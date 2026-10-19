@@ -1,5 +1,5 @@
+using DM.Domain.Core.Dto;
 using Riok.Mapperly.Abstractions;
-using ServicePagingSettings = DM.Domain.Core.Identity.PagingSettings;
 using ServiceUserSettings = DM.Domain.Core.Identity.UserSettings;
 
 namespace DM.Web.API.Features.Personal.Preferences;
@@ -9,7 +9,7 @@ namespace DM.Web.API.Features.Personal.Preferences;
 /// document.
 /// </summary>
 [Mapper]
-internal partial class PreferencesMapper
+public partial class PreferencesMapper
 {
     /// <summary>
     /// Domain settings document to the preferences DTO
@@ -24,22 +24,7 @@ internal partial class PreferencesMapper
     [MapperIgnoreTarget(nameof(ServiceUserSettings.Id))]
     public partial ServiceUserSettings ToUserSettings(Preferences preferences);
 
-    private partial ServicePagingSettings ToPagingSettings(Paging paging);
-
-    // A settings document may predate paging or carry zeroed values; both read
-    // as "no preference". The fallback of 10 is inherited verbatim from the
-    // AutoMapper profile this replaces.
-    private static Paging ToPaging(ServicePagingSettings? paging) =>
-        paging == null
-            ? new Paging()
-            : new Paging
-            {
-                PostsPerPage = PositiveOrDefault(paging.PostsPerPage),
-                CommentsPerPage = PositiveOrDefault(paging.CommentsPerPage),
-                TopicsPerPage = PositiveOrDefault(paging.TopicsPerPage),
-                MessagesPerPage = PositiveOrDefault(paging.MessagesPerPage),
-                EntitiesPerPage = PositiveOrDefault(paging.EntitiesPerPage),
-            };
-
-    private static int PositiveOrDefault(int value) => value > 0 ? value : 10;
+    // A zeroed page size reads as "no preference". Mapperly applies it to every
+    // int member it maps here, in both directions.
+    private static int PositiveOrDefault(int value) => value > 0 ? value : PagingPolicy.DefaultPageSize;
 }

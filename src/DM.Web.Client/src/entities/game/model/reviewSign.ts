@@ -1,13 +1,8 @@
-/**
- * The two spellings of a post review's sign.
- *
- * The wire carries the name the enum is declared with ("Positive"), while the
- * rating a post shows is arithmetic over +1 / 0 / -1, and the create and edit
- * forms send the number back. Both directions used to be written out wherever
- * they were needed, and a component that wrote a number into a field holding a
- * name turned "+1" into "+0" without any error to notice.
- */
-import type { ReviewSign } from "@/shared/api/models/game/reviews";
+// The wire names a review's sign ("Positive"), the rating counts it and the forms send it as a number.
+import type {
+  ReviewSign,
+  ReviewSignName,
+} from "@/shared/api/models/game/reviews";
 
 /** "Positive" | 1 | "1" → 1. Anything unrecognised is neutral. */
 export function reviewSignToNumber(
@@ -19,23 +14,17 @@ export function reviewSignToNumber(
   return 0;
 }
 
-/** 1 → "Positive". The spelling every read path of a review expects. */
-export function reviewSignName(sign: number): string {
-  if (sign > 0) return "Positive";
-  if (sign < 0) return "Negative";
-  return "Neutral";
+/** 1 → "Positive", the name the wire sends. */
+export function reviewSignName(sign: number): ReviewSignName {
+  return sign > 0 ? "Positive" : sign < 0 ? "Negative" : "Neutral";
 }
 
-/** A sign as a segment of the toggle the create and edit forms show. */
 export interface ReviewSignOption {
   value: "1" | "0" | "-1";
   label: string;
 }
 
-/**
- * The signs a reviewer may pick, in the order the forms offer them. A newbie
- * rates neutral only: the server takes "+" and "−" from 100 posts on.
- */
+// A newbie rates neutral only: the server takes "+" and "−" from 100 posts on.
 export function reviewSignOptions(canSign: boolean): ReviewSignOption[] {
   const neutral: ReviewSignOption = { value: "0", label: "=" };
   return canSign

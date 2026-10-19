@@ -1,15 +1,10 @@
-// Pure helpers and constants for the attribute-schema editor.
-// Kept framework-free so they can be unit-tested without mounting a component,
-// and shared by the screens that embed the editor instead of copied into each.
-
 import {
   AttributeSpecificationType,
   type AttributeSchemaDraft,
   type AttributeSpecification,
   type AttributeValueSpecification,
-} from "@/entities/game";
+} from "./gameTypes";
 
-/** Human-readable labels for the 6 specification types. */
 export const SPEC_TYPE_LABELS: Record<AttributeSpecificationType, string> = {
   [AttributeSpecificationType.Text]: "Текст",
   [AttributeSpecificationType.Number]: "Число",
@@ -19,10 +14,9 @@ export const SPEC_TYPE_LABELS: Record<AttributeSpecificationType, string> = {
   [AttributeSpecificationType.BbCode]: "BBCode",
 };
 
-/** Options array for the type <Select>. */
-export const SPEC_TYPE_OPTIONS = (
-  Object.values(AttributeSpecificationType) as AttributeSpecificationType[]
-).map((value) => ({ value, label: SPEC_TYPE_LABELS[value] }));
+export const SPEC_TYPE_OPTIONS = Object.values(AttributeSpecificationType).map(
+  (value) => ({ value, label: SPEC_TYPE_LABELS[value] }),
+);
 
 /** Types whose constraint is a maximal length (single-value inputs). */
 export function usesMaxLength(type: AttributeSpecificationType): boolean {
@@ -54,8 +48,8 @@ export function isBbCode(type: AttributeSpecificationType): boolean {
   return type === AttributeSpecificationType.BbCode;
 }
 
-/** Fresh client-side identifier for a draft spec (backend re-assigns on save). */
-export function newSpecId(): string {
+/** The server hands out the ids again on save. */
+function newSpecId(): string {
   return crypto.randomUUID();
 }
 
@@ -87,24 +81,14 @@ function cloneValues(
   return values.map((v) => ({ value: v.value, modifier: v.modifier }));
 }
 
-/**
- * Deep copy of a set of specifications, identifiers kept.
- *
- * Kept is what a game's own sheet needs: a replacement keeps the values of
- * every specification whose id it sends back, and a copy that renumbered them
- * would drop the answers of every character in the game.
- */
+// Ids kept: a replacement keeps the values of every specification whose id it sends back.
 export function cloneSpecs(
   specs: AttributeSpecification[],
 ): AttributeSpecification[] {
   return specs.map((s) => ({ ...s, values: cloneValues(s.values) }));
 }
 
-/**
- * Copy specs from another schema into a fresh draft. Each spec gets a NEW
- * client id and re-sequenced order so saving never re-uses the source
- * schema's spec identifiers (they become a distinct schema).
- */
+// New ids, so a save never reuses the specifications of the source schema.
 export function cloneSpecsWithNewIds(
   specs: AttributeSpecification[],
 ): AttributeSpecification[] {
@@ -115,7 +99,6 @@ export function cloneSpecsWithNewIds(
   }));
 }
 
-/** Deep clone of a whole draft (JSON round-trip is enough for this shape). */
 export function cloneSchema(
   schema: AttributeSchemaDraft,
 ): AttributeSchemaDraft {
@@ -125,10 +108,7 @@ export function cloneSchema(
   };
 }
 
-/**
- * Normalize a spec's per-type fields after a type change: keep only the
- * constraint relevant to the new type, drop the other.
- */
+/** After a type change only the constraint of the new type stays. */
 export function normalizeSpecForType(spec: AttributeSpecification): void {
   if (usesMaxLength(spec.type)) {
     spec.values = [];

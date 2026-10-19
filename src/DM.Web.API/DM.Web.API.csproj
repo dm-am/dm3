@@ -2,12 +2,10 @@
 
     <PropertyGroup>
         <TargetFramework>net10.0</TargetFramework>
-        <AspNetCoreHostingModel>InProcess</AspNetCoreHostingModel>
     </PropertyGroup>
 
     <ItemGroup>
         <PackageReference Include="AspNetCore.HealthChecks.Npgsql" />
-        <PackageReference Include="AspNetCore.HealthChecks.Rabbitmq" />
         <PackageReference Include="AspNetCore.HealthChecks.UI.Client" />
         <PackageReference Include="BouncyCastle.Cryptography" />
         <PackageReference Include="Microsoft.EntityFrameworkCore.Design">
@@ -19,8 +17,6 @@
         <PackageReference Include="Riok.Mapperly" PrivateAssets="all" />
         <PackageReference Include="Serilog" />
         <PackageReference Include="Swashbuckle.AspNetCore" />
-        <PackageReference Include="Swashbuckle.AspNetCore.Swagger" />
-        <PackageReference Include="Swashbuckle.AspNetCore.SwaggerUI" />
     </ItemGroup>
 
     <ItemGroup>
@@ -44,10 +40,7 @@
             <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
         </Content>
-        <!-- The Development overlay holds the localhost credentials, and it stays out
-             of the image. A deployed host runs as Production and would not read the
-             file anyway; not shipping it is what makes that a fact rather than a
-             property of one environment variable. -->
+        <!-- The Development overlay holds the localhost credentials and stays out of the image. -->
         <Content Update="appsettings.Development.json">
             <CopyToPublishDirectory>Never</CopyToPublishDirectory>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>

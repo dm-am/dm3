@@ -65,7 +65,6 @@ public class CreatePostReviewRequest
     /// <summary>
     /// Rating sign (required): Positive, Neutral, or Negative
     /// </summary>
-    [Required(ErrorMessage = "Укажите оценку")]
     public ReviewSign Sign { get; set; }
 
     /// <summary>

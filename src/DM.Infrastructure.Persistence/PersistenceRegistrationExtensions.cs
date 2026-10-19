@@ -52,6 +52,7 @@ using DM.Domain.Moderation.Features.ProfileNotes;
 using DM.Domain.Moderation.Features.Profiles;
 using DM.Domain.Moderation.Features.Tickets;
 using DM.Domain.Moderation.Features.Warnings;
+using DM.Domain.Moderation.Features.Bans;
 using DM.Domain.Personal.Features.Blacklists;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Domain.Personal.Features.ProfileNotes;
@@ -97,46 +98,68 @@ public static class PersistenceRegistrationExtensions
     /// <returns>Service collection for chaining.</returns>
     public static IServiceCollection AddDmPersistence(this IServiceCollection services)
     {
-        // The retention sweep, replacing the TTL indexes of the retired
-        // document store: the registry of policies lives beside the sweeper.
+        AddRelationalStorage(services);
+        AddCommunity(services);
+        AddForum(services);
+        AddMessaging(services);
+        AddModeration(services);
+        AddPersonal(services);
+        AddBlog(services);
+        AddAccount(services);
+        AddGame(services);
+        AddShared(services);
+
+        // Default types (validators, factories, etc.) from this assembly
+        services.AddDefaultTypes(typeof(PersistenceRegistrationExtensions).Assembly);
+
+        return services;
+    }
+
+    private static void AddRelationalStorage(IServiceCollection services)
+    {
+        // The registry of retention policies lives beside the sweeper.
         services.TryAddScoped<IRetentionSweepProcessor, RetentionSweeper>();
 
-        // The event producer lives here rather than in the messaging module
-        // because publishing an event is now an INSERT: the producer writes the
-        // outbox row with the same scoped DmDbContext the request runs on -
-        // shared and scoped for exactly that - and the transport half stays in
-        // Messaging, met by the relay in the host. Hosts without Persistence
-        // are not broken by the move: Workers.Mail never asks for the interface.
+        // Publishing an event is an outbox INSERT on the request's scoped DmDbContext.
         services.TryAddScoped<DM.Domain.Core.Events.IEventProducer, OutboxEventProducer>();
 
         // The storage half of the relay: claim a batch under FOR UPDATE SKIP
         // LOCKED, run it through the host's publisher, mark the confirmed
         // prefix.
         services.TryAddScoped<DM.Domain.Core.Events.IOutboxRelayProcessor, OutboxRelayProcessor>();
+    }
 
-        // Community repositories
+    private static void AddCommunity(IServiceCollection services)
+    {
         services.TryAddScoped<IPollRepository, PollRepository>();
         services.TryAddScoped<IUserEndorsementRepository, UserEndorsementRepository>();
         services.TryAddScoped<IWebsiteTestimonialRepository, WebsiteTestimonialRepository>();
         services.TryAddScoped<IFundraisingGoalRepository, FundraisingGoalRepository>();
         services.TryAddScoped<ICommunityStatsRepository, CommunityStatsRepository>();
+    }
 
-        // Forum repositories
+    private static void AddForum(IServiceCollection services)
+    {
         services.TryAddScoped<IBoardRepository, BoardRepository>();
         services.TryAddScoped<IBoardModeratorRepository, BoardModeratorRepository>();
         services.TryAddScoped<ITopicRepository, TopicRepository>();
         services.TryAddScoped<ITopicCommentRepository, TopicCommentRepository>();
         services.TryAddScoped<DM.Domain.Forum.Features.Search.IForumSearchRepository,
             Repositories.Search.ForumSearchRepository>();
+        services.TryAddScoped<IPeriodDigestRepository, PeriodDigestRepository>();
+    }
 
-        // Messaging repositories
+    private static void AddMessaging(IServiceCollection services)
+    {
         services.TryAddScoped<IChatRepository, ChatRepository>();
         services.TryAddScoped<IMessageRepository, MessageRepository>();
         services.TryAddScoped<IGlobalChatEventRepository, GlobalChatEventRepository>();
         services.TryAddScoped<DM.Domain.Messaging.Features.Search.IMessageSearchRepository,
             Repositories.Search.MessageSearchRepository>();
+    }
 
-        // Moderation repositories
+    private static void AddModeration(IServiceCollection services)
+    {
         services.TryAddScoped<ITicketRepository, TicketRepository>();
         services.TryAddScoped<IWarningRepository, WarningRepository>();
         services.TryAddScoped<IWarningEntityResolver, WarningEntityResolver>();
@@ -144,8 +167,10 @@ public static class PersistenceRegistrationExtensions
         services.TryAddScoped<IModeratedProfileNoteRepository, ModeratedProfileNoteRepository>();
         services.TryAddScoped<IMentorshipRepository, MentorshipRepository>();
         services.TryAddScoped<IModeratedProfileRepository, ModeratedProfileRepository>();
+    }
 
-        // Personal repositories
+    private static void AddPersonal(IServiceCollection services)
+    {
         services.TryAddScoped<INotificationRepository, NotificationRepository>();
         services.TryAddScoped<IUserProfileNoteRepository, UserProfileNoteRepository>();
 
@@ -167,8 +192,10 @@ public static class PersistenceRegistrationExtensions
             provider => provider.GetRequiredService<UserRepository>());
         services.TryAddScoped<IUserReadRepository>(
             provider => provider.GetRequiredService<UserRepository>());
+    }
 
-        // Blog repositories
+    private static void AddBlog(IServiceCollection services)
+    {
         services.TryAddScoped<IBlogRepository, BlogRepository>();
         services.TryAddScoped<IPublicationRepository, PublicationRepository>();
         services.TryAddScoped<IBlogPopularityRepository, BlogPopularityRepository>();
@@ -176,8 +203,10 @@ public static class PersistenceRegistrationExtensions
         services.TryAddScoped<IPublicationCommentRepository, PublicationCommentRepository>();
         services.TryAddScoped<IBlogInvitationRepository, BlogInvitationRepository>();
         services.TryAddScoped<IBlogBlacklistRepository, BlogBlacklistRepository>();
+    }
 
-        // Account repositories
+    private static void AddAccount(IServiceCollection services)
+    {
         services.TryAddScoped<IEmailLookupRepository, EmailLookupRepository>();
         services.TryAddScoped<ILoginAttemptRepository, LoginAttemptRepository>();
         services.TryAddScoped<IAuthenticationRepository, AuthenticationRepository>();
@@ -203,13 +232,14 @@ public static class PersistenceRegistrationExtensions
         // and by nothing that serves a request.
         services.TryAddScoped<ITokenMaintenanceRepository, TokenMaintenanceRepository>();
 
-        services.TryAddScoped<IPeriodDigestRepository, PeriodDigestRepository>();
-        services.TryAddScoped<IUploadOrphanCollector, UploadOrphanCollector>();
+        services.TryAddScoped<ISecurityAuditRepository, SecurityAuditRepository>();
+    }
 
-        // Game repositories
+    private static void AddGame(IServiceCollection services)
+    {
         services.TryAddScoped<IGameRepository, GameRepository>();
         services.TryAddScoped<IGamePopularityRepository, GamePopularityRepository>();
-        services.TryAddScoped<IGameUserRepository, GameUserRepository>();
+        services.TryAddScoped<IGameAssistantRepository, GameAssistantRepository>();
         services.TryAddScoped<IGameBlacklistRepository, GameBlacklistRepository>();
         services.TryAddScoped<IRoomRepository, RoomRepository>();
         services.TryAddScoped<IPostRepository, PostRepository>();
@@ -225,19 +255,14 @@ public static class PersistenceRegistrationExtensions
         services.TryAddScoped<IGameAttributeSchemaRepository, GameAttributeSchemaRepository>();
         services.TryAddScoped<IFirstUnreadRepository, FirstUnreadRepository>();
         services.TryAddScoped<IInactivityRepository, InactivityRepository>();
-        services.TryAddScoped<ISecurityAuditRepository, SecurityAuditRepository>();
+    }
 
-        // Shared repositories
-        services.TryAddScoped<ILikeFactory, LikeFactory>();
-        services.TryAddScoped<ILikeRepository, LikeRepository>();
+    private static void AddShared(IServiceCollection services)
+    {
         services.TryAddScoped<ILikeOperations, LikeOperations>();
         services.TryAddScoped<INotepadRepository, NotepadRepository>();
         services.TryAddScoped<ISubscriptionRepository, SubscriptionRepository>();
         services.TryAddScoped<IUnreadCountersRepository, UnreadCountersRepository>();
-
-        // Default types (validators, factories, etc.) from this assembly
-        services.AddDefaultTypes(typeof(PersistenceRegistrationExtensions).Assembly);
-
-        return services;
+        services.TryAddScoped<IUploadOrphanCollector, UploadOrphanCollector>();
     }
 }

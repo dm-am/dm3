@@ -7,13 +7,10 @@ namespace DM.Infrastructure.Core.Tracing;
 /// </summary>
 public static class DmActivitySource
 {
-    /// <summary>
-    /// Name of the activity source
-    /// </summary>
-    public const string Name = "DM.Services";
+    public const string Name = "DM";
 
-    /// <summary>
-    /// Activity source instance for creating activities
-    /// </summary>
-    public static readonly ActivitySource Source = new(Name, "1.0.0");
+    /// <summary>The version the source and every meter of this project report.</summary>
+    public const string Version = "1.0.0";
+
+    public static readonly ActivitySource Source = new(Name, Version);
 }

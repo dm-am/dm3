@@ -10,24 +10,9 @@ namespace BBCodeParser.Nodes
     /// through, less the tags a filtered node leaves with nothing to hold.
     /// </summary>
     /// <remarks>
-    /// The filter erases a block its reader may not read, and erases it without
-    /// a trace: no placeholder, no gap. The tags around the block are the
-    /// author's and stay, and one that held nothing but the block used to stay
-    /// empty: [b][private]x[/private][/b] gave that reader an empty bold element,
-    /// and [spoiler][private]x[/private][/spoiler] a spoiler with nothing in it,
-    /// both of which said that something had stood there. So a tag that is
-    /// drawn as markup, holds at least one node the walk leaves out and nothing
-    /// else but white space, is left out as well, as if the author had not
-    /// written it. What the author typed empty stays: [b][/b] is still drawn,
-    /// because nothing was erased from it.
-    ///
-    /// A tag printed as the text it was typed (broken, left open, a content tag
-    /// that holds no value it accepts) is not left out: its tags are text, and
-    /// text shows the same with the block and without it.
-    ///
-    /// The answer for a node is remembered for the walk, so each node is looked
-    /// at once however deep it stands. The recursion is bounded by the depth
-    /// guard of the parser (see BbParser).
+    /// An empty spoiler around an erased block would say something stood there.
+    /// A tag typed empty, [b][/b], stays, and so does a tag printed as typed. The
+    /// recursion is bounded by the depth guard of the parser.
     /// </remarks>
     internal sealed class Visibility
     {
@@ -67,8 +52,7 @@ namespace BBCodeParser.Nodes
 
         private bool ComputeLeftEmpty(TagNode node)
         {
-            // A hiding node the filter lets through is the filter's decision,
-            // and it is drawn as the filter says, empty or not.
+            // A hiding node is drawn as the filter decides, empty or not.
             if (node.Tag.Hides || node.IsBroken || (node.Tag.RequiresClosing && !node.IsClosed))
             {
                 return false;
@@ -79,7 +63,7 @@ namespace BBCodeParser.Nodes
             {
                 if (child is TextNode text)
                 {
-                    if (!IsWhiteSpace(text.Text))
+                    if (!string.IsNullOrWhiteSpace(text.Text))
                     {
                         return false;
                     }
@@ -97,19 +81,6 @@ namespace BBCodeParser.Nodes
             }
 
             return erased;
-        }
-
-        private static bool IsWhiteSpace(string text)
-        {
-            foreach (var character in text)
-            {
-                if (!char.IsWhiteSpace(character))
-                {
-                    return false;
-                }
-            }
-
-            return true;
         }
     }
 }

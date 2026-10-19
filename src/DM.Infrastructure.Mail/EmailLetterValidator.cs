@@ -6,7 +6,6 @@ namespace DM.Infrastructure.Mail;
 /// <inheritdoc />
 internal class EmailLetterValidator : AbstractValidator<EmailLetter>
 {
-    /// <inheritdoc />
     public EmailLetterValidator()
     {
         RuleFor(l => l.Address)

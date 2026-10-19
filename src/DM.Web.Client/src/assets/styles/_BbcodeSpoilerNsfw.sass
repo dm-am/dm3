@@ -1,0 +1,88 @@
+// [spoiler] and [nsfw], with the collapse wrapper they share. Drawn under
+// whatever selector includes the mixin.
+
+@use "Animations" as *
+@use "Variables" as *
+@use "Themes" as *
+
+// The fade of the 18+ overlay; the blur fades on its own, as opacity does not
+// fade it in every engine.
+$_nsfw-fade: opacity $expand-duration $expand-easing, backdrop-filter $expand-duration $expand-easing
+
+=bbcode-spoiler-nsfw
+  // The 0fr/1fr reveal, built by bbcodeCollapse.ts and by the editor's node
+  // views: .bb-collapse > .bb-collapse-clip > the content.
+  .bb-collapse
+    display: grid
+    grid-template-rows: 0fr
+    transition: grid-template-rows $expand-duration $expand-easing
+    &.open
+      grid-template-rows: 1fr
+
+  .bb-collapse-clip
+    overflow: hidden
+    min-height: 0
+
+  // Spoiler: a.spoiler-head and div.spoiler. The head is a block, a line of
+  // its own.
+  .spoiler-head
+    display: block
+    color: $link
+    cursor: pointer
+    text-decoration: none
+    &:hover
+      color: $link-hover
+      text-decoration: underline
+
+  // DM2's .lightbg, the box of both: margin 5px 0, padding 5px, a dashed
+  // frame; the margin is also the gap under the head. The NSFW box's margins
+  // collapse through .nsfw-content-wrapper and stop at the clip.
+  .spoiler, .bb-spoiler, .nsfw-spoiler, .bb-nsfw
+    margin: 5px 0
+    padding: 5px
+    background-color: $bg-highlight-yellow
+    border: 1px dashed $border
+
+  // NSFW: a.nsfw-head and div.nsfw-spoiler, with the 18+ overlay. The head is
+  // plain $link: the red stays in the warning over the content.
+  .nsfw-head
+    display: block
+    color: $link
+    cursor: pointer
+    text-decoration: none
+    &:hover
+      color: $link-hover
+      text-decoration: underline
+
+  .nsfw-spoiler, .bb-nsfw
+    position: relative
+
+  // The red zone covers the content area only, as on DM2: 6px is the 1px
+  // frame and the 5px padding.
+  .nsfw-overlay
+    position: absolute
+    inset: 6px
+    z-index: 1
+    background-color: $nsfw-overlay
+    backdrop-filter: blur(8px)
+    cursor: pointer
+    display: flex
+    // The warning at the top, centred, as on DM2.
+    align-items: flex-start
+    justify-content: center
+    transition: $_nsfw-fade
+
+    &.confirmed
+      opacity: 0
+      backdrop-filter: blur(0px)
+      pointer-events: none
+      visibility: hidden
+      // Out of the accessibility tree only after the fade; a fresh overlay
+      // shows at once.
+      transition: $_nsfw-fade, visibility 0s linear $expand-duration
+
+  .nsfw-warning
+    color: $accent-red
+    text-align: center
+    font-size: $font-size
+    font-weight: bold

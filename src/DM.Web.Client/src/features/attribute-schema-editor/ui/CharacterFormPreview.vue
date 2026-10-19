@@ -1,23 +1,14 @@
 <script setup lang="ts">
-/**
- * CharacterFormPreview — the character-creation form rendered in no-submit
- * mode. It shows how a player will fill the sheet for the current schema:
- * a name field plus one control per specification, rendered by the shared
- * CharacterSheetFields (same controls the real form uses). Purely a preview —
- * it holds throwaway local state and has no submit action.
- */
+// The real form's controls, with throwaway state and no submit.
 import { computed, reactive, ref } from "vue";
 import type { AttributeSpecification } from "@/entities/game";
 import { CharacterSheetFields } from "@/entities/game";
 import FormField from "@/shared/ui/Form/FormField.vue";
 
-// Only the specification list drives the preview; a draft and a saved sheet
-// both answer to that much.
 const props = defineProps<{
   schema: { specifications: AttributeSpecification[] };
 }>();
 
-// Throwaway preview state (never submitted anywhere).
 const name = ref("");
 const draftValues = reactive<Record<string, string>>({});
 

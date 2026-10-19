@@ -1,19 +1,14 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Account.Features.TwoFactor;
-using DM.Domain.Core.Abstractions;
+using DM.Domain.Account.Tests.Dsl;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Events;
 using DM.Domain.Core.Identity;
-using DM.Testing;
 using DM.Testing.Dsl;
 using AwesomeAssertions;
-using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -23,13 +18,9 @@ namespace DM.Domain.Account.Tests.Features.Authentication;
 /// What a login does when the account has a second factor.
 /// </summary>
 /// <remarks>
-/// The whole point is that between the two factors there is no session. No row,
-/// no cookie, no activity stamp, no entry in the journal saying somebody signed
-/// in. The alternative - a session marked "half" - obliges every authorization
-/// surface in the product to remember the mark, and the day one of them forgets,
-/// a password is enough again.
+/// Between the two factors there is no session, so no authorization surface has to remember a half one.
 /// </remarks>
-public class SecondFactorLoginShould : UnitTestBase
+public class SecondFactorLoginShould : AuthenticationServiceTestBase
 {
     private const string Email = "reader@example.com";
     private const string Password = "correct horse";
@@ -38,76 +29,34 @@ public class SecondFactorLoginShould : UnitTestBase
     private static readonly Guid SessionId = Guid.Parse("abcdabcd-1234-4321-8888-999900001111");
     private static readonly DateTimeOffset Moment = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly ISecurityManager _securityManager;
-    private readonly IAuthenticationRepository _repository;
-    private readonly ISessionFactory _sessionFactory;
-    private readonly ILoginAttemptTracker _loginAttemptTracker;
-    private readonly ISecurityAuditRepository _auditService;
-    private readonly ITwoFactorRepository _twoFactorRepository;
-    private readonly ITwoFactorVerifier _twoFactorVerifier;
-    private readonly ISymmetricCryptoService _cryptoService;
-    private readonly AuthenticationService _service;
-    private readonly AuthenticatedUser _user;
+    private readonly AuthenticatedUser user;
 
     public SecondFactorLoginShould()
     {
-        _securityManager = Mock<ISecurityManager>();
-        _repository = Mock<IAuthenticationRepository>();
-        _sessionFactory = Mock<ISessionFactory>();
-        _loginAttemptTracker = Mock<ILoginAttemptTracker>();
-        _auditService = Mock<ISecurityAuditRepository>();
-        _twoFactorRepository = Mock<ITwoFactorRepository>();
-        _twoFactorVerifier = Mock<ITwoFactorVerifier>();
-        _cryptoService = Mock<ISymmetricCryptoService>();
-        var dateTimeProvider = Mock<IDateTimeProvider>();
-        var guidFactory = Mock<IGuidFactory>();
-
         dateTimeProvider.Now.Returns(Moment);
         guidFactory.Create().Returns(ChallengeId);
-        _cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
+        cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
 
-        _user = Create.User(UserId)
+        user = Create.User(UserId)
             .WithRole(UserRole.RegularUser)
             .WithCredentials("salt", "hash")
             .Please();
-        _user.Username = "reader";
-        _user.Email = Email;
+        user.Username = "reader";
+        user.Email = Email;
 
-        _repository.IsPendingRegistration(Email).Returns(false);
-        _repository.TryFindUserByEmail(Email).Returns((true, _user));
-        _repository.FindUser(UserId).Returns(_user);
-        _repository.FindUserSettings(UserId).Returns(UserSettings.Default);
-        _repository.AddSession(UserId, Arg.Any<CreateSession>()).Returns(new Session { Id = SessionId });
-        _sessionFactory.Create(Arg.Any<bool>(), Arg.Any<SessionContext?>())
+        repository.TryFindUserByEmail(Email).Returns((true, user));
+        repository.FindUser(UserId).Returns(user);
+        repository.FindUserSettings(UserId).Returns(UserSettings.Default);
+        repository.AddSession(UserId, Arg.Any<CreateSession>()).Returns(new Session { Id = SessionId });
+        sessionFactory.Create(Arg.Any<bool>(), Arg.Any<SessionContext?>())
             .Returns(new CreateSession { Id = SessionId });
-        _securityManager.ComparePasswords(Password, "salt", "hash").Returns(true);
-
-        _service = new AuthenticationService(
-            _securityManager,
-            _cryptoService,
-            _repository,
-            _sessionFactory,
-            dateTimeProvider,
-            Mock<IIdentityProvider>(),
-            _loginAttemptTracker,
-            _auditService,
-            Mock<IEventProducer>(),
-            _twoFactorRepository,
-            _twoFactorVerifier,
-            guidFactory,
-            Mock<ILogger<AuthenticationService>>(),
-            Options.Create(new AuthenticationConfiguration()),
-            Options.Create(new TwoFactorConfiguration
-            {
-                ChallengeLifetimeMinutes = 5,
-                ChallengeAttemptLimit = 5
-            }));
+        securityManager.ComparePasswords(Password, "salt", "hash").Returns(true);
     }
 
     private void FactorIsOn() =>
-        _twoFactorRepository.IsConfirmed(UserId, Arg.Any<CancellationToken>()).Returns(true);
+        twoFactorRepository.IsConfirmed(UserId, Arg.Any<CancellationToken>()).Returns(true);
 
-    private TwoFactorChallengeState Challenge(
+    private static TwoFactorChallengeState Challenge(
         DateTimeOffset? expiresUtc = null, bool persistent = true) => new()
         {
             ChallengeId = ChallengeId,
@@ -118,17 +67,15 @@ public class SecondFactorLoginShould : UnitTestBase
             Persistent = persistent
         };
 
-    // ── The password step ──
-
     /// <summary>An account without a factor signs in exactly as before.</summary>
     [Fact]
     public async Task LeaveALoginWithoutAFactorAsItWas()
     {
-        var identity = await _service.Authenticate(Email, Password);
+        var identity = await service.Authenticate(Email, Password);
 
         identity.User.IsAuthenticated.Should().BeTrue();
         identity.TwoFactorChallengeId.Should().BeNull();
-        await _repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
+        await repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
     }
 
     /// <summary>No session exists until the factor is shown.</summary>
@@ -137,16 +84,16 @@ public class SecondFactorLoginShould : UnitTestBase
     {
         FactorIsOn();
 
-        var identity = await _service.Authenticate(Email, Password);
+        var identity = await service.Authenticate(Email, Password);
 
         identity.TwoFactorChallengeId.Should().Be(ChallengeId);
         identity.User.IsAuthenticated.Should().BeFalse();
         identity.AuthenticationToken.Should().BeNull();
         identity.Session.Should().BeNull();
 
-        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
-        await _repository.DidNotReceive().UpdateActivity(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
-        await _auditService.DidNotReceive().LogAsync(
+        await repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
+        await repository.DidNotReceive().UpdateActivity(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
+        await auditService.DidNotReceive().LogAsync(
             Arg.Any<Guid>(), SecurityEventType.LoginSuccess,
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
@@ -155,18 +102,16 @@ public class SecondFactorLoginShould : UnitTestBase
     /// The proven password does not reset the attempt counter on its own.
     /// </summary>
     /// <remarks>
-    /// Otherwise anybody holding the password takes an unlimited supply of
-    /// challenges, five guesses each, and the second level of the limit stops
-    /// limiting anything.
+    /// Otherwise the password alone buys an unlimited supply of challenges.
     /// </remarks>
     [Fact]
     public async Task NotResetTheAttemptCounterUntilTheLoginIsFinished()
     {
         FactorIsOn();
 
-        await _service.Authenticate(Email, Password);
+        await service.Authenticate(Email, Password);
 
-        await _loginAttemptTracker.DidNotReceive().ResetAttempts(Arg.Any<string>());
+        await loginAttemptTracker.DidNotReceive().ResetAttempts(Arg.Any<string>());
     }
 
     [Fact]
@@ -175,9 +120,9 @@ public class SecondFactorLoginShould : UnitTestBase
         FactorIsOn();
         var context = new SessionContext { IpAddress = "1.2.3.4", UserAgent = "agent" };
 
-        await _service.Authenticate(Email, Password, rememberMe: false, context);
+        await service.Authenticate(Email, Password, rememberMe: false, context);
 
-        await _twoFactorRepository.Received(1).AddChallenge(
+        await twoFactorRepository.Received(1).AddChallenge(
             Arg.Is<TwoFactorChallengeState>(c =>
                 c.UserId == UserId &&
                 c.Account == Email &&
@@ -187,22 +132,20 @@ public class SecondFactorLoginShould : UnitTestBase
             Arg.Any<CancellationToken>());
     }
 
-    // ── The second step ──
-
     /// <summary>The code finishes the login and the session is created.</summary>
     [Fact]
     public async Task FinishTheLoginOnAGoodCode()
     {
         ArrangeChallenge();
 
-        var identity = await _service.CompleteSecondFactor(ChallengeId, "123456");
+        var identity = await service.CompleteSecondFactor(ChallengeId, "123456");
 
         identity.User.IsAuthenticated.Should().BeTrue();
         identity.Error.Should().Be(AuthenticationError.NoError);
-        await _repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
-        await _twoFactorRepository.Received(1).RemoveChallenge(
+        await repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
+        await twoFactorRepository.Received(1).RemoveChallenge(
             ChallengeId, Arg.Any<CancellationToken>());
-        await _auditService.Received(1).LogAsync(
+        await auditService.Received(1).LogAsync(
             UserId, SecurityEventType.LoginSuccess,
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
@@ -217,35 +160,35 @@ public class SecondFactorLoginShould : UnitTestBase
     {
         ArrangeChallenge(persistent: persistent);
 
-        await _service.CompleteSecondFactor(ChallengeId, "123456");
+        await service.CompleteSecondFactor(ChallengeId, "123456");
 
-        _sessionFactory.Received(1).Create(persistent, Arg.Any<SessionContext?>());
+        sessionFactory.Received(1).Create(persistent, Arg.Any<SessionContext?>());
     }
 
-    /// <summary>Five ways of failing, one answer.</summary>
+    /// <summary>Every way of failing, one answer.</summary>
     [Fact]
     public async Task AnswerEveryFailureTheSameWay()
     {
         // Unknown challenge
-        _twoFactorRepository.FindChallenge(ChallengeId, Arg.Any<CancellationToken>())
+        twoFactorRepository.FindChallenge(ChallengeId, Arg.Any<CancellationToken>())
             .Returns((TwoFactorChallengeState?)null);
-        var unknown = await _service.CompleteSecondFactor(ChallengeId, "123456");
+        var unknown = await service.CompleteSecondFactor(ChallengeId, "123456");
 
         // Expired challenge
-        _twoFactorRepository.FindChallenge(ChallengeId, Arg.Any<CancellationToken>())
+        twoFactorRepository.FindChallenge(ChallengeId, Arg.Any<CancellationToken>())
             .Returns(Challenge(expiresUtc: Moment.AddMinutes(-1)));
-        var expired = await _service.CompleteSecondFactor(ChallengeId, "123456");
+        var expired = await service.CompleteSecondFactor(ChallengeId, "123456");
 
         // Wrong code
         ArrangeChallenge();
-        _twoFactorVerifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
+        twoFactorVerifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
             Arg.Any<CancellationToken>()).Returns(false);
-        var wrong = await _service.CompleteSecondFactor(ChallengeId, "000000");
+        var wrong = await service.CompleteSecondFactor(ChallengeId, "000000");
 
         // The factor went away between the steps
         ArrangeChallenge();
-        _twoFactorRepository.Find(UserId, Arg.Any<CancellationToken>()).Returns((TwoFactorState?)null);
-        var gone = await _service.CompleteSecondFactor(ChallengeId, "123456");
+        twoFactorRepository.Find(UserId, Arg.Any<CancellationToken>()).Returns((TwoFactorState?)null);
+        var gone = await service.CompleteSecondFactor(ChallengeId, "123456");
 
         new[] { unknown, expired, wrong, gone }.Should().AllSatisfy(identity =>
         {
@@ -259,28 +202,25 @@ public class SecondFactorLoginShould : UnitTestBase
     public async Task DestroyTheChallengeWhenTheAttemptsRunOut()
     {
         ArrangeChallenge();
-        _twoFactorVerifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
+        twoFactorVerifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
             Arg.Any<CancellationToken>()).Returns(false);
-        _twoFactorRepository.CountChallengeAttempt(ChallengeId, Arg.Any<CancellationToken>())
+        twoFactorRepository.CountChallengeAttempt(ChallengeId, Arg.Any<CancellationToken>())
             .Returns(1, 2, 3, 4, 5);
 
         for (var attempt = 0; attempt < 4; attempt++)
         {
-            await _service.CompleteSecondFactor(ChallengeId, "000000");
+            await service.CompleteSecondFactor(ChallengeId, "000000");
         }
 
-        await _twoFactorRepository.DidNotReceive().RemoveChallenge(
+        await twoFactorRepository.DidNotReceive().RemoveChallenge(
             ChallengeId, Arg.Any<CancellationToken>());
 
-        await _service.CompleteSecondFactor(ChallengeId, "000000");
+        await service.CompleteSecondFactor(ChallengeId, "000000");
 
-        await _twoFactorRepository.Received(1).RemoveChallenge(
+        await twoFactorRepository.Received(1).RemoveChallenge(
             ChallengeId, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A wrong code is counted where a wrong password is counted.
-    /// </summary>
     /// <remarks>
     /// Two counters over one login means two thresholds, and only the lower of
     /// them would ever be reached.
@@ -289,13 +229,13 @@ public class SecondFactorLoginShould : UnitTestBase
     public async Task CountAWrongCodeInTheCounterOfThePasswordStep()
     {
         ArrangeChallenge();
-        _twoFactorVerifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
+        twoFactorVerifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
             Arg.Any<CancellationToken>()).Returns(false);
         var context = new SessionContext { IpAddress = "1.2.3.4" };
 
-        await _service.CompleteSecondFactor(ChallengeId, "000000", context);
+        await service.CompleteSecondFactor(ChallengeId, "000000", context);
 
-        await _loginAttemptTracker.Received(1).RecordFailedAttempt(
+        await loginAttemptTracker.Received(1).RecordFailedAttempt(
             new LoginAttemptOrigin(Email, "1.2.3.4"));
     }
 
@@ -303,12 +243,12 @@ public class SecondFactorLoginShould : UnitTestBase
     public async Task RefuseTheSecondStepWhileTheAccountIsLockedOut()
     {
         ArrangeChallenge();
-        _loginAttemptTracker.IsAccountLocked(Arg.Any<LoginAttemptOrigin>()).Returns(true);
+        loginAttemptTracker.IsAccountLocked(Arg.Any<LoginAttemptOrigin>()).Returns(true);
 
-        var identity = await _service.CompleteSecondFactor(ChallengeId, "123456");
+        var identity = await service.CompleteSecondFactor(ChallengeId, "123456");
 
         identity.Error.Should().Be(AuthenticationError.TwoFactorRejected);
-        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
+        await repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
     /// <summary>A ban issued between the two steps takes effect.</summary>
@@ -316,25 +256,25 @@ public class SecondFactorLoginShould : UnitTestBase
     public async Task RefuseALoginBannedBetweenTheTwoSteps()
     {
         ArrangeChallenge();
-        _user.AccessRestrictions =
+        user.AccessRestrictions =
             [new AccessRestriction(AccessPolicy.FullBan, Moment.AddMinutes(-1), Moment.AddDays(1))];
 
-        var identity = await _service.CompleteSecondFactor(ChallengeId, "123456");
+        var identity = await service.CompleteSecondFactor(ChallengeId, "123456");
 
         identity.Error.Should().Be(AuthenticationError.Banned);
-        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
+        await repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
     [Fact]
     public async Task RefuseALoginRemovedBetweenTheTwoSteps()
     {
         ArrangeChallenge();
-        _user.IsRemoved = true;
+        user.IsRemoved = true;
 
-        var identity = await _service.CompleteSecondFactor(ChallengeId, "123456");
+        var identity = await service.CompleteSecondFactor(ChallengeId, "123456");
 
         identity.Error.Should().Be(AuthenticationError.Removed);
-        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
+        await repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
     /// <summary>A sign-in with the factor calls off a scheduled removal.</summary>
@@ -342,12 +282,12 @@ public class SecondFactorLoginShould : UnitTestBase
     public async Task CallOffAScheduledRemovalOnASuccessfulSecondFactor()
     {
         ArrangeChallenge();
-        _twoFactorRepository.CancelScheduledRemoval(UserId, Arg.Any<CancellationToken>())
+        twoFactorRepository.CancelScheduledRemoval(UserId, Arg.Any<CancellationToken>())
             .Returns(true);
 
-        await _service.CompleteSecondFactor(ChallengeId, "123456");
+        await service.CompleteSecondFactor(ChallengeId, "123456");
 
-        await _auditService.Received(1).LogAsync(
+        await auditService.Received(1).LogAsync(
             UserId, SecurityEventType.TwoFactorRemovalCancelled,
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
@@ -356,49 +296,42 @@ public class SecondFactorLoginShould : UnitTestBase
     public async Task SayNothingAboutACancellationWhenNoRemovalWasPending()
     {
         ArrangeChallenge();
-        _twoFactorRepository.CancelScheduledRemoval(UserId, Arg.Any<CancellationToken>())
+        twoFactorRepository.CancelScheduledRemoval(UserId, Arg.Any<CancellationToken>())
             .Returns(false);
 
-        await _service.CompleteSecondFactor(ChallengeId, "123456");
+        await service.CompleteSecondFactor(ChallengeId, "123456");
 
-        await _auditService.DidNotReceive().LogAsync(
+        await auditService.DidNotReceive().LogAsync(
             Arg.Any<Guid>(), SecurityEventType.TwoFactorRemovalCancelled,
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
-
-    // ── The path that mints a session without a password ──
 
     /// <summary>
     /// No session without a password for an account with a factor.
     /// </summary>
     /// <remarks>
-    /// Today the only caller is the auto-login that follows activation, and a
-    /// freshly created account cannot have a factor - which makes the rule safe
-    /// by circumstance rather than by construction. The next caller arrives
-    /// without a word.
+    /// Safe by construction, not by the circumstance that today's only caller is a fresh account.
     /// </remarks>
     [Fact]
     public async Task RefuseToMintASessionWithoutAPasswordForAnAccountWithAFactor()
     {
         FactorIsOn();
 
-        var identity = await _service.Authenticate(UserId);
+        var identity = await service.Authenticate(UserId);
 
         identity.User.IsAuthenticated.Should().BeFalse();
         identity.Error.Should().Be(AuthenticationError.Forbidden);
-        await _repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
+        await repository.DidNotReceive().AddSession(Arg.Any<Guid>(), Arg.Any<CreateSession>());
     }
 
     [Fact]
     public async Task StillMintASessionWithoutAPasswordForAnAccountWithoutAFactor()
     {
-        var identity = await _service.Authenticate(UserId);
+        var identity = await service.Authenticate(UserId);
 
         identity.User.IsAuthenticated.Should().BeTrue();
-        await _repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
+        await repository.Received(1).AddSession(UserId, Arg.Any<CreateSession>());
     }
-
-    // ── The rank on the token path ──
 
     /// <summary>
     /// A second factor is optional for every rank: an account without one acts
@@ -411,7 +344,7 @@ public class SecondFactorLoginShould : UnitTestBase
     {
         ArrangeTokenPath(role, factorConfirmed: false);
 
-        var identity = await _service.Authenticate("token");
+        var identity = await service.Authenticate("token");
 
         identity.User.IsAuthenticated.Should().BeTrue();
         identity.User.Role.Should().Be(role);
@@ -426,35 +359,35 @@ public class SecondFactorLoginShould : UnitTestBase
     {
         ArrangeTokenPath(UserRole.Admin, factorConfirmed: true);
 
-        await _service.Authenticate("token");
+        await service.Authenticate("token");
 
-        await _twoFactorRepository.DidNotReceive().IsConfirmed(
+        await twoFactorRepository.DidNotReceive().IsConfirmed(
             Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     private void ArrangeTokenPath(UserRole role, bool factorConfirmed)
     {
-        _user.Role = role;
-        _twoFactorRepository.IsConfirmed(UserId, Arg.Any<CancellationToken>()).Returns(factorConfirmed);
-        _repository.FindUserSession(UserId, SessionId)
+        user.Role = role;
+        twoFactorRepository.IsConfirmed(UserId, Arg.Any<CancellationToken>()).Returns(factorConfirmed);
+        repository.FindUserSession(UserId, SessionId)
             .Returns(new Session { Id = SessionId, ExpirationUtc = Moment.AddDays(1) });
-        _cryptoService.Decrypt("token")
+        cryptoService.Decrypt("token")
             .Returns($"{{\"userId\":\"{UserId}\",\"sessionId\":\"{SessionId}\"}}");
     }
 
     private void ArrangeChallenge(bool persistent = true)
     {
-        _twoFactorRepository.FindChallenge(ChallengeId, Arg.Any<CancellationToken>())
+        twoFactorRepository.FindChallenge(ChallengeId, Arg.Any<CancellationToken>())
             .Returns(Challenge(persistent: persistent));
-        _twoFactorRepository.Find(UserId, Arg.Any<CancellationToken>()).Returns(new TwoFactorState
+        twoFactorRepository.Find(UserId, Arg.Any<CancellationToken>()).Returns(new TwoFactorState
         {
             UserId = UserId,
             Secret = "envelope",
             CreatedUtc = Moment.AddDays(-1),
             ConfirmedUtc = Moment.AddDays(-1)
         });
-        _twoFactorVerifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
+        twoFactorVerifier.Accept(Arg.Any<TwoFactorState>(), Arg.Any<string>(), Arg.Any<string?>(),
             Arg.Any<CancellationToken>()).Returns(true);
-        _loginAttemptTracker.IsAccountLocked(Arg.Any<LoginAttemptOrigin>()).Returns(false);
+        loginAttemptTracker.IsAccountLocked(Arg.Any<LoginAttemptOrigin>()).Returns(false);
     }
 }

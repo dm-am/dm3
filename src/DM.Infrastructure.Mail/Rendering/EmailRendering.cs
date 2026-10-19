@@ -11,9 +11,7 @@ namespace DM.Infrastructure.Mail.Rendering;
 /// Builds the renderer the email templates are rendered by.
 /// </summary>
 /// <remarks>
-/// One place because there are two callers — the registration extensions and the test that
-/// guards the templates — and a test rendering through a differently configured
-/// renderer guards nothing.
+/// Shared with the test that guards the templates, which must render through the same renderer.
 /// </remarks>
 internal static class EmailRendering
 {
@@ -23,11 +21,7 @@ internal static class EmailRendering
     /// scope would outlive it.
     /// </summary>
     /// <param name="loggerFactory">Logger factory of the host</param>
-    /// <param name="siteAddresses">
-    /// Addresses of the site, named in the footer of every letter. Copied in
-    /// rather than resolved from the host container for the reason above: the
-    /// value is configuration read once at startup, so a copy cannot go stale.
-    /// </param>
+    /// <param name="siteAddresses">Addresses of the site, configuration read once at startup.</param>
     public static HtmlRenderer CreateHtmlRenderer(
         ILoggerFactory loggerFactory,
         SiteAddressConfiguration siteAddresses)
@@ -36,12 +30,7 @@ internal static class EmailRendering
         services.AddLogging();
         services.AddSingleton(siteAddresses);
 
-        // The default encoder escapes everything outside Basic Latin, which is
-        // every letter of a Russian name: "Аллигатор" left as &#x410;&#x43B;… —
-        // correct, three times longer, and unlike the literal text of the template
-        // beside it. All of Unicode is allowed through; angle brackets, ampersand
-        // and quotes are still escaped, and that is what keeps markup in a username
-        // from reaching the letter.
+        // The default encoder escapes every Cyrillic letter; markup characters are escaped either way.
         services.AddSingleton(HtmlEncoder.Create(UnicodeRanges.All));
 
         return new HtmlRenderer(services.BuildServiceProvider(), loggerFactory);

@@ -7,9 +7,6 @@ namespace DM.Domain.Moderation.Features.Mentorships;
 /// </summary>
 public class MentorshipAssignment
 {
-    /// <summary>
-    /// Curating mentor user id
-    /// </summary>
     public Guid MentorId { get; set; }
 
     /// <summary>
@@ -17,8 +14,5 @@ public class MentorshipAssignment
     /// </summary>
     public Guid TargetId { get; set; }
 
-    /// <summary>
-    /// Curated target title
-    /// </summary>
     public string Title { get; set; } = null!;
 }

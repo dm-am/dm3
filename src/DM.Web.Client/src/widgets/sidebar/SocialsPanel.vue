@@ -1,10 +1,9 @@
 <template>
-  <SidebarBlock token="Socials">
-    <template #title>Наши соцсети</template>
+  <SidebarBlock token="Socials" title="Наши соцсети">
     <li v-once class="socials">
       <Tooltip
         v-for="social in socialLinks"
-        :key="social.name"
+        :key="social.icon"
         :text="social.label"
       >
         <a
@@ -37,19 +36,16 @@ import {
 
 const socialLinks = [
   {
-    name: "vk",
     icon: "vk" as const,
     url: VK_GROUP_URL,
     label: "Группа ВКонтакте",
   },
   {
-    name: "discord",
     icon: "discord" as const,
     url: DISCORD_INVITE_URL,
     label: "Discord сервер",
   },
   {
-    name: "youtube",
     icon: "youtube" as const,
     url: YOUTUBE_CHANNEL_URL,
     label: "YouTube канал",

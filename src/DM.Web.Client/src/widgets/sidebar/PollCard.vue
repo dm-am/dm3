@@ -27,7 +27,6 @@ const props = withDefaults(
   { controls: false },
 );
 
-// Use server-computed status
 const isActive = computed(() => props.poll.status === "Active");
 
 const startsFormatted = computed(() =>
@@ -44,7 +43,6 @@ const canEdit = computed(
   () => props.controls && userIsSeniorModerator(userStore.user),
 );
 
-// Status text
 const statusText = computed(() => {
   switch (props.poll.status) {
     case "Pending":
@@ -58,19 +56,13 @@ const statusText = computed(() => {
   }
 });
 
-// Tooltip with full dates
 const statusTooltip = computed(() => {
   return `Начало: ${startsFormatted.value}\nОкончание: ${endsFormatted.value}`;
 });
 
-// Edit mode is delegated to features/poll-vote PollEditForm; this only tracks
-// whether the inline editor is open.
 const isEditing = ref(false);
 
-// Voters tooltip mirrors the readers tooltip: one uniform-colored line
-// "Голосовали: A, B, C" (with "... и еще N" when truncated), not a faded
-// title over a column of names. Only meaningful for public polls with at
-// least one voter - anonymous polls or empty options disable the tooltip.
+// One line, "Голосовали: A, B, C", as the readers tooltip; public polls with voters only.
 function votersTooltipText(option: Poll["options"][number]): string {
   return buildSubscribersTooltip(
     {
@@ -86,8 +78,7 @@ function optionHasVoters(option: Poll["options"][number]): boolean {
   return !props.poll.isAnonymous && !!option.voters?.length;
 }
 
-// Explicit literal separator between the checkmark and the option text -
-// whitespace-condense would otherwise glue them together when copied.
+// A literal space: whitespace condensing would glue the checkmark to the text in a copy.
 function optionText(option: Poll["options"][number]): string {
   const checkmark = option.voted ? `${symbols.checkmark} ` : "";
   return `${checkmark}${option.text}`;
@@ -95,7 +86,6 @@ function optionText(option: Poll["options"][number]): string {
 </script>
 <template>
   <div class="poll">
-    <!-- Edit mode -->
     <PollEditForm
       v-if="isEditing"
       :poll="poll"
@@ -103,7 +93,6 @@ function optionText(option: Poll["options"][number]): string {
       @cancel="isEditing = false"
     />
 
-    <!-- View mode -->
     <template v-else>
       <div class="poll-title">
         <span
@@ -135,13 +124,7 @@ function optionText(option: Poll["options"][number]): string {
         </Tooltip>
       </div>
       <template v-for="option in poll.options" :key="option.id">
-        <!-- Option text on the left, vote counter in brackets pinned to the
-             right edge — the site-wide bracketed-counter idiom. For public
-             polls with voters the counter itself is the voters-list trigger
-             (cursor: help, tooltip on hover or focus; no underline by
-             product decision 2026-07-11), so the rest of the bar stays
-             clean for the vote action. Guests simply see the numbers — no
-             login prompt. -->
+        <!-- The text left, the counter right; on a public poll the counter shows the voters -->
         <ProgressBar
           :current="option.votesCount"
           :goal="totalVotes || 1"
@@ -168,7 +151,7 @@ function optionText(option: Poll["options"][number]): string {
               type="button"
               class="poll-option-vote"
               :aria-label="`Проголосовать за: ${option.text}`"
-              @click="voteForOption(poll.id!, option.id)"
+              @click="voteForOption(poll.id, option.id)"
             />
           </Tooltip>
           <Tooltip
@@ -179,13 +162,12 @@ function optionText(option: Poll["options"][number]): string {
               type="button"
               class="poll-option-vote"
               aria-label="Отменить голос"
-              @click="cancelVote(poll.id!)"
+              @click="cancelVote(poll.id)"
             />
           </Tooltip>
         </ProgressBar>
       </template>
 
-      <!-- Poll type indicator -->
       <div class="poll-type-indicator">
         {{ poll.isAnonymous ? "Анонимный опрос" : "Публичный опрос" }}
       </div>
@@ -212,9 +194,6 @@ function optionText(option: Poll["options"][number]): string {
   font-size: $secondary-font-size
   cursor: help
 
-.muted
-  color: $text-muted
-
 .poll-option-vote
   display: block
   position: absolute
@@ -228,19 +207,9 @@ function optionText(option: Poll["options"][number]): string {
   cursor: pointer
   z-index: 1
 
-// Block line, NOT flex: element flex items copy with a newline between
-// them (Chrome selection serializer), so the old flex row copied as
-// "text\n(count)". Inline text + float:right counter keeps the identical
-// "text left, counter pinned right" single-line geometry while the row
-// copies as one line: "text (count)".
+// Not flex: flex items copy with a newline between them; the float keeps the counter right.
 .poll-option-row
   display: block
-
-// Zero-width preserved space between text and counter: invisible in
-// layout (font-size: 0), but Selection.toString() still emits a real " ".
-.copy-space
-  white-space: pre
-  font-size: 0
 
 .poll-option-count
   float: right
@@ -249,9 +218,7 @@ function optionText(option: Poll["options"][number]): string {
   .count-bracket
     color: $text-muted
 
-  // The counter is the voters-list trigger on public polls: it sits above
-  // the full-bar vote overlay so its tooltip stays reachable; the only
-  // affordance is the help cursor (no underline by product decision)
+  // Above the vote overlay, so its tooltip stays reachable.
   .voters-count
     position: relative
     z-index: 2
@@ -269,8 +236,8 @@ function optionText(option: Poll["options"][number]): string {
   background: none
   color: inherit
   cursor: pointer
-  opacity: 0.5
-  transition: opacity 0.15s
+  opacity: $muted-opacity
+  transition: opacity $transition-normal
 
   &:hover
     opacity: 1

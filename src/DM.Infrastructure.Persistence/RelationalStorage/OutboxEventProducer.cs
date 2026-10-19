@@ -17,18 +17,9 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 /// for the relay to publish.
 /// </summary>
 /// <remarks>
-/// The replacement for the producer that published straight to RabbitMQ: from
-/// here on, "publishing" an event is one INSERT into the same PostgreSQL the
-/// write itself went to, and a broker restart turns from a silent loss into a
-/// delivery delay. The insert is a second, separate commit of the scoped
-/// context - deliberately outside the domain transaction, which lives inside a
-/// repository method this producer is called after (the W1.1 compromise). This
-/// class never opens a transaction and never joins one; EventOutboxShould holds
-/// that as text.
-///
-/// The SaveChanges here flushes everything the scoped change tracker holds, so
-/// a SendAsync called before the domain commit would commit somebody else's
-/// half-written changes. PublishAfterCommitShould is what keeps the order.
+/// The insert is a separate commit of the scoped context after the domain one, so a
+/// broker restart delays delivery instead of losing it. It flushes the whole change
+/// tracker, so it must run after the domain commit.
 /// </remarks>
 internal class OutboxEventProducer(
     DmDbContext dbContext,
@@ -41,20 +32,9 @@ internal class OutboxEventProducer(
 
     /// <inheritdoc />
     /// <remarks>
-    /// A refusal is logged and counted, never thrown - the same contract the
-    /// direct producer kept, word for word. The write that produced the event is
-    /// committed by the time this runs, so a throw would turn a saved comment
-    /// into a 500 and the caller would post it twice. The refusal window is now
-    /// PostgreSQL refusing right after accepting the domain commit - a pool run
-    /// dry, a full disk - orders of magnitude narrower than the broker being
-    /// down, and the one loss nothing will retry: hence the PublishFailed
-    /// counter behind the EventsNotPublished alert.
-    ///
-    /// All rows of a batch go in one SaveChanges - atomically, unlike the N
-    /// independent publications this replaced. Each row still gets its own
-    /// EventId: the consumer deduplicates replays by it, so it has to be the
-    /// same on every relay retry of one row and fresh on a genuine second event
-    /// about the same entity.
+    /// A refusal is logged and counted behind the EventsNotPublished alert, never thrown:
+    /// the write is already committed, and a 500 would make the caller repeat it. Each
+    /// row gets its own EventId, by which the consumer deduplicates relay retries.
     /// </remarks>
     public async Task SendAsync(IEnumerable<EventType> eventTypes, Guid entityId)
     {

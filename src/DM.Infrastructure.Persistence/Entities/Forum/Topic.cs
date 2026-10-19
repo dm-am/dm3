@@ -12,7 +12,7 @@ namespace DM.Infrastructure.Persistence.Entities.Forum;
 /// DAL model for forum topic
 /// </summary>
 [Table("Topics")]
-public class Topic : ISoftDeletable, IHasEditHistory<TopicEdit>
+public class Topic : ISoftDeletable
 {
     /// <summary>
     /// Topic identifier
@@ -40,14 +40,8 @@ public class Topic : ISoftDeletable, IHasEditHistory<TopicEdit>
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// Title
-    /// </summary>
     public string Title { get; set; } = null!;
 
-    /// <summary>
-    /// Text
-    /// </summary>
     public string Text { get; set; } = null!;
 
     /// <summary>
@@ -85,15 +79,9 @@ public class Topic : ISoftDeletable, IHasEditHistory<TopicEdit>
     /// <inheritdoc />
     public DateTimeOffset? DeletedUtc { get; set; }
 
-    /// <summary>
-    /// Board
-    /// </summary>
     [ForeignKey(nameof(BoardId))]
     public virtual Board Board { get; set; } = null!;
 
-    /// <summary>
-    /// Author
-    /// </summary>
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;
 
@@ -116,7 +104,7 @@ public class Topic : ISoftDeletable, IHasEditHistory<TopicEdit>
     public virtual ICollection<TopicEdit> Edits { get; set; } = [];
 
     /// <summary>
-    /// Commenaries
+    /// Comments
     /// </summary>
     [InverseProperty(nameof(Comment.Topic))]
     public virtual ICollection<Comment> Comments { get; set; } = [];

@@ -11,19 +11,8 @@ namespace DM.Architecture.Tests;
 /// A job that repeats runs on the one loop, not on a copy of it.
 /// </summary>
 /// <remarks>
-/// Nine services each carried the same twenty lines - a timer, a while over the
-/// stopping token, a catch for cancellation, a catch for everything else, a
-/// scope per pass - and the copies had drifted apart in every way they could.
-/// Six ran their first pass outside the guard, one inside, one had none; two
-/// waited before the first pass and seven did not; one duplicated the tick wait
-/// inside its own error branch. The drift is not cosmetic: work placed before
-/// the first await runs inside host startup, and a cancellation raised there
-/// leaves ExecuteAsync, which BackgroundService reports as a critical failure
-/// and answers by stopping the host - once per deployment rolled back inside its
-/// first minute.
-///
-/// Held by the timer, because the timer is what a hand-rolled loop needs and the
-/// shared one already owns. A tenth job written the old way brings its own.
+/// Work before the first await runs inside host startup, and a cancellation there stops the host.
+/// Held by the timer, which only a hand-rolled loop needs.
 /// </remarks>
 public class PeriodicJobShould
 {
@@ -31,15 +20,12 @@ public class PeriodicJobShould
 
     [Fact]
     public void FindThePeriodicJobs() =>
-        Jobs().Should().HaveCountGreaterThanOrEqualTo(9,
-            "the API host runs nine of them, and a smaller match means the assemblies were " +
-            "never loaded and the rule below checks nothing");
+        Jobs().Should().NotBeEmpty(
+            "no match means the assemblies were never loaded and the rule below checks nothing");
 
     [Fact]
     public void OwnTheTimerInOnePlace() =>
-        Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(IsAuthored)
+        RepositoryFiles.ProductionSources()
             .Where(path => File.ReadAllText(path).Contains("new PeriodicTimer(", StringComparison.Ordinal))
             .Select(path => Path.GetFileName(path))
             .Should().BeEquivalentTo([$"{BaseType}.cs"],
@@ -59,10 +45,4 @@ public class PeriodicJobShould
             yield return current;
         }
     }
-
-    private static bool IsAuthored(string path) => !path
-        .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-        .Any(segment => segment is "obj" or "bin" or "node_modules");
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

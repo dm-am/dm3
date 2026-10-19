@@ -1,34 +1,27 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Characters;
-using DM.Domain.Game.Features.Games;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.AttributeSchemas;
 
 /// <summary>
-/// Shared schema-level validation rules for attribute specifications.
-/// Reused by both create and update schema validators so every persistence
-/// path enforces the same invariants.
+/// Schema rules shared by every validator that saves specifications, so all paths agree.
 /// </summary>
 internal static class AttributeSpecificationRules
 {
     /// <summary>
     /// The per-specification rules, whichever DTO carries the specification.
     /// </summary>
-    /// <remarks>
-    /// Written once and applied by both schema validators: creation and editing
-    /// have to accept the same specification, and the copy that used to sit in
-    /// each of them was the same three rules word for word.
-    /// </remarks>
     public static void Apply<TSpecification>(InlineValidator<TSpecification> specification)
-        where TSpecification : IAttributeSpecificationInput
+        where TSpecification : CreateAttributeSpecification
     {
         specification.RuleFor(s => s.Title)
-            .NotEmpty().WithMessage(ValidationError.Empty)
+            .NotEmpty().WithMessage("Введите название атрибута")
             .MaximumLength(AttributeSchemaFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
 
         specification.RuleFor(s => s.Type)
@@ -36,14 +29,31 @@ internal static class AttributeSpecificationRules
 
         specification.RuleFor(s => s.Order)
             .GreaterThanOrEqualTo(0).WithMessage(ValidationError.Invalid);
+
+        // Absent means "no limit"; a limit below one admits no value at all.
+        specification.RuleFor(s => s.MaxLength)
+            .GreaterThan(0).WithMessage(ValidationError.MustBePositive)
+            .When(s => s.MaxLength.HasValue);
+    }
+
+    /// <summary>
+    /// The per-specification rules and the schema-level ones, for whichever DTO carries the set.
+    /// </summary>
+    public static void RuleForSpecifications<TSchema, TSpecification>(
+        this AbstractValidator<TSchema> validator,
+        Expression<Func<TSchema, IEnumerable<TSpecification>>> specifications)
+        where TSpecification : CreateAttributeSpecification
+    {
+        validator.RuleForEach(specifications).ChildRules(Apply);
+        validator.RuleFor(specifications).Custom(AddFailures);
     }
 
     /// <summary>
     /// Report every schema-level violation of <see cref="Collect" /> to the
     /// validation context of whichever DTO is being checked.
     /// </summary>
-    public static void AddFailures<TSchema>(
-        IEnumerable<IAttributeSpecificationInput>? specifications,
+    private static void AddFailures<TSchema>(
+        IEnumerable<CreateAttributeSpecification>? specifications,
         ValidationContext<TSchema> context)
     {
         foreach (var error in Collect(specifications))
@@ -70,15 +80,8 @@ internal static class AttributeSpecificationRules
     /// Identifiers submitted twice in one set.
     /// </summary>
     /// <remarks>
-    /// Identifiers inside a schema are unique, and a replacement keeps the ones
-    /// the stored set already holds, so a set naming the same one twice asks
-    /// for two specifications that are the same specification, and the values of
-    /// the characters written against it would answer to both. Refused here,
-    /// before anything is written, rather than settled by whichever of the two
-    /// the document happens to keep.
-    ///
-    /// An absent or empty identifier is not a repeat: those are the spelling of
-    /// "new specification", and the server hands each of them one of its own.
+    /// Two specifications under one identifier would both own the values written against it.
+    /// An absent or empty identifier is not a repeat: it spells "new specification".
     /// </remarks>
     public static IEnumerable<string> CollectRepeatedIdentifiers(IEnumerable<Guid?>? identifiers)
     {
@@ -106,7 +109,7 @@ internal static class AttributeSpecificationRules
     /// </summary>
     /// <param name="specifications">Specifications being persisted (may be null on update)</param>
     /// <returns>Human-readable error messages, empty when valid</returns>
-    public static IEnumerable<string> Collect(IEnumerable<IAttributeSpecificationInput>? specifications)
+    public static IEnumerable<string> Collect(IEnumerable<CreateAttributeSpecification>? specifications)
     {
         if (specifications == null)
         {
@@ -115,26 +118,26 @@ internal static class AttributeSpecificationRules
 
         var specs = specifications.ToList();
 
-        // At most one descriptor across the whole schema
         if (specs.Count(s => s.IsDescriptor) > 1)
         {
-            yield return "Описателем можно отметить только один атрибут";
+            yield return "Дескриптором можно отметить только один атрибут";
         }
 
         foreach (var spec in specs)
         {
-            var title = string.IsNullOrWhiteSpace(spec.Title) ? "(untitled)" : spec.Title.Trim();
+            // An empty title is refused by the rule of the field (Apply); the
+            // sentences about the rest of the attribute still need a name for it.
+            var title = string.IsNullOrWhiteSpace(spec.Title) ? "Без названия" : spec.Title.Trim();
 
-            // Non-empty title per spec
-            if (string.IsNullOrWhiteSpace(spec.Title))
-            {
-                yield return "Attribute title must not be empty";
-            }
-
-            // BbCode specs may not be descriptor
             if (spec.Type == AttributeSpecificationType.BbCode && spec.IsDescriptor)
             {
-                yield return $"Атрибут '{title}' с разметкой не может быть описателем";
+                yield return $"Атрибут '{title}' с разметкой не может быть дескриптором";
+            }
+
+            // Every reader of the game page sees the descriptor.
+            if (spec.IsDescriptor && spec.IsHidden)
+            {
+                yield return $"Дескриптор '{title}' не может быть скрытым";
             }
 
             if (!IsListType(spec.Type))
@@ -144,21 +147,19 @@ internal static class AttributeSpecificationRules
 
             var values = spec.Values?.ToList() ?? [];
 
-            // List types require at least one value
             if (values.Count == 0)
             {
                 yield return $"У списка '{title}' должно быть хотя бы одно значение";
                 continue;
             }
 
-            // List option values must be unique per spec (read-time text matching relies on it)
+            // Values are matched by text when read.
             var distinctCount = values.Select(v => v.Value?.Trim()).Distinct().Count();
             if (distinctCount != values.Count)
             {
                 yield return $"В списке '{title}' значения не должны повторяться";
             }
 
-            // Text-number list requires both value and modifier for each option
             if (spec.Type == AttributeSpecificationType.TextNumberList &&
                 values.Any(v => string.IsNullOrWhiteSpace(v.Value) || v.Modifier == null))
             {
@@ -167,7 +168,7 @@ internal static class AttributeSpecificationRules
         }
     }
 
-    private static bool IsListType(AttributeSpecificationType type) =>
+    internal static bool IsListType(AttributeSpecificationType type) =>
         type is AttributeSpecificationType.TextList
             or AttributeSpecificationType.NumberList
             or AttributeSpecificationType.TextNumberList;

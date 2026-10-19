@@ -11,12 +11,6 @@ namespace DM.Web.API.Features.Moderation.Profiles;
 /// Fields are filtered by caller's role:
 /// Admin sees all fields; Moderator sees linked profiles, notes, violations.
 /// </summary>
-/// <remarks>
-/// Inherits from UserProfile: Id, Username, Role, Rating, Picture,
-/// Status, Info, Gender, Birthday, Name, Location, Contacts, RegisteredAtUtc, etc.
-/// Adds moderation-specific fields: Email (admin only), IpAddresses, LoginHistory,
-/// LinkedProfiles, ModeratorNotes, Violations, Permissions.
-/// </remarks>
 public class ModeratedProfile : UserProfile
 {
     /// <summary>
@@ -199,7 +193,7 @@ public class ViolationSummary
     public int TotalWarnings { get; set; }
 
     /// <summary>
-    /// Sum of active warning points (within last 30 days)
+    /// Sum of the points the warnings weigh now
     /// </summary>
     public int ActiveWarningPoints { get; set; }
 

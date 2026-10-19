@@ -15,7 +15,6 @@ public class GameBlacklist
     /// Entry identifier
     /// </summary>
     [Key]
-    [Column("GameBlacklistId")]
     public Guid EntryId { get; set; }
 
     /// <summary>
@@ -40,15 +39,9 @@ public class GameBlacklist
 
     #region Navigation Properties
 
-    /// <summary>
-    /// Game
-    /// </summary>
     [ForeignKey(nameof(GameId))]
     public virtual Game Game { get; set; } = null!;
 
-    /// <summary>
-    /// Blocked user
-    /// </summary>
     [ForeignKey(nameof(BlockedUserId))]
     public virtual User BlockedUser { get; set; } = null!;
 

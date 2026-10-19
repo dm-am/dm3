@@ -24,10 +24,9 @@ namespace DM.Web.API.Features.Personal.Blacklists;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class BlacklistController : ControllerBase
 {
-    private readonly IUserBlacklistApiService _apiService;
+    private readonly UserBlacklistApiService _apiService;
 
-    /// <inheritdoc />
-    public BlacklistController(IUserBlacklistApiService apiService)
+    public BlacklistController(UserBlacklistApiService apiService)
     {
         _apiService = apiService;
     }

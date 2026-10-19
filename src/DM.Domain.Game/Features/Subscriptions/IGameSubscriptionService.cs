@@ -7,35 +7,16 @@ using DM.Domain.Core.Subscriptions;
 
 namespace DM.Domain.Game.Features.Subscriptions;
 
-/// <summary>
-/// Service for managing game subscriptions
-/// </summary>
 public interface IGameSubscriptionService
 {
-    /// <summary>
-    /// Subscribe current user to a game
-    /// </summary>
     Task<Subscription> SubscribeAsync(Guid gameId, CancellationToken ct = default);
 
     /// <summary>
-    /// Subscribe another user, where the subscription follows from somebody
-    /// else's action rather than from a request of their own: the player who
-    /// lost their last character stays with the game as a reader.
+    /// Follows from somebody else's action: the player who lost his last character stays as a reader.
     /// </summary>
     Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Unsubscribe current user from a game
-    /// </summary>
     Task UnsubscribeAsync(Guid gameId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get subscribers of a game
-    /// </summary>
     Task<IEnumerable<UserReference>> GetSubscribersAsync(Guid gameId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Check if a user is subscribed to a game
-    /// </summary>
-    Task<bool> IsSubscribedAsync(Guid userId, Guid gameId, CancellationToken ct = default);
 }

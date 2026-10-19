@@ -1,4 +1,3 @@
-using System.Linq;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
 using System.Net;
@@ -10,6 +9,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
+using DM.Web.API.Shared.Dto;
 using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
 
@@ -18,11 +18,6 @@ namespace DM.Web.API.Features.Account.Credentials;
 /// <summary>
 /// Credential management: password, email, username changes
 /// </summary>
-/// <remarks>
-/// All operations require authentication.
-/// Email and username changes require confirmation via token sent to email.
-/// Username changes additionally require moderator approval.
-/// </remarks>
 [ApiController]
 [Route("v1/account")]
 [ApiExplorerSettings(GroupName = "Account")]
@@ -31,21 +26,16 @@ namespace DM.Web.API.Features.Account.Credentials;
 [EnableRateLimiting(RateLimitPolicies.Auth)]
 public class CredentialsController : ControllerBase
 {
-    private readonly ICredentialsApiService _credentialsService;
+    private readonly CredentialsApiService _credentialsService;
     private readonly ILogger<CredentialsController> _logger;
 
-    /// <summary>
-    /// Creates a new instance of CredentialsController
-    /// </summary>
     public CredentialsController(
-        ICredentialsApiService credentialsService,
+        CredentialsApiService credentialsService,
         ILogger<CredentialsController> logger)
     {
         _credentialsService = credentialsService;
         _logger = logger;
     }
-
-    #region Password
 
     /// <summary>
     /// Change password
@@ -67,10 +57,6 @@ public class CredentialsController : ControllerBase
     public async Task<IActionResult> ChangePassword([FromBody] PasswordChangeRequest request) =>
         Ok(await _credentialsService.ChangePassword(request));
 
-    #endregion
-
-    #region Email Change
-
     /// <summary>
     /// Request email change
     /// </summary>
@@ -80,12 +66,12 @@ public class CredentialsController : ControllerBase
     /// The change is not effective until confirmed.
     /// </remarks>
     /// <param name="request">New email and current password</param>
-    /// <response code="200">Confirmation email sent to new address</response>
+    /// <response code="200">Confirmation email sent to new address; the body says how long its link lives</response>
     /// <response code="400">Invalid request (wrong password, invalid email, or email taken)</response>
     /// <response code="401">User not authenticated</response>
     /// <response code="429">Too many requests</response>
     [HttpPost("email-change", Name = nameof(RequestEmailChange))]
-    [ProducesResponseType(typeof(User), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<MailedLink>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
@@ -93,14 +79,11 @@ public class CredentialsController : ControllerBase
     {
         try
         {
-            return Ok(await _credentialsService.RequestEmailChange(request));
+            return Ok(new Envelope<MailedLink>(await _credentialsService.RequestEmailChange(request)));
         }
-        catch (ValidationException refusal) when (refusal.Errors.Any(e =>
-                   e.PropertyName == "Email" && e.ErrorMessage == ValidationError.Taken))
+        catch (ValidationException refusal) when (refusal.DisclosesTaken("Email"))
         {
-            // The one bit of the availability check, given to a signed-in
-            // caller after a matched password, and recorded like the rest of
-            // the table (SECURITY.md).
+            // After a matched password, and recorded like the rest of the table (SECURITY.md).
             _logger.IdentifierDisclosed(HttpContext, "email-change", ValidationError.Taken);
             throw;
         }
@@ -130,10 +113,6 @@ public class CredentialsController : ControllerBase
         await _credentialsService.ConfirmEmailChange(TokenHeaders.ParseAccountToken(token));
         return NoContent();
     }
-
-    #endregion
-
-    #region Username Change
 
     /// <summary>
     /// Request permission to change username
@@ -173,10 +152,7 @@ public class CredentialsController : ControllerBase
     [ProducesResponseType(typeof(UsernameChangeResponse), StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    // The state of one account's own request, moderator verdict included. Same
-    // rule as the session list and the security journal: an authenticated read
-    // of the account area is stored by nothing.
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [PrivateResponse]
     public async Task<IActionResult> GetUsernameChangeStatus()
     {
         var result = await _credentialsService.GetUsernameChangeStatusAsync();
@@ -237,6 +213,4 @@ public class CredentialsController : ControllerBase
         [FromHeader(Name = TokenHeaders.Account)] string? token,
         [FromBody] UsernameChangeCompletionRequest request) =>
         Ok(await _credentialsService.CompleteUsernameChangeAsync(TokenHeaders.ParseAccountToken(token), request));
-
-    #endregion
 }

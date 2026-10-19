@@ -1,4 +1,8 @@
 @use "@/assets/styles/Variables" as *
+@use "@/assets/styles/Themes" as *
+@use "@/assets/styles/Surfaces" as *
+@use "@/assets/styles/Buttons" as *
+@use "@/assets/styles/DialogSurface" as *
 
 /// The outer width of the calendar panel, frame included: a 62-step grid of
 /// seven days, the $small padding on both sides and the 1px frame. Written once
@@ -6,3 +10,66 @@
 /// that stands as wide as the calendar it opens (DateInput, `narrow`), so the
 /// icon of the field sits over the right edge of the panel under it.
 $calendar-width: $grid-step * 62 + $small * 2 + 2px
+
+/// The window's field of one line, for a field that does not stand right in a FormField row.
+=window-field
+  height: $dialog-control-height
+  padding: 0 $dialog-field-inset
+  font-size: $dialog-field-font-size
+
+/// Select's chevron beside a word of the header: there is a choice behind it.
+=calendar-chevron
+  width: 14px
+  height: 14px
+  margin-left: $tiny
+  vertical-align: -2px
+  color: $text-muted
+
+/// An arrow of the header, `$size` square.
+=calendar-nav($size)
+  width: $size
+  height: $size
+  border: none
+  border-radius: $border-radius
+  background: transparent
+  color: $link
+  font-size: $font-size
+  cursor: pointer
+  line-height: 1
+  vertical-align: middle
+
+  &:hover:not(:disabled)
+    background-color: $bg-element-accent
+
+  &:disabled
+    color: $text-muted
+    cursor: default
+
+/// A cell of the grid. The content goes between its ring and its dimming, so
+/// out of reach and picked still have the last word.
+=calendar-cell
+  border: none
+  border-radius: $border-radius
+  background: transparent
+  color: $text
+  cursor: pointer
+  font: inherit
+  font-size: $secondary-font-size
+
+  &:hover:not(:disabled):not(.selected)
+    background-color: $bg-highlight-blue
+
+  // The cells stand flush: the ring goes inside.
+  &:focus-visible
+    +focus-ring($inward: true)
+
+  @content
+
+  // A cell has no box of its own to hatch, only its number.
+  &:disabled
+    color: $text-muted
+    opacity: $disabled-opacity
+    cursor: default
+
+  &.selected
+    +button-primary

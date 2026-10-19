@@ -10,7 +10,7 @@ namespace DM.Web.API.Features.Game.AttributeSchemaTemplates;
 /// Compile-time mapper for the catalogue of starting character sheets
 /// </summary>
 [Mapper]
-internal partial class AttributeSchemaTemplateMapper
+public partial class AttributeSchemaTemplateMapper
 {
     [UseMapper]
     private readonly AttributeSchemaMapper _specificationMapper;

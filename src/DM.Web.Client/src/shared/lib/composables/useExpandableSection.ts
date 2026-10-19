@@ -6,20 +6,11 @@ import {
 } from "./useExpandableRegistry";
 
 /**
- * THE building block for an expandable CONTENT section — one call wires the
- * complete site contract, so no new expandable can ever ship half-done:
- *
- *   1. Smooth reveal in the unified site tempo: the pin-and-animate
- *      height pattern (useAnimatedHeightToggle — a real height pin, so
- *      BOTH directions animate) against the global `.expand-zone` class
- *      from Reset.sass.
- *   2. The page-wide "Развернуть все / Свернуть все" ScrollNav toggle:
- *      collapsed-capable instances auto-register in the expandable registry
- *      (bulk actions animate too; late-mounting sections sync with a bulk
- *      action already in flight); `startExpanded` instances have no
- *      collapsed state to offer and stay unregistered.
- *   3. Correct manual-toggle semantics: `toggle` clears the registry's
- *      pending bulk action, exactly like every other manual reveal.
+ * An expandable content section with the whole site contract: the
+ * useAnimatedHeightToggle reveal in the .expand-zone tempo, registration for
+ * "Развернуть все" when it can collapse, and a toggle that clears a pending bulk
+ * action. Text truncation is TruncatedContent's; tool reveals and persistent
+ * sidebar sections stay out of the registry (UI_STANDARDS.md).
  *
  * Usage:
  *   const zoneRef = ref<HTMLElement | null>(null);
@@ -28,15 +19,6 @@ import {
  *
  *   <div ref="zoneRef" class="expand-zone" v-bind="zoneBindings">...</div>
  *   <button v-if="!isExpanded" @click="toggle(true)">...</button>
- *
- * Scope boundaries (see UI_STANDARDS.md, Animation Standards):
- *   - Text truncation ("показать полностью" over long text) stays with
- *     TruncatedContent — its reveal is coupled to line-snapped clamps.
- *   - TOOL reveals (inline create/edit forms, settings accordions) animate
- *     with useAnimatedHeightToggle directly but stay OUT of the registry:
- *     "Развернуть все" reads content, it must never open editing tools.
- *   - Persistent sidebar sections (localStorage state) also stay out of
- *     the registry and only share the animation tempo tokens.
  */
 export function useExpandableSection(options: {
   /** The animated zone element (carries the global .expand-zone class). */
@@ -47,9 +29,7 @@ export function useExpandableSection(options: {
   /** Start expanded: nothing to collapse — stays out of the registry.
    * Ignored when `model` is provided (the model's value is the start). */
   startExpanded?: boolean;
-  /** Reactive gate for registry participation (e.g. "only when the viewer
-   * is a moderator"). The section registers while true and unregisters
-   * while false; animation works regardless. Default: always on. */
+  /** Registers while true; the animation works regardless. Default: always on. */
   registryEnabled?: Ref<boolean> | (() => boolean);
   /** Registry handle label (debugging). */
   label?: string;
@@ -65,9 +45,8 @@ export function useExpandableSection(options: {
     isExpanded.value = next;
   });
 
-  // Registry participation. Sync-registration (not onMounted) so a section
-  // that mounts AFTER a bulk action still syncs via the registry's
-  // pending-action logic; a reactive gate re-syncs on permission changes.
+  // Registered in setup, not onMounted, so a section mounting after a bulk
+  // action still syncs.
   const registryGate = options.registryEnabled ?? (() => true);
   const gateValue = computed(() =>
     typeof registryGate === "function" ? registryGate() : registryGate.value,
@@ -107,9 +86,7 @@ export function useExpandableSection(options: {
     animate(next);
   }
 
-  /** Bindings for the `.expand-zone` element: the animation pin + the
-   * in-flight class + transition listeners (cancel included, so an
-   * interrupted transition never leaves a stuck pin). */
+  /** The pin, the in-flight class and both transition listeners. */
   const zoneBindings = computed(() => ({
     class: { animating: pinnedHeight.value !== null },
     style:

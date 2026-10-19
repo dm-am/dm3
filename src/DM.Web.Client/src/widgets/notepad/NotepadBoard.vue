@@ -1,19 +1,6 @@
 <script setup lang="ts">
-/**
- * NotepadBoard — the two-pane notepad (entry list + reader/editor) shared by
- * the personal, game-master and blog notepads.
- *
- * These were three copies of one screen and they had already drifted: only the
- * game copy had a loading skeleton, only the blog copy asked before deleting,
- * and each spelled its own toast text. The board is the single copy; a page
- * supplies the endpoints through `adapter` and the wording through props.
- *
- * `standalone` marks the personal notepad, which is a page in its own right
- * (own h1, own page padding). The game and blog notepads are tabs inside a
- * container page and carry an h2 with no outer padding.
- */
+/** The two-pane notepad of the three notepads; a page supplies the endpoints and the words. */
 import { computed, onMounted, ref, watch } from "vue";
-import { symbols } from "@/shared/lib/utils/icons";
 import type { NotepadEntry } from "@/shared/api/models/notepads";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
@@ -23,7 +10,9 @@ import { CaptionAction, CaptionLine } from "@/shared/ui/CaptionLine";
 import type { NotepadAdapter } from "./types";
 import { refusalHere } from "@/shared/lib/errors";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { FormField } from "@/shared/ui/Form";
+import { Button } from "@/shared/ui/Button";
+import NotepadEntryEditor from "./NotepadEntryEditor.vue";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = withDefaults(
   defineProps<{
@@ -38,19 +27,9 @@ const props = withDefaults(
     emptyHint: string;
     /** The line in place of the list when the list request fails. */
     loadErrorText: string;
-    /**
-     * Who is looking. The per-entry controls repeat the server's rules for one
-     * entry, which are decided by authorship: an entry is edited by the one who
-     * wrote it and by nobody else, because rewritten by another hand it would
-     * still stand under their name. Null for a viewer with no account, who
-     * writes nowhere.
-     */
+    /** Who is looking: an entry is edited by its author alone; null for a guest. */
     viewerId: string | null;
-    /**
-     * Whether the viewer leads the container and may therefore remove an entry
-     * somebody else wrote — the game master, the blog owner. Deleting is the
-     * one place where a lead outranks the author; editing is not.
-     */
+    /** The viewer leads the container and may delete an entry somebody else wrote. */
     canDeleteOthers?: boolean;
     /** Personal notepad: own page, h1 and page padding. */
     standalone?: boolean;
@@ -65,67 +44,27 @@ const props = withDefaults(
 
 const entries = ref<NotepadEntry[]>([]);
 const loading = ref(false);
-/**
- * Why the list did not arrive, in the place of the list with "Повторить". It
- * used to be a plate over an empty notepad that read as one with no entries.
- */
+/** Why the list did not arrive, in the place of the list with "Повторить". */
 const loadRefusal = ref("");
-const saving = ref(false);
 
-// Editor state
 const showEditor = ref(false);
 const editingEntry = ref<NotepadEntry | null>(null);
-const editorTitle = ref("");
-const editorContent = ref("");
 
-/**
- * Why the title is missing, printed under the field.
- *
- * The check is the client's own and runs before any request, so nothing is on
- * the wire to talk about: the reader is standing in the editor with the cursor
- * two lines above the empty field. A toast said it in the far corner of the
- * screen, away from the field it was about, while the rest of the site answers
- * a failed field with a red line under it — the one the shared FormField
- * prints (shared/ui/Form/FormField.vue), and the one the nearest twin of this
- * editor already uses for the very same check
- * (features/attribute-schema-editor, "Введите название схемы").
- */
-const titleError = ref("");
+/** Bumped on every opening, so each one mounts a fresh editor. */
+const editorKey = ref(0);
 
-/**
- * Why the last save was refused, printed in the editor above its buttons.
- *
- * A refused save leaves the editor standing with the text still in it, so the
- * reader is looking at the editor and not at the corner a toast rises in. The
- * refusal line of a form (p.form-error, the shape features/edit-character and
- * features/attribute-schema-editor print) stands where the eye already is and
- * stays until the next attempt or until the editor closes, however long the
- * reader takes to read it. The toast that stood here said the same thing in
- * the far corner and, raised directly, said it beside the interceptor's own
- * plate on a 403, 429 or 5xx: one press, two red boxes. A refusal has one
- * carrier (UI_STANDARDS, "Всплывающие сообщения"); the adapter has no seam for
- * `ownsRefusal`, so this screen keeps quiet on the statuses the interceptor
- * announces and prints the rest in the server's words.
- */
-const saveRefusal = ref("");
+const selectedId = ref<string | null>(null);
+const selectedEntry = computed(
+  () => entries.value.find((e) => e.id === selectedId.value) ?? null,
+);
 
-/** The board's own sentence, for a refusal the server did not word. */
-const SAVE_REFUSED = "Не удалось сохранить запись";
-
-// Selected entry for viewing
-const selectedEntry = ref<NotepadEntry | null>(null);
-
-// Entry awaiting delete confirmation (ConfirmDialog idiom).
 const pendingDelete = ref<NotepadEntry | null>(null);
 
 const sortedEntries = computed(() =>
   [...entries.value].sort((a, b) => a.sortOrder - b.sortOrder),
 );
 
-// The two controls over the entry on the right, each the client half of a
-// server rule. Offered on every entry, they earned a 403 the moment a notepad
-// held two authors — the notes of a game are shared by the master and the
-// assistants, and so are the notes kept about a character.
+// The client half of the server's rules: offered on every entry, they earned a 403.
 const canEditSelected = computed(
   () =>
     !!selectedEntry.value &&
@@ -147,8 +86,7 @@ async function fetchEntries() {
   const { data, error } = await props.adapter.list();
   loading.value = false;
   if (error) {
-    // An expired session and a dead connection keep their plate, and the
-    // place of the list still says the list is not there.
+    // An expired session and a dead connection keep their plate.
     loadRefusal.value =
       refusalHere(error, props.loadErrorText) ?? props.loadErrorText;
     return;
@@ -156,124 +94,44 @@ async function fetchEntries() {
   entries.value = data?.resources ?? [];
 }
 
-function openNewEntryEditor() {
-  editingEntry.value = null;
-  editorTitle.value = "";
-  editorContent.value = "";
-  titleError.value = "";
-  saveRefusal.value = "";
-  showEditor.value = true;
-}
-
-function openEditEntryEditor(entry: NotepadEntry) {
+/** Opens the editor on `entry`, or on a new one. */
+function openEditor(entry: NotepadEntry | null) {
   editingEntry.value = entry;
-  editorTitle.value = entry.title;
-  editorContent.value = entry.content;
-  titleError.value = "";
-  saveRefusal.value = "";
+  editorKey.value += 1;
   showEditor.value = true;
 }
 
 function closeEditor() {
   showEditor.value = false;
   editingEntry.value = null;
-  editorTitle.value = "";
-  editorContent.value = "";
-  titleError.value = "";
-  saveRefusal.value = "";
 }
 
-async function saveEntry() {
-  if (saving.value) return;
-  if (!editorTitle.value.trim()) {
-    titleError.value = "Введите название записи";
-    return;
-  }
-  titleError.value = "";
-  saveRefusal.value = "";
-
-  const input = { title: editorTitle.value, content: editorContent.value };
-  const editing = editingEntry.value;
-
-  saving.value = true;
-  const { data, error } = editing
-    ? await props.adapter.update(editing.id, input)
-    : await props.adapter.create(input);
-  saving.value = false;
-
-  if (error) {
-    // The editor explains every refusal - a rejected field, an entry that is
-    // gone, a refused action, a wait, a dead server - and stays open with what
-    // was typed; the plate the interceptor held for it is taken down.
-    saveRefusal.value = refusalHere(error, SAVE_REFUSED) ?? "";
-    return;
-  }
-
-  const saved = data?.resource;
-  if (!saved) {
-    // Answered without an entry: nothing to put in the pane and nothing the
-    // interceptor would have said, so the line speaks for itself.
-    saveRefusal.value = SAVE_REFUSED;
-    return;
-  }
-
+/** The editor's saved entry, put in the list, and the editor closed. */
+function onEntrySaved(saved: NotepadEntry, editing: NotepadEntry | null) {
   if (editing) {
     const index = entries.value.findIndex((e) => e.id === editing.id);
     if (index !== -1) entries.value[index] = saved;
-    if (selectedEntry.value?.id === saved.id) selectedEntry.value = saved;
   } else {
     entries.value.push(saved);
-    // A created entry opens in the reader pane, the way a created game or blog
-    // opens on its own page (features/create-game, features/create-blog): the
-    // thing that was just written is what the screen shows next. Here the pane
-    // already has the slot for it — `selectedEntry` is the only thing it reads,
-    // and the edit branch above re-points it at the saved resource for the same
-    // reason. The create endpoint answers with the whole entry
-    // (Envelope<NotepadEntryResponse>, the same DTO the list serves), so there
-    // is nothing left to fetch. Without this the pane fell back to "Выберите
-    // запись для просмотра" — the screen "Отмена" leaves behind — and a toast
-    // had to say what the screen refused to show.
-    selectedEntry.value = saved;
+    // A created entry opens in the reader pane, as a created game opens on its page.
+    selectedId.value = saved.id;
   }
   closeEditor();
 }
 
-/**
- * The confirmation's action: it waits shut for the answer, prints a refusal
- * in itself and closes on success alone, which is also what lets go of
- * `pendingDelete` (the window's `update:show`).
- */
+/** The confirmation's action: it closes on success alone, which lets go of pendingDelete. */
 async function deleteEntry() {
   const entry = pendingDelete.value;
   if (!entry) return;
 
-  const result = await props.adapter.remove(entry.id, {
-    ownsRefusal: true,
-    ownsRateLimit: true,
-  });
+  const result = await props.adapter.remove(entry.id, OWNS_REFUSAL);
   if (!result.error) {
     entries.value = entries.value.filter((e) => e.id !== entry.id);
-    if (selectedEntry.value?.id === entry.id) selectedEntry.value = null;
   }
   return result;
 }
 
-function selectEntry(entry: NotepadEntry) {
-  selectedEntry.value = entry;
-}
-
-// The entry list is an ARIA listbox (UI_STANDARDS, "Autocomplete/Listbox
-// Standards"). It used to be a bare div with @click — no role, no tabindex,
-// no keydown — while the reader pane and the per-entry edit/delete buttons
-// exist only under `selectedEntry`: a keyboard user could open nothing at
-// all on any of the three notepad pages.
-//
-// Roving tabindex, same mechanics as shared/ui/Tabs: exactly one option sits
-// in the Tab cycle — the selected entry, or the first one while nothing is
-// selected, so the list is never skipped over. Arrow keys, Home and End move
-// the focus and the selection follows it; Enter and Space take the option the
-// keyboard entered the list on, which is how the first entry gets opened from
-// a cold start.
+// A listbox with a roving tabindex: one option in the Tab cycle, the selection follows focus.
 const entryList = ref<HTMLElement | null>(null);
 
 const tabbableEntryId = computed(
@@ -313,13 +171,11 @@ function onEntryKeydown(event: KeyboardEvent, index: number) {
   }
 
   event.preventDefault();
-  selectEntry(list[nextIndex]);
+  selectedId.value = list[nextIndex].id;
   focusEntry(nextIndex);
 }
 
-// Access is resolved from a container store, so it can flip from false to true
-// after the container finishes loading — the first fetch would otherwise be
-// skipped and the notepad would stay empty for everyone.
+// Access comes from a container store and may flip to true once it loads.
 watch(() => props.accessible, fetchEntries);
 
 onMounted(fetchEntries);
@@ -335,18 +191,13 @@ onMounted(fetchEntries);
       <div class="page-header">
         <page-title v-if="standalone">{{ title }}</page-title>
         <h2 v-else class="page-title">{{ title }}</h2>
-        <!-- Secondary: it opens a form and is no form's action. With the editor
-             open, "Сохранить" is the one main button on screen. -->
-        <Button type="button" class="add-btn" @click="openNewEntryEditor">
+        <!-- Secondary: with the editor open, "Сохранить" is the one main button -->
+        <Button type="button" class="add-btn" @click="openEditor(null)">
           Новая запись
         </Button>
       </div>
 
-      <!-- Loading: geometric twin of the loaded two-pane layout
-           (skeleton-parity). Reuses .notepad-layout / .entry-list /
-           .entry-content so grid tracks, borders and paddings match by
-           construction; the right pane mirrors the initial no-selection
-           state (no phantom content). -->
+      <!-- The twin of the loaded layout, sharing its classes so the tracks match -->
       <div v-if="loading" class="notepad-layout" aria-hidden="true">
         <div class="entry-list">
           <div v-for="i in 3" :key="i" class="skeleton-entry">
@@ -373,7 +224,6 @@ onMounted(fetchEntries);
       </template>
 
       <div v-else class="notepad-layout">
-        <!-- Entry list -->
         <div
           ref="entryList"
           class="entry-list"
@@ -388,7 +238,7 @@ onMounted(fetchEntries);
             role="option"
             :aria-selected="selectedEntry?.id === entry.id"
             :tabindex="entry.id === tabbableEntryId ? 0 : -1"
-            @click="selectEntry(entry)"
+            @click="selectedId = entry.id"
             @keydown="onEntryKeydown($event, index)"
           >
             <div class="entry-title">{{ entry.title }}</div>
@@ -398,81 +248,19 @@ onMounted(fetchEntries);
           </div>
         </div>
 
-        <!-- Entry content / Editor -->
         <div class="entry-content">
-          <!-- Editor mode -->
-          <div v-if="showEditor" class="editor">
-            <div class="editor-header">
-              <h3>
-                {{ editingEntry ? "Редактирование записи" : "Новая запись" }}
-              </h3>
-              <button
-                class="close-btn"
-                aria-label="Закрыть"
-                @click="closeEditor"
-              >
-                {{ symbols.close }}
-              </button>
-            </div>
+          <NotepadEntryEditor
+            v-if="showEditor"
+            :key="editorKey"
+            :adapter="adapter"
+            :entry="editingEntry"
+            @saved="onEntrySaved"
+            @cancel="closeEditor"
+          />
 
-            <!-- A form of the page: the fields of the site with their captions
-                 and the red line under a field that failed, the buttons under
-                 the last field at the left, the main one first. -->
-            <div class="editor-form">
-              <FormField
-                label="Название"
-                :errors="titleError ? [titleError] : []"
-              >
-                <input
-                  id="entry-title"
-                  v-model="editorTitle"
-                  type="text"
-                  placeholder="Название записи"
-                  maxlength="200"
-                  @input="titleError = ''"
-                />
-              </FormField>
-
-              <FormField label="Содержимое">
-                <textarea
-                  id="entry-content"
-                  v-model="editorContent"
-                  placeholder="Текст записи..."
-                  rows="12"
-                ></textarea>
-              </FormField>
-
-              <!--
-                The refusal of the last save, in the form's own line above its
-                buttons: the site's answer to a save the server would not take
-                while the form stays on screen (features/edit-character puts
-                it in the same place). Not a toast - see `saveRefusal`.
-              -->
-              <p v-if="saveRefusal" class="form-error" role="alert">
-                {{ saveRefusal }}
-              </p>
-
-              <div class="editor-actions">
-                <Button variant="primary" :loading="saving" @click="saveEntry">
-                  Сохранить
-                </Button>
-                <Button
-                  class="cancel-btn"
-                  :disabled="saving"
-                  @click="closeEditor"
-                >
-                  Отмена
-                </Button>
-              </div>
-            </div>
-          </div>
-
-          <!-- View mode -->
           <template v-else-if="selectedEntry">
             <h2 class="content-title">{{ selectedEntry.title }}</h2>
-            <!-- The entry's caption and what the viewer may do with it, one
-                 line: the controls used to be buttons beside the title, where
-                 a long title pushed "Удалить" out of the pane. -->
+            <!-- The caption and the controls on one line, not buttons beside the title -->
             <CaptionLine class="content-meta">
               <span
                 >Создано: <human-date :date="selectedEntry.createdUtc"
@@ -482,7 +270,7 @@ onMounted(fetchEntries);
               /></span>
               <CaptionAction
                 v-if="canEditSelected"
-                @click="openEditEntryEditor(selectedEntry)"
+                @click="openEditor(selectedEntry)"
                 >Редактировать</CaptionAction
               >
               <CaptionAction
@@ -496,7 +284,6 @@ onMounted(fetchEntries);
             </div>
           </template>
 
-          <!-- No selection -->
           <div v-else class="no-selection">
             <secondary-text>Выберите запись для просмотра</secondary-text>
           </div>
@@ -517,7 +304,6 @@ onMounted(fetchEntries);
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 @use "@/assets/styles/Skeleton" as *
 
 .notepad
@@ -525,10 +311,7 @@ onMounted(fetchEntries);
   flex-direction: column
   min-height: $grid-step * 50
 
-  // The personal notepad is the page. No padding of its own: it pushed the
-  // heading 16 to the right of every other page of the column, as the
-  // notifications had it. The heading row keeps the top of a
-  // page's heading ($medium, as PageTitle stands).
+  // The personal notepad is the page: no padding, the heading row where a page heading stands.
   &.standalone
     height: 100%
     min-height: 0
@@ -545,8 +328,7 @@ onMounted(fetchEntries);
   align-items: center
   margin-bottom: $medium
 
-  // PageTitle renders an h1 (standalone), the tab variant an h2. Both sit
-  // flush in the header.
+  // PageTitle renders an h1, the tab variant an h2: both flush in the header.
   h1
     margin: 0
 
@@ -574,7 +356,7 @@ onMounted(fetchEntries);
   padding: $small
   border-bottom: 1px solid $border
   cursor: pointer
-  transition: background-color 0.2s
+  transition: background-color $transition-normal
 
   &:last-child
     border-bottom: none
@@ -585,22 +367,19 @@ onMounted(fetchEntries);
   &.selected
     background: $selected-overlay
 
-  // Keyboard focus ring for a listbox option. Inset, like the expandable
-  // table rows in _Tables.sass: the row sits flush inside the list's scroll
-  // container, where an outset ring would be clipped.
+  // The ring goes inward: an outset one would be clipped by the list's scroll box.
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
+    +focus-ring($inward: true)
 
 // A long title wraps, whole, rather than losing its end under "...".
 .entry-title
-  font-weight: 500
+  font-weight: 400
   color: $text
 
 .entry-date
   font-size: $tertiary-font-size
   color: $text-muted
-  margin-top: 2px
+  margin-top: $tiny
 
 .entry-content
   border: 1px solid $border
@@ -614,72 +393,10 @@ onMounted(fetchEntries);
   justify-content: center
   height: 100%
 
-.editor
-  height: 100%
-  display: flex
-  flex-direction: column
-
-.editor-header
-  display: flex
-  justify-content: space-between
-  align-items: center
-  margin-bottom: $medium
-
-  h3
-    margin: 0
-
-// A control, rounded as every control of the site is, the cross of a window
-// included (_DialogSurface.sass).
-.close-btn
-  width: 32px
-  height: 32px
-  border: none
-  border-radius: $border-radius
-  background: transparent
-  color: $text-muted
-  cursor: pointer
-  font-size: 1.5rem
-  line-height: 1
-  display: flex
-  align-items: center
-  justify-content: center
-
-  &:hover
-    background: $hover-overlay
-    color: $text
-
-.editor-form
-  flex: 1
-  display: flex
-  flex-direction: column
-
-// The fields are the site's own (FormField, +input): the line at the page's
-// control height, the caption, the frame, the ring, the red line under a
-// field that failed. Only the growth of the text area is this editor's.
-.editor-form textarea
-  resize: vertical
-  min-height: 200px
-
-// The form's refusal line, in the colour and size features/edit-character
-// prints its own: one sentence in the accent, no box of its own. No margin of
-// its own either - the field above and the buttons below carry the spacing.
-.form-error
-  margin: 0
-  color: $accent-red
-  font-size: $secondary-font-size
-
-// Under the last field, $medium away, the main button first: the row every
-// form of a page has.
-.editor-actions
-  display: flex
-  gap: $small
-  margin-top: $medium
-
 .content-title
   margin: 0 0 $small
 
-// The caption line draws its own size and colour; here it only stands as a
-// block of its own above the text.
+// The caption line draws its own look; here it only stands as a block.
 .content-meta
   display: block
   margin-bottom: $medium
@@ -687,16 +404,12 @@ onMounted(fetchEntries);
 .content-body
   pre
     white-space: pre-wrap
-    word-wrap: break-word
+    overflow-wrap: break-word
     font-family: inherit
     margin: 0
     color: $text
 
-// --- Loading skeleton (twin of .entry-item rows, skeleton-parity) ---
-
-// Twin of .entry-item: $small padding + 1px separator. Inner bars mirror
-// the real line boxes: title 16px x 1.3 ~ 21px (16px bar + 2px margins),
-// date 12px x 1.3 ~ 16px with its 2px top margin (12px bar + 4px margin).
+// Twin of .entry-item: its bars mirror the title's and the date's line boxes.
 .skeleton-entry
   padding: $small
   border-bottom: 1px solid $border
@@ -707,13 +420,13 @@ onMounted(fetchEntries);
 .skeleton-entry-title
   width: 70%
   height: 16px
-  margin: 2px 0
+  margin: $tiny 0
   +skeleton-shimmer
 
 .skeleton-entry-date
   width: 90px
   height: 12px
-  margin-top: 4px
+  margin-top: $minor
   +skeleton-shimmer
 
 // Twin of the centered "Выберите запись…" secondary-text line (14px).

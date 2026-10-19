@@ -1,5 +1,3 @@
-using DM.Domain.Core.Uploads;
-using DM.Testing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Personal.Profiles;
 using AwesomeAssertions;
@@ -8,19 +6,14 @@ using Xunit;
 namespace DM.Web.API.Tests.Features.Personal;
 
 /// <summary>
-/// PATCH carries "not sent" as null and the write model must keep saying it.
-/// The contact list is the loudest case: null leaves the contacts alone, an
-/// empty list removes them all.
+/// PATCH carries "not sent" as null and the write model keeps saying it: an empty contact list removes them all.
 /// </summary>
-public class PersonalProfileMapperShould : UnitTestBase
+public class PersonalProfileMapperShould
 {
-    private PersonalProfileMapper CreateMapper() =>
-        new(new UserMapper(Mock<IImgproxyUrlBuilder>()));
-
     [Fact]
     public void KeepAnUnsentContactListNull()
     {
-        var update = CreateMapper().ToUpdateUser(new UpdateProfile
+        var update = PersonalProfileMapper.ToUpdateUser(new UpdateProfile
         {
             Status = "Новый статус"
         });
@@ -38,7 +31,7 @@ public class PersonalProfileMapperShould : UnitTestBase
     [Fact]
     public void CarryAnEmptyContactListAsAClear()
     {
-        var update = CreateMapper().ToUpdateUser(new UpdateProfile
+        var update = PersonalProfileMapper.ToUpdateUser(new UpdateProfile
         {
             Contacts = []
         });
@@ -50,7 +43,7 @@ public class PersonalProfileMapperShould : UnitTestBase
     [Fact]
     public void NumberContactsInSubmittedOrder()
     {
-        var update = CreateMapper().ToUpdateUser(new UpdateProfile
+        var update = PersonalProfileMapper.ToUpdateUser(new UpdateProfile
         {
             Contacts =
             [
@@ -82,7 +75,7 @@ public class PersonalProfileMapperShould : UnitTestBase
     [Fact]
     public void FoldAPartialVisibilityBlockWithoutInventingValues()
     {
-        var update = CreateMapper().ToUpdateUser(new UpdateProfile
+        var update = PersonalProfileMapper.ToUpdateUser(new UpdateProfile
         {
             Visibility = new UpdateVisibilitySettings { ShowBirthday = false }
         });
@@ -90,4 +83,17 @@ public class PersonalProfileMapperShould : UnitTestBase
         update.ShowBirthday.Should().BeFalse();
         update.RatingDisabled.Should().BeNull("showRating was not sent");
     }
+
+    /// <summary>
+    /// The participation in the rating is saved by the profile: a hidden
+    /// rating is a disabled one on the account.
+    /// </summary>
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void CarryTheParticipationInTheRating(bool showRating, bool ratingDisabled) =>
+        PersonalProfileMapper.ToUpdateUser(new UpdateProfile
+        {
+            Visibility = new UpdateVisibilitySettings { ShowRating = showRating }
+        }).RatingDisabled.Should().Be(ratingDisabled);
 }

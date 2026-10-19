@@ -207,8 +207,7 @@ describe("DateInput", () => {
   // ============================================================================
 
   /**
-   * The numeric keyboard of a phone often has no dot, and on a desktop the
-   * dots were three keystrokes nobody wanted to type: "14031991" did not
+   * The dots were three keystrokes nobody wanted to type: "14031991" did not
    * parse, and the field threw it away on blur.
    */
   describe("Dots as you type", () => {
@@ -471,69 +470,20 @@ describe("DateInput", () => {
 });
 
 // ============================================================================
-// TOUCH
+// CLICK
 // ============================================================================
 
-/**
- * On a phone the tap that opened the calendar also raised the numeric
- * keyboard, which covered the calendar. The first tap now opens the calendar
- * with the keyboard held down, and a second tap closes it and gives the
- * keyboard back. A mouse is as it was.
- */
-describe("DateInput by touch", () => {
-  const mountField = () =>
-    mount(DateInput, {
+describe("DateInput by click", () => {
+  it("opens the calendar on a click, and a second click keeps it open", async () => {
+    const wrapper = mount(DateInput, {
       props: { modelValue: null },
       attachTo: document.body,
     });
-
-  /** A tap: the press, then the click it ends in. */
-  const tap = async (
-    wrapper: ReturnType<typeof mountField>,
-    pointerType = "touch",
-  ) => {
     const input = wrapper.find(".di-input");
-    const press = new Event("pointerdown", { bubbles: true });
-    Object.defineProperty(press, "pointerType", { value: pointerType });
-    input.element.dispatchEvent(press);
     await input.trigger("click");
-  };
-
-  const mode = (wrapper: ReturnType<typeof mountField>) =>
-    (wrapper.find(".di-input").element as HTMLInputElement).inputMode;
-
-  it("opens the calendar on the first tap with the keyboard down", async () => {
-    const wrapper = mountField();
-    await tap(wrapper);
     expect(wrapper.find(".calendar-grid").exists()).toBe(true);
-    expect(mode(wrapper)).toBe("none");
-    expect(wrapper.find(".di-input").attributes("inputmode")).toBe("none");
-  });
-
-  it("closes it on the second tap and gives the numeric keyboard", async () => {
-    const wrapper = mountField();
-    await tap(wrapper);
-    await tap(wrapper);
-    expect(wrapper.find(".calendar-grid").exists()).toBe(false);
-    expect(mode(wrapper)).toBe("numeric");
-  });
-
-  it("keeps the keyboard down when a day is picked by touch", async () => {
-    const wrapper = mountField();
-    await tap(wrapper);
-    const day = wrapper.findAll(".dp-day:not([disabled])")[0];
-    await day.trigger("click");
-    expect(wrapper.find(".calendar-grid").exists()).toBe(false);
-    expect(document.activeElement).toBe(wrapper.find(".di-input").element);
-    expect(mode(wrapper)).toBe("none");
-  });
-
-  it("leaves the mouse as it was: a click opens, a second keeps it open", async () => {
-    const wrapper = mountField();
-    await tap(wrapper, "mouse");
-    expect(wrapper.find(".calendar-grid").exists()).toBe(true);
-    expect(mode(wrapper)).toBe("numeric");
-    await tap(wrapper, "mouse");
+    expect(input.attributes("inputmode")).toBe("numeric");
+    await input.trigger("click");
     expect(wrapper.find(".calendar-grid").exists()).toBe(true);
   });
 });

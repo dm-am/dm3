@@ -4,7 +4,6 @@ using System.Linq;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Domain.Personal.Features.Notifications;
 using Microsoft.EntityFrameworkCore;
 
@@ -17,7 +16,6 @@ internal class BlogInvitationNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public BlogInvitationNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -49,9 +47,7 @@ internal class BlogInvitationNotificationGenerator : BaseNotificationGenerator
 
         var role = invitationData.Type == TokenType.BlogAssistantInvitation ? "Ассистент" : "Читатель";
 
-        // The inviter is the token's creator; falling back to the blog author keeps
-        // the filter on the person InviterUsername names for tokens stored without a
-        // creator, the way BlogInvitationRepository resolves its inviter.
+        // Falls back to the blog author for a token without a creator, as BlogInvitationRepository does.
         yield return new CreateNotification
         {
             UsersInterested = [invitationData.UserId],
@@ -59,8 +55,8 @@ internal class BlogInvitationNotificationGenerator : BaseNotificationGenerator
             Metadata = new
             {
                 BlogId = invitationData.BlogId.EncodeToReadable(invitationData.BlogTitle),
-                BlogTitle = invitationData.BlogTitle,
-                InviterUsername = invitationData.InviterUsername,
+                invitationData.BlogTitle,
+                invitationData.InviterUsername,
                 Role = role
             }
         };

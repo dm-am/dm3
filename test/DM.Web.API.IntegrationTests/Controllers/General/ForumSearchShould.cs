@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Forum;
@@ -19,12 +15,8 @@ using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
 /// <summary>
-/// Forum search runs on generated tsvector columns rather than a separate search
-/// store, and this is what that buys: Russian morphology, a title that outranks a
-/// body, and visibility that is a join rather than a copy of the access rules
-/// kept beside the text. The store it replaced could not do the last one — the
-/// authorization it wrote into each document was assembled at index time, so a
-/// board whose policy changed stayed wrong until something reindexed it.
+/// Forum search runs on generated tsvector columns: Russian morphology, a title that outranks a body, and
+/// visibility that is a join rather than a copy of the access rules.
 /// </summary>
 public class ForumSearchShould : IntegrationTestBase
 {
@@ -41,7 +33,7 @@ public class ForumSearchShould : IntegrationTestBase
     [Fact]
     public async Task MatchARussianWordInAnotherGrammaticalForm()
     {
-        var boardId = await CreateBoard(BoardAccessPolicy.Guest);
+        var boardId = await CreateBoard();
         try
         {
             await CreateTopic(boardId, "Хроники ольмагара", "Ведущий собирает партию странников.");
@@ -73,7 +65,7 @@ public class ForumSearchShould : IntegrationTestBase
     [Fact]
     public async Task RankATitleMatchAboveABodyMatch()
     {
-        var boardId = await CreateBoard(BoardAccessPolicy.Guest);
+        var boardId = await CreateBoard();
         try
         {
             await CreateTopic(boardId, "Обычная тема", "Здесь про ольмагара в тексте.", 1);
@@ -94,7 +86,7 @@ public class ForumSearchShould : IntegrationTestBase
     [Fact]
     public async Task FindACommentAndPointAtItsTopic()
     {
-        var boardId = await CreateBoard(BoardAccessPolicy.Guest);
+        var boardId = await CreateBoard();
         try
         {
             var topicId = await CreateTopic(boardId, "Тема без совпадений", "Ничего интересного.");
@@ -118,7 +110,7 @@ public class ForumSearchShould : IntegrationTestBase
     [Fact]
     public async Task IgnoreCommentsThatAreNotOnAForumTopic()
     {
-        var boardId = await CreateBoard(BoardAccessPolicy.Guest);
+        var boardId = await CreateBoard();
         try
         {
             // Comment.EntityId is polymorphic and the tsvector column indexes every
@@ -133,26 +125,6 @@ public class ForumSearchShould : IntegrationTestBase
         finally
         {
             await DropCommentsOn(TestConstants.TestGameId);
-            await DropBoard(boardId);
-        }
-    }
-
-    [Fact]
-    public async Task HideABoardTheCallerMayNotRead()
-    {
-        var boardId = await CreateBoard(BoardAccessPolicy.Moderator);
-        try
-        {
-            await CreateTopic(boardId, "Служебная тема", "Ольмагар только для модераторов.");
-
-            var anonymous = await Search("ольмагар");
-            anonymous.Should().BeEmpty("a guest holds no bit the board admits");
-
-            var moderator = await Search("ольмагар", CustomWebApplicationFactory.CreateAdminUser());
-            moderator.Should().ContainSingle(h => h.TopicTitle == "Служебная тема");
-        }
-        finally
-        {
             await DropBoard(boardId);
         }
     }
@@ -177,7 +149,7 @@ public class ForumSearchShould : IntegrationTestBase
         return payload!.Resources.ToArray();
     }
 
-    private async Task<Guid> CreateBoard(BoardAccessPolicy viewPolicy)
+    private async Task<Guid> CreateBoard()
     {
         var boardId = Guid.NewGuid();
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -188,8 +160,7 @@ public class ForumSearchShould : IntegrationTestBase
             Title = $"Search board {boardId:N}",
             Alias = $"search-{boardId:N}",
             Order = 0,
-            ViewPolicy = viewPolicy,
-            CreateTopicPolicy = viewPolicy,
+            CreateTopicPolicy = BoardAccessPolicy.RegularUser,
         });
         await dbContext.SaveChangesAsync();
         return boardId;
@@ -264,11 +235,7 @@ public class ForumSearchShould : IntegrationTestBase
         public string TopicTitle { get; set; } = "";
 
         /// <summary>
-        /// Runs of the preview, not a marked-up string: the database marks the
-        /// match, and a string carrying those marks would have to be rendered as
-        /// markup by whoever read it. Declared as a string here, this row simply
-        /// failed to deserialise - which is a contract change nothing else in the
-        /// suite would have noticed.
+        /// Runs of the preview, not a marked-up string: the marks are the database's.
         /// </summary>
         public IReadOnlyList<SnippetSegment> Snippet { get; set; } = [];
     }

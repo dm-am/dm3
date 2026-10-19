@@ -6,11 +6,6 @@ import type { ModeratedProfile } from "@/shared/api/models/moderation";
 import { userIsModerator } from "@/entities/user/@x/moderation";
 import { moderationApi } from "../api";
 
-/**
- * Composable that fetches the moderated profile for a user
- * if the current user has Moderator+ role.
- * Returns null if the current user is not a moderator.
- */
 export function useModeratedProfile(username: Ref<string> | (() => string)) {
   const { user: currentUser } = storeToRefs(useAuthStore());
   const moderatedProfile = ref<ModeratedProfile | null>(null);
@@ -34,8 +29,6 @@ export function useModeratedProfile(username: Ref<string> | (() => string)) {
         usernameValue.value as Username,
       );
       moderatedProfile.value = data ?? null;
-    } catch {
-      moderatedProfile.value = null;
     } finally {
       loading.value = false;
     }

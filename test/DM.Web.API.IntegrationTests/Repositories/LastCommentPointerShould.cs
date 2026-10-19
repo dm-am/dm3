@@ -1,12 +1,9 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Game.Features.Comments;
-using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -26,20 +23,9 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// pointer where it is, and takes the count down by one.
 /// </summary>
 /// <remarks>
-/// Which comment the pointer moves to is decided inside the transaction that marks
-/// the comment removed, and the write is guarded by the pointer still naming that
-/// comment. Writing it unconditionally erased the pointer whenever somebody deleted
-/// an earlier comment, and the reading side takes the discussion's last activity
-/// from that pointer.
-///
-/// All four discussions are asserted here rather than on the in-memory provider three
-/// of them used to share with the forum: a deletion is now set-based statements — the
-/// conditional mark, the conditional pointer, and for the three that keep one, the
-/// floored decrement — and neither ExecuteUpdate nor a row lock has an in-memory
-/// implementation, so the same cases asserted there would have asserted nothing.
-///
-/// The topic is the one owner of the four that keeps no comment count: a topic carries
-/// the pointer and nothing else, so its cases assert the pointer alone.
+/// The successor is decided inside the transaction that marks the comment, and the write is guarded by the pointer
+/// still naming it. Set-based statements and row locks have no in-memory implementation, so all four discussions
+/// run here; a topic keeps the pointer and no count.
 /// </remarks>
 public class LastCommentPointerShould : IntegrationTestBase
 {
@@ -84,15 +70,8 @@ public class LastCommentPointerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The guard has two halves and this is the second one.
+    /// The second half of the guard: the pointer is cleared when no comment is left to name.
     /// </summary>
-    /// <remarks>
-    /// "Move it to the newest comment left" is one half; "clear it when there is no
-    /// comment left to name" is the other, and only the second answers the last comment
-    /// of a discussion. A guard cut down to the first half passes every other test in
-    /// this class while leaving the pointer on a soft-deleted row, which the global
-    /// filter then reads as no comment at all, one query later.
-    /// </remarks>
     [Fact]
     public async Task EmptyWhenTheBlogLosesItsOnlyComment()
     {
@@ -308,12 +287,7 @@ public class LastCommentPointerShould : IntegrationTestBase
     /// <summary>
     /// The second removal of one comment answers that it removed nothing.
     /// </summary>
-    /// <remarks>
-    /// The answer is what the service gates the topic's unread counter and the
-    /// DeletedTopicComment event on. Two removals of one comment - a double click, a
-    /// moderator and an author at once - both used to lower the counter and both used
-    /// to announce, and the counter has no way back afterwards.
-    /// </remarks>
+    /// <remarks>The service gates the topic's unread counter and the DeletedTopicComment event on this answer.</remarks>
     [Fact]
     public async Task AnswerOnlyOnceWhenOneTopicCommentIsRemovedTwice()
     {
@@ -331,12 +305,7 @@ public class LastCommentPointerShould : IntegrationTestBase
     /// <summary>
     /// The first comment of a topic takes a pointer that names nothing.
     /// </summary>
-    /// <remarks>
-    /// The other three owners are also asserted against a pointer left over from a
-    /// comment that is no longer in the table; a topic cannot reach that state,
-    /// FK_Topics_Comments_LastCommentId standing behind its column, so the null is
-    /// the whole of "names nothing" here.
-    /// </remarks>
+    /// <remarks>FK_Topics_Comments_LastCommentId stands behind the topic's column, so null is the only "names nothing".</remarks>
     [Fact]
     public async Task MoveTheTopicOntoItsFirstComment()
     {
@@ -361,12 +330,7 @@ public class LastCommentPointerShould : IntegrationTestBase
     /// <summary>
     /// A comment written after a newer one does not take the topic's pointer.
     /// </summary>
-    /// <remarks>
-    /// The pointer used to be assigned on the tracked topic row by every reply, and
-    /// the forum list orders topics by it: a reply that waited on a lock or a retry
-    /// sent a live discussion backwards in that order, behind topics nobody had
-    /// touched since.
-    /// </remarks>
+    /// <remarks>The forum list orders topics by the pointer.</remarks>
     [Fact]
     public async Task LeaveTheTopicPointerOnTheNewerCommentWhenAnOlderOneArrivesAfterIt()
     {
@@ -399,15 +363,7 @@ public class LastCommentPointerShould : IntegrationTestBase
     /// A pointer left over from a comment that is no longer in the table gives way to
     /// a comment that is.
     /// </summary>
-    /// <remarks>
-    /// Nothing stops a blog, a game or a publication from naming a comment that is not
-    /// there: no foreign key stands behind the column, and a purge, an import or a
-    /// hand-written fix leaves the pointer behind. Stated as a case of its own because
-    /// the condition the pointer moves under is a comparison against the row it names,
-    /// and a comparison against a row that does not exist answers neither yes nor no.
-    /// The blog would keep advertising an activity nobody can open, and the comment
-    /// just written would never show as its last.
-    /// </remarks>
+    /// <remarks>No foreign key stands behind the column, and a comparison against a missing row answers neither yes nor no.</remarks>
     [Fact]
     public async Task MoveOffAPointerNamingACommentThatIsNotThere()
     {
@@ -516,7 +472,6 @@ public class LastCommentPointerShould : IntegrationTestBase
             Title = "Запись",
             Content = "text",
             Preview = "text",
-            IsPublished = true,
             CreatedUtc = Created,
         });
         await dbContext.SaveChangesAsync();
@@ -553,7 +508,6 @@ public class LastCommentPointerShould : IntegrationTestBase
             Title = $"Раздел для указателя {boardId:N}",
             Alias = $"pointer-{boardId:N}",
             Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = BoardAccessPolicy.Guest,
         });
         dbContext.Topics.Add(new DbTopic
@@ -624,10 +578,7 @@ public class LastCommentPointerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The starting state of the owner row: as many comments counted as it holds, and
-    /// the pointer on the newest one. Written set-based so the change tracker holds
-    /// nothing the repository under test would then read out of memory instead of out
-    /// of the database.
+    /// The owner row's starting state, written set-based so the change tracker holds nothing.
     /// </summary>
     private static Task PointAt<TEntity>(
         DbSet<TEntity> set,

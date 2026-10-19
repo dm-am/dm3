@@ -11,15 +11,9 @@ namespace DM.Domain.Account.Features.Identity;
 /// </summary>
 public class IdentityProvider : IIdentitySetter, IIdentityProvider, IAuthorizationContextProvider
 {
-    private IIdentity _identity = null!;
-
     /// <inheritdoc cref="IIdentityProvider.Current" />
-    public IIdentity Current
-    {
-        get => _identity;
-        set => _identity = value;
-    }
+    public IIdentity Current { get; set; } = null!;
 
     /// <inheritdoc />
-    public IAuthorizationSubject CurrentSubject => _identity?.User ?? AuthenticatedUser.Guest;
+    public IAuthorizationSubject CurrentSubject => Current?.User ?? AuthenticatedUser.Guest;
 }

@@ -13,6 +13,7 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using FluentValidation;
+using DM.Domain.Moderation.Features.Bans;
 
 namespace DM.Domain.Moderation.Features.Warnings;
 
@@ -20,10 +21,15 @@ namespace DM.Domain.Moderation.Features.Warnings;
 internal class WarningService : IWarningService
 {
     /// <summary>
-    /// Said by the reads that look for the warning and by the writes that find it
-    /// gone, so it is written once rather than at each site.
+    /// Said by the reads that look for the warning and by the writes that find it gone.
     /// </summary>
     private const string WarningNotFound = "Предупреждение не найдено";
+
+    /// <summary>
+    /// Said for a place a warning does not name (WarningEntityType): a game room, a
+    /// conversation, a chat other than the global one, and the rest.
+    /// </summary>
+    private const string NotModeratedPlace = "Это место не модерируется. Предупредите пользователя из профиля";
 
     private readonly IValidator<CreateWarning> _createValidator;
     private readonly IValidator<ChangeWarningPoints> _changePointsValidator;
@@ -36,8 +42,8 @@ internal class WarningService : IWarningService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IEventProducer _eventProducer;
+    private readonly IReadOnlyCollection<IPlaceReading> _placeReadings;
 
-    /// <inheritdoc />
     public WarningService(
         IValidator<CreateWarning> createValidator,
         IValidator<ChangeWarningPoints> changePointsValidator,
@@ -49,7 +55,8 @@ internal class WarningService : IWarningService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IEventProducer eventProducer)
+        IEventProducer eventProducer,
+        IEnumerable<IPlaceReading> placeReadings)
     {
         _createValidator = createValidator;
         _changePointsValidator = changePointsValidator;
@@ -62,6 +69,7 @@ internal class WarningService : IWarningService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _eventProducer = eventProducer;
+        _placeReadings = placeReadings.ToList();
     }
 
     /// <inheritdoc />
@@ -74,8 +82,7 @@ internal class WarningService : IWarningService
         }
         catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)
         {
-            // See BanService: an empty list answers "no such user" and nothing
-            // else. Every other failure belongs to ErrorHandlingMiddleware.
+            // An empty list answers "no such user" and no other failure.
             return [];
         }
     }
@@ -86,10 +93,47 @@ internal class WarningService : IWarningService
     {
         var (warnings, page) = await ReadLog(username, paging, ct);
 
-        // The open log shows the offending text too, as DM2's did, so it needs
-        // the place and whether a guest could follow the link there: resolved
-        // for the rows of the page, which is all a reader can see at once.
-        return (await DescribeEntities(warnings, ct), page);
+        // The open log shows the offending text and its place, resolved for the page
+        // and for its viewer.
+        var described = await DescribeEntities(warnings, ct);
+        await OpenToViewer(described, ct);
+        return (described, page);
+    }
+
+    /// <summary>
+    /// What a guest may not read is opened to the viewer who reads its place, by
+    /// the read rule of the place itself. A place he may not read and one that is
+    /// not there stay closed alike.
+    /// </summary>
+    /// <remarks>
+    /// Asked only of a place closed to a guest: a place a guest reads, everybody does.
+    /// One read per closed place of the page, by its own read: a batch query would restate the rule and drift.
+    /// A kind no module answers for stays closed.
+    /// </remarks>
+    private async Task OpenToViewer(IReadOnlyList<Warning> warnings, CancellationToken ct)
+    {
+        if (!_identityProvider.Current.User.IsAuthenticated)
+        {
+            return;
+        }
+
+        var closed = warnings
+            .Where(w => w.LogClosure == WarningLogClosure.PlaceNotPublic && w.ClosedPlace != null)
+            .GroupBy(w => w.ClosedPlace!.Kind);
+        foreach (var kind in closed)
+        {
+            var reading = _placeReadings.FirstOrDefault(r => r.Kind == kind.Key);
+            if (reading == null)
+            {
+                continue;
+            }
+
+            var readable = await reading.ReadableAsync(kind.Select(w => w.ClosedPlace!.Id).Distinct().ToList(), ct);
+            foreach (var warning in kind.Where(w => readable.Contains(w.ClosedPlace!.Id)))
+            {
+                warning.LogClosure = warning.ClosureForReader;
+            }
+        }
     }
 
     /// <summary>
@@ -107,9 +151,7 @@ internal class WarningService : IWarningService
             }
             catch (HttpException e) when (e.StatusCode == HttpStatusCode.NotFound)
             {
-                // The answer GetUserWarnings already gives: an empty page says "no
-                // such user" and nothing else, and the filter line above the list
-                // shows whose name was asked for.
+                // As GetUserWarnings answers: an empty page says "no such user".
                 return ([], PagingResult.Empty(paging.Take));
             }
         }
@@ -130,17 +172,14 @@ internal class WarningService : IWarningService
 
         var (warnings, page) = await ReadLog(username, paging, ct);
 
-        // Whether the row offers the points to be changed is decided here and
-        // not on the client: the rule reads the role of the caller and the author
-        // of the warning, and a client that guessed at it would show the control
-        // to a moderator the server then refuses.
+        // Decided here, by the rule the write refuses by, and not guessed on the client.
         foreach (var warning in warnings)
         {
             warning.CanChangePoints = MayChangePoints(warning, currentUser);
         }
 
-        // For the rows of the page only: paying for these queries over the whole
-        // history bought a moderator a wait for rows no screen shows.
+        // For the rows of the page only: over the whole history these queries buy a wait
+        // for rows no screen shows.
         return (await DescribeEntities(warnings, ct), page);
     }
 
@@ -157,55 +196,23 @@ internal class WarningService : IWarningService
 
         var targetUser = await _userLookupService.GetAsync(createWarning.Username);
 
-        // The rank rule of every action against a person (ModerationRank): a
-        // moderator warns those below him and not a colleague, a senior moderator
-        // or an administrator. The screens offer the button by the same formula,
-        // so this refusal answers a request no screen sends.
+        // The rank rule of every action against a person (ModerationRank); the screens
+        // offer the button by the same formula.
         if (!ModerationRank.Reaches(currentUser.Role, targetUser.Role))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
                 "Предупреждение можно выдать только пользователю с ролью ниже вашей");
         }
 
-        var entityType = ParseEntityType(createWarning.EntityType);
+        var (entityType, entityId) = ResolveObject(createWarning, targetUser);
+        var (snapshot, profile) = await CaptureEvidence(entityType, entityId, ct);
 
-        // The object of a warning on a profile is the warned user himself, and
-        // nothing the client sends changes that: the identifier it named is not
-        // read, so the snapshot below cannot be taken of somebody else's profile.
-        var entityId = entityType == WarningEntityType.Profile
-            ? targetUser.UserId
-            : createWarning.EntityId ?? Guid.Empty;
-
-        // Game content is outside moderation, so no warning names a post: no
-        // screen offers the button and the resolver refuses to copy one. Saying
-        // so out loud, because the quiet version stored a warning that pointed at
-        // a game post and carried no evidence at all.
-        if (entityType == WarningEntityType.Post)
+        // Only the global chat is moderated: a direct message, a group chat and the chat
+        // of a game room are copied by nothing, and are refused rather than kept as a
+        // warning that names a place it holds no text of.
+        if (entityType == WarningEntityType.Message && snapshot == null)
         {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                ["entityType"] = "Игровой контент модерации не подлежит"
-            });
-        }
-
-        // The evidence is taken here, before anything else can change it. A
-        // warning points at content its author is free to edit afterwards, and no
-        // edit history on the site keeps the previous text, so a warning that
-        // stored only the reference lost what it was given for the moment the
-        // author rewrote the sentence. A profile is taken the same way and for the
-        // same reason: the avatar, the status and "О себе" are the warned user's
-        // to change the next minute, and the picture is kept by the warning even
-        // after he replaces it.
-        ProfileCapture? profile = null;
-        string? snapshot = null;
-        if (entityType == WarningEntityType.Profile)
-        {
-            profile = await _entityResolver.CaptureProfile(entityId, ct);
-            snapshot = profile?.Info;
-        }
-        else if (entityId != Guid.Empty)
-        {
-            snapshot = await _entityResolver.CaptureSnapshot(entityType, entityId, ct);
+            throw NotModerated();
         }
 
         var entity = new CreateWarningEntity
@@ -215,8 +222,7 @@ internal class WarningService : IWarningService
             AuthorId = currentUser.UserId,
             EntityId = entityId,
             EntityType = entityType,
-            // 0 points = verbal warning: recorded, but adds nothing to the sum
-            Points = Math.Clamp(createWarning.Points, 0, WarningPolicy.MaxPointsPerWarning),
+            Points = createWarning.Points,
             Text = createWarning.Reason,
             EntitySnapshot = snapshot,
             ProfileStatusSnapshot = profile?.Status,
@@ -224,24 +230,76 @@ internal class WarningService : IWarningService
             CreatedUtc = _dateTimeProvider.Now
         };
 
-        // Read before the write. The automatic ban fires on the crossing of the
-        // threshold, and once the row is in there is no longer a way to tell
-        // whether it was this warning that carried the reader over it.
+        // Read before the write: the automatic ban fires on the crossing of the threshold.
         var pointsBefore = await _warningRepository.GetUserWarningPoints(targetUser.UserId, ct);
 
         var warning = await _warningRepository.Create(entity, ct);
 
-        // This event is the only thing that tells the warned user anything at
-        // all: no screen interrupts them, and points accumulate towards a ban in
-        // silence. Sent after the write so the generator finds the warning.
+        // Nothing else tells the warned user. Sent after the write, so the generator finds it.
         await _eventProducer.SendAsync(EventType.WarningIssued, warning.WarningId);
 
         await EvaluateAutomaticBan(targetUser.UserId, pointsBefore, ct);
 
-        // By the same single formula the list uses: the issuer may correct his own,
-        // so the row he gets back must not say otherwise.
         warning.CanChangePoints = MayChangePoints(warning, currentUser);
         return (await DescribeEntities([warning], ct)).Single();
+    }
+
+    /// <summary>
+    /// The object of a warning: the kind the request named and the identifier of
+    /// the offending object.
+    /// </summary>
+    private static (WarningEntityType EntityType, Guid EntityId) ResolveObject(
+        CreateWarning createWarning, GeneralUser targetUser)
+    {
+        var entityType = ParseEntityType(createWarning.EntityType);
+
+        // A warning on a profile is about the warned user himself, whatever the client
+        // names, so the evidence cannot be taken of somebody else's profile. A warning
+        // that names no kind names no object either: it is issued to the user alone.
+        var entityId = entityType switch
+        {
+            WarningEntityType.Profile => targetUser.UserId,
+            WarningEntityType.Unknown => Guid.Empty,
+            _ => createWarning.EntityId ?? Guid.Empty
+        };
+
+        return (entityType, entityId);
+    }
+
+    /// <summary>
+    /// A place moderation does not reach, refused out loud rather than stored without evidence.
+    /// </summary>
+    /// <remarks>
+    /// For a violation there the warning is issued to the user, with no place and no copy of the text.
+    /// </remarks>
+    private static HttpBadRequestException NotModerated() => new(new Dictionary<string, string>
+    {
+        ["entityType"] = NotModeratedPlace
+    });
+
+    /// <summary>
+    /// The evidence of a warning: a copy of the offending text, or of the profile
+    /// for a warning on one.
+    /// </summary>
+    /// <remarks>
+    /// Taken as the warning is issued: the author may rewrite the text and the warned user
+    /// may change the profile the next minute, and no edit history keeps what was there.
+    /// </remarks>
+    private async Task<(string? Snapshot, ProfileCapture? Profile)> CaptureEvidence(
+        WarningEntityType entityType, Guid entityId, CancellationToken ct)
+    {
+        if (entityType == WarningEntityType.Profile)
+        {
+            var profile = await _entityResolver.CaptureProfile(entityId, ct);
+            return (profile?.Info, profile);
+        }
+
+        if (entityId == Guid.Empty)
+        {
+            return (null, null);
+        }
+
+        return (await _entityResolver.CaptureSnapshot(entityType, entityId, ct), null);
     }
 
     /// <summary>
@@ -250,17 +308,9 @@ internal class WarningService : IWarningService
     /// from the open log.
     /// </summary>
     /// <remarks>
-    /// Derived rather than stored, and derived for the whole page in one pass:
-    /// an address changes when the object moves and a place can close, so a
-    /// column holding either would be a copy that goes stale without anything
-    /// writing to it. An edit of the object after the warning is not read: the
-    /// log shows the text the warning was issued for, which is the snapshot.
-    ///
-    /// A warning on a profile is left as it is. Its object is the warned user,
-    /// who has no place on the site to be found in and no address the log needs
-    /// (the reader links the profile by the user), so it is neither sent to the
-    /// resolver nor closed as a text nothing places, which its "О себе" in the
-    /// snapshot would otherwise make it.
+    /// Derived rather than stored, for the whole page in one pass: an address and a place
+    /// change without anything writing to the warning. A warning on a profile is left as it
+    /// is: its object is the warned user, whom the reader links by himself.
     /// </remarks>
     private async Task<IReadOnlyList<Warning>> DescribeEntities(
         IEnumerable<Warning> warnings, CancellationToken ct)
@@ -300,6 +350,8 @@ internal class WarningService : IWarningService
             warning.PlaceTitle = state.PlaceTitle;
             warning.EntityCreatedUtc = state.CreatedUtc;
             warning.LogClosure = state.LogClosure;
+            warning.ClosedPlace = state.ClosedPlace;
+            warning.ClosureForReader = state.ClosureForReader;
         }
 
         return list;
@@ -307,44 +359,34 @@ internal class WarningService : IWarningService
 
     /// <inheritdoc />
     public async Task<Warning> ChangeWarningPoints(
-        Guid warningId, int? points, string text, CancellationToken ct = default)
+        Guid warningId, ChangeWarningPoints change, CancellationToken ct = default)
     {
-        await _changePointsValidator.ValidateAndThrowAsync(
-            new ChangeWarningPoints { Points = points, Reason = text }, ct);
+        await _changePointsValidator.ValidateAndThrowAsync(change, ct);
 
-        // Past the validator the value is there: it refuses a body that left it out.
-        var newPoints = points!.Value;
+        // The validator refuses a body that left the points out.
+        var newPoints = change.Points!.Value;
 
         var currentUser = _identityProvider.Current.User;
         var warning = await _warningRepository.Get(warningId, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, WarningNotFound);
 
-        // The rule is not a rank alone, so the refusal cannot name a rank: an
-        // ordinary moderator may correct what he wrote himself and may not touch
-        // anybody else's, and the general sentence is the only one true of both
-        // halves.
+        // Not a rank alone, so the refusal names no rank.
         if (!MayChangePoints(warning, currentUser))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
         }
 
-        // Same reading as in CreateWarning, and for the same reason: raising the
-        // points of an old warning can carry a reader over the threshold exactly
-        // as a fresh warning can, and only the total before the write says whether
-        // it did.
+        // As in CreateWarning: raised points can carry a reader over the threshold.
         var pointsBefore = await _warningRepository.GetUserWarningPoints(warning.TargetUser.UserId, ct);
 
         var changed = await _warningRepository.ChangePoints(
-            warningId, newPoints, currentUser.UserId, _dateTimeProvider.Now, text.Trim(), ct);
+            warningId, newPoints, currentUser.UserId, _dateTimeProvider.Now, change.Reason, ct);
         if (!changed)
         {
             throw new HttpException(HttpStatusCode.NotFound, WarningNotFound);
         }
 
-        // The correction is as silent as the warning was before it got an event of
-        // its own: no screen interrupts the person it was issued to, and the points
-        // it costs him change without a word. Sent after the write, like the one
-        // CreateWarning sends, so the generator reads the row as it now stands.
+        // Nothing else tells the warned user. Sent after the write, as in CreateWarning.
         await _eventProducer.SendAsync(EventType.WarningPointsChanged, warningId);
 
         await EvaluateAutomaticBan(warning.TargetUser.UserId, pointsBefore, ct);
@@ -358,28 +400,23 @@ internal class WarningService : IWarningService
     /// <inheritdoc />
     public async Task DeleteProfilePicture(Guid warningId, CancellationToken ct = default)
     {
-        // The right to delete a file of somebody else (UploadIntentionResolver):
-        // a moderator may delete the current avatar of anybody already, and the
-        // avatar of the moment of a warning is the same file a little later.
+        // A moderator may delete the current avatar of anybody (UploadIntentionResolver),
+        // and the avatar of a warning is the same file a little later.
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role < UserRole.Moderator)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Убрать картинку из записи лога может только модератор");
+                "Убрать картинку из лога может только модератор");
         }
 
-        // A party does not rule on his own case, as with tickets. The picture of a
-        // warning issued to this moderator, before his promotion or by a higher
-        // rank, is his own avatar: the mark would carry the owner's name, and the
-        // log and the orphan sweeper read such a mark as the owner's own doing, so
-        // the picture would stay in the log while a success said it was gone, and
-        // his current avatar, if it is still that file, would leave his profile.
+        // A party does not rule on his own case: the picture of a warning issued to this
+        // moderator is his own avatar, and the mark would read as the owner's own doing.
         var targetUserId = await _warningRepository.GetTargetUserId(warningId, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, WarningNotFound);
         if (targetUserId == currentUser.UserId)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                "Убрать картинку из записи лога о вас может только другой модератор");
+                "Убрать картинку из лога о вас может только другой модератор");
         }
 
         var found = await _warningRepository.DeleteProfilePicture(
@@ -395,12 +432,9 @@ internal class WarningService : IWarningService
     /// carried its total across the threshold.
     /// </summary>
     /// <remarks>
-    /// The crossing, not the standing: a reader who is already at six was carried
-    /// there by an earlier write and has either served the automatic window or is
-    /// inside it, and firing on the standing would ban him again at every touch of
-    /// his record for as long as the points live. Whether the ban is actually
-    /// issued is <see cref="IBanService.IssueAutomaticBan" />'s to say - it
-    /// refuses over a ban already running, and over the accounts no ban reaches.
+    /// The crossing, not the standing, or every touch of a record at six would ban him
+    /// again. <see cref="IBanService.IssueAutomaticBan" /> refuses over a running ban and
+    /// over the accounts no ban reaches.
     /// </remarks>
     private async Task EvaluateAutomaticBan(Guid targetUserId, int pointsBefore, CancellationToken ct)
     {
@@ -419,14 +453,9 @@ internal class WarningService : IWarningService
     }
 
     /// <summary>
-    /// Who may move the points of a warning: a senior moderator over any of
-    /// them, and the moderator who issued this one over his own.
+    /// Who may move the points of a warning: a senior moderator over any of them, and the
+    /// moderator who issued this one over his own. The list and the write read this one formula.
     /// </summary>
-    /// <remarks>
-    /// One formula for the answer the moderation list shows on every row and for
-    /// the check the write makes, because two copies of it would let the list
-    /// offer what the write refuses.
-    /// </remarks>
     private static bool MayChangePoints(Warning warning, AuthenticatedUser currentUser) =>
         currentUser.Role >= UserRole.SeniorModerator ||
         (currentUser.Role >= UserRole.Moderator &&
@@ -466,9 +495,7 @@ internal class WarningService : IWarningService
             .GroupBy(b => b.TargetUser.UserId)
             .ToDictionary(g => g.Key, g => g.OrderByDescending(b => b.EndedUtc).First());
 
-        // The bans are read past BanService, so the flag every other ban list
-        // carries is set here, by the same rule the lift is refused by: read
-        // straight from the repository it said "no" to everybody.
+        // Read past BanService, so the flag is set here by the rule the lift is refused by.
         foreach (var ban in bansByUser.Values)
         {
             ban.CanLift = _banService.MayLift(ban);
@@ -514,6 +541,13 @@ internal class WarningService : IWarningService
             .ToList();
     }
 
+    /// <summary>
+    /// The place a request names, by the name of a member of the one list of them.
+    /// </summary>
+    /// <remarks>
+    /// By name and in any case, never by number. No name is a warning to the user alone;
+    /// a name the list has not got is refused, rather than issued as one with no place.
+    /// </remarks>
     private static WarningEntityType ParseEntityType(string? entityType)
     {
         if (string.IsNullOrEmpty(entityType))
@@ -521,14 +555,8 @@ internal class WarningService : IWarningService
             return WarningEntityType.Unknown;
         }
 
-        return entityType.ToLowerInvariant() switch
-        {
-            "comment" => WarningEntityType.Comment,
-            "message" => WarningEntityType.Message,
-            "post" => WarningEntityType.Post,
-            "topic" => WarningEntityType.Topic,
-            "profile" => WarningEntityType.Profile,
-            _ => WarningEntityType.Unknown
-        };
+        var name = Enum.GetNames<WarningEntityType>()
+            .FirstOrDefault(n => string.Equals(n, entityType, StringComparison.OrdinalIgnoreCase));
+        return name == null ? throw NotModerated() : Enum.Parse<WarningEntityType>(name);
     }
 }

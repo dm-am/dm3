@@ -9,7 +9,6 @@ internal class MessageFactory : IMessageFactory
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public MessageFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
@@ -25,7 +24,6 @@ internal class MessageFactory : IMessageFactory
         ChatId = createMessage.ChatId,
         CreatedUtc = _dateTimeProvider.Now,
         UserId = userId,
-        Text = createMessage.Text,
-        IsRemoved = false
+        Text = createMessage.Text
     };
 }

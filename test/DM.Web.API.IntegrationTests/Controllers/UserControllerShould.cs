@@ -7,25 +7,17 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers;
 
-/// <summary>
-/// Integration tests for UserController
-/// </summary>
 public class UserControllerShould : IntegrationTestBase
 {
     public UserControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// Get users should return OK with list
-    /// </summary>
     [Fact]
-    public async Task GetUsers_ReturnsOkWithList()
+    public async Task GetUsersReturnsOkWithList()
     {
-        // Act
         var response = await Client.GetAsync("/v1/users");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("resources");
@@ -34,15 +26,9 @@ public class UserControllerShould : IntegrationTestBase
     /// <summary>
     /// The per-category subscriber counts reach the wire.
     /// </summary>
-    /// <remarks>
-    /// The counts themselves are asserted against the database in
-    /// UserSubscriberSummaryShould; what this adds is that they survive the map
-    /// to the API DTO and the serializer, because the profile line reads them and
-    /// a missing object would silently read as three zeroes — which is the exact
-    /// wrong answer the counts were added to stop.
-    /// </remarks>
+    /// <remarks>The counts are UserSubscriberSummaryShould's; a missing object would read as three zeroes.</remarks>
     [Fact]
-    public async Task GetUser_CarriesTheSubscriberCountsPerCategory()
+    public async Task GetUserCarriesTheSubscriberCountsPerCategory()
     {
         var response = await Client.GetAsync($"/v1/users/{TestConstants.TestUserLogin}");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -57,43 +43,20 @@ public class UserControllerShould : IntegrationTestBase
         counts.TryGetProperty("topics", out _).Should().BeTrue();
     }
 
-    /// <summary>
-    /// Get user by login should return 404 for non-existent user
-    /// </summary>
-    [Fact]
-    public async Task GetUserByLogin_WithNonExistentUser_ReturnsNotFound()
+    [Theory]
+    [InlineData("/v1/users/nonexistentuser123")]
+    [InlineData("/v1/users/nonexistentuser123/profile")]
+    public async Task AnswerNotFoundForAUserThatDoesNotExist(string address)
     {
-        // Act
-        var response = await Client.GetAsync("/v1/users/nonexistentuser123");
+        var response = await Client.GetAsync(address);
 
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    /// <summary>
-    /// Get user profile by login should return 404 for non-existent user
-    /// </summary>
-    [Fact]
-    public async Task GetUserProfile_WithNonExistentUser_ReturnsNotFound()
-    {
-        // Act
-        var response = await Client.GetAsync("/v1/users/nonexistentuser123/profile");
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>
     /// Filtering the roster by role is the paged listing, and only that.
     /// </summary>
-    /// <remarks>
-    /// GET /v1/users/by-role/{role} answered the same question anonymously, with
-    /// no page and no upper bound, over a result cached for an hour.
-    /// API_DESIGN.md gives GET /v1/users?role=moderator as the shape for this and
-    /// forbids the specialised address beside it, so the address is gone rather
-    /// than paged: the second one only ever meant one endpoint could drift from
-    /// the other.
-    /// </remarks>
+    /// <remarks>API_DESIGN.md gives GET /v1/users?role=moderator for this and forbids a specialised address.</remarks>
     [Fact]
     public async Task FilterTheRosterByRoleThroughThePagedListing()
     {
@@ -107,12 +70,8 @@ public class UserControllerShould : IntegrationTestBase
         gone.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    #region Search Tests
-
     /// <summary>
-    /// Users nobody else in the tier can see, named by a prefix unique to this
-    /// instance. The tier shares one database and every class adds to it, so a
-    /// filter asserted over the whole registry asserts what the neighbours left.
+    /// Users named by a prefix unique to this instance: the tier shares one database.
     /// </summary>
     private readonly string Prefix = $"ucs{Guid.NewGuid():N}"[..10];
 
@@ -157,16 +116,9 @@ public class UserControllerShould : IntegrationTestBase
     /// <summary>
     /// The search filter narrows the list to the users it names.
     /// </summary>
-    /// <remarks>
-    /// These tests asked for <c>?q=</c> and <c>?sort=</c> and asserted a 200. Both
-    /// names were retired — the list takes <c>search</c> and <c>sortBy</c> — and a
-    /// query parameter the binder does not know is ignored rather than refused, so
-    /// every one of them went on passing against the default unsorted list. A 200 is
-    /// what the unfiltered answer looks like, which is why what each parameter did to
-    /// the answer is asserted here instead.
-    /// </remarks>
+    /// <remarks>An unknown query parameter is ignored, so what each parameter does to the answer is asserted.</remarks>
     [Fact]
-    public async Task GetUsers_WithSearch_NarrowsTheListToTheMatches()
+    public async Task GetUsersWithSearchNarrowsTheListToTheMatches()
     {
         var mine = await AddUsersAsync(3);
 
@@ -192,7 +144,7 @@ public class UserControllerShould : IntegrationTestBase
     [InlineData("Rating")]
     [InlineData("LastActivity")]
     [InlineData("Registered")]
-    public async Task GetUsers_WithSortOption_BindsTheSortAndRefusesAnUnknownOne(string sortBy)
+    public async Task GetUsersWithSortOptionBindsTheSortAndRefusesAnUnknownOne(string sortBy)
     {
         var response = await Client.GetAsync($"/v1/users?sortBy={sortBy}&activity=All");
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -208,16 +160,9 @@ public class UserControllerShould : IntegrationTestBase
     /// cheapest proof that the pair of sort parameters reaches the query.
     /// </summary>
     [Fact]
-    public async Task GetUsers_WithSortOrder_ReversesTheList()
+    public async Task GetUsersWithSortOrderReversesTheList()
     {
-        // Scoped to this test's own users. take=100 over the shared registry cut
-        // the list once the tier grew past a hundred rows, and a truncated
-        // descending page is the LAST hundred reversed, not the first hundred.
-        //
-        // Sorted by registration and not by name: with a search term the name
-        // sort answers by relevance first, which is what a search is for, so
-        // reversing the direction reorders only the ties. Registration is a plain
-        // ordering, and the reversal is exact.
+        // Scoped to this test's own users and sorted by registration: a search sorts by relevance first.
         await AddUsersAsync(4);
         var scope = $"search={Prefix}&activity=All&take=100";
 
@@ -227,15 +172,7 @@ public class UserControllerShould : IntegrationTestBase
 
         ascending.Should().NotBeEmpty();
 
-        // Not compared against a .NET comparer. ORDER BY runs under the server's
-        // collation, and the fixture pins the container to the image and the
-        // locale the stand runs (postgres:16, --locale=en_US.utf8), so the order
-        // here is the order the stand produces. The assertion stays relative all
-        // the same: a literal list of names rewrites itself on every fixture user
-        // added and says nothing more about what the endpoint promises.
-        //
-        // What the endpoint does promise is asserted instead: the order is
-        // stable, and desc is exactly asc reversed.
+        // ORDER BY runs under the server's collation, so the order is stable and desc is asc reversed.
         again.Should().Equal(ascending,
             "the same request twice must answer in the same order, or paging over " +
             "this list drops and repeats rows between pages");
@@ -248,7 +185,7 @@ public class UserControllerShould : IntegrationTestBase
     /// and the endpoint answered 200 to it all the same.
     /// </summary>
     [Fact]
-    public async Task GetUsers_WithActivityFilter_AdmitsMoreUsersThanTheDefault()
+    public async Task GetUsersWithActivityFilterAdmitsMoreUsersThanTheDefault()
     {
         // Seeded with no LastActivityUtc, so All is the only filter that admits
         // them. Counted within this test's own prefix: the tier shares one
@@ -267,5 +204,4 @@ public class UserControllerShould : IntegrationTestBase
         all.Length.Should().BeGreaterThan(active.Length);
     }
 
-    #endregion
 }

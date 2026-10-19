@@ -1,43 +1,22 @@
 <script setup lang="ts">
-/**
- * ChatFeed: the feed of a chat, the global chat and a private correspondence
- * alike.
- *
- * What makes a feed is here, once: the dashed frame; the line at its top (the
- * `strip` slot: the events of the global chat, who a correspondence is with);
- * the line under it explaining a window the reader did not ask for; the list
- * with its date separators, virtualized; the toolbar over a message; the button
- * back to the latest messages; the skeleton, the failure with its retry and the
- * empty feed; and the composer under the frame, drawn only for a reader who may
- * write (`canWrite`), with the `closed` slot standing in for it otherwise (the
- * guest's invitation to sign in).
- *
- * What differs is what the page hands in: the messages and the store's answers
- * (`actions`), the words of the empty feed and of the list's name, where a link
- * to a message leads (`linkTo`), whom the reader may warn (`canWarn`), and what
- * happens on the way back to the latest messages (the global chat leaves its
- * archive date). The page drives the window: it loads, it lands on a message
- * (`scrollToMessage`), it follows the tail (`scrollToBottom`, `atBottom`).
- */
-import { computed, nextTick, ref, watch } from "vue";
+// The feed of both chats: what makes a feed is here once, what differs the page hands in.
+import { computed, nextTick, ref, watch, type Ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useAuthStore, useMessagePermissions } from "@/entities/user";
 import { ChatMessage } from "@/widgets/chat-message/@x/chat-feed";
 import { useUiStore } from "@/shared/stores/ui";
-import { Tooltip } from "@/shared/ui/Tooltip";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ChatMessageSkeleton } from "@/shared/ui/Skeleton";
-import { symbols } from "@/shared/lib/utils/icons";
-import type { BBCodeContext } from "@/shared/lib/utils/bbcode";
+import type { BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
 import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
-import { isNearBottom } from "@/shared/lib/utils/liveTail";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,
   isUserOnline,
+  latestActivityByUsername,
   toChatVirtualRows,
   type MessageOrSeparator,
 } from "@/shared/lib/utils/chat";
@@ -47,8 +26,12 @@ import { useVirtualScroll } from "@/shared/lib/composables/useVirtualScroll";
 import { useMessageToolbar } from "@/shared/lib/composables/useMessageToolbar";
 import { useChatComposer } from "@/shared/lib/composables/useChatComposer";
 import { useAnchoredInfiniteScroll } from "@/shared/lib/composables/useAnchoredInfiniteScroll";
-import { markArrival } from "@/shared/lib/composables/useScrollToElement";
 import ChatComposer from "./ChatComposer.vue";
+import ChatStrip from "./ChatStrip.vue";
+import FeedEdge from "./FeedEdge.vue";
+import MessageToolbar from "./MessageToolbar.vue";
+import { useFeedPosition } from "./useFeedPosition";
+import { useMessageEdit } from "./useMessageEdit";
 import type { ChatFeedActions } from "./types";
 import { MESSAGE_FOLD_HEIGHT } from "./types";
 
@@ -61,7 +44,7 @@ const props = withDefaults(
     /** The window did not load; said with a retry where the feed would be. */
     error?: string | null;
     /** The retry of a window that did not load. */
-    retry?: () => unknown;
+    retry: () => unknown;
     /** What an empty feed says. */
     emptyText: string;
     /** Why the feed shows a window the reader did not ask for. */
@@ -71,13 +54,13 @@ const props = withDefaults(
     /** The tag set of the composer and of the edit box. */
     context: BBCodeContext;
     hasMoreBefore: boolean;
-    hasMoreAfter?: boolean;
+    hasMoreAfter: boolean;
     /** A page of older messages that did not load, at the top with a retry. */
     errorBefore?: string | null;
     /** A page of newer messages that did not load, at the bottom. */
     errorAfter?: string | null;
     loadOlder: () => Promise<unknown>;
-    loadNewer?: () => Promise<unknown>;
+    loadNewer: () => Promise<unknown>;
     /** The store's answers to what the reader does in the feed. */
     actions: ChatFeedActions;
     /** A send is in flight: the store's own flag. */
@@ -88,25 +71,17 @@ const props = withDefaults(
     composerDisabled?: boolean;
     /** Where the unsent text outlives the tab. */
     draftKey: string;
-    /**
-     * Where the link to a message leads: the page of the chat standing on
-     * that message. An ordinary link, which the reader opens or copies the
-     * way he copies any other.
-     */
+    /** Where the link to a message leads: the page of the chat standing on it. */
     linkTo: (id: string) => RouteLocationRaw;
-    /** The reader may warn the author: a moderator in the global chat. */
-    canWarn?: (message: Message) => boolean;
+    /** Moderation reaches this chat, the global one alone; the page says whom the reader may warn. */
+    moderation?: { canWarn: (message: Message) => boolean };
   }>(),
   {
     error: null,
-    retry: undefined,
     notice: null,
-    hasMoreAfter: false,
     errorBefore: null,
     errorAfter: null,
-    loadNewer: undefined,
     composerDisabled: false,
-    canWarn: () => false,
   },
 );
 
@@ -121,26 +96,27 @@ const emit = defineEmits<{
 
 const { user } = storeToRefs(useAuthStore());
 const { isCompactLayout } = storeToRefs(useUiStore());
-const { isModerator, canEdit, canDelete, canLike } =
-  useMessagePermissions(user);
+const permissions = useMessagePermissions(user, props);
+const { isModerator, canEdit, canDelete, canLike } = permissions;
 
 const frame = ref<HTMLElement | null>(null);
 const list = ref<HTMLElement | null>(null);
-const topSentinel = ref<HTMLElement | null>(null);
-const bottomSentinel = ref<HTMLElement | null>(null);
-const toolbarEl = ref<HTMLElement | null>(null);
+const topEdge = ref<InstanceType<typeof FeedEdge> | null>(null);
+const bottomEdge = ref<InstanceType<typeof FeedEdge> | null>(null);
+const toolbar = ref<InstanceType<typeof MessageToolbar> | null>(null);
 const composer = ref<InstanceType<typeof ChatComposer> | null>(null);
+// The roots of the parts: what the observers watch and the toolbar's focus is told by.
+const rootOf = (part: Ref<{ $el: HTMLElement } | null>) =>
+  computed<HTMLElement | null>(() => part.value?.$el ?? null);
+const topSentinel = rootOf(topEdge);
+const bottomSentinel = rootOf(bottomEdge);
+const toolbarEl = rootOf(toolbar);
 
-// ─────────────────────────────────────────────────────────────
-// The list
-// ─────────────────────────────────────────────────────────────
 const rows = computed((): MessageOrSeparator[] =>
   groupMessagesWithSeparators([...props.messages]),
 );
 
-// Stable per-item key (message id / date-separator date) instead of the
-// virtualizer's default index-based key: prepending older history shifts every
-// index, and measurements and the hover would slide onto another message.
+// A key per item, not per index: prepended older history shifts every index.
 function rowKey(index: number): string {
   const item = rows.value[index];
   if (!item) return String(index);
@@ -160,9 +136,7 @@ const virtualRows = computed(() =>
   toChatVirtualRows(rows.value, virtualItems.value),
 );
 
-// New messages bring new markup. Only the length is watched: a deep watch
-// walked every message on every like, and each message initialises its own
-// markup already (TruncatedContent's on-content-mounted).
+// Only the length: a deep watch walked every message on every like.
 watch(
   () => props.messages.length,
   () => nextTick(initMarkup),
@@ -172,35 +146,15 @@ function initMarkup() {
   if (list.value) initBbcodeInteractive(list.value);
 }
 
-// ─────────────────────────────────────────────────────────────
-// Where the reader stands
-// ─────────────────────────────────────────────────────────────
-const isScrolling = ref(false);
-let scrollEndTimeout: ReturnType<typeof setTimeout> | null = null;
-
-/**
- * The button back to the latest messages appears after a deep departure from
- * the bottom (a whole viewport up), not on the first turn of the wheel, and
- * goes once the reader is nearly back: the gap between the two is hysteresis,
- * so it does not flicker at either edge.
- */
-const isFarFromBottom = ref(false);
-
-function measureDeparture() {
-  const el = list.value;
-  if (!el) return;
-  const distance = el.scrollHeight - el.scrollTop - el.clientHeight;
-  if (distance > el.clientHeight) isFarFromBottom.value = true;
-  else if (isNearBottom(el)) isFarFromBottom.value = false;
-}
-
-function settleScrolling() {
-  if (scrollEndTimeout) clearTimeout(scrollEndTimeout);
-  scrollEndTimeout = setTimeout(() => {
-    isScrolling.value = false;
-    scrollEndTimeout = null;
-  }, 150);
-}
+const {
+  isScrolling,
+  isFarFromBottom,
+  measureDeparture,
+  settleScrolling,
+  atBottom,
+  scrollToBottom,
+  scrollToMessage,
+} = useFeedPosition({ list, rows, scrollToIndex });
 
 function handleWheel() {
   isScrolling.value = true;
@@ -220,41 +174,6 @@ function handleScroll() {
   settleScrolling();
 }
 
-/** The reader stands at the end of the loaded window, measured now. */
-function atBottom(): boolean {
-  return list.value ? isNearBottom(list.value) : true;
-}
-
-// Scrolls to the last item through the virtualizer rather than scrollTop =
-// scrollHeight: rows not measured yet make scrollHeight undershoot.
-function scrollToBottom() {
-  nextTick(() => {
-    const last = rows.value.length - 1;
-    if (last >= 0) scrollToIndex(last, { align: "end" });
-  });
-}
-
-/**
- * Brings a message into view and marks its arrival: the site's pulse for a
- * place one was taken to (.highlight-unread, two seconds of yellow).
- */
-function scrollToMessage(id: string, align: "center" | "start" = "center") {
-  const index = rows.value.findIndex(
-    (item) => !isDateSeparator(item) && item.id === id,
-  );
-  if (index >= 0) scrollToIndex(index, { align });
-  // The virtualizer draws the row after it has scrolled to it.
-  nextTick(() => {
-    setTimeout(() => {
-      const element = document.getElementById(`msg-${id}`);
-      if (element) markArrival(element);
-    }, 100);
-  });
-}
-
-// ─────────────────────────────────────────────────────────────
-// Paging, both ends
-// ─────────────────────────────────────────────────────────────
 const {
   loadOlder,
   loadNewer,
@@ -271,15 +190,12 @@ const {
   },
   newer: {
     sentinel: bottomSentinel,
-    hasMore: () => props.hasMoreAfter && Boolean(props.loadNewer),
-    load: () => props.loadNewer?.() ?? Promise.resolve(),
+    hasMore: () => props.hasMoreAfter,
+    load: () => props.loadNewer(),
     failed: () => Boolean(props.errorAfter),
   },
 });
 
-// ─────────────────────────────────────────────────────────────
-// The toolbar over a message
-// ─────────────────────────────────────────────────────────────
 const {
   hoveredMessageId,
   toolbarPosition,
@@ -291,7 +207,6 @@ const {
   handleMessageFocusOut,
   handleToolbarMouseEnter,
   handleToolbarMouseLeave,
-  handleToolbarFocusIn,
   handleToolbarFocusOut,
   handleScrollStart,
 } = useMessageToolbar({
@@ -306,9 +221,6 @@ const hoveredMessage = computed(() =>
     : null,
 );
 
-// ─────────────────────────────────────────────────────────────
-// Writing, deleting, the line under a refused press
-// ─────────────────────────────────────────────────────────────
 const {
   newMessage,
   handleSend,
@@ -329,22 +241,7 @@ const {
   canSend: () => props.canWrite && !props.composerDisabled,
 });
 
-// ─────────────────────────────────────────────────────────────
-// A message: who is online, likes, the edit, the removed one
-// ─────────────────────────────────────────────────────────────
-// The latest activity of every author in the window: a name is green while its
-// author was active lately. ISO strings compare in time order.
-const latestActivity = computed(() => {
-  const map = new Map<string, string>();
-  for (const msg of props.messages) {
-    const name = msg.author?.username;
-    const seen = msg.author?.lastActivityUtc;
-    if (!name || !seen) continue;
-    const known = map.get(name);
-    if (!known || seen > known) map.set(name, seen);
-  }
-  return map;
-});
+const latestActivity = computed(() => latestActivityByUsername(props.messages));
 
 function isOnline(message: Message): boolean {
   const name = message.author?.username;
@@ -359,44 +256,28 @@ function isLikedByMe(message: Message): boolean {
 
 async function toggleLike(message: Message) {
   if (!user.value) return;
-  // A refused like changes nothing on the heart, so the line under the message
-  // says it, until the next press on the heart.
+  // A refused like changes nothing on "Нравится", so the line under the message says it.
   clearMessageRefusal(message.id);
   const unliking = isLikedByMe(message);
   const { error } = unliking
     ? await props.actions.unlike(message.id)
     : await props.actions.like(message.id);
-  if (error)
-    refuseMessage(
-      message.id,
-      error,
-      unliking ? "Не удалось убрать лайк" : "Не удалось поставить лайк",
-    );
+  const failure = unliking
+    ? "Не удалось убрать отметку"
+    : "Не удалось отметить";
+  if (error) refuseMessage(message.id, error, failure);
 }
 
-// The edit box is seeded once with the message's own BBCode, asked of the
-// server; what is typed afterwards lives in ChatMessage and comes back as the
-// payload of save-edit.
-const editingId = ref<string | null>(null);
-const editText = ref("");
-
-async function startEdit(message: Message) {
-  editingId.value = message.id;
-  editText.value = await props.actions.editText(message.id);
-}
-
-function cancelEdit() {
-  editingId.value = null;
-  editText.value = "";
-  nextTick(initMarkup);
-}
+const { editingId, editText, startEdit, cancelEdit } = useMessageEdit({
+  load: (id) => props.actions.editText(id),
+  closed: () => nextTick(initMarkup),
+});
 
 async function saveEdit(id: string, text: string) {
   clearMessageRefusal(id);
   if (text.trim()) {
     const { error } = await props.actions.saveEdit(id, text);
-    // The editor stays open with the text in it: a closed editor over the
-    // unchanged message would say the edit went through.
+    // Closed over the unchanged message, the editor would say the edit went through.
     if (error) {
       refuseMessage(id, error, "Не удалось сохранить сообщение");
       return;
@@ -405,12 +286,11 @@ async function saveEdit(id: string, text: string) {
   cancelEdit();
 }
 
-// A removed message opens for a moderator, a deliberate act and not a fold:
-// "Развернуть все" never uncovers what was removed.
+// A moderator's deliberate act, not a fold: "Развернуть все" never uncovers it.
 const expandedRemoved = ref<Set<string>>(new Set());
 
 function toggleRemoved(id: string) {
-  if (!isModerator.value) return;
+  if (!permissions.revealsRemoved.value) return;
   if (expandedRemoved.value.has(id)) expandedRemoved.value.delete(id);
   else expandedRemoved.value.add(id);
 }
@@ -433,11 +313,10 @@ defineExpose({
       :class="{ 'layout-compact': isCompactLayout }"
     >
       <slot name="strip" />
-      <!-- Why the feed shows its tail instead of the place the reader asked
-           for, for as long as that window stands. -->
-      <p v-if="notice" class="chat-feed__notice" role="status">
+      <!-- Why the feed shows its tail instead of the place asked for -->
+      <ChatStrip v-if="notice" class="chat-feed__notice" role="status">
         {{ notice }}
-      </p>
+      </ChatStrip>
       <div
         ref="list"
         class="chat-feed__list"
@@ -451,8 +330,7 @@ defineExpose({
         @wheel.passive="handleWheel"
       >
         <ChatMessageSkeleton v-if="loading" :count="6" />
-        <!-- A failure is not an empty feed. What the retry shows is the
-             skeleton: the store raises loading before it awaits. -->
+        <!-- A failure is not an empty feed -->
         <ErrorState
           v-else-if="error && !messages.length"
           :message="error"
@@ -462,33 +340,14 @@ defineExpose({
           {{ emptyText }}
         </secondary-text>
         <template v-else>
-          <div
+          <FeedEdge
             v-if="hasMoreBefore"
-            ref="topSentinel"
-            class="chat-feed__sentinel"
-          >
-            <secondary-text
-              v-if="errorBefore"
-              class="chat-feed__sentinel-error"
-            >
-              {{ errorBefore }}
-              <button
-                type="button"
-                class="chat-feed__retry"
-                @click="loadOlder()"
-              >
-                Повторить
-              </button>
-            </secondary-text>
-          </div>
+            ref="topEdge"
+            :error="errorBefore"
+            @retry="loadOlder()"
+          />
 
-          <div
-            :style="{
-              height: `${totalSize}px`,
-              width: '100%',
-              position: 'relative',
-            }"
-          >
+          <div class="chat-feed__sizer" :style="{ height: `${totalSize}px` }">
             <div
               v-for="row in virtualRows"
               :key="row.key"
@@ -536,17 +395,14 @@ defineExpose({
                   :hovered="hoveredMessageId === row.message.id"
                   :is-online="isOnline(row.message)"
                   :is-liked-by-me="isLikedByMe(row.message)"
-                  :can-edit="canEdit(row.message)"
-                  :can-delete="canDelete(row.message)"
                   :can-like="canLike(row.message)"
-                  :is-moderator="isModerator"
+                  :is-moderator="permissions.revealsRemoved.value"
                   :is-editing="editingId === row.message.id"
                   :edit-text="editText"
                   :is-deleted-expanded="expandedRemoved.has(row.message.id)"
                   :max-height="MESSAGE_FOLD_HEIGHT"
                   @like="toggleLike(row.message)"
                   @toggle-deleted="toggleRemoved(row.message.id)"
-                  @start-edit="startEdit(row.message)"
                   @save-edit="(text) => saveEdit(row.message.id, text)"
                   @cancel-edit="cancelEdit"
                 />
@@ -558,139 +414,48 @@ defineExpose({
             </div>
           </div>
 
-          <div
+          <FeedEdge
             v-if="hasMoreAfter"
-            ref="bottomSentinel"
-            class="chat-feed__sentinel"
-          >
-            <secondary-text v-if="errorAfter" class="chat-feed__sentinel-error">
-              {{ errorAfter }}
-              <button
-                type="button"
-                class="chat-feed__retry"
-                @click="loadNewer()"
-              >
-                Повторить
-              </button>
-            </secondary-text>
-          </div>
+            ref="bottomEdge"
+            :error="errorAfter"
+            @retry="loadNewer()"
+          />
         </template>
       </div>
 
       <!-- The toolbar stands inside the frame, which clips it. -->
-      <div
+      <MessageToolbar
         v-if="
           hoveredMessage &&
           !hoveredMessage.isRemoved &&
           editingId !== hoveredMessage.id
         "
-        ref="toolbarEl"
-        class="msg-toolbar"
+        ref="toolbar"
         :style="{
           top: toolbarPosition.top + 'px',
           right: toolbarPosition.right + 'px',
         }"
+        :confirming-delete="confirmingDeleteId === hoveredMessage.id"
+        :likes="hoveredMessage.likes ?? []"
+        :liked="isLikedByMe(hoveredMessage)"
+        :can-like="canLike(hoveredMessage)"
+        :can-edit="canEdit(hoveredMessage)"
+        :can-delete="canDelete(hoveredMessage)"
+        :can-warn="moderation?.canWarn(hoveredMessage) ?? false"
+        :link-to="linkTo(hoveredMessage.id)"
         @mouseenter="handleToolbarMouseEnter"
         @mouseleave="handleToolbarMouseLeave"
-        @focusin="handleToolbarFocusIn"
+        @focusin="handleToolbarMouseEnter"
         @focusout="handleToolbarFocusOut"
-      >
-        <template v-if="confirmingDeleteId === hoveredMessage.id">
-          <Tooltip text="Подтвердить удаление">
-            <button
-              type="button"
-              class="toolbar-btn toolbar-btn-delete-confirm"
-              aria-label="Подтвердить удаление"
-              @click="confirmDelete"
-            >
-              <SvgIcon name="trash" />
-            </button>
-          </Tooltip>
-          <Tooltip text="Отмена">
-            <button
-              type="button"
-              class="toolbar-btn toolbar-btn-cancel"
-              aria-label="Отмена"
-              @click="cancelDelete"
-            >
-              {{ symbols.close }}
-            </button>
-          </Tooltip>
-        </template>
-        <template v-else>
-          <Tooltip
-            v-if="canLike(hoveredMessage)"
-            :text="
-              isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Поставить лайк'
-            "
-          >
-            <button
-              type="button"
-              class="toolbar-btn"
-              :class="{ active: isLikedByMe(hoveredMessage) }"
-              :aria-label="
-                isLikedByMe(hoveredMessage) ? 'Убрать лайк' : 'Поставить лайк'
-              "
-              @click="toggleLike(hoveredMessage)"
-            >
-              <SvgIcon
-                :name="
-                  isLikedByMe(hoveredMessage) ? 'heartFilled' : 'heartEmpty'
-                "
-              />
-            </button>
-          </Tooltip>
-          <Tooltip v-if="canEdit(hoveredMessage)" text="Редактировать">
-            <button
-              type="button"
-              class="toolbar-btn"
-              aria-label="Редактировать"
-              @click="startEdit(hoveredMessage)"
-            >
-              <SvgIcon name="pencil" />
-            </button>
-          </Tooltip>
-          <Tooltip v-if="canDelete(hoveredMessage)" text="Удалить">
-            <button
-              type="button"
-              class="toolbar-btn"
-              aria-label="Удалить"
-              @click="requestDelete(hoveredMessage.id)"
-            >
-              <SvgIcon name="trash" />
-            </button>
-          </Tooltip>
-          <Tooltip
-            v-if="canWarn(hoveredMessage)"
-            text="Оставить предупреждение"
-          >
-            <button
-              type="button"
-              class="toolbar-btn toolbar-btn-warn"
-              aria-label="Оставить предупреждение"
-              @click="emit('warn', hoveredMessage)"
-            >
-              {{ symbols.warning }}
-            </button>
-          </Tooltip>
-          <!-- An ordinary link to the message, opened or copied as any other
-               link of the site. It is not the current page, so it never says
-               it is. -->
-          <Tooltip text="Ссылка на сообщение">
-            <router-link
-              class="toolbar-btn"
-              :to="linkTo(hoveredMessage.id)"
-              aria-label="Ссылка на сообщение"
-              :aria-current="undefined"
-            >
-              <SvgIcon name="anchor" />
-            </router-link>
-          </Tooltip>
-        </template>
-      </div>
+        @like="toggleLike(hoveredMessage)"
+        @edit="startEdit(hoveredMessage)"
+        @delete="requestDelete(hoveredMessage.id)"
+        @confirm-delete="confirmDelete"
+        @cancel-delete="cancelDelete"
+        @warn="emit('warn', hoveredMessage)"
+      />
 
-      <!-- Back to the latest messages: while newer pages are there to fetch,
-           or once the reader went a whole viewport up. -->
+      <!-- While newer pages wait, or once the reader went a whole viewport up -->
       <button
         v-if="messages.length && (hasMoreAfter || isFarFromBottom)"
         type="button"
@@ -721,12 +486,7 @@ defineExpose({
 
 <style scoped lang="sass">
 @use "@/assets/styles/BbcodeContent" as *
-@use "@/assets/styles/Inputs" as *
-@use "@/assets/styles/MessageToolbar" as *
 @use "@/assets/styles/ZIndex" as *
-
-// The hover toolbar over a message, from its one partial.
-+message-toolbar
 
 .chat-feed
   display: flex
@@ -742,8 +502,7 @@ defineExpose({
   border: 1px dashed $border
   overflow: hidden
 
-  // Compact display: the full layout's side padding, so the compact content
-  // column lands on the x of the full layout's text.
+  // The full layout's side padding, so the compact text lands on the same x.
   &.layout-compact
     .chat-feed__message
       padding: $tiny $medium
@@ -753,28 +512,9 @@ defineExpose({
       &.continuation
         margin-top: 0
 
-// The line that explains a fallback window, in the strip's own dress. It wraps
-// where the strip keeps one line: it has no title to protect, and every word
-// of it is the point.
-.chat-feed__notice
-  flex-shrink: 0
-  margin: 0
-  padding: $small $medium
-  font-size: $secondary-font-size
-  line-height: 1.4
-  color: $text-muted
-  background-color: $bg-element
-  border-bottom: 1px dashed $border
-
-// No padding of its own, so the highlight of a message runs from edge to edge
-// of the frame; room for the scrollbar only when there is something to scroll.
-// No containment and no transform here or on a row: either makes the box the
-// containing block of every fixed layer inside it, and the menu of a message's
-// edit box is such a layer. It opened inside the clipped feed instead of over
-// the page.
+// No containment or transform here or on a row: either traps the fixed menu of an edit box.
 .chat-feed__list
-  // Everything the page spends around the feed, the search row above the
-  // frame included, written as the token so the feed follows it.
+  // What the page spends around the feed, the search row's control included.
   height: calc(100vh - 362px - #{$control-height})
   min-height: 200px
   overflow-y: auto
@@ -806,27 +546,9 @@ defineExpose({
   height: 100%
   padding: $big
 
-.chat-feed__sentinel
-  display: flex
-  justify-content: center
-  align-items: center
+.chat-feed__sizer
   width: 100%
-  min-height: 1px
-  // Grows to fit the retry when a page of history did not load; otherwise a
-  // hairline the observer watches.
-  &:has(.chat-feed__sentinel-error)
-    min-height: 30px
-    padding: $small 0
-
-.chat-feed__sentinel-error
-  display: flex
-  align-items: center
-  gap: $small
-  color: $accent-red
-
-.chat-feed__retry
-  flex-shrink: 0
-  +button
+  position: relative
 
 .chat-feed__row
   position: absolute
@@ -834,16 +556,14 @@ defineExpose({
   left: 0
   width: 100%
 
-// The very start of the history: the first date does not touch the dashed
-// line of the strip above it. Part of the row, so the virtualizer measures it.
+// The first date keeps off the strip's dashed line; part of the row, so it is measured.
 .chat-feed__row--start
   padding-top: $small
 
 .chat-feed__message
   padding: $small $medium
   margin-bottom: $medium
-  word-break: break-word
-  overflow-wrap: break-word
+  overflow-wrap: anywhere
   position: relative
   overflow: visible
   background-color: $bg-page
@@ -852,20 +572,17 @@ defineExpose({
     margin-bottom: $tiny
     margin-top: -$small
 
-  // A message is content, and its highlight is square like every block of
-  // content (owner's standard, 27 September 2026).
+  // Square, like the highlight of every block of content.
   &:hover,
   &.hovered,
   &:focus-visible
     background-color: $bg-element
 
-  // The whole row takes the focus, so the keyboard reaches the toolbar; the
-  // ring goes inward, since messages stand flush.
+  // The row takes the focus so the keyboard reaches the toolbar; the ring goes inward.
   &:focus:not(:focus-visible)
     outline: none
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
+    +focus-ring($inward: true)
 
   &.removed
     color: $text-muted
@@ -875,8 +592,7 @@ defineExpose({
 .chat-feed__message.hovered :deep(.bbcode-editor)
   background: linear-gradient($hover-overlay, $hover-overlay), $input-bg
 
-// Same control idiom as the fixed scroll-nav buttons (24px square, 16px
-// glyph), with a soft shadow because it floats over the messages.
+// The idiom of the scroll-nav buttons, with a shadow since it floats over the messages.
 .chat-feed__latest
   position: absolute
   bottom: $medium
@@ -885,16 +601,16 @@ defineExpose({
   display: flex
   align-items: center
   justify-content: center
-  width: 24px
-  height: 24px
+  width: $scroll-nav-width
+  height: $scroll-nav-width
   padding: 0
   border: 1px solid $border
   border-radius: $border-radius
   background-color: $bg-element
   color: $text-muted
   cursor: pointer
-  transition: transform 0.15s ease
-  box-shadow: 0 2px 8px $shadow-color
+  transition: transform $transition-normal
+  box-shadow: $shadow-small
   z-index: $z-chat-fab
   svg
     width: 16px

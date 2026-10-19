@@ -26,13 +26,12 @@ namespace DM.Web.API.Features.Game.Notepads;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class GameNotepadController : ControllerBase
 {
-    private readonly IGameNotepadApiService _notepadApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly GameNotepadApiService _notepadApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <inheritdoc />
     public GameNotepadController(
-        IGameNotepadApiService notepadApiService,
-        IGameApiService gameApiService)
+        GameNotepadApiService notepadApiService,
+        GameApiService gameApiService)
     {
         _notepadApiService = notepadApiService;
         _gameApiService = gameApiService;

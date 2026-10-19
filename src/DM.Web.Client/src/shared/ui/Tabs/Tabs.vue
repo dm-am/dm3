@@ -1,50 +1,8 @@
 <script setup lang="ts" generic="V extends string">
-/**
- * Tabs — accessible horizontal tab navigation.
- *
- * Visual: unified with the forum board strip (pages/forum/
- * BoardNavigation.vue) — the two must look identical: a compact
- * left-aligned row of items with " | " separators in base ($font-size) typography.
- * Items behave like the site's regular links: `$link` color,
- * `$link-hover` + underline on hover; the active tab keeps the link
- * color and is marked by semibold weight (underline only on hover —
- * underlines are never an active-state indicator on this site).
- *
- * Active-first behavior: the selected tab is always rendered at visual
- * (and DOM) index 0; the rest follow in their declared order. When the
- * selection changes, a manual FLIP pass animates each moved button from
- * its old bounding box to the new one over 280ms. Only the buttons are
- * animated: the " | " separators are visually identical glyphs, so they
- * simply re-render at their new slots without drawing attention (a
- * separator cannot be transform-animated anyway without breaking the
- * strip's wrap-at-separator behavior).
- *
- * Every width wraps the strip at the separators, a phone's too: nothing of a
- * row is put away and no row scrolls sideways (owner, 12 October 2026), so
- * where the column is narrow the strip takes the lines it needs. A tab and the
- * bar after it are one unbreakable item, and the line breaks at the space
- * after the bar only: a bar closes a line and never opens one, as in the forum
- * board strip. A no-break space before the bar would not do it, since the tab
- * is an inline-block (it has to be, for the FLIP transform), and Chrome breaks
- * after an inline-block whatever text follows it.
- *
- * Accessibility: ARIA tablist/tab pattern with automatic activation.
- * Roving `tabindex` keeps only the active tab in the Tab-key cycle.
- * Arrow / Home / End walk the DECLARED order (the `tabs` prop), never the
- * rendered active-first one: the selection always re-renders at index 0,
- * so stepping by rendered position ping-pongs between two tabs and never
- * reaches the third. `aria-posinset` / `aria-setsize` publish that same
- * declared order, so the position assistive tech announces is the one the
- * arrows walk. Each tab button gets a stable `id`
- * and `aria-controls`; use the exposed `tabId`/`panelId` helpers (via a
- * template ref) to wire the matching `role="tabpanel"` element on the
- * caller's side: `id="panelId(active)"` + `aria-labelledby="tabId(active)"`.
- *
- * Usage:
- *   <Tabs ref="tabsRef" v-model="active" :tabs="tabs" />
- *   const tabs = [{ value: "about", label: "О себе" }, ...]
- */
-import { computed, nextTick, ref } from "vue";
+// The selected tab renders first, and a FLIP animates the move. The keys walk the declared order, and
+// aria-posinset publishes it: by rendered position they bounce between two tabs. The caller wires its
+// tabpanel with the exposed tabId and panelId.
+import { computed, nextTick, ref, useId } from "vue";
 import { useFlipReorder } from "@/shared/lib/composables/useFlipReorder";
 
 export interface TabItem<V extends string = string> {
@@ -62,37 +20,24 @@ const props = withDefaults(
     tabs: readonly TabItem<V>[];
     /** Optional aria-label for the tablist. */
     ariaLabel?: string;
-    /**
-     * Prefix used to build per-tab / per-panel DOM ids: `${idPrefix}-tab-${value}`
-     * and `${idPrefix}-panel-${value}`. Defaults to a random instance id so
-     * multiple <Tabs> on the same page never collide.
-     */
+    /** Builds the tab and panel ids; a random instance id by default, so two strips never collide. */
     idPrefix?: string;
-    /**
-     * Visual variant. "links" (default): a compact row of link-styled items
-     * with " | " separators — the forum board-strip idiom. "headings": the
-     * strip reads as a row of page-title-sized section headings — the active
-     * tab matches <PageTitle> (brown $heading, uppercase, bold), the others
-     * the same but greyed. Used by the profile page, where each tab is a
-     * section of the profile and the strip doubles as its section heading.
-     */
+    /** "headings": the strip doubles as the section heading of the profile, in PageTitle's style. */
     variant?: "links" | "headings";
   }>(),
   {
     ariaLabel: "Разделы",
-    idPrefix: () => `tabs-${Math.random().toString(36).slice(2, 9)}`,
+    idPrefix: () => `tabs-${useId()}`,
     variant: "links",
   },
 );
 
-/** Tab-button DOM id for a given tab value — also usable by the caller
- * (via `tabId`) to wire `aria-labelledby` on its own tabpanel element. */
+/** For the caller's tabpanel aria-labelledby. */
 function tabId(value: V): string {
   return `${props.idPrefix}-tab-${value}`;
 }
 
-/** Tabpanel DOM id for a given tab value — the caller sets this as the
- * `id` on its own tabpanel element and points `aria-controls` here. */
+/** For the caller's tabpanel id. */
 function panelId(value: V): string {
   return `${props.idPrefix}-panel-${value}`;
 }
@@ -103,14 +48,9 @@ const emit = defineEmits<{
   "update:modelValue": [value: V];
 }>();
 
-// Filter hidden tabs first — both DOM order and visual order operate on
-// this set.
 const visibleTabs = computed(() => props.tabs.filter((t) => !t.hidden));
 
-// Visual / DOM order: active tab first, rest preserve their declared
-// order. Same `:key="tab.value"` for the same item across renders means
-// Vue reuses the DOM node (just moves it to a new sibling position),
-// which is what makes the FLIP measure-before / measure-after work.
+// Active first; the same key reuses the DOM node, which is what the FLIP measures.
 const orderedTabs = computed(() => {
   const tabs = visibleTabs.value;
   const i = tabs.findIndex((t) => t.value === props.modelValue);
@@ -118,10 +58,7 @@ const orderedTabs = computed(() => {
   return [tabs[i], ...tabs.slice(0, i), ...tabs.slice(i + 1)];
 });
 
-// 1-based position in the DECLARED order, published as `aria-posinset`.
-// The rendered order is active-first, so without it assistive tech reads
-// every selected tab as "1 of N" and the announced sequence contradicts
-// the one the arrow keys walk.
+// Without it every selected tab reads as "1 of N".
 const declaredPosition = computed(
   () =>
     new Map<V, number>(
@@ -134,20 +71,14 @@ const root = ref<HTMLElement | null>(null);
 /** Whether a tab has another after it, and so a bar. */
 const hasNext = (index: number) => index < orderedTabs.value.length - 1;
 
-// The roving-tabindex target is by definition the selected tab, wherever
-// the active-first reorder has just put it. One selector serves both the
-// post-selection focus move and useFlipReorder's focus restoration.
+// The roving-tabindex target, wherever the reorder put it.
 const SELECTED_TAB_SELECTOR = '[role="tab"][tabindex="0"]';
 
 function selectTab(value: V) {
   if (value !== props.modelValue) emit("update:modelValue", value);
 }
 
-// Keyboard navigation steps through the DECLARED order (visibleTabs) and
-// lets the selection carry the focus with it. Stepping through rendered
-// positions instead is a dead end: the selected tab always re-renders at
-// index 0, so ArrowRight/ArrowLeft would bounce between two tabs forever
-// and Home, aimed at rendered index 0, would reselect the current tab.
+// The declared order: the selected tab re-renders at index 0, so rendered positions bounce.
 function onKeydown(event: KeyboardEvent) {
   const tabs = visibleTabs.value;
   const last = tabs.length - 1;
@@ -174,8 +105,7 @@ function onKeydown(event: KeyboardEvent) {
 
   event.preventDefault();
   selectTab(tabs[nextIndex].value);
-  // Focus follows the selection: once the strip has re-rendered, the
-  // chosen tab is the only one left in the Tab cycle.
+  // Focus follows the selection once the strip has re-rendered.
   nextTick(() => {
     root.value
       ?.querySelector<HTMLElement>(SELECTED_TAB_SELECTOR)
@@ -183,10 +113,7 @@ function onKeydown(event: KeyboardEvent) {
   });
 }
 
-// FLIP animation on reorder + focus restoration (the browser drops focus
-// to <body> when Vue's keyed diff detaches the focused button — restore it
-// onto the active tab, the roving tabindex target). Shared mechanics live
-// in useFlipReorder (also used by the forum BoardNavigation strip).
+// Vue's keyed diff detaches the focused button, and the browser drops focus to <body>.
 useFlipReorder({
   root,
   itemSelector: '[role="tab"]',
@@ -202,13 +129,7 @@ useFlipReorder({
     role="tablist"
     :aria-label="ariaLabel"
   >
-    <!-- One inline run: the separators are real text nodes, so a select-all
-         copy of the strip reads "О себе | Игры | ..." on one line. The space
-         after a bar is the strip's only wrap opportunity (a tab and its bar
-         are one nowrap item): the strip wraps, never scrolls. aria-hidden
-         keeps the decorative separators out of the tablist's accessible
-         content, and the item holding a tab has no role, so to a reader the
-         tab is still a child of the tablist. -->
+    <!-- One inline run: the bars are real text, and the space after a bar is the strip's only wrap. -->
     <template v-for="(tab, index) in orderedTabs" :key="tab.value"
       ><span class="tabs__item"
         ><button
@@ -237,11 +158,7 @@ useFlipReorder({
 </template>
 
 <style scoped lang="sass">
-// Inline formatting context, NOT flex: flex blockifies its items, so a
-// select-all copy would serialize each item on its own line. With inline
-// items the copy reads "О себе | Игры | ..." on one line. Left-aligned
-// compact row — spacing comes only from the " | " separators, never
-// from justification.
+// Inline, not flex: flex items copy as separate lines.
 .tabs
   display: block
   margin-bottom: $small
@@ -251,12 +168,11 @@ useFlipReorder({
   white-space: nowrap
 
 .separator
-  color: $text-muted
   font-size: $font-size
+  color: $text-muted
 
 .tab
-  // inline-block: keeps the label atomic (no internal wrapping) and
-  // makes the FLIP transform applicable.
+  // inline-block: the label stays whole and the FLIP transform applies.
   display: inline-block
   padding: 0
   font-size: $font-size
@@ -267,8 +183,7 @@ useFlipReorder({
   border: none
   cursor: pointer
   white-space: nowrap
-  // Hard kill any inherited text-decoration so a tab can never pick up
-  // an underline from a global anchor/button rule outside :hover.
+  // No underline from a global rule outside :hover.
   text-decoration: none
   // The tempo of every link of the site (Reset.sass, +link-tone).
   transition: color $transition-normal
@@ -277,25 +192,16 @@ useFlipReorder({
     color: $link-hover
     text-decoration: underline
 
-  // Active tab: link color + bold — same idiom as the forum board strip's
-  // current item; underline stays hover-only. 700 and not 600: the face has
-  // two weights, and a bold link is the bold one.
+  // Bold, as the board strip's current item: the face has two weights.
   &.active
     font-weight: 700
 
-  // A bare word, not a box (no padding, no fill): the thin ring of a text
-  // link, not the 2px ring of a block control — that one drawn around a word
-  // is the rectangle the owner rejected.
+  // A word, not a box: the thin ring of a text link.
   &:focus-visible
     outline: 1px solid $link
     outline-offset: 2px
 
-// "headings" variant: the strip reads as a row of page-title-sized section
-// headings (the profile page — each tab is a section of the profile, and the
-// strip doubles as the section heading). The active tab matches the page
-// <PageTitle> exactly (brown $heading, $title-font-size, bold, uppercase,
-// 0.5px tracking); the rest keep the same format greyed ($heading-alt), so
-// the strip reads as the current section's heading among its muted siblings.
+// The active tab is PageTitle exactly; the rest the same, greyed.
 .tabs--headings
   .separator
     font-size: $title-font-size

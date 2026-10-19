@@ -21,7 +21,6 @@ public interface IAuthenticationRepository
     /// <summary>
     /// Search for user by its id
     /// </summary>
-    /// <param name="userId">User id</param>
     /// <returns>User data, or null if not found</returns>
     Task<AuthenticatedUser?> FindUser(Guid userId);
 
@@ -41,7 +40,6 @@ public interface IAuthenticationRepository
     /// <summary>
     /// Search for user settings by user id
     /// </summary>
-    /// <param name="userId">User id</param>
     /// <returns>User settings</returns>
     Task<UserSettings> FindUserSettings(Guid userId);
 

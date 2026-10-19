@@ -8,26 +8,16 @@ using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence.Shared.Comments;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
-using BoardEntity = DM.Infrastructure.Persistence.Entities.Forum.Board;
-using TopicEntity = DM.Infrastructure.Persistence.Entities.Forum.Topic;
+using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
+using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 
 /// <summary>
-/// Projection formulas for the forum DTOs.
-///
-/// The board shape is one spliced expression, asked for on its own and nested
-/// under a topic. It used to be two blocks "that must stay identical".
-///
-/// The user entries under a board are deliberately narrow GeneralUser stubs
-/// (name, role, rating), not the full <see cref="GeneralUserProjections"/>
-/// formula: the board list renders moderator names only, and the full row per
-/// moderator per board would be paid on every forum index render. The stub is
-/// a formula of its own for that reason - so narrowing it stays a decision
-/// somebody made once, rather than four hand-written member lists that agree
-/// by luck.
+/// Projection formulas for the forum DTOs. The board shape is one spliced
+/// expression, asked for on its own and nested under a topic.
 /// </summary>
 internal static class ForumMappers
 {
@@ -52,7 +42,7 @@ internal static class ForumMappers
     /// columns any more - they are computed on read in BoardRepository, so a
     /// counter can never be stale.
     /// </summary>
-    private static readonly Expression<Func<BoardEntity, Board>> BoardProjection =
+    private static readonly Expression<Func<DbBoard, Board>> BoardProjection =
         b => new Board
         {
             Id = b.BoardId,
@@ -60,7 +50,6 @@ internal static class ForumMappers
             Alias = b.Alias,
             Description = b.Description!,
             CreateTopicPolicy = b.CreateTopicPolicy,
-            ViewPolicy = b.ViewPolicy,
             TopicsCount = b.TopicsCount,
             ModeratorIds = b.Moderators.Select(m => m.UserId).ToList(),
             // Spelled out rather than left to the account filter: the board is
@@ -86,24 +75,16 @@ internal static class ForumMappers
         };
 
     /// <summary>EF projection to the domain board</summary>
-    public static IQueryable<Board> ProjectToBoard(this IQueryable<BoardEntity> query) =>
+    public static IQueryable<Board> ProjectToBoard(this IQueryable<DbBoard> query) =>
         query.Select(ExpressionSplicer.Expand(BoardProjection));
 
     /// <summary>
-    /// EF projection to the domain topic.
-    ///
-    /// Performance note (PERFORMANCE.md: "Avoid inline aggregations"):
-    /// TotalCommentsCount and its unread sibling are intentionally absent
-    /// here. Counting via <c>t.Comments.Count()</c> inside the Select would
-    /// generate one correlated <c>SELECT COUNT(*)</c> per row; the repository
-    /// fills them in a single batched <c>GROUP BY</c> pass after the main
-    /// projection, and Likes/LikesCount follow the same rule.
-    ///
-    /// Keeps the topics of removed accounts, signed by nobody
-    /// (<see cref="RemovedAuthors"/>).
+    /// EF projection to the domain topic. Comment and like counts are filled by the
+    /// repository in one GROUP BY: inside the Select they would be a COUNT per row.
+    /// Keeps the topics of removed accounts, signed by nobody (<see cref="RemovedAuthors"/>).
     /// </summary>
-    public static IQueryable<Topic> ProjectToTopic(this IQueryable<TopicEntity> query) =>
-        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<TopicEntity, Topic>>(t => new Topic
+    public static IQueryable<Topic> ProjectToTopic(this IQueryable<DbTopic> query) =>
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbTopic, Topic>>(t => new Topic
         {
             Id = t.TopicId,
             TopicNumber = t.TopicNumber,

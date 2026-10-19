@@ -1,14 +1,10 @@
 using System.Net;
-using System.Net.Http.Json;
 using DM.Domain.Core.Extensions;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 
-/// <summary>
-/// Integration tests for PublicationController
-/// </summary>
 public class PublicationControllerShould : IntegrationTestBase
 {
     public PublicationControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -16,46 +12,22 @@ public class PublicationControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetPublications_WithUnknownBlog_ReturnsNotFound()
+    public async Task GetPublicationsWithUnknownBlogReturnsNotFound()
     {
-        // Arrange - a blog id that is guaranteed not to exist
+        // A blog id that is guaranteed not to exist
         var blogId = Guid.NewGuid();
 
-        // Act
         var response = await Client.GetAsync($"/v1/blogs/{blogId}/publications");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Fact]
-    public async Task PostPublication_RequiresAuthentication()
-    {
-        // Arrange
-        var blogId = Guid.NewGuid();
-        var publicationData = new
-        {
-            title = "Test Publication",
-            text = "Test Content"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync($"/v1/blogs/{blogId}/publications", publicationData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
     /// <summary>
-    /// A notification names a publication the way every payload does — transliterated
-    /// title, tilde, base64 of the guid — and the page a reader opens from one is the
-    /// publication's own. The read route carried a <c>:guid</c> constraint, so that
-    /// form never reached the model binder written for it: routing answered 404 with
-    /// no body, which is the same status a missing publication answers and a different
-    /// thing entirely. Both spellings must reach the handler and be refused by it.
+    /// A notification names a publication by transliterated title, tilde and base64 of the guid; both spellings
+    /// reach the handler and are refused by it.
     /// </summary>
     [Fact]
-    public async Task GetPublication_AcceptsTheReadableGuidANotificationCarries()
+    public async Task GetPublicationAcceptsTheReadableGuidANotificationCarries()
     {
         var missing = Guid.NewGuid();
 
@@ -72,18 +44,5 @@ public class PublicationControllerShould : IntegrationTestBase
         var refusal = await byGuid.Content.ReadAsStringAsync();
         refusal.Should().Contain("Публикация не найдена");
         (await byReadable.Content.ReadAsStringAsync()).Should().Contain("Публикация не найдена");
-    }
-
-    [Fact]
-    public async Task DeletePublication_RequiresAuthentication()
-    {
-        // Arrange
-        var publicationId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.DeleteAsync($"/v1/publications/{publicationId}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

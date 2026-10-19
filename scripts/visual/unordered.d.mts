@@ -4,4 +4,4 @@ export declare const UNORDERED: {
   reason: string;
   order: (body: any, written: (moment: unknown) => boolean) => void;
 }[];
-export declare const addressOf: (route: string) => RegExp;
+export declare const routePattern: (route: string) => RegExp;

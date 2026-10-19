@@ -5,13 +5,9 @@ namespace DM.Domain.Core.Dto;
 /// produces.
 /// </summary>
 /// <remarks>
-/// The profile shows one line per category and the names on those lines come out
-/// of a single preview capped at
-/// <see cref="Configuration.SubscriptionPolicy.PreviewCap" /> and ordered by
-/// activity — the cap is applied before anything knows about categories. So a
-/// line could hold every name it had and still be missing subscribers, or hold
-/// none at all while the category had plenty, and it said neither. These counts
-/// are what lets the line say how many there really are.
+/// The names on the profile lines come from one preview capped at
+/// <see cref="Configuration.SubscriptionPolicy.PreviewCap" /> before categories,
+/// so only these counts say how many each line really has.
 ///
 /// Three named fields rather than a map keyed by
 /// <see cref="Enums.SubscriptionSettings" />: the three categories are a fixed

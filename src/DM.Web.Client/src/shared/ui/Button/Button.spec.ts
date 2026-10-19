@@ -2,19 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * What the button owes a request in flight.
- *
- * `loading` is two things at once and both are load-bearing: the control stops
- * answering, and it says so on screen. Fifteen pages used to fill the second
- * half by hand with a caption of their own; the caption is now whatever the
- * caller passed and nothing else.
- *
- * On screen a request in flight IS the disabled state — a control that has
- * stopped answering, hatched, in the fill it already had. What the two states
- * do not share is what they announce: `aria-busy` says the control will come
- * back, and a merely disabled one does not carry it.
- */
+// A request in flight looks disabled; only aria-busy says the control will come back.
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import Button from "./Button.vue";

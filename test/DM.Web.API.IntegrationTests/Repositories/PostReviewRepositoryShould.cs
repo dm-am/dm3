@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
 using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
@@ -19,19 +15,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// The review row and the post author's quality rating, written as one thing.
 /// </summary>
 /// <remarks>
-/// QualityRating is a stored column and not a sum over the reviews: nothing
-/// recomputes it, and the post's own rating - which is summed - stays right no
-/// matter what happens to it, so a drift here has nothing to be caught by. The
-/// counter used to be moved by a call of its own that committed before the row
-/// it belonged to was written, twice over on a sign change, and a refusal in
-/// either gap left a profile carrying a sign the review does not have.
-///
-/// Against the container Postgres, because the thing under test is the rollback:
-/// the InMemory provider has no transactions to roll back and no ExecuteUpdate to
-/// run, so a test there would assert the double rather than the write. The
-/// failure is a foreign key on the modifier - a user identifier nobody holds -
-/// which the row write is refused for after the counter has already moved inside
-/// the transaction.
+/// QualityRating is a stored column nothing recomputes. Against the container Postgres: the rollback is under test,
+/// forced by a foreign key on the modifier after the counter moved inside the transaction.
 /// </remarks>
 public class PostReviewRepositoryShould : IntegrationTestBase
 {
@@ -76,7 +61,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
-    private IPostReviewRepository Repository(IServiceScope scope) =>
+    private static IPostReviewRepository Repository(IServiceScope scope) =>
         scope.ServiceProvider.GetRequiredService<IPostReviewRepository>();
 
     /// <summary>
@@ -192,15 +177,8 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// And the way in: the review the unique index refuses costs the post author
-    /// nothing.
+    /// The review the unique index refuses costs the post author nothing.
     /// </summary>
-    /// <remarks>
-    /// One active review per author-post pair, and the service checks for one
-    /// before writing - this is the race where two requests both pass that check.
-    /// The counter moved for the loser of that race is the drift the check cannot
-    /// prevent.
-    /// </remarks>
     [Fact]
     public async Task PayNothingForAReviewTheUniqueIndexRefuses()
     {
@@ -221,8 +199,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
                     CreatedUtc = DateTimeOffset.UtcNow,
                     Sign = ReviewSign.Positive,
                     Text = "Вторая оценка того же поста"
-                },
-                qualityRatingDelta: 1);
+                });
 
             await act.Should().ThrowAsync<DuplicateEntityException>();
 
@@ -237,18 +214,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     /// <summary>
     /// One review taken down twice at once gives its sign back once.
     /// </summary>
-    /// <remarks>
-    /// The author of the review and a senior moderator can both remove it, and
-    /// the author can press it twice on a slow answer. What the counter owes used
-    /// to be computed by the caller from the review it had read, so both removals
-    /// carried the same "give the plus back" and the post author lost two points
-    /// for one review — a stored column, and the row that would say the right
-    /// number is the one that was removed.
-    ///
-    /// A scope apiece, as two requests would have, and a timeout over the pair:
-    /// the second removal waits on the row lock, and a wait that never ends has
-    /// to fail rather than hang the suite.
-    /// </remarks>
+    /// <remarks>What the counter owes is read off the row; a scope apiece and a timeout on the pair.</remarks>
     [Fact]
     public async Task GiveTheSignBackOnceWhenTwoRemovalsRaceForOneReview()
     {
@@ -274,13 +240,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     /// <summary>
     /// An edit that arrives after the removal moves nothing.
     /// </summary>
-    /// <remarks>
-    /// The author edits the sign in one tab while a senior moderator takes the
-    /// review down in another. A removed review is worth nothing to the post
-    /// author either way, so the difference the edit is worth is zero — which is
-    /// what a write that reads the row itself can see and a caller holding the
-    /// review as it was cannot.
-    /// </remarks>
+    /// <remarks>A removed review is worth nothing, which only a write reading the row itself can see.</remarks>
     [Fact]
     public async Task MoveNothingForAnEditQueuedBehindTheRemoval()
     {
@@ -316,14 +276,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     /// <summary>
     /// A sign the request does not carry is the sign the row already holds.
     /// </summary>
-    /// <remarks>
-    /// Editing the text of a review is a request with no sign in it, and what
-    /// the counter owes is the difference between the contribution the row will
-    /// have and the one it has. Reading the missing sign as nothing would make
-    /// that difference the whole sign taken back: the post author would pay for
-    /// an edit that never touched the sign, and the row would go on holding a
-    /// plus the counter no longer counts.
-    /// </remarks>
+    /// <remarks>An edit of the text carries no sign, and the counter owes the difference of contributions.</remarks>
     [Fact]
     public async Task KeepTheStoredSignWhenTheRequestCarriesOnlyText()
     {
@@ -357,12 +310,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     /// <summary>
     /// Taking down a review that carried no sign costs the post author nothing.
     /// </summary>
-    /// <remarks>
-    /// A neutral review is a comment with no weight, so its whole life is worth
-    /// zero to the counter: nothing on the way in, nothing on the way out. It is
-    /// the one sign that says whether the contribution is read off the row or
-    /// guessed from the fact that a review exists.
-    /// </remarks>
+    /// <remarks>The contribution is read off the row, not guessed from the review's existence.</remarks>
     [Fact]
     public async Task GiveNothingBackForTheRemovalOfANeutralReview()
     {
@@ -386,13 +334,7 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     /// <summary>
     /// The audit names the removal that happened, not the one that arrived after.
     /// </summary>
-    /// <remarks>
-    /// The author of a review and a senior moderator can both take it down, and
-    /// the second press finds the row already removed. The counter already owes
-    /// nothing in that case; the audit columns have to hold still for the same
-    /// reason, or the removal a moderator answers for is recorded under whoever
-    /// pressed the button last.
-    /// </remarks>
+    /// <remarks>The second press finds the row removed, and the audit columns hold still.</remarks>
     [Fact]
     public async Task KeepTheFirstRemoversHandWhenTheReviewIsRemovedAgain()
     {
@@ -421,16 +363,9 @@ public class PostReviewRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Reviews of one post written in the same moment come back in the same
-    /// order on every read: the list numbers them "#1", "#2" by it.
+    /// Reviews of one post written in one moment come back in one order on every read: the list numbers them by it.
     /// </summary>
-    /// <remarks>
-    /// Written in an order that is neither the order of their identifiers nor
-    /// its reverse, so neither the order the rows were stored in nor an index
-    /// read backwards can pass for the tie being closed. The moment is shared,
-    /// as the seed shares it between two reviews of its showcase post, which is
-    /// where the numbers were seen to swap between two loads of a room.
-    /// </remarks>
+    /// <remarks>Written in an order that is neither the identifiers' nor its reverse.</remarks>
     [Fact]
     public async Task CloseATieOfTheSameMomentByTheIdentifier()
     {

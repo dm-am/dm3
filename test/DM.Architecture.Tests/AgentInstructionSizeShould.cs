@@ -40,18 +40,18 @@ public class AgentInstructionSizeShould
 
     private static readonly Recorded[] Register =
     [
-        new(".claude/CLAUDE.md", 8361),
-        new(".claude/agents/code-reviewer.md", 5414),
-        new(".claude/agents/debugger.md", 3147),
-        new(".claude/agents/frontend-developer.md", 3251),
+        new(".claude/CLAUDE.md", 4904),
+        new(".claude/agents/code-reviewer.md", 3755),
+        new(".claude/agents/debugger.md", 1699),
+        new(".claude/agents/frontend-developer.md", 2698),
         new(".claude/skills/architecture-review/SKILL.md", 4615),
         new(".claude/skills/architecture/SKILL.md", 5594),
-        new(".claude/skills/codex-issue-coordinator/SKILL.md", 10280),
         new(".claude/skills/design/SKILL.md", 6494),
-        new(".claude/skills/html-doc/SKILL.md", 5151),
+        new(".claude/skills/grilling/SKILL.md", 2077),
         new(".claude/skills/improve/SKILL.md", 1432),
         new(".claude/skills/plan/SKILL.md", 5097),
-        new(".claude/skills/refactor-in-bounds/SKILL.md", 13086),
+        new(".claude/skills/prototype/SKILL.md", 2931),
+        new(".claude/skills/refactor-in-bounds/SKILL.md", 10677),
         new(".claude/skills/review/SKILL.md", 5953),
         new(".claude/skills/task-to-pr/SKILL.md", 4010),
         new(".claude/skills/test/SKILL.md", 2033),
@@ -85,7 +85,7 @@ public class AgentInstructionSizeShould
     [InlineData(".claude/CLAUDE.md", true)]
     [InlineData(".claude/agents/code-reviewer.md", true)]
     [InlineData(".claude/skills/review/SKILL.md", true)]
-    [InlineData(".claude/skills/html-doc/tests/fixtures/prd.md", false)]
+    [InlineData(".claude/skills/review/references/checklist.md", false)]
     [InlineData("docs/conventions/PROCESS.md", false)]
     public void TellAFileOfInstructions(string path, bool counted) =>
         Instructions.IsMatch(path).Should().Be(counted);

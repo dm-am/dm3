@@ -16,7 +16,7 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 ///
 /// FOR UPDATE SKIP LOCKED guards the deployment window when the old and the new
 /// API process run their relays at once: without it both would publish the same
-/// rows - which W1.4 would swallow - but worse, both would mark them. The
+/// rows and both would mark them. The
 /// identifiers in the SQL are compile-time constants of this file, the same
 /// reasoning as the retention sweeper next door.
 ///
@@ -105,9 +105,7 @@ internal class OutboxRelayProcessor(
 
             await transaction.CommitAsync(cancellationToken);
 
-            // The drain loop runs batches in one scope: without this, every
-            // full batch parks another hundred tracked rows in the context
-            // until the tick ends (review of W1.5).
+            // The drain loop runs batches in one scope, so tracked rows would pile up.
             dbContext.ChangeTracker.Clear();
 
             var oldestPendingAge = oldestOccurredUtc is { } oldest

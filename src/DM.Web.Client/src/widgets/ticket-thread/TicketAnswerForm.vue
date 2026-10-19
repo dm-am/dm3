@@ -1,29 +1,8 @@
 <script setup lang="ts">
-/**
- * The form an answer of a ticket is written in, under its conversation: the
- * form of a comment of a topic (CommentComposer), the editor across the column
- * and "Отправить" under it at the left, with a ticket's words and, for
- * moderation, the status the answer moves the ticket to.
- *
- * Moderation chooses the status over the editor, as a field of the form it
- * sends: "Ожидает ответа пользователя" unless it chooses to close the ticket or
- * to mark it as spam. The text and the status go in one request and land
- * together or not at all, so no closing stands without the word that came
- * with it. Closing needs no word: with "Закрыто" or "Спам" chosen the form
- * sends an empty field, and the status is the whole answer. The author and
- * the guest choose nothing: their answer always hands the ticket to
- * moderation, and the server refuses a status from them.
- *
- * The choice is a list of the site's forms (Select under a FormField caption),
- * as the forms of moderation choose a value (BanDialog, WarningDialog). It is
- * no filter: it changes nothing on the page until the answer is sent.
- *
- * Its own form and not the comment's, for the words: a ticket holds answers,
- * not comments, and the field and the refusal say so.
- */
+/** The answer form of a ticket: a comment's form in a ticket's words, the status for moderation. */
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
-import type { GeneralError } from "@/shared/api/models/common";
+import type { SubmitResult } from "@/shared/api/models/common";
 import Button from "@/shared/ui/Button/Button.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select, type SelectOption } from "@/shared/ui/Select";
@@ -37,14 +16,8 @@ import {
   type AnswerStatus,
 } from "@/entities/ticket";
 
-/** What a mutation answers with: null when the server took the change. */
-type SubmitResult = { error: GeneralError | null };
-
 const props = defineProps<{
-  /**
-   * Posts the answer; the result decides whether the draft is dropped. The
-   * status is moderation's alone and is left out for anybody else.
-   */
+  /** Posts the answer; the status is moderation's alone. */
   send: (text: string, status?: AnswerStatus) => Promise<SubmitResult>;
   /** The key the editor keeps the unsent draft under. */
   draftKey: string;
@@ -85,9 +58,7 @@ async function handleSend() {
   const written = text.value;
   const chosen = props.choosesStatus ? status.value : undefined;
 
-  // Emptied before the request, so that sending feels instant, and given back
-  // when it is refused. The editor's own clear() waits for the answer: it also
-  // drops the saved draft, the copy that outlives the tab.
+  // Emptied at once and given back on a refusal; clear() waits, since it drops the draft too.
   text.value = "";
   sending.value = true;
   sendResult.clear();
@@ -142,10 +113,7 @@ async function handleSend() {
 </template>
 
 <style scoped lang="sass">
-// The form of a comment (CommentComposer): the editor across the column,
-// "Отправить" under it at its own width and at the left, a small step
-// between them. The caption of the status and its list stand over the editor
-// on the same step: the field keeps no margin of its own here.
+// The form of a comment, the status field over the editor on the same step.
 .ticket-answer-form
   display: flex
   flex-direction: column

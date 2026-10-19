@@ -1,3 +1,4 @@
+using DM.Domain.Game.Authorization;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,26 +15,24 @@ using DtoGameDetails = DM.Domain.Game.Features.Games.GameDetails;
 using DtoGameRecruitment = DM.Domain.Game.Features.Games.GameRecruitment;
 using DtoActiveCharacterInfo = DM.Domain.Game.Features.Games.ActiveCharacterInfo;
 using DtoPlayerCharacterInfo = DM.Domain.Game.Features.Games.PlayerCharacterInfo;
-using DtoCharacterShortInfo = DM.Domain.Game.Features.Games.CharacterShortInfo;
+using DtoCharacterShortInfo = DM.Domain.Game.Features.Characters.CharacterShortInfo;
 using DtoGameTag = DM.Domain.Game.Features.Games.GameTag;
 using DtoGamesQuery = DM.Domain.Game.Features.Games.GamesQuery;
 using DtoCreateGame = DM.Domain.Game.Features.Games.CreateGame;
 using DtoUpdateGame = DM.Domain.Game.Features.Games.UpdateGame;
-using DtoGameAttributeSchema = DM.Domain.Game.Features.Games.GameAttributeSchema;
+using DtoGameAttributeSchema = DM.Domain.Game.Features.GameAttributeSchemas.GameAttributeSchema;
 using DtoReplaceGameAttributeSchema = DM.Domain.Game.Features.GameAttributeSchemas.ReplaceGameAttributeSchema;
 
 namespace DM.Web.API.Features.Game.Games;
 
 /// <summary>
-/// Compile-time mapper for game models. The viewer's participation folds out
-/// of the identity injected through the constructor instead of the
-/// GameParticipationResolver indirection, and the render-context envelope on
-/// the public info is an explicit step of <see cref="ToGameDetails"/>.
+/// Compile-time mapper for game models. The viewer's participation folds out of
+/// the identity injected through the constructor.
 /// </summary>
 [Mapper]
 [UseStaticMapper(typeof(UserRefMappers))]
 [UseStaticMapper(typeof(BbTextMappers))]
-internal partial class GameMapper
+public partial class GameMapper
 {
     [UseMapper]
     private readonly AttributeSchemaMapper _schemaMapper;
@@ -77,13 +76,8 @@ internal partial class GameMapper
     }
 
     /// <summary>
-    /// Domain game details to the full response DTO. The explicit envelope
-    /// step replaces the AutoMapper AfterMap: the master owns the public
-    /// info, so the envelope is what lets the JSON converter honor the
-    /// master's AuthorEdit round-trip (the settings editor sends
-    /// X-Dm-Audience: author_edit to load the raw BBCode source) while
-    /// downgrading any other viewer's author_edit request to
-    /// permission-filtered Display.
+    /// Domain game details to the full response DTO, with the master bound to the
+    /// public info for the settings editor's AuthorEdit read.
     /// </summary>
     public GameDetails ToGameDetails(DtoGameDetails game)
     {
@@ -101,18 +95,14 @@ internal partial class GameMapper
             ViewPostStats = !game.HidePostStats,
             CommentariesAccess = game.CommentsAccessMode
         };
-        // Readers ("Читатели") == game subscribers (GameRole.Reader is
-        // subscription based); same source, roster-named.
+        // A reader of a game is its subscriber.
         result.Readers = result.Subscribers;
         result.ViewerBlacklisted = AnonymousIdentity.Of(_identityProvider.Current?.User) is { } viewerId &&
                                    game.IsBlacklisted(viewerId);
-        if (result.Info is not null && game.Master is not null)
+        if (game.Master is not null)
         {
-            result.Info.Context = new RenderContextEnvelope
-            {
-                Surface = result.Info.Surface,
-                PostAuthorUserId = game.Master.UserId
-            };
+            result.Info?.BindAuthor(game.Master.UserId,
+                intentions => intentions.IsAllowed(GameIntention.EditSettings, game));
         }
 
         return result;
@@ -126,26 +116,17 @@ internal partial class GameMapper
     public DtoGamesQuery ToGamesQuery(GamesQuery query)
     {
         var result = ToGamesQueryCore(query);
-        result.Statuses = query.Statuses != null && query.Statuses.Any()
-            ? new HashSet<ModuleStatus>(query.Statuses)
-            : null;
-        result.RequiredTags = query.RequiredTags != null && query.RequiredTags.Any()
-            ? new HashSet<int>(query.RequiredTags)
-            : null;
-        result.OptionalTags = query.OptionalTags != null && query.OptionalTags.Any()
-            ? new HashSet<int>(query.OptionalTags)
-            : null;
-        result.ExcludedTags = query.ExcludedTags != null && query.ExcludedTags.Any()
-            ? new HashSet<int>(query.ExcludedTags)
-            : null;
-        result.OwnerUsernames = query.HostUsernames != null && query.HostUsernames.Any(u => !string.IsNullOrWhiteSpace(u))
-            ? new HashSet<string>(query.HostUsernames.Where(u => !string.IsNullOrWhiteSpace(u)))
-            : null;
-        result.PremoderationStatuses = query.PremoderationStatuses != null && query.PremoderationStatuses.Any()
-            ? new HashSet<PremoderationStatus>(query.PremoderationStatuses)
-            : null;
+        result.Statuses = ToSetOrNull(query.Statuses);
+        result.RequiredTags = ToSetOrNull(query.RequiredTags);
+        result.OptionalTags = ToSetOrNull(query.OptionalTags);
+        result.ExcludedTags = ToSetOrNull(query.ExcludedTags);
+        result.OwnerUsernames = ToSetOrNull(query.HostUsernames?.Where(u => !string.IsNullOrWhiteSpace(u)));
+        result.PremoderationStatuses = ToSetOrNull(query.PremoderationStatuses);
         return result;
     }
+
+    private static HashSet<T>? ToSetOrNull<T>(IEnumerable<T>? values) =>
+        values != null && values.Any() ? new HashSet<T>(values) : null;
 
     /// <summary>
     /// Domain tag to the API one - the public identifier is the short alias
@@ -156,8 +137,7 @@ internal partial class GameMapper
     public partial Tag ToTag(DtoGameTag tag);
 
     /// <summary>
-    /// Create request to the write model. Draft visibility is not part of
-    /// the API contract yet (the enum defaults to Private server-side).
+    /// Create request to the write model
     /// </summary>
     public DtoCreateGame ToCreateGame(CreateGameRequest request)
     {
@@ -178,8 +158,7 @@ internal partial class GameMapper
     public DtoUpdateGame ToUpdateGame(UpdateGameRequest request)
     {
         var result = ToUpdateGameCore(request);
-        // Lifted negation on purpose: a privacy block whose flag was not
-        // sent folds to null, not to a value.
+        // An absent privacy block folds to null, not to a value.
         result.HideDiceResult = request.PrivacySettings == null ? null : !request.PrivacySettings.ViewDice;
         result.ShowPrivateMessages = request.PrivacySettings?.ViewPrivates;
         result.HidePostStats = request.PrivacySettings == null ? null : !request.PrivacySettings.ViewPostStats;
@@ -190,18 +169,12 @@ internal partial class GameMapper
     }
 
     /// <summary>
-    /// Current user participation flags, flattened for the client. The one
-    /// bit the repository resolved rather than this method is Reader: the
-    /// flag is filled for the user the game was read for, and that is the
-    /// same current user this mapper asks about.
+    /// Current user participation flags, flattened for the client. Reader comes
+    /// from the repository, which read the game for the same current user.
     /// </summary>
     public IEnumerable<GameParticipation> ParticipationOf(DtoGame game)
     {
-        // Through AnonymousIdentity rather than the empty Guid. The empty id is
-        // the absence of an identity, and it is also what an unfilled field holds,
-        // so comparing by it answers "yes, this is you" to a visitor who is nobody
-        // against a game whose master the projection did not fill - and Owner here
-        // is what the client draws the settings and the master's controls from.
+        // Not the empty Guid: an unfilled master id would answer Owner to a guest.
         var userId = AnonymousIdentity.Of(_identityProvider.Current?.User);
         var participation = GameParticipation.None;
 
@@ -226,6 +199,11 @@ internal partial class GameMapper
             {
                 participation |= GameParticipation.Player;
             }
+
+            if (game.Mentor?.UserId == readerId)
+            {
+                participation |= GameParticipation.Moderator;
+            }
         }
 
         if (game.IsViewerSubscriber)
@@ -233,17 +211,10 @@ internal partial class GameMapper
             participation |= GameParticipation.Reader;
         }
 
-        if (game.Mentor?.UserId == userId)
-        {
-            participation |= GameParticipation.Moderator;
-        }
-
         return Enum.GetValues<GameParticipation>()
             .Where(p => p != GameParticipation.None && (p & participation) == p);
     }
 
-    // A narrowing projection by design: the domain game carries the roster
-    // and moderation fields the sidebar reference never answers.
     [MapperIgnoreTarget(nameof(GameRef.Participation))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial GameRef ToGameRefCore(DtoGame game);
@@ -251,17 +222,12 @@ internal partial class GameMapper
     [MapperIgnoreTarget(nameof(GameRef.Participation))]
     [MapProperty(nameof(DtoGame.SystemName), nameof(Game.System))]
     [MapProperty(nameof(DtoGame.NarrativeSetting), nameof(Game.Setting))]
-    // Conditional expansion: hydrated only by the player-filtered list path;
-    // a null source keeps null (instead of an empty collection) so
-    // unfiltered responses omit the field entirely.
+    // Only the player-filtered list hydrates it; null keeps it out of other responses.
     [MapProperty(nameof(DtoGame.FilteredPlayerCharacters), nameof(Game.PlayerCharacters))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial Game ToGameCore(DtoGame game);
 
-    // Participation, privacy fold and the info envelope live in the wrapper;
-    // Readers shares the Subscribers projection there too. The sheet maps by
-    // convention: both sides carry the specifications and the version. What
-    // the viewer may do is the domain's answer, composed by GameApiService.
+    // Composed in ToGameDetails, the viewer in GameApiService.
     [MapperIgnoreTarget(nameof(GameRef.Participation))]
     [MapperIgnoreTarget(nameof(GameDetails.PrivacySettings))]
     [MapperIgnoreTarget(nameof(GameDetails.Readers))]
@@ -289,14 +255,11 @@ internal partial class GameMapper
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial PlayerCharacterInfo ToPlayerCharacterInfo(DtoPlayerCharacterInfo info);
 
-    // An NPC has no author, and both sides say so: the domain member is
-    // nullable and the roster line answers with no owner rather than with a
-    // user nobody can name.
+    // An NPC has no author, nullable on both sides.
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial CharacterShortInfo ToCharacterShortInfo(DtoCharacterShortInfo info);
 
-    // The set filters fold in the wrapper - null and empty both mean "no
-    // filter" and the domain speaks HashSet.
+    // The set filters fold in ToGamesQuery.
     [MapperIgnoreTarget(nameof(DtoGamesQuery.Statuses))]
     [MapperIgnoreTarget(nameof(DtoGamesQuery.RequiredTags))]
     [MapperIgnoreTarget(nameof(DtoGamesQuery.OptionalTags))]
@@ -312,9 +275,7 @@ internal partial class GameMapper
     [MapperIgnoreTarget(nameof(DtoCreateGame.ShowPrivateMessages))]
     [MapperIgnoreTarget(nameof(DtoCreateGame.HidePostStats))]
     [MapperIgnoreTarget(nameof(DtoCreateGame.CommentsAccessMode))]
-    // API exposes only the `Draft` bool, not draft visibility; the enum
-    // defaults to Private server-side until the API surfaces it. The
-    // blacklist copy switch maps by name: absent, the account setting decides.
+    // The API has no draft visibility; the domain default is Private.
     [MapperIgnoreTarget(nameof(DtoCreateGame.DraftVisibility))]
     [MapProperty(nameof(CreateGameRequest.System), nameof(DtoCreateGame.SystemName))]
     [MapProperty(nameof(CreateGameRequest.Setting), nameof(DtoCreateGame.NarrativeSetting))]
@@ -330,13 +291,7 @@ internal partial class GameMapper
     public partial DtoReplaceGameAttributeSchema ToReplaceGameAttributeSchema(
         ReplaceGameAttributeSchemaRequest request);
 
-    // Tags map by convention: both sides are the short identifiers the tag
-    // list serves, and both spell "leave them alone" as null.
     [MapperIgnoreTarget(nameof(DtoUpdateGame.GameId))]
-    [MapperIgnoreTarget(nameof(DtoUpdateGame.DraftVisibility))]
-    [MapperIgnoreTarget(nameof(DtoUpdateGame.MentorId))]
-    [MapperIgnoreTarget(nameof(DtoUpdateGame.RecruitmentStartedUtc))]
-    [MapperIgnoreTarget(nameof(DtoUpdateGame.IsRemoved))]
     [MapperIgnoreTarget(nameof(DtoUpdateGame.HideDiceResult))]
     [MapperIgnoreTarget(nameof(DtoUpdateGame.ShowPrivateMessages))]
     [MapperIgnoreTarget(nameof(DtoUpdateGame.HidePostStats))]

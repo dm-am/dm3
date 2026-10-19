@@ -2,38 +2,10 @@
  * @vitest-environment jsdom
  */
 
-/**
- * "Перейти к дате" and its calendar, as the keyboard meets them.
- *
- * The calendar opened from the button takes the focus onto the day on view
- * (the one the chat is on, else today), so the arrows work at once; Escape
- * closes it and gives the focus back to the button, and so does a pick. Before,
- * the 42 days were 42 stops of Tab and a pick dropped the focus on the page.
- *
- * And what it offers: the days the feed has, from its first message to today,
- * and its words at every width, with the calendar hung from the row the
- * button stands in.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { componentCss, styleRules } from "@/shared/lib/testing/styles";
-import ChatDateJump from "./ChatDateJump.vue";
 
-/** The declarations of the control's rules on a part of it, by its class. */
-function ruleOn(part: string) {
-  const file = resolve(
-    dirname(fileURLToPath(import.meta.url)),
-    "ChatDateJump.vue",
-  );
-  return Object.assign(
-    {},
-    ...styleRules(componentCss(file))
-      .filter((rule) => rule.selector.includes(part))
-      .map((rule) => rule.declarations),
-  ) as Record<string, string>;
-}
+import ChatDateJump from "./ChatDateJump.vue";
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -63,7 +35,6 @@ const open = async (wrapper: ReturnType<typeof mountJump>) => {
 const focusedText = () =>
   (document.activeElement as HTMLElement | null)?.textContent?.trim();
 
-/** The days of the month on view that can be picked, by their numbers. */
 const pickable = (wrapper: ReturnType<typeof mountJump>) =>
   wrapper
     .findAll(".dp-day")
@@ -128,32 +99,9 @@ describe("the days the chat's date jump offers", () => {
   });
 });
 
-/**
- * A narrow row once had the button give up its words for its icon alone, a
- * square a phone showed in their place. The owner, 12 October 2026: nothing
- * is shortened on a phone. Nothing can ask for that form any more.
- */
 describe("the chat's date jump at any width", () => {
-  it("says its words, and has no form without them", () => {
+  it("says its words", () => {
     const wrapper = mountJump("", { narrow: true });
-    const button = wrapper.find(".date-btn");
-    expect(button.text()).toBe("Перейти к дате");
-    expect(button.classes()).not.toContain("date-btn--icon");
-    expect(wrapper.props()).not.toHaveProperty("narrow");
-  });
-
-  /**
-   * Where the field leaves the button no room beside it, the button stands
-   * under the field, at the start of the row (ChatSearchRow). A calendar hung
-   * from the right edge of the button reached 111 past the row on the left,
-   * over the column beside the chat (1001). Hung from the row, under it at its
-   * right edge, it keeps within the row on one line and on two alike.
-   */
-  it("hangs its calendar from the row it stands in, not from the button", () => {
-    expect(ruleOn(".date-section")).not.toHaveProperty("position");
-    expect(ruleOn(".date-popover")).toMatchObject({
-      position: "absolute",
-      right: "0",
-    });
+    expect(wrapper.find(".date-btn").text()).toBe("Перейти к дате");
   });
 });

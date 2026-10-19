@@ -1,9 +1,9 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,74 +12,25 @@ namespace DM.Architecture.Tests;
 /// A repository method that asks who is reading has to use the answer.
 /// </summary>
 /// <remarks>
-/// PostRepository.Get(Guid postId, Guid userId) took the reader's identifier and
-/// never mentioned it again: the query was Posts.Where(p => p.PostId == postId),
-/// so the text of any post whose identifier a caller happened to know came back,
-/// private room or not. The method two lines above it does the same read through
-/// the rooms and applies GameAccessibilityFilters.RoomAvailable(userId).
-///
-/// Nothing said a word. The compiler has no reason to: an unused parameter is
-/// legal. The signature promised a scoped read, the call sites believed it, and
-/// the only place the promise could be checked was the body nobody re-read.
-///
-/// So the rule is narrow and mechanical: a parameter that names the reader must
-/// appear in the body that declares it. It does not say which filter to use, and
-/// it cannot: whether the scope is correct is a question for a test over data.
-/// What it does say is that the argument was not silently dropped, which is the
-/// shape this defect had both times it happened.
+/// An unused parameter is legal, so a signature promising a scoped read is checked here: a parameter
+/// that names the reader appears in its body. Whether the scope is right is a test over data.
 /// </remarks>
 public class RepositoryScopeShould
 {
     /// <summary>Parameter names that mean "the person this read is for".</summary>
     private static readonly string[] ReaderParameters = { "userId", "viewerId", "readerId", "currentUserId" };
 
-    /// <summary>
-    /// Signature followed by a body or an expression body. The capture keeps the
-    /// parameter list so the reader parameter can be recognised, and the position
-    /// of the match is where the body extraction starts.
-    /// </summary>
-    private static readonly Regex Method = new(
-        @"(?<sig>(?:public|private|protected|internal)[^;{}()]*?\s(?<name>\w+)\s*\((?<args>[^)]*)\))\s*(?<open>=>|\{)",
-        RegexOptions.Compiled | RegexOptions.Singleline);
+    private static IEnumerable<string> PersistenceSources() => Directory
+        .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src", "DM.Infrastructure.Persistence", "Repositories"),
+            "*.cs", SearchOption.AllDirectories)
+        .Where(RepositoryFiles.IsAuthored);
 
-    private static string RepositoriesRoot => Path.Combine(
-        RepositoryRoot, "src", "DM.Infrastructure.Persistence", "Repositories");
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    private static IEnumerable<string> RepositoryFiles() => Directory
-        .EnumerateFiles(RepositoriesRoot, "*.cs", SearchOption.AllDirectories)
-        .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
-        .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"));
-
-    /// <summary>
-    /// The body that follows a signature: either everything up to the matching
-    /// closing brace, or, for an expression body, up to the semicolon that ends
-    /// the statement.
-    /// </summary>
-    private static string BodyAfter(string source, Match method)
+    /// <summary>The reader parameter a method takes and never mentions, or null.</summary>
+    private static string? DroppedReader(SourceText.Member member)
     {
-        var start = method.Index + method.Length;
-        if (method.Groups["open"].Value == "=>")
-        {
-            var end = source.IndexOf(';', start);
-            return end < 0 ? source[start..] : source[start..end];
-        }
-
-        var depth = 1;
-        for (var i = start; i < source.Length; i++)
-        {
-            if (source[i] == '{')
-            {
-                depth++;
-            }
-            else if (source[i] == '}' && --depth == 0)
-            {
-                return source[start..i];
-            }
-        }
-
-        return source[start..];
+        var reader = ReaderParameters.FirstOrDefault(name =>
+            Regex.IsMatch(member.Parameters, $@"\bGuid\??\s+{name}\b"));
+        return reader is null || Regex.IsMatch(member.Body, $@"\b{reader}\b") ? null : reader;
     }
 
     [Fact]
@@ -87,29 +38,14 @@ public class RepositoryScopeShould
     {
         var offenders = new List<string>();
 
-        foreach (var file in RepositoryFiles())
+        foreach (var file in PersistenceSources())
         {
-            var source = File.ReadAllText(file);
-            var relative = Path.GetRelativePath(RepositoryRoot, file);
-
-            foreach (Match method in Method.Matches(source))
+            foreach (var member in SourceText.Members(File.ReadAllText(file)))
             {
-                var parameters = method.Groups["args"].Value;
-                var reader = ReaderParameters.FirstOrDefault(name =>
-                    Regex.IsMatch(parameters, $@"\bGuid\??\s+{name}\b"));
-                if (reader is null)
+                if (DroppedReader(member) is { } reader)
                 {
-                    continue;
+                    offenders.Add($"{RepositoryFiles.Relative(file)}:{member.Line}: {member.Name} takes {reader} and never uses it");
                 }
-
-                var body = BodyAfter(source, method);
-                if (Regex.IsMatch(body, $@"\b{reader}\b"))
-                {
-                    continue;
-                }
-
-                var line = source[..method.Index].Count(c => c == '\n') + 1;
-                offenders.Add($"{relative}:{line}: {method.Groups["name"].Value} takes {reader} and never uses it");
             }
         }
 
@@ -121,46 +57,28 @@ public class RepositoryScopeShould
     [Fact]
     public void HaveASearchThatWouldFindOne()
     {
-        // The rule above is a scan, and a scan that stops matching passes in
-        // silence. This is the fixture that says it still recognises both the
-        // shape it looks for and the shape it must leave alone.
-        const string dropped = @"
-public async Task<Post?> Get(Guid postId, Guid userId)
-{
-    return await _dbContext.Posts.Where(p => p.PostId == postId).FirstOrDefaultAsync();
-}";
-        const string used = @"
-public async Task<Post?> Get(Guid postId, Guid userId)
-{
-    return await _dbContext.Rooms.Where(RoomAvailable(userId)).FirstOrDefaultAsync();
-}";
-
-        Offends(dropped).Should().BeTrue("this is the defect the rule exists for");
-        Offends(used).Should().BeFalse("a body that mentions the reader is out of scope for this rule");
-    }
-
-    private static bool Offends(string source)
-    {
-        foreach (Match method in Method.Matches(source))
-        {
-            var reader = ReaderParameters.FirstOrDefault(name =>
-                Regex.IsMatch(method.Groups["args"].Value, $@"\bGuid\??\s+{name}\b"));
-            if (reader is null)
+        // The rule above is a scan, and a scan that stops matching passes in silence.
+        const string dropped = """
+            public async Task<Post?> Get(Guid postId, Guid userId)
             {
-                continue;
+                return await _dbContext.Posts.Where(p => p.PostId == postId).FirstOrDefaultAsync();
             }
-
-            if (!Regex.IsMatch(BodyAfter(source, method), $@"\b{reader}\b"))
+            """;
+        const string used = """
+            public async Task<Post?> Get(Guid postId, Guid userId)
             {
-                return true;
+                return await _dbContext.Rooms.Where(RoomAvailable(userId)).FirstOrDefaultAsync();
             }
-        }
+            """;
 
-        return false;
+        DroppedReader(SourceText.Members(dropped).Should().ContainSingle().Which)
+            .Should().Be("userId", "this is the defect the rule exists for");
+        DroppedReader(SourceText.Members(used).Should().ContainSingle().Which)
+            .Should().BeNull("a body that mentions the reader is out of scope for this rule");
     }
 
     [Fact]
     public void FindTheFilesToSearch() =>
-        RepositoryFiles().Should().HaveCountGreaterThan(20,
+        PersistenceSources().Should().HaveCountGreaterThan(20,
             "a file walk that stops matching turns the rule above green by checking nothing");
 }

@@ -1,8 +1,6 @@
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Threading.Tasks;
 using AwesomeAssertions;
 using Xunit;
 
@@ -11,14 +9,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// <summary>
 /// The origin check refuses in the same shape as everything else refuses.
 /// </summary>
-/// <remarks>
-/// One middleware owns the body of every refusal in this host, and it builds it
-/// through ProblemDetailsFactory, which is what puts the correlation token in.
-/// The CSRF middleware assembled its own ProblemDetails instead: right status,
-/// right media type, no traceId and no type. The token exists precisely so a
-/// refusal can be matched to a line in the log, and this was the one refusal
-/// that could not be.
-/// </remarks>
+/// <remarks>The body of every refusal is built through ProblemDetailsFactory, which puts the correlation token in.</remarks>
 public class CsrfRefusalShould : IntegrationTestBase
 {
     public CsrfRefusalShould(DatabaseFixture databaseFixture) : base(databaseFixture)

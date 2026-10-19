@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.Json;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -11,14 +12,9 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The hooks of the agent settings are found from every directory an agent works in.
 /// </summary>
-/// <remarks>
-/// Kept apart from <see cref="AgentPermissionsShould"/>, which reads what the
-/// settings allow: this reads how they call the hooks that refuse, and the two
-/// fail for unrelated reasons.
-/// </remarks>
+/// <remarks>Apart from <see cref="AgentPermissionsShould"/>: the two fail for unrelated reasons.</remarks>
 public class AgentHookPathsShould
 {
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     /// <summary>The variable the agent sets to the root of the checkout before it runs a hook.</summary>
     private const string ProjectDirectory = "$CLAUDE_PROJECT_DIR/";
@@ -26,18 +22,11 @@ public class AgentHookPathsShould
     /// <summary>
     /// Every hook runs from wherever the agent stands.
     /// </summary>
-    /// <remarks>
-    /// A hook command runs in the agent's current directory, so a script named by
-    /// a relative path is found only from the root of the checkout. From
-    /// src/DM.Web.Client and below "node .claude/hooks/..." fails with a missing
-    /// module, and the refusals the hooks hold - the git commands that lose work,
-    /// a second migration - do not run at all for an agent working there. The
-    /// variable names the root wherever the agent stands.
-    /// </remarks>
+    /// <remarks>A hook runs in the agent's current directory, so a path relative to the root is not found below it.</remarks>
     [Fact]
     public void ReachEveryHookFromWhereverTheAgentStands()
     {
-        var settings = File.ReadAllText(Path.Combine(RepositoryRoot, ".claude", "settings.json"));
+        var settings = File.ReadAllText(Path.Combine(RepositoryLayout.Root, ".claude", "settings.json"));
 
         HookCommands(settings).Should().NotBeEmpty(
             "the settings run the hooks this class reads, and a walk that finds no command checks nothing");
@@ -119,7 +108,7 @@ public class AgentHookPathsShould
             }
 
             var script = command[(start + ProjectDirectory.Length)..].Split('"', ' ')[0];
-            return !File.Exists(Path.Combine(RepositoryRoot, script.Replace('/', Path.DirectorySeparatorChar)));
+            return !File.Exists(Path.Combine(RepositoryLayout.Root, script.Replace('/', Path.DirectorySeparatorChar)));
         })
         .ToList();
 }

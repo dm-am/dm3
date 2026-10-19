@@ -30,17 +30,8 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// A broker redelivery of one event costs the recipient nothing twice.
 /// </summary>
 /// <remarks>
-/// The bus delivers at least once: a worker killed between the write and the
-/// acknowledgement, a nack, a restart - each hands the same message in again.
-/// Before W1.4 that message carried no identity of its own, so a replay wrote a
-/// second notification and mailed a second letter; now it carries the EventId
-/// its publisher minted, the write is idempotent by (EventId, EventType), and
-/// every channel is built from what was actually written this time.
-///
-/// Asserted through the real service, repository and schema rather than mocks
-/// of them, because the guarantee lives in three places at once - the lookup,
-/// the answer the channels iterate, and the unique index underneath - and a
-/// mock of any one of them would pass with the other two broken.
+/// A message carries the EventId its publisher minted and the write is idempotent by (EventId, EventType).
+/// Through the real service, repository and schema: the guarantee lives in all three.
 /// </remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class EventReplayShould
@@ -131,10 +122,7 @@ public class EventReplayShould
     }
 
     /// <summary>
-    /// The processor is where the wire spelling of "no key" becomes the domain
-    /// spelling: Guid.Empty is what the codec answers for a message queued
-    /// before the field existed, and stamping it through as a value would make
-    /// every legacy message a replay of one and the same event.
+    /// The processor turns the wire's Guid.Empty into "no key", or every legacy message would replay one event.
     /// </summary>
     [Theory]
     [InlineData(false)]
@@ -156,7 +144,7 @@ public class EventReplayShould
 
         var generator = Substitute.For<INotificationGenerator>();
         generator.CanResolve(Arg.Any<EventType>()).Returns(true);
-        generator.Generate(Arg.Any<Guid>()).Returns(One(new CreateNotification
+        generator.Generate(Arg.Any<Guid>()).Returns(NotificationSeed.One(new CreateNotification
         {
             UsersInterested = [Guid.NewGuid()],
             Metadata = new object(),
@@ -197,7 +185,7 @@ public class EventReplayShould
 
         var generator = Substitute.For<INotificationGenerator>();
         generator.CanResolve(Arg.Any<EventType>()).Returns(true);
-        generator.Generate(message.EntityId).Returns(One(new CreateNotification
+        generator.Generate(message.EntityId).Returns(NotificationSeed.One(new CreateNotification
         {
             UsersInterested = [NotificationSeed.MasterId],
             Metadata = new { Marker = "replay-suite" },
@@ -216,10 +204,7 @@ public class EventReplayShould
     }
 
     /// <summary>
-    /// The service the worker resolves at run time, composed here by hand. The
-    /// concrete types are internal to their own assemblies and this suite is
-    /// not on their InternalsVisibleTo lists, so they are reached the way the
-    /// container reaches them - by name - and a rename fails with the name.
+    /// The service the worker resolves at run time, composed by hand: the types are internal, reached by name.
     /// </summary>
     private static INotificationService RealNotificationService(DmDbContext context)
     {
@@ -237,12 +222,7 @@ public class EventReplayShould
             "DM.Domain.Personal.Features.Notifications.NotificationFactory",
             guidFactory);
 
-        // The identity provider is never consulted on the create path - the
-        // worker itself registers one that refuses to answer - and the
-        // blacklist stays out of the way because the notification names no
-        // actor to filter by. The logger is built through the generic type the
-        // same way the service itself is reached: ILogger<T> over an internal
-        // T cannot be spelled from this assembly.
+        // The create path never asks the identity provider, and ILogger<T> over an internal T is built by type.
         var serviceType = typeof(INotificationService).Assembly
             .GetType("DM.Domain.Personal.Features.Notifications.NotificationService")!;
         var logger = Activator.CreateInstance(
@@ -277,9 +257,4 @@ public class EventReplayShould
         Metadata = "{}",
     };
 
-    private static async IAsyncEnumerable<CreateNotification> One(CreateNotification notification)
-    {
-        yield return notification;
-        await Task.CompletedTask;
-    }
 }

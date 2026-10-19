@@ -1,57 +1,48 @@
-// Game entity - public API
-// Pure types (interfaces, type aliases)
 export type {
   Game,
-  GamePremoderationStatus,
   GameRef,
-  GameId,
-  GameRecruitment,
   CreateGameInput,
   UpdateGameInput,
-  UpdateGamePrivacySettingsInput,
-  UpdateGameRecruitmentInput,
   Tag,
   Invitation,
   AttributeSchemaDraft,
-  GameAttributeSchema,
-  ReplaceGameAttributeSchemaRequest,
   AttributeSpecification,
   AttributeValueSpecification,
+} from "./model/gameTypes";
+export type {
   Character,
   CharacterInput,
   CharacterPrivacySettings,
   CharacterStatusTransition,
   PlayerCharacterInfo,
+} from "./model/characterTypes";
+export type {
   Room,
   RoomAccess,
+  RoomAccessGrant,
   PostPendency,
   CreateRoomInput,
-  DiceResult,
-  DiceRoll,
-  DiceRollInput,
+} from "./model/roomTypes";
+export type { DiceRollInput } from "./model/diceTypes";
+export type {
   Post,
   PostAttachment,
   PostReview,
   RoomPostsFilter,
-  FirstUnreadRoomPostResult,
-} from "./model/types";
+} from "./model/postTypes";
 
-// Enums (exported as values, can also be used as types)
 export {
   GameStatus,
   GameParticipation,
-  ClosedReason,
   CommentariesAccessMode,
   AttributeSpecificationType,
-  RoomType,
-  RoomAccessType,
-  RoomAccessPolicy,
   GameStatusTransition,
   GamePremoderationTransition,
-} from "./model/types";
+} from "./model/gameTypes";
+export { RoomType, RoomAccessType, RoomAccessPolicy } from "./model/roomTypes";
 
-// Store
 export { useGamesStore } from "./model/store";
+export { SIDEBAR_GAME_ROWS } from "./model/sidebarRows";
 export { useGameDetailsStore } from "./model/detailsStore";
 export { useRatedPostsStore } from "./model/ratedPostsStore";
 export { usePulseStore } from "./model/pulseStore";
@@ -61,24 +52,18 @@ export type {
   RatedPostsScope,
 } from "./model/ratedPostsParams";
 
-// Composables
 export { useGameDisplay } from "./model/useGameDisplay";
 
-// Lifecycle caption of a character, shared by the roster card and the
-// character's own page.
 export { characterStatusLabel } from "./model/characterStatus";
 
-// The two spellings of a review's sign — the name on the wire and the number
-// the rating is counted in.
+export { INVITATION_TYPE_LABELS } from "./model/invitationLabels";
+
 export {
   reviewSignToNumber,
   reviewSignName,
   reviewSignOptions,
 } from "./model/reviewSign";
-export type { ReviewSignOption } from "./model/reviewSign";
 
-// Attribute-schema helpers: pure functions over the schema shape declared
-// above, framework-free and shared by every embed site of the editor.
 export {
   SPEC_TYPE_LABELS,
   SPEC_TYPE_OPTIONS,
@@ -94,15 +79,18 @@ export {
   normalizeSpecForType,
 } from "./model/schemaHelpers";
 
-// API
-export { gameApi, gameTagApi } from "./api";
-export type {
-  GamesSearchParams,
-  ModerationTagGroup,
-  ModerationTag,
-} from "./api";
+export { default as gameApi } from "./api/gameApi";
+export { default as gameCatalogApi } from "./api/gameCatalogApi";
+export { default as postApi } from "./api/postApi";
+export { default as roomApi } from "./api/roomApi";
+export { default as characterApi } from "./api/characterApi";
+export { default as gameNotepadApi } from "./api/gameNotepadApi";
+export { default as discussionApi } from "./api/discussionApi";
+export { default as gameReviewApi } from "./api/gameReviewApi";
+export { default as gameTagApi } from "./api/gameTagApi";
+export type { GamesSearchParams } from "./api/gameCatalogApi";
+export type { ModerationTagGroup, ModerationTag } from "./api/gameTagApi";
 
-// UI Components
 export {
   GameStatusBadge,
   PostReviewItem,
@@ -112,4 +100,6 @@ export {
   CharacterCard,
   CharacterSheetFields,
   TagSelector,
+  DiceRolls,
+  DiceComposer,
 } from "./ui";

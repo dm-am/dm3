@@ -23,15 +23,12 @@ namespace DM.Web.API.Features.Moderation.Tags;
 [RequireRole(UserRole.SeniorModerator)]
 public class TagController : ControllerBase
 {
-    private readonly ITagApiService _tagApiService;
+    private readonly TagApiService _tagApiService;
 
-    /// <inheritdoc />
-    public TagController(ITagApiService tagApiService)
+    public TagController(TagApiService tagApiService)
     {
         _tagApiService = tagApiService;
     }
-
-    #region Tag Groups
 
     /// <summary>
     /// Get all tag groups
@@ -41,10 +38,8 @@ public class TagController : ControllerBase
     [HttpGet("groups", Name = nameof(GetTagGroups))]
     [ProducesResponseType(typeof(ListEnvelope<TagGroup>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetTagGroups(CancellationToken ct)
-    {
-        return Ok(await _tagApiService.GetGroups(ct));
-    }
+    public async Task<IActionResult> GetTagGroups(CancellationToken ct) =>
+        Ok(await _tagApiService.GetGroups(ct));
 
     /// <summary>
     /// Get a tag group by ID
@@ -58,10 +53,8 @@ public class TagController : ControllerBase
     [ProducesResponseType(typeof(TagGroup), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetTagGroup(Guid groupId, CancellationToken ct)
-    {
-        return Ok(await _tagApiService.GetGroup(groupId, ct));
-    }
+    public async Task<IActionResult> GetTagGroup(Guid groupId, CancellationToken ct) =>
+        Ok(await _tagApiService.GetGroup(groupId, ct));
 
     /// <summary>
     /// Create a new tag group
@@ -76,10 +69,10 @@ public class TagController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreateTagGroup([FromBody] CreateTagGroupRequest request)
+    public async Task<IActionResult> CreateTagGroup([FromBody] TagGroupRequest request)
     {
         var group = await _tagApiService.CreateGroup(request);
-        return CreatedAtAction(nameof(GetTagGroup), new { groupId = group.Id }, group);
+        return CreatedAtRoute(nameof(GetTagGroup), new { groupId = group.Id }, group);
     }
 
     /// <summary>
@@ -98,11 +91,8 @@ public class TagController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> UpdateTagGroup(Guid groupId, [FromBody] UpdateTagGroupRequest request)
-    {
-        var group = await _tagApiService.UpdateGroup(groupId, request);
-        return Ok(group);
-    }
+    public async Task<IActionResult> UpdateTagGroup(Guid groupId, [FromBody] TagGroupRequest request) =>
+        Ok(await _tagApiService.UpdateGroup(groupId, request));
 
     /// <summary>
     /// Delete a tag group
@@ -126,10 +116,6 @@ public class TagController : ControllerBase
         return NoContent();
     }
 
-    #endregion
-
-    #region Tags
-
     /// <summary>
     /// Get all tags
     /// </summary>
@@ -138,10 +124,8 @@ public class TagController : ControllerBase
     [HttpGet(Name = nameof(GetModerationTags))]
     [ProducesResponseType(typeof(ListEnvelope<Tag>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetModerationTags(CancellationToken ct)
-    {
-        return Ok(await _tagApiService.GetTags(ct));
-    }
+    public async Task<IActionResult> GetModerationTags(CancellationToken ct) =>
+        Ok(await _tagApiService.GetTags(ct));
 
     /// <summary>
     /// Get tags by group ID
@@ -153,10 +137,8 @@ public class TagController : ControllerBase
     [HttpGet("groups/{groupId}/tags", Name = nameof(GetTagsByGroup))]
     [ProducesResponseType(typeof(ListEnvelope<Tag>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> GetTagsByGroup(Guid groupId, CancellationToken ct)
-    {
-        return Ok(await _tagApiService.GetTagsByGroup(groupId, ct));
-    }
+    public async Task<IActionResult> GetTagsByGroup(Guid groupId, CancellationToken ct) =>
+        Ok(await _tagApiService.GetTagsByGroup(groupId, ct));
 
     /// <summary>
     /// Get a tag by ID
@@ -170,10 +152,8 @@ public class TagController : ControllerBase
     [ProducesResponseType(typeof(Tag), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetModerationTag(Guid tagId, CancellationToken ct)
-    {
-        return Ok(await _tagApiService.GetTag(tagId, ct));
-    }
+    public async Task<IActionResult> GetModerationTag(Guid tagId, CancellationToken ct) =>
+        Ok(await _tagApiService.GetTag(tagId, ct));
 
     /// <summary>
     /// Create a new tag
@@ -190,10 +170,10 @@ public class TagController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> CreateModerationTag([FromBody] CreateTagRequest request)
+    public async Task<IActionResult> CreateModerationTag([FromBody] TagRequest request)
     {
         var tag = await _tagApiService.CreateTag(request);
-        return CreatedAtAction(nameof(GetModerationTag), new { tagId = tag.Id }, tag);
+        return CreatedAtRoute(nameof(GetModerationTag), new { tagId = tag.Id }, tag);
     }
 
     /// <summary>
@@ -212,11 +192,8 @@ public class TagController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    public async Task<IActionResult> UpdateModerationTag(Guid tagId, [FromBody] UpdateTagRequest request)
-    {
-        var tag = await _tagApiService.UpdateTag(tagId, request);
-        return Ok(tag);
-    }
+    public async Task<IActionResult> UpdateModerationTag(Guid tagId, [FromBody] TagRequest request) =>
+        Ok(await _tagApiService.UpdateTag(tagId, request));
 
     /// <summary>
     /// Delete a tag
@@ -239,6 +216,4 @@ public class TagController : ControllerBase
         await _tagApiService.DeleteTag(tagId);
         return NoContent();
     }
-
-    #endregion
 }

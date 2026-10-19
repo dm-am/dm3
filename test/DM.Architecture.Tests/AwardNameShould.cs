@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -11,12 +12,7 @@ namespace DM.Architecture.Tests;
 /// The award is called "Народное признание, например", and every quotation of it
 /// carries the whole name.
 /// </summary>
-/// <remarks>
-/// The last two words are a joke and part of the title in the seed. Three comments
-/// quoted the name without them, which is exactly how such a joke gets "fixed": the
-/// next reader compares the seed against a comment and takes the difference for a
-/// typo. A comment cannot be checked mechanically in general - this one can.
-/// </remarks>
+/// <remarks>The last two words are a joke and part of the title; a comment quoting it short reads as a typo.</remarks>
 public class AwardNameShould
 {
     private const string Name = "Народное признание";
@@ -24,7 +20,6 @@ public class AwardNameShould
 
     private static readonly string[] Extensions = [".cs", ".ts", ".vue"];
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     [Fact]
     public void BeQuotedWholeWhereverItIsQuoted()
@@ -32,7 +27,7 @@ public class AwardNameShould
         var truncated = new List<string>();
 
         var files = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.*", SearchOption.AllDirectories)
+            .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src"), "*.*", SearchOption.AllDirectories)
             .Where(path => Extensions.Contains(Path.GetExtension(path), StringComparer.Ordinal))
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                        StringComparison.Ordinal)

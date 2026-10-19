@@ -1,9 +1,4 @@
-/**
- * Whom a moderation action reaches, as the screens read it: the server's
- * ModerationRank.Reaches, strictly below the reader's rank and never an
- * administrator. The owner (05.10) on whether a moderator may warn a senior
- * moderator or an administrator: "нет".
- */
+// Strictly below the reader's rank and never an administrator, as ModerationRank.Reaches.
 import { describe, it, expect } from "vitest";
 import { UserRole } from "@/shared/api/models/common";
 import { reachesByRank } from "./rank";

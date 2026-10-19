@@ -3,18 +3,11 @@
  */
 
 /**
- * "Удаление аккаунта", the form window the removal of an account is made in.
- *
- * The window is the site's own (Dialog, Form, FormField): titled by what it
- * does, the main action named by its result, "Отмена" beside it. The server
- * requires a reason, and an account removed with nothing written down leaves
- * the next moderator with a missing person and no record of who decided what,
- * so the main button is shut until there is one and an empty reason never
- * reaches the wire. The window runs the request, prints a refusal in itself
- * and reports success to its opener, who leaves the profile.
+ * "Удаление аккаунта", the form window of a removal: the main button is shut
+ * until there is a reason, the window runs the request, says a refusal in
+ * itself and reports success to its opener.
  */
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { defineComponent, h } from "vue";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { setScrollContainer } from "@/shared/lib/scroll";
 import AccountRemovalDialog from "./AccountRemovalDialog.vue";
@@ -25,17 +18,9 @@ vi.mock("@/entities/moderation", () => ({
   moderationApi: { removeAccount },
 }));
 
-// The library tier is a box that holds the card: every closing the window
-// makes is its own decision, and that decision is what is read below.
-vi.mock("vue-final-modal", () => ({
-  VueFinalModal: defineComponent({
-    name: "VueFinalModal",
-    setup:
-      (_props, { slots }) =>
-      () =>
-        h("div", { class: "vfm-content" }, slots.default?.()),
-  }),
-}));
+vi.mock("vue-final-modal", async () =>
+  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+);
 
 function render() {
   return mount(AccountRemovalDialog, {
@@ -81,7 +66,7 @@ describe("the account removal window", () => {
     expect(main(w).attributes("disabled")).toBeUndefined();
   });
 
-  it("sends the trimmed reason with the name, and reports the removal", async () => {
+  it("sends the reason as typed with the name, and reports the removal", async () => {
     removeAccount.mockResolvedValue({ data: undefined, error: null });
     const w = render();
 
@@ -90,17 +75,14 @@ describe("the account removal window", () => {
     await flushPromises();
 
     // The window prints a refusal in itself, so the interceptor keeps quiet.
-    expect(removeAccount).toHaveBeenCalledWith("reader", "Обращение 1234", {
+    expect(removeAccount).toHaveBeenCalledWith("reader", "  Обращение 1234  ", {
       ownsRefusal: true,
       ownsRateLimit: true,
     });
     expect(w.emitted("success")).toHaveLength(1);
   });
 
-  /**
-   * A refusal leaves the moderator where he is, with the reason he typed still
-   * in the box, and says why in the window.
-   */
+  /** A refusal keeps the typed reason and says why in the window. */
   it("keeps the reason and says a refusal in the window", async () => {
     removeAccount.mockResolvedValue({
       data: undefined,

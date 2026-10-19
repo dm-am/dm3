@@ -1,16 +1,8 @@
 <script setup lang="ts">
 /**
- * ModerationViolators — "Нарушители" (doc 4.2.3.8.6).
- * Users with active warning points or an active ban, sorted by points
- * descending (GET v1/moderation/violators). Filter: all / with active
- * ban / points without a ban. Row: name, points "N/6", last warning
- * date, active ban details.
- *
- * The filter is three short values, so it is the segments of the site and
- * not a list under a caption: "Все | С баном | Только баллы", one press each,
- * in one line at every width. The segments make the switch quick, so two
- * answers can be on the wire at once; the guard keeps the one the moderator
- * asked for last.
+ * Users with active warning points or an active ban, most points first. The
+ * segments make the switch quick, so two answers can be on the wire; the guard
+ * keeps the one asked for last.
  */
 import { computed, onMounted, ref } from "vue";
 import {
@@ -24,15 +16,11 @@ import {
   SegmentedControl,
   type SegmentedOption,
 } from "@/shared/ui/SegmentedControl";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { UserLink } from "@/entities/user";
-import { useRoleGate } from "./lib/useRoleGate";
 import { banTermLabel } from "./lib/labels";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
-
-const { hasAccess, deniedText } = useRoleGate("Moderator");
 
 const violators = ref<Violator[]>([]);
 
@@ -50,8 +38,7 @@ const filterOptions: SegmentedOption<ViolatorsFilter>[] = [
   { value: "points-only", label: "Только баллы" },
 ];
 
-// "Пользователь" takes what the other columns leave; their shares are of the
-// whole table, the padding of each cell included.
+// "Пользователь" takes what the others leave; shares are of the whole table, padding included.
 const columns: Column[] = [
   { key: "user", label: "Пользователь" },
   { key: "points", label: "Баллы", width: "17%", align: "center" },
@@ -59,7 +46,7 @@ const columns: Column[] = [
   { key: "ban", label: "Активный бан", width: "27%" },
 ];
 
-function fetch() {
+function loadViolators() {
   return run(
     () => moderationApi.getViolators(filter.value),
     (data) => {
@@ -71,12 +58,12 @@ function fetch() {
 function onFilterChange(value: ViolatorsFilter) {
   if (value === filter.value) return;
   filter.value = value;
-  fetch();
+  loadViolators();
 }
 
-onMounted(fetch);
+onMounted(loadViolators);
 
-// DataTable rows keyed by the violator's user id
+// DataTable keys its rows by id: the violator's user id.
 const rows = computed(() =>
   violators.value.map((v) => ({ ...v, id: v.user.id })),
 );
@@ -93,56 +80,52 @@ const emptyText = computed(() =>
   <div class="moderation-violators">
     <page-title>Нарушители</page-title>
 
-    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+    <div class="filter-line">
+      <SegmentedControl
+        :model-value="filter"
+        :options="filterOptions"
+        ariaLabel="Фильтр нарушителей"
+        @update:model-value="onFilterChange"
+      />
+    </div>
 
-    <template v-else>
-      <div class="filter-line">
-        <SegmentedControl
-          :model-value="filter"
-          :options="filterOptions"
-          ariaLabel="Фильтр нарушителей"
-          @update:model-value="onFilterChange"
-        />
-      </div>
+    <ErrorState v-if="loadError" :message="loadError" :retry="loadViolators" />
 
-      <ErrorState v-if="loadError" :message="loadError" :retry="fetch" />
-
-      <DataTable
-        v-else
-        :columns="columns"
-        :data="rows"
-        :loading="loading"
-        :empty-text="emptyText"
-        aria-label="Нарушители"
-      >
-        <template #cell-user="{ row }">
-          <UserLink :user="row.user" />
-        </template>
-        <template #cell-points="{ row }">
-          <span
-            class="points"
-            :class="{ 'points-critical': row.points >= row.pointsThreshold }"
-          >
-            {{ row.points }}/{{ row.pointsThreshold }}
-          </span>
-        </template>
-        <template #cell-lastWarning="{ row }">
-          <span v-if="row.lastWarningUtc">
-            {{ formatDateFull(row.lastWarningUtc) }}
-          </span>
-          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
-        </template>
-        <template #cell-ban="{ row }">
-          <span v-if="row.activeBan" class="ban-info">
-            {{ banTermLabel(row.activeBan) }}
-            <template v-if="row.activeBan.expiresUtc">
-              (до {{ formatDateFull(row.activeBan.expiresUtc) }})
-            </template>
-          </span>
-          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
-        </template>
-      </DataTable>
-    </template>
+    <DataTable
+      v-else
+      :columns="columns"
+      :data="rows"
+      :loading="loading"
+      :empty-text="emptyText"
+      aria-label="Нарушители"
+    >
+      <template #cell-user="{ row }">
+        <UserLink :user="row.user" />
+      </template>
+      <template #cell-points="{ row }">
+        <span
+          class="points"
+          :class="{ 'points-critical': row.points >= row.pointsThreshold }"
+        >
+          {{ row.points }}/{{ row.pointsThreshold }}
+        </span>
+      </template>
+      <template #cell-lastWarning="{ row }">
+        <span v-if="row.lastWarningUtc">
+          {{ formatDateFull(row.lastWarningUtc) }}
+        </span>
+        <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
+      </template>
+      <template #cell-ban="{ row }">
+        <span v-if="row.activeBan" class="ban-info">
+          {{ banTermLabel(row.activeBan) }}
+          <template v-if="row.activeBan.expiresUtc">
+            (до {{ formatDateFull(row.activeBan.expiresUtc) }})
+          </template>
+        </span>
+        <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
+      </template>
+    </DataTable>
   </div>
 </template>
 
@@ -152,7 +135,4 @@ const emptyText = computed(() =>
 
 .points-critical
   color: $accent-red
-
-.muted
-  color: $text-muted
 </style>

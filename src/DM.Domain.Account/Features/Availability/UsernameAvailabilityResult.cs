@@ -1,8 +1,5 @@
 namespace DM.Domain.Account.Features.Availability;
 
-/// <summary>
-/// Result of username availability check
-/// </summary>
 public class UsernameAvailabilityResult
 {
     /// <summary>

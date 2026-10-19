@@ -1,26 +1,35 @@
 <script setup lang="ts">
 /**
- * BlogInfoSection — "Общие настройки" of a blog: the title and who sees the
- * blog while it is in the making. Persists via blogApi.updateBlog (PATCH
- * blogs/{id}) then reloads the blog. Mirrors GameInfoSection, DM2's one form of
- * captioned rows (_FormRows.sass).
- *
- * The description is intentionally NOT edited here: the blog endpoint returns
- * it as server-rendered HTML (CommonBbText), so there is no raw BBCode source
- * to round-trip through an editor without corrupting it — the same limitation
- * as the game description (see GameInfoSection).
+ * The title, the description and who sees the blog while it is in the making,
+ * as GameInfoSection. The description is the owner's alone: the server gives
+ * its BBCode as typed to its author, and a lead would be given it drawn.
  */
 import { computed, nextTick, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, blogApi, DraftVisibility } from "@/entities/blog";
+import { useAuthStore } from "@/entities/user";
+import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { Form, FormField } from "@/shared/ui/Form";
 import { Select } from "@/shared/ui/Select";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import { useSavedState } from "@/shared/lib/composables/useSavedState";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { SettingsSection } from "@/shared/ui/SettingsSection";
+import { BLOG_TITLE_MAX_LENGTH } from "@/shared/lib/constants/blog";
+import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
+import { readFieldError } from "@/shared/lib/errors/validationErrors";
+import type { BadRequestError } from "@/shared/api/models/common";
 
 const store = useBlogDetailsStore();
 const { blog } = storeToRefs(store);
+const { user } = storeToRefs(useAuthStore());
+
+// By id, as the server compares: a username can change.
+const isOwner = computed(
+  () =>
+    !!user.value &&
+    !!blog.value?.author &&
+    blog.value.author.id === user.value.id,
+);
 
 const visibilityOptions = [
   { value: DraftVisibility.Public, label: "Все" },
@@ -29,34 +38,33 @@ const visibilityOptions = [
 
 const title = ref("");
 const draftVisibility = ref(DraftVisibility.Public);
+/** The description as typed, and as the server last gave it; null until it is read. */
+const description = ref("");
+const storedDescription = ref<string | null>(null);
+/** The server's refusal of the description, under the field it is about. */
+const descriptionRefusal = ref("");
 
 const saving = ref(false);
 
 /**
- * The patch this form sends, and the only thing the saved state compares.
- *
- * One function for both, because two would drift: a field the button watches
- * but the request leaves out would take the form back to "Сохранить" over work
- * that was never sent, and a field the request carries but the button ignores
- * would leave it reading "Сохранено" over an edit still in the field.
+ * The patch the form sends, and what the saved state compares: one function, or the two drift.
+ * The description goes only changed, an erased one as an empty string.
  */
 const patch = () => ({
-  title: title.value.trim(),
+  title: title.value,
   draftVisibility: draftVisibility.value,
+  ...(storedDescription.value !== null &&
+  description.value !== storedDescription.value
+    ? { description: description.value }
+    : {}),
 });
 
-// The form is the only thing that can report a save of its own: the screen
-// after one holds the very values the reader typed into it. So the submit
-// button carries the answer, and there is no toast — see UI_STANDARDS,
-// "Всплывающие сообщения".
+// The screen after a save holds the typed values, so the button carries the answer.
 const { saved, label, remember } = useSavedState(patch);
 
-// Form draws the submit disabled while `valid` is false, and a form that
-// matches the server's copy has nothing to submit. The button therefore reads
-// "Сохранено" and stays inert until the reader changes a field.
+// A form that matches the server's copy has nothing to submit.
 const canSubmit = computed(() => title.value.trim().length > 0 && !saved.value);
 
-// Seed the local draft from the loaded blog.
 watch(
   blog,
   (b) => {
@@ -67,34 +75,58 @@ watch(
   { immediate: true },
 );
 
-/** A refused save, said over the footer of the form. */
 const saveResult = useActionResult();
+
+async function loadDescription(id: string) {
+  const { data, error } = await blogApi.getBlogForEdit(id);
+  if (blog.value?.id !== id) return;
+  if (error) {
+    saveResult.refuse(error, "Не удалось загрузить описание блога");
+    return;
+  }
+  storedDescription.value = data?.resource.description ?? "";
+  description.value = storedDescription.value;
+}
+
+watch(
+  () => (isOwner.value ? blog.value?.id : undefined),
+  (id) => {
+    storedDescription.value = null;
+    if (id) void loadDescription(id);
+  },
+  { immediate: true },
+);
 
 async function save() {
   if (!blog.value) return;
   const id = blog.value.id;
   saving.value = true;
   saveResult.clear();
+  descriptionRefusal.value = "";
 
   const { error } = await blogApi.updateBlog(id, patch());
   saving.value = false;
   if (error) {
-    saveResult.refuse(error, "Не удалось сохранить информацию блога");
+    const said = readFieldError(
+      parseApiErrors(error as BadRequestError),
+      "description",
+    );
+    if (said) descriptionRefusal.value = said;
+    else saveResult.refuse(error, "Не удалось сохранить информацию блога");
     return;
   }
   await store.loadBlog(id);
-  // Remembered after the reload and the tick that lets the watch above re-seed
-  // the fields: the snapshot has to be what now stands on screen. Taken before
-  // it, a value the server normalised on its way in would come back into the
-  // field and read as an edit the reader never made.
+  // The field shows what the server stored, not what was sent.
+  if (isOwner.value) await loadDescription(id);
+  // After the reload and the tick that re-seeds the fields, so the button
+  // compares against the stored copy.
   await nextTick();
   remember();
 }
 </script>
 
 <template>
-  <section class="settings-section">
-    <BlockTitle>Общие настройки</BlockTitle>
+  <SettingsSection title="Общие настройки">
     <Form
       class="info-form"
       :valid="canSubmit"
@@ -104,7 +136,12 @@ async function save() {
       @submit="save"
     >
       <FormField class="row" label="Название:" name="blog-title">
-        <input id="blog-title" v-model="title" type="text" maxlength="200" />
+        <input
+          id="blog-title"
+          v-model="title"
+          type="text"
+          :maxlength="BLOG_TITLE_MAX_LENGTH"
+        />
       </FormField>
 
       <FormField
@@ -119,17 +156,28 @@ async function save() {
           @update:model-value="(v) => (draftVisibility = v as DraftVisibility)"
         />
       </FormField>
+
+      <FormField
+        v-if="storedDescription !== null"
+        label="Описание:"
+        name="blog-description"
+        :errors="descriptionRefusal ? [descriptionRefusal] : []"
+      >
+        <BBCodeEditor
+          v-model="description"
+          context="common"
+          :min-height="200"
+          :max-height="500"
+          :resizable="true"
+          @update:model-value="descriptionRefusal = ''"
+        />
+      </FormField>
     </Form>
-  </section>
+  </SettingsSection>
 </template>
 
 <style scoped lang="sass">
 @use "@/assets/styles/FormRows" as *
-
-.settings-section
-  margin-bottom: $big
-  padding: $medium
-  background-color: $bg-element
 
 .info-form .row
   +form-row

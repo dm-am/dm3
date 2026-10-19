@@ -14,11 +14,7 @@ export interface ActionResult {
   refusal: ComputedRef<string>;
   /** The server asked to wait: the control stays shut until zero. */
   waiting: ComputedRef<boolean>;
-  /**
-   * Writes a refusal at the place and takes down the plate the interceptor
-   * held for it. An expired session and a request that never arrived are left
-   * to the plate, and the line stays empty.
-   */
+  /** Writes a refusal at the place and takes down the held plate; status 0 and 401 stay the plate's. */
   refuse: (
     error: GeneralError | BadRequestError,
     fallback: string,
@@ -29,23 +25,9 @@ export interface ActionResult {
 }
 
 /**
- * The refusal of a press, written where the press was made.
- *
- * A press that failed used to answer with a plate in the corner of the screen,
- * away from the button, the row or the form it was about, while the place
- * itself stood unchanged. The owner's rule of 26 September 2026 keeps a plate
- * only where the page has nowhere to say it; everywhere else the answer is a
- * line at the place, drawn by ActionResult (shared/ui/ActionResult).
- *
- * One of these per place: a form's button, a row of a list, a control of a
- * card. The line holds until the place is pressed again (`clear`), so a reader
- * who looked away still finds it. A rate limit stands in the line with the
- * wait counting down, and `waiting` keeps the control shut until it is out,
- * as the guest forms and the windows do (useRateLimitNotice).
- *
- * The wording is describeFailure's, as in a window: the server's own sentence
- * where it gave one, the fields it refused by their labels on the screen, and
- * the fallback where it named nothing.
+ * The refusal of a press, written as a line at the place (ActionResult) until
+ * the place is pressed again. A rate limit counts down there and `waiting`
+ * keeps the control shut. Worded by describeFailure.
  */
 export function useActionResult(): ActionResult {
   const said = ref("");

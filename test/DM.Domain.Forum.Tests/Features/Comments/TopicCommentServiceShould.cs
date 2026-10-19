@@ -1,14 +1,11 @@
 using System;
-using System.Linq;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Comments;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
@@ -20,7 +17,6 @@ using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Topics;
 using DM.Testing.Dsl;
 using DM.Testing;
-using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -31,15 +27,15 @@ namespace DM.Domain.Forum.Tests.Features.Comments;
 
 public class TopicCommentServiceShould : UnitTestBase
 {
-    private readonly ITopicService _topicService;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly Guid _currentUserId = Guid.NewGuid();
-    private readonly ITopicCommentRepository _repository;
-    private readonly IUnreadCountersRepository _countersRepository;
-    private readonly IEventProducer _eventProducer;
-    private readonly IBoardService _boardService;
-    private readonly TopicCommentService _service;
+    private readonly ITopicService topicService;
+    private readonly IIntentionManager intentionManager;
+    private readonly IIdentityProvider identityProvider;
+    private readonly Guid currentUserId = Guid.NewGuid();
+    private readonly ITopicCommentRepository repository;
+    private readonly IUnreadCountersRepository countersRepository;
+    private readonly IEventProducer eventProducer;
+    private readonly IBoardService boardService;
+    private readonly TopicCommentService service;
 
     public TopicCommentServiceShould()
     {
@@ -53,55 +49,54 @@ public class TopicCommentServiceShould : UnitTestBase
             .ValidateAsync(Arg.Any<ValidationContext<UpdateComment>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
 
-        _topicService = Mock<ITopicService>();
-        _boardService = Mock<IBoardService>();
+        topicService = Mock<ITopicService>();
+        boardService = Mock<IBoardService>();
 
-        _intentionManager = Mock<IIntentionManager>();
+        intentionManager = Mock<IIntentionManager>();
 
-        _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        identityProvider = Mock<IIdentityProvider>();
+        identityProvider.Current.Returns(Identities.User(currentUserId, UserRole.RegularUser));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _repository = Mock<ITopicCommentRepository>();
+        repository = Mock<ITopicCommentRepository>();
 
-        _countersRepository = Mock<IUnreadCountersRepository>();
-        _countersRepository.IncrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>()).Returns(Task.CompletedTask);
+        countersRepository = Mock<IUnreadCountersRepository>();
+        countersRepository.IncrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>()).Returns(Task.CompletedTask);
 
-        _eventProducer = Mock<IEventProducer>();
-        _eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        eventProducer = Mock<IEventProducer>();
+        eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
-        _service = new TopicCommentService(
+        service = new TopicCommentService(
             createValidator,
             updateValidator,
-            _topicService,
-            _boardService,
-            _intentionManager,
-            _identityProvider,
+            topicService,
+            boardService,
+            intentionManager,
+            identityProvider,
             dateTimeProvider,
-            _repository,
-            _countersRepository,
-            _eventProducer,
-            new TagNamesAsTyped());
+            repository,
+            countersRepository,
+            eventProducer);
     }
 
     /// <summary>The store answers a creation with this comment.</summary>
     private void CreateReturns(Comment comment) =>
-        _repository.Create(Arg.Any<CreateTopicCommentEntity>()).Returns(comment);
+        repository.Create(Arg.Any<CreateTopicCommentEntity>()).Returns(comment);
 
     [Fact]
     public async Task AuthorizeCreateCommentAction()
     {
         var topicId = Guid.NewGuid();
         var topic = new Topic { Id = topicId, TotalCommentsCount = 0 };
-        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
+        topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
         CreateReturns(new Comment());
 
         var createComment = new CreateComment { EntityId = topicId, Text = "Test comment" };
-        await _service.CreateAsync(createComment);
+        await service.CreateAsync(createComment);
 
-        _intentionManager.Received(1).ThrowIfForbidden(TopicIntention.CreateComment, topic);
+        intentionManager.Received(1).ThrowIfForbidden(TopicIntention.CreateComment, topic);
     }
 
     [Fact]
@@ -110,16 +105,29 @@ public class TopicCommentServiceShould : UnitTestBase
         var topicId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var topic = new Topic { Id = topicId, TotalCommentsCount = 5 };
-        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
+        topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
 
         var expectedComment = new Comment { Id = commentId };
         CreateReturns(expectedComment);
 
         var createComment = new CreateComment { EntityId = topicId, Text = "Test comment" };
-        var result = await _service.CreateAsync(createComment);
+        var result = await service.CreateAsync(createComment);
 
         result.Should().Be(expectedComment);
-        await _countersRepository.Received(1).IncrementAsync(topicId, UnreadEntryType.Message);
+        await countersRepository.Received(1).IncrementAsync(topicId, UnreadEntryType.Message);
+    }
+
+    /// <summary>The text is stored as typed, the spaces around it included (BBCODE_RENDERING.md, "Регистр имен").</summary>
+    [Fact]
+    public async Task StoreTheTextAsTyped()
+    {
+        var topicId = Guid.NewGuid();
+        topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(new Topic { Id = topicId });
+        CreateReturns(new Comment());
+
+        await service.CreateAsync(new CreateComment { EntityId = topicId, Text = "  \n Test comment \n " });
+
+        await repository.Received(1).Create(Arg.Is<CreateTopicCommentEntity>(e => e.Text == "  \n Test comment \n "));
     }
 
     [Fact]
@@ -128,43 +136,13 @@ public class TopicCommentServiceShould : UnitTestBase
         var topicId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var topic = new Topic { Id = topicId, TotalCommentsCount = 0 };
-        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
+        topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
         CreateReturns(new Comment { Id = commentId });
 
         var createComment = new CreateComment { EntityId = topicId, Text = "Test comment" };
-        await _service.CreateAsync(createComment);
+        await service.CreateAsync(createComment);
 
-        await _eventProducer.Received(1).SendAsync(EventType.NewTopicComment, commentId);
-    }
-
-    /// <summary>
-    /// A topic is a public place: the personal blacklist of whoever opened it
-    /// does not close it to anybody. Keeping somebody out of the forum is a ban,
-    /// which the gate asks.
-    /// </summary>
-    /// <remarks>
-    /// The service used to ask the topic author's personal list and refuse with
-    /// "Вы не можете комментировать этот топик". It no longer holds the list at
-    /// all, which is what this pins; the behaviour end to end, with a real list
-    /// behind it, is in BlacklistRuleShould.
-    /// </remarks>
-    [Fact]
-    public async Task AcceptACommentWithoutAskingTheTopicAuthorsBlacklist()
-    {
-        var topicId = Guid.NewGuid();
-        var topic = new Topic
-        {
-            Id = topicId,
-            Author = new GeneralUser { UserId = Guid.NewGuid() }
-        };
-        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
-        CreateReturns(new Comment { Id = Guid.NewGuid() });
-
-        await _service.CreateAsync(new CreateComment { EntityId = topicId, Text = "Test comment" });
-
-        await _repository.Received(1).Create(Arg.Any<CreateTopicCommentEntity>());
-        typeof(TopicCommentService).GetConstructors().Single().GetParameters()
-            .Should().NotContain(parameter => parameter.ParameterType == typeof(IUserBlacklistChecker));
+        await eventProducer.Received(1).SendAsync(EventType.NewTopicComment, commentId);
     }
 
     [Fact]
@@ -172,13 +150,13 @@ public class TopicCommentServiceShould : UnitTestBase
     {
         var commentId = Guid.NewGuid();
         var comment = new Comment { Id = commentId, Text = "Original text" };
-        _repository.Get(commentId).Returns(comment);
-        _repository.Update(Arg.Any<UpdateTopicCommentEntity>()).Returns(comment);
+        repository.Get(commentId).Returns(comment);
+        repository.Update(Arg.Any<UpdateTopicCommentEntity>()).Returns(comment);
 
         var updateComment = new UpdateComment { CommentId = commentId, Text = "Updated text" };
-        await _service.UpdateAsync(updateComment);
+        await service.UpdateAsync(updateComment);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Edit, comment);
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Edit, comment);
     }
 
     [Fact]
@@ -192,24 +170,19 @@ public class TopicCommentServiceShould : UnitTestBase
             EntityId = topicId,
             CreatedUtc = DateTimeOffset.UtcNow
         };
-        _repository.GetForDelete(commentId).Returns(comment);
+        repository.GetForDelete(commentId).Returns(comment);
         DeleteTopicCommentEntity? deleted = null;
-        _repository.Delete(Arg.Any<DeleteTopicCommentEntity>())
-            .Returns(true)
-            .AndDoes(ci =>
-            {
-                var entity = ci.ArgAt<DeleteTopicCommentEntity>(0);
-                deleted = entity;
-            });
+        repository.Delete(Arg.Do<DeleteTopicCommentEntity>(entity => deleted = entity))
+            .Returns(true);
 
-        await _service.DeleteAsync(commentId);
+        await service.DeleteAsync(commentId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Delete, Arg.Any<Comment>());
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Delete, Arg.Any<Comment>());
         // The author of the removal travels with it: Comment is ISoftDeletable and the
         // column stays empty unless the service hands the identity over. Forum comments and
         // blog comments live in one table, so a forum comment that does not carry it makes
         // every report over that column wrong rather than incomplete.
-        deleted!.DeletedByUserId.Should().Be(_currentUserId);
+        deleted!.DeletedByUserId.Should().Be(currentUserId);
         deleted.DeletedUtc.Should().NotBe(default);
     }
 
@@ -217,9 +190,9 @@ public class TopicCommentServiceShould : UnitTestBase
     public async Task ThrowWhenDeletingNonExistentComment()
     {
         var commentId = Guid.NewGuid();
-        _repository.GetForDelete(commentId).Returns((TopicCommentToDelete)null!);
+        repository.GetForDelete(commentId).Returns((TopicCommentToDelete)null!);
 
-        var act = async () => await _service.DeleteAsync(commentId);
+        var act = async () => await service.DeleteAsync(commentId);
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -237,18 +210,18 @@ public class TopicCommentServiceShould : UnitTestBase
         var lastRead = new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc);
         var firstUnread = new FirstUnreadComment { CommentId = Guid.NewGuid(), CommentNumber = 41 };
 
-        _topicService
+        topicService
             .GetByBoardAndNumberAsync("news", 3, Arg.Any<CancellationToken>()).Returns(topic);
-        _countersRepository
+        countersRepository
             .GetLastReadTimeAsync(
-                _identityProvider.Current.User.UserId, topic.Id, UnreadEntryType.Message).Returns(lastRead);
-        _repository
+                identityProvider.Current.User.UserId, topic.Id, UnreadEntryType.Message).Returns(lastRead);
+        repository
             .FindFirstUnread(topic.Id, new DateTimeOffset(lastRead), null).Returns(firstUnread);
 
-        var result = await _service.GetFirstUnreadAsync("news", 3);
+        var result = await service.GetFirstUnreadAsync("news", 3);
 
         result.Should().BeSameAs(firstUnread);
-        await _repository.DidNotReceive().GetLastComment(Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>?>());
+        await repository.DidNotReceive().GetLastComment(Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>?>());
     }
 
     /// <summary>
@@ -263,17 +236,17 @@ public class TopicCommentServiceShould : UnitTestBase
         var lastRead = new DateTime(2026, 8, 1, 12, 0, 0, DateTimeKind.Utc);
         var lastComment = new FirstUnreadComment { CommentId = Guid.NewGuid(), CommentNumber = 60 };
 
-        _topicService
+        topicService
             .GetByBoardAndNumberAsync("news", 3, Arg.Any<CancellationToken>()).Returns(topic);
-        _countersRepository
+        countersRepository
             .GetLastReadTimeAsync(
-                _identityProvider.Current.User.UserId, topic.Id, UnreadEntryType.Message).Returns(lastRead);
-        _repository
+                identityProvider.Current.User.UserId, topic.Id, UnreadEntryType.Message).Returns(lastRead);
+        repository
             .FindFirstUnread(topic.Id, Arg.Any<DateTimeOffset>(), null).Returns((FirstUnreadComment?)null);
-        _repository
+        repository
             .GetLastComment(topic.Id, null).Returns(lastComment);
 
-        var result = await _service.GetFirstUnreadAsync("news", 3);
+        var result = await service.GetFirstUnreadAsync("news", 3);
 
         result.Should().BeSameAs(lastComment);
     }
@@ -289,30 +262,23 @@ public class TopicCommentServiceShould : UnitTestBase
         var topic = new Topic { Id = Guid.NewGuid() };
         var firstComment = new FirstUnreadComment { CommentId = Guid.NewGuid(), CommentNumber = 1 };
 
-        _topicService
+        topicService
             .GetByBoardAndNumberAsync("news", 3, Arg.Any<CancellationToken>()).Returns(topic);
-        _countersRepository
+        countersRepository
             .GetLastReadTimeAsync(Arg.Any<Guid>(), topic.Id, UnreadEntryType.Message).Returns((DateTime?)null);
-        _repository
+        repository
             .FindFirstUnread(topic.Id, DateTimeOffset.MinValue, null).Returns(firstComment);
 
-        var result = await _service.GetFirstUnreadAsync("news", 3);
+        var result = await service.GetFirstUnreadAsync("news", 3);
 
         result.Should().BeSameAs(firstComment);
     }
+
     /// <summary>
     /// Marking the whole forum read asks for the boards and nothing else.
     /// </summary>
     /// <remarks>
-    /// The list with counters is the expensive one: it fills a per-board unread
-    /// number from two aggregate reads over the document store and three queries
-    /// behind them. This loop reads identifiers, and the very call it makes with
-    /// them is what sets every one of those numbers to zero — so the work was
-    /// computed, carried across a service boundary and discarded a line later,
-    /// every time somebody clicked the link.
-    ///
-    /// Invisible from the outside: the page answers, the badges clear, and the
-    /// only difference is a handful of queries nobody counts.
+    /// The list with counters is the expensive one, and this call zeroes every counter it would fill.
     /// </remarks>
     [Fact]
     public async Task AskForTheBoardsWithoutTheCountersItIsAboutToZero()
@@ -320,44 +286,40 @@ public class TopicCommentServiceShould : UnitTestBase
         var first = Guid.NewGuid();
         var second = Guid.NewGuid();
 
-        _boardService
-            .GetAvailableBoards().Returns([new Board { Id = first }, new Board { Id = second }]);
+        boardService
+            .GetBoardsWithoutCounters().Returns([new Board { Id = first }, new Board { Id = second }]);
 
-        await _service.MarkAllAsReadAsync();
+        await service.MarkAllAsReadAsync();
 
-        await _countersRepository.Received(1).FlushAllAsync(_currentUserId, UnreadEntryType.Message, first);
-        await _countersRepository.Received(1).FlushAllAsync(_currentUserId, UnreadEntryType.Message, second);
+        await countersRepository.Received(1).FlushAllAsync(currentUserId, UnreadEntryType.Message, first);
+        await countersRepository.Received(1).FlushAllAsync(currentUserId, UnreadEntryType.Message, second);
         // The counters that call fills are the ones this method zeroes, so every read
         // behind them is work computed and thrown away.
-        await _boardService.DidNotReceive().GetBoardsList();
+        await boardService.DidNotReceive().GetBoardsList();
     }
 
     /// <summary>
     /// The removal that took the comment is the one that owns its consequences.
     /// </summary>
     /// <remarks>
-    /// Two removals of one comment - a double click, an author and a moderator at
-    /// once - both used to take the topic's unread counter down and both used to
-    /// announce the removal, and the counter has no way back afterwards. The caller
-    /// is answered the same either way: the comment is gone, which is what they
-    /// asked for.
+    /// Two removals of one comment would take the counter down twice, and it has no way back.
     /// </remarks>
     [Fact]
     public async Task LeaveTheCountersToTheRemovalThatTookTheComment()
     {
         var commentId = Guid.NewGuid();
-        _repository.GetForDelete(commentId).Returns(new TopicCommentToDelete
+        repository.GetForDelete(commentId).Returns(new TopicCommentToDelete
         {
             Id = commentId,
             EntityId = Guid.NewGuid(),
             CreatedUtc = DateTimeOffset.UtcNow,
         });
-        _repository.Delete(Arg.Any<DeleteTopicCommentEntity>()).Returns(false);
+        repository.Delete(Arg.Any<DeleteTopicCommentEntity>()).Returns(false);
 
-        await _service.DeleteAsync(commentId);
+        await service.DeleteAsync(commentId);
 
-        await _countersRepository.DidNotReceive().DecrementAsync(
+        await countersRepository.DidNotReceive().DecrementAsync(
             Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<DateTimeOffset>());
-        await _eventProducer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
+        await eventProducer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 }

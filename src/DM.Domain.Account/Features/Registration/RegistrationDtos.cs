@@ -71,9 +71,6 @@ public class CreateUser
     /// </summary>
     public Guid UserId { get; set; }
 
-    /// <summary>
-    /// Username
-    /// </summary>
     public string Username { get; set; } = null!;
 
     /// <summary>
@@ -81,9 +78,6 @@ public class CreateUser
     /// </summary>
     public string Email { get; set; } = null!;
 
-    /// <summary>
-    /// Password hash
-    /// </summary>
     public string PasswordHash { get; set; } = null!;
 
     /// <summary>
@@ -106,9 +100,6 @@ public class CreateUser
     /// </summary>
     public UserRole Role { get; set; } = UserRole.RegularUser;
 
-    /// <summary>
-    /// Access policy
-    /// </summary>
     public AccessPolicy AccessPolicy { get; set; } = AccessPolicy.NotSpecified;
 
     /// <summary>

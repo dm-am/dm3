@@ -1,24 +1,3 @@
-<template>
-  <div>
-    <textarea
-      :id="id"
-      ref="textareaRef"
-      :value="modelValue"
-      :disabled="disabled"
-      :placeholder="placeholder"
-      :maxlength="maxLength"
-      @input="onInput"
-    />
-    <div v-if="maxLength" class="textarea-counter">
-      <CounterPair
-        :first-value="modelValue.length"
-        :second-value="maxLength"
-        :class="{ 'over-limit': modelValue.length > maxLength }"
-      />
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { ref, watch, nextTick, onMounted } from "vue";
 import { CounterPair } from "@/shared/ui/CounterPair";
@@ -62,6 +41,27 @@ watch(
 onMounted(adjustHeight);
 </script>
 
+<template>
+  <div>
+    <textarea
+      :id="id"
+      ref="textareaRef"
+      :value="modelValue"
+      :disabled="disabled"
+      :placeholder="placeholder"
+      :maxlength="maxLength"
+      @input="onInput"
+    />
+    <div v-if="maxLength" class="textarea-counter">
+      <CounterPair
+        :first-value="modelValue.length"
+        :second-value="maxLength"
+        :class="{ 'over-limit': modelValue.length > maxLength }"
+      />
+    </div>
+  </div>
+</template>
+
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
 
@@ -76,8 +76,7 @@ textarea
     overflow: hidden
 
   &::placeholder
-    color: $text-muted
-    opacity: 0.6
+    +placeholder-ink
 
 .textarea-counter
   display: flex

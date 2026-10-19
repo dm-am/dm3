@@ -3,9 +3,8 @@
  */
 
 /**
- * The cycle of a request sent from a window, asked without a window around it.
- * The window's own spec (shared/ui/Layout/Dialog.spec.ts) asks the same rules
- * of the screen; this one holds the edges the screen reaches only by chance.
+ * The cycle of a request sent from a window, without the window: the edges
+ * Dialog.spec.ts reaches only by chance.
  */
 import { describe, it, expect, vi } from "vitest";
 import { defineComponent } from "vue";

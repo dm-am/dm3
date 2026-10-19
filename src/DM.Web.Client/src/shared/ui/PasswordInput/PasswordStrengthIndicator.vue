@@ -1,47 +1,15 @@
-<template>
-  <!-- The scale is hidden until there is something to measure, unless the
-       screen asked for it to stand there from the start: on the guest forms it
-       is where the rule "Минимум 8 символов" is written, and a rule that
-       appears only after the reader has broken it is not a rule he was given.
-       A field that already carries the rule in a hint of its own keeps the old
-       behaviour, or the same sentence would be on screen twice. -->
-  <div class="password-strength" v-if="always || password.length > 0">
-    <div class="strength-bar">
-      <div
-        class="strength-fill"
-        :style="{ width: `${barPercent}%`, '--progress': strengthProgress }"
-        :class="barClass"
-      />
-    </div>
-    <!-- One line under the bar, and what wins it, in order: the answer the
-         server gave about this password, then a rule the field itself can
-         judge, then the strength. The server comes first because it is the only
-         one of the three that knows something the browser cannot find out - a
-         breach index is not reachable from here, the document allows
-         connections to this origin only. -->
-    <!-- The server's answer is a refusal and arrives after the reader has
-         already left the field, so it is announced. The other two lines are
-         not: the rule and the strength change under the reader's own typing,
-         and a live region would read every keystroke back to him. -->
-    <div v-if="lineText" :class="lineClass" :role="error ? 'alert' : undefined">
-      {{ lineText }}
-    </div>
-  </div>
-</template>
-
 <script setup lang="ts">
 import { computed } from "vue";
+import { PASSWORD_MIN_LENGTH } from "@/shared/lib/constants/user";
+import { meetsPasswordMinimum } from "@/shared/lib/composables/useNewPasswordField";
+import { pluralize } from "@/shared/lib/utils/pluralize";
 
 const props = withDefaults(
   defineProps<{
     password: string;
     /** The password change form: the new password repeats the current one. */
     isSameAsOld?: boolean;
-    /**
-     * What the server said about this password on submit - a breach, above all
-     * else. It takes the line and turns the bar red, because it is a refusal
-     * and not advice: the password is long enough and still will not do.
-     */
+    /** The server's answer on submit, a breach above all: a refusal, so it takes the line and turns the bar red. */
     error?: string | null;
     /** Show the scale and its line on an empty field too. */
     always?: boolean;
@@ -53,7 +21,7 @@ const props = withDefaults(
   },
 );
 
-const meetsMinimum = computed(() => props.password.length >= 8);
+const meetsMinimum = computed(() => meetsPasswordMinimum(props.password));
 
 const strengthText = computed(() => {
   const len = props.password.length;
@@ -64,7 +32,8 @@ const strengthText = computed(() => {
 
 const lineText = computed(() => {
   if (props.error) return props.error;
-  if (!meetsMinimum.value) return "Минимум 8 символов";
+  if (!meetsMinimum.value)
+    return `Минимум ${PASSWORD_MIN_LENGTH} ${pluralize(PASSWORD_MIN_LENGTH, "символ", "символа", "символов")}`;
   if (props.isSameAsOld) return "Новый пароль совпадает с текущим";
   return strengthText.value;
 });
@@ -73,9 +42,7 @@ const hasError = computed(
   () => !meetsMinimum.value || props.isSameAsOld || !!props.error,
 );
 
-// An empty field is not a field that broke the rule: the reader has not typed
-// anything yet, so the minimum is stated in the colour of a hint rather than of
-// a refusal, and the bar is empty rather than fully red.
+// An empty field has broken no rule: the minimum is a hint, and the bar is empty.
 const untouched = computed(() => props.password.length === 0);
 
 const lineClass = computed(() => {
@@ -90,14 +57,13 @@ const barPercent = computed(() => {
   if (len === 0) return 0;
   if (hasError.value) return 100;
   if (len >= 15) return 100;
-  return 40 + ((len - 8) / 7) * 60;
+  return 40 + ((len - PASSWORD_MIN_LENGTH) / 7) * 60;
 });
 
-// Progress 0-1 for gradient (8 chars = 0, 15+ chars = 1)
 const strengthProgress = computed(() => {
   const len = props.password.length;
-  if (len < 8) return 0;
-  return Math.min((len - 8) / 7, 1);
+  if (len < PASSWORD_MIN_LENGTH) return 0;
+  return Math.min((len - PASSWORD_MIN_LENGTH) / 7, 1);
 });
 
 const barClass = computed(() => {
@@ -105,6 +71,23 @@ const barClass = computed(() => {
   return null;
 });
 </script>
+
+<template>
+  <!-- Shown from the start with `always`: there the minimum is written before it is broken. -->
+  <div class="password-strength" v-if="always || password.length > 0">
+    <div class="strength-bar">
+      <div
+        class="strength-fill"
+        :style="{ width: `${barPercent}%`, '--progress': strengthProgress }"
+        :class="barClass"
+      />
+    </div>
+    <!-- The server's answer first: it alone knows a breach. Only it is announced; the others change under the typing. -->
+    <div v-if="lineText" :class="lineClass" :role="error ? 'alert' : undefined">
+      {{ lineText }}
+    </div>
+  </div>
+</template>
 
 <style scoped lang="sass">
 .password-strength
@@ -119,7 +102,7 @@ const barClass = computed(() => {
 .strength-fill
   height: 100%
   border-radius: 2px
-  transition: width 0.3s ease, background-color 0.3s ease
+  transition: width $transition-slow, background-color $transition-slow
   background-color: color-mix(in srgb, $accent-yellow calc((1 - var(--progress)) * 100%), $accent-green calc(var(--progress) * 100%))
 
   &.error
@@ -135,11 +118,7 @@ const barClass = computed(() => {
   font-size: $secondary-font-size
   color: $text-muted
 
-// The verdict is advice, not a refusal, so it is written in the colour of a
-// hint. The scale it belongs to is one thing said twice over — the bar carries
-// the reading in colour and length, and a word repeating that colour beside it
-// makes a second signal out of one fact, in a place where the only coloured
-// text on these cards is a refusal.
+// Advice, not a refusal, in the colour of a hint: the bar already says it in colour.
 .strength-text
   margin-top: $tiny
   font-size: $secondary-font-size

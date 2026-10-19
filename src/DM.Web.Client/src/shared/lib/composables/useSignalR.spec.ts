@@ -3,37 +3,22 @@
  */
 
 /**
- * The socket both header badges live on has exactly one way back from a first
- * start() that failed, and it is the loop in this composable: the automatic
- * reconnect of the SignalR client only revives a connection that once started,
- * so an attempt that never succeeded is retried here or nowhere. An API still
- * warming up after a deploy is enough to lose that first attempt, and what
- * used to follow was a tab with no realtime until the reader reloaded it.
- *
- * Two things about the loop are invisible in a rendered page and easy to break:
- * the schedule it follows (retrying at once hammers the very API that is not
- * ready yet) and the way out of it (a logout that has to sit through the delay
- * ceiling before the tab stops reconnecting). The third case here is the one
- * that used to throw away a working recovery: connect() arriving while the
- * client's own reconnect was in flight stopped the instance, and with it the
- * schedule already running.
- *
- * The rest is about who the socket was negotiated as. A sign-in or a sign-out
- * that lands while somebody else holds the socket up has to reach the server,
- * because the session cookie is read at negotiation and never again: a socket
- * left as it was either misses everything addressed to the new session, or
- * keeps delivering the previous one's events to a browser that has signed out.
+ * The retry loop of a first start() that failed, which the client's own
+ * reconnect does not cover: its schedule, its way out on logout, and not
+ * stopping a reconnect in flight. And the bounce on a sign-in or sign-out under
+ * another lease: the cookie is read at negotiation only.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { HubConnectionState } from "@microsoft/signalr";
 import { hubRetryPolicy } from "@/shared/api/client";
+import { endOfTask } from "@/shared/lib/testing/tasks";
 
 const { establishHubConnection } = vi.hoisted(() => ({
   establishHubConnection: vi.fn(),
 }));
 
 vi.mock("@/shared/api", () => ({
-  default: { establishHubConnection },
+  Api: { establishHubConnection },
 }));
 
 // The socket negotiates as whoever the session store says is signed in, and
@@ -89,9 +74,6 @@ async function loadSocket(owner = "app") {
   const { useGlobalSignalR } = await import("./useSignalR");
   return useGlobalSignalR(owner);
 }
-
-/** Lets the transition queue run to its next real pause. */
-const settleQueue = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("the shared notification socket", () => {
   beforeEach(() => {
@@ -203,7 +185,7 @@ describe("the shared notification socket", () => {
     expect(socket.isConnected.value).toBe(false);
 
     const pending = socket.connect();
-    await settleQueue();
+    await endOfTask();
 
     expect(connection.stop).not.toHaveBeenCalled();
     expect(establishHubConnection).toHaveBeenCalledTimes(1);
@@ -229,7 +211,7 @@ describe("the shared notification socket", () => {
     anonymous.callbacks.reconnecting?.();
 
     const pending = socket.connect();
-    await settleQueue();
+    await endOfTask();
 
     // The reader signs in through the modal while that reconnect is running.
     // What comes back up is the socket negotiated before the sign-in, so every

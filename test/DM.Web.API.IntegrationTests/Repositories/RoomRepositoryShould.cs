@@ -1,7 +1,4 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -15,11 +12,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Runs against the container Postgres. Update writes a partial patch, so what
-/// is being asked is whether the columns it leaves alone survive a real UPDATE
-/// statement — a question the InMemory provider, which is LINQ over objects,
-/// cannot answer. GetAvailable additionally goes through the accessibility
-/// filter, which is relational NULL semantics all the way down.
+/// Update writes a partial patch, and GetAvailable goes through the accessibility filter's NULL semantics, so this
+/// runs against the container Postgres.
 /// </summary>
 public class RoomRepositoryShould : IntegrationTestBase
 {
@@ -132,9 +126,7 @@ public class RoomRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A public id no other row holds. The column is NOT NULL and uniquely
-    /// indexed — a constraint the InMemory provider did not have, which is why
-    /// the version of this test that ran there could omit the value entirely.
+    /// A public id no other row holds: the column is NOT NULL and uniquely indexed.
     /// </summary>
     private static string UniquePublicId() => Guid.NewGuid().ToString("N")[..10];
 }

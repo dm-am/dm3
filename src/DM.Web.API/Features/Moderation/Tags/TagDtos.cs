@@ -70,15 +70,11 @@ public class Tag
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Description as typed, the markup included: what the edit window is filled with
+    /// Description: rendered as a reader sees it in the tag's tooltip, which
+    /// the card of the tag shows, and as typed for the author_edit audience,
+    /// which the edit window is filled with
     /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
-    /// The same description rendered, as a reader sees it in the tag's tooltip:
-    /// what the card of the tag shows
-    /// </summary>
-    public HintBbText? DescriptionHtml { get; set; }
+    public TagDescriptionBbText? Description { get; set; }
 
     /// <summary>
     /// Sort order within group
@@ -92,9 +88,9 @@ public class Tag
 }
 
 /// <summary>
-/// Create tag group request
+/// Create or update tag group request
 /// </summary>
-public class CreateTagGroupRequest
+public class TagGroupRequest
 {
     /// <summary>
     /// Title
@@ -118,61 +114,9 @@ public class CreateTagGroupRequest
 }
 
 /// <summary>
-/// Update tag group request
+/// Create or update tag request
 /// </summary>
-public class UpdateTagGroupRequest
-{
-    /// <summary>
-    /// Title
-    /// </summary>
-    public string Title { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Description
-    /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
-    /// Sort order
-    /// </summary>
-    public int SortOrder { get; set; }
-
-    /// <summary>
-    /// How many tags of this group one game may carry; null means no limit
-    /// </summary>
-    public int? MaxTagsPerGame { get; set; }
-}
-
-/// <summary>
-/// Create tag request
-/// </summary>
-public class CreateTagRequest
-{
-    /// <summary>
-    /// Tag group ID
-    /// </summary>
-    public Guid GroupId { get; set; }
-
-    /// <summary>
-    /// Title
-    /// </summary>
-    public string Title { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Description
-    /// </summary>
-    public string? Description { get; set; }
-
-    /// <summary>
-    /// Sort order within group
-    /// </summary>
-    public int SortOrder { get; set; }
-}
-
-/// <summary>
-/// Update tag request
-/// </summary>
-public class UpdateTagRequest
+public class TagRequest
 {
     /// <summary>
     /// Tag group ID

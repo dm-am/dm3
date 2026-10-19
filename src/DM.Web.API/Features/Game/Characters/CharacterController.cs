@@ -23,17 +23,14 @@ namespace DM.Web.API.Features.Game.Characters;
 [Tags("Characters")]
 public class CharacterController : ControllerBase
 {
-    private readonly ICharacterApiService _characterApiService;
-    private readonly IGameNotepadApiService _notepadApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly CharacterApiService _characterApiService;
+    private readonly GameNotepadApiService _notepadApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <summary>
-    /// Creates a new instance of CharacterController
-    /// </summary>
     public CharacterController(
-        ICharacterApiService characterApiService,
-        IGameNotepadApiService notepadApiService,
-        IGameApiService gameApiService)
+        CharacterApiService characterApiService,
+        GameNotepadApiService notepadApiService,
+        GameApiService gameApiService)
     {
         _characterApiService = characterApiService;
         _notepadApiService = notepadApiService;
@@ -120,14 +117,14 @@ public class CharacterController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to change some properties of this character</response>
     /// <response code="404">Character not found</response>
-    [HttpPatch("{id}", Name = nameof(PutCharacter))]
+    [HttpPatch("{id}", Name = nameof(PatchCharacter))]
     [AuthenticationRequired]
     [ProducesResponseType(typeof(Envelope<CharacterDetails>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PutCharacter(Guid id, [FromBody] UpdateCharacterRequest request) =>
+    public async Task<IActionResult> PatchCharacter(Guid id, [FromBody] UpdateCharacterRequest request) =>
         Ok(await _characterApiService.Update(id, request));
 
     /// <summary>
@@ -180,8 +177,6 @@ public class CharacterController : ControllerBase
         await _characterApiService.Delete(id);
         return NoContent();
     }
-
-    #region Character Notepad
 
     /// <summary>
     /// Get player notepad entries for a character ("Заметки игрока")
@@ -283,10 +278,6 @@ public class CharacterController : ControllerBase
         await _notepadApiService.DeleteEntry(entryId);
         return NoContent();
     }
-
-    #endregion
-
-    #region Character Master Notepad
 
     /// <summary>
     /// Get the notes the game leads keep about a character ("Заметки мастера")
@@ -390,6 +381,4 @@ public class CharacterController : ControllerBase
         await _notepadApiService.DeleteEntry(entryId);
         return NoContent();
     }
-
-    #endregion
 }

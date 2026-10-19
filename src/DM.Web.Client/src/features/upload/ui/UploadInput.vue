@@ -1,23 +1,8 @@
-<template>
-  <input
-    type="file"
-    class="upload-input"
-    :accept="accept"
-    aria-label="Выбрать файл"
-    @change="upload"
-  />
-</template>
-
 <script setup lang="ts">
-withDefaults(
-  defineProps<{
-    accept?: string;
-  }>(),
-  {
-    accept: undefined,
-  },
-);
-const emits = defineEmits(["uploading"]);
+defineProps<{
+  accept?: string;
+}>();
+const emits = defineEmits<{ uploading: [formData: FormData] }>();
 
 const upload = (event: Event) => {
   const target = event.target as HTMLInputElement;
@@ -33,6 +18,16 @@ const upload = (event: Event) => {
   emits("uploading", formData);
 };
 </script>
+
+<template>
+  <input
+    type="file"
+    class="upload-input"
+    :accept="accept"
+    aria-label="Выбрать файл"
+    @change="upload"
+  />
+</template>
 
 <style scoped lang="sass">
 .upload-input

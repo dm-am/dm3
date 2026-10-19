@@ -1,5 +1,4 @@
 using System;
-using System.ComponentModel.DataAnnotations;
 using System.Threading.Tasks;
 using DM.Web.API.Features.Game.Games;
 using DM.Web.API.Features.Messaging.Messages;
@@ -23,13 +22,10 @@ namespace DM.Web.API.Features.Game.ChatRooms;
 [Tags("Chat Rooms")]
 public class ChatRoomController : ControllerBase
 {
-    private readonly IChatRoomApiService _apiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly ChatRoomApiService _apiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <summary>
-    /// Creates a new instance of ChatRoomController
-    /// </summary>
-    public ChatRoomController(IChatRoomApiService apiService, IGameApiService gameApiService)
+    public ChatRoomController(ChatRoomApiService apiService, GameApiService gameApiService)
     {
         _apiService = apiService;
         _gameApiService = gameApiService;
@@ -147,13 +143,8 @@ public class ChatRoomController : ControllerBase
     public async Task<IActionResult> GetChatRoomMessages(
         Guid id,
         [FromQuery] string? cursor = null,
-        // Rejected, not clipped: a caller who asked for a thousand has to learn
-        // that a thousand is not on offer instead of taking a hundred for the
-        // whole set. The other three cursor lists — chats, global chat and
-        // message search — say the same thing now; until they did, this comment
-        // described a rule only one endpoint followed, while they clamped in
-        // silence two layers down.
-        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50) =>
+        // Rejected, not clipped: a hundred taken for the whole set would mislead.
+        [FromQuery][PageSize] int limit = 50) =>
         Ok(await _apiService.GetMessagesAsync(id, cursor, limit));
 
     /// <summary>
@@ -175,7 +166,7 @@ public class ChatRoomController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostChatRoomMessage(
         Guid id,
-        [FromBody] CreateMessageInput input)
+        [FromBody] MessageInput input)
     {
         var result = await _apiService.CreateMessageAsync(id, input);
         return CreatedAtRoute(nameof(MessageController.GetMessage), new { id = result.Resource.Id }, result);

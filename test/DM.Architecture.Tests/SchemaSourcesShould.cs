@@ -7,13 +7,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The model the schema rules read is the model and nothing beside it.
 /// </summary>
-/// <remarks>
-/// Two rules let the files of the model spell what every other file is refused
-/// (the newbie threshold and the ticket conversation), so the predicate that
-/// picks them is an exemption, and an exemption that widens is a rule that
-/// quietly stops applying. It has to follow the model when the context is cut
-/// into a file per module, and stop there.
-/// </remarks>
+/// <remarks>The predicate is an exemption, and one that widens quietly stops a rule applying.</remarks>
 public class SchemaSourcesShould
 {
     private const string Entry = "protected override void OnModelCreating(ModelBuilder modelBuilder) { }";

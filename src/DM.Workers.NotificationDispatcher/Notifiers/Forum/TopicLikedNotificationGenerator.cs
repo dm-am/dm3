@@ -14,7 +14,6 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public TopicLikedNotificationGenerator(
         DmDbContext dbContext)
     {
@@ -41,11 +40,7 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
             })
             .FirstOrDefaultAsync();
 
-        // Every publication carries an EventId since W1.4, but these notifications are not stored, so there is nothing for the key to deduplicate against and is replayed by the retry
-        // middleware, by which time the like can be withdrawn or the topic
-        // removed. FirstAsync threw on that, the middleware replayed the whole
-        // delivery, and the queue stopped draining. Every other generator here
-        // answers a missing row with nothing, which is what this now does.
+        // Not stored, so a redelivery after the like or the topic has gone answers with nothing.
         if (likedTopicData == null)
         {
             yield break;
@@ -53,7 +48,7 @@ internal class TopicLikedNotificationGenerator : BaseNotificationGenerator
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { likedTopicData.AuthorId },
+            UsersInterested = [likedTopicData.AuthorId],
             ActorId = likedTopicData.LikerId,
             Metadata = new
             {

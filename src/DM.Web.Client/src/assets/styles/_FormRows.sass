@@ -1,23 +1,13 @@
-// A form of captioned rows, the layout DM2 draws its module forms in (the
-// creation and the settings of a game): the caption in a column on the left,
-// the field beside it on the right, one row per field. The creation and the
-// settings of a game and of a blog are laid out by it.
-//
-// Mixins only, no rules (see _Surfaces.sass).
-//
-// +form-row goes on a FormField that carries a caption. It places the parts
-// FormField draws - the caption, the row of the control, the error and the
-// hint - into two columns, so the label stays bound to its control and the
-// error and the hint stay described by it, as in any other field. The caption
-// keeps the look of a caption of a page (+field-caption, drawn by FormField).
-// A field that needs the whole width (the BBCode editor, the tags, the sheet
-// of attributes) is not a row: it keeps FormField's caption over the field, as
-// DM2 puts "Описание" and "Теги:" over theirs.
+// DM2's form of captioned rows, the module forms of a game and of a blog: the
+// caption in a column on the left, the field on the right. +form-row goes on a
+// FormField with a caption, so the label stays bound to its control; a field
+// that needs the whole width keeps its caption over it. Mixins only.
 
 @use "Variables" as *
+@use "Inputs" as *
 
-/// The column of the captions. A caption longer than it goes on in the next
-/// line, the way DM2 breaks "Количество / игроков:".
+/// The column of the captions; a longer caption wraps, as DM2 breaks
+/// "Количество / игроков:".
 $form-row-caption-width: 40 * $grid-step
 
 =form-row
@@ -26,8 +16,7 @@ $form-row-caption-width: 40 * $grid-step
   gap: 0 $medium
   align-items: start
 
-  // As high as a control of one line, so a caption of one line or two stands
-  // level with the middle of the field (FormField centres it in its box).
+  // As high as a control of one line, so the caption centres on the field.
   > :deep(.form-field-label)
     grid-row: 1
     grid-column: 1
@@ -41,18 +30,28 @@ $form-row-caption-width: 40 * $grid-step
   > :deep(.form-field-hint)
     grid-column: 2
 
-/// A field that is not a control, a link or a line of text, set level with the
-/// captions the way a control of one line is.
+/// A field that is not a control, set level with the captions.
 =form-row-text
   display: flex
   align-items: center
   min-height: $control-height
 
-/// The boxes of a form, DM2's column of them: each on a line of its own, from
-/// the left edge of the form and not from the column of the fields.
+/// DM2's column of boxes: each on its own line, from the form's left edge.
 =form-row-boxes
   display: flex
   flex-direction: column
   align-items: flex-start
   gap: $small
   margin: $medium 0
+
+/// A box and its words: the box at the first line, wrapped words under
+/// themselves; its step from the top centres it in a line of the page (1.3).
+=choice
+  display: flex
+  align-items: flex-start
+  gap: $small
+  cursor: pointer
+
+  input
+    flex: none
+    margin: calc((1.3em - #{$checkbox-size}) / 2) 0 0

@@ -1,12 +1,6 @@
 /**
- * Shared minute-resolution "now" timestamp
- * @module shared/lib/composables/useNowTimestamp
- *
- * Cached timestamp for per-row time checks (isNew/isOnline in the display
- * composables), refreshed every minute to avoid creating Date objects per
- * row. One module-level ref backed by a single interval, reference-counted
- * across all subscribers: the timer starts with the first one and stops when
- * the last one unmounts.
+ * A minute-resolution "now" for per-row time checks, one ref and one interval
+ * counted across subscribers: started by the first, stopped by the last.
  */
 import { ref, onUnmounted, type Ref } from "vue";
 
@@ -32,11 +26,7 @@ function stopTimestampRefresh() {
   }
 }
 
-/**
- * Subscribes the calling component to the shared timestamp and returns the
- * singleton ref. Must be called during setup: the subscription is released
- * in `onUnmounted`.
- */
+/** Subscribes the caller during setup; released in onUnmounted. */
 export function useNowTimestamp(): Ref<number> {
   startTimestampRefresh();
   onUnmounted(() => {

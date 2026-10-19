@@ -1,9 +1,5 @@
-using System;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -25,18 +21,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// the reader of the list.
 /// </summary>
 /// <remarks>
-/// The room list has carried post pendencies from the start and the sidebar
-/// draws a star from them, but a list of games carries no rooms: the mentor
-/// panel got its stars by fetching every room of every curated game, and "Мои
-/// игры", which is the panel a player actually watches, had no marker at all.
-/// The list now answers it itself, from the same selection the room list uses —
-/// so a starred game is a game with a starred room inside it, and the two
-/// screens cannot disagree.
-///
-/// Asserted through the HTTP list rather than against the repository because
-/// the marker is a promise of the payload: it travels through a viewer-scoped
-/// enrichment, a per-user cache and two mapping profiles, and each of them has
-/// dropped a viewer-scoped field before.
+/// The list answers from the selection the room list uses, so a starred game has a starred room. Through the
+/// HTTP list: the marker passes a viewer-scoped enrichment, a per-user cache and two mappings.
 /// </remarks>
 public class GameTurnMarkerShould : IntegrationTestBase
 {
@@ -135,11 +121,7 @@ public class GameTurnMarkerShould : IntegrationTestBase
     /// <summary>
     /// The marked game and the room inside it name the same expectation.
     /// </summary>
-    /// <remarks>
-    /// The two answers come from one selection, and this is what says so: a game
-    /// list that marks a game whose rooms show nothing would send the reader to
-    /// look for a turn that is not there.
-    /// </remarks>
+    /// <remarks>Both answers come from one selection.</remarks>
     [Fact]
     public async Task AgreeWithTheRoomListOfTheSameGame()
     {
@@ -189,10 +171,7 @@ public class GameTurnMarkerShould : IntegrationTestBase
     /// <summary>
     /// Read the seeded game out of the viewer's own participation list.
     /// </summary>
-    /// <remarks>
-    /// The whole list, not a filtered read: the marker belongs to a row among
-    /// rows, and the games of the shared fixture ride along in the same response.
-    /// </remarks>
+    /// <remarks>The whole list: the marker belongs to a row among the shared fixture's rows.</remarks>
     private async Task<JsonElement> ReadGame(World world)
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Get, ListUrl, Viewer(world));
@@ -219,11 +198,7 @@ public class GameTurnMarkerShould : IntegrationTestBase
     /// An active game with one room, a master, the viewer with a character, a
     /// second player with his own, and at most one expectation.
     /// </summary>
-    /// <remarks>
-    /// Both players hold room access: the expectation is only shown when the
-    /// person it awaits still takes part in the room, and the case worth
-    /// separating here is who is awaited, not who may enter.
-    /// </remarks>
+    /// <remarks>Both players hold room access: an expectation shows only while its person takes part.</remarks>
     private async Task<World> Seed(string publicId, Awaited awaited)
     {
         var gameId = Guid.NewGuid();
@@ -231,11 +206,11 @@ public class GameTurnMarkerShould : IntegrationTestBase
         var viewerId = Guid.NewGuid();
         var otherPlayerId = Guid.NewGuid();
         var roomId = Guid.NewGuid();
-        var viewerCharacterId = Guid.NewGuid();
-        var otherCharacterId = Guid.NewGuid();
         var viewerCharacterName = $"Ждущий {publicId}";
         var viewerUsername = $"turn{publicId}viewer"[..Math.Min(20, $"turn{publicId}viewer".Length)];
         var now = DateTimeOffset.UtcNow;
+        var viewer = new Seat(Guid.NewGuid(), viewerId, viewerCharacterName);
+        var other = new Seat(Guid.NewGuid(), otherPlayerId, $"Другой {publicId}");
 
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
@@ -244,7 +219,22 @@ public class GameTurnMarkerShould : IntegrationTestBase
             NewUser(masterId, $"turn{publicId}master"),
             NewUser(viewerId, viewerUsername),
             NewUser(otherPlayerId, $"turn{publicId}other"));
+        AddGameWithRoom(dbContext, publicId, gameId, roomId, masterId, now);
+        AddCharacters(dbContext, gameId, roomId, now, viewer, other);
+        AddPendencies(dbContext, roomId, masterId, awaited, viewer, other, now);
 
+        await dbContext.SaveChangesAsync();
+
+        return new World(gameId, masterId, viewerId, viewerUsername, viewerCharacterName, otherPlayerId);
+    }
+
+    /// <summary>A player's character in the game, and the player it belongs to.</summary>
+    private sealed record Seat(Guid CharacterId, Guid PlayerId, string Name);
+
+    /// <summary>The game, active and approved, and its one room of posts.</summary>
+    private static void AddGameWithRoom(
+        DmDbContext dbContext, string publicId, Guid gameId, Guid roomId, Guid masterId, DateTimeOffset now)
+    {
         dbContext.Set<DbGame>().Add(new DbGame
         {
             GameId = gameId,
@@ -278,47 +268,55 @@ public class GameTurnMarkerShould : IntegrationTestBase
             DiceEnabled = true,
             IsRemoved = false,
         });
+    }
 
+    /// <summary>The characters of the viewer and of the second player, both let into the room.</summary>
+    private static void AddCharacters(
+        DmDbContext dbContext, Guid gameId, Guid roomId, DateTimeOffset now, Seat viewer, Seat other)
+    {
         dbContext.Set<DbCharacter>().AddRange(
-            NewCharacter(viewerCharacterId, gameId, viewerId, viewerCharacterName, now),
-            NewCharacter(otherCharacterId, gameId, otherPlayerId, $"Другой {publicId}", now));
+            NewCharacter(viewer.CharacterId, gameId, viewer.PlayerId, viewer.Name, now),
+            NewCharacter(other.CharacterId, gameId, other.PlayerId, other.Name, now));
 
         dbContext.Set<DbRoomAccess>().AddRange(
             new DbRoomAccess
             {
                 AccessId = Guid.NewGuid(),
                 RoomId = roomId,
-                CharacterId = viewerCharacterId,
+                CharacterId = viewer.CharacterId,
                 Policy = RoomAccessPolicy.Full,
             },
             new DbRoomAccess
             {
                 AccessId = Guid.NewGuid(),
                 RoomId = roomId,
-                CharacterId = otherCharacterId,
+                CharacterId = other.CharacterId,
                 Policy = RoomAccessPolicy.Full,
             });
+    }
 
-        if (awaited != Awaited.Nobody)
+    /// <summary>The expectation the case names, if any: of the viewer or of the second player.</summary>
+    private static void AddPendencies(
+        DmDbContext dbContext, Guid roomId, Guid masterId, Awaited awaited, Seat viewer, Seat other, DateTimeOffset now)
+    {
+        if (awaited == Awaited.Nobody)
         {
-            var forViewer = awaited != Awaited.OtherPlayer;
-            dbContext.Set<DbPostPendency>().Add(new DbPostPendency
-            {
-                PendencyId = Guid.NewGuid(),
-                RoomId = roomId,
-                CharacterId = forViewer ? viewerCharacterId : otherCharacterId,
-                WaitingForUserId = forViewer ? viewerId : otherPlayerId,
-                // The master writes the expectations; one created by a stranger
-                // is not shown to anybody, which is a different case.
-                CreatedById = masterId,
-                CreatedUtc = now.AddHours(-3),
-                FulfilledUtc = awaited == Awaited.ViewerFulfilled ? now.AddHours(-1) : null,
-            });
+            return;
         }
 
-        await dbContext.SaveChangesAsync();
-
-        return new World(gameId, masterId, viewerId, viewerUsername, viewerCharacterName, otherPlayerId);
+        var forViewer = awaited != Awaited.OtherPlayer;
+        dbContext.Set<DbPostPendency>().Add(new DbPostPendency
+        {
+            PendencyId = Guid.NewGuid(),
+            RoomId = roomId,
+            CharacterId = forViewer ? viewer.CharacterId : other.CharacterId,
+            WaitingForUserId = forViewer ? viewer.PlayerId : other.PlayerId,
+            // The master writes the expectations; one created by a stranger
+            // is not shown to anybody, which is a different case.
+            CreatedById = masterId,
+            CreatedUtc = now.AddHours(-3),
+            FulfilledUtc = awaited == Awaited.ViewerFulfilled ? now.AddHours(-1) : null,
+        });
     }
 
     private static DbUser NewUser(Guid id, string username) => new()

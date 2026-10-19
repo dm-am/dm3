@@ -2,13 +2,10 @@
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { computed, ref, watch } from "vue";
 import type { Username } from "@/shared/api/models/community";
-// The public warnings/bans endpoints return bare `UserWarningsInfo` /
-// `PublicUserBanStatus` payloads (NOT a ListEnvelope). `moderationApi`
-// already declares those exact trimmed-public shapes, so we consume it
-// here — the old ListEnvelope-typed pair on the user client never matched the
-// contract and always produced empty results.
+// The public warnings and bans endpoints answer bare payloads, not a ListEnvelope.
 import {
-  moderationApi,
+  warningApi,
+  banApi,
   BanType,
   type UserWarningsInfo,
   type PublicUserBanStatus,
@@ -20,11 +17,8 @@ import {
   useGuardedRequest,
 } from "@/shared/lib/composables/useGuardedRequest";
 
-// The scale the points are drawn against, matching Violator.WarningPointsScale
-// on the server. It triggers nothing: there is no automatic ban in DM3, a ban is
-// always issued by a senior moderator. The comment here used to claim the
-// opposite and cite WarningController.cs for it, where the remarks say in as
-// many words that points are read and never compared.
+// The scale the points are drawn against (Violator.WarningPointsScale, compared by
+// ClientFieldLimitsShould); it triggers nothing.
 const WARNING_LIMIT = 6;
 
 const props = defineProps<{
@@ -34,9 +28,7 @@ const props = defineProps<{
 const warningsInfo = ref<UserWarningsInfo | null>(null);
 const banStatus = ref<PublicUserBanStatus | null>(null);
 
-// The line refetches when the profile changes under it, so two pairs of answers
-// can be on the wire at once; the guard drops the older pair instead of letting
-// whichever landed last decide whose violations are on screen.
+// The profile can change under the line: the guard drops the older pair of answers.
 const { loading, error, run } = useGuardedRequest({
   message: "не удалось загрузить",
   clearErrorOnStart: true,
@@ -45,14 +37,12 @@ const { loading, error, run } = useGuardedRequest({
 function fetchViolations() {
   return run(
     async () => {
-      // Taken over one by one as they land (shownOnPage): the line says the
-      // failure itself, and the first plate would not wait for the second.
+      // Taken over as they land: the line says a failure itself.
       const [warnings, bans] = await Promise.all([
-        moderationApi.getWarnings(props.username).then(shownOnPage),
-        moderationApi.getBans(props.username).then(shownOnPage),
+        warningApi.getWarnings(props.username).then(shownOnPage),
+        banApi.getBans(props.username).then(shownOnPage),
       ]);
-      // Both halves are one line on screen, so one failure is the line's
-      // failure — and the partial data is still handed over, as it was.
+      // One line on screen, so one failure is the line's; the partial data is still handed over.
       return {
         data: { warnings: warnings.data, bans: bans.data },
         error: warnings.error ?? bans.error,
@@ -65,30 +55,23 @@ function fetchViolations() {
   );
 }
 
-// Called during setup rather than on mount: `run` raises `loading` before its
-// first await, so the first paint already has the flag the template reads. On
-// mount the flag would be false for one frame and the line would draw 0/6 for a
-// profile whose warnings have not been read yet.
+// In setup, not on mount: `run` raises `loading` before its first await, so
+// the first paint does not draw 0/6 for warnings not yet read.
 fetchViolations();
 watch(() => props.username, fetchViolations);
 
 const activeBan = computed(() => banStatus.value?.activeBan ?? null);
 const history = computed(() => banStatus.value?.history ?? []);
 
-// API returns history newest-first, so the newest ban IS the last one
-// chronologically — its ordinal is the total ban count, not always "1-й".
+// Newest first, so the newest ban's ordinal is the count of bans.
 const lastBan = computed(() => history.value[0] ?? null);
 const lastBanOrdinal = computed(() => history.value.length);
 
 const warningPoints = computed(() => warningsInfo.value?.totalPoints ?? 0);
 
 /**
- * The points lead to the warnings behind them, in the open log narrowed to this
- * user, when there are warnings to lead to.
- *
- * The count decides it and not the points: a verbal warning carries none, so a
- * zero here can still stand for a log entry with a reason in it, and a user with
- * no warnings at all would otherwise be handed a link to an empty page.
+ * The warnings behind the points, in the log narrowed to this user, when there
+ * are any: a verbal warning carries no points, so the count decides.
  */
 const warningsLogLink = computed(() =>
   (warningsInfo.value?.activeCount ?? 0) > 0
@@ -138,11 +121,8 @@ function formatLastBan(ban: PublicBan, ordinal: number): string {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 
-// Reserve height for the inline "Нарушения" line while it loads, so the
-// identity column doesn't jump once the fetch resolves (one StatLine ==
-// one line-height 1.25 row at $font-size).
+// The height of one line, so the column does not jump when the line loads.
 .violations-inline
   min-height: calc($font-size * 1.25)
 </style>

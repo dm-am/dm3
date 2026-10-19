@@ -1,7 +1,2 @@
-/**
- * Cross-import surface for widgets/pulse-feed (FSD @x).
- *
- * The pulse feed renders game posts with the same widget the game room uses;
- * a second renderer would drift from it immediately.
- */
+// For widgets/pulse-feed: one post renderer, since a second would drift from it.
 export { GamePost } from "..";

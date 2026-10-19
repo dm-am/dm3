@@ -3,16 +3,9 @@
  */
 
 /**
- * Deleting a file is one flow, and it used to be two copies of one.
- *
- * The moderation list and the owner's list each carried it, and the last
- * difference between the copies — which client sent the DELETE — had already
- * been settled on the shared one. What matters to both is here: the request
- * carries the flags of a window that prints the refusal itself, the list is
- * re-read only after the server agreed, and a refusal is handed back to the
- * window with the row still selected, so the reader can see what was refused
- * and try again. One request per press and the refusal line are the window's
- * (ConfirmDialog.spec.ts).
+ * The request carries the flags of a window that prints the refusal itself,
+ * the list is re-read only after the server agreed, and a refusal goes back to
+ * the window with the row still selected (ConfirmDialog.spec.ts has the rest).
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import type { Upload } from "@/shared/api/models/common/upload";

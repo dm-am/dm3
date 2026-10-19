@@ -11,8 +11,8 @@ using Xunit;
 namespace DM.Domain.Blog.Tests.Authorization;
 
 /// <summary>
-/// Gates a publication: an unpublished draft is private writing, and the leak
-/// that matters is another user reading or rewriting it.
+/// Gates a publication: the leak that matters is another user rewriting or
+/// deleting it.
 /// </summary>
 public class PublicationIntentionResolverShould
 {
@@ -21,85 +21,47 @@ public class PublicationIntentionResolverShould
     private static readonly Guid AuthorId = Guid.NewGuid();
     private static readonly Guid StrangerId = Guid.NewGuid();
 
-    private static Publication PublicationBy(
-        Guid authorId,
-        bool isPublished = true) =>
+    private static Publication PublicationBy(Guid authorId) =>
         new()
         {
             Id = Guid.NewGuid(),
             BlogId = Guid.NewGuid(),
-            Author = new GeneralUser { UserId = authorId },
-            IsPublished = isPublished
+            Author = new GeneralUser { UserId = authorId }
         };
 
-    #region The draft
-
     [Theory]
-    [InlineData(PublicationIntention.ViewDraft)]
     [InlineData(PublicationIntention.Edit)]
-    [InlineData(PublicationIntention.Publish)]
     [InlineData(PublicationIntention.Delete)]
     public void LetTheAuthorRunTheirOwnPublication(PublicationIntention intention)
     {
         var user = Create.User(AuthorId).WithRole(UserRole.RegularUser).Please();
 
-        resolver.IsAllowed(user, intention, PublicationBy(AuthorId, isPublished: false))
+        resolver.IsAllowed(user, intention, PublicationBy(AuthorId))
             .Should().BeTrue();
     }
 
     [Theory]
-    [InlineData(PublicationIntention.ViewDraft)]
     [InlineData(PublicationIntention.Edit)]
-    [InlineData(PublicationIntention.Publish)]
     [InlineData(PublicationIntention.Delete)]
-    public void KeepAnotherUsersDraftAwayFromThem(PublicationIntention intention)
+    public void KeepAnotherUsersPublicationAwayFromThem(PublicationIntention intention)
     {
         var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
 
-        resolver.IsAllowed(user, intention, PublicationBy(AuthorId, isPublished: false))
+        resolver.IsAllowed(user, intention, PublicationBy(AuthorId))
             .Should().BeFalse();
     }
 
     [Theory]
-    [InlineData(PublicationIntention.ViewDraft)]
     [InlineData(PublicationIntention.Edit)]
-    [InlineData(PublicationIntention.Publish)]
     [InlineData(PublicationIntention.Delete)]
-    public void KeepAnotherUsersDraftAwayFromAGuest(PublicationIntention intention)
+    public void KeepAnotherUsersPublicationAwayFromAGuest(PublicationIntention intention)
     {
-        resolver.IsAllowed(AuthenticatedUser.Guest, intention, PublicationBy(AuthorId, isPublished: false))
-            .Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData(UserRole.Mentor)]
-    [InlineData(UserRole.Moderator)]
-    [InlineData(UserRole.SeniorModerator)]
-    public void NotOpenADraftToModerationBelowAdmin(UserRole role)
-    {
-        var user = Create.User(StrangerId).WithRole(role).Please();
-
-        // Moderation reads what was published. An unpublished draft stays with
-        // its author until an admin has a reason to reach for it.
-        resolver.IsAllowed(user, PublicationIntention.ViewDraft, PublicationBy(AuthorId, isPublished: false))
+        resolver.IsAllowed(AuthenticatedUser.Guest, intention, PublicationBy(AuthorId))
             .Should().BeFalse();
     }
 
     [Fact]
-    public void OpenADraftToAnAdmin()
-    {
-        var user = Create.User(StrangerId).WithRole(UserRole.Admin).Please();
-
-        resolver.IsAllowed(user, PublicationIntention.ViewDraft, PublicationBy(AuthorId, isPublished: false))
-            .Should().BeTrue();
-    }
-
-    #endregion
-
-    #region Comments and likes
-
-    [Fact]
-    public void LetAnyAuthenticatedUserCommentOnAPublishedPublication()
+    public void LetAnyAuthenticatedUserCommentOnAPublication()
     {
         var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
 
@@ -115,30 +77,11 @@ public class PublicationIntentionResolverShould
     }
 
     [Fact]
-    public void NotLetAnyoneCommentOnAnUnpublishedPublication()
-    {
-        var user = Create.User(AuthorId).WithRole(UserRole.RegularUser).Please();
-
-        // Not even its author: there is nothing public to answer yet.
-        resolver.IsAllowed(user, PublicationIntention.CreateComment, PublicationBy(AuthorId, isPublished: false))
-            .Should().BeFalse();
-    }
-
-    [Fact]
-    public void LetAnAuthenticatedUserLikeAPublishedPublication()
+    public void LetAnAuthenticatedUserLikeAPublication()
     {
         var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
 
         resolver.IsAllowed(user, PublicationIntention.Like, PublicationBy(AuthorId)).Should().BeTrue();
-    }
-
-    [Fact]
-    public void NotLetAnyoneLikeAnUnpublishedPublication()
-    {
-        var user = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
-
-        resolver.IsAllowed(user, PublicationIntention.Like, PublicationBy(AuthorId, isPublished: false))
-            .Should().BeFalse();
     }
 
     [Fact]
@@ -148,19 +91,12 @@ public class PublicationIntentionResolverShould
             .Should().BeFalse();
     }
 
-    #endregion
-
-    #region Behaviour as found
-
     [Fact]
     public void LetTheAuthorLikeTheirOwnPublication()
     {
         var user = Create.User(AuthorId).WithRole(UserRole.RegularUser).Please();
 
-        // Behaviour as found, not a rule that was chosen. CommentIntention.Like
-        // refuses self-likes outright and has a test saying so; the same action on
-        // a publication is allowed. One of the two is wrong, and which one is a
-        // product decision.
+        // Behaviour as found: CommentIntention.Like refuses self-likes, a publication allows them.
         resolver.IsAllowed(user, PublicationIntention.Like, PublicationBy(AuthorId)).Should().BeTrue();
     }
 
@@ -168,14 +104,9 @@ public class PublicationIntentionResolverShould
     public void GiveTheBlogOwnerNoSayOverAPublicationInTheirOwnBlog()
     {
         var blogOwner = Create.User(StrangerId).WithRole(UserRole.RegularUser).Please();
-        var publication = PublicationBy(AuthorId, isPublished: false);
+        var publication = PublicationBy(AuthorId);
 
-        // Behaviour as found, not a rule that was chosen. The publication carries
-        // a BlogId and nothing else about the blog, so the resolver cannot tell
-        // the blog's owner from a passer-by. An assistant may publish into a blog
-        // (BlogIntention.CreatePublication) and the owner can then neither edit
-        // nor delete what appeared there. PublicationCommentService loads the blog
-        // itself for exactly this reason; the write paths do not.
+        // Behaviour as found: the publication carries only a BlogId, so the owner is a passer-by here.
         resolver.IsAllowed(blogOwner, PublicationIntention.Edit, publication).Should().BeFalse();
         resolver.IsAllowed(blogOwner, PublicationIntention.Delete, publication).Should().BeFalse();
     }
@@ -188,12 +119,8 @@ public class PublicationIntentionResolverShould
     {
         var user = Create.User(StrangerId).WithRole(role).Please();
 
-        // Behaviour as found, not a rule that was chosen. A senior moderator may
-        // delete an entire blog (BlogIntention.Delete) but not one publication
-        // inside it, so the smaller act needs the higher rank.
+        // Behaviour as found: a senior moderator may delete a blog but not one publication in it.
         resolver.IsAllowed(user, PublicationIntention.Delete, PublicationBy(AuthorId))
             .Should().Be(allowed);
     }
-
-    #endregion
 }

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace DM.Domain.Core.Dto;
 
 /// <summary>
@@ -38,9 +35,9 @@ public class CursorQuery
     public DateTimeOffset? HistoryClearedUtc { get; set; }
 
     /// <summary>
-    /// Number of items to fetch (default: 50, max: 100)
+    /// Number of items to fetch
     /// </summary>
-    public int Limit { get; set; } = 50;
+    public int Limit { get; set; } = DefaultLimit;
 
     /// <summary>
     /// Maximum allowed limit
@@ -48,7 +45,7 @@ public class CursorQuery
     public const int MaxLimit = 100;
 
     /// <summary>
-    /// Default limit
+    /// Limit of a query that names none
     /// </summary>
     public const int DefaultLimit = 50;
 

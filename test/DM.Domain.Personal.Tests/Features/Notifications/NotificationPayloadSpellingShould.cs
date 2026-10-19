@@ -13,12 +13,7 @@ namespace DM.Domain.Personal.Tests.Features.Notifications;
 /// A notification reads the same whichever spelling its bag arrives in.
 /// </summary>
 /// <remarks>
-/// One bag has two spellings. A generator hands the dispatcher an anonymous object,
-/// so a letter reads GameId; the store writes the same object with the web
-/// defaults, so whatever reads it back out of the table reads gameId. The words and
-/// the paths are one table for both readers, and a key matched by its exact
-/// spelling would turn the stored bag into a notification with no link and its
-/// identifiers printed among the details.
+/// A letter reads GameId from the generator, and whatever reads the stored bag back reads gameId.
 /// </remarks>
 public class NotificationPayloadSpellingShould
 {

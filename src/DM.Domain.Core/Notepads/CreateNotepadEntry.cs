@@ -1,4 +1,3 @@
-using System;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Notepads;

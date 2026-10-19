@@ -1,9 +1,7 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using DM.Infrastructure.Persistence.Shared.Comments;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
@@ -14,25 +12,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 /// coin toss.
 /// </summary>
 /// <remarks>
-/// When the last comment of a discussion goes, the service asks the repository which
-/// comment takes over the pointer. That used to be spelled positionally — order by
-/// time descending, skip one — which is the right row only while the comment being
-/// deleted sorts first. Two comments can carry the same timestamp (the DM2 import
-/// produces them by the thousand, and so does a busy second), and among equals the
-/// order was whatever the plan returned: the row being deleted could sort second and
-/// be handed back as its own successor.
-///
-/// The pointer would then name a soft-deleted comment. Every read filters that row
-/// out, so the discussion reads as having no last comment at all and falls to the
-/// bottom of the activity order — the same symptom as an erased pointer, reached by
-/// a different route and only when two comments tie.
-///
-/// Arrival order is what the defect turned on, so it is what varies here: the same
-/// two tied comments seeded each way round must give one answer, and that answer must
-/// be the other comment. All four discussions ask the same question of the same
-/// table, so all four are asked, each through the shared query under its own tag -
-/// which is how every one of their deletions asks it now that the successor is
-/// chosen inside the transaction that writes the mark.
+/// The successor is chosen by exclusion and identifier, never by position: among tied timestamps the deleted
+/// row could sort second. All four discussions ask the shared query.
 /// </remarks>
 public class NewestCommentExceptShould
 {
@@ -60,18 +41,14 @@ public class NewestCommentExceptShould
 
     private static DmDbContext Seeded(params DbComment[] comments)
     {
-        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var context = InMemoryStore.Open();
         context.Comments.AddRange(comments);
         context.SaveChanges();
         return context;
     }
 
     /// <summary>
-    /// The same question on behalf of each of the four discussions. They read one table
-    /// and differ only in which entity the comments hang off, so a defect fixed in one
-    /// and left in another is invisible until a user hits that discussion.
+    /// The same question on behalf of each of the four discussions.
     /// </summary>
     public static TheoryData<string> Discussions() =>
         new("topic", "blog", "publication", "game");
@@ -93,9 +70,7 @@ public class NewestCommentExceptShould
         };
 
     /// <summary>
-    /// The pointer names the smaller identifier of two tied comments, which is the case
-    /// the positional form got wrong: the deleted row sorts second, and skipping one
-    /// lands on it.
+    /// The pointer names the smaller identifier of two tied comments when the deleted row sorts second.
     /// </summary>
     [Theory]
     [MemberData(nameof(Discussions))]
@@ -118,16 +93,7 @@ public class NewestCommentExceptShould
     /// Two comments left, tied with each other: which one takes the pointer is decided
     /// by the identifier and not by the plan.
     /// </summary>
-    /// <remarks>
-    /// The fact above needs the exclusion and nothing else — with one survivor there is
-    /// only one answer to give — so it stays green with the tie-breaker deleted, and for
-    /// a while that is what the tie-breaker had holding it: nothing. It takes three tied
-    /// comments to ask the question. Without ordering by the identifier the answer is
-    /// whichever of the two the provider happens to return first, so the same pair
-    /// seeded both ways round gives two different pointers for one deletion — and a
-    /// pointer that changes with the plan is a discussion whose activity date changes
-    /// with the plan.
-    /// </remarks>
+    /// <remarks>It takes three tied comments to ask the tie-breaker; seeded both ways they give one pointer.</remarks>
     [Theory]
     [MemberData(nameof(Discussions))]
     public async Task DecideBetweenTiedSurvivorsByTheIdentifier(string discussion)

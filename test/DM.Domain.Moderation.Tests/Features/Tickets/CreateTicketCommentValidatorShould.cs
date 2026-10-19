@@ -16,14 +16,14 @@ namespace DM.Domain.Moderation.Tests.Features.Tickets;
 /// </summary>
 public class CreateTicketCommentValidatorShould : UnitTestBase
 {
-    private readonly IBbCodeNestingLimit _nestingLimit;
-    private readonly CreateTicketCommentValidator _validator;
+    private readonly IBbCodeNestingLimit nestingLimit;
+    private readonly CreateTicketCommentValidator validator;
 
     public CreateTicketCommentValidatorShould()
     {
-        _nestingLimit = Mock<IBbCodeNestingLimit>();
-        _nestingLimit.IsWithinLimit(Arg.Any<string>()).Returns(true);
-        _validator = new CreateTicketCommentValidator(_nestingLimit);
+        nestingLimit = Mock<IBbCodeNestingLimit>();
+        nestingLimit.IsWithinLimit(Arg.Any<string>()).Returns(true);
+        validator = new CreateTicketCommentValidator(nestingLimit);
     }
 
     /// <summary>
@@ -34,11 +34,11 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
     [Fact]
     public void TakeATextAsLongAsTheTextOfATicket()
     {
-        var longest = new CreateTicketComment { Text = new string('а', 10000) };
-        var tooLong = new CreateTicketComment { Text = new string('а', 10001) };
+        var longest = new CreateTicketComment { Text = new string('а', TicketTextLimits.MaxLength) };
+        var tooLong = new CreateTicketComment { Text = new string('а', TicketTextLimits.MaxLength + 1) };
 
-        _validator.TestValidate(longest).ShouldNotHaveAnyValidationErrors();
-        _validator.TestValidate(tooLong).ShouldHaveValidationErrorFor(c => c.Text)
+        validator.TestValidate(longest).ShouldNotHaveAnyValidationErrors();
+        validator.TestValidate(tooLong).ShouldHaveValidationErrorFor(c => c.Text)
             .WithErrorMessage(ValidationError.Long);
     }
 
@@ -52,7 +52,7 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
     [InlineData(TicketStatus.WaitingForUser, "")]
     public void RefuseAnEmptyText(TicketStatus? status, string text)
     {
-        _validator.TestValidate(new CreateTicketComment { Text = text, Status = status })
+        validator.TestValidate(new CreateTicketComment { Text = text, Status = status })
             .ShouldHaveValidationErrorFor(c => c.Text)
             .WithErrorMessage(ValidationError.Empty);
     }
@@ -66,7 +66,7 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
     [InlineData(TicketStatus.Spam)]
     public void TakeAnEmptyTextWithAStatusThatEndsTheTicket(TicketStatus status)
     {
-        _validator.TestValidate(new CreateTicketComment { Text = "", Status = status })
+        validator.TestValidate(new CreateTicketComment { Text = "", Status = status })
             .ShouldNotHaveAnyValidationErrors();
     }
 
@@ -83,7 +83,7 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
     [InlineData((TicketStatus)42, false)]
     public void TakeTheStatusesModerationAnswersWith(TicketStatus? status, bool taken)
     {
-        var result = _validator.TestValidate(new CreateTicketComment { Text = "Ответ", Status = status });
+        var result = validator.TestValidate(new CreateTicketComment { Text = "Ответ", Status = status });
 
         if (taken)
         {
@@ -102,12 +102,12 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
     [Fact]
     public void HoldTheTextOfAClosingAnswerToTheRulesOfEveryAnswer()
     {
-        var tooLong = new CreateTicketComment { Text = new string('а', 10001), Status = TicketStatus.Closed };
+        var tooLong = new CreateTicketComment { Text = new string('а', TicketTextLimits.MaxLength + 1), Status = TicketStatus.Closed };
         var hiding = new CreateTicketComment { Text = "[private=\"Чак\"]секрет[/private]", Status = TicketStatus.Spam };
 
-        _validator.TestValidate(tooLong).ShouldHaveValidationErrorFor(c => c.Text)
+        validator.TestValidate(tooLong).ShouldHaveValidationErrorFor(c => c.Text)
             .WithErrorMessage(ValidationError.Long);
-        _validator.TestValidate(hiding).ShouldHaveValidationErrorFor(c => c.Text)
+        validator.TestValidate(hiding).ShouldHaveValidationErrorFor(c => c.Text)
             .WithErrorMessage(PrivateBlockMarkup.DescribeSurfaceRefusal(hiding.Text));
     }
 
@@ -120,16 +120,16 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
     {
         var input = new CreateTicketComment { Text = "до [private=\"Чак\"]секрет[/private] после" };
 
-        _validator.TestValidate(input).ShouldHaveValidationErrorFor(c => c.Text)
+        validator.TestValidate(input).ShouldHaveValidationErrorFor(c => c.Text)
             .WithErrorMessage(PrivateBlockMarkup.DescribeSurfaceRefusal(input.Text));
     }
 
     [Fact]
     public void RefuseATextTheRendererWouldRefuse()
     {
-        _nestingLimit.IsWithinLimit("[b][b]глубоко[/b][/b]").Returns(false);
+        nestingLimit.IsWithinLimit("[b][b]глубоко[/b][/b]").Returns(false);
 
-        _validator.TestValidate(new CreateTicketComment { Text = "[b][b]глубоко[/b][/b]" })
+        validator.TestValidate(new CreateTicketComment { Text = "[b][b]глубоко[/b][/b]" })
             .ShouldHaveValidationErrorFor(c => c.Text)
             .WithErrorMessage(ValidationError.Invalid);
     }

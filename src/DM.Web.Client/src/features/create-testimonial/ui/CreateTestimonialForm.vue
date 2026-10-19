@@ -8,15 +8,11 @@ import {
 import { useCreateTestimonial } from "../model";
 import TextArea from "@/shared/ui/TextArea/TextArea.vue";
 import Button from "@/shared/ui/Button/Button.vue";
+import { TESTIMONIAL_TEXT_MAX_LENGTH } from "@/shared/lib/constants/community";
 
 const userStore = useAuthStore();
 
-// Single policy owner: testimonials are a curated review barrier — regular
-// users post feedback in the forum topic instead. The rank is the server's,
-// not a looser one: WebsiteTestimonialIntentionResolver admits Create for
-// SeniorModerator and above (an admin posts on a user's behalf), so an
-// ordinary moderator opening this form would have been answered 403.
-// See pages/about/TestimonialsPage.vue, which renders this form unconditionally.
+// The rank is the server's: WebsiteTestimonialIntentionResolver admits Create for SeniorModerator up.
 const canAddTestimonial = computed(() => userIsSeniorModerator(userStore.user));
 
 const {
@@ -32,7 +28,6 @@ const {
 </script>
 
 <template>
-  <!-- Add Testimonial (authenticated users only) -->
   <template v-if="canAddTestimonial">
     <button
       v-if="!formExpanded"
@@ -45,16 +40,13 @@ const {
     <div class="expand-fold" :class="{ open: formExpanded }">
       <div class="expand-fold-clip" :inert="!formExpanded">
         <div class="review-form">
-          <!-- The entry is signed by the participant named here, not by the
-               moderator filling the form in. The same picker the other
-               moderation forms use (award grant, invitations, roles). -->
           <form-field
             label="Автор отзыва"
             name="testimonialAuthor"
             :errors="authorError ? [authorError] : []"
           >
             <template #hint
-              >Отзыв будет опубликован от имени этого участника</template
+              >Отзыв появится от имени этого пользователя</template
             >
             <UserAutocomplete
               id="testimonialAuthor"
@@ -74,7 +66,7 @@ const {
             <text-area
               v-model="testimonialText"
               placeholder="Расскажите, что вам нравится в Dungeon Master..."
-              :max-length="1000"
+              :max-length="TESTIMONIAL_TEXT_MAX_LENGTH"
             />
           </form-field>
           <div class="form-actions">
@@ -93,16 +85,14 @@ const {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .toggle-link
   display: inline-block
   margin-bottom: $medium
   +inline-link-button
 
-// The collapse itself is the global CSS-only .expand-fold (Reset.sass).
 
-// Review form styling
 .review-form
   margin-bottom: $medium
   padding: $medium

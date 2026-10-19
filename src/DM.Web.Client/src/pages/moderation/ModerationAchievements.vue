@@ -1,17 +1,15 @@
 <script setup lang="ts">
-/**
- * ModerationAchievements — the achievement catalog: 13 categories + 52
- * tiers. Categories support PATCH (Title/Description/IconName/SortOrder/
- * IsActive), tiers support POST/PATCH/DELETE. A category's Metric is
- * immutable (bound to the server-side AchievementMetricResolver).
- */
+/** The achievement catalog. A category's metric is fixed: the server resolves it. */
 import { computed, onMounted, reactive, ref, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
 import {
   achievementApi,
   useAchievementCatalog,
   formatThreshold,
+  nextChainTier,
+  tierWord,
 } from "@/entities/achievement";
+import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import type {
   AchievementCategory,
   AchievementType,
@@ -25,12 +23,8 @@ import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { RowIconButton } from "@/shared/ui/RowIconButton";
 import AchievementCategoryDialog from "./dialogs/AchievementCategoryDialog.vue";
 import AchievementTierDialog from "./dialogs/AchievementTierDialog.vue";
-import { useRoleGate } from "./lib/useRoleGate";
-import { sectionRole } from "./lib/sections";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
-const { hasAccess, deniedText } = useRoleGate(
-  sectionRole("moderation-achievements"),
-);
 const {
   adminCategories: categories,
   adminTypes: types,
@@ -50,9 +44,7 @@ function tiersOf(c: AchievementCategory): AchievementType[] {
     .sort((a, b) => a.threshold - b.threshold);
 }
 
-// The tiers of a category, in the site's table, as a table whose rows are
-// added and removed in place is drawn (AttributeSchemaEditor): the pencil and
-// the bin at the end of a row, "+ Тир" right under the table.
+// The pencil and the bin at the end of a row, "+ Тир" under the table, as in AttributeSchemaEditor.
 const tierColumns: Column[] = [
   { key: "tier", label: "Тир", align: "left" },
   { key: "code", label: "Код", align: "left" },
@@ -61,9 +53,7 @@ const tierColumns: Column[] = [
   { key: "actions", label: "", width: "1px", align: "center" },
 ];
 
-// --- Category edit dialog (shared Dialog idiom) ---
-// Null until the first openEditCategory sets it; the dialog only mounts
-// after that, so the non-null cast below is safe.
+// Set before the dialog first mounts, so the non-null cast below is safe.
 const editingCategory = ref<AchievementCategory | null>(null);
 
 const { open: openCategoryDialog, close: closeCategoryDialog } = useModal({
@@ -83,10 +73,9 @@ function openEditCategory(c: AchievementCategory) {
   openCategoryDialog();
 }
 
-// --- Tier create/edit dialog (shared Dialog idiom) ---
 const editingTier = ref<AchievementType | null>(null);
 const tierCategoryId = ref("");
-const tierDefault = ref(1);
+const tierDefault = ref<number | null>(null);
 
 const { open: openTierDialog, close: closeTierDialog } = useModal({
   component: AchievementTierDialog,
@@ -105,8 +94,7 @@ const { open: openTierDialog, close: closeTierDialog } = useModal({
 function openCreateTier(c: AchievementCategory) {
   editingTier.value = null;
   tierCategoryId.value = c.id;
-  const maxTier = tiersOf(c).reduce((m, t) => Math.max(m, t.tier ?? 0), 0);
-  tierDefault.value = maxTier + 1;
+  tierDefault.value = nextChainTier(tiersOf(c).map((t) => t.tier));
   openTierDialog();
 }
 
@@ -117,18 +105,16 @@ function openEditTier(t: AchievementType) {
   openTierDialog();
 }
 
-// --- Tier delete (ConfirmDialog) ---
 const deleteTierTarget = ref<AchievementType | null>(null);
 
-// The request of the confirmation. The window waits for it, prints a refusal in
-// itself and closes on success alone, so the interceptor keeps quiet about it.
+// The window waits for it, prints a refusal in itself and closes on success alone.
 async function confirmDeleteTier() {
   const target = deleteTierTarget.value;
   if (!target) return;
-  const result = await achievementApi.deleteAchievementType(target.id, {
-    ownsRefusal: true,
-    ownsRateLimit: true,
-  });
+  const result = await achievementApi.deleteAchievementType(
+    target.id,
+    OWNS_REFUSAL,
+  );
   if (!result.error) void reload();
   return result;
 }
@@ -137,9 +123,7 @@ async function confirmDeleteTier() {
 <template>
   <page-title>Достижения</page-title>
 
-  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
-
-  <section v-else class="achievements-admin">
+  <section class="achievements-admin">
     <SecondaryText>
       Категория считает одно: игровые посты, дни на сайте, комментарии и так
       далее. Тир категории выдается, когда счет доходит до его порога.
@@ -152,10 +136,7 @@ async function confirmDeleteTier() {
         class="cat-row"
         :class="{ 'is-inactive': !c.isActive }"
       >
-        <!-- The icon and the words of the category; its actions are the
-             caption line under the description, at every width. They used to
-             stand in a column of their own at the right, and on a phone the
-             whole line scrolled sideways inside the card. -->
+        <!-- The actions are the caption line under the description, at every width. -->
         <div class="cat-header">
           <GameIcon :name="c.iconName" class="cat-icon" />
           <div class="cat-info">
@@ -163,7 +144,7 @@ async function confirmDeleteTier() {
             <div class="cat-meta">
               <code>{{ c.code }}</code
               >, <code>{{ c.metric }}</code
-              >, sort {{ c.sortOrder }}
+              >, <span class="cat-order">порядок {{ c.sortOrder }}</span>
             </div>
             <p class="cat-desc">{{ c.description }}</p>
             <CaptionLine class="cat-actions">
@@ -181,6 +162,9 @@ async function confirmDeleteTier() {
           empty-text="Тиров нет"
           :aria-label="`Тиры: ${c.title}`"
         >
+          <template #cell-tier="{ row }">
+            {{ tierWord(row.tier) ?? VALUE_UNAVAILABLE }}
+          </template>
           <template #cell-code="{ row }">
             <code>{{ row.code }}</code>
           </template>
@@ -206,7 +190,6 @@ async function confirmDeleteTier() {
       </li>
     </ul>
 
-    <!-- Tier delete confirmation -->
     <ConfirmDialog
       :show="deleteTierTarget !== null"
       title="Удалить тир?"
@@ -220,12 +203,16 @@ async function confirmDeleteTier() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/pages/moderation/lib/catalogCode" as *
 
 .achievements-admin
   display: flex
   flex-direction: column
   gap: $medium
+
+  // The codes of a category and of its tiers.
+  code
+    +catalog-code
 
 .cat-list
   list-style: none
@@ -239,7 +226,7 @@ async function confirmDeleteTier() {
   +card()
 
   &.is-inactive
-    opacity: 0.55
+    opacity: $muted-opacity
 
 // The icon and the words: the words take what the icon leaves.
 .cat-header
@@ -248,60 +235,48 @@ async function confirmDeleteTier() {
   gap: $medium
   margin-bottom: $small
 
-// The codes break where the words do, at the comma, and inside a code only
-// where a column is narrower than one of them.
+// Codes break at the comma, and inside a code only where a column is narrower.
 .cat-info
   flex: 1 1 0
   min-width: 0
   overflow-wrap: anywhere
 
-// A category spans all four tiers and has no metal of its own, so its icon
-// is neutral: the metals are for a tier (see entities/achievement tierMetal).
+// A category has no metal of its own: the metals are a tier's (tierMetal).
 .cat-icon
   flex: none
-  width: 48px
-  font-size: 36px
+  width: $catalog-icon-box
+  font-size: $catalog-icon-size
   color: $text-muted
 
 .cat-title
-  font-weight: 500
+  font-weight: 400
   margin-bottom: $tiny
 
 .cat-meta
   font-size: $tertiary-font-size
   color: $text-muted
 
-  code
-    background: $bg-element-accent
-    padding: 0 4px
-    border-radius: 3px
+// A number stays with its word: "порядок 3".
+.cat-order
+  white-space: nowrap
 
 .cat-desc
   margin: $tiny 0 0
   font-size: $secondary-font-size
   color: $text
 
-// A caption line of its own under the description.
 .cat-actions
   display: block
   margin-top: $tiny
 
-// The site's table in the size this list has always had, its headers on the
-// left as its cells are (Column.align).
+// Headers on the left, as the cells are (Column.align).
 .tier-table
   font-size: $secondary-font-size
 
-  code
-    background: $bg-element-accent
-    padding: 0 4px
-    border-radius: 3px
-
-  // The two signs of a row on one line.
   :deep(.col-actions)
     white-space: nowrap
 
-// The shared secondary button, under the table it adds a row to, at its left
-// edge.
+// Under the table it adds a row to, at its left edge.
 .add-tier
   margin-top: $small
 </style>

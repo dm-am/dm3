@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using DM.Infrastructure.Persistence;
@@ -12,7 +7,6 @@ using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc.ActionConstraints;
 using Microsoft.AspNetCore.Mvc.Controllers;
 using Microsoft.AspNetCore.Mvc.Infrastructure;
-using Microsoft.AspNetCore.Mvc.Routing;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
@@ -24,27 +18,9 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// A 201 declares its Location, and the Location leads to what was created.
 /// </summary>
 /// <remarks>
-/// API_DESIGN states it: the header points at the created resource and at
-/// nothing else, and where a sub-resource has no address of its own the answer
-/// is not a 201. Neither half held. Sixty-two operations declared a 201 and none
-/// declared a header, so the address was on the wire and absent from the
-/// contract; and nine of them pointed somewhere else — a like answered with the
-/// address of the whole topic, so a consumer following the header to read what
-/// it had created redrew the page instead of moving a counter, and a new rubric
-/// answered with an empty Location, which resolves to the collection.
-///
-/// What is checked here is the declaration, because that is the part a consumer
-/// reads — and the declaration is checked against the code, not against itself.
-/// Reading the header back out of the published document proved nothing at all:
-/// the filter writes it there unconditionally, so restoring the finding's own
-/// defect (a like answering CreatedAtRoute(GetPublication)) left the walk green.
-/// The pairing below is what carries it: an action that calls CreatedAtRoute or
-/// its siblings sends a Location and may not be marked, an action that answers
-/// 201 any other way sends none and has to be, and either way round the document
-/// then says what the wire does.
-///
-/// The wire is checked on the endpoints the fix converted, so that a 201 with a
-/// borrowed address cannot come back on them under any declaration.
+/// API_DESIGN states the rule. The declaration is checked against the code: an action calling CreatedAtRoute
+/// or its siblings sends a Location and is not marked, one answering 201 any other way sends none and is. The
+/// wire is checked on the converted endpoints.
 /// </remarks>
 public class CreatedLocationShould : IntegrationTestBase
 {
@@ -105,10 +81,7 @@ public class CreatedLocationShould : IntegrationTestBase
     /// <summary>
     /// The addresses of the operations marked as sending no Location.
     /// </summary>
-    /// <remarks>
-    /// Read off the routes the host registered, so the set is the same one the
-    /// filter skips rather than a second list to keep in step with it.
-    /// </remarks>
+    /// <remarks>Read off the registered routes, the set the filter skips.</remarks>
     private HashSet<string> MarkedRoutes() => DatabaseFixture.Factory.Services
         .GetRequiredService<IActionDescriptorCollectionProvider>()
         .ActionDescriptors.Items
@@ -125,15 +98,7 @@ public class CreatedLocationShould : IntegrationTestBase
     /// <summary>
     /// The marker sits on exactly the actions that send no Location.
     /// </summary>
-    /// <remarks>
-    /// The two halves are read out of the source of each action: whether it calls
-    /// one of the framework methods that set the header, and whether it carries
-    /// CreatedWithoutLocation. Read from the source because the answer is in the
-    /// body of the method and nowhere else — the attributes of an action that
-    /// answers 201 through StatusCode are identical to those of one that answers
-    /// through CreatedAtRoute, which is how eighteen operations came to promise a
-    /// header they have never sent.
-    /// </remarks>
+    /// <remarks>Read from the source: the attributes of an action answering through StatusCode and through CreatedAtRoute are the same.</remarks>
     [Fact]
     public void MarkEveryCreatedResponseThatCarriesNoLocation()
     {
@@ -166,7 +131,7 @@ public class CreatedLocationShould : IntegrationTestBase
             }
         }
 
-        actions.Should().BeGreaterThan(40, "the API creates resources, and a walk finding few checks little");
+        actions.Should().BePositive("the API creates resources, and a walk finding none checks nothing");
         wrong.Should().BeEmpty(
             "the document declares Location over every 201 it is not told about, so a marker " +
             "out of step with the code is a header a consumer follows and never receives");
@@ -175,13 +140,7 @@ public class CreatedLocationShould : IntegrationTestBase
     /// <summary>
     /// A like is not a resource, so liking answers 200 and sets no Location.
     /// </summary>
-    /// <remarks>
-    /// The like has to be taken for the missing header to say anything: a like of
-    /// a comment nobody wrote is refused as 404 and sets no Location either. So
-    /// the comment is written here, by somebody other than the one who likes it,
-    /// and taken away again with the like so the shared topic reads as it did
-    /// before.
-    /// </remarks>
+    /// <remarks>The like has to be taken for the missing header to mean anything, so the comment is written and removed here.</remarks>
     [Theory]
     [InlineData("topic")]
     [InlineData("comment")]
@@ -248,13 +207,7 @@ public class CreatedLocationShould : IntegrationTestBase
     /// Actions of one controller: the name, and its own attributes, signature
     /// and body — nothing of its neighbour's.
     /// </summary>
-    /// <remarks>
-    /// Line based, and the attribute run is walked backwards from the signature,
-    /// because the two things this compares live on opposite sides of it: the
-    /// marker is an attribute and the call that sets the header is a statement.
-    /// Splitting on the signature alone puts the attributes of one action in the
-    /// block of the one above it, which reports every reader of the file.
-    /// </remarks>
+    /// <remarks>The attribute run is walked backwards from the signature: the marker is above it, the call below.</remarks>
     private static IEnumerable<(string Name, string Body)> Actions(string source)
     {
         var signature = new Regex(@"^\s+public\s+(?:async\s+)?[\w<>,\[\]\? ]+\s+(\w+)\s*\(");

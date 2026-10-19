@@ -3,15 +3,13 @@ using System.Collections.Generic;
 using DM.Domain.Community.Features.Polls;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Abstractions;
-using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Polls;
 
-public class CreatePollValidatorShould : UnitTestBase
+public class CreatePollValidatorShould
 {
     private readonly CreatePollValidator validator;
     private readonly IDateTimeProvider dateTimeProvider;
@@ -25,16 +23,19 @@ public class CreatePollValidatorShould : UnitTestBase
         validator = new CreatePollValidator(dateTimeProvider);
     }
 
+    private CreatePoll ValidPoll(
+        string title = "Valid poll title", DateTimeOffset? endsUtc = null, List<string>? options = null) => new()
+        {
+            Title = title,
+            StartsUtc = now,
+            EndsUtc = endsUtc ?? now.AddDays(7),
+            Options = options ?? ["Option 1", "Option 2"]
+        };
+
     [Fact]
     public void PassForValidInput()
     {
-        var input = new CreatePoll
-        {
-            Title = "Valid poll title",
-            StartsUtc = now,
-            EndsUtc = now.AddDays(7),
-            Options = new List<string> { "Option 1", "Option 2" }
-        };
+        var input = ValidPoll();
 
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
@@ -43,13 +44,7 @@ public class CreatePollValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenTitleIsEmpty()
     {
-        var input = new CreatePoll
-        {
-            Title = "",
-            StartsUtc = now,
-            EndsUtc = now.AddDays(7),
-            Options = new List<string> { "Option 1", "Option 2" }
-        };
+        var input = ValidPoll(title: "");
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
@@ -59,13 +54,7 @@ public class CreatePollValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenEndDateIsTooSoon()
     {
-        var input = new CreatePoll
-        {
-            Title = "Valid title",
-            StartsUtc = now,
-            EndsUtc = now.AddHours(12),
-            Options = new List<string> { "Option 1", "Option 2" }
-        };
+        var input = ValidPoll(endsUtc: now.AddHours(12));
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.EndsUtc)
@@ -75,13 +64,7 @@ public class CreatePollValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenEndDateIsTooFar()
     {
-        var input = new CreatePoll
-        {
-            Title = "Valid title",
-            StartsUtc = now,
-            EndsUtc = now.AddDays(366),
-            Options = new List<string> { "Option 1", "Option 2" }
-        };
+        var input = ValidPoll(endsUtc: now.AddDays(366));
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.EndsUtc)
@@ -91,13 +74,7 @@ public class CreatePollValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenOptionsAreEmpty()
     {
-        var input = new CreatePoll
-        {
-            Title = "Valid title",
-            StartsUtc = now,
-            EndsUtc = now.AddDays(7),
-            Options = new List<string>()
-        };
+        var input = ValidPoll(options: []);
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Options)
@@ -107,13 +84,7 @@ public class CreatePollValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenOptionIsEmpty()
     {
-        var input = new CreatePoll
-        {
-            Title = "Valid title",
-            StartsUtc = now,
-            EndsUtc = now.AddDays(7),
-            Options = new List<string> { "Option 1", "" }
-        };
+        var input = ValidPoll(options: ["Option 1", ""]);
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor("Options[1]")
@@ -121,15 +92,32 @@ public class CreatePollValidatorShould : UnitTestBase
     }
 
     [Fact]
+    public void PassForAStartLessThanAMinuteBehindTheClock()
+    {
+        var input = ValidPoll();
+        input.StartsUtc = now.AddSeconds(-30);
+
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Theory]
+    [InlineData(60)]
+    [InlineData(120)]
+    public void FailForAStartAMinuteOrMoreBehindTheClock(int secondsBehind)
+    {
+        var input = ValidPoll();
+        input.StartsUtc = now.AddSeconds(-secondsBehind);
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(x => x.StartsUtc)
+            .WithErrorMessage(ValidationError.Short);
+    }
+
+    [Fact]
     public void PassWithMinimalValidDuration()
     {
-        var input = new CreatePoll
-        {
-            Title = "Valid title",
-            StartsUtc = now,
-            EndsUtc = now.AddDays(1).AddMinutes(1),
-            Options = new List<string> { "Option 1", "Option 2" }
-        };
+        var input = ValidPoll(endsUtc: now.AddDays(1).AddMinutes(1));
 
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();

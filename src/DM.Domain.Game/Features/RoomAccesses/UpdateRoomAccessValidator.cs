@@ -7,14 +7,12 @@ namespace DM.Domain.Game.Features.RoomAccesses;
 /// <inheritdoc />
 internal class UpdateRoomAccessValidator : AbstractValidator<UpdateRoomAccess>
 {
-    /// <inheritdoc />
     public UpdateRoomAccessValidator()
     {
         RuleFor(c => c.AccessId)
             .NotEmpty().WithMessage(ValidationError.Empty);
 
-        // NoAccess is the deletion of the grant, not a value of it; anything
-        // outside the enum is a grant the authorization code cannot read at all.
+        // NoAccess is the deletion of the grant, not a value of it.
         RuleFor(c => c.Policy)
             .IsInEnum().WithMessage(ValidationError.Invalid)
             .Must(c => c != RoomAccessPolicy.NoAccess).WithMessage(ValidationError.Invalid);

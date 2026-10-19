@@ -1,11 +1,8 @@
-import type { Envelope, ListEnvelope, UserRef } from "../common";
+import type { UserRef } from "../common";
 
 /**
- * Progress metric for achievements. SSOT: the server enum
- * `DM.Domain.Core.Enums.AchievementMetric`. When adding a new metric,
- * both places change + `getMetricValue` on the FE and `AchievementMetricResolver.GetValue` on the BE.
- *
- * Serialized by the backend as a string (global JsonStringEnumConverter).
+ * Mirrors DM.Domain.Core.Enums.AchievementMetric, sent as a string. A new
+ * metric also changes getMetricValue here and AchievementMetricResolver there.
  */
 export enum AchievementMetric {
   GamePostsAuthored = "GamePostsAuthored",
@@ -29,10 +26,7 @@ export enum ContestType {
   Art = "Art",
 }
 
-/**
- * Achievement category (a chain of tiers for one metric). SSOT for the icon,
- * description and display order.
- */
+/** A chain of tiers for one metric; holds the icon, description and order. */
 export interface AchievementCategory {
   id: string;
   code: string;
@@ -76,7 +70,6 @@ export interface AwardType {
   isActive: boolean;
 }
 
-/** Contest series. */
 export interface ContestSeries {
   id: string;
   contestType: ContestType;
@@ -101,9 +94,8 @@ export interface UserAward {
 }
 
 /**
- * An award granted within a contest series, recipient included. UserAward has
- * no recipient — it is only ever returned inside one user's list; a series
- * listing is the opposite case, where the recipient is the point.
+ * An award within a contest series, with its recipient: UserAward comes only
+ * inside one user's list and has none.
  */
 export interface ContestSeriesAward {
   id: string;
@@ -112,8 +104,6 @@ export interface ContestSeriesAward {
   workUrl: string | null;
   awardedUtc: string;
 }
-
-// ---- Admin request DTOs ----
 
 export interface UpdateAchievementCategoryRequest {
   title?: string | null;
@@ -135,15 +125,6 @@ export interface UpdateAchievementTypeRequest {
   title?: string | null;
   threshold?: number | null;
   tier?: number | null;
-}
-
-export interface CreateAwardTypeRequest {
-  code: string;
-  title: string;
-  description: string;
-  iconName: string;
-  tier?: number | null;
-  sortOrder?: number;
 }
 
 export interface UpdateAwardTypeRequest {
@@ -175,18 +156,3 @@ export interface GrantUserAwardRequest {
   contestSeriesId?: string | null;
   workUrl?: string | null;
 }
-
-// ---- Response envelope shortcuts ----
-
-export type AwardTypesResponse = ListEnvelope<AwardType>;
-export type UserAwardsResponse = ListEnvelope<UserAward>;
-export type ContestSeriesAwardsResponse = ListEnvelope<ContestSeriesAward>;
-export type AchievementTypesResponse = ListEnvelope<AchievementType>;
-export type AchievementCategoriesResponse = ListEnvelope<AchievementCategory>;
-export type ContestSeriesResponse = ListEnvelope<ContestSeries>;
-export type UserAchievementsResponse = ListEnvelope<UserAchievement>;
-export type AwardTypeEnvelope = Envelope<AwardType>;
-export type UserAwardEnvelope = Envelope<UserAward>;
-export type AchievementTypeEnvelope = Envelope<AchievementType>;
-export type AchievementCategoryEnvelope = Envelope<AchievementCategory>;
-export type ContestSeriesEnvelope = Envelope<ContestSeries>;

@@ -13,21 +13,12 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Moderation;
 /// Notifies the author of the ticket.
 /// </summary>
 /// <remarks>
-/// The entity is the comment, not the ticket: one ticket is answered as many times
-/// as the conversation takes, and each answer is news of its own. The answer passes
-/// the turn to the author, and he is told so only when he has an account: a guest
-/// has no inbox, and his tracking page says the answer will appear there.
-///
-/// The comment is checked to be somebody else's than the author's. The service
-/// raises this event only for a moderator who is not the author, and a moderator
-/// who filed a ticket writes in it as its author; telling a person about his own
-/// comment would be the one thing worse than telling him nothing.
+/// The entity is the comment: each answer is news of its own. A guest has no inbox.
 /// </remarks>
 internal class TicketAnsweredNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public TicketAnsweredNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -51,8 +42,7 @@ internal class TicketAnsweredNotificationGenerator : BaseNotificationGenerator
             })
             .FirstOrDefaultAsync();
 
-        // A guest's ticket tells nobody, and a comment by nobody (the guest's) or
-        // by the author himself is not an answer to him.
+        // A guest's ticket tells nobody, and the author's own comment is not an answer to him.
         if (answer?.TicketAuthorId == null || answer.AuthorId == null ||
             answer.AuthorId == answer.TicketAuthorId)
         {
@@ -61,17 +51,14 @@ internal class TicketAnsweredNotificationGenerator : BaseNotificationGenerator
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { answer.TicketAuthorId.Value },
-            // No ActorId although the moderator who answered is on the row: an
-            // answer to a ticket is not less delivered because its author has the
-            // moderator on his blacklist, as with every moderation decision.
+            UsersInterested = [answer.TicketAuthorId.Value],
+            // No ActorId: a moderation decision is delivered whoever is on the blacklist.
             Metadata = new
             {
-                // The page of the ticket is built out of this field, in the list
-                // and in the letter alike.
-                TicketId = answer.TicketId,
-                ModeratorUsername = answer.ModeratorUsername,
-                CreatedUtc = answer.CreatedUtc
+                // The link to the ticket is built out of this field.
+                answer.TicketId,
+                answer.ModeratorUsername,
+                answer.CreatedUtc
             }
         };
     }

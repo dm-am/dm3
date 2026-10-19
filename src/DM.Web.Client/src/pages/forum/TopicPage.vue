@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, reactive, inject, onBeforeUnmount, watch } from "vue";
+import { ref, computed, reactive, inject, onBeforeUnmount } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { useModal } from "vue-final-modal";
 import { useBoardsStore } from "@/entities/forum";
@@ -16,6 +16,8 @@ import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
+import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
+import type { Served } from "@/shared/api/models";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";
 import { forumApi } from "@/entities/forum";
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
@@ -27,6 +29,7 @@ import Button from "@/shared/ui/Button/Button.vue";
 import { RefusalNote } from "@/shared/ui/Layout";
 import { reportForumShellError } from "./forumShell";
 import { permalinkOrigin } from "@/shared/config/site";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const route = useRoute();
 const router = useRouter();
@@ -40,43 +43,33 @@ const {
 const { selectedTopic: topic } = storeToRefs(boardsStore);
 const { user } = storeToRefs(useAuthStore());
 
-// Filter setup - get search params from URL
 const { searchParams } = useCommentsFilter();
 
-// Topic load state: skeleton until first fetch settles, ErrorPage on failure.
+// The skeleton until the first fetch settles, the ErrorPage on failure.
 const loading = ref(true);
 const errorCode = ref<number | null>(null);
 
 useDocumentTitle(() => topic.value?.title);
 
-// Comment creation state
 const newComment = ref("");
 const sending = ref(false);
 const editorRef = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
 const isModerator = computed(() => userIsModerator(user.value));
 
-// Who may write is the topic's answer about the viewer, asked by the code that
-// refuses the comment (TopicIntentionResolver.CreateComment): the topic open
-// and no ban. The page used to ask only the first, and a banned reader was
-// given the form and a refusal under it. The answer is for whoever held the
-// session when the topic was read: a viewer whose session has just ended is
-// offered nothing, and the topic is read again below when the viewer changes.
+// Who may write is the topic's answer about the viewer
+// (TopicIntentionResolver.CreateComment): the topic open and no ban.
 const canComment = computed(
   () => !!user.value && !!topic.value?.viewer?.canComment,
 );
 
-// Under the comments stands the form; under a closed topic, closed to
-// everybody's comments, a guest's included, one grey line that says so, ahead
-// of the way in for a guest, which would open nothing there. What was written
-// under a closed topic stays to read, empty or not. A signed-in viewer the
-// open topic does not take a comment from (a ban) gets nothing in that place.
+// Under a closed topic one grey line, ahead of a guest's way in, which would
+// open nothing there; a signed-in viewer the open topic refuses gets nothing.
 const hasComposerPlace = computed(
   () =>
     !!topic.value && (canComment.value || topic.value.isClosed || !user.value),
 );
 
-/** A refused comment, under the "Отправить" that sent it. */
 const sendResult = useActionResult();
 
 async function handleSend() {
@@ -87,16 +80,11 @@ async function handleSend() {
   sendResult.clear();
   const { error } = await createComment(text);
   sending.value = false;
-  // Give the text back on failure. Emptying the field before the request is
-  // what makes sending feel instant; losing what was written when it fails is
-  // not part of that bargain. The editor's own clear() waits for the send to
-  // land — it also drops the saved draft, and that copy is the one that
-  // outlives the tab.
+  // The text comes back on failure; the editor's clear(), which drops the saved
+  // draft, waits for the send to land.
   if (error) {
     newComment.value = text;
-    // A 400 is the refusal a comment gets most: the server names what is
-    // wrong with the text. Without this line the text came back into the
-    // field and nothing said why; it stands under the button, not in a plate.
+    // A 400 names what is wrong with the text, under the button.
     sendResult.refuse(error, "Не удалось отправить комментарий");
   } else {
     editorRef.value?.clear();
@@ -108,30 +96,20 @@ async function markAsReadIfNeeded() {
   if (!topic.value?.unreadCommentsCount) return;
 
   await forumApi.markTopicAsRead(topic.value.id!);
-  // Update local state
-  if (topic.value) {
-    (topic.value as any).unreadCommentsCount = 0;
-  }
+  if (topic.value) topic.value.unreadCommentsCount = 0 as Served<number>;
 }
 
-// A missing/private/deleted topic is a page-level failure: report it to the
-// persistent forum shell, which swaps its whole header stack for the
-// full-screen ErrorPage (an error must never render squeezed under the
-// forum title and board strip). Cleared on every new load and on unmount.
+// A missing, private or deleted topic is reported to the shell, which draws the
+// full ErrorPage; cleared on every load and on unmount.
 const reportShellError = inject(reportForumShellError, () => {});
 onBeforeUnmount(() => reportShellError(null));
 
-// The guest who signs in from the prompt under the topic is a viewer the topic
-// was not read for, and so is one whose session ends. Read it again in place,
-// the way the game shell reads its game: a failed read keeps the topic on
-// screen, and the form follows the new answer.
-watch(
-  () => user.value?.username ?? null,
-  () => {
-    const id = topic.value?.id;
-    if (id) void trySelectTopic(id);
-  },
-);
+// A sign-in or a sign-out changes whom the topic was read for: read it again in
+// place; a failed read keeps the topic on screen.
+useViewerChange(() => {
+  const id = topic.value?.id;
+  if (id) void trySelectTopic(id);
+});
 
 async function fetchData() {
   const alias = route.params.alias as string;
@@ -143,13 +121,11 @@ async function fetchData() {
 
   const { ok, status } = await trySelectTopicByNumber(alias, num);
   if (!ok) {
-    // The topic endpoint is the one that spends 410 on its literal meaning:
-    // TopicService answers Gone for a topic that was deleted and 404 for one
-    // that never existed, so this page keeps the "Страница удалена" branch.
+    // The topic endpoint answers Gone for a deleted topic and 404 for one that never
+    // existed, so "Страница удалена" stays here.
     errorCode.value = errorCodeForStatus(status, { goneMeansRemoved: true });
     reportShellError(errorCode.value);
-    // Drop comments from the previously viewed topic so they never leak
-    // onto an error page.
+    // The previous topic's comments must not leak onto an error page.
     boardsStore.comments = null;
     loading.value = false;
     return;
@@ -157,7 +133,6 @@ async function fetchData() {
 
   await searchComments(searchParams.value);
   loading.value = false;
-  // Mark as read after loading
   markAsReadIfNeeded();
 }
 
@@ -173,28 +148,24 @@ useFetchData(
       callback: () => fetchData(),
     },
   ],
-  // Query changes are handled by CommentsList via useCommentsFilter
 );
 
-// A refused like changes nothing on the heart, so a line under the card says
-// it, where the press was. It used to go unsaid, or as an unnamed plate.
+// A refused like changes nothing on "Нравится", so a line under the card says it.
 const likeResult = useActionResult();
 
 async function handleLike(id: string) {
   likeResult.clear();
   const { error } = await boardsStore.likeTopic(id);
-  if (error) likeResult.refuse(error, "Не удалось поставить лайк");
+  if (error) likeResult.refuse(error, "Не удалось отметить");
 }
 
 async function handleUnlike(id: string) {
   likeResult.clear();
   const { error } = await boardsStore.unlikeTopic(id);
-  if (error) likeResult.refuse(error, "Не удалось убрать лайк");
+  if (error) likeResult.refuse(error, "Не удалось убрать отметку");
 }
 
-// --- Topic lifecycle: edit (closing and pinning included) / delete (doc 4.2.2.17 / 4.2.3.7.5) ---
-// The edit form waits for this answer: it closes on success and stays open,
-// with the plate, on a refusal.
+// The edit form waits for this answer: it closes on success, stays open on a refusal.
 async function submitTopicEdit(id: string, patch: TopicEditPatch) {
   const { error } = await boardsStore.updateTopicContent(id, patch);
   return { error: error ?? null };
@@ -202,28 +173,18 @@ async function submitTopicEdit(id: string, patch: TopicEditPatch) {
 
 const showDeleteConfirm = ref(false);
 
-function handleDelete() {
-  showDeleteConfirm.value = true;
-}
-
-// The request of the confirmation. The window waits for it, prints a refusal in
-// itself and closes on success alone, so the interceptor keeps quiet about it.
+// The window waits for it, prints a refusal in itself and closes on success alone.
 async function confirmDeleteTopic() {
   const id = topic.value?.id;
   if (!id) return;
-  const result = await boardsStore.deleteTopic(id, {
-    ownsRefusal: true,
-    ownsRateLimit: true,
-  });
+  const result = await boardsStore.deleteTopic(id, OWNS_REFUSAL);
   if (result.error) return result;
   router.push({ name: "forum", params: { alias: route.params.alias } });
   return { error: null };
 }
 
-// --- Moderator warning (doc 4.2.4.1) ---
-// The warn button itself is gated by rank inside <Topic> (can-warn).
-// The dialog is prefilled with the topic author and a permalink to the
-// topic as the violation reference.
+// The warn button is gated by rank inside <Topic>; the dialog is prefilled
+// with the author and a permalink to the topic.
 const warnUsername = ref("");
 const warnEntityId = ref<string | undefined>(undefined);
 const warnEntityLink = ref<string | undefined>(undefined);
@@ -241,7 +202,7 @@ const { open: openWarnDialog, close: closeWarnDialog } = useModal({
 });
 
 function handleWarn(id: string) {
-  // Deleted author accounts arrive as null — nothing to warn.
+  // A removed author arrives as null: nothing to warn.
   const username = topic.value?.author?.username;
   if (!username) return;
 
@@ -258,22 +219,13 @@ function handleWarn(id: string) {
 </script>
 
 <template>
-  <!-- Error state lives on the ForumPage shell (reportForumShellError):
-       the shell hides its header stack and shows the full-screen ErrorPage,
-       so this leaf renders nothing at all while errorCode is set. -->
+  <!-- The error page is the shell's (reportForumShellError); this leaf draws nothing then. -->
 
-  <!-- The shared forum header stack (h1 + board strip) is rendered by the
-       persistent ForumPage shell above this leaf. The strip's active item
-       doubles as the way back to the board — no separate back-link.
-       document.title still reflects the topic (see useDocumentTitle). -->
   <template v-if="!errorCode">
-    <!-- Loading state: skeleton before the first paint -->
     <CommentSkeleton v-if="loading && !topic" :count="3" />
 
     <template v-else-if="topic">
-      <!-- The topic name lives INSIDE the card as its heading (same shape
-           as the news cards on the home page). Plain text, not a link: the
-           card already sits on the topic's own page. -->
+      <!-- The topic name is the card's heading, plain text: the card is on the topic's own page. -->
       <TopicDisplay
         :topic="topic"
         heading-level="h2"
@@ -283,18 +235,16 @@ function handleWarn(id: string) {
         @like="handleLike"
         @unlike="handleUnlike"
         @warn="handleWarn"
-        @delete="handleDelete"
+        @delete="showDeleteConfirm = true"
       />
       <ActionResult :result="likeResult" />
 
-      <!-- Comments filter bar (below topic bubble, above pagination) -->
       <CommentsFilter class="topic-filter" />
 
       <router-view class="topic-comments" />
     </template>
   </template>
 
-  <!-- Comment input area -->
   <div v-if="hasComposerPlace && !errorCode" class="comment-input-wrapper">
     <div class="comment-input-container">
       <template v-if="canComment">
@@ -324,9 +274,7 @@ function handleWarn(id: string) {
         <ActionResult :result="sendResult" class="comment-send-refusal" />
       </template>
 
-      <!-- A refusal, so the plaque of one and not a grey line. No margin of
-           its own: it stands flush with the comments, spaced by the
-           wrapper. -->
+      <!-- A refusal, so the plaque of one, flush with the comments. -->
       <RefusalNote v-else-if="topic?.isClosed" class="comment-closed-hint">
         Топик закрыт для комментариев
       </RefusalNote>
@@ -334,7 +282,6 @@ function handleWarn(id: string) {
     </div>
   </div>
 
-  <!-- Topic delete confirmation -->
   <ConfirmDialog
     v-model:show="showDeleteConfirm"
     title="Удалить топик?"

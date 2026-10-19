@@ -1,11 +1,5 @@
 <script setup lang="ts">
-/**
- * The waiting twin of a ticket (TicketThread): the dashed rectangle with its
- * heading over a dashed rule, two lines of text and the caption, in the
- * geometry of the real block, so nothing moves when the ticket arrives.
- *
- * How many to draw is the caller's: a list waits on three, a page on one.
- */
+/** The waiting twin of a ticket, in the geometry of the real block. */
 withDefaults(
   defineProps<{
     /** Number of tickets to draw while the list loads */
@@ -51,31 +45,25 @@ withDefaults(
 
 // A bar is the height of a letter, and with its margins the height of the
 // line box it stands in for, so two lines of text read as two.
-.skeleton-heading
-  width: 40%
+.skeleton-line
   height: 1em
-  margin: 0.1em 0
   font-size: $font-size
   +skeleton-shimmer
+
+.skeleton-heading
+  width: 40%
+  margin: 0.1em 0
 
 .skeleton-text
   width: 95%
-  height: 1em
   margin: 0.3em 0
-  font-size: $font-size
-  +skeleton-shimmer
 
 .skeleton-text-short
   width: 70%
-  height: 1em
   margin: 0.3em 0
-  font-size: $font-size
-  +skeleton-shimmer
 
 .skeleton-caption
   width: 30%
-  height: 1em
   margin-top: calc(#{$small} + 0.2em)
   font-size: $tertiary-font-size
-  +skeleton-shimmer
 </style>

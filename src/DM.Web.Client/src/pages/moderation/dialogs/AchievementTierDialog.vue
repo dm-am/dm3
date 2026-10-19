@@ -1,27 +1,28 @@
 <script setup lang="ts">
-/**
- * AchievementTierDialog — create or edit an achievement tier (code /
- * title / threshold / tier). Dialog twin of the former hand-rolled
- * modal in ModerationAchievements.vue. Code is only editable on create.
- *
- * The window runs the request (Dialog `action`): it waits for the answer,
- * prints a refusal in itself and closes on success alone.
- */
+/** Creates or edits a tier; the code is editable on create only. The window runs the request. */
 import { ref, computed } from "vue";
-import { achievementApi } from "@/entities/achievement";
+import {
+  achievementApi,
+  CATALOG_CODE_MAX_LENGTH,
+  CATALOG_TITLE_MAX_LENGTH,
+  MIN_TIER,
+  MAX_TIER,
+  TIER_SCALE_HINT,
+} from "@/entities/achievement";
 import type { AchievementType } from "@/shared/api/models/achievements";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{
   /** Tier to edit; null creates a new tier in the given category. */
   tier: AchievementType | null;
   /** Category the (new) tier belongs to. */
   categoryId: string;
-  /** Suggested tier number for a new tier. */
-  defaultTier: number;
+  /** Suggested tier for a new tier; none, or one off the scale, leaves the field empty. */
+  defaultTier: number | null;
 }>();
 
 const emit = defineEmits<{
@@ -32,7 +33,14 @@ const emit = defineEmits<{
 const code = ref(props.tier?.code ?? "");
 const title = ref(props.tier?.title ?? "");
 const threshold = ref(props.tier?.threshold ?? 0);
-const tierNumber = ref(props.tier?.tier ?? props.defaultTier);
+const onScale = (n: number | null): n is number =>
+  n !== null && n >= MIN_TIER && n <= MAX_TIER;
+const tierNumber = ref<number | null>(
+  props.tier?.tier ?? (onScale(props.defaultTier) ? props.defaultTier : null),
+);
+/** A cleared number field reads as "", which goes out as no value. */
+const tierSent = () =>
+  typeof tierNumber.value === "number" ? tierNumber.value : null;
 
 const canSubmit = computed(
   () =>
@@ -42,14 +50,14 @@ const canSubmit = computed(
 );
 
 async function send() {
-  const flags = { ownsRefusal: true, ownsRateLimit: true };
+  const flags = OWNS_REFUSAL;
   const result = props.tier
     ? await achievementApi.updateAchievementType(
         props.tier.id,
         {
           title: title.value,
           threshold: threshold.value,
-          tier: tierNumber.value,
+          tier: tierSent(),
         },
         flags,
       )
@@ -58,7 +66,7 @@ async function send() {
           code: code.value,
           title: title.value,
           threshold: threshold.value,
-          tier: tierNumber.value,
+          tier: tierSent(),
           achievementCategoryId: props.categoryId,
         },
         flags,
@@ -77,19 +85,15 @@ async function send() {
     <DialogTitle>{{ tier ? `Тир: ${tier.code}` : "Новый тир" }}</DialogTitle>
 
     <Form :valid="canSubmit" action="Сохранить" cancel="Отмена">
-      <FormField
-        v-if="!tier"
-        label="Code (стабильный, например POSTS_100)"
-        name="tier-code"
-        field="code"
-      >
+      <FormField v-if="!tier" label="Код" name="tier-code" field="code">
         <input
           id="tier-code"
           v-model="code"
           type="text"
           required
-          maxlength="80"
+          :maxlength="CATALOG_CODE_MAX_LENGTH"
         />
+        <template #hint>Не меняется, например POSTS_100</template>
       </FormField>
 
       <FormField label="Название" name="tier-title" field="title">
@@ -98,7 +102,7 @@ async function send() {
           v-model="title"
           type="text"
           required
-          maxlength="200"
+          :maxlength="CATALOG_TITLE_MAX_LENGTH"
         />
       </FormField>
 
@@ -112,14 +116,15 @@ async function send() {
         />
       </FormField>
 
-      <FormField label="Tier (1-4)" name="tier-number" field="tier">
+      <FormField label="Тир" name="tier-number" field="tier">
         <input
           id="tier-number"
           v-model.number="tierNumber"
           type="number"
-          min="1"
-          max="9"
+          :min="MIN_TIER"
+          :max="MAX_TIER"
         />
+        <template #hint>{{ TIER_SCALE_HINT }}</template>
       </FormField>
     </Form>
   </Dialog>

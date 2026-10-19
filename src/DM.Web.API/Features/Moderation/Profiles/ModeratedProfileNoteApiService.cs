@@ -6,62 +6,40 @@ using DM.Domain.Moderation.Features.ProfileNotes;
 
 namespace DM.Web.API.Features.Moderation.Profiles;
 
-/// <inheritdoc />
-internal class ModeratedProfileNoteApiService : IModeratedProfileNoteApiService
+public class ModeratedProfileNoteApiService
 {
     private readonly IModeratedProfileNoteService _noteService;
     private readonly ModeratedProfileNoteMapper _mapper;
 
-    /// <inheritdoc />
     public ModeratedProfileNoteApiService(IModeratedProfileNoteService noteService, ModeratedProfileNoteMapper mapper)
     {
         _noteService = noteService;
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<IEnumerable<ModeratedProfileNote>> GetNotes(string username)
     {
         var notes = await _noteService.GetNotes(username);
         return notes.Select(_mapper.ToNote);
     }
 
-    /// <inheritdoc />
     public async Task<ModeratedProfileNote> GetNote(Guid noteId)
     {
         var note = await _noteService.GetNote(noteId);
         return _mapper.ToNote(note);
     }
 
-    /// <inheritdoc />
     public async Task<ModeratedProfileNote> CreateNote(string username, CreateModeratedProfileNoteRequest request)
     {
-        var createNote = new CreateModeratedProfileNote
-        {
-            Username = username,
-            Text = request.Text
-        };
-
-        var note = await _noteService.Create(createNote);
+        var note = await _noteService.Create(new CreateModeratedProfileNote { Username = username, Text = request.Text });
         return _mapper.ToNote(note);
     }
 
-    /// <inheritdoc />
     public async Task<ModeratedProfileNote> UpdateNote(Guid noteId, UpdateModeratedProfileNoteRequest request)
     {
-        var updateNote = new UpdateModeratedProfileNote
-        {
-            Id = noteId,
-            Text = request.Text
-        };
-
-        var note = await _noteService.Update(updateNote);
+        var note = await _noteService.Update(new UpdateModeratedProfileNote { Id = noteId, Text = request.Text });
         return _mapper.ToNote(note);
     }
 
-    /// <inheritdoc />
-    public Task DeleteNote(Guid noteId)
-    {
-        return _noteService.Delete(noteId);
-    }
+    public Task DeleteNote(Guid noteId) => _noteService.Delete(noteId);
 }

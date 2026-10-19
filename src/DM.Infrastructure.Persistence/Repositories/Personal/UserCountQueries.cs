@@ -71,7 +71,6 @@ internal static class UserCountQueries
     /// </summary>
     internal sealed class CountedUser
     {
-        /// <summary>The user.</summary>
         public User User { get; set; } = null!;
 
         /// <summary>His counter.</summary>
@@ -83,7 +82,6 @@ internal static class UserCountQueries
     /// </summary>
     internal static IQueryable<UserCount> GamesMastered(DmDbContext context) =>
         context.Games
-            .Where(g => !g.IsRemoved)
             .GroupBy(g => g.MasterId)
             .Select(g => new UserCount { UserId = g.Key, Count = g.Count() });
 
@@ -101,7 +99,6 @@ internal static class UserCountQueries
     /// </summary>
     internal static IQueryable<UserCount> BlogsOwned(DmDbContext context) =>
         context.Blogs
-            .Where(b => !b.IsRemoved)
             .GroupBy(b => b.AuthorId)
             .Select(g => new UserCount { UserId = g.Key, Count = g.Count() });
 
@@ -120,7 +117,7 @@ internal static class UserCountQueries
     /// </summary>
     internal static IQueryable<UserCount> GamesPlayed(DmDbContext context) =>
         context.Characters
-            .Where(c => !c.IsRemoved && !c.IsNpc && c.AuthorId.HasValue && !c.Game.IsRemoved)
+            .Where(c => !c.IsNpc && c.AuthorId.HasValue && !c.Game.IsRemoved)
             .Select(c => new { UserId = c.AuthorId!.Value, c.GameId })
             .Distinct()
             .GroupBy(x => x.UserId)

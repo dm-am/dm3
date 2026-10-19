@@ -11,7 +11,6 @@ using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Users;
 using DM.Infrastructure.Persistence.Shared.Tokens;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
@@ -45,30 +44,22 @@ internal class EmailChangeRepository : IEmailChangeRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-            // The account row is claimed first, and the retirement of the old
-            // links belongs inside this same transaction. Written as two calls it
-            // interleaved with a second request from another tab: both retired
-            // what they found and both wrote a pending address, leaving two live
-            // letters of which the older one pointed at an address the owner had
-            // already replaced.
+            // The account row is claimed first, so a second request from another tab
+            // cannot leave two live letters.
             await _dbContext.Database.ExecuteSqlRawAsync(
                 """SELECT "UserId" FROM "Users" WHERE "UserId" = {0} FOR UPDATE""", userId);
 
             var user = await _dbContext.Users.FindAsync(userId);
             if (user == null)
             {
-                await transaction.RollbackAsync();
                 return;
             }
 
             await _dbContext.Tokens
                 .Where(t => t.UserId == userId && t.Type == TokenType.EmailChange && !t.IsRemoved)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true));
+                .Retire();
 
-            // Pending, not current. The account keeps answering at the old address
-            // until the link in the letter is followed: writing the new one here made
-            // the confirmation a formality with nothing left to confirm, and a typo
-            // took the account away from its owner along with any way to be told.
+            // Pending, not current: the address changes once the link in the letter is followed.
             user.PendingEmail = newEmail;
             _dbContext.Tokens.Add(tokenEntity);
 
@@ -79,13 +70,8 @@ internal class EmailChangeRepository : IEmailChangeRepository
 
     /// <inheritdoc />
     /// <remarks>
-    /// Two writes, of which exactly one happens: the move, or the giving up on
-    /// it. They share a transaction all the same, because the second is the
-    /// undoing of the first and has to outlive the refusal that called for it.
-    /// EF takes a savepoint before a SaveChanges inside a transaction somebody
-    /// else opened and rolls back to it when the statement is refused, so the
-    /// transaction is still usable afterwards and the compensating write commits
-    /// on its own.
+    /// The move or the giving up on it, in one transaction: EF rolls a refused
+    /// SaveChanges back to its savepoint, so the compensating write still commits.
     /// </remarks>
     public async Task<EmailMove?> ApplyPendingEmail(Guid userId)
     {
@@ -98,14 +84,10 @@ internal class EmailChangeRepository : IEmailChangeRepository
             var user = await _dbContext.Users.FindAsync(userId);
             if (user?.PendingEmail is null)
             {
-                await transaction.RollbackAsync();
                 return;
             }
 
-            // Both halves in one save: an account whose address moved but whose
-            // pending value stayed would offer the same change again, and one whose
-            // pending value cleared without the address moving would lose the request
-            // with the letter already sent.
+            // Both halves in one save, so the change is neither offered twice nor lost.
             var move = new EmailMove(user.Email, user.PendingEmail);
             user.Email = user.PendingEmail;
             user.PendingEmail = null;
@@ -113,23 +95,13 @@ internal class EmailChangeRepository : IEmailChangeRepository
             {
                 await _dbContext.SaveChangesAsync();
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+            catch (DbUpdateException ex) when (ex.IsDuplicateKey())
             {
-                // The address was free when the change was asked for and is not free
-                // now: somebody else registered or moved onto it while the letter sat
-                // in the mailbox. The unique index over lower("Email") is what holds
-                // the rule, and it is translated here so the caller answers the same
-                // "already taken" the form answers, rather than a failure of the
-                // storage engine.
+                // Somebody took the address while the letter sat in the mailbox.
                 _dbContext.ChangeTracker.Clear();
 
-                // The request is over, so the address it was waiting for goes with
-                // it. Left standing, the pending value keeps the account offering a
-                // change that can never go through: the profile advertises an
-                // address it will never get, and every later click on the same
-                // letter fails the same way. Set-based rather than through the
-                // tracker, which has just been cleared of the save the index
-                // refused.
+                // The request is over, so its pending address goes too; set-based,
+                // because the tracker was just cleared.
                 await _dbContext.Users
                     .Where(u => u.UserId == userId)
                     .ExecuteUpdateAsync(s => s.SetProperty(u => u.PendingEmail, (string?)null));

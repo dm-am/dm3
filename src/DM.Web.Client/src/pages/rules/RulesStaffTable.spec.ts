@@ -1,16 +1,10 @@
-/**
- * The staff table of the rules page: three columns at every width, as on the
- * full version, its rows plain rows that hold links. A login is whole and on
- * one line: nothing cuts it with "...", no tooltip has to repeat it, and no
- * rule of the table breaks it inside.
- */
-import { join } from "node:path";
+// The staff table: every login whole and no tooltip repeats it; its look is the visual stand's to guard.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
+import { userApi } from "@/entities/user";
 import { UserRole } from "@/shared/api/models/community";
-import type { ExpandableListColumn } from "@/shared/ui/ExpandableList";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
-import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import RulesStaffTable from "./RulesStaffTable.vue";
 
 const LONG = "Многоуважаемый_Шкаф1";
@@ -50,23 +44,7 @@ afterEach(() => {
 });
 
 describe("RulesStaffTable", () => {
-  it("stands its three columns in the row, its rows plain rows", async () => {
-    const wrapper = await mountTable();
-    // By name: a generic component is no selector to the type checker.
-    const list = wrapper.getComponent({ name: "ExpandableList" });
-    const columns = list.props("columns") as ExpandableListColumn[];
-
-    expect(columns).toEqual([
-      { key: "title", label: "Роль" },
-      { key: "description", label: "Функции" },
-      { key: "users", label: "Состав" },
-    ]);
-    expect(list.props("plainRows")).toBe(true);
-    expect(wrapper.findAll(".expandable-header .header-cell")).toHaveLength(3);
-    wrapper.unmount();
-  });
-
-  it("shows every login whole, one to a line, with no tooltip to repeat it", async () => {
+  it("shows every login whole, with no tooltip to repeat it", async () => {
     const wrapper = await mountTable();
     const logins = wrapper.findAll(".user-item");
 
@@ -76,33 +54,48 @@ describe("RulesStaffTable", () => {
       SPACED,
     ]);
     expect(wrapper.findAllComponents(Tooltip)).toHaveLength(0);
-
-    // Nothing in the table's own sheet cuts a line or keeps it from breaking.
-    const css = componentCss(join(__dirname, "RulesStaffTable.vue"));
-    expect(css).not.toMatch(/text-overflow|nowrap|overflow:\s*hidden/);
     wrapper.unmount();
   });
 
-  // A login stands on one line, as at 1366: no rule of the table breaks it by
-  // its letters or balances its lines.
-  it("breaks no login inside", async () => {
+  // The site's error block, not a line of its own in every cell; the roles stay, their column of members goes.
+  it("says a failed load once under the table and loads again on Повторить", async () => {
+    vi.mocked(userApi.getUsersByRole).mockResolvedValueOnce({
+      error: { title: "Сервер недоступен" },
+    } as never);
     const wrapper = await mountTable();
-    const rules = ruleMap(componentCss(join(__dirname, "RulesStaffTable.vue")));
 
-    expect(rules.get(".user-item")).not.toHaveProperty("word-break");
-    expect(rules.get(".user-item")).not.toHaveProperty("text-wrap");
-    expect(rules.has(".user-item--word")).toBe(false);
-    expect(wrapper.find(".user-item--word").exists()).toBe(false);
+    const failure = wrapper.findComponent(ErrorState);
+    expect(failure.props("message")).toBe("Сервер недоступен");
+    expect(wrapper.text()).not.toContain("Состав");
+    expect(wrapper.text()).toContain("Функции");
+
+    await failure.find("button").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.findComponent(ErrorState).exists()).toBe(false);
+    expect(wrapper.text()).toContain("Состав");
+    expect(wrapper.findAll(".user-item")).toHaveLength(3);
     wrapper.unmount();
   });
 
-  // The table is the last block of the rules page, and the page ends where it
-  // ends: the shell keeps the one space between a page and what stands under
-  // it. A margin of the section under it stood on top of that, and the rules
-  // ended 80 above it.
-  it("keeps no space of its own under it: the shell's is the one", () => {
-    const rules = ruleMap(componentCss(join(__dirname, "RulesStaffTable.vue")));
+  // A role and a login take what they hold, the functions take the rest: no column gets a third by default.
+  it("sizes Роль and Состав by what they hold and leaves the rest to Функции", async () => {
+    const wrapper = await mountTable();
+    // By name: the list is generic, and the typed lookup has no overload for it.
+    const list = wrapper.findComponent({ name: "ExpandableList" });
+    const columns = list.props("columns") as {
+      label: string;
+      fit?: boolean;
+      width?: string;
+    }[];
 
-    expect(rules.get(".admin-section")).toEqual({ "margin-top": "32px" });
+    expect(
+      columns.map(({ label, fit, width }) => ({ label, fit, width })),
+    ).toEqual([
+      { label: "Роль", fit: true, width: undefined },
+      { label: "Функции", fit: undefined, width: undefined },
+      { label: "Состав", fit: true, width: undefined },
+    ]);
+    wrapper.unmount();
   });
 });

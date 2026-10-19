@@ -1,31 +1,31 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.IO;
 using System.Linq;
-using System.Text.RegularExpressions;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using Amazon.S3;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Caching;
-using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Uploads;
 using DM.Domain.Personal.Features.Profiles;
-using DM.Infrastructure.Core.Tracing;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
+using UploadDto = DM.Web.API.Shared.Dto.Upload;
 
 namespace DM.Web.API.Features.General.Upload;
 
-/// <inheritdoc />
-internal class UploadApiService : IUploadApiService
+/// <summary>
+/// API service for file upload management.
+/// Direct upload only: the server validates, processes (for images — generates
+/// thumbnails) and puts to S3 atomically. No presigned URLs.
+/// </summary>
+public partial class UploadApiService
 {
     private readonly IUploadRepository _uploadRepository;
     private readonly IIdentityProvider _identityProvider;
@@ -37,20 +37,7 @@ internal class UploadApiService : IUploadApiService
     private readonly ICache _cache;
     private readonly IHttpContextAccessor _httpContext;
     private readonly IReadOnlyCollection<IUploadTargetAuthorizer> _targetAuthorizers;
-    private readonly CdnConfiguration _cdnConfig;
 
-    /// <summary>Max upload size — 10 MB (in sync with RequestSizeLimit on the controller).</summary>
-    private const long MaxUploadSizeBytes = 10 * 1024 * 1024;
-
-    /// <summary>
-    /// Idempotency-Key header. The client sends a unique per-logical-upload
-    /// key; if the same key arrives twice we return the cached response
-    /// instead of reprocessing. TTL 1h.
-    /// </summary>
-    private const string IdempotencyHeader = "Idempotency-Key";
-    private static readonly TimeSpan IdempotencyTtl = TimeSpan.FromHours(1);
-
-    /// <inheritdoc />
     public UploadApiService(
         IUploadRepository uploadRepository,
         IIdentityProvider identityProvider,
@@ -61,8 +48,7 @@ internal class UploadApiService : IUploadApiService
         IImageProcessingService imageProcessingService,
         ICache cache,
         IHttpContextAccessor httpContext,
-        IEnumerable<IUploadTargetAuthorizer> targetAuthorizers,
-        IOptions<CdnConfiguration> cdnOptions)
+        IEnumerable<IUploadTargetAuthorizer> targetAuthorizers)
     {
         _uploadRepository = uploadRepository;
         _identityProvider = identityProvider;
@@ -74,11 +60,10 @@ internal class UploadApiService : IUploadApiService
         _cache = cache;
         _httpContext = httpContext;
         _targetAuthorizers = targetAuthorizers.ToList();
-        _cdnConfig = cdnOptions.Value;
     }
 
-    /// <inheritdoc />
-    public async Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploads(
+    /// <summary>List uploads (current user; specific user — moderator+; all — admin).</summary>
+    public async Task<(IEnumerable<UploadDto> Uploads, PagingInfo Paging)> GetUploads(
         UploadsQuery query, string? username, bool all)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
@@ -102,61 +87,77 @@ internal class UploadApiService : IUploadApiService
         return await GetUploadsInternal(query, currentUserId);
     }
 
-    /// <inheritdoc />
-    public async Task<Shared.Dto.Upload> GetUpload(Guid id)
+    /// <summary>Get upload by ID (owner or moderator+).</summary>
+    /// <remarks>
+    /// Owner self-view; viewing another user's file is a moderation action. Refused
+    /// with 403 only to a caller who reads the file where it hangs, and to anybody
+    /// else answered as a file that does not exist, as its bytes are.
+    /// </remarks>
+    public async Task<UploadDto> GetUpload(Guid id)
     {
-        var upload = await _uploadRepository.GetAsync(id);
-
-        if (upload == null)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
-        }
-
-        // Owner self-view; viewing another user's file is a moderation action
-        // (Moderator+), aligned with the list + delete endpoints. Asked of the
-        // intention that names the rule: it used to be spelled out here and again
-        // in DeleteUpload, while UploadIntention.View resolved to nothing.
-        _intentionManager.ThrowIfForbidden(UploadIntention.View, upload);
-
-        return MapToDto(upload);
-    }
-
-    /// <inheritdoc />
-    public async Task<UploadContent> GetUploadContent(Guid id, CancellationToken ct = default)
-    {
-        var upload = await _uploadRepository.GetAsync(id);
-
-        if (upload == null)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
-        }
-
-        // Two ways to be entitled to the bytes, and the file's own rule is asked
-        // first because it is the cheap one: the owner looking at their own file,
-        // and Moderator+ looking at anybody's — the same pair that opens the
-        // record itself and the same pair the moderation screen for uploaded files
-        // is built on. A file the site must be able to act on is one the site must
-        // be able to look at, and no game's privacy is a reason to moderate blind.
+        var upload = await _uploadRepository.GetAsync(id) ?? throw UploadNotFound();
         if (!_intentionManager.IsAllowed(UploadIntention.View, upload))
         {
-            // Otherwise the entity the file hangs on decides, by whatever rule
-            // makes that entity visible. For a post that is the room it is in.
-            //
-            // Whatever it refuses with is replaced by the one refusal this
-            // endpoint has. The authorizer speaks about the target - "Пост не
-            // найден" - and that names both what the file hangs on and that a
-            // live row exists at all, which is the difference this endpoint is
-            // built not to expose. Status alone is not enough: the message
-            // travels in the body of the answer.
-            try
-            {
-                await AuthorizeReadAsync(upload);
-            }
-            catch (HttpException)
-            {
-                throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
-            }
+            await RefuseAsync(UploadIntention.View, upload);
         }
+
+        return (await ForCaller([upload])).Single();
+    }
+
+    /// <summary>
+    /// Change who sees a file of a post (its author only).
+    /// </summary>
+    /// <remarks>
+    /// A file the caller may not have is answered as one that does not exist, as its bytes are
+    /// (GetUploadContent), and so is every refusal of its post to find it: a caller who reads the
+    /// file and its post and did not write the post gets 403. The module then freezes the
+    /// characters chosen against the room, and the mark is written alone, the file and its place
+    /// in the text untouched.
+    /// </remarks>
+    public async Task<UploadDto> UpdateAudience(Guid id, UploadAudience audience)
+    {
+        var upload = await _uploadRepository.GetAsync(id) ?? throw UploadNotFound();
+        await EnsureReadableAsync(upload);
+        if (upload.Type != UploadType.PostAttachment || upload.TargetId == null)
+        {
+            throw AudienceOnlyForPostAttachment();
+        }
+
+        var authorizer = AuthorizerFor(upload.Type);
+        string? addressees;
+        try
+        {
+            await authorizer.EnsureAllowedAsync(upload.TargetId.Value);
+            addressees = await authorizer.FreezeAudienceAsync(upload.TargetId.Value, upload.Id, audience);
+        }
+        catch (HttpException missing) when (missing.StatusCode == HttpStatusCode.NotFound)
+        {
+            throw UploadNotFound();
+        }
+
+        var stored = await _uploadRepository.SetAddresseesAsync(id, addressees) ?? throw UploadNotFound();
+        return MapToDto(stored, canOpen: true);
+    }
+
+    /// <summary>
+    /// The file's bytes, for a caller entitled to them.
+    /// </summary>
+    /// <remarks>
+    /// Answers <see cref="DM.Domain.Core.Exceptions.HttpException"/> with 404
+    /// whenever the caller may not have the file, rather than 403: the closed
+    /// prefixes exist so that an outsider learns nothing about what a private game
+    /// contains, and "you may not have this" is something.
+    /// </remarks>
+    /// <param name="id">Upload identifier.</param>
+    /// <param name="ct">Cancellation token.</param>
+    public async Task<UploadContent> GetUploadContent(Guid id, CancellationToken ct = default)
+    {
+        var upload = await _uploadRepository.GetAsync(id) ?? throw UploadNotFound();
+        await EnsureReadableAsync(upload);
+
+        // A guest just passed the guest's read; anybody else asks it as well.
+        var openToGuest = !_identityProvider.Current.User.IsAuthenticated ||
+                          (upload.TargetId != null && await AuthorizerFor(upload.Type).OpenToGuestAsync(upload));
 
         // Read after the decision, never before: a store lookup for a caller with
         // no right to the answer is work an outsider gets to spend.
@@ -167,11 +168,8 @@ internal class UploadApiService : IUploadApiService
 
         if (stored == null)
         {
-            // A row whose object is gone. The sweeper destroys objects a whole
-            // grace period after the row is hidden, so this is a bucket that lost
-            // a file rather than an ordinary race — and to the caller it is still
-            // just a file that is not there.
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
+            // A row whose object is gone: to the caller, a file that is not there.
+            throw UploadNotFound();
         }
 
         return new UploadContent(
@@ -181,332 +179,115 @@ internal class UploadApiService : IUploadApiService
             // file anybody checked.
             string.IsNullOrEmpty(upload.ContentType) ? stored.ContentType : upload.ContentType,
             stored.Length,
-            upload.FileName);
+            upload.FileName,
+            openToGuest);
     }
 
-    /// <inheritdoc />
+    /// <summary>Soft-delete upload (owner, moderator+, or an editor of the entity it hangs on).</summary>
     public async Task DeleteUpload(Guid id)
     {
         var userId = _identityProvider.Current.User.UserId;
-        var upload = await _uploadRepository.GetAsync(id);
+        var upload = await _uploadRepository.GetAsync(id) ?? throw UploadNotFound();
 
-        if (upload == null)
-        {
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
-        }
-
-        // Owner self-service; deleting others' files is a moderation action
-        // (Moderator+). Beyond those two, whoever may edit the entity the file
-        // hangs on may take it off: an attachment is part of what a post says, so
-        // the master and the assistants who may edit that post may remove it,
-        // which the file's own ownership rule does not cover — they did not
-        // upload it and are not moderators of the site.
+        // The owner, Moderator+, and whoever may edit the entity the file hangs on:
+        // an attachment is part of what a post says.
         if (!_intentionManager.IsAllowed(UploadIntention.Delete, upload) &&
             !await MayDetachAsync(upload))
         {
-            _intentionManager.ThrowIfForbidden(UploadIntention.Delete, upload);
+            await RefuseAsync(UploadIntention.Delete, upload);
         }
 
         await _uploadRepository.SoftDeleteAsync(id, userId, _dateTimeProvider.Now);
     }
 
-    /// <inheritdoc />
-    public async Task<Shared.Dto.Upload> DirectUpload(IFormFile file, UploadType type, Guid? targetId)
+    /// <summary>
+    /// Refuses an action on the file the caller has no right to: with 403 where he
+    /// sees the file, as one that does not exist where he does not.
+    /// </summary>
+    /// <remarks>
+    /// Seeing is the file's own right to view it or the entity it hangs on letting
+    /// him read it.
+    /// </remarks>
+    private async Task RefuseAsync(UploadIntention intention, StoredUpload upload)
     {
-        using var activity = DmActivitySource.Source.StartActivity(
-            "upload.direct",
-            ActivityKind.Server);
-        activity?.SetTag("upload.type", type.ToString());
-        activity?.SetTag("upload.declared_content_type", file.ContentType);
-        activity?.SetTag("upload.input_size_bytes", file.Length);
-
-        // Idempotency: if the client sends an Idempotency-Key, return the cached
-        // response for duplicate retries (mobile network retries, double-
-        // clicks below the rate-limit window). The cache is scoped per user —
-        // cross-user replay is impossible.
-        var userId = _identityProvider.Current.User.UserId;
-        var idempotencyKey = _httpContext.HttpContext?.Request.Headers[IdempotencyHeader].ToString();
-        if (!string.IsNullOrWhiteSpace(idempotencyKey))
+        if (!_intentionManager.IsAllowed(UploadIntention.View, upload))
         {
-            activity?.SetTag("upload.idempotency_key", idempotencyKey);
-            var cacheKey = $"upload:idemp:{userId:N}:{idempotencyKey}";
-            return await _cache.GetOrCreateAsync(
-                cacheKey,
-                () => DirectUploadInstrumented(file, type, targetId, activity),
-                IdempotencyTtl);
+            await EnsureReadableAsync(upload);
         }
 
-        return await DirectUploadInstrumented(file, type, targetId, activity);
+        _intentionManager.ThrowIfForbidden(intention, upload);
     }
 
-    private async Task<Shared.Dto.Upload> DirectUploadInstrumented(
-        IFormFile file,
-        UploadType type,
-        Guid? targetId,
-        Activity? activity)
+    /// <summary>
+    /// Refuses the caller who may not have the file as a file that does not exist.
+    /// </summary>
+    /// <remarks>
+    /// The file's own rule first, the cheap one: the owner, and Moderator+, who
+    /// moderates no game blind, pass the entity, though not what it keeps from all
+    /// its readers but some. Otherwise the entity the file hangs on decides. A
+    /// refusal names the target and that a live row exists, so it is replaced by this one.
+    /// </remarks>
+    private async Task EnsureReadableAsync(StoredUpload upload)
     {
-        var stopwatch = Stopwatch.StartNew();
-        var typeTag = new KeyValuePair<string, object?>("type", type.ToString());
-
         try
         {
-            var result = await DirectUploadCore(file, type, targetId);
-
-            stopwatch.Stop();
-            UploadMetrics.Success.Add(1, typeTag,
-                new("content_type", result.ContentType));
-            UploadMetrics.Duration.Record(stopwatch.Elapsed.TotalSeconds, typeTag);
-            UploadMetrics.InputSizeBytes.Record(file.Length, typeTag);
-            // OutputSizeBytes is written inside DirectUploadCore via an activity tag —
-            // add it here if present.
-            if (activity?.GetTagItem("upload.output_size_bytes") is long outputBytes)
+            if (_intentionManager.IsAllowed(UploadIntention.View, upload))
             {
-                UploadMetrics.OutputSizeBytes.Record(outputBytes, typeTag);
+                if ((await WithheldAsync([upload])).Count > 0)
+                {
+                    throw UploadNotFound();
+                }
             }
-            return result;
-        }
-        catch (HttpBadRequestException)
-        {
-            UploadMetrics.Failure.Add(1, typeTag, new("reason", "validation"));
-            throw;
-        }
-        catch (AmazonS3Exception)
-        {
-            UploadMetrics.Failure.Add(1, typeTag, new("reason", "s3"));
-            activity?.SetStatus(ActivityStatusCode.Error, "S3 failure");
-            throw;
-        }
-        catch (StorageException)
-        {
-            UploadMetrics.Failure.Add(1, typeTag, new("reason", "db"));
-            activity?.SetStatus(ActivityStatusCode.Error, "DB failure");
-            throw;
-        }
-        catch (Exception ex)
-        {
-            UploadMetrics.Failure.Add(1, typeTag, new("reason", "other"));
-            activity?.SetStatus(ActivityStatusCode.Error, ex.Message);
-            throw;
-        }
-    }
-
-    private async Task<Shared.Dto.Upload> DirectUploadCore(IFormFile file, UploadType type, Guid? targetId)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        var now = _dateTimeProvider.Now;
-
-        // Check the size upfront (before magic bytes). A cheap check
-        // against a DoS vector — do not let 10+ MB into the buffer / processing.
-        //
-        // Per type, because the ceiling on the controller is one number for the
-        // request and this is the product rule for the file. An attachment is
-        // capped lower and stored at its own dimensions, so its bytes are the only
-        // bound on what a room accumulates; an avatar is downscaled to 1024 px and
-        // its input size only decides how much work the pipeline does.
-        var maxSizeBytes = MaxSizeFor(type);
-        if (file.Length > maxSizeBytes)
-        {
-            throw new HttpBadRequestException(new Dictionary<string, string>
+            else
             {
-                ["file"] = $"Максимальный размер: {maxSizeBytes / (1024 * 1024)} МБ",
-            });
+                await AuthorizeReadAsync(upload);
+            }
         }
-
-        if (file.Length <= 0)
+        catch (HttpException)
         {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                ["file"] = "Пустой файл",
-            });
-        }
-
-        // 1. Resolve and check the target before anything else. For UserAvatar an
-        // unset targetId means the uploader themselves; for CharacterAvatar and
-        // PostAttachment it is required. The null check used to sit after the PUT
-        // and outside the rollback, so a valid image with a missing targetId left
-        // an object in the bucket that nothing would ever collect: the orphan
-        // sweeper walks rows, and the failed request never wrote one.
-        //
-        // Ahead of processing, not merely ahead of the PUT: decoding, EXIF
-        // stripping and downscaling up to 10 MB is the expensive part of this
-        // request, and a caller with no right to the target should not be able to
-        // spend it.
-        var effectiveTarget = targetId ?? (type == UploadType.UserAvatar ? userId : (Guid?)null);
-        RequireTarget(type, effectiveTarget);
-        await AuthorizeTargetAsync(type, effectiveTarget!.Value);
-
-        // 1a. How many files this target already carries. Checked here, on the
-        //     upload, and not when the post is written: the post and its files
-        //     arrive as separate requests, and the post exists first. Ahead of
-        //     processing for the same reason the authorization is.
-        //
-        //     A race between two simultaneous uploads can put a fourth file on a
-        //     post. Nothing in the schema forbids it and the cost of it happening
-        //     is one extra picture, which is not worth a unique index over a
-        //     counted set.
-        await EnsureTargetHasRoomAsync(type, effectiveTarget.Value);
-
-        // 2. Buffer + validate + process (in-memory; magic-byte, EXIF strip,
-        //    decompression-bomb guard, downscale where the type asks for it). A
-        //    single file — avatar thumbnails are generated on-the-fly via imgproxy
-        //    at serving time, and an attachment has none at all.
-        ProcessedImage processed;
-        await using (var fileStream = file.OpenReadStream())
-        {
-            processed = await _imageProcessingService.ProcessAsync(fileStream, file.ContentType, type);
-        }
-
-        // 3. Generate the object key (the extension is NORMALIZED from the validated
-        //    content-type, NOT from the user filename — anti-extension-spoofing).
-        var objectKey = GenerateObjectKey(type, userId, processed.Extension);
-
-        // 4. A single PUT into the object store. Everything after it that can
-        //    fail is wrapped in the rollback below.
-        await _objectStorage.PutAsync(objectKey, processed.Bytes, processed.ContentType);
-
-        Activity.Current?.SetTag("upload.output_size_bytes", processed.Bytes.LongLength);
-
-        // 5. DB record. If the write fails — roll back the S3 PUT.
-        var newUpload = new NewUpload
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            Type = type,
-            Status = UploadStatus.Confirmed,
-            TargetId = effectiveTarget,
-            // Filename is NORMALIZED: the extension comes from the content-type, the original name
-            // (if provided) is for UI display purposes only.
-            FileName = SanitizeFileName(file.FileName, processed.Extension),
-            ContentType = processed.ContentType,
-            SizeBytes = processed.Bytes.LongLength,
-            // Measured by the pipeline that produced these bytes, so the row and
-            // the object in the bucket cannot disagree about the aspect ratio.
-            Width = processed.Width,
-            Height = processed.Height,
-            ObjectKey = objectKey,
-            Original = true,
-            // Only for the types the bucket actually answers anonymously. The
-            // policy grants GetObject per prefix, so handing back a public
-            // address for anything else is a 200 carrying a link that returns
-            // 403 — the object key is stored either way, and a serving path for
-            // the closed types is what they are waiting on.
-            Url = UploadFolder.AnonymouslyReadable.Contains(type)
-                ? _objectStorage.BuildPublicUrl(objectKey)
-                : null,
-            CreatedUtc = now,
-            ConfirmedUtc = now,
-        };
-
-        StoredUpload stored;
-        try
-        {
-            stored = await _uploadRepository.AddAsync(newUpload);
-        }
-        catch
-        {
-            // Compensation for the PUT above, and the only chance there is: the
-            // object is in the bucket and the only row that would ever have named
-            // it does not exist, while the orphan sweeper walks rows. The catch
-            // has to stay on this side of the repository call — that is where the
-            // object was written and where the key is still known.
-            await _objectStorage.DeleteAsync(objectKey);
-            throw;
-        }
-
-        return MapToDto(stored);
-    }
-
-    /// <summary>
-    /// Rejects an upload whose target is missing. Every type points at exactly one
-    /// entity, and a request that names none cannot be stored — this answers 400
-    /// instead of letting the DB CHECK constraint answer 500.
-    /// </summary>
-    private static void RequireTarget(UploadType type, Guid? target)
-    {
-        var requirement = type switch
-        {
-            UploadType.UserAvatar => "Не указан пользователь",
-            UploadType.CharacterAvatar => "Не указан персонаж",
-            UploadType.PostAttachment => "Не указан пост",
-            _ => throw new InvalidOperationException($"Unknown UploadType {type}"),
-        };
-
-        if (target == null)
-        {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                ["targetId"] = requirement,
-            });
+            throw UploadNotFound();
         }
     }
 
     /// <summary>
-    /// The largest file this upload type accepts.
-    /// </summary>
-    private static long MaxSizeFor(UploadType type) => type switch
-    {
-        UploadType.PostAttachment => UploadPolicy.MaxPostAttachmentSizeBytes,
-        _ => MaxUploadSizeBytes,
-    };
-
-    /// <summary>
-    /// Refuses an upload the target has no room for.
-    /// </summary>
-    /// <remarks>
-    /// Only the multi-slot type has a count to check. A character portrait is
-    /// single by construction — the insert retires the previous row — and an
-    /// avatar the same, so neither has a number to be over.
-    /// </remarks>
-    private async Task EnsureTargetHasRoomAsync(UploadType type, Guid target)
-    {
-        if (type != UploadType.PostAttachment)
-        {
-            return;
-        }
-
-        var attached = await _uploadRepository.CountPostAttachmentsAsync(target);
-        if (attached >= UploadPolicy.MaxPostAttachments)
-        {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                ["file"] = $"К посту можно приложить не больше {UploadPolicy.MaxPostAttachments} файлов",
-            });
-        }
-    }
-
-    /// <summary>
-    /// Refuses an upload whose target the caller has no right to.
-    /// </summary>
-    /// <remarks>
-    /// Until this existed the endpoint checked only that a target was named, so any
-    /// authenticated user could point a CharacterAvatar at any character. Two such
-    /// rows turned every read of that character's room into a 500 for everyone, and
-    /// nothing but a hand-edited row brought it back.
-    ///
-    /// The rule per type comes from the module that owns the entity — see
-    /// IUploadTargetAuthorizer. Fails closed: a type with no authorizer is refused,
-    /// so adding one to the enum without a rule breaks the upload rather than
-    /// opening it. That path is unreachable today and is asserted, not assumed.
-    /// </remarks>
-    private async Task AuthorizeTargetAsync(UploadType type, Guid target)
-    {
-        await AuthorizerFor(type).EnsureAllowedAsync(target);
-    }
-
-    /// <summary>
-    /// Refuses a read of a file whose target the caller cannot see.
+    /// Refuses a read of a file whose target the caller cannot see, or that the
+    /// target keeps from him.
     /// </summary>
     private async Task AuthorizeReadAsync(StoredUpload upload)
     {
         if (upload.TargetId == null)
         {
-            // The CHECK constraint makes this unreachable: every type names a
-            // target and a row without one cannot be written. Refuse rather than
-            // dereference, so a row that got there another way stays closed.
-            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
+            // Unreachable under the CHECK constraint; a row that got there another way stays closed.
+            throw UploadNotFound();
         }
 
-        await AuthorizerFor(upload.Type).EnsureReadAllowedAsync(upload.TargetId.Value);
+        await AuthorizerFor(upload.Type).EnsureReadAllowedAsync(upload);
+    }
+
+    /// <summary>
+    /// The uploads of <paramref name="uploads"/> their targets keep from a caller whose own right
+    /// reaches them: one question per type, for a whole page.
+    /// </summary>
+    /// <remarks>A row that hangs on nothing has nothing to keep it, and the right stands.</remarks>
+    private async Task<IReadOnlySet<Guid>> WithheldAsync(IReadOnlyCollection<StoredUpload> uploads)
+    {
+        var withheld = new HashSet<Guid>();
+        foreach (var ofType in uploads.Where(u => u.TargetId != null).GroupBy(u => u.Type))
+        {
+            withheld.UnionWith(await AuthorizerFor(ofType.Key).WithheldAsync(ofType.ToArray()));
+        }
+
+        return withheld;
+    }
+
+    /// <summary>
+    /// The uploads as the caller, whose own right reaches each of them, gets them: a file its target
+    /// keeps from him is named and not opened.
+    /// </summary>
+    private async Task<IReadOnlyList<UploadDto>> ForCaller(IReadOnlyCollection<StoredUpload> uploads)
+    {
+        var withheld = await WithheldAsync(uploads);
+        return uploads.Select(u => MapToDto(u, canOpen: !withheld.Contains(u.Id))).ToArray();
     }
 
     /// <summary>
@@ -537,21 +318,14 @@ internal class UploadApiService : IUploadApiService
         return authorizer;
     }
 
-    private static string SanitizeFileName(string? originalName, string normalizedExtension)
-    {
-        if (string.IsNullOrWhiteSpace(originalName))
-        {
-            return $"image{normalizedExtension}";
-        }
-        // Keep the base name (for UX in the Uploads tab); the extension is always normalized.
-        var baseName = Path.GetFileNameWithoutExtension(originalName);
-        // Strip all characters except letters/digits/dashes/underscores (anti-path-traversal).
-        var safe = Regex.Replace(baseName, @"[^\p{L}\p{N}_\-.]", "_");
-        if (safe.Length > 80) safe = safe[..80];
-        return $"{safe}{normalizedExtension}";
-    }
+    private static HttpException UploadNotFound() => new(HttpStatusCode.NotFound, RefusalMessage.UploadNotFound);
 
-    private async Task<(IEnumerable<Shared.Dto.Upload> Uploads, PagingInfo Paging)> GetUploadsInternal(
+    private static HttpBadRequestException AudienceOnlyForPostAttachment() => new(new Dictionary<string, string>
+    {
+        ["visibleTo"] = RefusalMessage.AudienceOnlyForPostAttachment,
+    });
+
+    private async Task<(IEnumerable<UploadDto> Uploads, PagingInfo Paging)> GetUploadsInternal(
         UploadsQuery query, Guid? userId)
     {
         var (uploads, totalCount) = await _uploadRepository.GetPageAsync(
@@ -564,49 +338,19 @@ internal class UploadApiService : IUploadApiService
             skip: query.Skip,
             take: query.Take);
 
-        // Skip is an offset in entities, which is the slot PagingResult.Create
-        // reads as a 1-based entity number — the same conversion PagingData does
-        // for every other offset-paged list. The page number used to be handed
-        // in here instead, and ceil(page / pageSize) reported page 1 for the
-        // first twenty pages.
+        // Skip is an offset; PagingResult.Create reads a 1-based entity number, as PagingData does.
         var paging = new PagingInfo(PagingResult.Create(totalCount, query.Skip + 1, query.Take));
-        return (uploads.Select(MapToDto), paging);
+        return (await ForCaller(uploads), paging);
     }
 
     /// <summary>
-    /// Object key: type folder + scope (userId) + a full random suffix. Not a
-    /// content hash: the same image uploaded twice occupies two objects, and the
-    /// key says nothing about what stands behind it. Keys are never rewritten (a
-    /// replaced avatar allocates a fresh one), and that, not the shape of the key,
-    /// is what the immutable cache headers on PUT rest on.
-    ///
-    /// The suffix is the whole identifier and not eight characters of it, because
-    /// a key is never reused and never overwritten and the value has to be unique
-    /// for as long as the bucket lives. What it is NOT is access control: the
-    /// bucket answers anonymously on the declared public prefixes only, and an
-    /// attachment in a closed room is not under one of them. It used to be — the
-    /// grant covered the whole bucket, listing included — and that made this
-    /// paragraph read like a security argument, which the length of a key cannot
-    /// be. The extension is accepted as a validated, normalized string.
+    /// The upload as its record goes out. Who sees a marked file is told only to a caller who may
+    /// open it: the names of the addressees are as much the file's as its bytes.
     /// </summary>
-    private string GenerateObjectKey(UploadType type, Guid userId, string normalizedExtension)
+    private static UploadDto MapToDto(StoredUpload upload, bool canOpen)
     {
-        // The prefix is not chosen here: the bucket policy grants anonymous reads
-        // per prefix, so the two have to say the same thing about a type.
-        var folder = UploadFolder.For(type);
-
-        var uniqueId = Guid.NewGuid().ToString("N");
-        var ext = string.IsNullOrEmpty(normalizedExtension) ? string.Empty : normalizedExtension;
-        var keyName = $"{userId:N}_{uniqueId}{ext}";
-
-        return string.IsNullOrEmpty(_cdnConfig.Folder)
-            ? $"{folder}/{keyName}"
-            : $"{_cdnConfig.Folder}/{folder}/{keyName}";
-    }
-
-    private static Shared.Dto.Upload MapToDto(StoredUpload upload)
-    {
-        return new Shared.Dto.Upload
+        var addressees = canOpen ? PrivateAddresseeSnapshot.ReadList(upload.AddresseesJson) : null;
+        return new UploadDto
         {
             Id = upload.Id,
             UserId = upload.UserId,
@@ -620,12 +364,14 @@ internal class UploadApiService : IUploadApiService
             SizeBytes = upload.SizeBytes,
             Status = upload.Status,
             Url = upload.Url,
-            // Always, including for the types with no public Url: it is the only
-            // address a closed-prefix file has, and the endpoint behind it decides
-            // the caller's right on every request rather than trusting the link.
+            // Always: the only address a closed-prefix file has, checked on every request.
             ContentUrl = UploadContentRoute.For(upload.Id),
             CreatedUtc = upload.CreatedUtc,
             ConfirmedUtc = upload.ConfirmedUtc,
+            CanOpen = canOpen,
+            Recipients = addressees == null ? null : PrivateRecipients.Line(addressees.Names),
+            Addressees = addressees?.Characters
+                .Select(c => new UploadAddressee { Id = c.CharacterId, Name = c.CharacterName }).ToArray(),
         };
     }
 }

@@ -1,40 +1,37 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed } from "vue";
 import {
-  useCommunityStore,
   useAvatarUpload,
   AVATAR_ACCEPT,
+  type UploadedAvatar,
 } from "@/entities/user";
 import { UploadInput } from "@/features/upload";
-import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 
 /**
- * Overlay for editing the avatar on the profile page.
- * Shown only when canEdit && isEditMode (see ProfilePage.vue).
- * The single UX entry point for avatar editing in the app.
- *
- * Uses the `useAvatarUpload` composable — the SSOT for upload/reset logic,
- * drag-drop, paste, compression, progress.
- *
- * Two roots: the shade over the picture, and under the picture the line that
- * says why a change did not happen. See the note at that line.
+ * The overlay that edits the avatar, in the owner's edit mode, on useAvatarUpload.
+ * A picture sent up and a reset are changes of the edit: the page holds them
+ * until "Сохранить". Two roots: the shade over the picture, and the refusal
+ * line under it.
  */
-defineProps<{
-  username: string;
+const props = defineProps<{
+  /** The owner, whose upload the server files under him. */
+  userId: string;
+  /** The picture drawn, the pending change included: whether there is one to reset. */
+  hasAvatar: boolean;
 }>();
 
-// Take the user from the community store: `selectedUser` is the object the
-// profile page draws. It is not the session user — the same person, a separate
-// object, filled once per route change — so an upload or a reset has to be
-// written back into this store, which is what useAvatarUpload does.
-const communityStore = useCommunityStore();
-const selectedUser = computed(() => communityStore.selectedUser);
+const emit = defineEmits<{
+  uploaded: [avatar: UploadedAvatar];
+  removed: [];
+}>();
 
-const avatar = useAvatarUpload(selectedUser);
+const avatar = useAvatarUpload(
+  () => props.userId,
+  (uploaded) => emit("uploaded", uploaded),
+);
 
 const stateLabel = computed(() => {
   if (avatar.uploading.value) return `${avatar.progress.value}%`;
-  if (avatar.resetting.value) return "Сброс...";
   if (avatar.isDragover.value) return "Отпустите для загрузки";
   return "Загрузить (перетащите или вставьте)";
 });
@@ -43,21 +40,13 @@ const handleUploaded = async (formData: FormData) => {
   const file = formData.get("file") as File | null;
   if (file) await avatar.uploadFile(file);
 };
-
-// --- Reset avatar (ConfirmDialog-gated) ---
-const confirmingReset = ref(false);
-
-// The request of the confirmation. The window waits for it, prints a refusal in
-// itself and closes on success alone, so the interceptor keeps quiet about it.
-const confirmReset = () =>
-  avatar.resetAvatar({ ownsRefusal: true, ownsRateLimit: true });
 </script>
 
 <template>
   <div
     class="profile-picture-upload"
     :class="{
-      'is-active': avatar.uploading.value || avatar.resetting.value,
+      'is-active': avatar.uploading.value,
       'is-dragover': avatar.isDragover.value,
     }"
     @dragenter="avatar.onDragEnter"
@@ -68,16 +57,16 @@ const confirmReset = () =>
     <div class="upload-overlay">
       <span class="upload-label">{{ stateLabel }}</span>
       <UploadInput
-        v-if="!avatar.uploading.value && !avatar.resetting.value"
+        v-if="!avatar.uploading.value"
         :accept="AVATAR_ACCEPT"
         @uploading="handleUploaded"
       />
+      <!-- Asks nothing: the reset waits for "Сохранить", and "Отмена" takes it back. -->
       <button
-        v-if="avatar.hasAvatar.value && !avatar.uploading.value"
+        v-if="hasAvatar && !avatar.uploading.value"
         type="button"
         class="reset-btn"
-        :disabled="avatar.resetting.value"
-        @click.stop="confirmingReset = true"
+        @click.stop="emit('removed')"
       >
         Сбросить
       </button>
@@ -88,31 +77,11 @@ const confirmReset = () =>
       :style="{ width: `${avatar.progress.value}%` }"
       aria-hidden="true"
     />
-
-    <ConfirmDialog
-      v-model:show="confirmingReset"
-      title="Сбросить аватар?"
-      message="Текущий аватар будет удален"
-      confirm-label="Сбросить"
-      failure="Не удалось сбросить аватар"
-      :action="confirmReset"
-    />
   </div>
 
-  <!-- The refusal of an upload, under the picture and outside the shade
-       above, in the words and colour of the form refusal line (p.form-error
-       elsewhere). A refused reset is not here: the window that asked before
-       it stays open and says it. Not inside the shade: that one is drawn on
-       hover alone, so a line in it is gone on a touch screen and after a
-       paste made with the pointer elsewhere on the page - and the red does
-       not read on the dark shade in the light theme (1.2:1 over a light
-       photo). Not a toast either: it would
-       answer in the corner for a press made on the avatar, and stay until
-       dismissed by hand. A second root in the flow of .avatar-wrapper stands
-       under the picture whatever the pointer does, and goes down with the
-       next attempt. The drag handlers are bound here too: the line is part of
-       the drop target, and a file dropped on it with no handler is opened by
-       the browser in place of the page. -->
+  <!-- A refused upload, under the picture: the shade shows on hover only, and the
+       line goes with the next attempt. It is part of the drop target, or a file
+       dropped on it opens in place of the page. -->
   <p
     v-if="avatar.refusal.value"
     class="avatar-refusal"
@@ -127,16 +96,16 @@ const confirmReset = () =>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
+
+$drop-ring-width: 2px
+$progress-height: 4px
 
 .profile-picture-upload
   position: absolute
-  top: 0
-  left: 0
-  right: 0
-  bottom: 0
+  inset: 0
   opacity: 0
-  transition: opacity 0.2s ease
+  transition: opacity $transition-normal
 
   &:hover,
   &.is-active,
@@ -144,23 +113,19 @@ const confirmReset = () =>
     opacity: 1
 
   &.is-dragover .upload-overlay
-    outline: 2px dashed $accent-green
-    outline-offset: -4px
+    outline: $drop-ring-width dashed $accent-green
+    outline-offset: -$minor
 
 .upload-overlay
   position: absolute
-  top: 0
-  left: 0
-  right: 0
-  bottom: 0
+  inset: 0
   background-color: $shade-bg
   display: flex
   flex-direction: column
   align-items: center
   justify-content: center
   gap: $small
-  // Square: the shade lies over the picture, which is square (a picture is
-  // content, and a rounded shade left its corners standing out of it).
+  // Square, as the picture it lies over.
   cursor: pointer
 
 .upload-label
@@ -172,9 +137,7 @@ const confirmReset = () =>
   padding: 0 $small
   font-size: $secondary-font-size
 
-// A link-button of the site on the dark shade: the ink of the shade at rest,
-// and under the pointer the hover blue drawn for dark surfaces (the tooltip's),
-// with the underline. The padding is its pointer target over the picture.
+// A link-button on the dark shade: its ink at rest, the tooltip's hover blue under the pointer.
 .reset-btn
   pointer-events: auto
   background: none
@@ -190,19 +153,12 @@ const confirmReset = () =>
   position: absolute
   left: 0
   bottom: 0
-  height: 4px
+  height: $progress-height
   background-color: $accent-green
-  transition: width 0.2s ease
+  transition: width $transition-normal
 
-// In the flow of .avatar-wrapper, which is ProfilePage's and is also the
-// shade's containing block: once this line is in it the wrapper grows, the
-// shade grows with it, and on hover the words would sit under the dark
-// overlay. Positioned, the line paints above the shade (a positioned sibling
-// later in the tree); on the page colour, which is what the identity block
-// sits on, it covers the shade under it; padding rather than a top margin
-// keeps that cover joined to the picture's bottom edge, or the shade shows
-// through the gap. The clean shape is a positioned box around the picture
-// alone, and that box is ProfilePage's to draw.
+// In the flow of .avatar-wrapper, positioned over the shade that grows with it,
+// on the page colour, padded rather than margined so the shade does not show through.
 .avatar-refusal
   position: relative
   margin: 0

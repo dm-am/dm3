@@ -2,23 +2,11 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The moderation windows with a form, as they answer a refusal.
- *
- * Each of them used to run its request by hand: a busy flag, a catch around a
- * client that never throws, and a line under the first field that nothing ever
- * filled, so a refusal fell as a plate over a window that closed as if the save
- * had gone through. Now the window runs the request itself (Dialog `action`),
- * and what is left for each window to get right is its half of the wiring: the
- * request carries the flags that keep the interceptor quiet, a refusal stands
- * in the window, the window stays open over it, and a window with typed
- * multi-line text asks before dropping it. The rest of the cycle is the
- * window's own and has its spec in shared/ui/Layout/Dialog.spec.ts.
- *
- * The two windows of the awards page have specs of their own.
- */
+// Each moderation window with a form: the request carries the flags, a refusal
+// stands in the window and keeps it open, and typed multi-line text is asked
+// about before it is dropped. The cycle itself is Dialog.spec.ts's.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h, type Component } from "vue";
+import type { Component } from "vue";
 import {
   enableAutoUnmount,
   flushPromises,
@@ -35,19 +23,9 @@ import TagDialog from "./TagDialog.vue";
 import TagGroupDialog from "./TagGroupDialog.vue";
 import UsernameChangeRejectDialog from "./UsernameChangeRejectDialog.vue";
 
-vi.mock("vue-final-modal", () => ({
-  VueFinalModal: defineComponent({
-    props: { contentClass: { type: String, default: "" } },
-    setup:
-      (props, { slots }) =>
-      () =>
-        h(
-          "div",
-          { class: ["vfm-content", props.contentClass] },
-          slots.default?.(),
-        ),
-  }),
-}));
+vi.mock("vue-final-modal", async () =>
+  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+);
 
 const FLAGS = { ownsRefusal: true, ownsRateLimit: true };
 
@@ -94,10 +72,7 @@ const TIER = {
 
 const GROUP = { id: "g-1", title: "Жанр", description: "", sortOrder: 0 };
 
-/**
- * A row of the queue of new names as the server sends it: the status by its
- * name, the empty fields left out.
- */
+/** A row of the queue of new names as the server sends it: the status by name. */
 const NAME_REQUEST = {
   id: "r-1",
   userId: "u-1",
@@ -246,10 +221,7 @@ describe.each(CASES.filter((c) => c.typed))("the window for $name", (c) => {
   });
 });
 
-/**
- * The status goes back the way the server writes it, by name. The rest of
- * the window is the shared cycle above.
- */
+// The status goes back the way the server writes it, by name.
 describe("the window for the rejection of a new name", () => {
   it("rejects with the status by name and the typed reason", async () => {
     const c = CASES.find(
@@ -268,5 +240,67 @@ describe("the window for the rejection of a new name", () => {
       { status: "Rejected", comment: "Имя занято" },
       FLAGS,
     );
+  });
+});
+
+/** The words of a window by field: the labels, then the hint under each one that has it. */
+function fieldWords(w: VueWrapper) {
+  return w.findAll(".form-field").map((f) => {
+    const label = f.find(".form-field-label label");
+    const hint = f.find(".form-field-hint");
+    return [
+      label.exists() ? label.text() : "",
+      hint.exists() ? hint.text() : "",
+    ];
+  });
+}
+
+const caseOf = (name: string) => CASES.find((each) => each.name === name)!;
+
+// The fields are named in Russian, and the bounds are the server's.
+describe("the fields of the achievement windows", () => {
+  it("names the fields of a new tier and bounds them as the server does", () => {
+    const { wrapper } = render(caseOf("a new achievement tier"));
+
+    expect(fieldWords(wrapper)).toEqual([
+      ["Код", "Не меняется, например POSTS_100"],
+      ["Название", ""],
+      ["Порог", ""],
+      ["Тир", "1 золото, 2 серебро, 3 бронза, 5 платина"],
+    ]);
+    expect(wrapper.get("#tier-code").attributes("maxlength")).toBe("80");
+    expect(wrapper.get("#tier-title").attributes("maxlength")).toBe("200");
+    const tier = wrapper.get("#tier-number");
+    expect([tier.attributes("min"), tier.attributes("max")]).toEqual([
+      "1",
+      "5",
+    ]);
+  });
+
+  it("leaves the tier empty when the one suggested is off the scale", async () => {
+    const request = vi
+      .spyOn(achievementApi, "createAchievementType")
+      .mockResolvedValue({ data: null, error: null } as never);
+    const c = { ...caseOf("a new achievement tier") };
+    c.props = { ...c.props, defaultTier: 6 };
+    const { wrapper } = render(c);
+
+    expect(
+      (wrapper.get("#tier-number").element as HTMLInputElement).value,
+    ).toBe("");
+    await press(c, wrapper);
+    expect(request.mock.calls[0][0]).toMatchObject({ tier: null });
+  });
+
+  it("names the fields of a category, with the popover and the icon set under them", () => {
+    const { wrapper } = render(caseOf("the achievement category"));
+
+    expect(fieldWords(wrapper)).toEqual([
+      ["Название", ""],
+      ["Описание", "Показывается во всплывающей подсказке"],
+      ["Имя иконки", "Из набора иконок"],
+      ["Порядок", ""],
+      ["", ""],
+    ]);
   });
 });

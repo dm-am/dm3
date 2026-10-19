@@ -30,11 +30,7 @@ const adapter = (over: Partial<CommentSectionApi> = {}): CommentSectionApi => ({
   ...over,
 });
 
-/**
- * The game, the blog and the publication run their discussions through this
- * slice, and the item that was pressed is what says a refused like. So the
- * answer has to come back out of it, and a refusal must not move the heart.
- */
+// The pressed item says a refused like, so the answer comes back out of here.
 describe("createCommentSection likes", () => {
   it("adds the liker and answers with no error", async () => {
     const section = createCommentSection(
@@ -54,7 +50,7 @@ describe("createCommentSection likes", () => {
   });
 
   it("hands a refused like back and adds nobody", async () => {
-    const answer = refusal("Вы уже поставили лайк");
+    const answer = refusal("Вы уже отметили Нравится");
     const section = createCommentSection(
       adapter({
         likeComment: vi.fn().mockResolvedValue({ data: null, error: answer }),
@@ -85,7 +81,7 @@ describe("createCommentSection likes", () => {
   });
 
   it("hands a refused unlike back and keeps the like", async () => {
-    const answer = refusal("Вы еще не ставили лайк");
+    const answer = refusal("Вы еще не отмечали Нравится");
     const section = createCommentSection(
       adapter({
         unlikeComment: vi.fn().mockResolvedValue({ data: null, error: answer }),

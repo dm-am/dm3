@@ -27,10 +27,9 @@ namespace DM.Web.API.Features.Moderation.Profiles;
 [Tags("Profiles")]
 public class ProfileController : ControllerBase
 {
-    private readonly IModeratedProfileApiService _profileApiService;
+    private readonly ModeratedProfileApiService _profileApiService;
 
-    /// <inheritdoc />
-    public ProfileController(IModeratedProfileApiService profileApiService)
+    public ProfileController(ModeratedProfileApiService profileApiService)
     {
         _profileApiService = profileApiService;
     }

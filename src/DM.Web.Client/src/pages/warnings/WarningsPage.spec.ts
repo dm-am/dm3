@@ -2,22 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * What the open warning log shows, and what it asks the server for.
- *
- * The page it replaces said "В разработке" while the rules page linked here as
- * the proof that moderation is done in the open, so every state below is a
- * first: the list, the page number in the address, the narrowing to one person,
- * the two ways of being empty, and the refusal.
- *
- * The request is asserted alongside the markup because the address bar is half
- * of this page: a page number nobody reads and a page size taken from a literal
- * instead of the reader's preference both look identical on screen. For the same
- * reason the way back to the first page is checked by where it leads and not by
- * what it says, and the answer to a page the reader has left is checked to stay
- * off the screen: a link that quietly drops the filter and a list that shows the
- * page nobody asked for both read as correct until the target is opened.
- */
+// The request is asserted with the markup: a page number nobody reads and a
+// page size from a literal look identical on screen.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { ref, type Ref } from "vue";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
@@ -27,7 +13,7 @@ import WarningsPage from "./WarningsPage.vue";
 const getWarningLog = vi.hoisted(() => vi.fn());
 
 vi.mock("@/entities/moderation", () => ({
-  moderationApi: { getWarningLog },
+  warningApi: { getWarningLog },
   WarningCard: {
     props: ["warning"],
     template: "<div class='card-stub'>{{ warning.reason }}</div>",
@@ -38,12 +24,7 @@ vi.mock("@/entities/moderation", () => ({
   },
 }));
 
-/**
- * The address bar, held in a ref rather than a plain object: the page derives
- * the number and the name inside computeds and refetches on their change, and a
- * plain property read there is tracked by nothing. The ref leaves through the
- * mocked module because the test and the page must be looking at the same one.
- */
+/** A ref, not a plain object: the page reads the query inside computeds. */
 vi.mock("vue-router", async () => {
   const { shallowRef } = await import("vue");
   const query = shallowRef<Record<string, string>>({});
@@ -65,7 +46,7 @@ const routeQuery = (
 // a page that reads a literal instead answers with the literal.
 const PAGE_SIZE = 7;
 vi.mock("@/shared/lib/composables/usePaging", () => ({
-  usePaging: () => ({ entitiesPerPage: ref(PAGE_SIZE) }),
+  usePaging: () => ({ pageSize: ref(PAGE_SIZE) }),
 }));
 
 const entry = (over: Record<string, unknown> = {}) => ({
@@ -213,10 +194,7 @@ describe("the open warning log", () => {
     );
   });
 
-  /**
-   * A stale link, or a page that emptied under a removal. The reader is told
-   * and offered the way back, filter kept, rather than moved without asking.
-   */
+  // The reader is told and offered the way back, filter kept.
   it("offers the first page when the number is past the end of a filled log", async () => {
     routeQuery.value = { number: "9", username: "Нарушитель" };
     getWarningLog.mockResolvedValue(page([], 3));
@@ -232,11 +210,7 @@ describe("the open warning log", () => {
     });
   });
 
-  /**
-   * Two page numbers on the wire at once, which a second click of the paging
-   * control is enough to produce. What the reader asked for last is what stays,
-   * however late the answer to the page they left arrives.
-   */
+  // A second click of the paging control is enough to put two pages on the wire.
   it("keeps the page the address names when a later answer belongs to an older one", async () => {
     const answers = new Map<number, (value: unknown) => void>();
     getWarningLog.mockImplementation(

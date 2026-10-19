@@ -23,13 +23,10 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     private readonly EmailConfiguration _configuration;
 
     /// <summary>
-    /// The session this processor sends its letter through. Built here and opened
-    /// on first use: a constructor cannot await, and opening it is several network
-    /// round trips.
+    /// The session this processor sends its letter through, opened on first use.
     /// </summary>
     private readonly SmtpClient _client = new();
 
-    /// <inheritdoc />
     public MailSendingProcessor(
         IOptions<EmailConfiguration> configuration,
         ILogger<MailSendingProcessor> logger,
@@ -44,16 +41,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     /// The connected transport, opening the session on the first call.
     /// </summary>
     /// <remarks>
-    /// Every step is the asynchronous overload. The handshake is several round
-    /// trips - TCP, greeting, STARTTLS, greeting again, AUTH - and the blocking
-    /// overloads spent all of them holding a thread pool thread inside a pipeline
-    /// that is asynchronous everywhere else. The NoOp that used to close the
-    /// sequence was one more round trip, asking a connection that had just
-    /// finished answering whether it was there.
-    ///
-    /// A session per letter is deliberate and stays: a processor is resolved from
-    /// its own scope for every delivered letter and closes what it opened, which
-    /// is what MailTransportOwnershipShould holds.
+    /// A session per letter: the processor lives in the scope of one message and closes what it opened.
     /// </remarks>
     private async Task<IMailTransport> ConnectedClient(CancellationToken cancellationToken)
     {
@@ -65,16 +53,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
         await _client.ConnectAsync(_configuration.ServerHost, _configuration.ServerPort,
             TransportSecurity(), cancellationToken);
 
-        // Credentials that are set are still sent, and a relay that then refuses
-        // them still fails loudly. What this skips is the attempt with none.
-        // MailKit answers an authentication attempt against a relay that advertises
-        // no AUTH extension by refusing it outright - "The SMTP server does not
-        // support authentication." - rather than by sending nothing, and the letter
-        // that triggered it would be retried, dead lettered and never delivered.
-        // Nothing changes on a stand: Mailpit advertises AUTH PLAIN and answers
-        // empty credentials with 235, which is why the shipped empty values work
-        // there today. The relay this opens the way to is an internal one with no
-        // AUTH at all, which until now could not be configured here.
+        // MailKit refuses to authenticate against a relay that advertises no AUTH.
         if (_configuration.UsesAuthentication)
         {
             await _client.AuthenticateAsync(_configuration.Username, _configuration.Password, cancellationToken);
@@ -86,10 +65,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     /// <inheritdoc />
     public async Task<ProcessResult> Process(string key, EmailLetter message, CancellationToken cancellationToken)
     {
-        // Logged, not only written into the header: the identifier is the one
-        // part of a letter that comes back — a bounce report, a relay's log and
-        // the reader's own client all quote it — and without it here there was
-        // nothing on this side to match any of them against.
+        // Logged: a bounce report and a relay log quote the identifier back.
         var messageId = MessageIdentifier.Build(
             _correlationTokenProvider.Current, _configuration.FromAddress);
         _logger.LogInformation("Sending letter {MessageId} to {Address}",
@@ -117,13 +93,6 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     /// <summary>
     /// How much of the encryption this deployment is willing to give up.
     /// </summary>
-    /// <remarks>
-    /// The mode used to be a constant written into the call, so a deployment that
-    /// wanted encryption had no way to ask for it: an attacker on the path strips
-    /// STARTTLS out of the greeting and the same session continues in the clear,
-    /// carrying activation and password reset links. Opportunistic upgrade stays
-    /// the default only because the local and preview stacks send through Mailpit.
-    /// </remarks>
     private SecureSocketOptions TransportSecurity()
     {
         if (!_configuration.RequireTls)
@@ -131,9 +100,7 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
             return SecureSocketOptions.StartTlsWhenAvailable;
         }
 
-        // Port 465 is encrypted from the first byte: there is no plaintext greeting
-        // to upgrade, and demanding STARTTLS on it fails a session that is already
-        // encrypted.
+        // Port 465 has no plaintext greeting to upgrade.
         return _configuration.ServerPort == ImplicitTlsPort
             ? SecureSocketOptions.SslOnConnect
             : SecureSocketOptions.StartTls;
@@ -143,31 +110,21 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     /// Closes the SMTP session this processor opened, if it opened one.
     /// </summary>
     /// <remarks>
-    /// A processor is resolved from a fresh scope for every delivered letter, and
-    /// a scope releases only what it can see as disposable. Without this the
-    /// session stays connected and authenticated until a finalizer happens to
-    /// reach the socket: relays cap concurrent connections per address, and past
-    /// the cap every further letter is retried, dead-lettered and never delivered
-    /// — activation and password reset mail included.
+    /// Relays cap concurrent connections per address, so a session must not wait for a finalizer.
     /// </remarks>
     public async ValueTask DisposeAsync()
     {
         try
         {
-            // A processor whose letter never reached the relay opened nothing, and
-            // now that the transport is built rather than deferred, IsConnected is
-            // what says so
             if (_client.IsConnected)
             {
-                // Quit rather than drop: a socket closed without QUIT leaves the
-                // relay counting the session until its own idle timeout expires
+                // Quit rather than drop: the relay counts a dropped session until its idle timeout
                 await _client.DisconnectAsync(true, CancellationToken.None);
             }
         }
         catch (Exception e)
         {
-            // Best effort: the letter is already sent, and throwing from disposal
-            // would fail a message the consumer would then redeliver
+            // The letter is already sent: throwing here would fail the message
             _logger.LogWarning(e, "Could not close the SMTP session cleanly");
         }
 
@@ -177,11 +134,6 @@ internal class MailSendingProcessor : IProcessor<string, EmailLetter>, IDisposab
     /// <summary>
     /// Synchronous fallback, for a scope that is disposed synchronously.
     /// </summary>
-    /// <remarks>
-    /// Both paths exist because the container picks one by how the scope is
-    /// closed, and a type that is only IAsyncDisposable gets disposed
-    /// sync-over-async — on a network round trip that is worth avoiding.
-    /// </remarks>
     public void Dispose()
     {
         try

@@ -3,14 +3,14 @@
  * Unified "separator + Paging + separator" block with compact spacing.
  * Used on list pages (Testimonials, Polls, Pulse).
  */
-import type { RouteLocationRaw } from "vue-router";
+import type { RouteLocationNamedRaw } from "vue-router";
 import Paging from "./Paging.vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import type { PagingInfo } from "@/shared/api/models/common";
 
 defineProps<{
   paging: PagingInfo;
-  to: RouteLocationRaw;
+  to: RouteLocationNamedRaw;
   useQuery?: boolean;
   queryKey?: string;
   onPrefetch?: (page: number) => void;

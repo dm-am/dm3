@@ -154,7 +154,7 @@ describe("CalendarGrid levels", () => {
   it("returns to the days of the month that was picked", async () => {
     const wrapper = mountGrid();
     await openMonths(wrapper);
-    await cellNamed(wrapper, "Мар").trigger("click");
+    await cellNamed(wrapper, "Март").trigger("click");
     expect(caption(wrapper)).toBe("Март 2026");
     expect(wrapper.findAll(".dp-day")).toHaveLength(31);
   });
@@ -201,7 +201,7 @@ describe("CalendarGrid levels", () => {
     ]);
     await cellNamed(dated, "1991").trigger("click");
     expect(dated.findAll(".myp-cell.selected").map((c) => c.text())).toEqual([
-      "Мар",
+      "Март",
     ]);
 
     const empty = mountGrid({ modelValue: null, initialLevel: "years" });
@@ -222,7 +222,7 @@ describe("CalendarGrid levels", () => {
     await openMonths(wrapper);
     await openYears(wrapper);
     await cellNamed(wrapper, "2019").trigger("click");
-    await cellNamed(wrapper, "Ноя").trigger("click");
+    await cellNamed(wrapper, "Нояб.").trigger("click");
     expect(caption(wrapper)).toBe("Ноябрь 2019");
   });
 
@@ -499,7 +499,7 @@ describe("CalendarGrid Escape", () => {
     const wrapper = mountGrid();
     await openMonths(wrapper);
     const owner = ownerCloses();
-    escapeFrom(cellNamed(wrapper, "Июл").element);
+    escapeFrom(cellNamed(wrapper, "Июль").element);
     await wrapper.vm.$nextTick();
     owner.stop();
     expect(owner.seen).toEqual([]);
@@ -524,7 +524,7 @@ describe("CalendarGrid Escape", () => {
   it("takes the keyboard down with it", async () => {
     const wrapper = mountGrid({ modelValue: "2026-07-15" });
     await openMonths(wrapper);
-    const cell = cellNamed(wrapper, "Июл").element as HTMLElement;
+    const cell = cellNamed(wrapper, "Июль").element as HTMLElement;
     cell.focus();
     escapeFrom(cell);
     await wrapper.vm.$nextTick();

@@ -5,13 +5,6 @@ namespace DM.Domain.Core.Enums;
 /// </summary>
 public enum TokenType
 {
-    // === ACCOUNT (verification) ===
-
-    /// <summary>
-    /// User registration password setting
-    /// </summary>
-    Activation = 0,
-
     /// <summary>
     /// Password restoration
     /// </summary>
@@ -37,8 +30,6 @@ public enum TokenType
     /// </summary>
     TwoFactorRemovalCancellation = 10,
 
-    // === GAME INVITATIONS ===
-
     /// <summary>
     /// Game assistant invitation
     /// </summary>
@@ -53,8 +44,6 @@ public enum TokenType
     /// Game reader invitation
     /// </summary>
     GameReaderInvitation = 4,
-
-    // === BLOG INVITATIONS ===
 
     /// <summary>
     /// Blog assistant invitation

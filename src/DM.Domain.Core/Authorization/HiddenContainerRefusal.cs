@@ -1,6 +1,4 @@
-using System;
 using System.Net;
-using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Core.Authorization;
@@ -10,15 +8,8 @@ namespace DM.Domain.Core.Authorization;
 /// lives in is not there to the reader.
 /// </summary>
 /// <remarks>
-/// A character, a review or a notepad entry is found by its id before the module
-/// around it is asked, and the module answers in its own words: the game or the
-/// blog is not found. Passed on as they are, those words tell a stranger that the
-/// id is real and what hides it, next to the plain "not found" an id that is
-/// nothing gets. So a module that is not there to the reader answers exactly as
-/// the thing itself not being there, by the thing's own sentence. A refusal of
-/// another kind - the reader sees the module and may not do this - is not about
-/// existence and passes unchanged. Comments have the same rule in
-/// <see cref="Comments.DiscussionRefusal" />.
+/// The module's own "not found" would tell a stranger that the id is real and what
+/// hides it, so it answers by the thing's own sentence; other refusals pass unchanged.
 /// </remarks>
 public static class HiddenContainerRefusal
 {

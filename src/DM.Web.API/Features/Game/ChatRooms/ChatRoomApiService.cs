@@ -4,31 +4,27 @@ using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
 using DM.Domain.Messaging.Features.Chats;
 using DM.Web.API.Features.Messaging;
 using DM.Web.API.Features.Messaging.Messages;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using CreateRoom = DM.Domain.Game.Features.Rooms.CreateRoom;
 using UpdateRoom = DM.Domain.Game.Features.Rooms.UpdateRoom;
 
 namespace DM.Web.API.Features.Game.ChatRooms;
 
-/// <inheritdoc />
-internal class ChatRoomApiService : IChatRoomApiService
+public class ChatRoomApiService
 {
     private readonly IRoomService _roomService;
     private readonly IChatService _chatService;
-    private readonly IMessagingApiService _messagingService;
+    private readonly MessagingApiService _messagingService;
     private readonly ChatRoomMapper _mapper;
 
-    /// <inheritdoc />
     public ChatRoomApiService(
         IRoomService roomService,
         IChatService chatService,
-        IMessagingApiService messagingService,
+        MessagingApiService messagingService,
         ChatRoomMapper mapper)
     {
         _roomService = roomService;
@@ -37,34 +33,30 @@ internal class ChatRoomApiService : IChatRoomApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<ChatRoom>> GetChatRoomsAsync(Guid gameId)
     {
         var rooms = await _roomService.GetAllAsync(gameId);
-        // The rooms listing now names private rooms the caller may not open,
-        // for the menu's closed-lock row. This endpoint has no such row: it
-        // lists chats to enter, so it keeps to the ones GetChatRoomAsync opens.
+        // Chats to enter: the rooms listing also names closed private rooms, for the lock row.
         var chatRooms = rooms
             .Where(r => r.Type == RoomType.Chat && r.CanView)
             .Select(_mapper.ToChatRoom);
         return new ListEnvelope<ChatRoom>(chatRooms);
     }
 
-    /// <inheritdoc />
-    public async Task<Envelope<ChatRoom>> GetChatRoomAsync(Guid id)
+    public async Task<Envelope<ChatRoom>> GetChatRoomAsync(Guid id) =>
+        new(_mapper.ToChatRoom(await GetChatRoomOrThrow(id)));
+
+    /// <summary>A room that is not a chat answers as an unknown chat.</summary>
+    private async Task<Room> GetChatRoomOrThrow(Guid id)
     {
         var room = await _roomService.GetAsync(id);
-        if (room.Type != RoomType.Chat)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
-        }
-        return new Envelope<ChatRoom>(_mapper.ToChatRoom(room));
+        return room.Type == RoomType.Chat
+            ? room
+            : throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<ChatRoom>> CreateChatRoomAsync(Guid gameId, CreateChatRoom input)
     {
-        // 1. Create Room with Type = Chat
         var createRoom = new CreateRoom
         {
             GameId = gameId,
@@ -74,10 +66,8 @@ internal class ChatRoomApiService : IChatRoomApiService
         };
         var room = await _roomService.CreateAsync(createRoom);
 
-        // 2. Create linked Chat entity with ChatType.GameRoom
         var chat = await _chatService.CreateGameRoomChatAsync(room.Id, input.Title);
 
-        // 3. Update room with chat link
         var updateRoom = new UpdateRoom
         {
             RoomId = room.Id,
@@ -88,14 +78,9 @@ internal class ChatRoomApiService : IChatRoomApiService
         return new Envelope<ChatRoom>(_mapper.ToChatRoom(room));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<ChatRoom>> UpdateChatRoomAsync(Guid id, UpdateChatRoom input)
     {
-        var room = await _roomService.GetAsync(id);
-        if (room.Type != RoomType.Chat)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
-        }
+        await GetChatRoomOrThrow(id);
 
         var updateRoom = new UpdateRoom
         {
@@ -103,21 +88,14 @@ internal class ChatRoomApiService : IChatRoomApiService
             Title = input.Title,
             PreviousRoomId = input.PreviousRoomId
         };
-        room = await _roomService.UpdateAsync(updateRoom);
+        var room = await _roomService.UpdateAsync(updateRoom);
 
         return new Envelope<ChatRoom>(_mapper.ToChatRoom(room));
     }
 
-    /// <inheritdoc />
     public async Task DeleteChatRoomAsync(Guid id)
     {
-        var room = await _roomService.GetAsync(id);
-        if (room.Type != RoomType.Chat)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ChatNotFound);
-        }
-
-        // Delete linked chat if exists
+        var room = await GetChatRoomOrThrow(id);
         if (room.ChatId.HasValue)
         {
             await _chatService.DeleteAsync(room.ChatId.Value);
@@ -126,7 +104,6 @@ internal class ChatRoomApiService : IChatRoomApiService
         await _roomService.DeleteAsync(id);
     }
 
-    /// <inheritdoc />
     public async Task<CursorEnvelope<Message>> GetMessagesAsync(Guid chatRoomId, string? cursor, int limit)
     {
         var room = await _roomService.GetChatRoomForReadingAsync(chatRoomId);
@@ -135,16 +112,12 @@ internal class ChatRoomApiService : IChatRoomApiService
             room.ChatId!.Value, cursor, limit);
     }
 
-    /// <inheritdoc />
-    public async Task<Envelope<Message>> CreateMessageAsync(Guid chatRoomId, CreateMessageInput input)
+    public async Task<Envelope<Message>> CreateMessageAsync(Guid chatRoomId, MessageInput input)
     {
         var room = await _roomService.GetChatRoomForWritingAsync(chatRoomId);
-
-        var message = new Message { Text = new CommonBbText { Value = input.Text } };
-        return await _messagingService.CreateGameRoomMessageAsync(room.ChatId!.Value, message);
+        return await _messagingService.CreateGameRoomMessageAsync(room.ChatId!.Value, input.Text);
     }
 
-    /// <inheritdoc />
     public async Task MarkAsReadAsync(Guid chatRoomId)
     {
         var room = await _roomService.GetChatRoomForReadingAsync(chatRoomId);

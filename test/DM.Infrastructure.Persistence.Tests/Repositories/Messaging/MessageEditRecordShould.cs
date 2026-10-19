@@ -1,12 +1,11 @@
+using DM.Domain.Core.Chats;
 using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Messages;
-using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Repositories.Messaging;
-using DM.Infrastructure.Persistence.Shared.Users;
 using DM.Testing;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -14,7 +13,6 @@ using NSubstitute;
 using Xunit;
 using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
 using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Messaging;
 
@@ -22,18 +20,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Messaging;
 /// Editing a message leaves a trace.
 /// </summary>
 /// <remarks>
-/// The message row keeps no modification stamp: the update path said tracking
-/// was "handled via Edit history" and then saved the new text alone, so
-/// MessageEdits stayed empty for every message ever edited — the same shape of
-/// hole the four comment repositories had.
-///
-/// It is load-bearing beyond the "edited" mark. A moderation warning on a global
-/// chat message shows the text as it stood when the warning was issued, and says
-/// whether the author has rewritten it since; that answer is read from this
-/// table, so an unwritten history reports every rewritten message as untouched.
-///
-/// Re-sending the text the message already holds is not an edit, and neither is
-/// a write that does not say who is making it: both leave the history alone.
+/// A warning on a global chat message reads from this history whether the author rewrote it. Re-sending the
+/// held text, or a write naming no editor, leaves the history alone.
 /// </remarks>
 public class MessageEditRecordShould : UnitTestBase
 {
@@ -44,28 +32,15 @@ public class MessageEditRecordShould : UnitTestBase
     private static readonly Guid MessageId = Guid.Parse("7c2e1d33-0000-4000-8000-000000000002");
     private static readonly Guid EditId = Guid.Parse("7c2e1d33-0000-4000-8000-000000000003");
 
-    private readonly string _databaseName = Guid.NewGuid().ToString();
-
-    private DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
-        .UseInMemoryDatabase(_databaseName)
-        .Options);
-
-    private DmDbContext Seeded()
+    private static DmDbContext Seeded()
     {
-        var context = Context();
-        context.Users.Add(new DbUser
-        {
-            UserId = AuthorId,
-            Username = "author",
-            Email = "author@test.local",
-            Salt = "",
-            PasswordHash = ""
-        });
-        context.Chats.Add(new DbChat { ChatId = DbChat.GlobalChatId, Type = ChatType.Global });
+        var context = InMemoryStore.Open();
+        context.Users.Add(InMemoryStore.User(AuthorId, "author"));
+        context.Chats.Add(new DbChat { ChatId = WellKnownChats.GlobalChatId, Type = ChatType.Global });
         context.Messages.Add(new DbMessage
         {
             MessageId = MessageId,
-            ChatId = DbChat.GlobalChatId,
+            ChatId = WellKnownChats.GlobalChatId,
             UserId = AuthorId,
             Text = "Исходный текст",
             CreatedUtc = Created
@@ -74,7 +49,7 @@ public class MessageEditRecordShould : UnitTestBase
         return context;
     }
 
-    private MessageRepository Repository(DmDbContext context)
+    private static MessageRepository Repository(DmDbContext context)
     {
         var clock = Mock<IDateTimeProvider>();
         clock.Now.Returns(Edited);

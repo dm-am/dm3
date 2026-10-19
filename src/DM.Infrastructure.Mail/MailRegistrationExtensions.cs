@@ -22,16 +22,10 @@ public static class MailRegistrationExtensions
     /// <returns>Service collection for chaining.</returns>
     public static IServiceCollection AddDmMail(this IServiceCollection services)
     {
-        // One sender per scope: the channel is opened on the first send and
-        // closed only in Dispose, and per-dependency there was nobody to close
-        // it. Not a singleton - one channel may not be published to from
-        // several threads at once.
+        // Per scope: the scope disposes the channel, and a channel is not shared between threads.
         services.TryAddScoped<IMailSender, MailSender>();
 
-        // One renderer per process. The template map is built by reflection over the
-        // assembly and does not change, and the HtmlRenderer under it is a singleton
-        // anyway: its own Dispatcher, which every call goes through, serializes the
-        // renders.
+        // One renderer per process: the Dispatcher of HtmlRenderer serializes the renders.
         services.TryAddSingleton<HtmlRenderer>(provider => EmailRendering.CreateHtmlRenderer(
             provider.GetRequiredService<ILoggerFactory>(),
             provider.GetRequiredService<IOptions<SiteAddressConfiguration>>().Value));

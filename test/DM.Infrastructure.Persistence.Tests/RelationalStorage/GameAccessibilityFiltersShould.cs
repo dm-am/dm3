@@ -14,17 +14,9 @@ using DbRoomAccess = DM.Infrastructure.Persistence.Entities.Game.Links.RoomAcces
 namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 
 /// <summary>
-/// The storage filters and ModuleVisibility.IsPubliclyVisible answer one
-/// question about a user holding no role in the game, and the rule is written
-/// twice because EF Core translates expression trees and not method calls.
-/// Every combination of the three fields it reads is compared here, so a change
-/// to one copy alone turns this red instead of splitting the game list from the
-/// game page.
-///
-/// The room filter answers a second question with the same rule: whether a room
-/// may be NAMED in the game menu, which a closed room may until its master takes
-/// it off. That switch has to cut the room out of the query, so it is checked
-/// here and not against the markup of the menu.
+/// The storage filters and ModuleVisibility.IsPubliclyVisible answer one question twice, because EF
+/// translates expression trees and not method calls; every combination is compared. The room filter also
+/// decides whether a closed room is named in the menu.
 /// </summary>
 public class GameAccessibilityFiltersShould
 {
@@ -78,11 +70,8 @@ public class GameAccessibilityFiltersShould
     }
 
     /// <summary>
-    /// A closed room is named to everybody by default: closing it is most often
-    /// technical rather than a secret, and the name alone gives nothing away.
-    /// Its master may take it off the menu, and then the room has to leave the
-    /// query itself, or the switch is a decoration over a payload that still
-    /// carries the room.
+    /// A closed room is named to everybody by default; its master may take it off the menu, and then it
+    /// leaves the query itself.
     /// </summary>
     [Fact]
     public void NameAClosedRoomToAStrangerUntilItsMasterHidesIt()
@@ -108,17 +97,10 @@ public class GameAccessibilityFiltersShould
     }
 
     /// <summary>
-    /// The rank that passes premoderation verdicts opens the games awaiting one,
-    /// and its arm answers by the premoderation status alone — the same set
-    /// PremoderationAccess.IsPending names, over every module state.
+    /// The rank that passes premoderation verdicts opens the games awaiting one, by the premoderation status
+    /// alone, the set PremoderationAccess.IsPending names.
     /// </summary>
-    /// <remarks>
-    /// The row has to leave the query for the reader before any gate can be asked
-    /// about it. Without this arm a game in AwaitingEdits — the status every
-    /// newbie's game is created in, with no curator recorded — answered 404 to the
-    /// mentor, the moderator and everybody above them, so the moderation queue
-    /// linked to nothing.
-    /// </remarks>
+    /// <remarks>The row has to reach the reader before any gate can be asked about it.</remarks>
     [Theory]
     [MemberData(nameof(ModuleStates))]
     public void ListTheGameToAJudgeExactlyWhenItAwaitsAPremoderationVerdict(
@@ -135,10 +117,7 @@ public class GameAccessibilityFiltersShould
     }
 
     /// <summary>
-    /// A private draft is hidden by its author's choice and not by premoderation,
-    /// so the rank does not reach it. Named on its own rather than left to the
-    /// theory above, because this is the case an arm keyed on "hidden" instead of
-    /// on the premoderation status would get wrong.
+    /// A private draft is hidden by its author, not by premoderation, so the rank does not reach it.
     /// </summary>
     [Fact]
     public void KeepAPrivateDraftShutToAJudge()
@@ -187,15 +166,8 @@ public class GameAccessibilityFiltersShould
     }
 
     /// <summary>
-    /// The rooms answer the rank the same way the game does: whoever may pass the
-    /// verdict opens the rooms of the games awaiting one, by the premoderation
-    /// status alone and over every module state.
+    /// The rooms answer the rank as the game does: the judge of a game gets its rooms to read.
     /// </summary>
-    /// <remarks>
-    /// The two filters are one promise. The game arm alone handed the judge a game
-    /// whose room list came back empty — nothing to read, nothing to judge — because
-    /// the rooms were still scoped by the public rule.
-    /// </remarks>
     [Theory]
     [MemberData(nameof(ModuleStates))]
     public void OpenTheRoomToAJudgeExactlyWhenItsGameAwaitsAPremoderationVerdict(
@@ -319,11 +291,7 @@ public class GameAccessibilityFiltersShould
 
         var listed = games.Any(GameAccessibilityFilters.GameAvailable(Stranger));
 
-        // The blacklist closes writing and not reading. Dropping the row here hid
-        // the game from the list, from search and from its own address, while
-        // GameIntentionResolver.Read would have opened the page: one rule, two
-        // answers. The game is public to everybody else, so the concealment
-        // promised a privacy it never had.
+        // The blacklist closes writing, not reading: GameIntentionResolver.Read opens the page.
         listed.Should().BeTrue();
     }
 
@@ -356,7 +324,7 @@ public class GameAccessibilityFiltersShould
             Status = status,
             PremoderationStatus = premoderationStatus,
             DraftVisibility = draftVisibility,
-            BlackList = blacklisted is null
+            Blacklist = blacklisted is null
             ? new List<GameBlacklist>()
             : new List<GameBlacklist> { new() { BlockedUserId = blacklisted.Value } }
         };

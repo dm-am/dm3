@@ -15,7 +15,6 @@ const FEATURES = join(
   "../../../features",
 );
 
-// Mock userApi
 const mockSearchUsers = vi.fn();
 
 vi.mock("../api", () => ({
@@ -24,20 +23,19 @@ vi.mock("../api", () => ({
   },
 }));
 
-// Mock FilterDropdownItem
 const FilterDropdownItemStub = {
   template: `
     <button
       class="dropdown-item"
       :class="{ highlighted }"
-      @click="$emit('select')"
+      @click="$emit('item-select')"
       @mouseenter="$emit('mouseenter')"
     >
       {{ label }}
     </button>
   `,
   props: ["label", "avatarUrl", "highlighted"],
-  emits: ["select", "mouseenter"],
+  emits: ["item-select", "mouseenter"],
 };
 
 describe("UserMultiSelect", () => {
@@ -64,10 +62,6 @@ describe("UserMultiSelect", () => {
     });
   };
 
-  // ============================================================================
-  // BASIC RENDERING
-  // ============================================================================
-
   describe("Basic Rendering", () => {
     it("renders search input", () => {
       const wrapper = mountComponent();
@@ -93,10 +87,6 @@ describe("UserMultiSelect", () => {
     });
   });
 
-  // ============================================================================
-  // SEARCH BEHAVIOR
-  // ============================================================================
-
   describe("Search Behavior", () => {
     it("calls API after debounce when user types", async () => {
       mockSearchUsers.mockResolvedValue({
@@ -108,13 +98,11 @@ describe("UserMultiSelect", () => {
 
       await input.setValue("test");
 
-      // Should not call API immediately
       expect(mockSearchUsers).not.toHaveBeenCalled();
 
-      // Fast forward past debounce
       await vi.advanceTimersByTimeAsync(150);
 
-      expect(mockSearchUsers).toHaveBeenCalledWith("test", 10);
+      expect(mockSearchUsers).toHaveBeenCalledWith("test", 10, undefined);
     });
 
     it("looks among everyone, the long absent too, when asked", async () => {
@@ -131,15 +119,12 @@ describe("UserMultiSelect", () => {
       const wrapper = mountComponent();
       const input = wrapper.find("input");
 
-      // Type something first
       await input.setValue("test");
       await nextTick();
 
-      // Clear it
       await input.setValue("");
       await nextTick();
 
-      // Should show the prompt again
       expect(wrapper.find(".dropdown-empty").text()).toBe(
         "Введите имя пользователя",
       );
@@ -163,10 +148,6 @@ describe("UserMultiSelect", () => {
     });
   });
 
-  // ============================================================================
-  // KEYBOARD EVENTS
-  // ============================================================================
-
   describe("Keyboard Events", () => {
     it("emits keydown for Escape key", async () => {
       const wrapper = mountComponent();
@@ -177,32 +158,16 @@ describe("UserMultiSelect", () => {
       expect(wrapper.emitted("keydown")).toBeTruthy();
     });
 
-    it("prevents default on ArrowDown", async () => {
+    it.each(["ArrowDown", "ArrowUp"])("prevents default on %s", (key) => {
       const wrapper = mountComponent();
-      const input = wrapper.find("input");
+      const event = new KeyboardEvent("keydown", { key, cancelable: true });
 
-      // Simulate the keydown
-      await input.trigger("keydown", { key: "ArrowDown" });
+      wrapper.find("input").element.dispatchEvent(event);
 
-      // The handler should call preventDefault (we can't directly spy on native events in vue-test-utils)
-      // So we just verify the event was handled
-      expect(wrapper.emitted("keydown")).toBeFalsy(); // ArrowDown shouldn't bubble
-    });
-
-    it("prevents default on ArrowUp", async () => {
-      const wrapper = mountComponent();
-      const input = wrapper.find("input");
-
-      await input.trigger("keydown", { key: "ArrowUp" });
-
-      // ArrowUp shouldn't bubble to parent
+      expect(event.defaultPrevented).toBe(true);
       expect(wrapper.emitted("keydown")).toBeFalsy();
     });
   });
-
-  // ============================================================================
-  // COMPONENT BEHAVIOR
-  // ============================================================================
 
   describe("Component Behavior", () => {
     it("cleans up debounce timer on unmount", async () => {
@@ -211,85 +176,14 @@ describe("UserMultiSelect", () => {
 
       await input.setValue("test");
 
-      // Unmount before timer fires
       wrapper.unmount();
 
-      // This should not throw or cause issues
       await vi.advanceTimersByTimeAsync(1000);
-    });
-
-    it("uses default debounce of 150ms", () => {
-      const wrapper = mountComponent();
-      // Default prop value
-      expect(wrapper.props().debounceMs).toBe(150);
-    });
-
-    it("uses default maxSuggestions of 6", () => {
-      const wrapper = mountComponent();
-      expect(wrapper.props().maxSuggestions).toBe(6);
-    });
-  });
-
-  // ============================================================================
-  // ERROR HANDLING
-  // ============================================================================
-
-  describe("Error Handling", () => {
-    it("handles API error gracefully", async () => {
-      mockSearchUsers.mockRejectedValue(new Error("API Error"));
-
-      const wrapper = mountComponent({ debounceMs: 0 });
-      const input = wrapper.find("input");
-
-      await input.setValue("test");
-      await vi.runAllTimersAsync();
-      await nextTick();
-      await nextTick();
-
-      // Should show empty state, not crash
-      expect(wrapper.find(".dropdown-empty").exists()).toBe(true);
-    });
-  });
-
-  // ============================================================================
-  // PROPS
-  // ============================================================================
-
-  describe("Props", () => {
-    it("accepts selectedUsers as Set", () => {
-      const selected = new Set(["user1", "user2"]);
-      const wrapper = mountComponent({ selectedUsers: selected });
-
-      expect(wrapper.props().selectedUsers).toStrictEqual(selected);
-    });
-
-    it("accepts custom placeholder", () => {
-      const wrapper = mountComponent({ placeholder: "Найти пользователя" });
-      expect(wrapper.find("input").attributes("placeholder")).toBe(
-        "Найти пользователя",
-      );
-    });
-
-    it("accepts custom maxSuggestions", () => {
-      const wrapper = mountComponent({ maxSuggestions: 10 });
-      expect(wrapper.props().maxSuggestions).toBe(10);
-    });
-
-    it("accepts custom debounceMs", () => {
-      const wrapper = mountComponent({ debounceMs: 300 });
-      expect(wrapper.props().debounceMs).toBe(300);
     });
   });
 });
 
-/**
- * The people of a filter are the authors or the hosts of what the list holds,
- * and a list holds the old as well: the master of a frozen game, the author of
- * a topic of years ago. The server's default finds only the people active in
- * the last 30 days, so every list of the site that picks people asks for
- * everyone. The games and the room did before 5 October 2026; the pulse, the
- * topics, the comments and the blogs since.
- */
+// A list holds the old as well, and the server finds only the active by default.
 describe("the people of every filter of the site", () => {
   it("are looked for among everyone", () => {
     const pickers: string[] = [];

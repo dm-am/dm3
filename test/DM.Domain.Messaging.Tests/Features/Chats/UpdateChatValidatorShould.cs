@@ -1,21 +1,14 @@
 using System;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Messaging.Features.Chats;
-using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.Chats;
 
-public class UpdateChatValidatorShould : UnitTestBase
+public class UpdateChatValidatorShould
 {
-    private readonly UpdateChatValidator validator;
-
-    public UpdateChatValidatorShould()
-    {
-        validator = new UpdateChatValidator();
-    }
+    private readonly UpdateChatValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -63,7 +56,7 @@ public class UpdateChatValidatorShould : UnitTestBase
         var input = new UpdateChat
         {
             ChatId = Guid.NewGuid(),
-            Title = new string('x', 201)
+            Title = new string('x', ChatFieldLimits.TitleMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
@@ -77,7 +70,7 @@ public class UpdateChatValidatorShould : UnitTestBase
         var input = new UpdateChat
         {
             ChatId = Guid.NewGuid(),
-            Title = new string('x', 200)
+            Title = new string('x', ChatFieldLimits.TitleMaxLength)
         };
 
         var result = validator.TestValidate(input);

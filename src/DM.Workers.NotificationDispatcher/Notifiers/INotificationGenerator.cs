@@ -13,7 +13,6 @@ internal interface INotificationGenerator
     /// <summary>
     /// Tells if resolver can process the certain event type
     /// </summary>
-    /// <param name="eventType">Event type</param>
     /// <returns>True if this generator can process the event type</returns>
     bool CanResolve(EventType eventType);
 

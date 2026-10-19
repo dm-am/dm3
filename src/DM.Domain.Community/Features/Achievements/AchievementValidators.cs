@@ -1,3 +1,4 @@
+using DM.Domain.Community.Features.Catalogs;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
@@ -6,22 +7,21 @@ namespace DM.Domain.Community.Features.Achievements;
 /// <inheritdoc />
 internal class CreateAchievementTypeValidator : AbstractValidator<CreateAchievementType>
 {
-    /// <inheritdoc />
     public CreateAchievementTypeValidator()
     {
         RuleFor(t => t.Code)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(64).WithMessage(ValidationError.Long);
+            .MaximumLength(CatalogFieldLimits.CodeMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(t => t.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(128).WithMessage(ValidationError.Long);
+            .MaximumLength(CatalogFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(t => t.Threshold)
             .GreaterThan(0).WithMessage(ValidationError.Invalid);
 
         RuleFor(t => t.Tier)
-            .InclusiveBetween(1, 4).WithMessage(ValidationError.Invalid)
+            .InclusiveBetween(TierScale.MinTier, TierScale.MaxTier).WithMessage(ValidationError.Invalid)
             .When(t => t.Tier.HasValue);
 
         RuleFor(t => t.AchievementCategoryId)
@@ -32,7 +32,6 @@ internal class CreateAchievementTypeValidator : AbstractValidator<CreateAchievem
 /// <inheritdoc />
 internal class UpdateAchievementTypeValidator : AbstractValidator<UpdateAchievementType>
 {
-    /// <inheritdoc />
     public UpdateAchievementTypeValidator()
     {
         RuleFor(t => t.Id)
@@ -40,7 +39,7 @@ internal class UpdateAchievementTypeValidator : AbstractValidator<UpdateAchievem
 
         RuleFor(t => t.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(128).WithMessage(ValidationError.Long)
+            .MaximumLength(CatalogFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long)
             .When(t => t.Title != null);
 
         RuleFor(t => t.Threshold)
@@ -48,7 +47,7 @@ internal class UpdateAchievementTypeValidator : AbstractValidator<UpdateAchievem
             .When(t => t.Threshold.HasValue);
 
         RuleFor(t => t.Tier)
-            .InclusiveBetween(1, 4).WithMessage(ValidationError.Invalid)
+            .InclusiveBetween(TierScale.MinTier, TierScale.MaxTier).WithMessage(ValidationError.Invalid)
             .When(t => t.Tier.HasValue);
     }
 }
@@ -56,7 +55,6 @@ internal class UpdateAchievementTypeValidator : AbstractValidator<UpdateAchievem
 /// <inheritdoc />
 internal class UpdateAchievementCategoryValidator : AbstractValidator<UpdateAchievementCategory>
 {
-    /// <inheritdoc />
     public UpdateAchievementCategoryValidator()
     {
         RuleFor(c => c.Id)
@@ -64,7 +62,11 @@ internal class UpdateAchievementCategoryValidator : AbstractValidator<UpdateAchi
 
         RuleFor(c => c.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(128).WithMessage(ValidationError.Long)
+            .MaximumLength(CatalogFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long)
             .When(c => c.Title != null);
+
+        RuleFor(c => c.Description)
+            .MaximumLength(CatalogFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long)
+            .When(c => c.Description != null);
     }
 }

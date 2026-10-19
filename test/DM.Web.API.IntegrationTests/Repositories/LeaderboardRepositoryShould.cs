@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -12,7 +9,7 @@ using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
@@ -21,17 +18,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// where the reader cannot check the answer.
 /// </summary>
 /// <remarks>
-/// A leaderboard is plausible whatever it says: nobody knows who the top ten
-/// should be, so a sum credited to the wrong column produces a page that looks
-/// finished. Two properties decide whether the numbers mean anything, and both
-/// have already been wrong here: the rating of a post belongs to whoever wrote
-/// the post rather than to whoever rated it, and the window is half-open, which
-/// is the difference between a week that ends and a week that swallows the next
-/// one's first day.
-///
-/// Run against the database rather than against a mocked set: the whole of the
-/// method is one translated GroupBy, and an in-memory provider answers a question
-/// PostgreSQL was never asked.
+/// A leaderboard looks finished whatever it says. A post's rating belongs to its author, and the window is
+/// half-open. Against the database: the method is one translated GroupBy.
 /// </remarks>
 public class LeaderboardRepositoryShould : IntegrationTestBase
 {
@@ -40,12 +28,7 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The Monday of the week this test owns, far from anything the fixture
-    /// seeds. A week of its own per test, because the database is shared and a
-    /// board is an aggregate: rows another test left inside the same window would
-    /// join the answer and the count would depend on the execution order. The
-    /// weeks stand a month apart rather than back to back, so the rows written
-    /// just outside a window land in a gap and not in a neighbour's week.
+    /// The Monday of this test's own week, a month from any other, so rows of other tests stay out of the aggregate.
     /// </summary>
     private static DateTimeOffset WeekOf(int index) =>
         new DateTimeOffset(2019, 3, 4, 0, 0, 0, TimeSpan.Zero).AddDays(28 * index);
@@ -170,16 +153,8 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
     /// characters the author typed to produce it.
     /// </summary>
     /// <remarks>
-    /// It used to count the source, which put two kinds of character into a
-    /// public score: the markup, which nobody reads, and the contents of
-    /// [private], which the room is not allowed to read. The second one is the
-    /// reason this is not merely inaccurate - a player could take the top place
-    /// with text that no reader could see and no reader could tell had been
-    /// counted.
-    ///
-    /// The two posts below are built so the answer inverts: the padded one is
-    /// four times the plain one as source and a fifth of it as text. On the old
-    /// query the padded author heads the board.
+    /// Markup and [private] are not in the text a reader got. The padded post is four times the plain one as source
+    /// and a fifth of it as text.
     /// </remarks>
     [Fact]
     public async Task CountTheVisibleTextOfAPostAndNotItsSource()
@@ -283,9 +258,7 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// One rating of a post by <paramref name="postAuthorId"/>, written by
-    /// somebody else: the pair (AuthorId, PostId) is uniquely indexed, and the
-    /// reviewer is exactly the person the board must not credit.
+    /// One rating of a post by <paramref name="postAuthorId"/>, written by somebody the board must not credit.
     /// </summary>
     private static async Task AddReviewAsync(
         DmDbContext dbContext,
@@ -313,22 +286,5 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
         await dbContext.SaveChangesAsync();
     }
 
-    private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
-    {
-        var userId = Guid.NewGuid();
-
-        dbContext.Users.Add(new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id is
-            // truncated rather than used whole.
-            Username = $"brd{userId:N}"[..20],
-            Email = $"{userId:N}@example.com",
-            PasswordHash = "hash",
-            Salt = "salt",
-        });
-
-        await dbContext.SaveChangesAsync();
-        return userId;
-    }
+    private static Task<Guid> AddUserAsync(DmDbContext dbContext) => UserRows.AddAsync(dbContext, "brd");
 }

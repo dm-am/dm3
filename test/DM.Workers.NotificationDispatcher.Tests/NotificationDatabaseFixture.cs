@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using DM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
@@ -10,11 +9,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// <summary>
 /// A PostgreSQL built by the migration, shared by every test in the tier.
 /// </summary>
-/// <remarks>
-/// The schema comes from MigrateAsync rather than EnsureCreated: the migration is
-/// the database the site starts from, and building the model instead would let a
-/// generator keep passing against columns the migration does not create.
-/// </remarks>
+/// <remarks>MigrateAsync rather than EnsureCreated: the migration is the database the site starts from.</remarks>
 public class NotificationDatabaseFixture : IAsyncLifetime
 {
     private readonly PostgreSqlContainer _postgres = new PostgreSqlBuilder()
@@ -46,9 +41,7 @@ public class NotificationDatabaseFixture : IAsyncLifetime
 }
 
 /// <summary>
-/// One container for the whole assembly. Every test either reads the seed or
-/// writes rows under identifiers of its own, so nothing here needs isolation and
-/// a container per class would cost a minute of wall clock for nothing.
+/// One container for the whole assembly: tests read the seed or write under identifiers of their own.
 /// </summary>
 [CollectionDefinition(Name)]
 public class NotificationDatabaseCollection : ICollectionFixture<NotificationDatabaseFixture>

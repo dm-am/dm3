@@ -1,3 +1,4 @@
+using DM.Domain.Blog.Authorization;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Identity;
@@ -25,7 +26,7 @@ namespace DM.Web.API.Features.Blog.Blogs;
 [Mapper]
 [UseStaticMapper(typeof(BbTextMappers))]
 [UseStaticMapper(typeof(UserRefMappers))]
-internal partial class BlogMapper
+public partial class BlogMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -52,12 +53,8 @@ internal partial class BlogMapper
     }
 
     /// <summary>
-    /// Domain blog to the full list/card DTO. The explicit envelope step
-    /// replaces the AutoMapper AfterMap: the owner owns the description, so
-    /// the envelope is what lets the JSON converter honor the owner's
-    /// AuthorEdit round-trip (the settings editor sends X-Dm-Audience:
-    /// author_edit to load the raw BBCode source) while downgrading any
-    /// other viewer's author_edit request to permission-filtered Display.
+    /// Domain blog to the full list/card DTO, with the owner bound to the
+    /// description for the settings editor's AuthorEdit read.
     /// </summary>
     public Blog ToBlog(SvcBlog blog)
     {
@@ -69,13 +66,10 @@ internal partial class BlogMapper
         var result = ToBlogCore(blog);
         result.ViewerBlacklisted = AnonymousIdentity.Of(_identityProvider.Current?.User) is { } viewerId &&
                                    blog.IsBlacklisted(viewerId);
-        if (result.Description is not null && blog.Author is not null)
+        if (blog.Author is not null)
         {
-            result.Description.Context = new RenderContextEnvelope
-            {
-                Surface = result.Description.Surface,
-                PostAuthorUserId = blog.Author.UserId
-            };
+            result.Description?.BindAuthor(blog.Author.UserId,
+                intentions => intentions.IsAllowed(BlogIntention.EditSettings, blog));
         }
 
         return result;
@@ -85,15 +79,8 @@ internal partial class BlogMapper
     public partial Rubric ToRubric(SvcRubric rubric);
 
     /// <summary>
-    /// Domain publication to the API one.
-    ///
-    /// No render-context envelope on Content - a decision, not an omission.
-    /// The publication editor (PublicationEdit.vue) seeds from the display
-    /// render through the editor-internal htmlToBbcode; no author_edit
-    /// request exists on the publication path at all, so an envelope here
-    /// would have no reader, and a stray author_edit header degrades to
-    /// Display in the converter - failing closed. If the editor moves to an
-    /// AuthorEdit fetch, the envelope moves here with it.
+    /// Domain publication to the API one, with the author bound to the content:
+    /// the publication editor reads its source with the author_edit audience.
     /// </summary>
     public Publication ToPublication(SvcPublication publication)
     {
@@ -102,7 +89,10 @@ internal partial class BlogMapper
             return null!;
         }
 
-        return ToPublicationCore(publication);
+        var result = ToPublicationCore(publication);
+        result.Content?.BindAuthor(publication.Author?.UserId,
+            intentions => intentions.IsAllowed(PublicationIntention.Edit, publication));
+        return result;
     }
 
     /// <summary>
@@ -138,23 +128,16 @@ internal partial class BlogMapper
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public partial SvcUpdatePublication ToUpdatePublication(UpdatePublicationRequest request);
 
-    // The author maps by name and by convention: a blog is owned by exactly
-    // one user, the column is not nullable and the projection hydrates it, so
-    // there is nothing here for a null-tolerant hop to tolerate.
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial BlogRef ToBlogRefCore(SvcBlog blog);
 
-    // The description envelope and the viewer's standing are composed in the
-    // wrapper; what the viewer may do is the domain's answer, composed by
-    // BlogApiService on the reads of one blog.
+    // The viewer's standing is composed in ToBlog, what he may do in BlogApiService.
     [MapperIgnoreTarget(nameof(Blog.ViewerBlacklisted))]
     [MapperIgnoreTarget(nameof(Blog.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial Blog ToBlogCore(SvcBlog blog);
 
-    // A publication without a rubric hands a null over from a `= null!`
-    // member; the guard keeps null flowing through. What the viewer may do is
-    // the domain's answer, composed by BlogApiService on the reads of one.
+    // A publication without a rubric hands a null over from a `= null!` member.
     [MapProperty(nameof(SvcPublication.Rubric), nameof(Publication.Rubric), Use = nameof(ToRubricOrNull))]
     [MapperIgnoreTarget(nameof(Publication.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]

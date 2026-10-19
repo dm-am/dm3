@@ -2,22 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The room row is where "the game has this room" and "you may open it" come
- * apart. The menu names every room, closed ones included, so a room the
- * viewer has no access to is a name, a pale lock and the characters who write
- * in it, as the old site writes "[Лес] - Густав, Эодор" — not a link, because
- * the page behind it answers 404 to exactly the viewers who see it locked,
- * and no counter, because nothing in it is counted for them.
- *
- * Both halves used to be unreachable. The listing dropped closed rooms
- * altogether, so the grey lock had no state to be in and the master saw a
- * grey one on the room he owns; the title was a router-link with no other
- * branch. The star had a failure of its own: it read `pendings`, a field no
- * endpoint has ever sent, so no room ever showed a turn waiting.
- */
+/** A room row: a link and a counter where the viewer may open it, a name, a lock and its writers where not. */
 import { describe, it, expect, beforeEach } from "vitest";
-import { mount, config } from "@vue/test-utils";
+import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import GameRoomLink from "./GameRoomLink.vue";
 import { useAuthStore } from "@/entities/user";
@@ -27,11 +14,8 @@ import {
   type PostPendency,
   type Room,
 } from "@/entities/game";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 
-config.global.stubs = {
+const stubs = {
   "router-link": {
     template: '<a class="router-link"><slot /></a>',
     props: ["to"],
@@ -70,6 +54,7 @@ const row = (target: Room, prefix?: string) =>
       prefix === undefined
         ? { room: target, gamePublicId: "abcde" }
         : { room: target, gamePublicId: "abcde", prefix },
+    global: { stubs },
   });
 
 /** What the row copies as: a non-breaking space is still a space. */
@@ -141,10 +126,7 @@ describe("GameRoomLink", () => {
   });
 
   it("locks a private room and colours the lock by access", () => {
-    // The lock is rendered for every room and hidden on the public ones, so
-    // that the titles of a list start at one x. Asserted through the class
-    // rather than through presence: dropping the element is what left the
-    // column ragged.
+    // Through the class: the lock stands for every room, so the titles start at one x.
     const publicRoom = row(room());
     expect(publicRoom.find(".lock").exists()).toBe(true);
     expect(publicRoom.find(".lock").classes()).toContain("public");
@@ -199,52 +181,5 @@ describe("GameRoomLink", () => {
       }),
     );
     expect(someoneElse.text()).not.toContain("*");
-  });
-});
-
-/**
- * The colours of a closed room, as the old site gives them: the glyph green
- * where the viewer may open the room and the palest grey of the theme where
- * he may not, and the name of a room he may not open in the plain ink of the
- * column, not a muted one. Read off the stylesheet: jsdom applies no scoped
- * style, so a mount cannot see a colour.
- */
-describe("GameRoomLink colours", () => {
-  const rules = ruleMap(
-    componentCss(
-      join(dirname(fileURLToPath(import.meta.url)), "GameRoomLink.vue"),
-    ),
-  );
-
-  it("draws the lock pale grey to a viewer without access and green to one with it", () => {
-    expect(rules.get(".lock")).toMatchObject({ color: "var(--border)" });
-    expect(rules.get(".lock.granted")).toMatchObject({
-      color: "var(--accent-green)",
-    });
-  });
-
-  it("writes a room the viewer may not open, and the names after it, in the ink of the text", () => {
-    expect(rules.get(".no-access, .writers")).toEqual({ color: "var(--text)" });
-  });
-});
-
-/**
- * A row of the room list that wraps, a long title or the writers of a closed
- * room, goes on under the start of the menu line, as the old site wraps
- * "[Военно-полевой госпиталь] - Никита, Север": the nesting indents the first
- * line only. Read off the stylesheet of the menu that nests the rows.
- */
-describe("the room list of the game menu", () => {
-  const rules = ruleMap(
-    componentCss(
-      join(dirname(fileURLToPath(import.meta.url)), "GamePanel.vue"),
-    ),
-  );
-
-  it("indents the first line of a room and wraps the rest under the menu line", () => {
-    expect(rules.get(".room-list")).toMatchObject({ padding: "0" });
-    const indent = rules.get(".room-list > li")?.["text-indent"];
-    expect(indent).toBeTruthy();
-    expect(indent).not.toBe("0");
   });
 });

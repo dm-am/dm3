@@ -2,28 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * What the reader sees after inviting somebody to the blog.
- *
- * The section used to answer with a line in the corner, and the line was the
- * only dependable part of the answer: the list under it is read again over the
- * network, it was emptied outright when that read failed, and the invitation
- * the server hands back is a REPLACEMENT - inviting the same person twice
- * invalidates the first invitation, so the promised "new row" need never
- * appear. The row is now the answer, and it carries the moment it was sent.
- *
- * What each test here catches, since a list that holds something always looks
- * plausible:
- *  - the order left to the endpoint: the blog serves invitations newest first,
- *    so the fresh row lands at the top, away from the control that made it;
- *  - the failed reload emptying the list: an invitation that went out reads as
- *    "Активных приглашений нет";
- *  - the row taken from the reload alone: nothing to show when that read does
- *    not come back;
- *  - the replacement appended instead of replacing: the same person twice in
- *    the list, one of the two rows standing for an invitation that is dead;
- *  - the toast put back beside the row: one event announced twice.
- */
+// The new row is the answer to an invitation: last, next to the control,
+// kept when the reload fails, replacing the dead invitation of the same person,
+// with no toast beside it.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -33,6 +14,7 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import type { GeneralError } from "@/shared/api/models/common";
 import InvitationsSection from "./InvitationsSection.vue";
+import { expectFirstReadStates } from "@/shared/lib/testing/firstRead";
 
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
@@ -84,13 +66,18 @@ let list: ReturnType<typeof vi.fn>;
 let inviteReader: ReturnType<typeof vi.fn>;
 
 /** The section over a blog whose owner is looking at it. */
-async function mountSection(initial: BlogInvitation[] = [OLD]) {
+/** `first`, when given, answers the read the section opens with. */
+async function mountSection(
+  initial: BlogInvitation[] = [OLD],
+  first?: Promise<unknown>,
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useBlogDetailsStore();
   store.blog = { id: "the-blog", title: "Дневник" } as unknown as Blog;
 
   list = vi.fn().mockResolvedValue(served(initial));
+  if (first) list.mockReturnValueOnce(first);
   inviteReader = vi.fn().mockResolvedValue({ data: FRESH, error: null });
   vi.spyOn(blogApi, "getInvitations").mockImplementation(
     list as unknown as typeof blogApi.getInvitations,
@@ -137,8 +124,7 @@ describe("Blog InvitationsSection", () => {
 
   it("shows the invitation just sent as the last row, next to the control", async () => {
     const wrapper = await mountSection();
-    // The order the endpoint answers in: newest first. Served as it comes, the
-    // new row would be the top one.
+    // The endpoint answers newest first.
     list.mockResolvedValue(served([FRESH, OLD]));
 
     await invite(wrapper, "Новичок");
@@ -175,8 +161,7 @@ describe("Blog InvitationsSection", () => {
   });
 
   it("replaces the invitation of a person invited a second time", async () => {
-    // The person already has one out, and the server kills it as it issues the
-    // new one; the row has to be the live invitation, not both of them.
+    // The server kills the earlier invitation as it issues this one.
     const earlier = invitation("i-0", "Новичок", "2026-09-10T08:00:00Z");
     const wrapper = await mountSection([earlier]);
     list.mockResolvedValue(refused);
@@ -196,8 +181,7 @@ describe("Blog InvitationsSection", () => {
     await invite(wrapper, "Новичок");
 
     expect(rows(wrapper)).toHaveLength(1);
-    // Where the press was, and in no plate (the owner's rule of 26 September
-    // 2026, UI_STANDARDS "Всплывающие сообщения").
+    // Where the press was, and in no plate.
     expect(wrapper.get(".invite-row + .action-result").text()).toBe(
       "Не удалось отправить приглашение",
     );
@@ -205,16 +189,17 @@ describe("Blog InvitationsSection", () => {
   });
 });
 
-/**
- * The button says what it does in full, as the rest of the page does at full
- * width: a reader of the blog is what it invites.
- */
-describe("Blog InvitationsSection line that invites", () => {
-  it("names its button by the whole of what it does", async () => {
-    const wrapper = await mountSection([]);
-
-    const button = wrapper.get(".invite-row button");
-    expect(button.text()).toBe("Пригласить читателя");
-    expect(button.attributes("aria-label")).toBeUndefined();
+// The list waits in its shape, a failed first read says so, and emptiness is
+// said only once the answer came.
+describe("Blog InvitationsSection before the list is read", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
+
+  it("waits in its shape and says a failed first read, not an empty list", () =>
+    expectFirstReadStates((first) => mountSection([], first), refused, {
+      placeholder: ".inv-waiting",
+      failed: "Не удалось загрузить приглашения",
+      empty: "Активных приглашений нет",
+    }));
 });

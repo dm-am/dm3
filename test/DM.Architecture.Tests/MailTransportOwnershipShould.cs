@@ -13,22 +13,8 @@ namespace DM.Architecture.Tests;
 /// Whoever opens an SMTP session has to be able to close it.
 /// </summary>
 /// <remarks>
-/// The mail processor is resolved from its own scope for every delivered letter
-/// and opens its transport lazily on first use. MailKit ends a session on
-/// Disconnect or Dispose and on nothing else, and a container releases only what
-/// it can see as disposable: a holder that is neither IDisposable nor
-/// IAsyncDisposable leaves one connected, authenticated session behind per letter,
-/// alive until a finalizer happens to reach the socket. Relays cap concurrent
-/// connections per address, so past the cap every further letter is retried, dead
-/// lettered and never delivered — activation and password reset mail included.
-///
-/// A rule rather than one test, because the shape repeats: any type that holds a
-/// MailKit service owns a socket only it can give back. It is the same slip the
-/// producer rule next door exists for.
-///
-/// Reflection rather than the ArchUnit model used elsewhere in this suite: the
-/// holder is internal to a worker executable this project cannot see at compile
-/// time, and the transport hides inside a generic argument.
+/// MailKit ends a session on Disconnect or Dispose only, and a container releases only what is
+/// disposable. Reflection: the holder is internal to a worker this project cannot see.
 /// </remarks>
 public class MailTransportOwnershipShould
 {
@@ -38,10 +24,7 @@ public class MailTransportOwnershipShould
         .ToArray();
 
     /// <summary>
-    /// Only types somebody wrote. Making the holder disposable gives its
-    /// DisposeAsync a compiler-generated state machine that captures the same
-    /// field and is itself neither disposable nor anyone's responsibility — so
-    /// without this the rule reported the fix as the violation.
+    /// Only types somebody wrote: DisposeAsync's generated state machine captures the same field.
     /// </summary>
     private static bool IsWritten(Type type) =>
         type.GetCustomAttribute<CompilerGeneratedAttribute>() is null &&
@@ -70,18 +53,10 @@ public class MailTransportOwnershipShould
 
     private static bool HoldsAMailTransport(Type type)
     {
-        try
-        {
-            return type
-                .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
-                .Select(field => Unwrap(field.FieldType))
-                .Any(fieldType => typeof(IMailService).IsAssignableFrom(fieldType));
-        }
-        catch (Exception)
-        {
-            // A field whose type cannot be loaded is not a MailKit service
-            return false;
-        }
+        return type
+            .GetFields(BindingFlags.Instance | BindingFlags.Public | BindingFlags.NonPublic)
+            .Select(field => Unwrap(field.FieldType))
+            .Any(fieldType => typeof(IMailService).IsAssignableFrom(fieldType));
     }
 
     // Deferred construction hides the transport from a plain field-type check, and

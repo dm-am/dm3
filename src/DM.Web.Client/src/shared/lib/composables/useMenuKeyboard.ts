@@ -1,23 +1,9 @@
 import { type Ref } from "vue";
 
 /**
- * The keyboard half of a `role="menu"` dropdown.
- *
- * Three menus on the site announce themselves as menus — the sign-out menu in
- * the header, the sort dropdown and the "и еще N" bubble in the filters — and
- * a reader who hears "menu" expects Escape to leave it and the arrows to walk
- * its items. None of them did that: the trigger keeps focus when the menu
- * opens, so pressing it again was the only key that closed anything, and
- * nothing at all moved between the items.
- *
- * Focus is what moves here, not a highlight: a highlighted index is an
- * affordance the template has to paint, and none of these menus has one.
- * Items are found by their `role="menuitem"`, so the markup that makes the
- * promise to the reader is the same markup this reads.
- *
- * Escape is not `preventDefault`ed: it is how the rest of the page closes what
- * it has open too, and swallowing it inside a menu would strand anything
- * around it. The arrows are, or the page scrolls out from under the menu.
+ * The keyboard half of a `role="menu"` dropdown: Escape leaves, the arrows move
+ * focus over `role="menuitem"`. Escape is not preventDefaulted, so the page can
+ * close what it has open; the arrows are, or the page scrolls.
  */
 export interface MenuKeyboardOptions {
   /** Whether the menu is open. Closed menus pass every key straight through. */

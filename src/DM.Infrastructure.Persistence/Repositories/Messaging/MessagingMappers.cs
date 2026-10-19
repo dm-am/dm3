@@ -14,13 +14,38 @@ using DbGlobalChatEventParticipant = DM.Infrastructure.Persistence.Entities.Mess
 namespace DM.Infrastructure.Persistence.Repositories.Messaging;
 
 /// <summary>
-/// Projection formulas for the messaging module. The message shape appears
-/// twice - on its own and as a chat's last message - and the two blocks must
-/// stay identical. (They could be one spliced expression, like the user
-/// formula; nobody has needed a third copy yet.)
+/// Projection formulas for the messaging module.
 /// </summary>
 internal static class MessagingMappers
 {
+    /// <summary>
+    /// The one message formula, on its own and as a chat's last message. Likes live in the
+    /// polymorphic Likes table and are filled by the repository for a whole page at once.
+    /// </summary>
+    private static readonly Expression<Func<DbMessage, Message>> MessageShape =
+        m => new Message
+        {
+            Id = m.MessageId,
+            ChatId = m.ChatId,
+            ChatType = m.Chat.Type,
+            CreatedUtc = m.CreatedUtc,
+            Text = m.Text,
+            IsRemoved = m.IsRemoved,
+            DeletedUtc = m.DeletedUtc,
+            GlobalChatEventId = m.GlobalChatEventId,
+            Author = GeneralUserProjections.Projection.Splice(m.Author),
+            DeletedBy = GeneralUserProjections.Projection.Splice(m.DeletedBy),
+            Edits = m.Edits
+                .OrderBy(e => e.ModifiedUtc)
+                .Select(e => new MessageEdit
+                {
+                    Id = e.MessageEditId,
+                    ModifiedUtc = e.ModifiedUtc,
+                    Editor = GeneralUserProjections.Projection.Splice(e.Editor)
+                })
+                .ToList()
+        };
+
     /// <summary>
     /// The one event-participant formula, asked for on its own and nested
     /// under the event.
@@ -74,62 +99,15 @@ internal static class MessagingMappers
                           c.UserLinks.Any(l => !l.IsRemoved && l.UserId == viewerId &&
                                                l.HistoryClearedUtc >= c.LastMessage.CreatedUtc)
                 ? null!
-                : new Message
-                {
-                    Id = c.LastMessage.MessageId,
-                    ChatId = c.LastMessage.ChatId,
-                    ChatType = c.Type,
-                    CreatedUtc = c.LastMessage.CreatedUtc,
-                    Text = c.LastMessage.Text,
-                    IsRemoved = c.LastMessage.IsRemoved,
-                    DeletedUtc = c.LastMessage.DeletedUtc,
-                    GlobalChatEventId = c.LastMessage.GlobalChatEventId,
-                    Author = GeneralUserProjections.Projection.Splice(c.LastMessage.Author),
-                    DeletedBy = GeneralUserProjections.Projection.Splice(c.LastMessage.DeletedBy),
-                    Edits = c.LastMessage.Edits
-                        .OrderBy(e => e.ModifiedUtc)
-                        .Select(e => new MessageEdit
-                        {
-                            Id = e.MessageEditId,
-                            ModifiedUtc = e.ModifiedUtc,
-                            Editor = GeneralUserProjections.Projection.Splice(e.Editor)
-                        })
-                        .ToList()
-                }
+                : MessageShape.Splice(c.LastMessage)
         }));
 
     /// <summary>
-    /// EF projection to the domain message. ModifiedUtc is not stored on the
-    /// DB entity yet. Likes are absent here on purpose: they live in the
-    /// polymorphic Likes table (EntityType + EntityId) with no navigation to
-    /// project through, and the repository backfills them for a whole page at
-    /// once (MessageRepository.FillLikes) rather than one subquery per row.
-    /// Keeps the messages of removed accounts, signed by nobody
-    /// (<see cref="RemovedAuthors"/>).
+    /// EF projection to the domain message. Keeps the messages of removed accounts,
+    /// signed by nobody (<see cref="RemovedAuthors"/>).
     /// </summary>
     public static IQueryable<Message> ProjectToMessage(this IQueryable<DbMessage> query) =>
-        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbMessage, Message>>(m => new Message
-        {
-            Id = m.MessageId,
-            ChatId = m.ChatId,
-            ChatType = m.Chat.Type,
-            CreatedUtc = m.CreatedUtc,
-            Text = m.Text,
-            IsRemoved = m.IsRemoved,
-            DeletedUtc = m.DeletedUtc,
-            GlobalChatEventId = m.GlobalChatEventId,
-            Author = GeneralUserProjections.Projection.Splice(m.Author),
-            DeletedBy = GeneralUserProjections.Projection.Splice(m.DeletedBy),
-            Edits = m.Edits
-                .OrderBy(e => e.ModifiedUtc)
-                .Select(e => new MessageEdit
-                {
-                    Id = e.MessageEditId,
-                    ModifiedUtc = e.ModifiedUtc,
-                    Editor = GeneralUserProjections.Projection.Splice(e.Editor)
-                })
-                .ToList()
-        }));
+        query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(MessageShape));
 
     /// <summary>
     /// EF projection to the domain global chat event

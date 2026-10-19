@@ -4,9 +4,7 @@ using Microsoft.AspNetCore.Hosting;
 namespace DM.Web.API.IntegrationTests;
 
 /// <summary>
-/// Startup filter that inserts TestAuthenticationMiddleware early in the pipeline.
-/// IStartupFilter runs BEFORE Startup.Configure(), so our middleware will be added
-/// before the normal AuthenticationMiddleware.
+/// Inserts TestAuthenticationMiddleware ahead of the pipeline: IStartupFilter runs before Startup.Configure().
 /// </summary>
 public class TestAuthenticationStartupFilter : IStartupFilter
 {
@@ -14,10 +12,7 @@ public class TestAuthenticationStartupFilter : IStartupFilter
     {
         return app =>
         {
-            // Add our test middleware first
             app.UseMiddleware<TestAuthenticationMiddleware>();
-
-            // Then continue with the rest of the pipeline
             next(app);
         };
     }

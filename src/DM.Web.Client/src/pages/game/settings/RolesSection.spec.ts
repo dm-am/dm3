@@ -3,26 +3,9 @@
  */
 
 /**
- * What the reader sees after inviting an assistant to the game.
- *
- * Nothing in the roster can answer for it: the invited person joins the list
- * of assistants when the invitation is accepted, which is somebody else's
- * doing, later. The section used to say it in the corner, and the one line it
- * had on screen came from the game itself — a single slot filled with
- * FirstOrDefault out of an unordered token read, so a master who invites a
- * second assistant while the first invitation is out was shown the other
- * person's name and nothing else changed. The block of invitations that are
- * out is now read from the invitation endpoint, which knows all of them and
- * when each was sent.
- *
- * What each test here catches:
- *  - the block fed from the game DTO again: the second invitation is invisible
- *    behind the first;
- *  - the block left out: an invitation that went out leaves no trace on the
- *    page that sent it;
- *  - the row taken from the reload alone: nothing to show when that read does
- *    not come back;
- *  - the toast put back beside the block: one event announced twice.
+ * An invited assistant joins the roster only once he accepts, so the block of
+ * pending invitations, read from the invitation endpoint and not from the
+ * game's single pending slot, is the answer.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
@@ -57,9 +40,7 @@ const invitation = (
     createdUtc,
   }) as unknown as Invitation;
 
-/** The invitation that was already out when the master sent the next one. */
 const EARLIER = invitation("i-1", "Другой", "2026-09-02T10:00:00Z");
-/** The one the test sends. */
 const FRESH = invitation("i-2", "Кандидат", "2026-09-20T09:05:00Z");
 
 const served = (resources: Invitation[]) => ({
@@ -73,9 +54,11 @@ const refused = {
 };
 
 const stubs = {
+  // The badge of a site role, unless the place hides it.
   UserLink: {
-    props: ["user"],
-    template: '<span class="named">{{ user.username }}</span>',
+    props: { user: Object, hideBadge: Boolean },
+    template:
+      '<span class="named">{{ user.username }}<i v-if="!hideBadge" class="badge" /></span>',
   },
   UserAutocomplete: {
     props: ["modelValue"],
@@ -83,20 +66,13 @@ const stubs = {
     template:
       '<input class="invitee" :value="modelValue" @input="$emit(\'update:modelValue\', $event.target.value)" />',
   },
-  // The confirmation of a removal is the real window, drawn in place.
   Teleport: true,
 };
 
 let list: ReturnType<typeof vi.fn>;
 let inviteAssistant: ReturnType<typeof vi.fn>;
 
-/**
- * The section over a game with one assistant and one invitation already out.
- *
- * The game carries that first invitation in its single pending slot, which is
- * the trap: the block has to name whoever the endpoint names, not whoever the
- * slot happened to catch.
- */
+// The game's single pending slot holds the first invitation: the trap.
 async function mountSection(initial: Invitation[] = []) {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -128,10 +104,7 @@ async function mountSection(initial: Invitation[] = []) {
   return wrapper;
 }
 
-/**
- * The waiting block, as one line of text, or "" when it is not drawn.
- * The no-break space a date keeps after "в" stays.
- */
+// The no-break space a date keeps after "в" stays.
 const waiting = (wrapper: VueWrapper) =>
   wrapper.find(".pending").exists()
     ? wrapper
@@ -141,7 +114,6 @@ const waiting = (wrapper: VueWrapper) =>
         .trim()
     : "";
 
-/** Name somebody and press "Пригласить". */
 async function invite(wrapper: VueWrapper, username: string) {
   await wrapper.find("input.invitee").setValue(username);
   await wrapper.find(".invite-row button").trigger("click");
@@ -167,13 +139,10 @@ describe("Game RolesSection assistant invitation", () => {
     expect(waiting(wrapper)).toContain(
       `отправлено ${formatDateFull(FRESH.createdUtc)}`,
     );
-    // The one that was already out keeps its own row and its own moment.
     expect(waiting(wrapper)).toContain("Другой");
     expect(waiting(wrapper)).toContain(
       `отправлено ${formatDateFull(EARLIER.createdUtc)}`,
     );
-    // And neither of them is in the roster: accepting is what puts a name
-    // there.
     const roster = wrapper.findAll(".staff-list")[0].text();
     expect(roster).toContain("Помощник");
     expect(roster).not.toContain("Кандидат");
@@ -223,8 +192,7 @@ describe("Game RolesSection assistant invitation", () => {
     await invite(wrapper, "Кандидат");
 
     expect(waiting(wrapper)).toBe("");
-    // Where the press was, and in no plate (the owner's rule of 26 September
-    // 2026, UI_STANDARDS "Всплывающие сообщения").
+    // Where the press was, in no plate (UI_STANDARDS "Всплывающие сообщения").
     expect(wrapper.get(".invite-row + .action-result").text()).toBe(
       "Не удалось пригласить ассистента",
     );
@@ -232,11 +200,7 @@ describe("Game RolesSection assistant invitation", () => {
   });
 });
 
-/**
- * Taking an assistant off. The confirmation runs the request itself: it waits
- * for the answer, prints a refusal in itself and closes on success alone, and
- * the request carries the flags that keep the interceptor quiet about it.
- */
+// The confirmation runs the request and prints its own refusal.
 describe("Game RolesSection assistant removal", () => {
   beforeEach(() => {
     [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));
@@ -275,5 +239,28 @@ describe("Game RolesSection assistant removal", () => {
     );
     expect(wrapper.find(".dialog-container").exists()).toBe(true);
     expect(saidOutLoud()).toEqual([]);
+  });
+});
+
+// In the settings of a game the staff are its people, not the site's: no badge of a role.
+describe("Game RolesSection names", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it("names the assistants, the waiting and the mentor without a role", async () => {
+    const wrapper = await mountSection([EARLIER]);
+    useGameDetailsStore().game!.mentor = {
+      id: "u-m",
+      username: "Наставник",
+    } as never;
+    await flushPromises();
+
+    expect(wrapper.findAll(".named").map((n) => n.text())).toEqual([
+      "Помощник",
+      "Другой",
+      "Наставник",
+    ]);
+    expect(wrapper.find(".badge").exists()).toBe(false);
   });
 });

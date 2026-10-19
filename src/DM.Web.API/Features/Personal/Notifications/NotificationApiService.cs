@@ -9,13 +9,11 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Personal.Notifications;
 
-/// <inheritdoc />
-internal class NotificationApiService : INotificationApiService
+public class NotificationApiService
 {
     private readonly INotificationService _notificationService;
     private readonly IBotLinkService _botLinkService;
 
-    /// <inheritdoc />
     public NotificationApiService(
         INotificationService notificationService,
         IBotLinkService botLinkService)
@@ -24,7 +22,6 @@ internal class NotificationApiService : INotificationApiService
         _botLinkService = botLinkService;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Notification>> GetNotifications(PagingQuery query)
     {
         var (notifications, paging) = await _notificationService.GetAsync(query);
@@ -33,38 +30,26 @@ internal class NotificationApiService : INotificationApiService
         return new ListEnvelope<Notification>(mapped, new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
-    public async Task<NotificationCount> GetUnreadCount()
-    {
-        var count = await _notificationService.CountUnreadAsync();
-        return new NotificationCount { Count = count };
-    }
+    public async Task<UnreadCount> GetUnreadCount() =>
+        new() { Count = await _notificationService.CountUnreadAsync() };
 
-    /// <inheritdoc />
     public Task MarkAsRead(Guid notificationId) =>
         _notificationService.MarkAsReadAsync(notificationId);
 
-    /// <inheritdoc />
-    public Task MarkAsRead() =>
+    public Task MarkAllAsRead() =>
         _notificationService.MarkAllAsReadAsync();
 
-    /// <inheritdoc />
     public async Task<NotificationSettings> GetNotificationSettings() =>
         Map(await _botLinkService.GetChannels());
 
-    /// <inheritdoc />
     public async Task<NotificationSettings> UpdateNotificationSettings(UpdateNotificationSettingsRequest request)
     {
-        if (request.Discord != null)
+        foreach (var (type, channel) in new[] { ("discord", request.Discord), ("telegram", request.Telegram) })
         {
-            await _botLinkService.UpdateChannelPreferences(
-                "discord", request.Discord.Enabled, request.Discord.EnabledCategories);
-        }
-
-        if (request.Telegram != null)
-        {
-            await _botLinkService.UpdateChannelPreferences(
-                "telegram", request.Telegram.Enabled, request.Telegram.EnabledCategories);
+            if (channel != null)
+            {
+                await _botLinkService.UpdateChannelPreferences(type, channel.Enabled, channel.EnabledCategories);
+            }
         }
 
         return Map(await _botLinkService.GetChannels());
@@ -86,7 +71,6 @@ internal class NotificationApiService : INotificationApiService
                 EnabledCategories = new HashSet<NotificationCategory>(channel.EnabledCategories)
             };
 
-    /// <inheritdoc />
     public async Task<BotLinkResult> ConnectBot(string type)
     {
         var result = await _botLinkService.GenerateLinkCode(type);
@@ -97,7 +81,6 @@ internal class NotificationApiService : INotificationApiService
         };
     }
 
-    /// <inheritdoc />
     public Task DisconnectBot(string type) =>
         _botLinkService.Disconnect(type);
 }

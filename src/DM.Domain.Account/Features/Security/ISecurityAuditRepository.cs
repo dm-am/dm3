@@ -5,13 +5,10 @@ using System.Threading.Tasks;
 namespace DM.Domain.Account.Features.Security;
 
 /// <summary>
-/// Storage of security audit events: one write and five reads, no rules
+/// Storage of security audit events: one write and two reads, no rules
 /// </summary>
 /// <remarks>
-/// Named for what it is. Under its former name the boundary rule, which matches
-/// on the shape of a dependency, could not tell it from a domain service, and an
-/// API service held it directly for that reason alone. What a caller of the
-/// journal actually wants is <see cref="ISecurityJournalService" />.
+/// What a caller of the journal wants is <see cref="ISecurityJournalService" />.
 /// </remarks>
 public interface ISecurityAuditRepository
 {
@@ -41,11 +38,7 @@ public interface ISecurityAuditRepository
     /// Get the events of one category for a user, newest first
     /// </summary>
     /// <remarks>
-    /// One read for every filter the journal offers. It used to be four methods
-    /// with the same query written out four times, differing only in the set of
-    /// types each built for itself — and those sets are a statement about the
-    /// product, so they now live in <see cref="SecurityEventCategories" /> beside
-    /// the enum they select from.
+    /// One read for every filter of <see cref="SecurityEventCategories" />.
     /// </remarks>
     /// <param name="userId">User identifier</param>
     /// <param name="eventTypes">Types the category is made of</param>

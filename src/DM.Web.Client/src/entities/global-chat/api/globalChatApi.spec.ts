@@ -2,19 +2,7 @@
  * @vitest-environment node
  */
 
-/**
- * A single reply of the global chat is addressed under the global chat.
- *
- * These six requests used to go to `messages/{id}` — the endpoint of private
- * correspondence, which reads a message only for a participant of its chat.
- * The global chat has no participants, because the right to read it belongs to
- * everyone signed in, so all six answered 404, including on the reader's own
- * line: editing, liking, deleting and following a link to a message were dead
- * in the chat.
- *
- * The URL is the whole of what is asserted here, because the URL was the whole
- * of the defect.
- */
+// Under the global chat: messages/{id} reads a message only for a participant of a chat.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("@/shared/api", () => ({

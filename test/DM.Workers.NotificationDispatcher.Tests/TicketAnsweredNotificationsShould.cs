@@ -15,12 +15,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// Who is told that moderation wrote in the conversation of a ticket, what he is
 /// told, and where it leads him.
 /// </summary>
-/// <remarks>
-/// The event names the comment, and the comment names two people: the moderator
-/// who wrote it and, through its ticket, the author it answers. Only the author is
-/// the reader, and only with an account: a guest reads the answer on his tracking
-/// page.
-/// </remarks>
+/// <remarks>Only the author with an account is the reader; a guest reads the answer on his tracking page.</remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class TicketAnsweredNotificationsShould
 {

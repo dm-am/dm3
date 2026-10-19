@@ -1,17 +1,11 @@
 using System;
 using System.Collections.Generic;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
 
 namespace DM.Domain.Game.Features.GameAttributeSchemas;
 
-/// <summary>
-/// DTO for replacing the character sheet of a game
-/// </summary>
 public class ReplaceGameAttributeSchema
 {
-    /// <summary>
-    /// Game whose sheet is being replaced
-    /// </summary>
     public Guid GameId { get; set; }
 
     /// <summary>
@@ -21,8 +15,7 @@ public class ReplaceGameAttributeSchema
     public IEnumerable<UpdateAttributeSpecification> Specifications { get; set; } = [];
 
     /// <summary>
-    /// The version the caller read the sheet at. Absent is a caller that never
-    /// read one, which is refused rather than treated as "whatever is there".
+    /// The version the caller read the sheet at
     /// </summary>
     public int? Version { get; set; }
 }

@@ -2,17 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The times of the events strip are on the site's clock: the account's zone
- * for a signed-in reader, the device's for a guest. The messages under the
- * strip were already stamped that way, and the strip over them was not: a
- * reader whose account is in Tokyo read the feed in Tokyo and the events in
- * the zone of whatever device they sat at.
- *
- * The device is in Moscow for the file, the account in Tokyo, six hours apart,
- * and the moments are picked so that the two clocks disagree about the day as
- * well as the hour.
- */
+// The strip's times are on the site's clock: the account's zone for a reader.
+// The device is in Moscow, the account in Tokyo, six hours apart, and the
+// moments make the two disagree about the day as well.
 const MACHINE_ZONE = process.env.TZ;
 process.env.TZ = "Europe/Moscow";
 
@@ -37,7 +29,7 @@ vi.mock("@/entities/global-chat/api/globalChatApi", () => ({
   default: { getEvents: vi.fn(), getEvent: vi.fn() },
 }));
 
-import { useGlobalChatStore } from "@/entities/global-chat";
+import { useGlobalChatEventsStore } from "@/entities/global-chat";
 import ChatEventsPanel from "./ChatEventsPanel.vue";
 
 const summary = (
@@ -56,7 +48,7 @@ const summary = (
 
 /** The strip with a live event of two hours and one scheduled after it. */
 function render(liveStartsUtc: string) {
-  const store = useGlobalChatStore();
+  const store = useGlobalChatEventsStore();
   store.events = [
     summary("live", liveStartsUtc, "Live"),
     summary("next", "2026-09-28T18:30:00Z", "Scheduled"),

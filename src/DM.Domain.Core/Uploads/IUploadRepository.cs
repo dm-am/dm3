@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Uploads;
@@ -82,6 +79,13 @@ public interface IUploadRepository
     /// </remarks>
     /// <param name="upload">Values of the row to create.</param>
     Task<StoredUpload> AddAsync(NewUpload upload);
+
+    /// <summary>
+    /// Store who sees the file, or null when no live row carries that identifier.
+    /// </summary>
+    /// <param name="uploadId">Upload identifier.</param>
+    /// <param name="addresseesJson">The mark (<see cref="StoredUpload.AddresseesJson"/>).</param>
+    Task<StoredUpload?> SetAddresseesAsync(Guid uploadId, string? addresseesJson);
 }
 
 /// <summary>
@@ -142,6 +146,12 @@ public class StoredUpload
 
     /// <summary>Confirmation moment (UTC).</summary>
     public DateTimeOffset? ConfirmedUtc { get; init; }
+
+    /// <summary>
+    /// Who sees a file of a post: null for every reader of the post, else the
+    /// addressees chosen (<see cref="DM.Domain.Core.Content.PrivateAddresseeSnapshot.ReadList"/>).
+    /// </summary>
+    public string? AddresseesJson { get; init; }
 }
 
 /// <summary>
@@ -196,4 +206,7 @@ public class NewUpload
 
     /// <summary>Confirmation moment (UTC).</summary>
     public DateTimeOffset? ConfirmedUtc { get; init; }
+
+    /// <summary>Who sees the file (<see cref="StoredUpload.AddresseesJson"/>), written with the row.</summary>
+    public string? AddresseesJson { get; init; }
 }

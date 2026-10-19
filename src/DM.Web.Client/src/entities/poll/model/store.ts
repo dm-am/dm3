@@ -1,38 +1,39 @@
 import { defineStore } from "pinia";
 import { ref } from "vue";
-import type { Poll, PollId, PollOptionId, PollsSearchParams } from "./types";
+import type {
+  CreatePollRequest,
+  Poll,
+  PollId,
+  PollOptionId,
+  PollsSearchParams,
+  UpdatePollRequest,
+} from "./types";
 import type { ListEnvelope } from "@/shared/api/models/common";
-import type { Patch, Post } from "@/shared/api/models";
 import pollApi from "../api/pollApi";
 import { unwrapResource } from "@/shared/api";
 import { useApiList } from "@/shared/lib/composables/useApiResource";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 
 export const usePollsStore = defineStore("polls", () => {
-  // Sidebar active polls with caching (60s TTL)
   const active = useApiList<Poll>(() => pollApi.getActivePolls(), {
     cacheMs: 60_000,
   });
 
-  // Paginated polls list (no caching - always fresh for polls page)
+  // Not cached: the polls page always reads fresh.
   const polls = ref<ListEnvelope<Poll> | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
 
-  // Request guard to discard stale out-of-order responses
   const requestGuard = createRequestGuard();
 
   async function fetchPolls(params: PollsSearchParams) {
     const requestId = requestGuard.next();
 
-    // Reset error up front so a stale error never survives a later,
-    // still-in-flight request winning the race.
     error.value = null;
     loading.value = true;
 
     const { data, error: apiError } = await pollApi.getPolls(params);
 
-    // Ignore stale responses
     if (!requestGuard.isCurrent(requestId)) {
       return;
     }
@@ -43,21 +44,15 @@ export const usePollsStore = defineStore("polls", () => {
   }
 
   function updatePoll(poll: Poll) {
-    // Update in active polls cache
     const matchingActivePoll = active.data.value?.find((p) => p.id === poll.id);
     if (matchingActivePoll) Object.assign(matchingActivePoll, poll);
 
-    // Update in paginated polls
     const matchingPoll = polls.value?.resources.find((p) => p.id === poll.id);
     if (matchingPoll) Object.assign(matchingPoll, poll);
   }
 
-  async function createPoll(poll: Post<Poll>) {
+  async function createPoll(poll: CreatePollRequest) {
     const { data, error } = await pollApi.postPoll(poll);
-    // Every answer here is an envelope, and the poll is under `resource`. Used
-    // as it came, its id is undefined: the new poll went into the list as an
-    // empty card, and updatePoll below matched nothing at all, so a vote, an
-    // unvote and an edit each left the card showing what it showed before.
     const created = unwrapResource<Poll>(data);
     if (created && polls.value) {
       polls.value.resources.unshift(created);
@@ -65,7 +60,7 @@ export const usePollsStore = defineStore("polls", () => {
     return { data: created, error };
   }
 
-  async function editPoll(pollId: PollId, poll: Patch<Poll>) {
+  async function editPoll(pollId: PollId, poll: UpdatePollRequest) {
     const { data, error } = await pollApi.patchPoll(pollId, poll);
     const updated = unwrapResource<Poll>(data);
     if (updated) updatePoll(updated);
@@ -87,19 +82,16 @@ export const usePollsStore = defineStore("polls", () => {
   }
 
   return {
-    // Active polls (sidebar)
     activePolls: active.data,
     activePollsLoading: active.loading,
     activePollsError: active.error,
     fetchActivePolls: active.fetch,
 
-    // Paginated polls (polls page)
     polls,
     pollsLoading: loading,
     pollsError: error,
     fetchPolls,
 
-    // Mutations
     createPoll,
     editPoll,
     vote,

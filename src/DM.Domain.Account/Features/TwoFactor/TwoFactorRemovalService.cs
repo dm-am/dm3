@@ -22,9 +22,9 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
     private readonly IConfirmationTokenRepository _tokens;
     private readonly ITwoFactorRemovalMailSender _mailSender;
     private readonly ITokenFactory _tokenFactory;
-    private readonly IAuthenticationService _authenticationService;
+    private readonly ISessionService _sessionService;
     private readonly IIdentityProvider _identityProvider;
-    private readonly ISecurityAuditRepository _auditService;
+    private readonly ISecurityAuditRepository _auditRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<TwoFactorRemovalService> _logger;
     private readonly TwoFactorConfiguration _config;
@@ -35,9 +35,9 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
         IConfirmationTokenRepository tokens,
         ITwoFactorRemovalMailSender mailSender,
         ITokenFactory tokenFactory,
-        IAuthenticationService authenticationService,
+        ISessionService sessionService,
         IIdentityProvider identityProvider,
-        ISecurityAuditRepository auditService,
+        ISecurityAuditRepository auditRepository,
         IDateTimeProvider dateTimeProvider,
         ILogger<TwoFactorRemovalService> logger,
         IOptions<TwoFactorConfiguration> config,
@@ -47,9 +47,9 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
         _tokens = tokens;
         _mailSender = mailSender;
         _tokenFactory = tokenFactory;
-        _authenticationService = authenticationService;
+        _sessionService = sessionService;
         _identityProvider = identityProvider;
-        _auditService = auditService;
+        _auditRepository = auditRepository;
         _dateTimeProvider = dateTimeProvider;
         _logger = logger;
         _config = config.Value;
@@ -89,9 +89,7 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.LinkInvalidOrExpired);
         }
 
-        // An account that is gone answers as a link that is gone: a page reached
-        // from a letter speaks of the link and of the reader's action, never of
-        // the state of the account (SECURITY.md).
+        // An account that is gone answers as a link that is gone (SECURITY.md).
         var account = await _repository.FindAccount(userId.Value, cancellationToken);
         if (account?.Email == null)
         {
@@ -106,23 +104,17 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
         var dueUtc = _dateTimeProvider.Now + TimeSpan.FromDays(_config.RemovalDelayDays);
         if (!await _repository.ScheduleRemoval(account.UserId, dueUtc, cancellationToken))
         {
-            // The read above is a hint and this write is the decision: the factor
-            // can be switched off in the moment between them. Everything below
-            // belongs to a waiting period that was never started - the sessions,
-            // the journal entry, and a letter naming a date and offering a link
-            // that would answer "already gone" when it was followed.
+            // The read above is a hint and this write is the decision.
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TwoFactorNotEnabled);
         }
 
-        // Every session goes. Whoever set this in motion is either the owner,
-        // who is about to sign in again anyway, or somebody working on the
-        // account - and for the second one this is the point.
-        await _authenticationService.LogoutAll(account.UserId);
+        // Every session goes, in case somebody else set this in motion.
+        await _sessionService.LogoutAll(account.UserId);
 
         var cancellation = _tokenFactory.Create(account.UserId, TokenType.TwoFactorRemovalCancellation);
         await _tokens.ReplaceToken(account.UserId, cancellation, cancellationToken);
 
-        await _auditService.LogAsync(account.UserId, SecurityEventType.TwoFactorRemovalScheduled);
+        await _auditRepository.LogAsync(account.UserId, SecurityEventType.TwoFactorRemovalScheduled);
         await _mailSender.SendScheduled(
             account.Email, dueUtc, cancellation.Secret, account.TimeZoneId);
     }
@@ -130,8 +122,7 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
     /// <inheritdoc />
     public async Task Cancel(Guid secret, CancellationToken cancellationToken = default)
     {
-        // No lifetime on this one: it is live for exactly as long as there is a
-        // removal to call off, and the refusal below is what says so.
+        // No lifetime: live for as long as there is a removal to call off.
         var userId = await _tokens.RedeemToken(
             secret, TokenType.TwoFactorRemovalCancellation, null, cancellationToken);
         if (userId == null)
@@ -144,7 +135,7 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
             throw new HttpException(HttpStatusCode.Gone, RefusalMessage.LinkInvalidOrUsed);
         }
 
-        await _auditService.LogAsync(userId.Value, SecurityEventType.TwoFactorRemovalCancelled);
+        await _auditRepository.LogAsync(userId.Value, SecurityEventType.TwoFactorRemovalCancelled);
     }
 
     /// <inheritdoc />
@@ -155,23 +146,17 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
         var removed = 0;
         foreach (var userId in due)
         {
-            // The listing is a hint and the write is the decision. Calling the
-            // removal off - the second link out of the letter, or any sign-in that
-            // passes the factor - clears the due date, and it lands between the
-            // two often enough to matter: a person who has just kept their factor
-            // must not lose it to a pass that had already made up its mind. The
-            // journal entry and the log line follow the write for the same reason.
+            // The listing is a hint and the write is the decision: a cancellation
+            // can land between the two.
             if (!await _repository.RemoveIfDue(userId, now, cancellationToken))
             {
                 continue;
             }
 
             removed++;
-            // The link that could have called this off dies with the removal:
-            // opened afterwards, it would answer "called off" about a factor
-            // that is already gone, and the owner would relax over an open door.
+            // The cancellation link dies with the removal it could have called off.
             await _tokens.RevokeTokens(userId, TokenType.TwoFactorRemovalCancellation, cancellationToken);
-            await _auditService.LogAsync(userId, SecurityEventType.TwoFactorDisabled,
+            await _auditRepository.LogAsync(userId, SecurityEventType.TwoFactorDisabled,
                 details: "Отложенное отключение по почте");
             _logger.LogInformation("Two-factor removed after the waiting period. UserId={UserId}", userId);
         }
@@ -182,20 +167,11 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
     /// <inheritdoc />
     public async Task ClearForColleague(string username, CancellationToken cancellationToken = default)
     {
-        var caller = _identityProvider.Current.User;
-        if (!caller.IsAuthenticated)
-        {
-            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
-        }
+        var caller = _identityProvider.RequireAuthenticated();
 
-        // Compared here rather than through an intention, the way the rest of
-        // moderation compares a rank: the refusal is read by a member of staff
-        // about their own authority, and a general sentence would leave them
-        // unable to tell a missing rank from a broken screen.
-        //
-        // The role read here is the folded one, so an administrator who owes a
-        // factor cannot use this to hand a colleague their way in - which is the
-        // point of folding it in one place.
+        // Compared here rather than through an intention, so the refusal names the
+        // rank. The role is the folded one: an administrator who owes a factor cannot
+        // hand a colleague the way in.
         if (caller.Role < UserRole.Admin)
         {
             throw new HttpException(HttpStatusCode.Forbidden,
@@ -210,9 +186,8 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
 
         if (account.UserId == caller.UserId)
         {
-            // Taking one's own factor off through the staff door would make the
-            // arrangement a single-administrator one, which is the thing it
-            // exists not to be. The owner's own path is the settings screen.
+            // One's own factor through the staff door would make it a single-administrator
+            // arrangement; the owner's own path is the settings screen.
             throw new HttpException(HttpStatusCode.Forbidden,
                 "Отключить свою двухфакторную аутентификацию можно в настройках");
         }
@@ -223,15 +198,14 @@ internal class TwoFactorRemovalService : ITwoFactorRemovalService
         }
 
         await _repository.Remove(account.UserId, cancellationToken);
-        await _authenticationService.LogoutAll(account.UserId);
+        await _sessionService.LogoutAll(account.UserId);
 
-        // Both journals. The owner has to see what was done to his account, and
-        // the administrator's own trail has to carry what he did and under which
-        // rank.
-        await _auditService.LogAsync(account.UserId, SecurityEventType.TwoFactorRemovedByAdmin,
+        // Both journals: the owner's and the administrator's. Past the rank check the caller is an
+        // administrator: the System identity never signs in.
+        await _auditRepository.LogAsync(account.UserId, SecurityEventType.TwoFactorRemovedByAdmin,
             details: $"Администратор: {caller.Username}");
-        await _auditService.LogAsync(caller.UserId, SecurityEventType.TwoFactorRemovedByAdmin,
-            details: $"Учетная запись: {account.Username}; роль администратора: {caller.Role}");
+        await _auditRepository.LogAsync(caller.UserId, SecurityEventType.TwoFactorRemovedByAdmin,
+            details: $"Учетная запись: {account.Username}, роль администратора: Администратор");
 
         _logger.LogWarning(
             "Two-factor cleared by an administrator. Target={UserId}, Actor={ActorId}",

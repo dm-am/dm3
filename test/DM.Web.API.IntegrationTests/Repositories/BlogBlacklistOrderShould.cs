@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -19,16 +16,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// (GameBlacklistOrderShould).
 /// </summary>
 /// <remarks>
-/// A name just added belongs at the bottom of the list, and a read without an
-/// order gave the database the choice. The copy of the owner's personal list
-/// writes one moment on every row, so the date alone does not settle the order
-/// either.
-///
-/// The rows are written in the order no read should return them: newest first,
-/// and of the two made together the later name first. The blocked users'
-/// identifiers rise in insertion order too, so neither the heap, the index on
-/// (BlogId, BlockedUserId) nor the users table can hand back the expected order
-/// by accident.
+/// The copy of the personal list writes one moment on every row. The rows are written in the order no read should
+/// return, with identifiers rising in insertion order, so no index hands back the answer by accident.
 /// </remarks>
 public class BlogBlacklistOrderShould : IntegrationTestBase
 {

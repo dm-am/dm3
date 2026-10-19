@@ -12,19 +12,7 @@ namespace DM.Domain.Game.Tests.Features.Games;
 /// One anonymous listing, one cache entry.
 /// </summary>
 /// <remarks>
-/// The entry is shared by every anonymous reader of the site, so a field that
-/// changes what the repository returns and does not change the key hands one
-/// reader another reader's page for the whole life of the entry. That is what
-/// happened to the sort order: it was written into the key only when a sort field
-/// came with it, while the repository reads the order in every branch including
-/// the default one, so ?sortOrder=asc and ?sortOrder=desc were one entry.
-///
-/// Walked by reflection rather than listed, because a list is exactly what failed
-/// here. Twenty-three properties, two hand-kept mirrors of them, and nothing that
-/// notices a twenty-fourth: the field is added, both mirrors are forgotten, and
-/// the site keeps answering — with the wrong page, to somebody who has no way of
-/// knowing. Every property has to end up in one of two places, and this says
-/// which without needing anyone to remember either.
+/// Walked by reflection, so a new query field must end up in the key or in the shared list.
 /// </remarks>
 public class AnonymousGameCacheKeyShould
 {
@@ -37,10 +25,10 @@ public class AnonymousGameCacheKeyShould
             "the query declares the fields this is about, and finding none passes everything");
 
         var plain = new GamesQuery();
-        GameService.IsCacheableAnonymousQuery(plain).Should().BeTrue(
+        GamesQueryCacheKey.IsCacheableAnonymousQuery(plain).Should().BeTrue(
             "the plainest listing there is - the front page of an anonymous reader - is the " +
             "one this cache exists for");
-        var plainKey = GameService.BuildAnonymousCacheKey(plain);
+        var plainKey = GamesQueryCacheKey.BuildAnonymousCacheKey(plain);
 
         foreach (var property in properties)
         {
@@ -51,7 +39,7 @@ public class AnonymousGameCacheKeyShould
             // property is capable of changing the key at all.
             var cacheable = QueryProbes.Candidates(property.PropertyType)
                 .Select(value => Query(property, value))
-                .Where(GameService.IsCacheableAnonymousQuery)
+                .Where(GamesQueryCacheKey.IsCacheableAnonymousQuery)
                 .ToList();
 
             if (cacheable.Count == 0)
@@ -59,7 +47,7 @@ public class AnonymousGameCacheKeyShould
                 continue;
             }
 
-            cacheable.Select(GameService.BuildAnonymousCacheKey).Should().Contain(
+            cacheable.Select(GamesQueryCacheKey.BuildAnonymousCacheKey).Should().Contain(
                 key => key != plainKey,
                 $"no value of {property.Name} that this cache agrees to serve changes the key " +
                 "it is served under, so listings that differ in it share one entry and " +
@@ -79,16 +67,13 @@ public class AnonymousGameCacheKeyShould
     /// The two directions of a sort are two listings.
     /// </summary>
     /// <remarks>
-    /// The defect itself, written out. The order was appended to the key only
-    /// beside a sort field, and the repository reads it in every branch - so the
-    /// oldest games and the newest games were one entry, and for a minute at a
-    /// time the front page showed whichever of them was asked for first.
+    /// The repository reads the order in every branch, the default one included.
     /// </remarks>
     [Fact]
     public void TellTheTwoDirectionsOfASortApart()
     {
-        var ascending = GameService.BuildAnonymousCacheKey(new GamesQuery { SortOrder = "asc" });
-        var descending = GameService.BuildAnonymousCacheKey(new GamesQuery { SortOrder = "desc" });
+        var ascending = GamesQueryCacheKey.BuildAnonymousCacheKey(new GamesQuery { SortOrder = "asc" });
+        var descending = GamesQueryCacheKey.BuildAnonymousCacheKey(new GamesQuery { SortOrder = "desc" });
 
         ascending.Should().NotBe(descending,
             "these are opposite ends of the same list, and the field that reverses it is read " +
@@ -99,10 +84,7 @@ public class AnonymousGameCacheKeyShould
     /// Both spellings of the same listing are one entry.
     /// </summary>
     /// <remarks>
-    /// The other direction, and the cheaper half: the repository lowercases the
-    /// sort field and reads the statuses as a set, so keys differing only in the
-    /// case of one and the order of the other held byte-identical pages under two
-    /// names — twice the memory and half the hit rate for nothing.
+    /// The repository lowercases the sort field and reads the statuses as a set.
     /// </remarks>
     [Fact]
     public void HoldOneEntryForTwoSpellingsOfTheSameListing()
@@ -120,7 +102,7 @@ public class AnonymousGameCacheKeyShould
             Statuses = [ModuleStatus.Draft, ModuleStatus.Active],
         };
 
-        GameService.BuildAnonymousCacheKey(upper).Should().Be(GameService.BuildAnonymousCacheKey(lower),
+        GamesQueryCacheKey.BuildAnonymousCacheKey(upper).Should().Be(GamesQueryCacheKey.BuildAnonymousCacheKey(lower),
             "the repository lowercases the sort field and matches the statuses as a set, so " +
             "these are one listing and two entries of it are one wasted");
     }

@@ -11,24 +11,11 @@ using DbGameReview = DM.Infrastructure.Persistence.Entities.Game.GameReview;
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
 /// <summary>
-/// Integration tests for UserGameReviewController and the two profile counters
-/// it backs.
+/// The game reviews and the two profile counters they back.
 /// </summary>
 /// <remarks>
-/// A game review is authored by one user and lands on another — the master of
-/// the reviewed game — so every assertion here is about which of the two names
-/// a row answers to. The seeded fixture gives the two sides different owners:
-/// TestGame is mastered by TestUser, SecondGame by SecondUser.
-///
-/// Counters are asserted as deltas rather than as absolute numbers: the profile
-/// counts every review in the database, and a test that pinned the total would
-/// be a test about what else the fixture happens to contain.
-///
-/// The arithmetic is read off the repository rather than off GET
-/// /v1/users/{name}/profile: that endpoint answers out of
-/// CommunityProfileService's cache, so a before-and-after pair taken through it
-/// measures the cache and not the count. What the endpoint is held to here is
-/// the other half — that both numbers reach the wire at all.
+/// TestGame is mastered by TestUser and SecondGame by SecondUser. Counters are asserted as deltas off the
+/// repository: the profile endpoint answers out of a cache.
 /// </remarks>
 public class UserGameReviewControllerShould : IntegrationTestBase
 {
@@ -37,9 +24,7 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Seed a review directly: the create endpoint requires a post in the game
-    /// and a hundred game posts overall, which is too heavy to arrange through
-    /// the API.
+    /// Seed a review directly: the create endpoint's gates are too heavy to arrange through the API.
     /// </summary>
     private async Task SeedReview(Guid id, Guid authorId, Guid gameId, string text)
     {
@@ -97,7 +82,7 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     [Fact]
     public async Task ListOnlyTheReviewsOfTheGamesTheUserMasters()
     {
-        // Arrange - one review of TestUser's game, two of somebody else's
+        // One review of TestUser's game, two of somebody else's
         var received = Guid.NewGuid();
         var writtenBySameUser = Guid.NewGuid();
         var strangers = Guid.NewGuid();
@@ -110,10 +95,9 @@ public class UserGameReviewControllerShould : IntegrationTestBase
 
         try
         {
-            // Act
             var ids = await ReviewIdsAt($"/v1/users/{TestConstants.TestUserLogin}/game-reviews");
 
-            // Assert - a review of somebody else's game is somebody else's,
+            // A review of somebody else's game is somebody else's,
             // whoever wrote it
             ids.Should().Contain(received);
             ids.Should().NotContain(writtenBySameUser);
@@ -128,7 +112,6 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     [Fact]
     public async Task ListOnlyTheReviewsTheUserWrote()
     {
-        // Arrange
         var written = Guid.NewGuid();
         var aboutTheSameUsersGame = Guid.NewGuid();
         await SeedReview(written, TestConstants.TestUserId, TestConstants.SecondGameId,
@@ -138,10 +121,9 @@ public class UserGameReviewControllerShould : IntegrationTestBase
 
         try
         {
-            // Act
             var ids = await ReviewIdsAt($"/v1/users/{TestConstants.TestUserLogin}/written-game-reviews");
 
-            // Assert - authorship, not the game
+            // Authorship, not the game
             ids.Should().Contain(written);
             ids.Should().NotContain(aboutTheSameUsersGame);
         }
@@ -154,7 +136,7 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     [Fact]
     public async Task NameTheReviewedGame()
     {
-        // Arrange - the user-level listing is the one place where the game is
+        // The user-level listing is the one place where the game is
         // what differs between rows, and the id alone is not a name
         var reviewId = Guid.NewGuid();
         await SeedReview(reviewId, TestConstants.TestUserId, TestConstants.SecondGameId,
@@ -162,12 +144,10 @@ public class UserGameReviewControllerShould : IntegrationTestBase
 
         try
         {
-            // Act
             var response = await Client.GetAsync(
                 $"/v1/users/{TestConstants.TestUserLogin}/written-game-reviews");
             response.StatusCode.Should().Be(HttpStatusCode.OK);
 
-            // Assert
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var review = document.RootElement.GetProperty("resources").EnumerateArray()
                 .Single(r => r.GetProperty("id").GetGuid() == reviewId);
@@ -182,7 +162,6 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     [Fact]
     public async Task CountAReceivedReviewForTheGameMasterAndNobodyElse()
     {
-        // Arrange
         var before = (await Counted(TestConstants.TestUserLogin)).GameReviewsReceivedCount;
         var authorBefore = (await Counted(TestConstants.SecondUserLogin)).GameReviewsReceivedCount;
 
@@ -192,7 +171,7 @@ public class UserGameReviewControllerShould : IntegrationTestBase
 
         try
         {
-            // Act / Assert - the review lands on the master of the reviewed
+            // The review lands on the master of the reviewed
             // game; its author has received nothing
             (await Counted(TestConstants.TestUserLogin)).GameReviewsReceivedCount
                 .Should().Be(before + 1);
@@ -208,7 +187,6 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     [Fact]
     public async Task CountAWrittenReviewForItsAuthorAndNobodyElse()
     {
-        // Arrange
         var before = (await Counted(TestConstants.TestUserLogin)).GameReviewsGivenCount;
         var masterBefore = (await Counted(TestConstants.SecondUserLogin)).GameReviewsGivenCount;
 
@@ -218,7 +196,6 @@ public class UserGameReviewControllerShould : IntegrationTestBase
 
         try
         {
-            // Act / Assert
             (await Counted(TestConstants.TestUserLogin)).GameReviewsGivenCount
                 .Should().Be(before + 1);
             (await Counted(TestConstants.SecondUserLogin)).GameReviewsGivenCount
@@ -233,7 +210,7 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     [Fact]
     public async Task CountNeitherSideOfARemovedReview()
     {
-        // Arrange - a deleted review is gone from both numbers, not just from
+        // A deleted review is gone from both numbers, not just from
         // the list
         var receivedBefore = (await Counted(TestConstants.TestUserLogin)).GameReviewsReceivedCount;
         var givenBefore = (await Counted(TestConstants.SecondUserLogin)).GameReviewsGivenCount;
@@ -251,7 +228,6 @@ public class UserGameReviewControllerShould : IntegrationTestBase
                 await db.SaveChangesAsync();
             }
 
-            // Act / Assert
             (await Counted(TestConstants.TestUserLogin)).GameReviewsReceivedCount
                 .Should().Be(receivedBefore);
             (await Counted(TestConstants.SecondUserLogin)).GameReviewsGivenCount
@@ -266,10 +242,7 @@ public class UserGameReviewControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The other half of the counter: whatever the number is, the profile
-    /// endpoint publishes it. The arithmetic is asserted above, off the
-    /// uncached repository; this is about the two fields existing on the wire,
-    /// which is what the profile page reads.
+    /// The profile endpoint publishes both counters.
     /// </summary>
     [Fact]
     public async Task PublishBothCountersOnTheProfile()
@@ -280,8 +253,8 @@ public class UserGameReviewControllerShould : IntegrationTestBase
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
         var profile = document.RootElement.GetProperty("resource");
 
-        profile.GetProperty("gameReviewsReceived").GetInt32().Should().BeGreaterThanOrEqualTo(0);
-        profile.GetProperty("gameReviewsGiven").GetInt32().Should().BeGreaterThanOrEqualTo(0);
+        profile.GetProperty("gameReviewsReceived").ValueKind.Should().Be(JsonValueKind.Number);
+        profile.GetProperty("gameReviewsGiven").ValueKind.Should().Be(JsonValueKind.Number);
     }
 
     [Fact]

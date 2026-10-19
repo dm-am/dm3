@@ -17,7 +17,6 @@ internal class UploadRepository : IUploadRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public UploadRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -28,7 +27,7 @@ internal class UploadRepository : IUploadRepository
         UploadFilter filter, int skip, int take)
     {
         // Owner is loaded so the moderation "Загрузил" column can render the
-        // uploader username/profile link for every file (doc 4.2.3.8.9).
+        // uploader username/profile link for every file.
         // Include, not a projection: on a required navigation a projected join
         // would drop upload rows whose owner the soft-delete filter hides,
         // silently shrinking the moderation list.
@@ -121,6 +120,7 @@ internal class UploadRepository : IUploadRepository
             FilePath = upload.Url,
             CreatedUtc = upload.CreatedUtc,
             ConfirmedUtc = upload.ConfirmedUtc,
+            AddresseesJson = upload.AddresseesJson,
         };
         AssignTypedTarget(entity, upload.Type, upload.TargetId);
 
@@ -150,6 +150,22 @@ internal class UploadRepository : IUploadRepository
         // file it is, and a lookup purely to echo the username back would cost
         // a query per upload.
         return ToStored(entity);
+    }
+
+    /// <inheritdoc />
+    public async Task<StoredUpload?> SetAddresseesAsync(Guid uploadId, string? addresseesJson)
+    {
+        var upload = await _dbContext.Uploads
+            .Include(u => u.Owner)
+            .FirstOrDefaultAsync(u => u.UploadId == uploadId);
+        if (upload == null)
+        {
+            return null;
+        }
+
+        upload.AddresseesJson = addresseesJson;
+        await _dbContext.SaveChangesAsync();
+        return ToStored(upload);
     }
 
     /// <summary>
@@ -182,12 +198,12 @@ internal class UploadRepository : IUploadRepository
             // The soft-delete filter keeps this to the live rows, so a portrait
             // retired earlier does not get its grace period restarted. The stamp is
             // the new upload's own moment: that is when the old one was superseded.
-            await _dbContext.Uploads
-                .Where(u => u.TargetCharacterId == entity.TargetCharacterId
-                    && u.Type == UploadType.CharacterAvatar)
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.IsRemoved, true)
-                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)entity.CreatedUtc));
+            // No author: a superseded portrait is not a removal anybody made.
+            await SoftDelete.MarkWhere(
+                _dbContext.Uploads.Where(u => u.TargetCharacterId == entity.TargetCharacterId
+                    && u.Type == UploadType.CharacterAvatar),
+                null,
+                entity.CreatedUtc);
 
             _dbContext.Uploads.Add(entity);
             await _dbContext.SaveChangesAsync();
@@ -234,5 +250,6 @@ internal class UploadRepository : IUploadRepository
         Url = upload.FilePath,
         CreatedUtc = upload.CreatedUtc,
         ConfirmedUtc = upload.ConfirmedUtc,
+        AddresseesJson = upload.AddresseesJson,
     };
 }

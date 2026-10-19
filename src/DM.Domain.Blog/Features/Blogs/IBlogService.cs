@@ -7,28 +7,21 @@ using DM.Domain.Core.Statuses;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
-/// <summary>
-/// Service for blog operations
-/// </summary>
 public interface IBlogService
 {
     /// <summary>
     /// Get public blogs with paging. Resolves the filter's host usernames into
     /// user ids and role-gates its premoderation status before querying, so
-    /// callers pass what the request said and nothing more.
+    /// callers pass what the request said and nothing more. An empty filter
+    /// means the whole public list.
     /// </summary>
-    /// <param name="query">Paging query</param>
-    /// <param name="filter">Filter and sort (an empty filter means the whole public list)</param>
-    /// <param name="ct">Cancellation token</param>
     Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
         PagingQuery query, BlogFilter filter, CancellationToken ct = default);
 
     /// <summary>
-    /// Get popular blogs ordered by subscriber count
+    /// Get popular blogs ordered by subscriber count, without the blogs of
+    /// <paramref name="excludeOwnerIds" /> (blacklist filtering)
     /// </summary>
-    /// <param name="count">Number of blogs to return</param>
-    /// <param name="excludeOwnerIds">Optional owner IDs to exclude (for blacklist filtering)</param>
-    /// <param name="ct">Cancellation token</param>
     Task<IEnumerable<Blog>> GetPopularBlogs(
         int count = 5, IReadOnlyCollection<Guid>? excludeOwnerIds = null, CancellationToken ct = default);
 
@@ -38,8 +31,8 @@ public interface IBlogService
     Task<IEnumerable<Blog>> GetUserBlogs(string username, CancellationToken ct = default);
 
     /// <summary>
-    /// Get blog by ID. A blog the reader may not see answers the same as one
-    /// that is not there: 404, same body.
+    /// A blog the reader may not see answers the same as one that is not
+    /// there: 404, same body.
     /// </summary>
     Task<Blog> GetAsync(Guid blogId, CancellationToken ct = default);
 
@@ -52,7 +45,20 @@ public interface IBlogService
     /// <summary>
     /// Get blog by ID (for authorization checks, skips draft visibility)
     /// </summary>
-    Task<Blog> GetBlogAsync(Guid blogId, CancellationToken ct = default);
+    Task<Blog> GetUnfiltered(Guid blogId, CancellationToken ct = default);
+
+    /// <summary>
+    /// The blog as the caller sees it, for a read or for a move he makes on it as
+    /// its reader.
+    /// </summary>
+    /// <remarks>
+    /// A blog the caller may not open answers exactly as one that is not there.
+    /// A 403 instead would tell a stranger that the identifier resolves and that
+    /// what it resolves to is a private draft or a blog under premoderation, and a
+    /// move let through would write a subscription into a blog hidden from the
+    /// one who made it.
+    /// </remarks>
+    Task<Blog> GetVisibleAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
     /// Whether the reader the current request is on behalf of may see the blog at
@@ -61,14 +67,10 @@ public interface IBlogService
     /// not there answers the same as one the reader may not open.
     /// </summary>
     /// <remarks>
-    /// For the callers whose refusal has to be a 404 and not a 403, because on a
-    /// blog the caller can find nowhere else on the site the difference between
-    /// "no such blog" and "not yours" is itself the leak. What lives inside a blog
-    /// asks it about its parent: a publication row on its own cannot tell whether
-    /// it is readable, and the id of one is handed out by the profile widget.
+    /// For the callers whose refusal has to be a 404 and not a 403. What lives
+    /// inside a blog asks it about its parent: a publication row on its own cannot
+    /// tell whether it is readable, and the id of one is handed out by the profile widget.
     /// </remarks>
-    /// <param name="blogId">Blog identifier</param>
-    /// <param name="ct">Cancellation token</param>
     Task<bool> IsVisibleToViewerAsync(Guid blogId, CancellationToken ct = default);
 
     /// <summary>
@@ -77,99 +79,37 @@ public interface IBlogService
     /// </summary>
     Task<Blog> GetByOwnerUsernameAsync(string username, CancellationToken ct = default);
 
-    /// <summary>
-    /// Add an assistant to a blog
-    /// </summary>
     Task AddAssistant(Guid blogId, Guid userId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Create a new blog
-    /// </summary>
     Task<Blog> Create(CreateBlog createBlog, CancellationToken ct = default);
 
-    /// <summary>
-    /// Update blog
-    /// </summary>
     Task<Blog> Update(UpdateBlog updateBlog, CancellationToken ct = default);
 
-    /// <summary>
-    /// Delete blog
-    /// </summary>
     Task Delete(Guid blogId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Create a new rubric. Rubrics stay on this service rather than getting a
-    /// feature of their own; the reason is stated where they are implemented.
-    /// </summary>
     Task<Rubric> CreateRubric(CreateRubric createRubric, CancellationToken ct = default);
 
     /// <summary>
-    /// Rename a rubric (and optionally change its sort order). Gated to the
-    /// blog owner, mirroring how rubrics are created and deleted.
+    /// Rename a rubric (and optionally change its sort order)
     /// </summary>
     Task<Rubric> UpdateRubric(UpdateRubric updateRubric, CancellationToken ct = default);
 
     /// <summary>
     /// Replace the order of a blog's rubrics. The position of each id in
     /// <paramref name="orderedRubricIds"/> becomes the rubric's sort order.
-    /// Gated to the blog owner, mirroring the other rubric operations.
     /// </summary>
     /// <remarks>
     /// The whole order, not a correction to it: <paramref name="orderedRubricIds"/>
     /// names every rubric of the blog exactly once, and a list that does not is
-    /// refused. A partial list would leave the rubrics it skipped holding the sort
-    /// orders this call has just given to others.
+    /// refused.
     /// </remarks>
     /// <returns>The rubrics in their new order</returns>
     Task<IEnumerable<Rubric>> ReorderRubrics(
         Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default);
 
-    /// <summary>
-    /// Delete rubric
-    /// </summary>
     Task DeleteRubric(Guid rubricId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get rubrics for a blog
-    /// </summary>
     Task<IEnumerable<Rubric>> GetRubrics(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Subscribe to a blog as a reader (via Subscriptions)
-    /// </summary>
-    /// <param name="blogId">Blog identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>The subscribed user</returns>
-    Task<GeneralUser> Subscribe(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Unsubscribe from a blog (via Subscriptions)
-    /// </summary>
-    /// <param name="blogId">Blog identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    Task Unsubscribe(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Leave a blog (remove current user as assistant)
-    /// </summary>
-    /// <param name="blogId">Blog identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    Task Leave(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get blog readers (subscribers)
-    /// </summary>
-    Task<IEnumerable<UserReference>> GetReaders(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Get blog assistants with role information
-    /// </summary>
-    Task<IEnumerable<BlogUser>> GetAssistants(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Remove assistant from blog
-    /// </summary>
-    Task RemoveAssistant(Guid blogId, string username, CancellationToken ct = default);
 
     /// <summary>
     /// Get blogs by IDs (for subscribed blogs), the ones the caller may open
@@ -184,11 +124,9 @@ public interface IBlogService
     /// <summary>
     /// Apply a premoderation transition (send to / remove from premoderation).
     /// Gated Mentor+. The public id is resolved via the repository (ungated) so
-    /// a premoderation-pending blog stays reachable for the non-curator mentor.
+    /// a premoderation-pending blog stays reachable for a mentor who is not the blog's.
+    /// <paramref name="id" /> is the public id (5 letters) or the GUID.
     /// </summary>
-    /// <param name="id">Blog public id (5 letters) or GUID</param>
-    /// <param name="transition">Requested transition</param>
-    /// <param name="ct">Cancellation token</param>
     Task<Blog> ChangePremoderationAsync(
         string id, ModulePremoderationTransition transition, CancellationToken ct = default);
 
@@ -196,13 +134,9 @@ public interface IBlogService
     /// Apply a status transition (start / freeze / finish / close / reopen)
     /// on the blog state machine. Illegal transitions are rejected with 400
     /// before authorization; the transition itself is gated by the blog lead
-    /// bucket (owner + assistants). The public id is resolved via the
-    /// repository (ungated) so the owner of a premoderation-pending or
-    /// private-draft blog can still operate on it.
+    /// bucket (owner + assistants). <paramref name="id" /> is the public id
+    /// (5 letters) or the GUID.
     /// </summary>
-    /// <param name="id">Blog public id (5 letters) or GUID</param>
-    /// <param name="transition">Requested transition</param>
-    /// <param name="ct">Cancellation token</param>
     Task<Blog> ChangeStatusAsync(
         string id, ModuleStatusTransition transition, CancellationToken ct = default);
 }

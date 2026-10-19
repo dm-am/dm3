@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Configuration;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -11,22 +12,9 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// A newbie is one number, and the stored column agrees with it.
 /// </summary>
-/// <remarks>
-/// The rule "fewer than a hundred game posts" was written out seven times over two
-/// different sources - the denormalised counter and a COUNT over posts, which the
-/// removal of a post was already enough to split - and the number existed once more
-/// as a setting the schema cannot read. Lowering the setting moved game
-/// premoderation, reviews and endorsements while the badge on the profile, the user
-/// filter and the assistant lists stayed on the column's hundred; the only thing
-/// guarding that was a warning line at warm-up, after which the site started anyway.
-///
-/// Read out of the sources rather than restated here: the migration and the two
-/// snapshots are what a database is built from, and a number is compared rather
-/// than a phrase, so a failure says which copy moved.
-/// </remarks>
+/// <remarks>Read out of the sources: the migration and snapshots build the database; a number names the copy that moved.</remarks>
 public class NewbieThresholdShould
 {
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     /// <summary>The SQL the column computes, as the sources spell it.</summary>
     private static string Expression =>
@@ -53,19 +41,9 @@ public class NewbieThresholdShould
     }
 
     /// <summary>
-    /// No second spelling of the rule. Only the schema repeats the number, and the
-    /// test above is what holds it to the constant.
+    /// No second spelling of the rule; the schema's four files are compared to the constant above.
     /// </summary>
-    /// <remarks>
-    /// The schema is four files, not one: the model declares the column, and the
-    /// migration and the two snapshots are the generated text a database is built
-    /// from. They are excluded here and compared to the constant above instead.
-    ///
-    /// The comparison is matched through the escaped quotes the SQL carries. A
-    /// pattern that only accepts whitespace after the column name reads as strict
-    /// and passes everything, which is how the number came back into the model
-    /// unnoticed.
-    /// </remarks>
+    /// <remarks>Matched through the escaped quotes the SQL carries.</remarks>
     [Fact]
     public void BeSpelledNowhereElse()
     {
@@ -78,7 +56,7 @@ public class NewbieThresholdShould
         };
 
         var offenders = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
+            .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src"), "*.cs", SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
                        StringComparison.Ordinal)
                        && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
@@ -100,29 +78,13 @@ public class NewbieThresholdShould
     /// <summary>
     /// The number the published documentation states is the number the code uses.
     /// </summary>
-    /// <remarks>
-    /// The endorsement and post-review endpoints spell the threshold out in their
-    /// XML docs, which is what a client reads in Swagger before deciding whether an
-    /// account qualifies. An XML doc cannot interpolate a constant, so the wording
-    /// is left alone and held to the constant from here instead: moving the product
-    /// rule without moving the sentence leaves the API promising the old number,
-    /// and there is nothing else in the build that would notice.
-    ///
-    /// Refusal messages are not matched - they interpolate the constant and carry
-    /// no digits of their own, which is the shape this test is asking the rest of
-    /// the prose to reach.
-    /// </remarks>
+    /// <remarks>An XML doc cannot interpolate a constant, so its number is held to the constant here.</remarks>
     [Fact]
     public void BeTheNumberTheApiDocumentationPromises()
     {
         var mention = new Regex(@"(?<number>\d+)\s+(game posts|постов)", RegexOptions.Compiled);
 
-        var stale = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
-                       StringComparison.Ordinal)
-                       && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
-                           StringComparison.Ordinal))
+        var stale = RepositoryFiles.ProductionSources()
             .SelectMany(path => mention
                 .Matches(File.ReadAllText(path))
                 .Select(match => (File: Path.GetFileName(path), Number: match.Groups["number"].Value)))
@@ -141,16 +103,8 @@ public class NewbieThresholdShould
     /// column too.
     /// </summary>
     /// <remarks>
-    /// "Game posts" had two readings - the denormalised QuantityRating the profile
-    /// badge and the user filter are built on, and a COUNT over Posts, which the
-    /// global !IsRemoved filter makes a different number the moment a post is
-    /// deleted. Three repositories answered the same question and one of them
-    /// counted, so a user could be shown the newbie badge and still be allowed to
-    /// review a game, or the reverse.
-    ///
-    /// Matched on the implementations rather than the declarations: the interfaces
-    /// spell the method without a body, and a rule stated on the name alone would
-    /// be satisfied by an interface nobody implements the same way.
+    /// A COUNT over Posts differs from QuantityRating once a post is removed. Matched on the
+    /// implementations, not the declarations.
     /// </remarks>
     [Fact]
     public void BeCountedOffTheSameColumnInEveryRepository()
@@ -160,11 +114,8 @@ public class NewbieThresholdShould
             RegexOptions.Compiled);
 
         var implementations = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*Repository.cs", SearchOption.AllDirectories)
-            .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}",
-                       StringComparison.Ordinal)
-                       && !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
-                           StringComparison.Ordinal))
+            .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src"), "*Repository.cs", SearchOption.AllDirectories)
+            .Where(RepositoryFiles.IsAuthored)
             .SelectMany(path => implementation
                 .Matches(File.ReadAllText(path))
                 .Select(match => (File: Path.GetFileName(path), Body: match.Groups["body"].Value)))

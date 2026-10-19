@@ -1,14 +1,14 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { authenticatedContext, seededUser } from "../../fixtures/auth";
-
-const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
+import {
+  API_BASE_URL,
+  authenticatedContext,
+  primaryUser,
+} from "../../fixtures/auth";
 
 /**
  * Personal notes about other users: `/v1/users/me/notes/{username}`, an upsert
  * keyed by the subject. There is no collection: no POST to create, no GET to
- * list. The previous version of this file tested exactly those two, got 404
- * from a route that has never existed, and did not notice because the whole
- * suite was skipping itself.
+ * list.
  */
 
 let authContext: APIRequestContext;
@@ -17,17 +17,21 @@ let subjectUsername: string | null = null;
 test.beforeAll(async () => {
   authContext = await authenticatedContext();
 
-  const usersResponse = await authContext.get(`${API_URL}/v1/users?size=5`);
+  const usersResponse = await authContext.get(
+    `${API_BASE_URL}/v1/users?take=5`,
+  );
   const users = await usersResponse.json();
   subjectUsername =
     users.resources?.find(
-      (u: { username: string }) => u.username !== seededUser.username,
+      (u: { username: string }) => u.username !== primaryUser.username,
     )?.username ?? null;
 });
 
 test.afterAll(async () => {
   if (subjectUsername) {
-    await authContext.delete(`${API_URL}/v1/users/me/notes/${subjectUsername}`);
+    await authContext.delete(
+      `${API_BASE_URL}/v1/users/me/notes/${subjectUsername}`,
+    );
   }
   await authContext.dispose();
 });
@@ -41,9 +45,8 @@ test.describe("Profile Notes API", () => {
     expect(subjectUsername, "seed must contain a second user").not.toBeNull();
 
     const response = await authContext.put(
-      `${API_URL}/v1/users/me/notes/${subjectUsername}`,
+      `${API_BASE_URL}/v1/users/me/notes/${subjectUsername}`,
       {
-        headers: { "Content-Type": "application/json" },
         data: { text: "Заметка из e2e" },
       },
     );
@@ -54,16 +57,15 @@ test.describe("Profile Notes API", () => {
   });
 
   test("reads the note back by username", async () => {
-    // Its own precondition. The note used to come from the test above and be
-    // deleted by the one below, and the file runs in parallel with itself, so
-    // whether this one found anything depended on the order the workers
-    // happened to pick.
-    await authContext.put(`${API_URL}/v1/users/me/notes/${subjectUsername}`, {
-      headers: { "Content-Type": "application/json" },
-      data: { text: "Заметка из e2e" },
-    });
+    // Its own precondition, whatever the test above left.
+    await authContext.put(
+      `${API_BASE_URL}/v1/users/me/notes/${subjectUsername}`,
+      {
+        data: { text: "Заметка из e2e" },
+      },
+    );
     const response = await authContext.get(
-      `${API_URL}/v1/users/me/notes/${subjectUsername}`,
+      `${API_BASE_URL}/v1/users/me/notes/${subjectUsername}`,
     );
 
     expect(response.ok()).toBeTruthy();
@@ -73,9 +75,8 @@ test.describe("Profile Notes API", () => {
 
   test("deletes a note by writing an empty text", async () => {
     const response = await authContext.put(
-      `${API_URL}/v1/users/me/notes/${subjectUsername}`,
+      `${API_BASE_URL}/v1/users/me/notes/${subjectUsername}`,
       {
-        headers: { "Content-Type": "application/json" },
         data: { text: "" },
       },
     );
@@ -85,9 +86,8 @@ test.describe("Profile Notes API", () => {
 
   test("refuses a note about oneself", async () => {
     const response = await authContext.put(
-      `${API_URL}/v1/users/me/notes/${seededUser.username}`,
+      `${API_BASE_URL}/v1/users/me/notes/${primaryUser.username}`,
       {
-        headers: { "Content-Type": "application/json" },
         data: { text: "Заметка о себе" },
       },
     );
@@ -97,9 +97,8 @@ test.describe("Profile Notes API", () => {
 
   test("reports an unknown subject as not found", async () => {
     const response = await authContext.put(
-      `${API_URL}/v1/users/me/notes/nobody-by-that-name`,
+      `${API_BASE_URL}/v1/users/me/notes/nobody-by-that-name`,
       {
-        headers: { "Content-Type": "application/json" },
         data: { text: "Заметка о призраке" },
       },
     );
@@ -109,7 +108,7 @@ test.describe("Profile Notes API", () => {
 
   test("requires authentication", async ({ request }) => {
     const response = await request.get(
-      `${API_URL}/v1/users/me/notes/${seededUser.username}`,
+      `${API_BASE_URL}/v1/users/me/notes/${primaryUser.username}`,
     );
 
     expect(response.status()).toBe(401);

@@ -1,3 +1,5 @@
+using DM.Domain.Account.Features.Availability;
+
 namespace DM.Web.API.Features.Account.Availability;
 
 /// <summary>
@@ -14,19 +16,4 @@ public class UsernameAvailabilityResponse
     /// Reason if not available
     /// </summary>
     public UsernameUnavailableReason? Reason { get; set; }
-}
-
-/// <summary>
-/// Reason why username is not available
-/// </summary>
-public enum UsernameUnavailableReason
-{
-    /// <summary>
-    /// Username is taken by another user
-    /// </summary>
-    Taken,
-    /// <summary>
-    /// Username format is invalid
-    /// </summary>
-    InvalidFormat
 }

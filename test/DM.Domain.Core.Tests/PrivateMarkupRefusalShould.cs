@@ -9,18 +9,7 @@ namespace DM.Domain.Core.Tests;
 /// to act on.
 /// </summary>
 /// <remarks>
-/// Only the game post declares [private]. Everywhere else the page erases such
-/// a block for every reader, the author included, and the line the author
-/// wrote for one reader reaches nobody without a word said. The predicate lives
-/// beside the tag's shape rather than beside the tag catalogue, because the catalogue is infrastructure and a validator may
-/// not reach into it — a validator knows its own surface by being the validator
-/// of that surface.
-///
-/// The wording matters as much as the refusal. A bare error code names neither
-/// the tag nor its place, and an author who wrote a long text is left to find
-/// the offending line by bisection; on a surface that never had the tag they
-/// are also left without the one thing they need to hear, which is where the
-/// tag does work and how to write it as an example.
+/// Only the game post declares [private], elsewhere the page erases the block for every reader.
 /// </remarks>
 public class PrivateMarkupRefusalShould
 {
@@ -61,26 +50,22 @@ public class PrivateMarkupRefusalShould
     }
 
     /// <summary>
-    /// The refusal on a surface that does not declare the tag names four
-    /// things: the spelling, its place, where the tag works and how to show it
-    /// as an example.
+    /// The refusal on a surface that does not declare the tag names three
+    /// things: the spelling, where the tag works and how to show it as an
+    /// example. No character number: the editor's check points at the line.
     /// </summary>
     [Fact]
     public void TellTheAuthorWhatWasReadAndWhereItWorks()
     {
         var refusal = PrivateBlockMarkup.DescribeSurfaceRefusal("до [private=\"Чак\"]СЕКРЕТ[/private] после");
 
-        refusal.Should().Contain("[private=\"Чак\"]");
-        refusal.Should().Contain("символ 4");
-        refusal.Should().StartWith("Скрытый текст работает только в игровом тексте поста");
-        refusal.Should().Contain("[noparse]");
+        refusal.Should().Be(
+            "Скрытый блок работает только в игровых постах: [private=\"Чак\"]. Для примера оберните его в [noparse].");
     }
 
     /// <summary>
     /// The refusal names where the tag works and promises nothing about who
-    /// would read the block. It used to say every reader would see it, and a
-    /// text that never met the refusal has the block erased for every reader
-    /// instead (BBCODE_RENDERING.md, "Грамматика разметки").
+    /// would read the block.
     /// </summary>
     [Fact]
     public void NotTellTheAuthorThatEveryReaderWouldSeeTheBlock()
@@ -99,7 +84,7 @@ public class PrivateMarkupRefusalShould
     public void GiveTheReasonAloneWhenThereIsNothingToPointAt()
     {
         PrivateBlockMarkup.DescribeSurfaceRefusal("без разметки")
-            .Should().Be("Скрытый текст работает только в игровом тексте поста");
+            .Should().Be("Скрытый блок работает только в игровых постах");
     }
 
     /// <summary>
@@ -127,20 +112,20 @@ public class PrivateMarkupRefusalShould
 
     [Theory]
     // Opened and never closed.
-    [InlineData("до [private=Вася]без закрытия", "[private=Вася]", "символ 4")]
+    [InlineData("до [private=\"Вася\"]без закрытия", "[private=\"Вася\"]", "Скрытый блок не закрыт: [private=\"Вася\"]. Добавьте [/private].")]
     // Closed without being opened.
-    [InlineData("текст [/private] дальше", "[/private]", "символ 7")]
+    [InlineData("текст [/private] дальше", "[/private]", "[/private] ничего не закрывает, уберите его или откройте [private] выше.")]
     // Opened inside itself.
-    [InlineData("[private]раз [private=Петя]два[/private]", "[private=Петя]", "символ 14")]
+    [InlineData("[private]раз [private=\"Петя\"]два[/private]", "[private=\"Петя\"]", "Скрытый блок внутри скрытого не работает: [private=\"Петя\"]. Закройте первый тегом [/private].")]
     // Written after a verbatim block nobody closed.
-    [InlineData("[noparse][private=\"Чак\"]СЕКРЕТ[/private]", "[private=\"Чак\"]", "символ 10")]
+    [InlineData("[noparse][private=\"Чак\"]СЕКРЕТ[/private]", "[private=\"Чак\"]", "[private=\"Чак\"] не станет примером: [noparse] выше не закрыт тегом [/noparse].")]
     public void TellTheAuthorWhichSpellingBrokeTheBlockAndWhere(
-        string source, string spelling, string place)
+        string source, string spelling, string expected)
     {
         var refusal = PrivateBlockMarkup.DescribeBalanceRefusal(source);
 
         refusal.Should().Contain(spelling);
-        refusal.Should().Contain(place);
+        refusal.Should().Be(expected);
     }
 
     /// <summary>
@@ -154,6 +139,6 @@ public class PrivateMarkupRefusalShould
     public void NameTheVerbatimBlockThatWasLeftOpen(string source)
     {
         PrivateBlockMarkup.DescribeBalanceRefusal(source)
-            .Should().Contain("после незакрытого [noparse]").And.Contain("[/noparse]");
+            .Should().Contain("не станет примером: [noparse] выше не закрыт тегом [/noparse].");
     }
 }

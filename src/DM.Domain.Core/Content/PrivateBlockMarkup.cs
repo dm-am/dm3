@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-
 namespace DM.Domain.Core.Content;
 
 /// <summary>
@@ -11,8 +8,7 @@ namespace DM.Domain.Core.Content;
 /// a domain assembly references no parser, so the save path reads the same
 /// rules here, for the one tag it has to answer about. The two are held to the
 /// same rows of bbcodeGrammar.cases.ts by BbGrammarShould, and the rules are
-/// written down once, in docs/architecture/BBCODE_RENDERING.md, section
-/// "Скрытый блок [private]":
+/// written down once, in BBCODE_RENDERING.md, section "Скрытый блок [private]":
 ///
 /// - every token <c>[private</c> followed by "]", "=", a whitespace character or
 ///   the end of the text is a hiding block;
@@ -36,6 +32,9 @@ public static class PrivateBlockMarkup
     public const string TagName = "private";
 
     private const string ClosingTag = "[/private]";
+
+    /// <summary>Why hiding markup is refused on a surface that does not declare it.</summary>
+    private const string SurfaceReason = "Скрытый блок работает только в игровых постах";
 
     /// <summary>
     /// The blocks of the text for the paths that cut them out of a string rather
@@ -82,16 +81,32 @@ public static class PrivateBlockMarkup
 
     /// <summary>
     /// What to tell the author when <see cref="IsBalanced"/> refuses: which
-    /// spelling was read, where it stands, and how to write it.
+    /// spelling was read and how to write it.
     /// </summary>
     /// <remarks>
-    /// A refusal nobody can act on is indistinguishable from a broken form. The
-    /// bare error code this used to carry named neither the tag nor its place,
-    /// so the author of a long post was told that something in it was wrong and
-    /// left to find it by bisection.
+    /// A refusal nobody can act on is indistinguishable from a broken form. It
+    /// gives no character number: a person does not count characters, and the
+    /// editor's markup check points at the line before the text is sent.
     /// </remarks>
     public static string DescribeBalanceRefusal(string? source) =>
-        FindImbalance(Read(source)) ?? "Скрытый блок написан неправильно.";
+        FindImbalance(Read(source))?.Message ?? "Скрытый блок написан неправильно.";
+
+    /// <summary>
+    /// Where the spelling <see cref="DescribeBalanceRefusal"/> quotes begins, as an
+    /// index into the text the parser reads, or null when the text is balanced.
+    /// </summary>
+    /// <remarks>
+    /// Not said to the author. The editor's check is held to name the same line
+    /// (markupCorpus.golden.json, written by BbMarkupCorpusShould).
+    /// </remarks>
+    public static int? LocateBalanceRefusal(string? source) => FindImbalance(Read(source))?.At;
+
+    /// <summary>
+    /// Where the hiding markup <see cref="DescribeSurfaceRefusal"/> quotes begins,
+    /// as an index into the text the parser reads, or null when there is none.
+    /// </summary>
+    public static int? LocatePrivateMarkup(string? source) =>
+        FindPrivateMarkup(Read(source)) is var found and >= 0 ? found : null;
 
     /// <summary>
     /// Whether the text carries hiding markup at all, wherever the parser would
@@ -115,15 +130,12 @@ public static class PrivateBlockMarkup
 
     /// <summary>
     /// What to tell the author on a surface that does not declare the tag: where
-    /// the tag does work, the spelling, its place, and how to show it as an
+    /// the tag does work, the spelling, and how to show it as an
     /// example instead.
     /// </summary>
     /// <remarks>
-    /// The reason is where the tag works and nothing about who would read the
-    /// block: a text that skipped this refusal has the block erased for every
-    /// reader, and the refusal once told the author the opposite, that every
-    /// reader would see it. The editor's markup check names the same case in
-    /// the same words (bbcode.ts, "private-outside-game").
+    /// The editor's markup check names the same case in the same words
+    /// (bbcodeWarnings.ts, "private-outside-game").
     /// </remarks>
     public static string DescribeSurfaceRefusal(string? source)
     {
@@ -131,13 +143,8 @@ public static class PrivateBlockMarkup
         var found = FindPrivateMarkup(text);
         return found < 0
             ? SurfaceReason
-            : $"{SurfaceReason}: {SpellingAt(text!, found)}, символ {found + 1}. " +
-              "Чтобы показать разметку примером, " +
-              $"поставьте ее между [{VerbatimTagName}] и [/{VerbatimTagName}].";
+            : $"{SurfaceReason}: {SpellingAt(text!, found)}. Для примера оберните его в [{VerbatimTagName}].";
     }
-
-    /// <summary>Why hiding markup is refused on a surface that does not declare it.</summary>
-    private const string SurfaceReason = "Скрытый текст работает только в игровом тексте поста";
 
     /// <summary>
     /// Attribute value of every well spelled [private="..."] block of the text, in
@@ -203,7 +210,7 @@ public static class PrivateBlockMarkup
     /// <summary>
     /// The refusal to report, or null when the text is well formed.
     /// </summary>
-    private static string? FindImbalance(string? source)
+    private static Imbalance? FindImbalance(string? source)
     {
         if (!MayContainTag(source)) return null;
 
@@ -215,42 +222,31 @@ public static class PrivateBlockMarkup
         {
             switch (token.Kind)
             {
-                // The parser reads the block after a [noparse] nobody closed as
-                // a block, and the page hides it. The author almost always wrote
-                // an example and forgot the closing tag, and without the refusal
-                // that example would quietly become a secret, or its [/private]
-                // would end a block early and show the rest. Refused to the end
-                // of the text rather than to the end of the tag the [noparse]
-                // stands in: no other tag is read here, so where that one ends
-                // is not known, and refusing too much is the safe way to be
-                // wrong. The editor's check reads the same rule.
+                // After a [noparse] nobody closed the parser reads a block, so an
+                // example would quietly become a secret: refused to the end of the text.
                 case TokenKind.UnclosedVerbatim:
                     unclosedVerbatim = true;
                     break;
 
                 case TokenKind.Opening or TokenKind.Closing when unclosedVerbatim:
-                    return $"Скрытая разметка после незакрытого [{VerbatimTagName}]: " +
-                           $"{SpellingAt(text, token.Index)}, символ {token.Index + 1}. " +
-                           $"Закройте [{VerbatimTagName}] тегом [/{VerbatimTagName}] " +
-                           "или уберите скрытую разметку.";
+                    return new(token.Index, $"{SpellingAt(text, token.Index)} не станет примером: " +
+                           $"[{VerbatimTagName}] выше не закрыт тегом [/{VerbatimTagName}].");
 
                 case TokenKind.Opening when token.Broken:
-                    return $"Скрытый блок записан неправильно: {SpellingAt(text, token.Index)}, " +
-                           $"символ {token.Index + 1}. Верная запись: [{TagName}=\"Имя\"], " +
-                           $"имена через запятую, или [{TagName}] без имени.";
+                    return new(token.Index, $"{SpellingAt(text, token.Index)} записан неверно, " +
+                           $"скрытый блок пишется [{TagName}=\"Имя\"] или [{TagName}].");
 
                 case TokenKind.Opening when opened >= 0:
-                    return $"Скрытый блок внутри скрытого: {SpellingAt(text, token.Index)}, " +
-                           $"символ {token.Index + 1}. Закройте первый тегом [/{TagName}] " +
-                           "до начала второго.";
+                    return new(token.Index, "Скрытый блок внутри скрытого не работает: " +
+                           $"{SpellingAt(text, token.Index)}. Закройте первый тегом [/{TagName}].");
 
                 case TokenKind.Opening:
                     opened = token.Index;
                     break;
 
                 case TokenKind.Closing when opened < 0:
-                    return $"Лишний закрывающий тег: {SpellingAt(text, token.Index)}, " +
-                           $"символ {token.Index + 1}. Скрытый блок перед ним не открыт.";
+                    return new(token.Index, $"{SpellingAt(text, token.Index)} ничего не закрывает, " +
+                           $"уберите его или откройте [{TagName}] выше.");
 
                 case TokenKind.Closing:
                     opened = -1;
@@ -269,11 +265,13 @@ public static class PrivateBlockMarkup
         if (opened < 0) return null;
 
         return misspelledClosing >= 0
-            ? $"Закрывающий тег записан неправильно: {SpellingAt(text, misspelledClosing)}, " +
-              $"символ {misspelledClosing + 1}. Скрытый блок закрывает только [/{TagName}]."
-            : $"Скрытый блок не закрыт: {SpellingAt(text, opened)}, " +
-              $"символ {opened + 1}. Закройте его тегом [/{TagName}] или уберите.";
+            ? new(misspelledClosing, $"{SpellingAt(text, misspelledClosing)} не закрывает скрытый блок, " +
+                                     $"закрывает только [/{TagName}].")
+            : new(opened, $"Скрытый блок не закрыт: {SpellingAt(text, opened)}. Добавьте [/{TagName}].");
     }
+
+    /// <summary>A refusal and the index of the spelling it quotes.</summary>
+    private readonly record struct Imbalance(int At, string Message);
 
     /// <summary>
     /// Where the first piece of hiding markup stands, a closing tag of any

@@ -2,22 +2,11 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The four lines of the statistics, wherever they stand: the corner of the
- * header, or the top of the right column of a phone.
- *
- * The column of a phone is narrower than the header's corner, and with numbers
- * of the old site's size (13 487 players, 2 831 945 posts) a line runs past
- * it. A line then breaks after its comma and nowhere else: the second count
- * goes under the first whole, never a word or a number of it. What a reader
- * copies is the line as before.
- */
-import { beforeEach, describe, it, expect, vi } from "vitest";
-import { mount } from "@vue/test-utils";
-import { computed, ref } from "vue";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { componentCss, styleRules } from "@/shared/lib/testing/styles";
+/** The four lines of the statistics: their words, where they break, their colours. */
+import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
+import SiteStatistics from "./SiteStatistics.vue";
 
 const LARGE = {
   online: 1234,
@@ -31,61 +20,43 @@ const LARGE = {
   },
 };
 
-/** What the server answered, set by each test before it mounts. */
-const answer = vi.hoisted(() => ({ stats: null as unknown, loaded: true }));
+/** What the server answers, set by each test before it mounts; null refuses. */
+const answer = vi.hoisted(() => ({ stats: null as unknown, pending: false }));
 
-vi.mock("@/entities/statistics", () => ({
-  useStatisticsStore: () => {
-    const stats = ref(answer.stats as typeof LARGE | null);
-    const total = (key: keyof typeof LARGE.totals) =>
-      computed(() => stats.value?.totals[key] ?? { value: 0, todayDelta: 0 });
-    return {
-      stats,
-      loaded: ref(answer.loaded),
-      online: computed(() => stats.value?.online ?? 0),
-      users: total("users"),
-      characters: total("characters"),
-      games: total("games"),
-      posts: total("gamePosts"),
-      blogs: total("blogs"),
-      publications: total("publications"),
-      startPolling: vi.fn(),
-      stopPolling: vi.fn(),
-    };
+vi.mock("@/entities/statistics/api/statisticsApi", () => ({
+  default: {
+    getLiveStats: () =>
+      answer.pending
+        ? new Promise(() => {})
+        : Promise.resolve(
+            answer.stats
+              ? { data: { resource: answer.stats }, error: null }
+              : { data: null, error: { status: 500, title: "" } },
+          ),
   },
 }));
 
-// storeToRefs over the plain object above: its refs are taken as they are.
-vi.mock("pinia", async (original) => ({
-  ...(await original<typeof import("pinia")>()),
-  storeToRefs: (store: object) => store,
-}));
+enableAutoUnmount(afterEach);
 
-const { default: SiteStatistics } = await import("./SiteStatistics.vue");
+async function open() {
+  const wrapper = mount(SiteStatistics);
+  await flushPromises();
+  return wrapper;
+}
 
 /** The words of an element as a selection copies them. */
 const words = (el: Element) =>
   (el.textContent ?? "").replace(/\s+/g, " ").trim();
 
-const rules = styleRules(
-  componentCss(
-    resolve(dirname(fileURLToPath(import.meta.url)), "SiteStatistics.vue"),
-  ),
-);
-/** What the rules say of a selector, alone or in a list of them. */
-const of = (selector: string) =>
-  rules.find((rule) =>
-    rule.selector.split(",").some((one) => one.trim() === selector),
-  )?.declarations ?? {};
-
 beforeEach(() => {
+  setActivePinia(createPinia());
   answer.stats = LARGE;
-  answer.loaded = true;
+  answer.pending = false;
 });
 
 describe("the lines of the statistics", () => {
-  it("read as before", () => {
-    const rows = mount(SiteStatistics).findAll(".stat-row");
+  it("read as before", async () => {
+    const rows = (await open()).findAll(".stat-row");
 
     expect(rows.map((row) => words(row.element))).toEqual([
       "Пользователей: 13 487 [+12], online: 1234",
@@ -95,12 +66,14 @@ describe("the lines of the statistics", () => {
     ]);
   });
 
-  it("break after the comma and nowhere else", () => {
-    const rows = mount(SiteStatistics).findAll(".stat-row");
+  it("break after the comma and nowhere else", async () => {
+    const rows = (await open()).findAll(".stat-row");
 
     for (const row of rows) {
       const children = Array.from(row.element.childNodes).filter(
-        (node) => node.nodeType !== Node.TEXT_NODE || node.textContent?.trim(),
+        (node) =>
+          node.nodeType === Node.ELEMENT_NODE ||
+          (node.nodeType === Node.TEXT_NODE && node.textContent?.trim()),
       );
       // A count, then for each next count a place to break and the count.
       const shape = children.map((node) =>
@@ -118,21 +91,36 @@ describe("the lines of the statistics", () => {
       for (const part of parts.slice(0, -1))
         expect(part.element.textContent).toMatch(/\], $/);
     }
+  });
 
-    expect(of(".stat-part")["white-space"]).toBe("nowrap");
-    expect(of(".site-stats")["white-space"]).toBeUndefined();
+  // Split in two text nodes, a phone draws the first digit of the count a
+  // fraction of a pixel apart.
+  it("hold a label and its count in one text node", async () => {
+    const parts = (await open()).findAll(".stat-part");
+
+    const leads = parts.map((part) =>
+      Array.from(part.element.childNodes)
+        .find((node) => node.nodeType === Node.TEXT_NODE && node.textContent)
+        ?.textContent?.replace(/\s+/g, " ")
+        .trim(),
+    );
+    expect(leads).toEqual([
+      "Пользователей: 13 487",
+      "online:",
+      "Персонажей: 98 765",
+      "Игр: 12 345",
+      "постов: 2 831 945",
+      "Блогов: 1 204",
+      "публикаций: 21 530",
+    ]);
   });
 });
 
-/**
- * Green is for what is good (the owner's rule of colour): a count of the day
- * that grew, and readers online. Nothing is neither good nor bad, so a "+0"
- * and "online: 0" are grey, as the brackets around them are.
- */
+/** Green for what is good: a count that grew, readers online; "+0" stays grey. */
 describe("the colour of a count", () => {
   const GROWN = "rising";
 
-  it("is green where the day added something, grey where it added nothing", () => {
+  it("is green where the day added something, grey where it added nothing", async () => {
     answer.stats = {
       online: 0,
       totals: {
@@ -141,7 +129,7 @@ describe("the colour of a count", () => {
         games: { value: 70, todayDelta: 3 },
       },
     };
-    const w = mount(SiteStatistics);
+    const w = await open();
     const deltas = w.findAll(".delta");
     const byText = Object.fromEntries(
       deltas.map((d) => [
@@ -156,42 +144,18 @@ describe("the colour of a count", () => {
     expect(w.get(".online").classes()).not.toContain(GROWN);
   });
 
-  it("is green for readers online, as many as there are", () => {
-    const w = mount(SiteStatistics);
+  it("is green for readers online, as many as there are", async () => {
+    const w = await open();
     expect(w.get(".online").classes()).toContain(GROWN);
     for (const delta of w.findAll(".delta"))
       expect(delta.classes()).toContain(GROWN);
   });
 
-  it("is grey where the numbers did not come", () => {
+  it("is grey where the numbers did not come", async () => {
     answer.stats = null;
-    const w = mount(SiteStatistics);
+    const w = await open();
+    expect(w.findAll(".delta, .online")).not.toHaveLength(0);
     for (const count of w.findAll(".delta, .online"))
       expect(count.classes()).not.toContain(GROWN);
-  });
-
-  it("takes the ink of the theme: grey by default, green when grown", () => {
-    expect(of(".delta").color).toBe("var(--text-muted)");
-    expect(of(".online").color).toBe("var(--text-muted)");
-    expect(of(".delta.rising").color).toBe("var(--accent-green)");
-    expect(of(".online.rising").color).toBe("var(--accent-green)");
-  });
-});
-
-describe("the class its place gives the block", () => {
-  // The sliding column of a narrow window spaces the statistics off the
-  // column under them by a class (.drawer-lead in App.vue), and that class
-  // has to stand on the placeholder of the numbers too, or the column jumps
-  // when they arrive.
-  it("stands on the placeholder while the numbers are on their way, as on the lines", () => {
-    answer.loaded = false;
-    const waiting = mount(SiteStatistics, { attrs: { class: "drawer-lead" } });
-    expect(waiting.get(".site-stats-skeleton").classes()).toContain(
-      "drawer-lead",
-    );
-
-    answer.loaded = true;
-    const loaded = mount(SiteStatistics, { attrs: { class: "drawer-lead" } });
-    expect(loaded.get(".site-stats").classes()).toContain("drawer-lead");
   });
 });

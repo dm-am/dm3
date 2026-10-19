@@ -9,9 +9,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
 /// <summary>
 /// The description of a game tag is the hint surface: saved with the names of
-/// its tags in lower case, refused with a hidden block in it, and given to the
-/// card of the tag rendered by the server, next to the text the edit window is
-/// filled with.
+/// its tags in lower case, refused with a hidden block in it, given to the card
+/// of the tag rendered by the server and to the edit window as typed.
 /// </summary>
 public class TagDescriptionShould : IntegrationTestBase
 {
@@ -23,7 +22,7 @@ public class TagDescriptionShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task SaveTheNamesInLowerCase_AndRenderTheHintForTheCard()
+    public async Task SaveTheDescriptionAsTypedAndRenderTheHintForTheCard()
     {
         var title = $"Подсказка {Guid.NewGuid():N}"[..40];
         var created = await Send(HttpMethod.Post, "/v1/moderation/tags", new
@@ -39,12 +38,14 @@ public class TagDescriptionShould : IntegrationTestBase
             created.Status.Should().Be(HttpStatusCode.Created, "body was: {0}", created.Body);
             var tag = JsonDocument.Parse(created.Body).RootElement;
             tag.GetProperty("description").GetString().Should()
-                .Be("Игра затрагивает [tip text=\"Политика & религия\"]спорные[/tip] темы");
-            tag.GetProperty("descriptionHtml").GetString().Should()
                 .Be("Игра затрагивает <span class=\"bb-tip\" tabindex=\"0\" " +
                     "data-tip-text=\"Политика &amp; религия\">спорные</span> темы");
 
             var id = tag.GetProperty("id").GetGuid();
+            var saved = await Send(HttpMethod.Get, $"/v1/moderation/tags/{id}", null, "author_edit");
+            JsonDocument.Parse(saved.Body).RootElement.GetProperty("description").GetString().Should()
+                .Be("Игра затрагивает [TIP TEXT=\"Политика & религия\"]спорные[/TIP] темы");
+
             var updated = await Send(HttpMethod.Put, $"/v1/moderation/tags/{id}", new
             {
                 groupId = GroupId,
@@ -54,13 +55,16 @@ public class TagDescriptionShould : IntegrationTestBase
             });
 
             updated.Status.Should().Be(HttpStatusCode.OK, "body was: {0}", updated.Body);
-            var edited = JsonDocument.Parse(updated.Body).RootElement;
-            // A [tip] that shows nothing is text on the page, and text keeps its case.
-            edited.GetProperty("description").GetString().Should()
-                .Be("[Tip Img=\"/images/erp-tooltip.gif\"]эротические сцены[/Tip] и [TIP]слово[/TIP]");
-            edited.GetProperty("descriptionHtml").GetString().Should()
+            JsonDocument.Parse(updated.Body).RootElement.GetProperty("description").GetString().Should()
                 .Be("<span class=\"bb-tip\" tabindex=\"0\" data-tip-img=\"/images/erp-tooltip.gif\">" +
                     "эротические сцены</span> и [TIP]слово[/TIP]");
+
+            // The edit window gets the text as it was saved.
+            var forEditing = await Send(HttpMethod.Get, $"/v1/moderation/tags/{id}", null, "author_edit");
+            forEditing.Status.Should().Be(HttpStatusCode.OK, "body was: {0}", forEditing.Body);
+            JsonDocument.Parse(forEditing.Body).RootElement.GetProperty("description")
+                .GetString().Should()
+                .Be("[Tip Img=\"/images/erp-tooltip.gif\"]эротические сцены[/Tip] и [TIP]слово[/TIP]");
         }
         finally
         {
@@ -70,7 +74,7 @@ public class TagDescriptionShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task RefuseAHiddenBlock_NamingWhereItIs()
+    public async Task RefuseAHiddenBlockNamingWhereItIs()
     {
         var title = $"Подсказка {Guid.NewGuid():N}"[..40];
         var created = await Send(HttpMethod.Post, "/v1/moderation/tags", new
@@ -88,7 +92,7 @@ public class TagDescriptionShould : IntegrationTestBase
                 .Where(field => field.Name.Equals("description", StringComparison.OrdinalIgnoreCase))
                 .SelectMany(field => field.Value.EnumerateArray().Select(message => message.GetString()))
                 .Should().ContainSingle().Which.Should()
-                .StartWith("Скрытый текст работает только в игровом тексте поста: [private], символ 9.");
+                .StartWith("Скрытый блок работает только в игровых постах: [private].");
         }
         finally
         {
@@ -98,15 +102,13 @@ public class TagDescriptionShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A description is drawn in a tooltip and nowhere else, and the catalogue
-    /// that carries it is cached for everyone: it is rendered for display
-    /// whatever rendering audience the request names.
+    /// The edit window asks with the author_edit audience and gets the text as
+    /// typed; asked otherwise, the description is the card's render.
     /// </summary>
     [Theory]
-    [InlineData("plain_text")]
-    [InlineData("embed_safe")]
-    [InlineData("author_edit")]
-    public async Task RenderTheHintForDisplay_WhateverAudienceIsAsked(string audience)
+    [InlineData(null, "a &lt; b <span class=\"bb-tip\" tabindex=\"0\" data-tip-text=\"x\">слово</span>")]
+    [InlineData("author_edit", "a < b [tip text=\"x\"]слово[/tip]")]
+    public async Task GiveTheEditWindowTheSourceAndTheCardTheRender(string? audience, string expected)
     {
         var title = $"Подсказка {Guid.NewGuid():N}"[..40];
         var created = await Send(HttpMethod.Post, "/v1/moderation/tags", new
@@ -120,8 +122,8 @@ public class TagDescriptionShould : IntegrationTestBase
         try
         {
             created.Status.Should().Be(HttpStatusCode.Created, "body was: {0}", created.Body);
-            JsonDocument.Parse(created.Body).RootElement.GetProperty("descriptionHtml").GetString().Should()
-                .Be("a &lt; b <span class=\"bb-tip\" tabindex=\"0\" data-tip-text=\"x\">слово</span>");
+            JsonDocument.Parse(created.Body).RootElement.GetProperty("description").GetString().Should()
+                .Be(expected);
         }
         finally
         {
@@ -130,12 +132,12 @@ public class TagDescriptionShould : IntegrationTestBase
         }
     }
 
-    private async Task<(HttpStatusCode Status, string Body)> Send(HttpMethod method, string url, object body,
+    private async Task<(HttpStatusCode Status, string Body)> Send(HttpMethod method, string url, object? body,
         string? audience = null)
     {
         var request = CreateAuthenticatedRequest(method, url, CustomWebApplicationFactory.CreateSeniorModeratorUser());
         if (audience != null) request.Headers.Add("X-Dm-Audience", audience);
-        request.Content = JsonContent.Create(body);
+        if (body != null) request.Content = JsonContent.Create(body);
         var response = await Client.SendAsync(request);
         return (response.StatusCode, await response.Content.ReadAsStringAsync());
     }

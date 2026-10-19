@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Shared.Dto;
 
@@ -8,7 +9,6 @@ namespace DM.Web.API.Shared.Dto;
 /// <typeparam name="T">Enveloped type</typeparam>
 public class CursorEnvelope<T>
 {
-    /// <inheritdoc />
     public CursorEnvelope(IEnumerable<T> resources, CursorPaging paging)
     {
         Resources = resources;
@@ -37,6 +37,15 @@ public class CursorEnvelope<T>
 /// </remarks>
 public class CursorPaging
 {
+    /// <summary>The paging of a domain cursor page.</summary>
+    public static CursorPaging Of<T>(CursorResult<T> result) => new()
+    {
+        NextCursor = result.NextCursor,
+        PrevCursor = result.PrevCursor,
+        HasNext = result.HasNext,
+        HasPrev = result.HasPrev
+    };
+
     /// <summary>
     /// Cursor for the next page in the order the endpoint sorts by
     /// </summary>

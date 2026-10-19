@@ -27,10 +27,9 @@ namespace DM.Web.API.Features.Personal.Subscriptions;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class SubscriptionController : ControllerBase
 {
-    private readonly ISubscriptionApiService _apiService;
+    private readonly SubscriptionApiService _apiService;
 
-    /// <inheritdoc />
-    public SubscriptionController(ISubscriptionApiService apiService)
+    public SubscriptionController(SubscriptionApiService apiService)
     {
         _apiService = apiService;
     }
@@ -48,14 +47,8 @@ public class SubscriptionController : ControllerBase
     [HttpGet(Name = nameof(GetMySubscriptions))]
     [ProducesResponseType(typeof(ListEnvelope<Subscription>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    public async Task<IActionResult> GetMySubscriptions([FromQuery] SubscriptionTargetType? type = null)
-    {
-        if (type.HasValue)
-        {
-            return Ok(new ListEnvelope<Subscription>(await _apiService.GetMySubscriptionsAsync(type.Value)));
-        }
-        return Ok(new ListEnvelope<Subscription>(await _apiService.GetMySubscriptionsAsync()));
-    }
+    public async Task<IActionResult> GetMySubscriptions([FromQuery] SubscriptionTargetType? type = null) =>
+        Ok(new ListEnvelope<Subscription>(await _apiService.GetMySubscriptionsAsync(type)));
 
     /// <summary>
     /// Get subscription by ID
@@ -100,7 +93,7 @@ public class SubscriptionController : ControllerBase
         var result = await _apiService.GetSubscriptionAsync(type, targetId);
         if (result == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Вы не подписаны");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotSubscribed);
         }
         return Ok(result);
     }
@@ -114,15 +107,14 @@ public class SubscriptionController : ControllerBase
     /// <param name="request">Subscription request</param>
     /// <response code="201">Subscription created, or the existing one when already subscribed</response>
     /// <response code="401">User must be authenticated</response>
+    /// <response code="404">Game not found</response>
     [HttpPost(Name = nameof(Subscribe))]
     [ProducesResponseType(typeof(Subscription), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Subscribe([FromBody] SubscribeRequest request)
     {
         var result = await _apiService.SubscribeAsync(request.TargetType, request.TargetId, request);
-        // The subscription has an address of its own, and that is where Location
-        // leads. It used to lead to the query endpoint that answers "am I
-        // subscribed", which is not the resource that was created.
         return CreatedAtRoute(nameof(GetSubscription), new { id = result.Id }, result);
     }
 

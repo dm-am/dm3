@@ -9,19 +9,8 @@ namespace DM.Infrastructure.Core.Tests;
 /// that carry it.
 /// </summary>
 /// <remarks>
-/// It used to reach only two of them. The HTML path dropped the text children
-/// of a list outright, while the source and the text projection kept them, so
-/// the author saw their paragraph every time they opened the post for editing
-/// and no reader ever saw it on the page. Nothing reported the loss - the two
-/// outputs that agreed were the two nobody compares.
-///
-/// The rule that replaced the dropping is one sentence: the list markup wraps
-/// runs of items and steps aside for anything else, so the text is printed
-/// where it was written and a ul still contains only li. The reasoning is in
-/// TagNode.EmitList; the cases below are what it is pinned on. The parser
-/// comes from BbParserProvider rather than a set built here, because the
-/// question these ask is what a reader of a comment gets, not what the walk
-/// does in isolation - that one is BbTreeWalkShould.
+/// The list markup wraps runs of items and steps aside for anything else, so a ul holds only li (see
+/// TagNode.EmitList). The parser comes from BbParserProvider: the walk alone is BbTreeWalkShould's.
 /// </remarks>
 public class BbListTextShould
 {
@@ -34,8 +23,7 @@ public class BbListTextShould
         parserProvider.GetForSurface(BbSurface.Comment).Parse(bbCode).ToText();
 
     /// <summary>
-    /// The defect itself: this text reached the source and the text projection
-    /// and never reached the page.
+    /// Text between items reaches the page, as it reaches the source and the text projection.
     /// </summary>
     [Fact]
     public void PrintTextWrittenBetweenItems()
@@ -45,36 +33,31 @@ public class BbListTextShould
     }
 
     /// <summary>
-    /// The same in an ordered list, where the split costs the numbering: the
-    /// second chunk starts from one again. That is the price of showing the
-    /// text, and it is named here so it is not mistaken for a defect later.
+    /// The same in an ordered list, where the second chunk numbers from one again: the price of showing the text.
     /// </summary>
     [Fact]
-    public void SplitAnOrderedListToo_AtTheCostOfItsNumbering()
+    public void SplitAnOrderedListTooAtTheCostOfItsNumbering()
     {
         ToHtml("[ol][li]раз[/li]а вот и абзац[li]два[/li][/ol]")
             .Should().Be("<ol><li>раз</li></ol>а вот и абзац<ol><li>два</li></ol>");
     }
 
     [Fact]
-    public void PrintTextWrittenBeforeTheFirstItem_AheadOfTheList()
+    public void PrintTextWrittenBeforeTheFirstItemAheadOfTheList()
     {
         ToHtml("[ul]вступление[li]раз[/li][li]два[/li][/ul]")
             .Should().Be("вступление<ul><li>раз</li><li>два</li></ul>");
     }
 
     [Fact]
-    public void PrintTextWrittenAfterTheLastItem_BehindTheList()
+    public void PrintTextWrittenAfterTheLastItemBehindTheList()
     {
         ToHtml("[ul][li]раз[/li][li]два[/li]послесловие[/ul]")
             .Should().Be("<ul><li>раз</li><li>два</li></ul>послесловие");
     }
 
     /// <summary>
-    /// The whitespace that separates one item from the next is layout, not
-    /// text, and it has to keep being dropped: the substitution table turns a
-    /// newline into a line break, so printing it would break every list ever
-    /// written one item per line into a column of blank lines.
+    /// The whitespace between items is layout and stays dropped: a newline would become a line break.
     /// </summary>
     [Fact]
     public void DropTheWhitespaceBetweenItems()
@@ -84,9 +67,7 @@ public class BbListTextShould
     }
 
     /// <summary>
-    /// And the same whitespace around text that is kept comes off with it -
-    /// otherwise a paragraph written on its own line, which is how anyone
-    /// would write one, arrives fenced by line breaks.
+    /// The same whitespace around kept text comes off with it.
     /// </summary>
     [Fact]
     public void TrimTheWhitespaceAroundTextItPrints()
@@ -96,9 +77,7 @@ public class BbListTextShould
     }
 
     /// <summary>
-    /// A nested list is written inside an item, and the text between its items
-    /// is lifted only out of it - landing inside that item, where the author
-    /// put it, and where an li is allowed to hold text.
+    /// Text between the items of a nested list stays inside the item that holds the list.
     /// </summary>
     [Fact]
     public void LiftTextOutOfTheInnerListOnly()
@@ -110,42 +89,34 @@ public class BbListTextShould
     }
 
     /// <summary>
-    /// A list with nothing in it renders as it always has. There is no text to
-    /// save and no item to wrap, and the empty markup is what the previous
-    /// walk emitted.
+    /// A list with nothing in it renders as empty list markup.
     /// </summary>
     [Fact]
-    public void RenderAnEmptyList_AsItAlwaysHas()
+    public void RenderAnEmptyListAsItAlwaysHas()
     {
         ToHtml("[ul][/ul]").Should().Be("<ul></ul>");
     }
 
     /// <summary>
-    /// A list of nothing but text has no item to wrap, so the list markup is
-    /// not emitted at all: an empty box drawn around text standing outside it
-    /// is not what the author wrote.
+    /// A list of nothing but text has no item to wrap, so no list markup is emitted.
     /// </summary>
     [Fact]
-    public void EmitNoListMarkup_WhenTheListHoldsOnlyText()
+    public void EmitNoListMarkupWhenTheListHoldsOnlyText()
     {
         ToHtml("[ul]никаких пунктов[/ul]").Should().Be("никаких пунктов");
     }
 
     /// <summary>
-    /// A list written the way another engine spells one. [*] is a tag on
-    /// neither side here, so all of this is text, and text is now what comes
-    /// out - where the whole line used to vanish, list and items together.
-    /// Making [*] work is a separate question with a separate answer.
+    /// [*] is a tag on neither side, so a list spelled with it is text.
     /// </summary>
     [Fact]
-    public void PrintAListWrittenWithStars_AsThePlainTextItIs()
+    public void PrintAListWrittenWithStarsAsThePlainTextItIs()
     {
         ToHtml("[ul][*]раз[*]два[/ul]").Should().Be("[*]раз[*]два");
     }
 
     /// <summary>
-    /// The text projection, which was already keeping this text, keeps it in
-    /// place and untouched by the HTML rule: it is what search reads.
+    /// The text projection keeps this text in place: it is what search reads.
     /// </summary>
     [Fact]
     public void KeepTheTextInTheTextProjection()

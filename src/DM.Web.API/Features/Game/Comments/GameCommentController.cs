@@ -2,14 +2,13 @@ using DM.Web.API.Shared.Authentication;
 using DM.Domain.Core.Comments;
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Game.Features.Comments;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Game.Games;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Comment = DM.Web.API.Shared.Dto.Comment;
-using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
+using CommentRequest = DM.Web.API.Shared.Dto.CommentRequest;
 
 namespace DM.Web.API.Features.Game.Comments;
 
@@ -26,17 +25,14 @@ namespace DM.Web.API.Features.Game.Comments;
 [Tags("Comments")]
 public class GameCommentController : ControllerBase
 {
-    private readonly IGameCommentApiService _commentApiService;
-    private readonly IGameCommentLikeApiService _likeApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly GameCommentApiService _commentApiService;
+    private readonly GameCommentLikeApiService _likeApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <summary>
-    /// Creates a new instance of GameCommentController
-    /// </summary>
     public GameCommentController(
-        IGameCommentApiService commentApiService,
-        IGameCommentLikeApiService likeApiService,
-        IGameApiService gameApiService)
+        GameCommentApiService commentApiService,
+        GameCommentLikeApiService likeApiService,
+        GameApiService gameApiService)
     {
         _commentApiService = commentApiService;
         _likeApiService = likeApiService;
@@ -49,16 +45,6 @@ public class GameCommentController : ControllerBase
     /// <remarks>
     /// Returns paginated list of out-of-character comments in the game.
     /// Supports filtering by author usernames, text search, date range and sorting.
-    ///
-    /// ## Query Parameters
-    /// - **skip**: Number of items to skip (pagination)
-    /// - **take**: Number of items to return (max 100, default 20)
-    /// - **search**: Text search in comment content (case-insensitive)
-    /// - **authorUsernames**: Filter by author usernames, repeated per author (`authorUsernames=alice&amp;authorUsernames=bob`), OR logic
-    /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
-    /// - **createdToUtc**: Filter by creation date end (ISO 8601)
-    /// - **sortBy**: Sort field - "created" (default) or "likes"
-    /// - **sortOrder**: Sort direction - "asc" (default for created) or "desc"
     /// </remarks>
     /// <param name="id">Game public ID (5 letters) or GUID</param>
     /// <param name="q">Query parameters with filtering, sorting and pagination</param>
@@ -70,8 +56,7 @@ public class GameCommentController : ControllerBase
     public async Task<IActionResult> GetGameComments(string id, [FromQuery] CommentsQuery q)
     {
         var gameId = await _gameApiService.ResolveId(id);
-        var (comments, paging) = await _commentApiService.Get(gameId, q);
-        return Ok(new ListEnvelope<Comment>(comments, paging));
+        return Ok(await _commentApiService.Get(gameId, q));
     }
 
     /// <summary>
@@ -91,7 +76,7 @@ public class GameCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostGameComment(string id, [FromBody] CreateCommentRequest request)
+    public async Task<IActionResult> PostGameComment(string id, [FromBody] CommentRequest request)
     {
         var gameId = await _gameApiService.ResolveId(id);
         var result = await _commentApiService.Create(gameId, request);
@@ -129,7 +114,7 @@ public class GameCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchGameComment(Guid id, [FromBody] UpdateCommentRequest request) =>
+    public async Task<IActionResult> PatchGameComment(Guid id, [FromBody] CommentRequest request) =>
         Ok(await _commentApiService.Update(id, request));
 
     /// <summary>

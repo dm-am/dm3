@@ -1,12 +1,19 @@
-export { UploadInput } from "./ui";
 export {
-  POST_ATTACHMENT_ACCEPT,
+  UploadInput,
+  AttachmentsClip,
+  AttachmentsStrip,
+  AttachmentsEditor,
+  AttachmentsPicker,
+} from "./ui";
+export {
+  audienceCandidates,
+  everyReader,
+  type PendingAttachment,
+} from "./model/attachmentAudience";
+export {
   MAX_POST_ATTACHMENTS,
-  MAX_POST_ATTACHMENT_BYTES,
-  describeAttachmentProblem,
+  pickAttachments,
   uploadPostAttachments,
   reserveAttachmentImageBoxes,
-  isImageAttachment,
-  attachmentImageBox,
-  type AttachmentUploadResult,
 } from "./model/postAttachments";
+export { useAttachmentsFold } from "./model/useAttachmentsFold";

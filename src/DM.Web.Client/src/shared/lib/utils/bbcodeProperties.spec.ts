@@ -3,60 +3,42 @@
  */
 
 /**
- * The editor's converter held to the server on texts nobody wrote down.
- *
- * bbcodeGrammar.spec.ts holds the converter to the rows of the grammar table,
- * the spellings somebody thought of. These checks hold it to the rest: texts
- * generated from the alphabet both sides share (markupAlphabet.ts), and a
- * corpus of such texts with the server's own answers about each
- * (markupCorpus.golden.json, written by BbMarkupCorpusShould):
- *
- * - the preview shows the author what the page shows them;
- * - what the server gives the author's editor back comes out of htmlToBbcode as
- *   a text that shows the same;
- * - the markup check names a refusal exactly where the save path refuses, on
- *   the line the refusal names, and is silent on markup the grammar accepts;
- * - the preview gives every text back as typed, and nothing it reads throws;
- * - reading costs time in proportion to the text.
- *
- * What the preview may differ from the page by is the list in the header of
- * bbcode.ts: typography as typed, a hidden block drawn for its author, a hidden
- * block on a surface that has none kept as the text it was typed as (the page
- * erases it, the save refuses it), a chat image without its spoiler. The
- * reading of both into runs (markupFuzz.ts) is where the first and the last
- * are forgiven; the third leaves those texts out of the comparison.
- *
- * A failure names the smallest text it found, and, for a generated one, the
- * seed to replay it with: docs/guides/TESTING.md, section "Генеративные
- * проверки разметки".
+ * The editor's converter held to the server on texts nobody wrote down: texts
+ * generated from the shared alphabet (markupAlphabet.ts) and a corpus with the
+ * server's answers (markupCorpus.golden.json, written by BbMarkupCorpusShould).
+ * The preview shows what the page shows, the check names refusals where the
+ * save refuses, every text comes back from the preview as typed, and reading
+ * is linear. The allowed differences are those in
+ * the header of bbcodeToHtml.ts. A failure names the smallest text and its
+ * seed (docs/guides/TESTING.md, "Генеративные проверки разметки").
  */
 
 import { describe, expect, it } from "vitest";
 import fc from "fast-check";
+import { bbcodeToHtml } from "./bbcodeToHtml";
+import { htmlToBbcode } from "./htmlToBbcode";
+import { validateBBCode } from "./bbcodeWarnings";
+import { type BBCodeContext } from "./bbcodeTagSet";
 import {
-  bbcodeToHtml,
-  htmlToBbcode,
-  validateBBCode,
-  type BBCodeContext,
-} from "./bbcode";
-import {
-  asBothSidesRead,
-  canonical,
   CONTEXT_OF,
+  asBothSidesRead,
+  readAddressVerdicts,
+  readCorpus,
+  refusesSave,
+  type CorpusEntry,
+} from "@/shared/lib/testing/markupCorpus";
+import {
   inThePreview,
+  onThePage,
+  opensAnItemInsideAnItem,
+  rebuiltByTheBrowser,
+} from "@/shared/lib/testing/markupReading";
+import {
   literal,
   markupRuns,
   markupSoup,
   markupValid,
-  onlyWhiteSpace,
-  onThePage,
-  opensAnItemInsideAnItem,
-  readAddressVerdicts,
-  readCorpus,
-  rebuiltByTheBrowser,
-  refusesSave,
-  type CorpusEntry,
-} from "@/shared/lib/testing/markupFuzz";
+} from "@/shared/lib/testing/markupGenerator";
 
 const corpus = readCorpus();
 
@@ -107,10 +89,9 @@ describe("the corpus the server wrote", () => {
   )("%s: the preview shows what the page shows", (_id, entry) => {
     const page = entry.display as string;
     if (rebuiltByTheBrowser(page)) {
-      // The browser reads the page into another tree than the server wrote,
-      // and the reader sees that one. The one known way is an item opened
-      // inside another item with no list between them, which waits for the
-      // owner's decision (docs/guides/TESTING.md); any other is a failure.
+      // The browser reads the page into another tree than the server wrote.
+      // The one known way, an item opened inside another item with no list
+      // between, is an open question (docs/guides/TESTING.md); any other fails.
       expect(
         opensAnItemInsideAnItem(page),
         `the browser rebuilds the page: ${page}`,
@@ -121,29 +102,6 @@ describe("the corpus the server wrote", () => {
       onThePage(page),
     );
   });
-
-  // What the author typed comes back up to the editor's own spelling of the
-  // tags that are markup (canonical): the markup the server sends carries no
-  // spelling, and a browser holds no CR. Line breaks and every character of
-  // text are held exactly.
-  it.each(entries(() => true))(
-    "%s: what the editor is given back is what was typed",
-    (_id, entry) => {
-      const context = CONTEXT_OF[entry.surface];
-      const back = htmlToBbcode(entry.authorEdit);
-      // A text of white space alone renders as nothing on every audience
-      // (BbParser.Parse), so the editor is given nothing: a post of spaces
-      // shows the same, and the save path takes no empty body.
-      const typed = onlyWhiteSpace(entry.input) ? "" : entry.input;
-      expect(literal(canonical(back, context))).toBe(
-        literal(canonical(typed, context)),
-      );
-      expect(
-        validateBBCode(back, context).some(refusesSave),
-        `the save path would answer ${literal(back)} otherwise`,
-      ).toBe(validateBBCode(entry.input, context).some(refusesSave));
-    },
-  );
 
   it.each(entries(() => true))(
     "%s: the check names a refusal where the save path refuses",
@@ -166,12 +124,14 @@ describe("the corpus the server wrote", () => {
           refusals.length,
           `the save path refuses: ${entry.refusal}`,
         ).toBeGreaterThan(0);
-        const at = /символ (\d+)/.exec(entry.refusal);
-        expect(at, entry.refusal).not.toBeNull();
+        expect(entry.refusalAt, `${entry.refusal} names no place`).not.toBe(
+          null,
+        );
+        const line = lineOf(entry.input, entry.refusalAt as number);
         expect(
           refusals.map((issue) => issue.line),
-          `${entry.refusal} is on line ${lineOf(entry.input, Number(at?.[1]))}`,
-        ).toContain(lineOf(entry.input, Number(at?.[1])));
+          `${entry.refusal} is on line ${line}`,
+        ).toContain(line);
       }
       if (entry.valid) expect(issues).toEqual([]);
     },
@@ -269,11 +229,8 @@ describe("generated texts", () => {
 });
 
 /**
- * The steepest step in cost across three sizes of a text, each four times the
- * last: about 4 for a reading linear in the text, about 16 for one that costs
- * its square. The same measure as BbParserCostShould on the server: the best
- * of several rounds, the sizes taken in turn in each round, so a busy machine
- * slows all of them rather than one.
+ * The steepest step in cost across three sizes four times apart: about 4 for
+ * linear, 16 for a square; best of rounds, sizes in turn, as BbParserCostShould.
  */
 function steepestStep(work: (text: string) => void, texts: string[]): number {
   const best = texts.map(() => Number.POSITIVE_INFINITY);

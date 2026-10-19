@@ -1,6 +1,3 @@
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace DM.Domain.Core.Uploads;
 
 /// <summary>
@@ -18,7 +15,6 @@ public interface IUploadOrphanCollector
     /// <summary>
     /// Runs one sweep.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>What the sweep found and removed.</returns>
     Task<UploadSweepResult> SweepAsync(CancellationToken cancellationToken = default);
 }

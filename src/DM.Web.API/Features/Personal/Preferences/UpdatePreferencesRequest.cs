@@ -1,7 +1,6 @@
 using System.Collections.Generic;
-using DM.Domain.Core.Dto;
 using System.ComponentModel.DataAnnotations;
-using System.Linq;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Personal.Preferences;
@@ -10,12 +9,10 @@ namespace DM.Web.API.Features.Personal.Preferences;
 /// Partial update of display preferences
 /// </summary>
 /// <remarks>
-/// Every field is optional: an omitted one keeps its current value. The read
-/// model cannot be reused here — its <c>Theme</c> is a plain enum and its
-/// <c>Paging</c> default-constructs with every page size at 10, so a request
-/// carrying only the theme reset all five page sizes.
+/// Every field is optional: an omitted one keeps its current value, which the
+/// plain values of the read model cannot say.
 /// </remarks>
-public class UpdatePreferencesRequest
+public class UpdatePreferencesRequest : IValidatableObject
 {
     /// <summary>
     /// Website color theme
@@ -23,73 +20,25 @@ public class UpdatePreferencesRequest
     public Theme? Theme { get; set; }
 
     /// <summary>
-    /// Paging settings for various list views
+    /// Page size of every paged list, one of PagingPolicy.AllowedPageSizes
     /// </summary>
-    public UpdatePagingRequest? Paging { get; set; }
+    public int? PageSize { get; set; }
 
     /// <summary>
     /// IANA name of the reader's time zone ("Europe/Moscow"), used by letters.
     /// </summary>
     /// <remarks>
-    /// Omitted keeps the zone the account has; an empty string clears it, which
-    /// is how a reader asks for UTC. Null and empty have to mean different
-    /// things here: with one spelling for both, a zone once set could never be
-    /// taken off again.
+    /// Omitted keeps the zone the account has; an empty string clears it to UTC.
     /// </remarks>
     [StringLength(64, ErrorMessage = "Название часового пояса не должно превышать 64 символа")]
     public string? TimeZoneId { get; set; }
-}
-
-/// <summary>
-/// Partial update of paging preferences
-/// </summary>
-/// <remarks>
-/// Allowed values come from PagingPolicy. An omitted field keeps its current value.
-/// </remarks>
-public class UpdatePagingRequest : IValidatableObject
-{
-    /// <summary>
-    /// Number of posts per page in game rooms
-    /// </summary>
-    public int? PostsPerPage { get; set; }
-
-    /// <summary>
-    /// Number of comments per page on games or topics
-    /// </summary>
-    public int? CommentsPerPage { get; set; }
-
-    /// <summary>
-    /// Number of topics per page on forum boards
-    /// </summary>
-    public int? TopicsPerPage { get; set; }
-
-    /// <summary>
-    /// Number of messages per page in conversations
-    /// </summary>
-    public int? MessagesPerPage { get; set; }
-
-    /// <summary>
-    /// Number of items per page for other entity lists (users, games, etc.)
-    /// </summary>
-    public int? EntitiesPerPage { get; set; }
 
     /// <inheritdoc />
     public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
     {
-        foreach (var (value, field) in new[]
-                 {
-                     (PostsPerPage, nameof(PostsPerPage)),
-                     (CommentsPerPage, nameof(CommentsPerPage)),
-                     (TopicsPerPage, nameof(TopicsPerPage)),
-                     (MessagesPerPage, nameof(MessagesPerPage)),
-                     (EntitiesPerPage, nameof(EntitiesPerPage)),
-                 })
+        if (PageSize is { } pageSize && !PagingPolicy.Allows(pageSize))
         {
-            if (value.HasValue && !PagingPolicy.Allows(value.Value))
-            {
-                yield return new ValidationResult(
-                    "Недопустимое количество элементов на страницу", [field]);
-            }
+            yield return new ValidationResult("Недопустимое число на странице", [nameof(PageSize)]);
         }
     }
 }

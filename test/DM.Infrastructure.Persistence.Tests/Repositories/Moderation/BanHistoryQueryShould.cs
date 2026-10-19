@@ -2,16 +2,13 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Moderation.Features.Warnings;
 using DM.Infrastructure.Persistence.Repositories.Moderation;
-using DM.Infrastructure.Persistence.Shared.Users;
 using DM.Testing;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using Xunit;
 using DbBan = DM.Infrastructure.Persistence.Entities.Moderation.Ban;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using DM.Domain.Moderation.Features.Bans;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Moderation;
 
@@ -20,18 +17,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Moderation;
 /// does not.
 /// </summary>
 /// <remarks>
-/// Lifting used to soft-delete the row, so the ban left the user's history and the
-/// moderation history the moment a senior moderator took it back: who lifted it,
-/// when and why became unreadable, and IsLifted was false on every row a query
-/// could still return. Removing the global filter is not the whole rule - the
-/// history queries also carried the predicate written out by hand, and rewriting
-/// that hand-written copy in terms of the new column brings the same disappearance
-/// back with no filter in sight. The model-level check beside this one cannot see
-/// a Where in a repository, which is where the copy lived.
-///
-/// GetActiveBan is asserted in the same place on purpose: "keep the lifted row" and
-/// "do not enforce it" are one decision read from two sides, and a test for either
-/// half alone is satisfied by deleting the other.
+/// The history queries spelled the lift predicate by hand, out of sight of the model-level check.
+/// GetActiveBan is asserted here too: keeping the lifted row and not enforcing it is one decision.
 /// </remarks>
 public class BanHistoryQueryShould : UnitTestBase
 {
@@ -45,30 +32,19 @@ public class BanHistoryQueryShould : UnitTestBase
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
 
-    private DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
-        .UseInMemoryDatabase(_databaseName)
-        .Options);
+    private DmDbContext Context() => InMemoryStore.Open(_databaseName);
 
-    private BanRepository Repository(DmDbContext context)
+    private static BanRepository Repository(DmDbContext context)
     {
         var clock = Mock<IDateTimeProvider>();
         clock.Now.Returns(Now);
         return new BanRepository(context, clock);
     }
 
-    private static DbUser NewUser(Guid id, string username) => new()
-    {
-        UserId = id,
-        Username = username,
-        Email = $"{username}@test.local",
-        Salt = "",
-        PasswordHash = "",
-    };
-
     private DmDbContext Seeded()
     {
         var context = Context();
-        context.Users.AddRange(NewUser(TargetId, "target"), NewUser(ModeratorId, "moderator"));
+        context.Users.AddRange(InMemoryStore.User(TargetId, "target"), InMemoryStore.User(ModeratorId, "moderator"));
         context.Bans.AddRange(
             new DbBan
             {
@@ -130,11 +106,7 @@ public class BanHistoryQueryShould : UnitTestBase
     /// The list is the ban log: an issue at its start and a lift at its moment,
     /// newest first, and the lift of an older ban above the issue of a newer one.
     /// </summary>
-    /// <remarks>
-    /// The lifted ban started before the running one and was lifted after it
-    /// started, so a list of bans by their start, which the history used to be,
-    /// has no place for the lift that is both above and below the running ban.
-    /// </remarks>
+    /// <remarks>A list of bans by their start has no place for a lift both above and below the running ban.</remarks>
     [Fact]
     public async Task ListAnIssueAndALiftAsEntriesOfTheirOwnNewestFirst()
     {
@@ -166,7 +138,7 @@ public class BanHistoryQueryShould : UnitTestBase
             EndedUtc = Now.AddDays(6),
             Comment = "issued the moment the other was lifted",
         });
-        context.Users.Add(NewUser(OtherTargetId, "other"));
+        context.Users.Add(InMemoryStore.User(OtherTargetId, "other"));
         context.SaveChanges();
 
         var (entries, _) = await Repository(context).GetBanHistory(null, 0, 2);
@@ -184,7 +156,7 @@ public class BanHistoryQueryShould : UnitTestBase
     public async Task NarrowTheListToOnePersonAndPageItByEntries()
     {
         using var context = Seeded();
-        context.Users.Add(NewUser(OtherTargetId, "other"));
+        context.Users.Add(InMemoryStore.User(OtherTargetId, "other"));
         context.Bans.Add(new DbBan
         {
             BanId = Guid.Parse("2f0e2a54-0a8e-4a37-9a2a-6f1f9b0d0006"),
@@ -219,12 +191,7 @@ public class BanHistoryQueryShould : UnitTestBase
     /// issue and lift alike, and are signed by nobody, as a removed author is
     /// everywhere, and not by the name of the account.
     /// </summary>
-    /// <remarks>
-    /// The issuer is a required navigation, joined to an account row the filter
-    /// of removed accounts hides. The count and the numbers count the entries of
-    /// such a ban, so the page holds them too: with the filter in force the page
-    /// comes up short and a number leads to an entry that is not on it.
-    /// </remarks>
+    /// <remarks>The issuer is a required navigation to a filtered account row, so the page would come up short.</remarks>
     [Fact]
     public async Task SignTheBansOfAModeratorWhoIsGoneByNobody()
     {
@@ -269,7 +236,7 @@ public class BanHistoryQueryShould : UnitTestBase
     {
         using var context = Seeded();
         var newId = Guid.Parse("2f0e2a54-0a8e-4a37-9a2a-6f1f9b0d0008");
-        context.Users.Add(NewUser(OtherTargetId, "other"));
+        context.Users.Add(InMemoryStore.User(OtherTargetId, "other"));
         context.Bans.Add(new DbBan
         {
             BanId = newId,
@@ -299,7 +266,7 @@ public class BanHistoryQueryShould : UnitTestBase
     {
         using var context = Seeded();
         var betweenId = Guid.Parse("2f0e2a54-0a8e-4a37-9a2a-6f1f9b0d0009");
-        context.Users.Add(NewUser(OtherTargetId, "other"));
+        context.Users.Add(InMemoryStore.User(OtherTargetId, "other"));
         context.Bans.Add(new DbBan
         {
             BanId = betweenId,
@@ -328,7 +295,7 @@ public class BanHistoryQueryShould : UnitTestBase
     public async Task NumberEntriesOfOneMomentInTheOrderOfTheList()
     {
         using var context = Seeded();
-        context.Users.Add(NewUser(OtherTargetId, "other"));
+        context.Users.Add(InMemoryStore.User(OtherTargetId, "other"));
         context.Bans.AddRange(
             new DbBan
             {
@@ -368,7 +335,7 @@ public class BanHistoryQueryShould : UnitTestBase
     public async Task FindWhereAnEntryStandsByItsNumber()
     {
         using var context = Seeded();
-        context.Users.Add(NewUser(OtherTargetId, "other"));
+        context.Users.Add(InMemoryStore.User(OtherTargetId, "other"));
         context.Bans.Add(new DbBan
         {
             BanId = Guid.Parse("2f0e2a54-0a8e-4a37-9a2a-6f1f9b0d0009"),

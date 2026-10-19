@@ -8,7 +8,7 @@ namespace DM.Web.API.Features.Account.Credentials;
 /// Compile-time mapper for account credential flows
 /// </summary>
 [Mapper]
-internal partial class CredentialsMapper
+public partial class CredentialsMapper
 {
     /// <summary>
     /// Domain queue entry to the account-facing status DTO
@@ -18,9 +18,7 @@ internal partial class CredentialsMapper
     public partial UsernameChangeResponse ToResponse(UsernameChangeRequestEntry entry);
 
     /// <summary>
-    /// Create request to the domain command. The AutoMapper predecessor had
-    /// no map for this pair at all, so filing a request answered 500 the
-    /// moment it reached the reply - a generated method cannot be missing.
+    /// Create request to the domain command
     /// </summary>
     public partial ServiceCreateUsernameChangeRequest ToCreateRequest(UsernameChangeCreateRequest request);
 }

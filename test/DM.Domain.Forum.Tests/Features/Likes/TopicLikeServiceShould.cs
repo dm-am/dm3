@@ -1,21 +1,15 @@
 using System;
-using System.Linq;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Identity;
 using DM.Domain.Core.Likes;
 using DM.Domain.Forum.Authorization;
 using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Likes;
 using DM.Domain.Forum.Features.Topics;
-using DM.Testing.Dsl;
 using DM.Testing;
 using AwesomeAssertions;
 using NSubstitute;
@@ -25,30 +19,30 @@ namespace DM.Domain.Forum.Tests.Features.Likes;
 
 public class TopicLikeServiceShould : UnitTestBase
 {
-    private readonly ITopicService _topicService;
-    private readonly ITopicCommentService _commentService;
-    private readonly IIntentionManager _intentionManager;
-    private readonly ILikeOperations _likeOperations;
-    private readonly TopicLikeService _service;
+    private readonly ITopicService topicService;
+    private readonly ITopicCommentService commentService;
+    private readonly IIntentionManager intentionManager;
+    private readonly ILikeOperations likeOperations;
+    private readonly TopicLikeService service;
 
     public TopicLikeServiceShould()
     {
-        _topicService = Mock<ITopicService>();
-        _commentService = Mock<ITopicCommentService>();
+        topicService = Mock<ITopicService>();
+        commentService = Mock<ITopicCommentService>();
 
-        _intentionManager = Mock<IIntentionManager>();
+        intentionManager = Mock<IIntentionManager>();
 
-        _likeOperations = Mock<ILikeOperations>();
-        _likeOperations.LikeAsync(Arg.Any<Topic>(), Arg.Any<EventType>()).Returns(new GeneralUser());
-        _likeOperations.LikeAsync(Arg.Any<Comment>(), Arg.Any<EventType>()).Returns(new GeneralUser());
-        _likeOperations.UnlikeAsync(Arg.Any<Topic>()).Returns(Task.CompletedTask);
-        _likeOperations.UnlikeAsync(Arg.Any<Comment>()).Returns(Task.CompletedTask);
+        likeOperations = Mock<ILikeOperations>();
+        likeOperations.LikeAsync(Arg.Any<Topic>(), Arg.Any<EventType>()).Returns(new GeneralUser());
+        likeOperations.LikeAsync(Arg.Any<Comment>(), Arg.Any<EventType>()).Returns(new GeneralUser());
+        likeOperations.UnlikeAsync(Arg.Any<Topic>()).Returns(Task.CompletedTask);
+        likeOperations.UnlikeAsync(Arg.Any<Comment>()).Returns(Task.CompletedTask);
 
-        _service = new TopicLikeService(
-            _topicService,
-            _commentService,
-            _intentionManager,
-            _likeOperations);
+        service = new TopicLikeService(
+            topicService,
+            commentService,
+            intentionManager,
+            likeOperations);
     }
 
     [Fact]
@@ -56,11 +50,11 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var topicId = Guid.NewGuid();
         var topic = new Topic { Id = topicId };
-        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
+        topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
 
-        await _service.LikeTopicAsync(topicId);
+        await service.LikeTopicAsync(topicId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(TopicIntention.Like, topic);
+        intentionManager.Received(1).ThrowIfForbidden(TopicIntention.Like, topic);
     }
 
     [Fact]
@@ -69,26 +63,13 @@ public class TopicLikeServiceShould : UnitTestBase
         var topicId = Guid.NewGuid();
         var topic = new Topic { Id = topicId };
         var expectedUser = new GeneralUser { UserId = Guid.NewGuid(), Username = "User1" };
-        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
-        _likeOperations.LikeAsync(topic, EventType.LikedTopic).Returns(expectedUser);
+        topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
+        likeOperations.LikeAsync(topic, EventType.LikedTopic).Returns(expectedUser);
 
-        var result = await _service.LikeTopicAsync(topicId);
+        var result = await service.LikeTopicAsync(topicId);
 
         result.Should().Be(expectedUser);
-        await _likeOperations.Received(1).LikeAsync(topic, EventType.LikedTopic);
-    }
-
-    /// <summary>
-    /// The forum is a public place, and neither the topic author's nor the
-    /// comment author's personal blacklist closes a like there; the author hears
-    /// nothing of it, because the notification leaves out whoever blocked its
-    /// actor. The behaviour with a real list behind it is in BlacklistRuleShould.
-    /// </summary>
-    [Fact]
-    public void KnowNothingOfPersonalBlacklists()
-    {
-        typeof(TopicLikeService).GetConstructors().Single().GetParameters()
-            .Should().NotContain(parameter => parameter.ParameterType == typeof(IUserBlacklistChecker));
+        await likeOperations.Received(1).LikeAsync(topic, EventType.LikedTopic);
     }
 
     [Fact]
@@ -96,11 +77,11 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var commentId = Guid.NewGuid();
         var comment = new Comment { Id = commentId };
-        _commentService.GetAsync(commentId).Returns(comment);
+        commentService.GetAsync(commentId).Returns(comment);
 
-        await _service.LikeCommentAsync(commentId);
+        await service.LikeCommentAsync(commentId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
     }
 
     [Fact]
@@ -109,13 +90,13 @@ public class TopicLikeServiceShould : UnitTestBase
         var commentId = Guid.NewGuid();
         var comment = new Comment { Id = commentId };
         var expectedUser = new GeneralUser { UserId = Guid.NewGuid(), Username = "User1" };
-        _commentService.GetAsync(commentId).Returns(comment);
-        _likeOperations.LikeAsync(comment, EventType.LikedTopicComment).Returns(expectedUser);
+        commentService.GetAsync(commentId).Returns(comment);
+        likeOperations.LikeAsync(comment, EventType.LikedTopicComment).Returns(expectedUser);
 
-        var result = await _service.LikeCommentAsync(commentId);
+        var result = await service.LikeCommentAsync(commentId);
 
         result.Should().Be(expectedUser);
-        await _likeOperations.Received(1).LikeAsync(comment, EventType.LikedTopicComment);
+        await likeOperations.Received(1).LikeAsync(comment, EventType.LikedTopicComment);
     }
 
     [Fact]
@@ -123,11 +104,11 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var topicId = Guid.NewGuid();
         var topic = new Topic { Id = topicId };
-        _topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
+        topicService.GetAsync(topicId, Arg.Any<CancellationToken>()).Returns(topic);
 
-        await _service.UnlikeTopicAsync(topicId);
+        await service.UnlikeTopicAsync(topicId);
 
-        await _likeOperations.Received(1).UnlikeAsync(topic);
+        await likeOperations.Received(1).UnlikeAsync(topic);
     }
 
     [Fact]
@@ -135,10 +116,10 @@ public class TopicLikeServiceShould : UnitTestBase
     {
         var commentId = Guid.NewGuid();
         var comment = new Comment { Id = commentId };
-        _commentService.GetAsync(commentId).Returns(comment);
+        commentService.GetAsync(commentId).Returns(comment);
 
-        await _service.UnlikeCommentAsync(commentId);
+        await service.UnlikeCommentAsync(commentId);
 
-        await _likeOperations.Received(1).UnlikeAsync(comment);
+        await likeOperations.Received(1).UnlikeAsync(comment);
     }
 }

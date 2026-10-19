@@ -1,38 +1,9 @@
 /**
- * Live reachability of the site's addresses
- * @module shared/lib/composables/useAddressPing
- *
- * Measures every SITE_ADDRESSES host from the visitor's own network: the
- * block that lists the addresses shows which of them answer THIS reader and
- * how fast, which no server-side check can know. One tiny static file is
- * fetched off each origin and the round trip is timed around the await.
- *
- * /favicon.ico with a cache-busting query and `cache: "no-store"`: the one
- * file every host serves without auth, and a cached copy would measure the
- * browser rather than the network. `mode: "no-cors"` because the other
- * address is a foreign origin that sets no CORS headers — the response comes
- * back opaque, and an opaque response resolving at all is the whole fact
- * being measured: the address answers. (On the address being read the same
- * request is same-origin and resolves as a basic response — same fact.) A
- * fetch that rejects — network refusal or the timeout's abort — is the other
- * fact.
- *
- * Each host is asked twice in a row and the second round trip is the one
- * reported: the first carries the DNS lookup and the TLS handshake and reads
- * about twice the working figure, which is the number a visitor would then
- * compare the other address against. The first request still decides the
- * fact that matters most — whether the address answers at all.
- *
- * Measured on mount, again when the tab regains focus (at most once per
- * REMEASURE_MIN_INTERVAL_MS), and again when the network itself changes —
- * the device leaving wifi for mobile data, a VPN switched on or off — because
- * that is the one moment the answer actually changes and the tab would
- * otherwise not learn of it until its next return. Deliberately no interval
- * timer: a tab pinging two hosts forever is traffic nobody reads, and the
- * reading is only worth refreshing when somebody is about to look at it. Not
- * measured at all under `navigator.connection.saveData` — the extra requests
- * are exactly what that flag asks to avoid; the rows then keep their reserved
- * dash.
+ * Whether each SITE_ADDRESSES host answers this reader and how fast, timed
+ * around a no-store, no-cors fetch of /favicon.ico: an opaque answer at all is
+ * the fact. The second round trip is reported, the first carries DNS and TLS.
+ * Measured on mount, on focus (at most once per REMEASURE_MIN_INTERVAL_MS) and
+ * on a network change, never on a timer and never under saveData.
  */
 import { onMounted, onUnmounted, reactive } from "vue";
 import { SITE_ADDRESSES } from "@/shared/config/site";
@@ -46,25 +17,13 @@ export interface AddressPing {
   latencyMs: number | null;
 }
 
-/**
- * Past this the round is aborted and the address counts as not answering.
- * Generous on purpose: a server that answers in four seconds is a bad server,
- * but it is not the dead one the block exists to expose.
- */
+/** Past this the address counts as not answering: slow is not dead. */
 const PING_TIMEOUT_MS = 5_000;
 
-/**
- * Tab focus re-measures, but not more often than this. A reader flipping
- * between tabs should not turn the sidebar into a ping flood; latency that is
- * three minutes old is still an honest picture of the network.
- */
+/** Tab focus re-measures no more often than this. */
 const REMEASURE_MIN_INTERVAL_MS = 3 * 60 * 1000;
 
-/**
- * A network change re-measures past the three-minute rule — it is the event
- * the rule exists to approximate — but the browser can report one change as
- * several events in a row, and this keeps them from becoming several rounds.
- */
+/** A network change re-measures past the interval; the browser may report it several times. */
 const NETWORK_CHANGE_GUARD_MS = 5_000;
 
 /** One round trip to the host, timed. Rejects when the host does not answer. */
@@ -79,14 +38,8 @@ async function roundTrip(host: string, signal: AbortSignal): Promise<number> {
 }
 
 /**
- * Whether one address answers this reader right now.
- *
- * The same fact the block measures, asked once and outside any component: the
- * failure interceptor needs it the moment a request comes back with nothing,
- * and what it does with the answer is decide whether offering the other
- * address is help or a wild goose chase. A request that never reached the
- * server means one of two things - the server is down, or the road to THIS
- * address is closed - and only the second one the other address can fix.
+ * Whether one address answers this reader now, for the failure interceptor:
+ * offering the other address helps only when the road to this one is closed.
  */
 export async function addressAnswers(
   host: string,
@@ -104,11 +57,7 @@ export async function addressAnswers(
   }
 }
 
-/**
- * Reachability of every site address, keyed by host, live-updated as the
- * measurements land. Must be called during setup: the measurement starts on
- * mount and the focus listener is released in `onUnmounted`.
- */
+/** Reachability by host, live; call during setup (measures on mount). */
 export function useAddressPing(): Record<string, AddressPing> {
   const pings = reactive<Record<string, AddressPing>>(
     Object.fromEntries(

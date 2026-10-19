@@ -14,27 +14,21 @@ namespace DM.Domain.Account.Features.TwoFactor;
 internal class TwoFactorVerifier : ITwoFactorVerifier
 {
     private readonly ITwoFactorRepository _repository;
-    private readonly ITotpCalculator _calculator;
-    private readonly IRecoveryCodeFactory _recoveryCodes;
     private readonly ISymmetricCryptoService _cryptoService;
-    private readonly ISecurityAuditRepository _auditService;
+    private readonly ISecurityAuditRepository _auditRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly TwoFactorConfiguration _config;
 
     public TwoFactorVerifier(
         ITwoFactorRepository repository,
-        ITotpCalculator calculator,
-        IRecoveryCodeFactory recoveryCodes,
         ISymmetricCryptoService cryptoService,
-        ISecurityAuditRepository auditService,
+        ISecurityAuditRepository auditRepository,
         IDateTimeProvider dateTimeProvider,
         IOptions<TwoFactorConfiguration> config)
     {
         _repository = repository;
-        _calculator = calculator;
-        _recoveryCodes = recoveryCodes;
         _cryptoService = cryptoService;
-        _auditService = auditService;
+        _auditRepository = auditRepository;
         _dateTimeProvider = dateTimeProvider;
         _config = config.Value;
     }
@@ -67,7 +61,7 @@ internal class TwoFactorVerifier : ITwoFactorVerifier
     {
         var secret = await DecryptSecret(state);
 
-        var matchedStep = _calculator.Match(
+        var matchedStep = TotpCalculator.Match(
             secret, code, _dateTimeProvider.Now, _config.VerificationWindowSteps);
         if (matchedStep == null)
         {
@@ -84,12 +78,12 @@ internal class TwoFactorVerifier : ITwoFactorVerifier
     }
 
     private async Task<byte[]> DecryptSecret(TwoFactorState state) =>
-        _calculator.FromBase32(await _cryptoService.Decrypt(state.Secret));
+        TotpCalculator.FromBase32(await _cryptoService.Decrypt(state.Secret));
 
     private async Task<bool> AcceptRecoveryCode(
         TwoFactorState state, string value, string? ipAddress, CancellationToken cancellationToken)
     {
-        var presented = _recoveryCodes.Hash(value);
+        var presented = RecoveryCodeFactory.Hash(value);
         var stored = await _repository.GetUnusedRecoveryCodes(state.UserId, cancellationToken);
 
         // Every candidate is compared, and each comparison is fixed-time: a loop
@@ -120,19 +114,11 @@ internal class TwoFactorVerifier : ITwoFactorVerifier
 
         await _repository.MarkVerified(state.UserId, _dateTimeProvider.Now, cancellationToken);
 
-        // Counted after the spend, so the number in the entry is what is left
-        // and not what was left. The remainder belongs in the entry rather than
-        // in a separate request for the state: the owner reads this line to find
-        // out how close he is to having nothing left, and a line that only says
-        // a code was used sends him elsewhere for the half of the fact that
-        // matters.
+        // Counted after the spend: the entry tells the owner how many are left.
         var left = await _repository.CountUnusedRecoveryCodes(state.UserId, cancellationToken);
 
-        // Written here rather than in each of the three callers: spending a
-        // recovery code is the same event whichever door it came through, and
-        // the owner reading the journal is asking whether somebody used one of
-        // his paper codes.
-        await _auditService.LogAsync(
+        // Here rather than in the three callers: one event whichever door it came through.
+        await _auditRepository.LogAsync(
             state.UserId, SecurityEventType.TwoFactorRecoveryCodeUsed, ipAddress,
             details: $"Осталось резервных кодов: {left}");
         return true;

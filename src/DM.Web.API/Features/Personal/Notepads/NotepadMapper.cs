@@ -4,13 +4,11 @@ using Riok.Mapperly.Abstractions;
 namespace DM.Web.API.Features.Personal.Notepads;
 
 /// <summary>
-/// Compile-time mapper for notepad responses. An instance class on purpose:
-/// the blanket assembly scan registers it like any other collaborator, and
-/// mappers that need services (identity, clock) take them through the
-/// constructor instead of AutoMapper's resolver indirection.
+/// Compile-time mapper for notepad responses. An instance class, so the assembly
+/// scan registers it like any other collaborator.
 /// </summary>
 [Mapper]
-internal partial class NotepadMapper
+public partial class NotepadMapper
 {
     /// <summary>
     /// Notepad entry to its response DTO
@@ -21,10 +19,8 @@ internal partial class NotepadMapper
     /// Create request to the domain DTO.
     /// </summary>
     /// <remarks>
-    /// Which notepad the entry lands in is decided by the route and by the
-    /// service behind it, not by the body: the three placement members stay at
-    /// their defaults here exactly as the five hand-written initializers left
-    /// them.
+    /// Which notepad the entry lands in is decided by the route and the service,
+    /// not by the body: the three placement members stay at their defaults.
     /// </remarks>
     [MapperIgnoreTarget(nameof(CreateNotepadEntry.NotepadType))]
     [MapperIgnoreTarget(nameof(CreateNotepadEntry.ContainerId))]

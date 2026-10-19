@@ -3,29 +3,14 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Game.Features.Rooms;
 
-/// <summary>
-/// DTO for room creating
-/// </summary>
 public class CreateRoom
 {
-    /// <summary>
-    /// Game identifier
-    /// </summary>
     public Guid GameId { get; set; }
 
-    /// <summary>
-    /// Room title
-    /// </summary>
     public string Title { get; set; } = null!;
 
-    /// <summary>
-    /// Room type
-    /// </summary>
     public RoomType Type { get; set; }
 
-    /// <summary>
-    /// Room access type
-    /// </summary>
     public RoomAccessType AccessType { get; set; }
 
     /// <summary>
@@ -38,8 +23,5 @@ public class CreateRoom
     /// </summary>
     public bool ViewDiceResults { get; set; } = true;
 
-    /// <summary>
-    /// Dice rolling is enabled in this room
-    /// </summary>
     public bool DiceEnabled { get; set; } = true;
 }

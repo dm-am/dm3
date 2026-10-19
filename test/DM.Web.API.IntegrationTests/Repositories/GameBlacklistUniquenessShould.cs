@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Blacklists;
@@ -20,16 +17,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// One user is on one game's blacklist once, and taking them off it is a
 /// statement about the pair rather than about a row that was just read.
 /// </summary>
-/// <remarks>
-/// Adding is check-then-insert - the service reads the game's blacklist off the
-/// game and inserts a statement later - and a check cannot see the request
-/// running beside it, so two of them both passed and both inserted. The
-/// duplicate was not something the master could undo: the list showed the name
-/// twice, and removing it deleted the one row the read happened to load while
-/// the person stayed blocked. A rule about rows that do not exist yet can only
-/// be stated in the schema, so what is asserted here is that the refusal comes
-/// from there and that the repository answers it in the domain's own currency.
-/// </remarks>
+/// <remarks>Adding is check-then-insert, so the rule lives in the schema, and the repository answers its refusal in the domain's terms.</remarks>
 public class GameBlacklistUniquenessShould : IntegrationTestBase
 {
     public GameBlacklistUniquenessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -67,12 +55,7 @@ public class GameBlacklistUniquenessShould : IntegrationTestBase
     /// <summary>
     /// Taking a pair off the list that is not on it is not an error.
     /// </summary>
-    /// <remarks>
-    /// The delete names the pair and accepts zero rows, so the caller's refusal of
-    /// that case stays the only one: the row can be gone by the time the statement
-    /// runs, and a form of the delete that insisted on finding it - one loaded row
-    /// asserted to exist - would turn the second of two removals into a failure.
-    /// </remarks>
+    /// <remarks>The delete names the pair and accepts zero rows: the row can be gone by the time it runs.</remarks>
     [Fact]
     public async Task RemoveAPairThatIsNotOnTheList()
     {
@@ -99,14 +82,7 @@ public class GameBlacklistUniquenessShould : IntegrationTestBase
     /// The master's personal list lands on the game once, however many copies of it
     /// run at the same time.
     /// </summary>
-    /// <remarks>
-    /// The copy read the game's list and inserted what it had not seen there, so two
-    /// copies running together both read it empty and both inserted: the index took
-    /// the first and refused the second with a 23505, which failed that caller
-    /// outright. The copies here stand in for any write to the game's list landing
-    /// between the read and the insert; each one has to end without an error, and
-    /// between them they have to write every entry exactly once.
-    /// </remarks>
+    /// <remarks>The copies stand in for any write landing between the read and the insert; each ends without an error.</remarks>
     [Fact]
     public async Task CopyThePersonalListOnceWhenCopiesRunTogether()
     {

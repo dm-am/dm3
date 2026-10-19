@@ -1,60 +1,37 @@
 import type { BlogStatus } from "@/entities/blog";
 
-/**
- * Status filter values (includes "any" option)
- */
 export type StatusFilter = "any" | BlogStatus;
 
-/**
- * Filter state for blogs
- */
 export interface BlogsFilterState {
-  /** Text search query (title, description) */
   search: string;
 
-  /** Status filter */
   status: StatusFilter;
 
-  /** Hosts filter - author (owner) OR assistant (OR logic) */
+  /** Author or assistant. */
   hostUsernames: Set<string>;
 
-  /** Creation date range start (inclusive) */
   createdFromUtc: string | null;
 
-  /** Creation date range end (inclusive) */
   createdToUtc: string | null;
 
-  /** Activated date range start (inclusive). Blogs without ActivatedUtc are excluded. */
+  /** Blogs without ActivatedUtc are excluded. */
   activatedFromUtc: string | null;
 
-  /** Activated date range end (inclusive). Blogs without ActivatedUtc are excluded. */
   activatedToUtc: string | null;
 
-  /** Closed date range start (inclusive). Blogs without ClosedUtc are excluded. */
+  /** Blogs without ClosedUtc are excluded. */
   closedFromUtc: string | null;
 
-  /** Closed date range end (inclusive). Blogs without ClosedUtc are excluded. */
   closedToUtc: string | null;
 
-  /** Sort field */
   sortBy: string;
 
-  /** Sort direction */
   sortOrder: "asc" | "desc";
 }
 
-/**
- * API search parameters for blogs.
- *
- * The store's shape, taken from the entity that owns the query rather than
- * restated here: the two copies differed only in how strictly they typed the
- * status, and the strict one is what the filter passes.
- */
+// The store's own shape, taken from the entity that owns the query.
 export type { BlogsSearchParams } from "@/entities/blog";
 
-/**
- * Default filter state
- */
 export const DEFAULT_FILTER_STATE: BlogsFilterState = {
   search: "",
   status: "any",
@@ -69,9 +46,6 @@ export const DEFAULT_FILTER_STATE: BlogsFilterState = {
   sortOrder: "desc",
 };
 
-/**
- * Status filter options (short form, unified with games)
- */
 export const STATUS_OPTIONS = [
   { value: "any" as const, label: "Все статусы", hint: "Показать все блоги" },
   {
@@ -83,9 +57,6 @@ export const STATUS_OPTIONS = [
   { value: "Closed" as const, label: "Закрыт", hint: "Закрытые блоги" },
 ] as const;
 
-/**
- * Sort options (unified with games)
- */
 export const SORT_OPTIONS = [
   {
     value: "title",

@@ -1,51 +1,25 @@
 <script setup lang="ts">
-/**
- * CharacterSheetFields — schema-driven per-specification controls.
- *
- * The single source of truth for how a character sheet's attribute inputs are
- * rendered: one control per specification, chosen by its Type. Shared by the
- * real create/edit form (CharacterForm) and the schema-editor live preview
- * (CharacterFormPreview) so the two can never drift apart.
- *
- *  - Text            -> text FormField (maxlength = MaxLength, none when unset)
- *  - Number          -> numeric FormField (digits + optional leading minus)
- *  - TextList / NumberList / TextNumberList -> Select (TextNumberList shows the
- *    text with its signed modifier)
- *  - BbCode          -> BBCodeEditor (dual-mode; raw BBCode is the source of truth)
- *
- * Values are read from the `values` record (keyed by spec id) and changes are
- * emitted via `update` — the owning form keeps and mutates the record.
- * Validation is display-only here: the caller supplies `specErrors`; form
- * validity and submission stay in the caller.
- */
+// Shared by the form and the schema editor's preview, so the two cannot drift apart.
 import {
   AttributeSpecificationType,
   type AttributeSpecification,
   type AttributeValueSpecification,
-} from "../model/types";
+} from "../model/gameTypes";
 import { defineAsyncComponent } from "vue";
 import { FormField } from "@/shared/ui/Form";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { SvgIcon } from "@/shared/ui/Icon";
 
-/**
- * Loaded on demand: BBCodeEditor pulls TipTap (360 KB), and this component is
- * exported from the entities/game barrel, which the left sidebar imports on
- * every page. A static import here put the whole editor on the entry chunk —
- * every visitor, including guests on the home page, downloaded it. Only sheets
- * with a BbCode specification ever render it.
- */
+// On demand: the sidebar imports the game barrel on every page, and the editor pulls TipTap.
 const BBCodeEditor = defineAsyncComponent(() =>
   import("@/shared/ui/BBCodeEditor").then((m) => m.BBCodeEditor),
 );
 
 withDefaults(
   defineProps<{
-    /** Specifications to render, already in the desired order */
     specs: AttributeSpecification[];
-    /** Raw value per specification id (read-only here) */
+    /** Per specification id; the form keeps and changes it. */
     values: Record<string, string>;
-    /** Display-only errors for a spec (empty by default) */
     specErrors?: (spec: AttributeSpecification) => string[];
   }>(),
   {
@@ -57,13 +31,14 @@ const emit = defineEmits<{
   (e: "update", specId: string, value: string): void;
 }>();
 
-const Type = AttributeSpecificationType;
-
 function optionLabel(
   spec: AttributeSpecification,
   v: AttributeValueSpecification,
 ): string {
-  if (spec.type === Type.TextNumberList && v.modifier != null) {
+  if (
+    spec.type === AttributeSpecificationType.TextNumberList &&
+    v.modifier != null
+  ) {
     const sign = v.modifier > 0 ? "+" : "";
     return `${v.value} (${sign}${v.modifier})`;
   }
@@ -110,9 +85,8 @@ function onNumberInput(specId: string, event: Event) {
       </span>
     </template>
 
-    <!-- Text -->
     <input
-      v-if="spec.type === Type.Text"
+      v-if="spec.type === AttributeSpecificationType.Text"
       :id="`spec-${spec.id}`"
       :value="values[spec.id]"
       type="text"
@@ -120,9 +94,8 @@ function onNumberInput(specId: string, event: Event) {
       @input="onTextInput(spec.id, $event)"
     />
 
-    <!-- Number -->
     <input
-      v-else-if="spec.type === Type.Number"
+      v-else-if="spec.type === AttributeSpecificationType.Number"
       :id="`spec-${spec.id}`"
       :value="values[spec.id]"
       type="text"
@@ -131,16 +104,14 @@ function onNumberInput(specId: string, event: Event) {
       @input="onNumberInput(spec.id, $event)"
     />
 
-    <!-- BbCode -->
     <BBCodeEditor
-      v-else-if="spec.type === Type.BbCode"
+      v-else-if="spec.type === AttributeSpecificationType.BbCode"
       :model-value="values[spec.id]"
       context="info"
       :max-length="spec.maxLength ?? 0"
       @update:model-value="emit('update', spec.id, $event)"
     />
 
-    <!-- Lists (TextList / NumberList / TextNumberList) -->
     <Select
       v-else
       :id="`spec-${spec.id}`"
@@ -156,8 +127,7 @@ function onNumberInput(specId: string, event: Event) {
 .required-mark
   color: $accent-red
 
-// A note beside the caption, like "необязательно": the caption row of a
-// field is bold (FormField), the note keeps the regular weight.
+// A note beside the bold caption keeps the regular weight.
 .privacy-indicator
   display: inline-flex
   align-items: center

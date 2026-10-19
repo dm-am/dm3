@@ -1,13 +1,10 @@
 <script setup lang="ts">
-// Game info block ("Информация игры", dev doc 4.2.2.9): a key-value fact
-// table, the player + master character rosters, and the description — the old
-// site's module-info layout, but the fields/columns follow the doc, not the
-// legacy page (e.g. "Посты"/"Последний пост", not "Ходов"/"Последний ход"; the
-// descriptor column is titled by the schema's descriptor attribute).
+// The facts of a game, its two character rosters and its description.
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import {
   useGameDetailsStore,
+  characterStatusLabel,
   GameStatusBadge,
   type Character,
 } from "@/entities/game";
@@ -31,12 +28,9 @@ const { isOnline } = useUserDisplay();
 const assistants = computed(() => game.value?.assistants ?? []);
 const readers = computed(() => game.value?.readers ?? []);
 const tags = computed(() => game.value?.tags ?? []);
-const recruitment = computed(() => game.value?.recruitment);
 
-// "Количество игроков: X/Y" — accepted players / limit (doc). Without a limit
-// only the accepted count is shown.
 const playerCount = computed(() => {
-  const r = recruitment.value;
+  const r = game.value?.recruitment;
   const accepted = r?.pcCount ?? game.value?.players?.length ?? 0;
   return r?.pcLimit ? `${accepted}/${r.pcLimit}` : String(accepted);
 });
@@ -51,8 +45,6 @@ const npcCharacters = computed(() =>
   characters.value.filter((c) => c.isNpc && isInGame(c)),
 );
 
-// The descriptor column is titled by the schema's descriptor attribute
-// ("[Дескриптор]. По умолчанию 'класс'").
 const descriptorTitle = computed(
   () =>
     game.value?.schema?.specifications.find((s) => s.isDescriptor)?.title ||
@@ -66,100 +58,61 @@ function lastPostOf(c: Character): string {
   return c.lastPostUtc ? formatDateFull(c.lastPostUtc) : VALUE_UNAVAILABLE;
 }
 
-// Character status, refined from the Retired flags.
-function statusLabel(c: Character): string {
-  if (c.status === "Active") return "В игре";
-  if (c.status === "Retired") {
-    if (c.isDead) return "Персонаж мертв";
-    if (c.isPlayerExiled) return "Выведен из игры";
-    if (c.isPlayerLeft) return "Покинул игру";
-    return "Вне игры";
-  }
-  return c.status;
-}
 function isRetired(c: Character): boolean {
   return c.status === "Retired";
 }
 
-// The name of a character leads to that character's own page. It used to lead
-// to the roster of the whole game with a scrollTo query, which pointed at the
-// right card only in intent: no roster reads that query. The name inside a post
-// leads to the same page, so one name never means two places.
 function characterLink(c: Character) {
   return {
     name: "game-character",
     params: {
-      id: game.value?.publicId || game.value?.id,
+      id: game.value?.publicId,
       characterId: c.id,
     },
   };
 }
 
-// Character status: "В игре" in the colour of the text, everything else muted.
-// It was green as on the old site, and green says something good (owner, 12
-// October 2026), while a character in the game is the plain state of one.
+// Not green: a character in the game is the plain state, not a good one.
 function statusClass(c: Character): string {
   return c.status === "Active" ? "status-active" : "status-retired";
 }
 
-// Roster columns, every one centred as on the old site. Both tables use layout
-// "auto" instead of a percentage width on the content-sized columns: a date
-// ("DD.MM.YYYY в HH:mm") and the "Присутствие" header each need a constant
-// number of pixels, and no single percentage covers both a 1600 and a 1920
-// viewport. At 12% the date wrapped onto a second line at either width, and
-// the wrap grew every roster row. So "Последний пост" and "Присутствие" are
-// width-less (they take their content, on one line where the column has the
-// room), "Игрок" and "Имя персонажа" are width-less too and absorb the rest,
-// and the remaining columns keep their proportions as hints.
-const playerColumns = computed<Column[]>(() => [
-  { key: "player", label: "Игрок", align: "center" },
+const centred = (columns: Column[]) =>
+  columns.map((column) => ({ ...column, align: "center" as const }));
+
+// A date and "Присутствие" need fixed pixels no percentage gives at every
+// width, so they and the names go width-less and the rest keep proportions.
+const rosters = computed(() => [
   {
-    key: "rating",
-    label: "Рейтинг",
-    align: "center",
-    width: "11%",
+    title: "Персонажи игроков",
+    characters: playerCharacters.value,
+    columns: centred([
+      { key: "player", label: "Игрок" },
+      { key: "rating", label: "Рейтинг", width: "11%" },
+      { key: "presence", label: "Присутствие" },
+      { key: "character", label: "Имя персонажа" },
+      { key: "descriptor", label: descriptorTitle.value, width: "11%" },
+      { key: "posts", label: "Посты", width: "7%" },
+      { key: "lastpost", label: "Последний пост" },
+      { key: "status", label: "Статус", width: "11%" },
+    ]),
   },
   {
-    key: "presence",
-    label: "Присутствие",
-    align: "center",
+    title: "Неигровые персонажи",
+    characters: npcCharacters.value,
+    columns: centred([
+      { key: "character", label: "Имя персонажа" },
+      { key: "descriptor", label: descriptorTitle.value, width: "18%" },
+      { key: "posts", label: "Посты", width: "12%" },
+      { key: "lastpost", label: "Последний пост" },
+      { key: "status", label: "Статус", width: "18%" },
+    ]),
   },
-  { key: "character", label: "Имя персонажа", align: "center" },
-  {
-    key: "descriptor",
-    label: descriptorTitle.value,
-    align: "center",
-    width: "11%",
-  },
-  { key: "posts", label: "Посты", align: "center", width: "7%" },
-  {
-    key: "lastpost",
-    label: "Последний пост",
-    align: "center",
-  },
-  { key: "status", label: "Статус", align: "center", width: "11%" },
-]);
-const npcColumns = computed<Column[]>(() => [
-  { key: "character", label: "Имя персонажа", align: "center" },
-  {
-    key: "descriptor",
-    label: descriptorTitle.value,
-    align: "center",
-    width: "18%",
-  },
-  { key: "posts", label: "Посты", align: "center", width: "12%" },
-  {
-    key: "lastpost",
-    label: "Последний пост",
-    align: "center",
-  },
-  { key: "status", label: "Статус", align: "center", width: "18%" },
 ]);
 </script>
 
 <template>
   <div v-if="game" class="game-details">
-    <!-- Key-value info table (dev doc 4.2.2.9), a borderless information block. -->
     <table class="info-table">
       <tbody>
         <tr>
@@ -227,7 +180,6 @@ const npcColumns = computed<Column[]>(() => [
           <td>
             <template v-for="(tag, i) in tags" :key="tag.id"
               ><router-link
-                class="tag-link"
                 :to="{ name: 'games', query: { requiredTags: String(tag.id) } }"
                 >{{ tag.title }}</router-link
               ><span v-if="i < tags.length - 1">, </span></template
@@ -251,9 +203,6 @@ const npcColumns = computed<Column[]>(() => [
             {{ game.masterPostsCount ?? 0 }}/{{ game.totalPostsCount ?? 0 }}
           </td>
         </tr>
-        <!-- The home of the post ratings, which the games listing no longer
-             shows: they address posts of this game, so they belong to the
-             game's facts and not to a column of a list of games. -->
         <tr>
           <th>Оцененных постов</th>
           <td>
@@ -270,81 +219,54 @@ const npcColumns = computed<Column[]>(() => [
       </tbody>
     </table>
 
-    <!-- Player roster -->
-    <section v-if="playerCharacters.length" class="roster">
-      <BlockTitle>Персонажи игроков</BlockTitle>
-      <DataTable
-        :columns="playerColumns"
-        :data="playerCharacters"
-        :show-row-numbers="true"
-        empty-text="Персонажей пока нет"
-      >
-        <template #cell-player="{ row }">
-          <UserLink v-if="row.author" :user="row.author" hide-badge />
-          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
-        </template>
-        <template #cell-rating="{ row }">
-          <UserRating
-            v-if="row.author"
-            :user="row.author"
-            :rating="row.authorRating"
-          />
-          <!-- No author, no page for the link to lead to. -->
-          <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
-        </template>
-        <template #cell-presence="{ row }">
-          <span
-            v-if="row.author"
-            :class="isOnline(row.author) ? 'online' : 'offline'"
-            >{{ isOnline(row.author) ? "online" : "offline" }}</span
-          >
-        </template>
-        <template #cell-character="{ row }">
-          <router-link
-            :to="characterLink(row)"
-            :class="{ retired: isRetired(row) }"
-            >{{ row.name }}</router-link
-          >
-        </template>
-        <template #cell-descriptor="{ row }">{{ descriptorOf(row) }}</template>
-        <template #cell-posts="{ row }">{{ row.totalPostsCount }}</template>
-        <template #cell-lastpost="{ row }">{{ lastPostOf(row) }}</template>
-        <template #cell-status="{ row }"
-          ><span :class="statusClass(row)">{{
-            statusLabel(row)
-          }}</span></template
+    <template v-for="roster in rosters" :key="roster.title">
+      <section v-if="roster.characters.length" class="roster">
+        <BlockTitle>{{ roster.title }}</BlockTitle>
+        <DataTable
+          :columns="roster.columns"
+          :data="roster.characters"
+          show-row-numbers
         >
-      </DataTable>
-    </section>
-
-    <!-- Master's characters (NPC) -->
-    <section v-if="npcCharacters.length" class="roster">
-      <BlockTitle>Персонажи мастера</BlockTitle>
-      <DataTable
-        :columns="npcColumns"
-        :data="npcCharacters"
-        :show-row-numbers="true"
-        empty-text="Персонажей мастера пока нет"
-      >
-        <template #cell-character="{ row }">
-          <router-link
-            :to="characterLink(row)"
-            :class="{ retired: isRetired(row) }"
-            >{{ row.name }}</router-link
+          <template #cell-player="{ row }">
+            <UserLink v-if="row.author" :user="row.author" hide-badge />
+            <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
+          </template>
+          <template #cell-rating="{ row }">
+            <UserRating
+              v-if="row.author"
+              :user="row.author"
+              :rating="row.authorRating"
+            />
+            <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
+          </template>
+          <template #cell-presence="{ row }">
+            <span
+              v-if="row.author"
+              :class="isOnline(row.author) ? 'online' : 'offline'"
+              >{{ isOnline(row.author) ? "online" : "offline" }}</span
+            >
+          </template>
+          <template #cell-character="{ row }">
+            <router-link
+              :to="characterLink(row)"
+              :class="{ retired: isRetired(row) }"
+              >{{ row.name }}</router-link
+            >
+          </template>
+          <template #cell-descriptor="{ row }">{{
+            descriptorOf(row)
+          }}</template>
+          <template #cell-posts="{ row }">{{ row.totalPostsCount }}</template>
+          <template #cell-lastpost="{ row }">{{ lastPostOf(row) }}</template>
+          <template #cell-status="{ row }"
+            ><span :class="statusClass(row)">{{
+              characterStatusLabel(row) ?? "В игре"
+            }}</span></template
           >
-        </template>
-        <template #cell-descriptor="{ row }">{{ descriptorOf(row) }}</template>
-        <template #cell-posts="{ row }">{{ row.totalPostsCount }}</template>
-        <template #cell-lastpost="{ row }">{{ lastPostOf(row) }}</template>
-        <template #cell-status="{ row }"
-          ><span :class="statusClass(row)">{{
-            statusLabel(row)
-          }}</span></template
-        >
-      </DataTable>
-    </section>
+        </DataTable>
+      </section>
+    </template>
 
-    <!-- Description (BBCode, server-rendered) -->
     <section v-if="game.info" class="description">
       <DashSeparator />
       <ContentText :html="game.info" />
@@ -363,35 +285,26 @@ const npcColumns = computed<Column[]>(() => [
 .info-table
   +info-table
 
-.tag-link
-  color: $link
-  &:hover
-    color: $link-hover
+// A name longer than the column breaks inside itself rather than widen the page:
+// the master, the assistants, the mentor and the readers alike. The tables of
+// characters keep their names whole.
+.info-table :deep(.user-link)
+  overflow-wrap: anywhere
 
 .roster
   display: flex
   flex-direction: column
   gap: $small
 
-.muted
+.offline,
+.status-retired,
+.retired
   color: $text-muted
 
 .online
   color: $accent-green
 
-.offline
-  color: $text-muted
-
-// Two words that are one state: never "В" alone at the end of a line, which a
-// narrow "Статус" column of a phone made of it. The column takes the width of
-// the two (the roster tables lay their columns out by content).
+// "В игре" is one state: never "В" alone at the end of a line.
 .status-active
   white-space: nowrap
-
-.status-retired
-  color: $text-muted
-
-// Retired characters read as muted in the roster (dead / left / exiled).
-.retired
-  color: $text-muted
 </style>

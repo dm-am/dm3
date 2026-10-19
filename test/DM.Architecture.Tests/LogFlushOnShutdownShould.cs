@@ -10,14 +10,8 @@ namespace DM.Architecture.Tests;
 /// A host that borrows the static logger has to give it back.
 /// </summary>
 /// <remarks>
-/// UseSerilog() with no argument takes Log.Logger with dispose: false, so nothing
-/// disposes it when the host shuts down and the Loki sink — which ships on a timer
-/// — dies with its last batch still buffered. The lost batch is always the same
-/// one: the lines that say why the process stopped. Nothing fails and nothing
-/// warns, so the absence has to be asserted rather than observed.
-///
-/// Source text is the only surface there is: the call lives in Main, which no test
-/// can run, and leaving it out changes nothing observable about the built host.
+/// UseSerilog() takes Log.Logger with dispose: false, so the Loki sink dies with its last batch.
+/// Source text: the call lives in Main, which no test runs.
 /// </remarks>
 public class LogFlushOnShutdownShould
 {
@@ -58,15 +52,7 @@ public class LogFlushOnShutdownShould
     /// <summary>
     /// The runtime is PID 1 in the container, so it hears the stop signal at all.
     /// </summary>
-    /// <remarks>
-    /// The image starts through a shell, because the entry point interpolates the
-    /// project name and the exec form of ENTRYPOINT expands nothing. Without exec
-    /// the shell stays PID 1 and docker stop delivers SIGTERM to it alone: .NET
-    /// never runs its shutdown, the flush asserted above never happens, the message
-    /// a worker is holding is never finished, and the container dies of SIGKILL
-    /// when the grace period runs out. Nothing about that is visible in a log —
-    /// the log is exactly what is lost.
-    /// </remarks>
+    /// <remarks>The entry point runs through a shell to interpolate the project name; without exec the shell stays PID 1.</remarks>
     [Fact]
     public void HandTheStopSignalToTheRuntimeItself()
     {

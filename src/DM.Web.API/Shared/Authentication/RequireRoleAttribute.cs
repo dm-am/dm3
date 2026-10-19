@@ -13,7 +13,6 @@ namespace DM.Web.API.Shared.Authentication;
 /// </summary>
 internal class RequireRoleAttribute : TypeFilterAttribute
 {
-    /// <inheritdoc />
     public RequireRoleAttribute(UserRole minimumRole) : base(typeof(RequireRoleFilter))
     {
         Arguments = [minimumRole];
@@ -28,22 +27,12 @@ internal class RequireRoleAttribute : TypeFilterAttribute
         public void OnAuthorization(AuthorizationFilterContext context)
         {
             var identity = identityProvider.Current;
-
-            // Both refusals are thrown for the middleware to shape, for the reason
-            // AuthenticationRequiredAttribute states, and both take their wording
-            // from the dictionary: this 401 is the same event as the one that
-            // filter refuses, and this 403 is the same event as an intention
-            // refusal, so a second wording for either would only drift.
-            if (identity?.User == null || !identity.User.IsAuthenticated)
-            {
-                throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
-            }
+            AuthenticationRequiredAttribute.EnsureAuthenticated(identity);
 
             if (identity.User.Role < minimumRole)
             {
-                // The role that would have been enough is not named. The reader
-                // cannot grant it to themselves, and the refusal is shown to an
-                // anonymous caller too.
+                // The role that would have been enough is not named: the refusal
+                // reaches anonymous callers too.
                 throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
             }
         }

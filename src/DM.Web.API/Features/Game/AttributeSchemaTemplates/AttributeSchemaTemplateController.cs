@@ -24,13 +24,10 @@ namespace DM.Web.API.Features.Game.AttributeSchemaTemplates;
 [Tags("Attribute Schema Templates")]
 public class AttributeSchemaTemplateController : ControllerBase
 {
-    private readonly IAttributeSchemaTemplateApiService _apiService;
+    private readonly AttributeSchemaTemplateApiService _apiService;
 
-    /// <summary>
-    /// Creates a new instance of AttributeSchemaTemplateController
-    /// </summary>
     public AttributeSchemaTemplateController(
-        IAttributeSchemaTemplateApiService apiService)
+        AttributeSchemaTemplateApiService apiService)
     {
         _apiService = apiService;
     }

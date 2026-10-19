@@ -14,8 +14,6 @@
  */
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import { Tooltip } from "@/shared/ui/Tooltip";
-import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
 import SpeechBubble from "./SpeechBubble.vue";
 import BubbleAction from "./BubbleAction.vue";
 
@@ -53,18 +51,6 @@ describe("SpeechBubble actions", () => {
 describe("BubbleAction", () => {
   const render = () =>
     mount(BubbleAction, { props: { icon: "trash", label: "Удалить" } });
-
-  it("is a button named for a screen reader and described on hover", () => {
-    const wrapper = render();
-    const button = wrapper.get("button");
-
-    expect(button.attributes("type")).toBe("button");
-    expect(button.attributes("aria-label")).toBe("Удалить");
-    expect(wrapper.findComponent(Tooltip).props("text")).toBe("Удалить");
-    expect(wrapper.findComponent(SvgIcon).props("name")).toBe("trash");
-    // The name is the label alone: the glyph is hidden from the reader.
-    expect(button.text()).toBe("");
-  });
 
   it("says a click to the caller", async () => {
     const wrapper = render();

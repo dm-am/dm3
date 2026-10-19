@@ -31,19 +31,8 @@ internal class GameAttributeSchemaService : IGameAttributeSchemaService
 
     /// <inheritdoc />
     /// <remarks>
-    /// The order of the refusals is the order of the questions. A body that
-    /// cannot be stored is refused before anything is read, so an unstorable
-    /// request tells the caller nothing about which games exist. Then the game
-    /// itself, resolved by the same read that serves its details, so a game this
-    /// caller may not see answers the same 404 either way. Then the intention,
-    /// so a visible game the caller does not lead answers 403. The version comes
-    /// last, and inside the write: it is the only question the database can
-    /// answer.
-    ///
-    /// The conflict below is that version and nothing else. A game holding no
-    /// sheet row never arrives here: the repository fails on it, because a
-    /// missing sheet is a defect of whoever wrote the game and reloading would
-    /// hand the caller the same nothing again.
+    /// An unstorable body is refused before the game is read, so it tells nothing about which games exist.
+    /// The conflict is the lost version and nothing else: a game without a sheet row fails in the repository.
     /// </remarks>
     public async Task<GameAttributeSchema> ReplaceAsync(
         ReplaceGameAttributeSchema replace, CancellationToken ct = default)
@@ -57,7 +46,7 @@ internal class GameAttributeSchemaService : IGameAttributeSchemaService
         if (replaced == null)
         {
             throw new HttpException(HttpStatusCode.Conflict,
-                "Схему только что изменили. Проверьте и сохраните снова");
+                "Пока вы правили, схему сохранил кто-то другой. Ваши правки на месте, \"Сохранить\" запишет их поверх");
         }
 
         return replaced;

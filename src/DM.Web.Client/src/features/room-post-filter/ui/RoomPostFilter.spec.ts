@@ -2,15 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The room bar is the pulse bar with two filters of the room's own. These
- * mount it on a router and go through it the way a reader does: the menu
- * offers the five filters in the order the bubbles stand in, the characters
- * list offers "Без персонажа" and every character that has been in play, with
- * its player (or "NPC"), a picked character stands as a bubble under its name, the sort
- * starts at the room's own order, and "Сбросить" takes the address back to the
- * bare room.
- */
 import { describe, it, expect, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
@@ -44,7 +35,6 @@ const characters = [
     isNpc: false,
     author: { username: "LongestLoginPossible" },
   },
-  // Never in play: nothing was written by them.
   {
     id: "c-liara",
     name: "Лиара Тенебраум",
@@ -83,7 +73,6 @@ async function mountBar(query: Record<string, string> = {}) {
   return { wrapper, router };
 }
 
-// The filter writes the address after a short debounce.
 const settle = async () => {
   await new Promise((resolve) => setTimeout(resolve, 80));
   await flushPromises();
@@ -121,9 +110,9 @@ describe("room filter bar", () => {
       .findAll(".dropdown-item .item-hint")
       .map((h) => h.text());
     expect(hints).toEqual([
-      "Мастер и помощники от своего имени",
+      "Мастер и ассистенты от своего имени",
       "LongestLoginPossible",
-      "NPC",
+      "Неигровой персонаж",
       "Experienced",
     ]);
 

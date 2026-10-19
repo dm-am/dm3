@@ -4,7 +4,6 @@ using System.Linq;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Domain.Personal.Features.Notifications;
 using Microsoft.EntityFrameworkCore;
 
@@ -18,7 +17,6 @@ internal class NewBlogCommentNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public NewBlogCommentNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -30,7 +28,7 @@ internal class NewBlogCommentNotificationGenerator : BaseNotificationGenerator
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        // Comments are polymorphic - EntityId is the BlogId for blog comments
+        // Comments are polymorphic: EntityId is the BlogId for blog comments.
         var commentData = await (
             from c in _dbContext.Comments
             join b in _dbContext.Blogs on c.EntityId equals b.BlogId
@@ -40,7 +38,7 @@ internal class NewBlogCommentNotificationGenerator : BaseNotificationGenerator
                 c.CommentId,
                 c.AuthorId,
                 CommentAuthorUsername = c.Author.Username,
-                BlogId = b.BlogId,
+                b.BlogId,
                 BlogTitle = b.Title,
                 BlogAuthorId = b.AuthorId,
                 BlogMentorId = b.MentorId,
@@ -55,7 +53,6 @@ internal class NewBlogCommentNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        // Collect all users to notify (owner, mentor, assistants)
         var usersToNotify = new HashSet<Guid> { commentData.BlogAuthorId };
 
         if (commentData.BlogMentorId.HasValue)
@@ -68,7 +65,6 @@ internal class NewBlogCommentNotificationGenerator : BaseNotificationGenerator
             usersToNotify.Add(assistantId);
         }
 
-        // Don't notify the comment author
         usersToNotify.Remove(commentData.AuthorId);
 
         if (usersToNotify.Count == 0)
@@ -78,13 +74,13 @@ internal class NewBlogCommentNotificationGenerator : BaseNotificationGenerator
 
         yield return new CreateNotification
         {
-            UsersInterested = usersToNotify.ToArray(),
+            UsersInterested = usersToNotify,
             ActorId = commentData.AuthorId,
             Metadata = new
             {
-                CommentId = commentData.CommentId,
+                commentData.CommentId,
                 BlogId = commentData.BlogId.EncodeToReadable(commentData.BlogTitle),
-                BlogTitle = commentData.BlogTitle,
+                commentData.BlogTitle,
                 AuthorUsername = commentData.CommentAuthorUsername
             }
         };

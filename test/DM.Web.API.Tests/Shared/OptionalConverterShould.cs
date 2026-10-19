@@ -10,16 +10,7 @@ namespace DM.Web.API.Tests.Shared;
 /// <summary>
 /// Optional carries three states across the wire, and PATCH needs all three.
 /// </summary>
-/// <remarks>
-/// Property absent means "leave it alone", property null means "clear it",
-/// property set means "assign it". The domain reads exactly that —
-/// ShouldReorder is PreviousRoomId != null, the new value is
-/// PreviousRoomId?.Value — but the converter could not produce the middle state:
-/// Optional is a class, so with the default HandleNull the serialiser skipped
-/// Read on a null and wrote null into the property itself. A room could not be
-/// moved to the head of the chain through the API, because the request that says
-/// so was indistinguishable from the request that says nothing.
-/// </remarks>
+/// <remarks>Optional is a class, so with the default HandleNull the serialiser skips Read on a null.</remarks>
 public class OptionalConverterShould
 {
     private class Target
@@ -70,9 +61,7 @@ public class OptionalConverterShould
     [Fact]
     public void ReadANonStringValue()
     {
-        // Reading a string first threw here, and the throw left the pipeline as a
-        // 500. No Optional<int> is on the wire today; the trap was set for the
-        // next person to add one.
+        // A value read as a string first throws, and the throw answers 500.
         var target = JsonSerializer.Deserialize<Target>("""{"position":7}""", Options)!;
 
         target.Position!.Value.Should().Be(7);

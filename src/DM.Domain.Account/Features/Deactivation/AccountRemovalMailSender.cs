@@ -8,22 +8,17 @@ using Microsoft.Extensions.Options;
 namespace DM.Domain.Account.Features.Deactivation;
 
 /// <inheritdoc cref="IAccountRemovalMailSender" />
-internal class AccountRemovalMailSender : AccountMailSender, IAccountRemovalMailSender
+internal class AccountRemovalMailSender(
+    ITemplateRenderer renderer,
+    IMailSender mailSender,
+    IEmailAssetsProvider emailAssetsProvider,
+    IOptions<SiteAddressConfiguration> siteAddresses)
+    : AccountMailSender(renderer, mailSender, emailAssetsProvider, siteAddresses), IAccountRemovalMailSender
 {
-    public AccountRemovalMailSender(
-        ITemplateRenderer renderer,
-        IMailSender mailSender,
-        IEmailAssetsProvider emailAssetsProvider,
-        IOptions<SiteAddressConfiguration> siteAddresses)
-        : base(renderer, mailSender, emailAssetsProvider, siteAddresses)
-    {
-    }
-
     /// <inheritdoc />
     public Task SendCompleted(string email)
     {
-        const string subject = "Dungeon Master: аккаунт удален";
-        return Send(email, subject, new AccountRemovedViewModel(
+        return Deliver(email, "аккаунт удален", new AccountRemovedViewModel(
             SupportUrl: SiteLink("support?reason=removed")));
     }
 }

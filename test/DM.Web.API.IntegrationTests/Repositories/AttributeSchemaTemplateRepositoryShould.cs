@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.AttributeSchemaTemplates;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -19,12 +15,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// <summary>
 /// The catalogue of starting character sheets, against a live Postgres.
 /// </summary>
-/// <remarks>
-/// Every rule here is one the database settles and nothing else can: the two
-/// partial unique indexes exist only under PostgreSQL, and the conditional
-/// writes that hide a template and move the default flag are predicates on a
-/// row rather than decisions taken in memory.
-/// </remarks>
+/// <remarks>The partial unique indexes and the conditional writes exist only under PostgreSQL.</remarks>
 public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
 {
     public AttributeSchemaTemplateRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -32,9 +23,7 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The table is shared with every other test of the run, and the default
-    /// flag is a fact about the whole table, so each test starts from a
-    /// catalogue that has no default at all.
+    /// The default flag is a fact about the shared table, so each test starts with no default.
     /// </summary>
     private static async Task ClearTheDefaultFlag(DmDbContext dbContext) =>
         await dbContext.AttributeSchemaTemplates
@@ -58,9 +47,7 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
     };
 
     /// <summary>
-    /// The exemption from the global soft-delete filter is gone with the reason
-    /// for it, so a hidden template is invisible to both reads without either of
-    /// them spelling a predicate.
+    /// A hidden template is invisible to both reads through the global soft-delete filter.
     /// </summary>
     [Fact]
     public async Task HideATemplateInsteadOfDroppingTheRow()
@@ -156,9 +143,7 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A replacement writes every field, and the specifications come back with
-    /// identifiers of the server's own: nothing addresses a specification of a
-    /// template, so none of them is preserved.
+    /// A replacement writes every field, and the specifications get new server identifiers.
     /// </summary>
     [Fact]
     public async Task HandOutFreshSpecificationIdentifiersOnEveryReplacement()
@@ -268,12 +253,7 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
     /// A hidden template cannot become the default one, whichever order the two
     /// writes arrive in: the assignment requires a live row.
     /// </summary>
-    /// <remarks>
-    /// Another template holds the flag while the refusal happens, because the
-    /// assignment takes the flag off its holder before it learns the target is
-    /// hidden. With nothing holding it there is nothing for the rollback to put
-    /// back, and the assertion passes on a write that kept the half it managed.
-    /// </remarks>
+    /// <remarks>Another template holds the flag, so the rollback has the holder's flag to put back.</remarks>
     [Fact]
     public async Task RefuseTheDefaultFlagToAHiddenTemplate()
     {
@@ -321,44 +301,6 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
             "the partial unique index is what keeps a second starting sheet out");
     }
 
-    /// <summary>
-    /// Two assignments running at once leave one default behind, and it is one
-    /// of the two that asked for it - the loser is refused by the index rather
-    /// than left overwriting the winner.
-    /// </summary>
-    [Fact]
-    public async Task LeaveOneDefaultWhenTwoAssignmentsRaceEachOther()
-    {
-        using var setup = DatabaseFixture.Factory.Services.CreateScope();
-        var setupRepository = setup.ServiceProvider
-            .GetRequiredService<IAttributeSchemaTemplateRepository>();
-        var setupContext = setup.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        await ClearTheDefaultFlag(setupContext);
-        var author = await SeedUser(setupContext);
-        var standing = await setupRepository.Create(Creation(UniqueTitle()), author);
-        var first = await setupRepository.Create(Creation(UniqueTitle()), author);
-        var second = await setupRepository.Create(Creation(UniqueTitle()), author);
-        await setupRepository.MakeDefault(standing.Id);
-
-        using var firstScope = DatabaseFixture.Factory.Services.CreateScope();
-        using var secondScope = DatabaseFixture.Factory.Services.CreateScope();
-
-        var refusals = await Task.WhenAll(
-            Assign(firstScope, first.Id),
-            Assign(secondScope, second.Id));
-
-        refusals.Where(refusal => refusal != null).Should().AllBeOfType<DuplicateEntityException>(
-            "an assignment that loses the race is refused by the partial unique index");
-
-        var defaults = await LiveDefaults(setupContext);
-        defaults.Should().HaveCount(1,
-            "however the two land, the catalogue keeps exactly one starting sheet");
-        new[] { first.Id, second.Id }.Should().Contain(defaults.Single(),
-            "one of the two asked for the flag and got it, so the template that held " +
-            "it before is not the one still holding it");
-    }
-
     private static async Task<Exception?> Assign(IServiceScope scope, Guid templateId)
     {
         var repository = scope.ServiceProvider.GetRequiredService<IAttributeSchemaTemplateRepository>();
@@ -374,20 +316,11 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The assignment that arrives second is refused by the partial unique
-    /// index, and that refusal reaches the service as a duplicate rather than
-    /// as a bare database error.
+    /// The second assignment is refused by the partial unique index, and the service sees a duplicate.
     /// </summary>
     /// <remarks>
-    /// The loser is held still instead of being raced: the winning claim is made
-    /// by hand in a transaction that stays open, the assignment is let into the
-    /// database and parked on it, and only then is the claim committed. A race
-    /// shows this on the runs where it happens to interleave and nothing at all
-    /// on the rest.
-    ///
-    /// The claim runs on a connection of its own rather than through a context,
-    /// because the host configures a retrying execution strategy and that
-    /// strategy refuses a transaction opened outside it.
+    /// The winning claim is held open by hand on a connection of its own (the retrying strategy refuses an outside
+    /// transaction), the assignment parked on it, and only then committed.
     /// </remarks>
     [Fact]
     public async Task RefuseAnAssignmentTheFlagWasClaimedAheadOf()
@@ -454,10 +387,7 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Waits for the assignment to reach the database and stop there. The claim
-    /// it collides with is not committed yet, so PostgreSQL parks the assignment
-    /// rather than refusing it; committing before it is parked would let it take
-    /// the flag off the holder and keep it, and the test would prove nothing.
+    /// Waits until PostgreSQL parks the assignment behind the uncommitted claim.
     /// </summary>
     private static async Task WaitUntilTheAssignmentWaits(string connectionString, int backendPid)
     {

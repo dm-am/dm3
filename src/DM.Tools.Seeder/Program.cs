@@ -18,10 +18,7 @@ using Microsoft.Extensions.Hosting;
 namespace DM.Tools.Seeder;
 
 /// <summary>
-/// Development data seeder. Lives outside the API on purpose: it writes straight
-/// to Postgres and the object storage, so it must never be reachable over
-/// HTTP. Connection strings come from the same DM_* environment variables the
-/// application workloads read.
+/// Development data seeder, outside the API so that it is never reachable over HTTP.
 /// </summary>
 internal static class Program
 {
@@ -52,8 +49,7 @@ internal static class Program
                 PrintUsers(await RunPhase(seeder => seeder.SeedTestUsers()));
             }
 
-            // The content seed reads the users it attaches everything to, so on
-            // "all" it always runs second.
+            // The content seed reads the users, so on "all" it runs second.
             if (command is AllCommand or ContentCommand)
             {
                 PrintContent(await RunPhase(seeder => seeder.SeedComprehensiveData()));
@@ -69,17 +65,12 @@ internal static class Program
     }
 
     /// <summary>
-    /// One phase on a host of its own, so that "all" lays out the fixture that
-    /// "users" followed by "content" lays out in two processes, which is how the
-    /// stand scripts seed. The generator and the identifier counter are
-    /// singletons of the host: shared across the phases, the content phase
-    /// started where the users phase had stopped drawing, and the stand and the
-    /// pipeline disagreed on which accounts play which game.
+    /// One phase on a host of its own, so that "all" lays out what "users" and then "content" lay out
+    /// in two processes, as the stand scripts seed.
     /// </summary>
     private static async Task<T> RunPhase<T>(Func<DataSeeder, Task<T>> phase)
     {
-        // Args are commands, not configuration: Host.CreateDefaultBuilder would
-        // reject a bare positional argument as an unrecognized switch.
+        // Args are commands: Host.CreateDefaultBuilder would reject a bare positional argument.
         using var host = CreateHostBuilder().Build();
         await using var scope = host.Services.CreateAsyncScope();
         return await phase(scope.ServiceProvider.GetRequiredService<DataSeeder>());
@@ -89,58 +80,30 @@ internal static class Program
     /// The tool's composition, in one place so that the container it runs on is
     /// the container a test can build.
     /// </summary>
-    /// <remarks>
-    /// Internal rather than private for exactly that: the tool composes inside its
-    /// entry point rather than in a Startup class, so the architecture suite could
-    /// read this file as text and never resolve anything out of it. A dependency
-    /// the container cannot supply is not a build error here — it surfaces on a
-    /// developer's machine as a seeding run that dies before it writes a row.
-    /// </remarks>
     internal static IHostBuilder CreateHostBuilder() => Host
         .CreateDefaultBuilder()
-        // Scope validation only. ValidateOnBuild is deliberately off here,
-        // alone among the executables: the tool scans three domain assemblies
-        // for a handful of internal types - the hashing, the popularity
-        // processors - and the sweep brings in services wired for the API
-        // (mail senders, the HIBP client, the realtime push) that this tool
-        // never resolves and whose dependencies it has no business registering.
-        // What the tool does resolve is guarded twice instead: the composition
-        // rule resolves every constructor dependency of DataSeeder against
-        // this container, and a seeding run is part of the local gates.
+        // Scope validation only: the domain scans bring in API services this tool never resolves.
+        // CompositionRootShould resolves every dependency of DataSeeder against this container instead.
         .UseDefaultServiceProvider(options => options.ValidateScopes = true)
         .WithDmConfiguration()
         .ConfigureServices((context, services) => services
             .AddOptions()
             .AddDmCoreConfiguration(context.Configuration)
-            // The scans below sweep the whole account assembly, whose types read
-            // four option sections. IOptions of an unbound type hands out a default
-            // rather than throwing, so the encryption key would have been empty at the
-            // first call that needed it instead of missing at startup.
+            // The account assembly reads these sections, and IOptions of an unbound one hands out empty defaults.
             .AddDmAccountConfiguration(context.Configuration)
             .RequireRelationalStorage()
             .RequireObjectStorage()
             .AddDbContext<DmDbContext>(options => options.UseNpgsql(
                 context.Configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
                 npgsql => npgsql.CommandTimeout(120)))
-            // The DI modules, after everything the tool wires explicitly: their
-            // scans only fill gaps, so the DbContext above must already be on
-            // the collection when they run.
+            // After the explicit registrations: the scans only fill gaps.
             .AddDmCore()
             .AddDmPersistence()
-            // Password hashing lives in the Account domain and its implementation is
-            // internal, so the assembly scan is what picks it up. The same goes for
-            // the two popularity processors: the fixture scores its games and blogs
-            // by the site's definition rather than by a copy of it, and the classes
-            // that hold that definition are internal to their modules.
+            // The hashing and the popularity processors are internal to their modules, so the scan picks them up.
             .AddDefaultTypes(typeof(ISecurityManager).Assembly)
             .AddDefaultTypes(typeof(DM.Domain.Game.Authorization.GameIntention).Assembly)
             .AddDefaultTypes(typeof(DM.Domain.Blog.Authorization.BlogIntention).Assembly)
-            // Last, and deliberately last: MS.DI hands a single resolution to
-            // the final registration, so this is what replaces the
-            // infrastructure Guid.NewGuid() factory for the tool and only for
-            // the tool. Single instances, because a per-dependency generator
-            // restarts its stream on every resolve and hands out the same
-            // identifiers twice.
+            // Last, because the final registration wins. Singletons, so a resolve does not restart the stream.
             .AddSingleton<SeedDeterminism>()
             .AddSingleton<IGuidFactory, SeededGuidFactory>()
             .AddScoped<DataSeeder>());
@@ -164,10 +127,7 @@ internal static class Program
 
     private static void PrintUsers(SeedResult result)
     {
-        // Zeroes omitted, the way the content line next door already does it.
-        // "22 created, 0 skipped" spends half its width saying that nothing was
-        // skipped, on a line read after every run, and the two summaries of one
-        // command read differently for no reason.
+        // Zeroes omitted, as on the content line.
         var counters = new (string Label, int Value)[]
         {
             ("created", result.Created),
@@ -188,8 +148,7 @@ internal static class Program
 
     private static void PrintContent(ComprehensiveSeedResult result)
     {
-        // Same counters the HTTP endpoint returned, zeroes omitted: on a reseed
-        // almost everything is skipped and the interesting part is what is not.
+        // Zeroes omitted: on a reseed almost everything is skipped.
         var counters = new (string Label, int Value)[]
         {
             ("games", result.GamesCreated),

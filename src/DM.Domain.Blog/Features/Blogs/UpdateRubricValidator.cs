@@ -6,7 +6,6 @@ namespace DM.Domain.Blog.Features.Blogs;
 /// <inheritdoc />
 internal class UpdateRubricValidator : AbstractValidator<UpdateRubric>
 {
-    /// <inheritdoc />
     public UpdateRubricValidator()
     {
         RuleFor(x => x.RubricId)

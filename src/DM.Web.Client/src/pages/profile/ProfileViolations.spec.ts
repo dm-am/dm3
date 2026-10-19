@@ -3,16 +3,9 @@
  */
 
 /**
- * The violations line of a profile, and where its points lead.
- *
- * "N/6" was a dead number: it said how much a person had been warned and gave
- * no way to find out what for. It now opens the open log narrowed to that
- * person, where every warning carries its reason.
- *
- * What decides the link is the number of warnings in force, not the points on
- * them. A verbal warning costs nothing and still stands in the log, so a line
- * reading "0/6" can have entries behind it; a profile with no warnings at all
- * must not offer a link to an empty page.
+ * The violations line of a profile: "N/6" leads to the log narrowed to the
+ * person where there are warnings in force, the count deciding and not the
+ * points, since a verbal warning carries none.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
@@ -24,7 +17,8 @@ const getBans = vi.hoisted(() => vi.fn());
 
 vi.mock("@/entities/moderation", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/entities/moderation")>()),
-  moderationApi: { getWarnings, getBans },
+  warningApi: { getWarnings },
+  banApi: { getBans },
 }));
 
 const warnings = (totalPoints: number, activeCount: number) => ({

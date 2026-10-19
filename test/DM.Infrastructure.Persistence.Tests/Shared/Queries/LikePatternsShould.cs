@@ -8,10 +8,8 @@ namespace DM.Infrastructure.Persistence.Tests.Shared.Queries;
 /// What a reader types is matched as text, whatever LIKE would have read it as.
 /// </summary>
 /// <remarks>
-/// Asserted on the pattern rather than through a query: the rule is what the string looks
-/// like when it reaches PostgreSQL, and the in-memory provider does not read patterns at
-/// all. The three characters are the whole rule — the two wildcards and the escape that
-/// makes them literal, which has to be escaped before them or it escapes them again.
+/// Asserted on the pattern: the in-memory provider does not read patterns. The escape is escaped before the
+/// two wildcards, or it escapes them again.
 /// </remarks>
 public class LikePatternsShould
 {
@@ -33,14 +31,7 @@ public class LikePatternsShould
     /// <summary>
     /// A backslash typed on its own reaches the database as a pair.
     /// </summary>
-    /// <remarks>
-    /// Asserted on the whole pattern rather than on its ending. A rule phrased as
-    /// "does not end on backslash-percent" cannot tell the two cases apart: in
-    /// `%\\%` the backslash before the closing wildcard is the second half of an
-    /// escaped pair and the pattern is correct, while in `%\%` the same two
-    /// characters are an escape swallowing the wildcard. Counting them is what
-    /// distinguishes them, and the count is what this states.
-    /// </remarks>
+    /// <remarks>On the whole pattern: `%\\%` and `%\%` end alike and differ in count.</remarks>
     [Fact]
     public void SendALoneBackslashAsAnEscapedPair() =>
         LikePatterns.Contains("\\").Should().Be("%\\\\%",

@@ -1,19 +1,8 @@
 <script setup lang="ts" generic="T extends { id: string | number }">
 /**
- * ProfileTestimonialsFrame — the shared frame of the profile's
- * testimonial-like lists (endorsements, game reviews): the filter bar, the
- * guarded fetch keyed to the URL, the skeleton/empty/error states and the
- * paging above and below the items.
- *
- * A caller chooses the endpoint (`fetch-page`), the card (the `item` slot) and
- * the texts; the frame owns everything the two lists used to spell twice.
- *
- * Architecture:
- *  - `useTestimonialsFilter` manages the URL state (search + sort) — both
- *    lists carry the same state in the URL and the same page size.
- *  - `useFetchData` listens to route.query (+ username/mode via a closure)
- *    and re-runs the fetch.
- *  - Server-side pagination — paging info comes from the ListEnvelope.
+ * The shared frame of the profile's testimonial-like lists: the filter, the
+ * fetch keyed to the address, the states and the paging. A caller gives the
+ * endpoint, the card (the `item` slot) and the texts.
  */
 import { ref, computed, watch, type Ref } from "vue";
 import { useRoute } from "vue-router";
@@ -36,7 +25,7 @@ const props = defineProps<{
   username: string;
   /** Which side of the pair the list shows; part of the refetch key. */
   mode: "received" | "written";
-  /** The current page's route name — for Paging.to. */
+  /** The route of the page, for the paging links. */
   routeName: string;
   /** The text `ErrorState` shows when a page fails to load. */
   errorMessage: string;
@@ -52,11 +41,7 @@ const props = defineProps<{
     number?: number;
     take?: number;
   }) => Promise<ApiResult<ListEnvelope<T>>>;
-  /**
-   * Relabels the "Автор" sort option (label + hint) where the author is the
-   * profile owner on every row and the backend already sorts the scope by the
-   * other side of the pair. The sortBy value sent stays "author".
-   */
+  /** Relabels the "Автор" sort where every row's author is the owner; the value sent stays "author". */
   authorSortOverride?: { label: string; hint: string };
   searchPlaceholder?: string;
 }>();
@@ -72,9 +57,7 @@ const { filterState, searchParams, hasActiveFilters } = useTestimonialsFilter();
 
 const envelope: Ref<ListEnvelope<T> | null> = ref(null);
 
-// Keeps any already-shown items on a failure (stale-while-revalidate); the
-// ErrorState banner renders independently above the list — see template — so
-// the previous message is not cleared until the next answer lands.
+// A failure keeps the items already shown; the banner stands above them.
 const {
   loading,
   error: loadError,
@@ -82,8 +65,7 @@ const {
   run,
 } = useGuardedRequest({ message: () => props.errorMessage });
 
-// Username/mode change (navigating between "received" and "written" pages, or
-// to another profile) must drop the previous list immediately.
+// Another profile or the other side of the pair drops the list at once.
 watch(
   () => `${props.username}:${props.mode}`,
   () => {
@@ -92,7 +74,7 @@ watch(
   },
 );
 
-function fetch() {
+function loadPage() {
   return run(
     () =>
       props.fetchPage({
@@ -109,16 +91,13 @@ function fetch() {
 }
 
 useFetchData(
-  () => fetch(),
+  () => loadPage(),
   [
     {
-      // The URL is the single source of truth for filter/paging: route.query
-      // changed → refetch. Username/mode come in via the props closure so they
-      // are covered too (mode switches received/written without changing
-      // route.query, hence explicitly part of the key).
+      // The address holds the filter and the page; the mode is part of the key, since it changes no query.
       param: () =>
         JSON.stringify({ q: route.query, u: props.username, m: props.mode }),
-      callback: () => fetch(),
+      callback: () => loadPage(),
     },
   ],
 );
@@ -138,18 +117,8 @@ const sortOptions = computed<SortOption[] | undefined>(() => {
   if (!override) return undefined;
   return SORT_OPTIONS.map((o) =>
     o.value === "author"
-      ? {
-          value: o.value,
-          label: override.label,
-          hint: override.hint,
-          defaultDirection: o.defaultDirection,
-        }
-      : {
-          value: o.value,
-          label: o.label,
-          hint: o.hint,
-          defaultDirection: o.defaultDirection,
-        },
+      ? { ...o, label: override.label, hint: override.hint }
+      : o,
   );
 });
 
@@ -158,12 +127,8 @@ const pagingTo = computed(() => ({
   params: { username: props.username },
 }));
 
-// Paging scrolls the list block (top paging + cards) back into view instead
-// of the page top.
+// Paging scrolls the list back into view, not the page top.
 const listRef = ref<HTMLElement | null>(null);
-function pagingAnchor(): HTMLElement | null {
-  return listRef.value;
-}
 </script>
 
 <template>
@@ -173,16 +138,12 @@ function pagingAnchor(): HTMLElement | null {
       :search-placeholder="searchPlaceholder"
     />
 
-    <!-- Error banner — independent of the list, matches /pulse: never hides
-         already-loaded items on a failed refetch. 404-vs-failure distinction
-         (does this profile exist at all) is resolved one level up by
-         useProfileSubpageUser; this ErrorState is purely for "the request to
-         load the list failed". -->
+    <!-- Never hides the items already loaded; a profile that does not exist is a 404 one level up. -->
     <ErrorState
       v-if="loadError"
       class="error-banner"
       :message="loadError"
-      :retry="fetch"
+      :retry="loadPage"
     />
 
     <TestimonialSkeleton v-if="loading && !envelope" :count="3" />
@@ -197,7 +158,7 @@ function pagingAnchor(): HTMLElement | null {
         :paging="paging"
         :to="pagingTo"
         :use-query="true"
-        :scroll-anchor="pagingAnchor"
+        :scroll-anchor="() => listRef"
       />
 
       <div class="list-items">
@@ -212,7 +173,7 @@ function pagingAnchor(): HTMLElement | null {
         :paging="paging"
         :to="pagingTo"
         :use-query="true"
-        :scroll-anchor="pagingAnchor"
+        :scroll-anchor="() => listRef"
       />
     </div>
   </div>
@@ -227,8 +188,7 @@ function pagingAnchor(): HTMLElement | null {
 .error-banner
   margin-bottom: $medium
 
-// Paging blocks sit $medium from the items; the tight $tiny rhythm between
-// items and their dash separators lives on the inner wrapper.
+// The paging $medium from the items; the $tiny rhythm of items and dashes is the inner wrapper's.
 .list
   display: flex
   flex-direction: column

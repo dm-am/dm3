@@ -1,8 +1,6 @@
-using System;
 using DM.Domain.Core.Content;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Game.AttributeSchemas;
 using CommentariesAccessMode = DM.Domain.Core.Enums.CommentsAccessMode;
 
@@ -16,21 +14,21 @@ public class CreateGameRequest
     /// <summary>
     /// Game title
     /// </summary>
-    [Required(ErrorMessage = "Введите заголовок")]
+    [Required(ErrorMessage = "Введите название")]
     [StringLength(GameFieldLimits.TitleMaxLength, MinimumLength = GameFieldLimits.TitleMinLength,
-        ErrorMessage = "Заголовок от 3 до 200 символов")]
+        ErrorMessage = "Название до {1} символов")]
     public string Title { get; set; } = "";
 
     /// <summary>
     /// RPG system name (e.g. "D&amp;D 5e", "GURPS", "Fate")
     /// </summary>
-    [StringLength(GameFieldLimits.SystemMaxLength, ErrorMessage = "Название системы не длиннее 100 символов")]
+    [StringLength(GameFieldLimits.SystemMaxLength, ErrorMessage = "Название системы не длиннее {1} символов")]
     public string? System { get; set; }
 
     /// <summary>
     /// Narrative setting (e.g. "Forgotten Realms", "Warhammer 40k", "Original")
     /// </summary>
-    [StringLength(GameFieldLimits.SettingMaxLength, ErrorMessage = "Название сеттинга не длиннее 100 символов")]
+    [StringLength(GameFieldLimits.SettingMaxLength, ErrorMessage = "Название сеттинга не длиннее {1} символов")]
     public string? Setting { get; set; }
 
     /// <summary>
@@ -39,7 +37,7 @@ public class CreateGameRequest
     [Required(ErrorMessage = "Введите описание")]
     // The domain's rule rather than an invention of the form: a game is chosen
     // by this text, and the rule has been refusing short ones all along.
-    [MinLength(GameFieldLimits.InfoMinLength, ErrorMessage = "Описание от 200 символов")]
+    [MinLength(GameFieldLimits.InfoMinLength, ErrorMessage = "Описание от {1} символов")]
     public string Info { get; set; } = "";
 
     /// <summary>

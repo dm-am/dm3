@@ -3,11 +3,10 @@
  */
 
 /**
- * The section "Аккаунт" of the profile's "Модерация" tab: the two actions on
- * the account, the second factor first, in one line at every width
- * (ButtonRow): none goes into "…" and the line does not scroll sideways.
+ * The section "Аккаунт" of the profile's "Модерация" tab: who is offered its
+ * two actions, the second factor first.
  */
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect } from "vitest";
 import { shallowMount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { UserRole } from "@/entities/user";
@@ -15,13 +14,10 @@ import { useAuthStore } from "@/shared/stores";
 import type { ModeratedProfile } from "@/shared/api/models/moderation";
 import ProfileModerationTab from "./ProfileModerationTab.vue";
 
-function render() {
+function render(role: UserRole, targetUsername = "Colleague") {
   const pinia = createPinia();
   setActivePinia(pinia);
-  useAuthStore().updateUser({
-    username: "Admin",
-    role: UserRole.Admin,
-  } as never);
+  useAuthStore().updateUser({ username: "Admin", role } as never);
   return shallowMount(ProfileModerationTab, {
     props: {
       profile: {
@@ -30,35 +26,39 @@ function render() {
         moderatorNotes: [],
         isUnderModerationWatch: false,
       } as unknown as ModeratedProfile,
-      targetUsername: "Colleague",
+      targetUsername,
     },
-    global: {
-      plugins: [pinia],
-      // The row is drawn for real: a stub would not draw what stands in it.
-      stubs: { ButtonRow: false },
-    },
+    global: { plugins: [pinia], renderStubDefaultSlot: true },
   });
 }
 
-beforeEach(() => {
-  localStorage.clear();
-});
+/** The actions of the section, in the order they stand. */
+const actions = (wrapper: ReturnType<typeof render>) =>
+  Array.from(
+    wrapper.html().matchAll(/<moderation-(two-factor|account-removal)-stub/g),
+    ([, action]) => action,
+  );
 
 describe("the section of the account in the moderation tab", () => {
-  it("stands both actions in a row of buttons, the second factor first, neither held back", () => {
-    const wrapper = render();
+  it("offers an administrator both actions, the second factor first", () => {
+    expect(actions(render(UserRole.Admin))).toEqual([
+      "two-factor",
+      "account-removal",
+    ]);
+  });
 
-    const row = wrapper.get(".mod-account_actions");
-    expect(row.classes()).toContain("button-row");
-    expect(wrapper.find("[data-fit-row]").exists()).toBe(false);
-    expect(wrapper.find(".scroll-row").exists()).toBe(false);
-    const actions = Array.from(row.element.children).map((child) => [
-      child.tagName.toLowerCase(),
-      child.hasAttribute("data-fit-keep"),
+  it("offers a senior moderator the removal alone", () => {
+    expect(actions(render(UserRole.SeniorModerator))).toEqual([
+      "account-removal",
     ]);
-    expect(actions).toEqual([
-      ["moderation-two-factor-stub", false],
-      ["moderation-account-removal-stub", false],
-    ]);
+  });
+
+  it("is not drawn for a moderator below them", () => {
+    expect(render(UserRole.Moderator).text()).not.toContain("Аккаунт");
+    expect(actions(render(UserRole.Moderator))).toEqual([]);
+  });
+
+  it("is not drawn on the viewer's own profile, in any case of the name", () => {
+    expect(actions(render(UserRole.Admin, "admin"))).toEqual([]);
   });
 });

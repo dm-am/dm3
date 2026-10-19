@@ -11,8 +11,6 @@ namespace DM.Domain.Personal.Features.Notifications;
 /// </summary>
 public interface INotificationService
 {
-    #region Reading
-
     /// <summary>
     /// Count unread notifications for current user
     /// </summary>
@@ -24,33 +22,19 @@ public interface INotificationService
     /// <param name="query">Paging query</param>
     Task<(IEnumerable<ListedNotification> Notifications, PagingResult Paging)> GetAsync(PagingQuery query);
 
-    #endregion
-
-    #region Creating
-
     /// <summary>
     /// Create new notifications
     /// </summary>
     /// <remarks>
-    /// Answers with the audience as it survived the recipient filter, not with
-    /// the audience it was asked for. Every channel has to be built from this
-    /// answer: the filter is what keeps a blocked person from reaching somebody,
-    /// and a channel reading the request instead of the reply mails out exactly
-    /// what the filter refused to store.
-    ///
-    /// Idempotent by (EventId, EventType): a request whose pair is already
-    /// stored is dropped from the answer and stored again by nobody, which is
-    /// what makes a redelivered bus event write once and mail once. A request
-    /// without an EventId is created unconditionally, as before the key existed.
+    /// Answers with the audience as it survived the recipient filter: every channel
+    /// is built from this answer. Idempotent by (EventId, EventType), so a
+    /// redelivered bus event writes once and mails once; a request without an
+    /// EventId is created unconditionally.
     /// </remarks>
     /// <param name="createNotifications">List of creating DTOs</param>
     /// <param name="ct">Cancellation token</param>
     Task<IReadOnlyList<CreatedNotification>> CreateAsync(
         IEnumerable<CreateNotification> createNotifications, CancellationToken ct = default);
-
-    #endregion
-
-    #region Flushing
 
     /// <summary>
     /// Mark single notification as read by current user
@@ -62,6 +46,4 @@ public interface INotificationService
     /// Mark all notifications as read for current user
     /// </summary>
     Task MarkAllAsReadAsync();
-
-    #endregion
 }

@@ -104,11 +104,6 @@ internal class ComprehensiveSeedResult
     public int NotificationsCreated { get; set; }
 
     /// <summary>
-    /// Skipped items (already existed)
-    /// </summary>
-    public int Skipped { get; set; }
-
-    /// <summary>
     /// Details about what was created
     /// </summary>
     public List<string> Details { get; set; } = new();

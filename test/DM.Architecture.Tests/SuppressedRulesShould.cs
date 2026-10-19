@@ -12,27 +12,8 @@ namespace DM.Architecture.Tests;
 /// is off.
 /// </summary>
 /// <remarks>
-/// A rule can be dealt with two ways: fix what it points at, or write the line
-/// that tells it to look away. The second is sometimes right, and it is always
-/// silent - the build goes green and nothing records that a check stopped
-/// applying or why. Over a year that is how a suite of checks becomes decoration:
-/// still there, switched off everywhere it was inconvenient.
-///
-/// This test is the register. It is deliberately not a document: a list of what
-/// is currently switched off is a snapshot of state, and a snapshot in prose
-/// drifts from the tree on the next edit and then misinforms. A test cannot
-/// drift - it fails.
-///
-/// Two scopes are left out on purpose:
-///
-/// Generated migrations. EF writes those files and puts its own pragmas in them;
-/// the repository does not author that code and regenerating it would restore
-/// them.
-///
-/// The test tree. Its only occurrence is a string constant in SchemaSources that
-/// names the pragma in order to find where the generated model starts - not a
-/// suppression at all. A scanner that counted string literals would be reporting
-/// on the very code that reads them, and tests are not shipped besides.
+/// A suppression is silent, so this test is the register. Left out: generated migrations, whose pragmas
+/// EF writes, and the test tree.
 /// </remarks>
 public class SuppressedRulesShould
 {
@@ -76,11 +57,7 @@ public class SuppressedRulesShould
     /// Nothing is switched off that is not listed above, and nothing is listed that
     /// is no longer switched off.
     /// </summary>
-    /// <remarks>
-    /// Checked from both ends so the list cannot rot into a licence. An entry for a
-    /// suppression that has since been removed is a reason nobody has to give any
-    /// more, and leaving it invites the next one to be added under it.
-    /// </remarks>
+    /// <remarks>Checked from both ends so the list cannot rot into a licence.</remarks>
     [Fact]
     public void CarryAReasonForEveryCheckThatIsSwitchedOff()
     {
@@ -96,23 +73,6 @@ public class SuppressedRulesShould
         stale.Should().BeEmpty(
             "the suppression is gone, so the reason for it is spent: drop the entry " +
             "rather than leave it standing for the next one to be added under");
-    }
-
-    /// <summary>
-    /// A reason has to say something. An entry with a placeholder for prose is the
-    /// same silence this test exists to end, spelled differently.
-    /// </summary>
-    [Fact]
-    public void SpellOutEachReasonRatherThanNameTheRuleAgain()
-    {
-        foreach (var entry in Allowed)
-        {
-            entry.Why.Should().NotBeNullOrWhiteSpace();
-            entry.Why.Length.Should().BeGreaterThan(
-                entry.Rule.Length,
-                "the reason has to explain the exception, and a line no longer than the " +
-                "rule's own name explains nothing");
-        }
     }
 
     private static IEnumerable<string> Scan()

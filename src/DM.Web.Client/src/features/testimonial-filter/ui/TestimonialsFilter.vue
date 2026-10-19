@@ -7,13 +7,11 @@ import type { SortOption } from "@/shared/ui/Filters";
 
 const props = withDefaults(
   defineProps<{
-    /** Sort options override (contract for profile pages, e.g. given/received endorsements) */
+    /** For profile pages (given and received endorsements). */
     sortOptions?: SortOption[];
-    /** Search input placeholder override */
     searchPlaceholder?: string;
   }>(),
   {
-    sortOptions: undefined,
     searchPlaceholder: "Поиск по тексту или автору",
   },
 );
@@ -21,14 +19,12 @@ const props = withDefaults(
 const { filterState, setSearch, setSort, toggleSortOrder } =
   useTestimonialsFilter();
 
-// Search with debounce
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
   setSearch,
 );
 
-// Sort
-const sortOptions = computed<SortOption[]>(
+const options = computed<SortOption[]>(
   () =>
     props.sortOptions ??
     SORT_OPTIONS.map((o) => ({
@@ -39,8 +35,7 @@ const sortOptions = computed<SortOption[]>(
     })),
 );
 
-// The direction rides along with the clicked option, so an overridden option
-// list no longer has to keep its directions in step with SORT_OPTIONS.
+// The direction rides with the clicked option, so an override needs no directions of its own.
 function handleSortSelect(value: string, direction?: "asc" | "desc") {
   setSort(value as "created" | "author", direction);
 }
@@ -49,7 +44,6 @@ function handleSortSelect(value: string, direction?: "asc" | "desc") {
 <template>
   <div class="testimonials-filter">
     <div class="filter-bar">
-      <!-- Search input -->
       <FilterSearchInput
         v-model="localInput"
         :placeholder="searchPlaceholder"
@@ -58,9 +52,9 @@ function handleSortSelect(value: string, direction?: "asc" | "desc") {
         @blur="applySearch"
       />
 
-      <!-- Sort (sorting is driven solely by this control, no bubble row) -->
+      <!-- The sort alone drives the order: no bubble row. -->
       <SortButton
-        :options="sortOptions"
+        :options="options"
         :sort-by="filterState.sortBy"
         :sort-order="filterState.sortOrder"
         @sort-select="handleSortSelect"
@@ -79,5 +73,4 @@ function handleSortSelect(value: string, direction?: "asc" | "desc") {
   gap: $small
 
   +filter-bar
-  +filter-responsive
 </style>

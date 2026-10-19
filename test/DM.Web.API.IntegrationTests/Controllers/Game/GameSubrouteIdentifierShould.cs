@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
 using DM.Web.API.Swagger;
@@ -15,22 +12,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// Every subroute of a game takes the same identifier as the game itself.
 /// </summary>
 /// <remarks>
-/// A game is addressed by a five-letter public id everywhere the client has one,
-/// and that is what the page URL carries. One subroute out of 33 declared
-/// {id:guid} instead, so GET /v1/games/gamea/characters answered 200 while
-/// GET /v1/games/gamea/reviews answered a bodiless routing 404 — no error body,
-/// nothing in the contract to read it off, and a mandatory extra round trip
-/// through GET /v1/games/{publicId} to obtain a GUID nothing else asks for.
-///
-/// Checked against the route templates the host registered rather than against a
-/// list of paths, so a subroute added tomorrow with the constraint copied from a
-/// neighbour is caught without anybody remembering this test exists.
-///
-/// The templates, and not the published schemas: the schema of a path parameter
-/// comes from the type of the argument, so an action declaring {id:guid} while
-/// taking a string publishes a plain string and refuses every public id at
-/// routing time - the exact shape of this finding, invisible to a walk over the
-/// document. The constraint is only in the template, which is where it is read.
+/// The page URL carries the five-letter public id. Checked against the registered route templates, where an
+/// {id:guid} constraint lives; the published schema shows a plain string either way.
 /// </remarks>
 public class GameSubrouteIdentifierShould : IntegrationTestBase
 {

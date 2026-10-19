@@ -28,7 +28,6 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
     private readonly IGuidFactory _guidFactory;
     private readonly IIdentityProvider _identityProvider;
 
-    /// <inheritdoc />
     public WebsiteTestimonialService(
         IValidator<CreateWebsiteTestimonial> createValidator,
         IValidator<UpdateWebsiteTestimonial> updateValidator,
@@ -57,10 +56,8 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
         await _createValidator.ValidateAndThrowAsync(createTestimonial);
         _intentionManager.ThrowIfForbidden(WebsiteTestimonialIntention.Create);
 
-        // The entry is signed by the participant the moderator named, not by the
-        // moderator who submitted it. An unknown name is refused here: written
-        // through unresolved, it would either sign the wrong person or store a
-        // foreign key to nobody.
+        // Signed by the participant the moderator named; an unknown name would sign
+        // the wrong person or store a foreign key to nobody.
         var authorId = await _userRepository.FindUserIdAsync(createTestimonial.AuthorUsername);
         if (authorId == null)
         {
@@ -68,10 +65,7 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
                 RefusalMessage.UserNotFoundByUsername(createTestimonial.AuthorUsername));
         }
 
-        // One testimonial per participant. A second one is a conflict of state,
-        // which is what the controller declares and what the form on the other
-        // side branches on: Gone said neither "not found" nor "deleted" here and
-        // matched nothing the caller was written for.
+        // One testimonial per participant: a second one is a conflict, which the form branches on.
         var existing = await _repository.GetByAuthor(authorId.Value);
         if (existing != null)
         {
@@ -94,10 +88,7 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
         }
         catch (DuplicateEntityException)
         {
-            // The pre-check above cannot see the request running beside it, and
-            // the partial unique index by author is what actually refuses the
-            // second entry. Answered with the sentence the pre-check uses, so
-            // the loser of the race and the ordinary second attempt read alike.
+            // The loser of the race reads as the ordinary second attempt does.
             throw new HttpException(HttpStatusCode.Conflict,
                 RefusalMessage.TestimonialAlreadyExists(createTestimonial.AuthorUsername));
         }
@@ -108,24 +99,16 @@ internal class WebsiteTestimonialService : IWebsiteTestimonialService
     }
 
     /// <inheritdoc />
-    public async Task<WebsiteTestimonial> GetAsync(Guid id)
-    {
-        var testimonial = await _repository.Get(id);
-        if (testimonial == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, "Отзыв не найден");
-        }
-
-        return testimonial;
-    }
+    public async Task<WebsiteTestimonial> GetAsync(Guid id) =>
+        await _repository.Get(id) ?? throw new HttpException(HttpStatusCode.NotFound, "Отзыв не найден");
 
     /// <inheritdoc />
     public async Task<(IEnumerable<WebsiteTestimonial> Testimonials, PagingResult Paging)> GetListAsync(
         WebsiteTestimonialsQuery query)
     {
         var totalCount = await _repository.Count(query);
-        var pageSize = _identityProvider.Current.Settings.Paging.EntitiesPerPage;
-        var pagingData = new PagingData(query, pageSize, (int)totalCount);
+        var pageSize = _identityProvider.Current.Settings.PageSize;
+        var pagingData = new PagingData(query, pageSize, totalCount);
         var testimonials = await _repository.Get(query, pagingData);
         return (testimonials, pagingData.Result);
     }

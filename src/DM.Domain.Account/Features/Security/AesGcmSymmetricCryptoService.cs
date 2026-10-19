@@ -22,40 +22,23 @@ internal class AesGcmSymmetricCryptoService : ISymmetricCryptoService
     private readonly int _currentVersion;
     private readonly Dictionary<int, byte[]> _allKeys = new();
 
-    /// <inheritdoc />
     public AesGcmSymmetricCryptoService(IOptions<CryptoConfiguration> cryptoOptions)
     {
+        // The current key is checked once, at startup (AccountConfigurationExtensions);
+        // the previous ones are not, and are checked here.
         var config = cryptoOptions.Value;
-
-        if (string.IsNullOrEmpty(config?.KeyBase64))
-        {
-            throw new InvalidOperationException(
-                "CryptoConfiguration.KeyBase64 must be configured. " +
-                "Generate a secure 32-byte key: Convert.ToBase64String(RandomNumberGenerator.GetBytes(32))");
-        }
-
         _currentKey = Convert.FromBase64String(config.KeyBase64);
         _currentVersion = config.KeyVersion;
-
-        if (_currentKey.Length != 32)
-        {
-            throw new CryptographicException($"AES-256 key must be 32 bytes (256 bits), got {_currentKey.Length} bytes");
-        }
-
         _allKeys[_currentVersion] = _currentKey;
 
-        // Load previous keys for decryption
-        if (config.PreviousKeys != null)
+        foreach (var (version, keyBase64) in config.PreviousKeys)
         {
-            foreach (var (version, keyBase64) in config.PreviousKeys)
+            var key = Convert.FromBase64String(keyBase64);
+            if (key.Length != 32)
             {
-                var key = Convert.FromBase64String(keyBase64);
-                if (key.Length != 32)
-                {
-                    throw new CryptographicException($"Previous key version {version} must be 32 bytes, got {key.Length} bytes");
-                }
-                _allKeys[version] = key;
+                throw new CryptographicException($"Previous key version {version} must be 32 bytes, got {key.Length} bytes");
             }
+            _allKeys[version] = key;
         }
     }
 
@@ -64,19 +47,15 @@ internal class AesGcmSymmetricCryptoService : ISymmetricCryptoService
     {
         var plaintext = Encoding.UTF8.GetBytes(valueToEncrypt);
 
-        var nonce = RandomNumberGenerator.GetBytes(NonceSize);
-        var ciphertext = new byte[plaintext.Length];
-        var tag = new byte[TagSize];
+        // Format: [version(1)][nonce(12)][tag(16)][ciphertext(N)], written in place
+        var result = new byte[VersionSize + NonceSize + TagSize + plaintext.Length];
+        result[0] = (byte)_currentVersion;
+        var nonce = result.AsSpan(VersionSize, NonceSize);
+        RandomNumberGenerator.Fill(nonce);
 
         using var aesGcm = new AesGcm(_currentKey, TagSize);
-        aesGcm.Encrypt(nonce, plaintext, ciphertext, tag);
-
-        // Format: [version(1)][nonce(12)][tag(16)][ciphertext(N)]
-        var result = new byte[VersionSize + NonceSize + TagSize + ciphertext.Length];
-        result[0] = (byte)_currentVersion;
-        Buffer.BlockCopy(nonce, 0, result, VersionSize, NonceSize);
-        Buffer.BlockCopy(tag, 0, result, VersionSize + NonceSize, TagSize);
-        Buffer.BlockCopy(ciphertext, 0, result, VersionSize + NonceSize + TagSize, ciphertext.Length);
+        aesGcm.Encrypt(nonce, plaintext, result.AsSpan(VersionSize + NonceSize + TagSize),
+            result.AsSpan(VersionSize + NonceSize, TagSize));
 
         return Task.FromResult(Convert.ToBase64String(result));
     }
@@ -97,18 +76,15 @@ internal class AesGcmSymmetricCryptoService : ISymmetricCryptoService
             throw new CryptographicException($"Unknown encryption key version: {version}");
         }
 
-        return Task.FromResult(DecryptWithKey(combined, VersionSize, key));
+        return Task.FromResult(DecryptWithKey(combined, key));
     }
 
-    private static string DecryptWithKey(byte[] combined, int offset, byte[] key)
+    private static string DecryptWithKey(byte[] combined, byte[] key)
     {
-        var nonce = new byte[NonceSize];
-        var tag = new byte[TagSize];
-        var ciphertext = new byte[combined.Length - offset - NonceSize - TagSize];
-
-        Buffer.BlockCopy(combined, offset, nonce, 0, NonceSize);
-        Buffer.BlockCopy(combined, offset + NonceSize, tag, 0, TagSize);
-        Buffer.BlockCopy(combined, offset + NonceSize + TagSize, ciphertext, 0, ciphertext.Length);
+        var payload = combined.AsSpan(VersionSize);
+        var nonce = payload[..NonceSize];
+        var tag = payload.Slice(NonceSize, TagSize);
+        var ciphertext = payload[(NonceSize + TagSize)..];
 
         var plaintext = new byte[ciphertext.Length];
 

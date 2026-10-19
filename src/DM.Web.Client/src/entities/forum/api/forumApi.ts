@@ -10,48 +10,16 @@ import type {
   TopicsQuery,
   CommentsQuery,
 } from "../model/types";
-import { Api, toCommentsQueryParams } from "@/shared/api";
-import { RENDER_AUDIENCE } from "@/shared/api";
+import { Api, RENDER_AUDIENCE, toCommentsQueryParams } from "@/shared/api";
 import type { Patch, Post } from "@/shared/api/models";
+import type { RequestOptions } from "@/shared/api/interceptor";
 
-// Well-known board aliases
 const NEWS_BOARD_ALIAS = "news";
 
-/**
- * How many news cards the homepage block shows at once. Owner's rule: having
- * more than two at a time is too many. It caps the request and the render
- * alike — the block's freshness window (last seven days) decides WHICH news
- * qualify, never HOW MANY are shown.
- */
+// More than two news cards at a time is too many; freshness decides which, not how many.
 export const NEWS_WIDGET_LIMIT = 2;
 
-/**
- * The refusal a caller takes over because its own screen carries it.
- *
- * A screen that answers a failure where the reader is looking — the strip in
- * place of the rows, the card in place of the content — is the one carrier of
- * that failure, and the response interceptor has to stay quiet or the same
- * sentence stands in two places at once. The methods below pass this through
- * untouched; every call that leaves it out is unchanged, because the client
- * then sees nothing and the interceptor speaks as it always did.
- *
- * Declared here rather than imported: `shared/api` keeps its own copy of the
- * type to itself, and the client reads the two fields off the request by name,
- * so a structural twin carries them just as well.
- */
-type RefusalFlags = {
-  /** The screen shows a 403 and a 5xx itself. */
-  ownsRefusal?: boolean;
-  /** The screen shows a 429 itself, the wait included. */
-  ownsRateLimit?: boolean;
-};
-
-/**
- * One place — and one place only — where TopicsQuery becomes
- * query-string parameters. The per-board and cross-board endpoints
- * share this builder so a new filter automatically propagates to both
- * without diverging.
- */
+// Shared by the board and the cross-board search, so a new filter reaches both.
 function buildTopicsParams(q: TopicsQuery) {
   const pageSize = q.size ?? 20;
   const queryParams: Record<
@@ -70,8 +38,6 @@ function buildTopicsParams(q: TopicsQuery) {
   if (q.search) {
     queryParams.search = q.search;
   }
-  // `authorUsernames` on the wire, per the API query vocabulary; `authors`
-  // is the name this query type and the route use.
   if (q.authors && q.authors.length > 0) {
     queryParams.authorUsernames = q.authors;
   }
@@ -95,15 +61,8 @@ export default new (class ForumApi {
     return Api.get<ListEnvelope<Board>>("boards");
   }
 
-  /**
-   * @param options For the read that opens a board's page: a failure there
-   * stands as the error page of the status in place of the board, so that read
-   * is the one carrier and the interceptor has nothing to add over it. The
-   * board is read again after a sign-in and as the board of a topic, and
-   * neither of those shows a word about a failure: the interceptor is their
-   * only voice. Hence the caller sets it, per read, as for getTopics.
-   */
-  public getBoard(id: BoardId, options?: RefusalFlags) {
+  // The caller sets the flags per read: the other reads have only the interceptor's voice.
+  public getBoard(id: BoardId, options?: RequestOptions) {
     return Api.get<Envelope<Board>>(
       `boards/${id}`,
       undefined,
@@ -113,11 +72,7 @@ export default new (class ForumApi {
   }
 
   public getNews() {
-    // Homepage news block. The sort key is explicit because the server's
-    // default is last activity (TopicRepository), which floats an older topic
-    // above a newer one the moment somebody comments on it — news are ordered
-    // by publication, not by discussion. `take` here is the block's hard cap,
-    // not a page size.
+    // The server sorts by last activity unless told; news go by publication.
     return Api.get<ListEnvelope<Topic>>(`boards/${NEWS_BOARD_ALIAS}/topics`, {
       take: NEWS_WIDGET_LIMIT,
       sortBy: "created",
@@ -125,20 +80,8 @@ export default new (class ForumApi {
     });
   }
 
-  public getModerators(id: BoardId) {
-    return Api.get<ListEnvelope<User>>(`boards/${id}/moderators`);
-  }
-
-  /**
-   * @param options For the read that fills a board listing: a failure there
-   * stands as a strip where the rows would be, so that read is the one carrier
-   * and the interceptor has nothing to add over it. The other reads of this
-   * endpoint refresh the pinned block after a pin or a reorder and show nothing
-   * at all about a failure — the interceptor is the only voice they have, and a
-   * flag pinned inside this method would take it away. Hence the caller sets
-   * it, per read, and this method only carries it.
-   */
-  public getTopics(id: BoardId, q: TopicsQuery, options?: RefusalFlags) {
+  // The caller sets the flags per read: the pinned block refresh has only the interceptor's voice.
+  public getTopics(id: BoardId, q: TopicsQuery, options?: RequestOptions) {
     return Api.get<ListEnvelope<Topic>>(
       `boards/${id}/topics`,
       buildTopicsParams(q),
@@ -147,24 +90,11 @@ export default new (class ForumApi {
     );
   }
 
-  /**
-   * Cross-board topic search — backs the user-profile "Topics" tab. The
-   * caller is expected to set `q.authors = [username]` to scope results
-   * to a specific user; access policy is enforced server-side so private
-   * boards never leak into the response.
-   *
-   * Shares the same TopicsQuery → query-string mapping as `getTopics` so
-   * both call sites stay in lock-step when a new filter is added.
-   */
   public getAllTopics(q: TopicsQuery) {
     return Api.get<ListEnvelope<Topic>>("topics", buildTopicsParams(q));
   }
 
-  /**
-   * The body is the whole pinned order of the board, so the verb is PUT: the
-   * server refuses a list that is not the board's pinned topics, each named
-   * once. The caller passes everything the pinned block holds.
-   */
+  /** The whole pinned order of the board, each pinned topic named once. */
   public reorderPinnedTopics(boardId: BoardId, topicIds: string[]) {
     return Api.put(`boards/${boardId}/topics/pinned/order`, { topicIds });
   }
@@ -173,15 +103,11 @@ export default new (class ForumApi {
     return Api.patch<Envelope<Topic>>(`topics/${id}`, topic);
   }
 
-  /** Delete a topic (author or moderator; backend DELETE v1/topics/{id}). */
-  public deleteTopic(id: TopicId, options?: RefusalFlags) {
+  public deleteTopic(id: TopicId, options?: RequestOptions) {
     return Api.delete(`topics/${id}`, undefined, options);
   }
 
-  /**
-   * Fetch a topic's first-post raw BBCode source for the editor (AuthorEdit
-   * audience round-trips [private]/[mod] for the author).
-   */
+  /** The raw BBCode for the editor: AuthorEdit keeps [private] and [mod] for the author. */
   public getTopicForUpdate(id: TopicId) {
     return Api.get<Envelope<Topic>>(
       `topics/${id}`,
@@ -190,15 +116,7 @@ export default new (class ForumApi {
     );
   }
 
-  /**
-   * Create a new topic on a board.
-   *
-   * The wire body intentionally does NOT reuse `Post<Topic>` — the API DTO
-   * (CreateTopicRequest on the server) takes `{ title, text }`, not
-   * `{ title, description }` like the Topic resource's own field name.
-   * Passing `description` here would silently fail to bind to the
-   * server-side `Text` property (both required, non-empty).
-   */
+  // Not Post<Topic>: the request takes `text`, which the resource calls `description`.
   public createTopic(id: BoardId, topic: { title: string; text: string }) {
     return Api.post<Envelope<Topic>>(`boards/${id}/topics`, topic);
   }
@@ -211,10 +129,6 @@ export default new (class ForumApi {
     return Api.get<Envelope<Topic>>(`forum/${boardAlias}/${topicNumber}`);
   }
 
-  public markBoardAsRead(id: BoardId) {
-    return Api.delete(`boards/${id}/comments/unread`);
-  }
-
   public markForumAsRead() {
     return Api.delete("forum/comments/unread");
   }
@@ -223,13 +137,7 @@ export default new (class ForumApi {
     return Api.delete(`topics/${id}/comments/unread`);
   }
 
-  /**
-   * Where this reader continues in the topic: the first comment he has not
-   * read, or the topic's last comment when everything is read. Backs the
-   * card's comments counter, which lands him on that comment instead of at
-   * the top of the discussion. Addressed by alias and number, like the topic
-   * itself, so the resolver needs no separate lookup of the topic id.
-   */
+  /** The first unread comment, or the last one when everything is read. */
   public getFirstUnreadComment(boardAlias: string, topicNumber: number) {
     return Api.get<Envelope<FirstUnreadComment>>(
       `forum/${boardAlias}/${topicNumber}/comments/first-unread`,
@@ -251,7 +159,7 @@ export default new (class ForumApi {
     return Api.patch<Envelope<Comment>>(`forum/comments/${id}`, comment);
   }
 
-  public deleteComment(id: CommentId, options?: RefusalFlags) {
+  public deleteComment(id: CommentId, options?: RequestOptions) {
     return Api.delete(`forum/comments/${id}`, undefined, options);
   }
 

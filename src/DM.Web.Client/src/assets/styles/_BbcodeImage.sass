@@ -1,0 +1,28 @@
+// [img], the picture of the text: .image from the server, .bb-image from the
+// editor, a plain img. Drawn under whatever selector includes the mixin.
+
+=bbcode-image
+  // A custom size comes as custom properties on .bb-image-frame, so an
+  // ancestor overrides it with a plain class rule; the fallbacks are the
+  // default size. height: auto and no width: auto: a width/height attribute
+  // pair still reserves room, and under max-width the ratio governs. The cap
+  // is DM2's 500px; a taller picture opens whole on a click (bbcodeImageViewer),
+  // except inside [link] and in the editor.
+  img, .bb-image
+    max-width: var(--bb-image-max-width, 100%)
+    max-height: var(--bb-image-max-height, 500px)
+    height: auto
+    object-fit: contain
+    display: inline-block
+    vertical-align: middle
+
+  .bb-image
+    cursor: zoom-in
+
+    &:is(a *, [contenteditable="true"] *)
+      cursor: inherit
+
+  .bb-image-frame
+    display: inline-block
+    // Only a vehicle for the custom properties of its inline style.
+    max-width: 100%

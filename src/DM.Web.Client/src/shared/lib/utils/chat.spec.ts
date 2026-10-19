@@ -1,15 +1,10 @@
-/**
- * The virtualized chat rows.
- *
- * Both chat pages used to read the mixed list at the virtualizer's index
- * inside every template binding and cast the result, so nothing ever checked
- * that the member being read belonged to the kind of item actually there. The
- * mapping below is where the two kinds are told apart now, which makes it the
- * one place worth pinning: the narrowed value each row carries, and what
- * happens to a row whose item is gone.
- */
-import { describe, it, expect } from "vitest";
+// The virtualized chat rows: the narrowed value each carries, and a row whose
+// item is gone.
+import { describe, it, expect, afterEach, vi } from "vitest";
+import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
 import {
+  isUserOnline,
+  latestActivityByUsername,
   openImageGates,
   toChatVirtualRows,
   type MessageOrSeparator,
@@ -126,5 +121,48 @@ describe("openImageGates", () => {
     const html =
       '<a href="#" class="spoiler-head">x</a><div class="spoiler">y</div>';
     expect(openImageGates(html)).toBe(html);
+  });
+});
+
+describe("latestActivityByUsername", () => {
+  const by = (username: string | null, lastActivityUtc: string | null) => ({
+    author: username === null ? null : { username, lastActivityUtc },
+  });
+
+  it("keeps the latest stamp of each author and skips those without one", () => {
+    const latest = latestActivityByUsername([
+      by("Alice", "2026-08-11T10:00:00Z"),
+      by("Bob", "2026-08-11T09:00:00Z"),
+      by("Alice", "2026-08-11T11:00:00Z"),
+      by("Alice", "2026-08-11T08:00:00Z"),
+      by("Carol", null),
+      by(null, null),
+    ] as never);
+
+    expect([...latest]).toEqual([
+      ["Alice", "2026-08-11T11:00:00Z"],
+      ["Bob", "2026-08-11T09:00:00Z"],
+    ]);
+  });
+});
+
+describe("isUserOnline", () => {
+  const NOW = new Date("2026-08-11T10:00:00Z").getTime();
+  const activeAgo = (ms: number) => new Date(NOW - ms).toISOString();
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  it("calls nobody online without a last activity", () => {
+    expect(isUserOnline(null)).toBe(false);
+    expect(isUserOnline(undefined)).toBe(false);
+  });
+
+  it("keeps the threshold minute itself online and the second past it not", () => {
+    vi.useFakeTimers({ now: NOW });
+    const threshold = ONLINE_THRESHOLD_MINUTES * 60_000;
+    expect(isUserOnline(activeAgo(threshold))).toBe(true);
+    expect(isUserOnline(activeAgo(threshold + 1_000))).toBe(false);
   });
 });

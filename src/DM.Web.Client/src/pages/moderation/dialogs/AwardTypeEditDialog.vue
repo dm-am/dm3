@@ -1,21 +1,25 @@
 <script setup lang="ts">
 /**
- * AwardTypeEditDialog — edit an award-type catalog entry (title /
- * description / icon / tier / sortOrder).
- *
- * The window runs the request (Dialog `action`): it waits for the answer,
- * prints a refusal in itself - a name the catalogue already carries as well as
- * a refusal the interceptor used to say in a plate over it - and closes on
- * success alone. An edited description is typed text, so the window asks
- * before it is dropped.
+ * Edits an award type. The window runs the request, prints a refusal in
+ * itself and closes on success alone; an edited description is typed text,
+ * so the window asks before it is dropped.
  */
 import { ref, computed } from "vue";
-import { achievementApi } from "@/entities/achievement";
+import {
+  achievementApi,
+  CATALOG_TITLE_MAX_LENGTH,
+  CATALOG_DESCRIPTION_MAX_LENGTH,
+  CATALOG_ICON_NAME_MAX_LENGTH,
+  MIN_TIER,
+  MAX_TIER,
+  TIER_SCALE_HINT,
+} from "@/entities/achievement";
 import type { AwardType } from "@/shared/api/models/achievements";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{
   awardType: AwardType;
@@ -52,7 +56,7 @@ async function send() {
       tier: tier.value,
       sortOrder: sortOrder.value,
     },
-    { ownsRefusal: true, ownsRateLimit: true },
+    OWNS_REFUSAL,
   );
   if (!result.error) emit("success");
   return result;
@@ -75,7 +79,7 @@ async function send() {
           v-model="title"
           type="text"
           required
-          maxlength="200"
+          :maxlength="CATALOG_TITLE_MAX_LENGTH"
         />
       </FormField>
 
@@ -88,37 +92,31 @@ async function send() {
           id="award-type-description"
           v-model="description"
           rows="3"
-          maxlength="1000"
+          :maxlength="CATALOG_DESCRIPTION_MAX_LENGTH"
           required
         ></textarea>
       </FormField>
 
-      <FormField
-        label="Имя иконки (из game-icons sprite)"
-        name="award-type-icon"
-        field="iconName"
-      >
+      <FormField label="Имя иконки" name="award-type-icon" field="iconName">
         <input
           id="award-type-icon"
           v-model="iconName"
           type="text"
           required
-          maxlength="80"
+          :maxlength="CATALOG_ICON_NAME_MAX_LENGTH"
         />
+        <template #hint>Из набора иконок</template>
       </FormField>
 
-      <FormField
-        label="Tier (1 gold / 2 silver / 3 bronze / 5 diamond / null)"
-        name="award-type-tier"
-        field="tier"
-      >
+      <FormField label="Тир" name="award-type-tier" field="tier">
         <input
           id="award-type-tier"
           v-model.number="tier"
           type="number"
-          min="0"
-          max="9"
+          :min="MIN_TIER"
+          :max="MAX_TIER"
         />
+        <template #hint>{{ TIER_SCALE_HINT }}</template>
       </FormField>
 
       <FormField

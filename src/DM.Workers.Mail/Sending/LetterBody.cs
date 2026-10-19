@@ -10,15 +10,7 @@ namespace DM.Workers.Mail.Sending;
 /// in plain text beside it.
 /// </summary>
 /// <remarks>
-/// multipart/alternative with the text first and the HTML last, which is the
-/// order the standard gives them in: a client shows the last part it can draw,
-/// so every client that draws HTML draws exactly what it drew before, and one
-/// that cannot, or a reader who asked for text, gets the words and the
-/// addresses instead of a raw document. The logo stays where it was, beside
-/// the HTML inside multipart/related, because only the HTML refers to it.
-///
-/// The HTML part is built the way it always was, from the body unchanged: a
-/// letter must not look any different for having gained a second half.
+/// Text first, HTML last: a client shows the last part it can draw.
 /// </remarks>
 internal static class LetterBody
 {
@@ -44,7 +36,6 @@ internal static class LetterBody
             return html;
         }
 
-        // multipart/related for inline images (CID attachments)
         var related = new MultipartRelated { html };
 
         foreach (var resource in letter.LinkedResources)

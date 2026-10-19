@@ -6,7 +6,6 @@ namespace DM.Domain.Game.Features.Rooms;
 /// <inheritdoc />
 internal class CreateRoomValidator : AbstractValidator<CreateRoom>
 {
-    /// <inheritdoc />
     public CreateRoomValidator()
     {
         RuleFor(c => c.GameId)

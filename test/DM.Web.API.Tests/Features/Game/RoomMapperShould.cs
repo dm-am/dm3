@@ -1,30 +1,26 @@
 using System;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Game.Characters;
 using DM.Web.API.Features.Game.Rooms;
 using AwesomeAssertions;
 using Xunit;
-using DomainRoomAccess = DM.Domain.Game.Features.Games.RoomAccess;
+using DomainRoomAccess = DM.Domain.Game.Features.RoomAccesses.RoomAccess;
 
 namespace DM.Web.API.Tests.Features.Game;
 
 public class RoomMapperShould : UnitTestBase
 {
-    private RoomMapper CreateMapper()
+    private static RoomMapper CreateMapper()
     {
-        var userMapper = new UserMapper(Mock<IImgproxyUrlBuilder>());
+        var userMapper = new UserMapper();
         return new RoomMapper(userMapper, new CharacterMapper(userMapper));
     }
 
     /// <summary>
-    /// The policy is what decides who may write in the room. It was mapped with
-    /// Ignore(), so every access of every response answered null: the screen that
-    /// grants access could not show which grant it had just made, and no client
-    /// could tell a spectator from a participant.
+    /// The policy decides who may write in the room, and every response carries it.
     /// </summary>
     [Fact]
     public void CarryTheAccessPolicy()
@@ -40,10 +36,7 @@ public class RoomMapperShould : UnitTestBase
     }
 
     /// <summary>
-    /// PATCH carries "not sent" as null and the write model must keep saying
-    /// it: the repository applies each setting only when its nullable is set,
-    /// so a mapper that defaults an omitted field re-introduces the bug where
-    /// renaming a room silently rewrote its access and dice settings.
+    /// PATCH carries "not sent" as null and the write model keeps saying it: each setting applies only when set.
     /// </summary>
     [Fact]
     public void KeepAnUnsentUpdateFieldNull()
@@ -87,10 +80,7 @@ public class RoomMapperShould : UnitTestBase
     }
 
     /// <summary>
-    /// PreviousRoomId is three-valued: absent (covered above), explicit null
-    /// (move to the head of the chain) and a value. The wrapped null must
-    /// survive the map - collapsing it to a bare null turns "move to head"
-    /// into "do not reorder".
+    /// PreviousRoomId is three-valued: absent, explicit null (move to the head) and a value.
     /// </summary>
     [Fact]
     public void CarryAnExplicitNullPreviousRoomThrough()

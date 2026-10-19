@@ -3,10 +3,9 @@
  * An action of a caption line ("Редактировать", "Удалить", "Снять бан"): a
  * word of the line and not a control drawn over it. It takes the line's font,
  * size and colour, and answers the pointer the way a grey link of the site
- * does: $link-hover and the underline (owner's standard, 27 September 2026;
- * it used to take the underline alone, while the same action as a link turned
- * blue). It never turns red, a destructive action included - the confirmation
- * it opens is where the danger is spelled out.
+ * does: $link-hover and the underline. It never turns red, a destructive
+ * action included - the confirmation it opens is where the danger is spelled
+ * out.
  *
  * A button, or a link when `to` is given (the edit page of a publication).
  * Listeners and attributes (`disabled`, `aria-*`) fall through to either.
@@ -25,7 +24,7 @@ defineProps<{
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 // The link's behaviour in the colour of the line: the button reset, the eased
 // $link-hover and underline, the inline ring and the site's disabled opacity

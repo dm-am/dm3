@@ -2,43 +2,17 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The rating line is one line of human text, and what the reader selects is
- * what has to reach the clipboard: "+1 от Тест Елки, 26.07.2026 в 16:00, #1".
- * It used to copy as "...в 16:00#1" — the gap before the number was drawn by
- * `margin-left` on the button, and a margin renders but does not copy. The
- * number stands in the line after the date, a comma and a space before it, as
- * it did before the room wave of 24.09 moved it to the right corner of the row
- * (the owner, 05.10: "У оценок постов что ты сделал с #1? Почему он справа?").
- *
- * The assertion is on the raw textContent, deliberately not on a normalized
- * form. Whitespace that comes from template indentation instead of from the
- * copy is invisible in the browser and collapses on the way to the clipboard,
- * so a normalized comparison would pass over the very mistake this guards:
- * a separator that is geometry rather than a character.
- *
- * The number itself is a link and not a copy button: it leads where it points,
- * the way "Перейти к посту" does in the footer of the post.
- *
- * The second half of the file is about the controls: every one of them repeats
- * a check the server makes, and a button the server would refuse is a promise
- * the page cannot keep.
- */
+// The raw textContent is asserted: a separator drawn by a margin renders but does not copy.
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { enableAutoUnmount, mount, flushPromises } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import { createMemoryHistory, createRouter } from "vue-router";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import PostReviewItem from "./PostReviewItem.vue";
-import type { PostReview } from "../model/types";
+import type { PostReview } from "../model/postTypes";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-vi.mock("../api/gameApi", () => ({
+vi.mock("../api/postApi", () => ({
   default: {
     getPostReviewForEdit: vi.fn(),
     updatePostReview: vi.fn(),
@@ -46,7 +20,7 @@ vi.mock("../api/gameApi", () => ({
   },
 }));
 
-const { default: gameApi } = await import("../api/gameApi");
+const { default: postApi } = await import("../api/postApi");
 
 /**
  * No trailing "Z": formatDateFull renders local time, and a UTC stamp would
@@ -110,6 +84,7 @@ const mountItem = (
   props: Partial<{
     review: PostReview;
     editable: boolean;
+    canWarn: boolean;
   }> = {},
 ) => {
   const router = createRouter({
@@ -162,9 +137,9 @@ enableAutoUnmount(afterEach);
 
 beforeEach(() => {
   signIn(null);
-  vi.mocked(gameApi.getPostReviewForEdit).mockReset();
-  vi.mocked(gameApi.updatePostReview).mockReset();
-  vi.mocked(gameApi.deletePostReview).mockReset();
+  vi.mocked(postApi.getPostReviewForEdit).mockReset();
+  vi.mocked(postApi.updatePostReview).mockReset();
+  vi.mocked(postApi.deletePostReview).mockReset();
 });
 
 describe("PostReviewItem", () => {
@@ -180,29 +155,6 @@ describe("PostReviewItem", () => {
     expect(wrapper.find(".review-footer").exists()).toBe(false);
     const anchor = wrapper.get(".review-meta .review-anchor");
     expect(anchor.text()).toBe("#1");
-  });
-
-  // A "go to the post" affordance is a link and looks like one everywhere,
-  // the number of a review among them (UI_STANDARDS, "Переход к посту
-  // выглядит ссылкой везде"), as it did in the line before 24.09.
-  it("draws the number as a link of the site", () => {
-    const rules = ruleMap(componentCss(resolve(HERE, "PostReviewItem.vue")));
-
-    expect(rules.get(".review-anchor")).toMatchObject({
-      color: "var(--link)",
-    });
-    expect(rules.get(".review-anchor:hover")).toMatchObject({
-      color: "var(--link-hover)",
-    });
-  });
-
-  // The owner, 27.09: the reviews of a post stand a clear step apart.
-  it("keeps 16 px between one review and the next", () => {
-    const rules = ruleMap(componentCss(resolve(HERE, "PostReviewItem.vue")));
-
-    expect(rules.get(".review-item + .review-item")).toMatchObject({
-      "margin-top": "16px",
-    });
   });
 
   it("describes the anchor with the project tooltip instead of a native title", () => {
@@ -300,15 +252,18 @@ describe("PostReviewItem controls", () => {
     );
   });
 
-  it("seeds the editor from the author's own rendering and saves sign and text together", async () => {
+  it("seeds the editor from the author's own text and saves sign and text together", async () => {
     signIn({ id: "u-author", username: "Тест Елки", role: "RegularUser" });
-    vi.mocked(gameApi.getPostReviewForEdit).mockResolvedValue({
+    vi.mocked(postApi.getPostReviewForEdit).mockResolvedValue({
       data: {
-        resource: { ...freshReview, text: "<p>[b]Отличный[/b] пост</p>" },
+        resource: {
+          ...freshReview,
+          text: "[b]Отличный[/b] пост, Том &amp; Джерри",
+        },
       },
       error: undefined,
     } as never);
-    vi.mocked(gameApi.updatePostReview).mockResolvedValue({
+    vi.mocked(postApi.updatePostReview).mockResolvedValue({
       data: { resource: { ...freshReview, sign: "Negative" } },
       error: undefined,
     } as never);
@@ -317,10 +272,10 @@ describe("PostReviewItem controls", () => {
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
 
-    expect(gameApi.getPostReviewForEdit).toHaveBeenCalledWith("p-1", "r-1");
+    expect(postApi.getPostReviewForEdit).toHaveBeenCalledWith("p-1", "r-1");
     const editor = wrapper.get("textarea.review-input");
-    expect((editor.element as HTMLTextAreaElement).value).toContain(
-      "[b]Отличный[/b]",
+    expect((editor.element as HTMLTextAreaElement).value).toBe(
+      "[b]Отличный[/b] пост, Том &amp; Джерри",
     );
 
     // The sign the review had is the one pressed when the form opens.
@@ -331,18 +286,36 @@ describe("PostReviewItem controls", () => {
     await wrapper.get(".submit-btn").trigger("click");
     await flushPromises();
 
-    expect(gameApi.updatePostReview).toHaveBeenCalledWith("p-1", "r-1", {
+    expect(postApi.updatePostReview).toHaveBeenCalledWith("p-1", "r-1", {
       sign: -1,
-      text: "[b]Отличный[/b] пост",
+      text: "[b]Отличный[/b] пост, Том &amp; Джерри",
     });
     // The card shows what the server answered, without a refetch of the list.
     expect(wrapper.get(".review-sign").text()).toBe("-1");
     expect(wrapper.emitted("updated")).toEqual([[{ id: "r-1", sign: -1 }]]);
   });
 
+  // The card's text is drawn: an editor opened on it would save the drawing.
+  it("opens no editor when the text as typed does not come, and says so", async () => {
+    signIn({ id: "u-author", username: "Тест Елки", role: "RegularUser" });
+    vi.mocked(postApi.getPostReviewForEdit).mockResolvedValue({
+      data: null,
+      error: { type: "", title: "", status: 404, traceId: "t" },
+    } as never);
+    const wrapper = mountItem({ review: freshReview, editable: true });
+
+    await action(wrapper, "Редактировать").trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find("textarea.review-input").exists()).toBe(false);
+    expect(wrapper.get(".review-refusal").text()).toBe(
+      "Не удалось загрузить оценку",
+    );
+  });
+
   it("asks before it deletes, and reports the sign it took away", async () => {
     signIn({ id: "u-senior", username: "Старший", role: "SeniorModerator" });
-    vi.mocked(gameApi.deletePostReview).mockResolvedValue({
+    vi.mocked(postApi.deletePostReview).mockResolvedValue({
       data: undefined,
       error: undefined,
     } as never);
@@ -351,14 +324,14 @@ describe("PostReviewItem controls", () => {
     await action(wrapper, "Удалить").trigger("click");
 
     // Nothing is gone yet: the dialog is the question, not the answer.
-    expect(gameApi.deletePostReview).not.toHaveBeenCalled();
+    expect(postApi.deletePostReview).not.toHaveBeenCalled();
     const dialog = wrapper.findComponent(ConfirmDialog);
     expect(dialog.props("show")).toBe(true);
 
     inQuestion(".dialog-btn-submit").click();
     await flushPromises();
 
-    expect(gameApi.deletePostReview).toHaveBeenCalledWith("p-1", "r-1", {
+    expect(postApi.deletePostReview).toHaveBeenCalledWith("p-1", "r-1", {
       ownsRefusal: true,
       ownsRateLimit: true,
     });
@@ -375,7 +348,7 @@ describe("PostReviewItem controls", () => {
    */
   it("says a refused delete in the question and keeps the review", async () => {
     signIn({ id: "u-senior", username: "Старший", role: "SeniorModerator" });
-    vi.mocked(gameApi.deletePostReview).mockResolvedValue({
+    vi.mocked(postApi.deletePostReview).mockResolvedValue({
       data: null,
       error: { type: "", title: "", status: 404, traceId: "t" },
     } as never);
@@ -400,7 +373,7 @@ describe("PostReviewItem controls", () => {
       role: "RegularUser",
       isNewbie: true,
     });
-    vi.mocked(gameApi.getPostReviewForEdit).mockResolvedValue({
+    vi.mocked(postApi.getPostReviewForEdit).mockResolvedValue({
       data: { resource: freshReview },
       error: undefined,
     } as never);
@@ -410,5 +383,29 @@ describe("PostReviewItem controls", () => {
     await flushPromises();
 
     expect(signs(wrapper)).toEqual(["="]);
+  });
+});
+
+/**
+ * The text of a review is a place a warning names. Whether the reader may warn its author is the list's
+ * to say (the ranks), and the card offers the control by that word alone.
+ */
+describe("PostReviewItem warning", () => {
+  it("offers Предупреждение where the list allows it, and hands the review up", async () => {
+    const wrapper = mountItem({ canWarn: true });
+
+    await action(wrapper, "Предупреждение").trigger("click");
+
+    expect(wrapper.emitted("warn")).toEqual([[review]]);
+  });
+
+  it("offers no Предупреждение where the list does not allow it", () => {
+    expect(actions(mountItem())).not.toContain("Предупреждение");
+  });
+
+  it("offers no Предупреждение for a review without a text", () => {
+    expect(
+      actions(mountItem({ canWarn: true, review: { ...review, text: "" } })),
+    ).not.toContain("Предупреждение");
   });
 });

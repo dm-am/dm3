@@ -1,22 +1,9 @@
-/**
- * Shared Filter Utilities
- *
- * Unified helpers for working with filters:
- * - Date parsing and formatting
- * - Conversion between URL, State and API formats
- */
-
 import { formatDate } from "@/shared/lib/utils/datetime";
 import type { DateRange, SortDirection } from "./types";
 
-// =============================================================================
-// QUERY VALUE NORMALIZATION
-// =============================================================================
-
 /**
- * Normalize a raw route query value (which may include `null` entries,
- * e.g. from repeated query params like `?foo&foo=bar`) into the
- * `string | string[] | undefined` shape expected by the parse* helpers below.
+ * A raw route query value (null entries come from `?foo&foo=bar`) in the
+ * shape the parse helpers take.
  */
 export function toQueryValue(
   value: string | null | (string | null)[] | undefined,
@@ -28,19 +15,10 @@ export function toQueryValue(
   return value;
 }
 
-// =============================================================================
-// DATE UTILITIES
-// =============================================================================
-
-/** Regex for YYYY-MM-DD format */
 const ISO_DATE_REGEX = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Regex for full ISO 8601 with time */
 const ISO_DATETIME_REGEX = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}/;
 
-/**
- * Validate YYYY-MM-DD date string
- */
 export function isValidDate(value: string | null | undefined): value is string {
   if (!value) return false;
   if (!ISO_DATE_REGEX.test(value)) return false;
@@ -48,22 +26,16 @@ export function isValidDate(value: string | null | undefined): value is string {
   return !isNaN(date.getTime());
 }
 
-/**
- * Parse date from URL query parameter.
- * Accepts both YYYY-MM-DD and ISO 8601 formats.
- * Returns YYYY-MM-DD string or null.
- */
+/** YYYY-MM-DD from a query value in that form or in full ISO 8601, else null. */
 export function parseDateFromUrl(
   value: string | string[] | undefined,
 ): string | null {
   if (!value || Array.isArray(value)) return null;
 
-  // If it's a full ISO datetime, extract date part
   if (ISO_DATETIME_REGEX.test(value)) {
     return value.substring(0, 10);
   }
 
-  // If it's YYYY-MM-DD, validate and return
   if (isValidDate(value)) {
     return value;
   }
@@ -71,40 +43,19 @@ export function parseDateFromUrl(
   return null;
 }
 
-/**
- * Convert YYYY-MM-DD date to ISO 8601 for API (start of day).
- * Returns string like "2024-01-15T00:00:00Z"
- */
+/** YYYY-MM-DD as the API's start of that day. */
 export function dateToApiStart(date: string | null): string | undefined {
   if (!date || !isValidDate(date)) return undefined;
   return `${date}T00:00:00Z`;
 }
 
-/**
- * Convert YYYY-MM-DD date to ISO 8601 for API (end of day).
- * Returns string like "2024-01-15T23:59:59Z"
- */
+/** YYYY-MM-DD as the API's end of that day. */
 export function dateToApiEnd(date: string | null): string | undefined {
   if (!date || !isValidDate(date)) return undefined;
   return `${date}T23:59:59Z`;
 }
 
-/**
- * Format YYYY-MM-DD to DD.MM.YYYY for display
- */
-export function formatDateForDisplay(date: string | null | undefined): string {
-  return formatDate(date, "");
-}
-
-/**
- * Format a numeric range for display in a filter bubble.
- *
- * The same three shapes as the date range below, with the prepositions a
- * Russian reader expects in front of a count rather than a date. Spelled here
- * once: rating, hosted games, played games, blogs and the pulse rating all
- * draw a range of numbers, and every one of them spelled it out for itself
- * until the wordings drifted apart.
- */
+/** A numeric range for a filter bubble, with the prepositions of a count. */
 export function formatNumberRangeForDisplay(
   from: number | null | undefined,
   to: number | null | undefined,
@@ -124,12 +75,9 @@ export function formatNumberRangeForDisplay(
   return "";
 }
 
-/**
- * Format date range for display in filter bubble
- */
 export function formatDateRangeForDisplay(range: DateRange): string {
-  const from = formatDateForDisplay(range.from);
-  const to = formatDateForDisplay(range.to);
+  const from = formatDate(range.from, "");
+  const to = formatDate(range.to, "");
 
   if (from && to) {
     return `${from} — ${to}`;
@@ -143,35 +91,23 @@ export function formatDateRangeForDisplay(range: DateRange): string {
   return "";
 }
 
-// =============================================================================
-// STRING UTILITIES
-// =============================================================================
+/** The first of a repeated query parameter. */
+const firstOf = (value: string | string[]): string | undefined =>
+  Array.isArray(value) ? value[0] : value;
 
-/**
- * Parse string from URL query parameter
- */
 export function parseStringFromUrl(
   value: string | string[] | undefined,
   maxLength?: number,
 ): string {
   if (!value) return "";
-  const str = Array.isArray(value) ? value[0] : value;
+  const str = firstOf(value);
   if (!str) return "";
   return maxLength ? str.slice(0, maxLength) : str;
 }
 
-// =============================================================================
-// PAGING UTILITIES
-// =============================================================================
-
 /**
- * Parse the page number out of the `?number=` query parameter.
- *
- * Returns undefined for anything that is not a page: a missing parameter, an
- * empty one, a word, a zero or a negative. Callers that pass the value on to
- * the API leave it out in that case, and callers that need a page to render
- * fall back to the first one with `?? 1` — same parse, two readings of the
- * same absence.
+ * The page of `?number=`, or undefined for anything that is not one: callers
+ * leave it out of the request or fall back with `?? 1`.
  */
 export function parsePageNumber(
   value: string | null | (string | null)[] | undefined,
@@ -181,51 +117,21 @@ export function parsePageNumber(
   return !isNaN(parsed) && parsed > 0 ? parsed : undefined;
 }
 
-// =============================================================================
-// SORT UTILITIES
-// =============================================================================
-
-/**
- * Parse sort direction from URL
- */
 export function parseSortDirection(
   value: string | string[] | undefined,
   defaultDir: SortDirection = "desc",
 ): SortDirection {
   if (!value) return defaultDir;
-  const str = Array.isArray(value) ? value[0] : value;
+  const str = firstOf(value);
   return str === "asc" || str === "desc" ? str : defaultDir;
 }
 
-/**
- * Validate sort field against allowed options
- */
 export function validateSortField(
   value: string | string[] | undefined,
   validValues: readonly string[],
   defaultValue: string,
 ): string {
   if (!value) return defaultValue;
-  const str = Array.isArray(value) ? value[0] : value;
+  const str = firstOf(value);
   return validValues.includes(str ?? "") ? str! : defaultValue;
-}
-
-// =============================================================================
-// QUERY BUILDING UTILITIES
-// =============================================================================
-
-/**
- * Build URL query object, excluding undefined/null/empty values
- */
-export function buildQuery(
-  params: Record<string, string | number | boolean | null | undefined>,
-): Record<string, string> {
-  const query: Record<string, string> = {};
-
-  for (const [key, value] of Object.entries(params)) {
-    if (value === undefined || value === null || value === "") continue;
-    query[key] = String(value);
-  }
-
-  return query;
 }

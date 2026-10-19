@@ -4,13 +4,11 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Community.Fundraising;
 
-/// <inheritdoc />
-internal class FundraisingApiService : IFundraisingApiService
+public class FundraisingApiService
 {
     private readonly IFundraisingGoalService _fundraisingGoalService;
     private readonly FundraisingMapper _mapper;
 
-    /// <inheritdoc />
     public FundraisingApiService(
         IFundraisingGoalService fundraisingGoalService,
         FundraisingMapper mapper)
@@ -19,23 +17,15 @@ internal class FundraisingApiService : IFundraisingApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Fundraising>> Get()
     {
         var goal = await _fundraisingGoalService.GetAsync();
         return new Envelope<Fundraising>(_mapper.ToFundraising(goal));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Fundraising>> Update(UpdateFundraisingRequest request)
     {
-        var updateGoal = new UpdateFundraisingGoal
-        {
-            Title = request.Title,
-            GoalAmount = request.GoalAmount,
-            CollectedAmount = request.CollectedAmount
-        };
-        var goal = await _fundraisingGoalService.UpdateAsync(updateGoal);
+        var goal = await _fundraisingGoalService.UpdateAsync(_mapper.ToUpdateGoal(request));
         return new Envelope<Fundraising>(_mapper.ToFundraising(goal));
     }
 }

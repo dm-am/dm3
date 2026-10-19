@@ -8,18 +8,13 @@ namespace DM.Infrastructure.Core.Tests;
 /// The [quote] tag is formatting: a block around the text, with nothing of its
 /// own inside.
 /// </summary>
-/// <remarks>
-/// The tag carries no attribute, as on DM2. What an author writes after an
-/// equals sign makes the tag a broken tag, the way it does on any other tag
-/// without an attribute: the opening and the closing tag show as they were
-/// typed, and the content between them renders as it would anywhere else.
-/// </remarks>
+/// <remarks>The tag carries no attribute, as on DM2: one makes it a broken tag shown as typed.</remarks>
 public class BbQuoteBlockShould
 {
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 
     private string ToHtml(BbSurface surface, string bbCode) =>
-        ((BbParserWrapper)_parserProvider.GetForSurface(surface))
+        _parserProvider.GetForSurface(surface)
         .RenderHtml(bbCode, new RenderContext { Audience = RenderAudience.Display, Surface = surface });
 
     [Theory]
@@ -35,7 +30,7 @@ public class BbQuoteBlockShould
     [InlineData("quote")]
     [InlineData("spoiler")]
     [InlineData("b")]
-    public void ShowAQuotedValueAsText_AsAnyTagWithoutAnAttributeDoes(string tagName) =>
+    public void ShowAQuotedValueAsTextAsAnyTagWithoutAnAttributeDoes(string tagName) =>
         ToHtml(BbSurface.Comment, $"[{tagName}=\"Вася\"]текст[/{tagName}]")
             .Should().Be($"[{tagName}=\"Вася\"]текст[/{tagName}]");
 
@@ -43,7 +38,7 @@ public class BbQuoteBlockShould
     [InlineData("quote")]
     [InlineData("spoiler")]
     [InlineData("b")]
-    public void ShowAnUnquotedValueAsText_AsAnyTagWithoutAnAttributeDoes(string tagName) =>
+    public void ShowAnUnquotedValueAsTextAsAnyTagWithoutAnAttributeDoes(string tagName) =>
         ToHtml(BbSurface.Comment, $"[{tagName}=Вася]текст[/{tagName}]")
             .Should().Be($"[{tagName}=Вася]текст[/{tagName}]");
 

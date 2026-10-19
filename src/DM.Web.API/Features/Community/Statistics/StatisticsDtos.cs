@@ -2,8 +2,6 @@ using System;
 
 namespace DM.Web.API.Features.Community.Statistics;
 
-#region Live Stats
-
 /// <summary>
 /// Live community statistics (updated frequently)
 /// </summary>
@@ -18,11 +16,6 @@ public class LiveStats
     /// Total counts with today's changes
     /// </summary>
     public TotalsWithDelta Totals { get; set; } = new();
-
-    /// <summary>
-    /// Most recently reviewed post
-    /// </summary>
-    public PostHighlight? LastReviewedPost { get; set; }
 
     /// <summary>
     /// Best post of the week by rating
@@ -112,10 +105,6 @@ public class PostHighlight
     /// </summary>
     public int? RatingSum { get; set; }
 }
-
-#endregion
-
-#region Leaderboards
 
 /// <summary>
 /// Leaderboards for a specific period
@@ -220,5 +209,3 @@ public class Period
     /// </summary>
     public int? Month { get; set; }
 }
-
-#endregion

@@ -3,17 +3,12 @@ using System.Collections.Generic;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Domain.Personal.Features.Notifications;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Game;
 
-/// <summary>
-/// Notification generator for assistant invitations
-/// </summary>
 internal class GameAssistantInvitationNotificationGenerator : GameInvitationNotificationGenerator
 {
-    /// <inheritdoc />
     public GameAssistantInvitationNotificationGenerator(DmDbContext dbContext)
         : base(dbContext)
     {
@@ -36,13 +31,13 @@ internal class GameAssistantInvitationNotificationGenerator : GameInvitationNoti
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { invitation.UserId },
+            UsersInterested = [invitation.UserId],
             ActorId = invitation.CreatorId ?? invitation.MasterId,
             Metadata = new
             {
-                GameTitle = invitation.GameTitle,
+                invitation.GameTitle,
                 GameId = invitation.GameId.EncodeToReadable(),
-                InviterUsername = invitation.InviterUsername,
+                invitation.InviterUsername,
                 TokenId = entityId.EncodeToReadable(),
                 InvitationType = "assistant"
             }

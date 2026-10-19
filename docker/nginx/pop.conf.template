@@ -1,25 +1,14 @@
-# Край точки присутствия.
+# Point of presence edge. A file apart from nginx.conf because the job differs: that edge
+# stands beside the application and serves its docker network neighbours, while this door
+# sits in another network, holds no application and reaches it by its external address, so
+# it has an external upstream and a cache.
 #
-# Отдельный файл, а не общий nginx.conf, потому что задача у него другая. Общий
-# край стоит рядом с приложением и раздает его соседям по сети docker. Дверь
-# стоит в другой сети, приложения у себя не держит и обязана дотянуться до него
-# по внешнему адресу. Разница не в двух строках, а в том, что здесь есть
-# внешний upstream и кэш, а там их нет и быть не должно.
+# Substituted by the envsubst of the nginx image at start; only POP_ variables are replaced
+# (NGINX_ENVSUBST_FILTER), so the $host and $scheme of nginx survive.
+#   POP_UPSTREAM       origin of the main server, for example https://dm.am
+#   POP_UPSTREAM_HOST  name set in Host and SNI, for example dm.am
 #
-# Подставляется envsubst из образа nginx при старте контейнера. Заменяются
-# только переменные с приставкой POP_ (NGINX_ENVSUBST_FILTER), поэтому
-# собственные переменные nginx вида $host и $scheme доживают до конфига целыми.
-#
-# Что должно приехать снаружи:
-#   POP_UPSTREAM      — origin основного сервера, например https://dm.am
-#   POP_UPSTREAM_HOST — имя, которое точка присутствия ставит в Host и SNI, например dm.am
-#
-# TLS обязателен, и это не пожелание. Основной сайт отдает
-# Strict-Transport-Security с includeSubDomains, то есть браузер каждого, кто
-# хоть раз открывал сайт по https, сам перепишет ее http-адрес в https. Точка присутствия
-# без сертификата не откроется ни у одного постоянного посетителя — то есть ни у
-# кого из тех, ради кого она существует. Вторая причина той же силы: сессионная
-# кука помечена Secure, и по http браузер ее не отдаст и не даст перезаписать.
+# TLS is mandatory: docs/guides/POINT_OF_PRESENCE.md, "Требования к машине".
 
 proxy_cache_path /var/cache/nginx/media levels=1:2 keys_zone=pop_media:16m
                  max_size=2g inactive=30d use_temp_path=off;
@@ -33,21 +22,18 @@ server {
     listen 80;
     server_name _;
 
-    # Здоровье самой точки присутствия, и только ее. Зеленый ответ тут означает, что край
-    # жив, и ничего не говорит о том, отвечает ли приложение за границей.
-    # Остается на http, потому что его спрашивает docker изнутри контейнера.
+    # Health of the point of presence itself, nothing about the application beyond the
+    # border. On http because docker asks it from inside the container.
     location = /pop-health {
         access_log off;
-        # default_type, а не add_header: для return с телом nginx уже выставляет
-        # Content-Type из default_type, а add_header не заменяет его, а
-        # добавляет второй, и проба отвечала сразу с двумя.
+        # default_type, not add_header: a return with a body already sets Content-Type, and
+        # add_header would append a second.
         default_type text/plain;
         return 200 "ok\n";
     }
 
-    # Челлендж центра сертификации: анонимный запрос из интернета, поэтому стоит
-    # перед редиректом. Префикс с ^~ бьет location / — иначе проверка уезжает на
-    # https, которого при первом выпуске еще нет.
+    # Certificate authority challenge: anonymous, so it precedes the redirect. ^~ beats
+    # location /, or the check goes to https, which does not exist at the first issue.
     location ^~ /.well-known/acme-challenge/ {
         access_log off;
         root /var/www/certbot;
@@ -70,35 +56,27 @@ server {
     ssl_session_cache shared:pop_ssl:10m;
     ssl_session_timeout 1d;
 
-    # Тот же предел, что на основном крае. Расхождение означает, что точка присутствия
-    # пропускает файл, который основной сервер отдаст обратно с 413 в виде
-    # html-страницы вместо ошибки API.
+    # The same limit as the main edge, or the point of presence passes a file that the main
+    # server returns as an HTML 413 instead of an API error.
     client_max_body_size 10m;
 
-    # Дверь — второй публичный край сайта, и заголовки политики на нем свои.
-    # Общий nginx.conf сюда не смонтирован, а конфиг SPA рассчитывает, что их
-    # ставит край: без этих строк второй адрес отдает документ без единой
-    # политики, тогда как первый отдает все.
+    # The door is the second public edge and sets its own policy headers: the shared
+    # nginx.conf is not mounted here, and the SPA expects the edge to set them.
     add_header X-Content-Type-Options "nosniff" always;
     add_header X-Frame-Options "DENY" always;
     add_header Referrer-Policy "strict-origin-when-cross-origin" always;
     add_header Permissions-Policy "camera=(), microphone=(), geolocation=()" always;
 
-    # Эти же четыре приходят сверху: их ставит приложение, а на пути к нему еще
-    # и край основного сервера. Директива add_header не заменяет пришедший
-    # заголовок, а добавляет второй, и ответ уезжает с двумя значениями одной
-    # политики. Пока значения совпадают, браузер приходит к тому же решению, но
-    # как только их разведут в одном из слоев, исход будет решать разбор
-    # конкретного заголовка, а не автор правки. Снимается ровно то, что тут же и
-    # ставится. Content-Security-Policy тут не ставит никто, и он проходит
-    # насквозь по той же причине.
+    # The same four arrive from above (the application, then the main edge), and add_header
+    # appends instead of replacing, so a response would carry two values of one policy.
+    # Hidden exactly where set here. Content-Security-Policy is set by nobody here and passes
+    # through.
     proxy_hide_header X-Content-Type-Options;
     proxy_hide_header X-Frame-Options;
     proxy_hide_header Referrer-Policy;
     proxy_hide_header Permissions-Policy;
 
-    # Фронтенд с локального диска. Контейнер SPA поднят рядом, на этой же
-    # машине, и это половина смысла всей схемы.
+    # Frontend from the local disk: the SPA container runs beside, which is half the point.
     location / {
         proxy_pass http://dmfront:80;
         proxy_http_version 1.1;
@@ -108,20 +86,14 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Запросы к приложению уходят за границу. Host и SNI ставятся в имя
-    # основного сервера: сертификат выписан на него, и приложение узнает себя
-    # по этому имени.
+    # Application requests go across the border. Host and SNI are the main server's name: the
+    # certificate is issued for it and the application recognises itself by it.
+    # X-Forwarded-Proto carries the scheme of the VISITOR, not of this hop upward: the
+    # application decides on the Secure cookie by it.
     #
-    # X-Forwarded-Proto несет схему, с которой пришел ПОСЕТИТЕЛЬ, а не схему
-    # похода точки присутствия наверх. По ней приложение решает, помечать ли сессионную
-    # куку как Secure, и подстановка своей схемы здесь выдает куку, которую
-    # браузер молча выбрасывает.
-    # Живость и готовность приложения — точными совпадениями, как и на основном
-    # крае. Без своих локаций они падают в location /, который отдает фронтенд, а
-    # SPA отвечает index.html с кодом 200 на любой путь: внешний пульс, нацеленный
-    # сюда, рапортовал бы о здоровом сайте ровно столько, сколько жив край.
-    # Префикс тут нельзя: он опубликовал бы /_health/detail с перечнем всех
-    # зависимостей и их состоянием.
+    # Liveness and readiness by exact match, as on the main edge: otherwise they fall into
+    # location /, the SPA answers 200 to any path, and an external heartbeat reports a healthy
+    # site as long as the edge lives. Not a prefix, which would publish /_health/detail.
     location = /_health {
         access_log off;
         proxy_pass ${POP_UPSTREAM};
@@ -144,8 +116,8 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 
-    # Живость самого края и по https тоже: на 80 все прочее уезжает редиректом,
-    # поэтому по http эту пробу видит только docker изнутри контейнера.
+    # Liveness of the edge itself, over https too: on 80 everything else redirects, so over
+    # http only docker sees this probe.
     location = /pop-health {
         access_log off;
         default_type text/plain;
@@ -166,9 +138,9 @@ server {
         proxy_read_timeout 60s;
     }
 
-    # Живые обновления. Те же заголовки плюс апгрейд соединения, иначе
-    # вебсокет не поднимется и клиент уйдет на длинные опросы.
-    location /whatsup {
+    # Live updates: the same headers plus the connection upgrade, or the websocket does not
+    # come up and the client falls back to long polling. The hub is mapped at /hubs/.
+    location /hubs/ {
         proxy_pass ${POP_UPSTREAM};
         proxy_http_version 1.1;
         proxy_ssl_server_name on;
@@ -184,17 +156,13 @@ server {
         proxy_send_timeout 3600s;
     }
 
-    # Загрузки и картинки: то же проксирование плюс кэш. Содержимое публичное и
-    # неизменяемое по адресу, поэтому лежит долго.
-    #
-    # Кука наверх не идет: ключ кэша ее не учитывает, и пока запрос анонимен,
-    # свойство "ответ одинаков для всех" принадлежит этому конфигу, а не
-    # апстриму. Заголовки политики повторены, потому что add_header в location
-    # отменяет наследование от сервера целиком. proxy_hide_header наследуется
-    # отдельно и по тому же правилу: своего у этой локации нет, значит действуют
-    # серверные, и пришедшие сверху копии снимаются до того, как добавятся эти
-    # четыре.
-    location ~ ^/(dm-uploads|img)/ {
+    # Uploads and their thumbnails: the same proxying plus a cache. Content is public and immutable by
+    # address, so it keeps long. The cookie does not go upstream: the cache key ignores it, and
+    # while the request is anonymous the "same for everyone" property belongs to this config.
+    # The policy headers are repeated because add_header in a location cancels the inheritance
+    # from the server; proxy_hide_header inherits by the same rule, so the server's hides
+    # apply and strip the incoming copies before these four are added.
+    location ~ ^/dm-uploads/ {
         proxy_pass ${POP_UPSTREAM};
         proxy_http_version 1.1;
         proxy_ssl_server_name on;

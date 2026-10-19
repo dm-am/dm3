@@ -37,14 +37,6 @@ export const APP_BASE_URL =
  * Seeded dev accounts. Not secrets: DM.Tools.Seeder writes exactly these into
  * a throwaway local database and the same pairs live in the seeder source.
  * Overridable through the environment for a differently seeded stack.
- *
- * What was here before: a user named "Alice" with an empty password, plus ten
- * spec files each carrying their own hardcoded copy of a password for that
- * same non-existent user. Login therefore always failed; every authenticated
- * test skipped itself through `test.skip(!authContext, "Auth failed")` and the
- * suite reported green while 37 tests had not run in a long time. A second,
- * independent break hid underneath: loginWithCookies called `newContext()` on
- * the injected APIRequestContext, which has no such method.
  */
 export const primaryUser = {
   username: process.env.E2E_TEST_USERNAME || "SolohinLex",
@@ -59,19 +51,12 @@ export const secondaryUser = {
   password: process.env.E2E_SECOND_PASSWORD || "Test123!",
 };
 
-/** Kept for call sites that read the primary account's name. */
-export const seededUser = primaryUser;
-
 // ESM: there is no __dirname, so the path comes from import.meta.url.
 const AUTH_DIR = join(dirname(fileURLToPath(import.meta.url)), "..", ".auth");
 export const PRIMARY_STORAGE_STATE = join(AUTH_DIR, "primary.json");
 export const SECONDARY_STORAGE_STATE = join(AUTH_DIR, "secondary.json");
 
-/**
- * A request context carrying a session saved by global setup. No login call,
- * so the 5-per-minute auth rate limit is never a factor no matter how many
- * workers run.
- */
+/** A request context carrying a session saved by global setup: no login call. */
 export function authenticatedContext(
   storageState: string = PRIMARY_STORAGE_STATE,
 ): Promise<APIRequestContext> {

@@ -14,7 +14,7 @@ export interface ChatFeedActions {
   unlike: (id: string) => Promise<ChatActionResult>;
   /**
    * The BBCode of a message, to seed its edit box: the text as the author
-   * wrote it, read back through htmlToBbcode (authorEditRoundTrip.spec.ts).
+   * wrote it, the author_edit answer as it came.
    */
   editText: (id: string) => Promise<string>;
   saveEdit: (id: string, text: string) => Promise<ChatActionResult>;

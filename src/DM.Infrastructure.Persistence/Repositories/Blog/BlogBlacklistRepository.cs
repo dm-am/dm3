@@ -9,10 +9,11 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Persistence.Entities.Blog;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 using DM.Infrastructure.Persistence.Shared.Users;
+using DM.Infrastructure.Persistence.Shared.Tokens;
 
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
 
@@ -66,7 +67,7 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
         {
             await _dbContext.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // The race the caller's check cannot see: two requests for the same
             // name both passed it. Translated here, as the game's list does, so
@@ -104,7 +105,7 @@ internal class BlogBlacklistRepository : IBlogBlacklistRepository
         {
             await _dbContext.Tokens
                 .Where(t => pendingInvitations.Contains(t.TokenId))
-                .ExecuteUpdateAsync(setters => setters.SetProperty(t => t.IsRemoved, true), ct);
+                .Retire(ct);
         }
 
         return pendingInvitations;

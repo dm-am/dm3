@@ -12,32 +12,32 @@ namespace DM.Domain.Account.Tests.Features.Availability;
 
 public class AvailabilityServiceShould : UnitTestBase
 {
-    private readonly IRegistrationRepository _registrationRepository;
-    private readonly IUsernameChangeRepository _usernameChangeRepository;
-    private readonly IUsernameHistoryRepository _usernameHistoryRepository;
-    private readonly AvailabilityService _service;
+    private readonly IRegistrationRepository registrationRepository;
+    private readonly IUsernameChangeRepository usernameChangeRepository;
+    private readonly IUsernameHistoryRepository usernameHistoryRepository;
+    private readonly AvailabilityService service;
 
     public AvailabilityServiceShould()
     {
-        _registrationRepository = Mock<IRegistrationRepository>();
-        _usernameChangeRepository = Mock<IUsernameChangeRepository>();
-        _usernameHistoryRepository = Mock<IUsernameHistoryRepository>();
+        registrationRepository = Mock<IRegistrationRepository>();
+        usernameChangeRepository = Mock<IUsernameChangeRepository>();
+        usernameHistoryRepository = Mock<IUsernameHistoryRepository>();
 
-        _service = new AvailabilityService(
-            _registrationRepository,
-            _usernameChangeRepository,
-            _usernameHistoryRepository);
+        service = new AvailabilityService(
+            registrationRepository,
+            usernameChangeRepository,
+            usernameHistoryRepository);
     }
 
     [Fact]
     public async Task ReturnAvailableForUnusedEmail()
     {
         var email = "newuser@example.com";
-        _registrationRepository.EmailFreeForNewRegistration(email, Arg.Any<CancellationToken>()).Returns(true);
-        _registrationRepository.FindPendingByEmail(email, Arg.Any<CancellationToken>())
+        registrationRepository.EmailFreeForNewRegistration(email, Arg.Any<CancellationToken>()).Returns(true);
+        registrationRepository.FindPendingByEmail(email, Arg.Any<CancellationToken>())
             .Returns((PendingRegistration?)null);
 
-        var result = await _service.CheckEmailAvailability(email);
+        var result = await service.CheckEmailAvailability(email);
 
         result.IsAvailable.Should().BeTrue();
     }
@@ -49,9 +49,9 @@ public class AvailabilityServiceShould : UnitTestBase
     public async Task ReturnUnavailableWhenEmailIsHeldByAnyAccount()
     {
         var email = "existing@example.com";
-        _registrationRepository.EmailFreeForNewRegistration(email, Arg.Any<CancellationToken>()).Returns(false);
+        registrationRepository.EmailFreeForNewRegistration(email, Arg.Any<CancellationToken>()).Returns(false);
 
-        var result = await _service.CheckEmailAvailability(email);
+        var result = await service.CheckEmailAvailability(email);
 
         result.IsAvailable.Should().BeFalse();
         result.Reason.Should().Be(EmailUnavailableReason.Taken);
@@ -61,11 +61,11 @@ public class AvailabilityServiceShould : UnitTestBase
     public async Task ReturnUnavailableWhenEmailHasPendingRegistration()
     {
         var email = "pending@example.com";
-        _registrationRepository.EmailFreeForNewRegistration(email, Arg.Any<CancellationToken>()).Returns(true);
-        _registrationRepository.FindPendingByEmail(email, Arg.Any<CancellationToken>())
+        registrationRepository.EmailFreeForNewRegistration(email, Arg.Any<CancellationToken>()).Returns(true);
+        registrationRepository.FindPendingByEmail(email, Arg.Any<CancellationToken>())
             .Returns(new PendingRegistration { Email = email });
 
-        var result = await _service.CheckEmailAvailability(email);
+        var result = await service.CheckEmailAvailability(email);
 
         result.IsAvailable.Should().BeFalse();
         result.Reason.Should().Be(EmailUnavailableReason.PendingActivation);
@@ -75,27 +75,20 @@ public class AvailabilityServiceShould : UnitTestBase
     public async Task ReturnAvailableForValidUsername()
     {
         var username = "ValidUsername";
-        _usernameChangeRepository.IsUsernameAvailable(username, null, Arg.Any<CancellationToken>()).Returns(true);
-        _usernameHistoryRepository.IsUsernameReserved(username, Arg.Any<CancellationToken>()).Returns(false);
+        usernameChangeRepository.IsUsernameAvailable(username, null, Arg.Any<CancellationToken>()).Returns(true);
+        usernameHistoryRepository.IsUsernameReserved(username, Arg.Any<CancellationToken>()).Returns(false);
 
-        var result = await _service.CheckUsernameAvailability(username);
+        var result = await service.CheckUsernameAvailability(username);
 
         result.IsAvailable.Should().BeTrue();
     }
 
-    [Fact]
-    public async Task ReturnInvalidFormatForEmptyUsername()
+    [Theory]
+    [InlineData("")]
+    [InlineData("user<script>")]
+    public async Task ReturnInvalidFormatForAMalformedUsername(string username)
     {
-        var result = await _service.CheckUsernameAvailability("");
-
-        result.IsAvailable.Should().BeFalse();
-        result.Reason.Should().Be(UsernameUnavailableReason.InvalidFormat);
-    }
-
-    [Fact]
-    public async Task ReturnInvalidFormatForUsernameWithInvalidCharacters()
-    {
-        var result = await _service.CheckUsernameAvailability("user<script>");
+        var result = await service.CheckUsernameAvailability(username);
 
         result.IsAvailable.Should().BeFalse();
         result.Reason.Should().Be(UsernameUnavailableReason.InvalidFormat);
@@ -105,9 +98,9 @@ public class AvailabilityServiceShould : UnitTestBase
     public async Task ReturnTakenForExistingUsername()
     {
         var username = "ExistingUser";
-        _usernameChangeRepository.IsUsernameAvailable(username, null, Arg.Any<CancellationToken>()).Returns(false);
+        usernameChangeRepository.IsUsernameAvailable(username, null, Arg.Any<CancellationToken>()).Returns(false);
 
-        var result = await _service.CheckUsernameAvailability(username);
+        var result = await service.CheckUsernameAvailability(username);
 
         result.IsAvailable.Should().BeFalse();
         result.Reason.Should().Be(UsernameUnavailableReason.Taken);
@@ -122,10 +115,10 @@ public class AvailabilityServiceShould : UnitTestBase
     public async Task AnswerTakenForAHistoricalUsername()
     {
         var username = "FormerUser";
-        _usernameChangeRepository.IsUsernameAvailable(username, null, Arg.Any<CancellationToken>()).Returns(true);
-        _usernameHistoryRepository.IsUsernameReserved(username, Arg.Any<CancellationToken>()).Returns(true);
+        usernameChangeRepository.IsUsernameAvailable(username, null, Arg.Any<CancellationToken>()).Returns(true);
+        usernameHistoryRepository.IsUsernameReserved(username, Arg.Any<CancellationToken>()).Returns(true);
 
-        var result = await _service.CheckUsernameAvailability(username);
+        var result = await service.CheckUsernameAvailability(username);
 
         result.IsAvailable.Should().BeFalse();
         result.Reason.Should().Be(UsernameUnavailableReason.Taken);

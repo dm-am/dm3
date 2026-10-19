@@ -20,17 +20,9 @@ public interface IDeactivationService
     /// Deactivate somebody else's account on a moderator's decision.
     /// </summary>
     /// <remarks>
-    /// The door the owner asked for and asked not to advertise: the account
-    /// screens offer nothing, and a reader who wants his account gone writes to
-    /// support. A senior moderator then does it here, with the same reach a ban
-    /// has - never over an administrator and never over his own rank - and with a
-    /// reason, because an account removed without one leaves the next moderator
-    /// nothing to read.
-    ///
-    /// The deletion itself is the one the owner already has: the row stays, the
-    /// address and the name stay reserved, and the content stays where it is
-    /// without its author's name. The letter is what tells its owner, at the
-    /// address the account keeps.
+    /// The account screens offer nothing: a reader who wants his account gone writes
+    /// to support. The reach is a ban's (ModerationRank), and a reason is required
+    /// for the next moderator. The row stays, the address and the name stay reserved.
     /// </remarks>
     /// <param name="username">Whose account to remove</param>
     /// <param name="reason">Why, for the moderation record</param>
@@ -42,15 +34,8 @@ public interface IDeactivationService
     /// Bring a removed account back on a moderator's decision.
     /// </summary>
     /// <remarks>
-    /// The mirror of the removal, and the whole of what restoration means here:
-    /// no request to file, nothing to wait for, and a letter telling the owner
-    /// his account answers again.
-    ///
-    /// Who may do it is the removal's rule - a senior moderator or an
-    /// administrator. Whose account it may be done to is not: the removal refuses
-    /// an equal rank because taking an account from an equal is an act against
-    /// him, while giving one back is not, and the same refusal here would leave a
-    /// moderator's own removed account with nobody able to restore it.
+    /// Who may do it is the removal's rule; whose account is not limited by rank,
+    /// because giving an account back is no act against its owner.
     /// </remarks>
     /// <param name="username">Whose account to bring back</param>
     /// <param name="cancellationToken">Cancellation token</param>
@@ -67,6 +52,6 @@ public interface IDeactivationService
     /// <param name="query">Search term and page</param>
     /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>The page and what it is a page of</returns>
-    Task<(IReadOnlyList<RemovedAccount> Accounts, PagingResult Paging)> GetRemovedAccounts(
+    Task<(IReadOnlyList<RemovedAccountRow> Accounts, PagingResult Paging)> GetRemovedAccounts(
         RemovedAccountsQuery query, CancellationToken cancellationToken = default);
 }

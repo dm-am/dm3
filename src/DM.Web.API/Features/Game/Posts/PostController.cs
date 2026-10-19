@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.Posts;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -22,12 +21,9 @@ namespace DM.Web.API.Features.Game.Posts;
 [Tags("Posts")]
 public class PostController : ControllerBase
 {
-    private readonly IPostApiService _postApiService;
+    private readonly PostApiService _postApiService;
 
-    /// <summary>
-    /// Creates a new instance of PostController
-    /// </summary>
-    public PostController(IPostApiService postApiService)
+    public PostController(PostApiService postApiService)
     {
         _postApiService = postApiService;
     }
@@ -170,10 +166,7 @@ public class PostController : ControllerBase
     /// <response code="200">Returns the list of rated posts</response>
     [HttpGet(Name = nameof(GetRatedPosts))]
     [ProducesResponseType(typeof(ListEnvelope<Post>), StatusCodes.Status200OK)]
-    // No cache policy at all: the response is personalized (unread counters,
-    // private rooms), and a personal answer held for a minute is stale for that
-    // caller rather than leaked to another — a smaller defect, not a different
-    // one. Freshness here is worth more than a saved request.
+    // No cache policy: the response is personalized (unread counters, private rooms).
     public async Task<IActionResult> GetRatedPosts([FromQuery] PostsQuery query) =>
         Ok(await _postApiService.GetRated(query));
 }

@@ -1,21 +1,10 @@
 import { test, expect } from "../../fixtures/auth";
 
 /**
- * ".messenger-page" and ".chat-user" are in no template: the list is
- * `.messenger-list` with `.chats-list` inside it, and a preview names its
- * interlocutor in `.name`, the number of unread after it as the header writes
- * its own, "SolohinLex (2)". The second test also hid its only assertion
- * behind `isVisible()`, so an empty messenger reported green.
+ * The messenger list is `.messenger-list` with `.chats-list` inside it, and a
+ * preview names its interlocutor in `.name`.
  */
 test.describe("Chat List", () => {
-  test("should display messenger page", async ({ authenticatedPage }) => {
-    await authenticatedPage.goto("/messenger");
-
-    await expect(authenticatedPage.locator(".messenger-list")).toBeVisible({
-      timeout: 10000,
-    });
-  });
-
   test("should show chat preview", async ({ authenticatedPage }) => {
     await authenticatedPage.goto("/messenger");
 

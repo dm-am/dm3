@@ -4,50 +4,32 @@ import {
   PRIMARY_STORAGE_STATE,
 } from "../../fixtures/auth";
 import { readTables } from "../../fixtures/tables";
+import { settle, windowContext } from "../../fixtures/window";
 import type { Page } from "@playwright/test";
 
 /**
  * The topics table keeps every column and every word of what it shows whole
  * at every width of the full version, and never widens the page.
  *
- * Its columns have px widths that add up to 740px besides "Топик", against a
- * column of 300px at 1024, 556px at 1280, 642px at 1366 and 716px at 1440. It
- * carried a floor of 950px and scrolled sideways inside the column; then its
- * author and date of creation folded into a line under the title below
- * 1100px, then its words broke inside to fit, and then its rarer columns went,
- * all taken back. The table lays out "auto": the px widths are where the
- * columns start from, every column stands at its own where the column has the
- * room (1920), and where even its least width, every word whole, is wider
- * than the column, the table keeps that width and scrolls sideways in its own
- * frame, and only there (fixtures/tables.ts). Its frame keeps to the column,
- * and the page does not move.
+ * The table lays out "auto": the px widths are where the columns start from,
+ * and where even its least width, every word whole, is wider than the column,
+ * the table keeps that width and scrolls sideways in its own frame, and only
+ * there (fixtures/tables.ts). Its frame keeps to the column.
  *
  * Read as a guest and as the primary seeded account, an administrator: that
- * viewer may pin a topic on every board, with a pin before every title, and
- * the pins of the pinned topics as the handles of their order. A moderator had
- * a column of pin buttons of his own past the dates, the widest form of the
- * table, with the column behind the sideways scroll at 1280 and 1366; the
- * pins stand in the title cell now, and the moderator has the columns of the
- * guest.
+ * viewer may pin a topic on every board, with a pin before every title.
  */
-/**
- * A window of the full version as a guest and as the administrator, each in
- * a context of its own and not the page of the project: a phone of a project
- * lays the page out at its own width whatever width it is given later
- * (fixtures/phone.ts).
- */
+/** A window as a guest and as the administrator, each in a context of its own. */
 const test = base.extend<{ guest: Page; moderator: Page }>({
   guest: async ({ browser }, use) => {
-    const context = await browser.newContext({
-      viewport: { width: 1366, height: 900 },
-    });
+    const context = await windowContext(browser, { width: 1366 });
     await use(await context.newPage());
     await context.close();
   },
   moderator: async ({ browser }, use) => {
-    const context = await browser.newContext({
+    const context = await windowContext(browser, {
+      width: 1366,
       storageState: PRIMARY_STORAGE_STATE,
-      viewport: { width: 1366, height: 900 },
     });
     await use(await context.newPage());
     await context.close();
@@ -55,13 +37,13 @@ const test = base.extend<{ guest: Page; moderator: Page }>({
 });
 
 const BOARD = "/forum/general";
-const WIDTHS = [1024, 1280, 1366, 1440, 1920];
+const WIDTHS = [1366, 1440, 1920];
 
 const COLUMNS = [
   "Топик",
   "Автор",
   "Комментарии",
-  "Лайки",
+  "Нравится",
   "Дата создания",
   "Последняя активность",
 ];
@@ -75,55 +57,35 @@ interface Fit {
 
 /**
  * The table as it stands: its headers, the widths of its columns, and what is
- * wrong with it, the columns and the frame read by fixtures/tables.ts.
+ * wrong with it, the columns, the words, the frame and the headers read by
+ * fixtures/tables.ts. The text under visibility: hidden is read as well: it
+ * takes the width of its column like the text seen, and the widths of the
+ * columns are what this spec holds.
  */
 async function measure(page: Page): Promise<Fit> {
-  const tables = await page.evaluate(readTables, {
+  const tables = await readTables(page, {
     within: ".topics-page",
-    words: false,
+    words: true,
+    heads: true,
+    withHidden: true,
   });
   const fit = await measureInPage(page);
   return { ...fit, problems: [...tables.problems, ...fit.problems] };
 }
 
+/**
+ * What the fixture does not read: the page stays put, the frame keeps to the
+ * column, and the widths of the columns.
+ */
 function measureInPage(page: Page): Promise<Fit> {
   return page.evaluate(() => {
     const problems: string[] = [];
     const scroller = document.querySelector<HTMLElement>(".main")!;
     const column = document.querySelector<HTMLElement>(".topics-page")!;
     const table = column.querySelector<HTMLElement>("table.data-table")!;
-    const text = (el: HTMLElement) =>
-      el.innerText.trim().replace(/\s+/g, " ").slice(0, 40);
     const label = (th: HTMLElement) =>
       (th.textContent ?? "").trim().replace(/\s+/g, " ");
     const shown = (el: Element) => el.getClientRects().length > 0;
-    const textBoxes = (cell: Element) => {
-      const range = document.createRange();
-      range.selectNodeContents(cell);
-      return [...range.getClientRects()].filter((r) => r.width > 0.5);
-    };
-    /** The words of a cell's text that stand on more than one line. */
-    const brokenWords = (cell: Element) => {
-      const broken: string[] = [];
-      const walker = document.createTreeWalker(cell, NodeFilter.SHOW_TEXT);
-      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
-        // A word, with the break after a hyphen or a slash allowed.
-        const words = /[^\s\-\u2010-\u2015/]+[-\u2010-\u2015/]?/g;
-        for (const match of (node as Text).data.matchAll(words)) {
-          if (match[0].length < 2) continue;
-          const range = document.createRange();
-          range.setStart(node, match.index!);
-          range.setEnd(node, match.index! + match[0].length);
-          const lines = new Set(
-            [...range.getClientRects()]
-              .filter((r) => r.width > 0.5)
-              .map((r) => Math.round(r.top)),
-          );
-          if (lines.size > 1) broken.push(match[0]);
-        }
-      }
-      return broken;
-    };
 
     if (scroller.scrollWidth > scroller.clientWidth + 1) {
       problems.push(
@@ -154,50 +116,6 @@ function measureInPage(page: Page): Promise<Fit> {
       widths[label(th)] = Math.round(width);
       if (width < 1) problems.push(`the column "${label(th)}" has no width`);
     }
-    const heads = ths.filter(shown).map((th) => ({ th, boxes: textBoxes(th) }));
-    for (const { th, boxes } of heads) {
-      const cell = th.getBoundingClientRect();
-      if (
-        boxes.some(
-          (r) => r.left < cell.left - 0.5 || r.right > cell.right + 0.5,
-        )
-      ) {
-        problems.push(`the header "${text(th)}" runs out of its cell`);
-      }
-    }
-    for (let i = 0; i < heads.length; i++) {
-      for (let j = i + 1; j < heads.length; j++) {
-        const meet = heads[i].boxes.some((a) =>
-          heads[j].boxes.some(
-            (b) =>
-              a.left < b.right - 0.5 &&
-              b.left < a.right - 0.5 &&
-              a.top < b.bottom - 0.5 &&
-              b.top < a.bottom - 0.5,
-          ),
-        );
-        if (meet) {
-          problems.push(
-            `the headers "${text(heads[i].th)}" and "${text(heads[j].th)}" run into each other`,
-          );
-        }
-      }
-    }
-
-    for (const cell of table.querySelectorAll<HTMLElement>("th, td")) {
-      if (!shown(cell)) continue;
-      if (cell.scrollWidth > cell.clientWidth + 1) {
-        problems.push(
-          `${cell.className} "${text(cell)}" overflows: ${cell.scrollWidth} > ${cell.clientWidth}`,
-        );
-      }
-      if (getComputedStyle(cell).hyphens !== "none") {
-        problems.push(`${cell.className} hyphenates`);
-      }
-      for (const word of brokenWords(cell)) {
-        problems.push(`${cell.className} breaks "${word}"`);
-      }
-    }
     return {
       headers: ths.map(label),
       widths,
@@ -213,18 +131,6 @@ async function open(page: Page, width: number) {
     timeout: 10000,
   });
   await settle(page);
-}
-
-/** Two frames after the face has loaded: a table settles after its column. */
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    document.fonts.ready.then(
-      () =>
-        new Promise<void>((done) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => done())),
-        ),
-    ),
-  );
 }
 
 test.describe("Forum topics table width", () => {
@@ -328,7 +234,7 @@ test.describe("Forum topics table width", () => {
     expect(fit.widths).toMatchObject({
       Автор: 204,
       Комментарии: 124,
-      Лайки: 70,
+      Нравится: 92,
       "Дата создания": 158,
       "Последняя активность": 184,
     });

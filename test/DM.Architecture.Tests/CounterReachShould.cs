@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,23 +13,8 @@ namespace DM.Architecture.Tests;
 /// A counter that goes up on a live row comes back down on a row that may not be.
 /// </summary>
 /// <remarks>
-/// The post count of an author is a column and not a view: it is raised when a
-/// post is written and lowered when one is removed, and nothing recomputes it.
-/// The soft-delete filter is global, so a set-based update reaches only rows that
-/// are not removed — which is right for the write that raises it, since a
-/// deactivated account writes no posts, and wrong for the one that lowers it,
-/// since moderation removes the posts of deactivated accounts as a matter of
-/// course.
-///
-/// Nothing fails when that happens. The update matches no rows and reports
-/// success, the transaction commits, the post is gone, and the number on the
-/// profile keeps counting it — with no way left to reconcile the two, because the
-/// row that would have said what to subtract is the one that was deleted.
-///
-/// Asserted on the text of the statement because the provider that runs these is
-/// the one thing a unit test cannot stand in for: ExecuteUpdate has no in-memory
-/// implementation, so the only cheap place to see the filter is where it is
-/// written.
+/// The soft-delete filter is global, so a set-based update that lowers a counter misses removed
+/// rows and reports success. Asserted on the text: ExecuteUpdate has no in-memory provider.
 /// </remarks>
 public class CounterReachShould
 {
@@ -52,7 +38,7 @@ public class CounterReachShould
         var lowering = Persistence()
             .SelectMany(path => Update
                 .Matches(File.ReadAllText(path))
-                .Select(match => (Path: Relative(path), Match: match)))
+                .Select(match => (Path: RepositoryFiles.Relative(path), Match: match)))
             .Where(update => Counters.Any(counter =>
                 update.Match.Groups["body"].Value.Contains(counter, StringComparison.Ordinal)))
             .Where(update => Lowers(update.Match.Groups["body"].Value))
@@ -79,13 +65,9 @@ public class CounterReachShould
 
     private static IEnumerable<string> Persistence() => Directory
         .EnumerateFiles(
-            Path.Combine(RepositoryRoot, "src", "DM.Infrastructure.Persistence"),
+            Path.Combine(RepositoryLayout.Root, "src", "DM.Infrastructure.Persistence"),
             "*.cs", SearchOption.AllDirectories)
         .Where(path => !path
             .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
             .Any(segment => segment is "obj" or "bin" or "Migrations"));
-
-    private static string Relative(string path) => Path.GetRelativePath(RepositoryRoot, path);
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

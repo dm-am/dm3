@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using DM.Web.API.Swagger;
 using DM.Web.API.Shared.Authentication;
@@ -27,13 +26,12 @@ namespace DM.Web.API.Features.Blog.Blacklists;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class BlogBlacklistController : ControllerBase
 {
-    private readonly IBlogBlacklistApiService _blacklistApiService;
-    private readonly IBlogApiService _blogApiService;
+    private readonly BlogBlacklistApiService _blacklistApiService;
+    private readonly BlogApiService _blogApiService;
 
-    /// <inheritdoc />
     public BlogBlacklistController(
-        IBlogBlacklistApiService blacklistApiService,
-        IBlogApiService blogApiService)
+        BlogBlacklistApiService blacklistApiService,
+        BlogApiService blogApiService)
     {
         _blacklistApiService = blacklistApiService;
         _blogApiService = blogApiService;

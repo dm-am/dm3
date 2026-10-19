@@ -16,25 +16,13 @@ using IObjectStorage = DM.Domain.Core.Uploads.IObjectStorage;
 namespace DM.Infrastructure.Persistence.Tests.Repositories.General;
 
 /// <summary>
-/// The orphan sweeper looks for soft-deleted uploads, and DmDbContext applies a
-/// global "not removed" query filter to every IRemovable entity. Written without
-/// IgnoreQueryFilters the predicate collapses to "NOT IsRemoved AND IsRemoved",
-/// which no row can satisfy: the sweep reports "no orphans" forever while every
-/// deleted avatar and attachment stays in the bucket at its original public URL.
-/// These tests pin both halves of the contract — a row past the grace period IS
-/// collected, and rows that are fresh or live are NOT.
+/// The orphan sweeper looks for soft-deleted uploads past the global "not removed" filter: a row past the
+/// grace period is collected, fresh and live rows are not.
 /// </summary>
-/// <remarks>
-/// The sweep used to live in a background service of the HTTP host, which is why
-/// this used to build a service provider to reach it. It is a domain contract
-/// now, so the test constructs the collector the way anything else would.
-/// </remarks>
 public class UploadOrphanCollectorShould : UnitTestBase
 {
     /// <summary>
-    /// The instant every row here is dated from. Fixed rather than taken from
-    /// DateTimeOffset.UtcNow, so the grace period is checked against a value the
-    /// test owns instead of against the same wall clock the code under test reads.
+    /// The instant every row here is dated from, owned by the test rather than read off the wall clock.
     /// </summary>
     private static readonly DateTimeOffset Now = new(2020, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
@@ -51,9 +39,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
         _clock.Now.Returns(Now);
     }
 
-    private DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
-        .UseInMemoryDatabase(_databaseName)
-        .Options);
+    private DmDbContext Context() => InMemoryStore.Open(_databaseName);
 
     private static Upload NewUpload(bool removed, DateTimeOffset? deletedUtc, string objectKey) => new()
     {
@@ -122,9 +108,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
     }
 
     /// <summary>
-    /// The grace period is a statement about elapsed time, so the test states it by
-    /// moving the clock: one and the same row is left alone before the deadline and
-    /// collected after it, with nothing but IDateTimeProvider changing in between.
+    /// One row is left alone before the deadline and collected after it, with only the clock moving.
     /// </summary>
     [Fact]
     public async Task CollectUploadOnceTheClockPassesTheGracePeriod()
@@ -139,6 +123,41 @@ public class UploadOrphanCollectorShould : UnitTestBase
 
         await _objectStorage.Received(1).DeleteAsync("uploads/aging.png", Arg.Any<CancellationToken>());
         (await RemainingUploads()).Should().Be(0);
+    }
+
+    /// <summary>
+    /// The thumbnails of an avatar go with it: no row names them, so nothing would find them later.
+    /// </summary>
+    [Fact]
+    public async Task CollectTheThumbnailsOfAnAvatarWithIt()
+    {
+        var upload = NewUpload(removed: true, Now.AddDays(-2), "avatars/expired.png");
+        upload.Type = UploadType.UserAvatar;
+        await GivenUpload(upload);
+
+        await Sweep();
+
+        foreach (var key in new[] { "avatars/expired.png", "avatars/expired_100.webp", "avatars/expired_400.webp" })
+        {
+            await _objectStorage.Received(1).DeleteAsync(key, Arg.Any<CancellationToken>());
+        }
+        (await RemainingUploads()).Should().Be(0);
+    }
+
+    /// <summary>
+    /// A thumbnail the store refused keeps the row for the next pass, as the original does.
+    /// </summary>
+    [Fact]
+    public async Task KeepTheRowOfAnAvatarWhoseThumbnailTheStoreRefused()
+    {
+        var upload = NewUpload(removed: true, Now.AddDays(-2), "avatars/stuck.png");
+        upload.Type = UploadType.UserAvatar;
+        await GivenUpload(upload);
+        _objectStorage.DeleteAsync("avatars/stuck_400.webp", Arg.Any<CancellationToken>()).Returns(false);
+
+        await Sweep();
+
+        (await RemainingUploads()).Should().Be(1);
     }
 
     /// <summary>A warning on a profile that pins the upload as the avatar it showed.</summary>
@@ -160,15 +179,8 @@ public class UploadOrphanCollectorShould : UnitTestBase
     }
 
     /// <summary>
-    /// An avatar a warning on a profile pinned outlives its replacement: the
-    /// owner replacing or deleting it is not moderation's decision about the
-    /// picture, and the open log shows it as the evidence of the warning.
+    /// An avatar a warning pinned outlives its replacement: the open log shows it as the evidence.
     /// </summary>
-    /// <remarks>
-    /// Replacing an avatar marks the previous upload deleted with no author, and
-    /// the sweeper used to erase it a day later together with the only copy of
-    /// what the warning was given for.
-    /// </remarks>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -204,8 +216,7 @@ public class UploadOrphanCollectorShould : UnitTestBase
     }
 
     /// <summary>
-    /// The pin is one warning's and not a rule about every replaced avatar: one
-    /// nothing pins goes after the grace period, as it always did.
+    /// An avatar nothing pins goes after the grace period.
     /// </summary>
     [Fact]
     public async Task CollectAReplacedAvatarNothingPins()
@@ -217,5 +228,68 @@ public class UploadOrphanCollectorShould : UnitTestBase
 
         await _objectStorage.Received(1).DeleteAsync("avatars/replaced.png", Arg.Any<CancellationToken>());
         (await RemainingUploads()).Should().Be(0);
+    }
+
+    /// <summary>
+    /// An avatar uploaded and never saved to the profile: the tab was closed
+    /// before "Сохранить", and nothing ever marked it deleted.
+    /// </summary>
+    [Fact]
+    public async Task CollectAnAvatarNeverSavedToTheProfile()
+    {
+        await GivenUpload(UnsavedAvatar(Now.AddDays(-2), "avatars/unsaved.png"));
+
+        await Sweep();
+
+        await _objectStorage.Received(1).DeleteAsync("avatars/unsaved.png", Arg.Any<CancellationToken>());
+        (await RemainingUploads()).Should().Be(0);
+    }
+
+    /// <summary>
+    /// Within the grace period the avatar is still on its way to "Сохранить".
+    /// </summary>
+    [Fact]
+    public async Task LeaveAnUnsavedAvatarWithinTheGracePeriod()
+    {
+        await GivenUpload(UnsavedAvatar(Now.AddHours(-1), "avatars/pending.png"));
+
+        await Sweep();
+
+        await _objectStorage.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        (await RemainingUploads()).Should().Be(1);
+    }
+
+    [Fact]
+    public async Task LeaveTheAvatarOfAProfile()
+    {
+        var avatar = UnsavedAvatar(Now.AddDays(-30), "avatars/current.png");
+        await GivenUpload(avatar);
+        await using (var dbContext = Context())
+        {
+            dbContext.Users.Add(new DM.Infrastructure.Persistence.Entities.Account.User
+            {
+                UserId = avatar.UserId,
+                Username = "AvatarOwner",
+                Email = "owner@example.com",
+                PasswordHash = "hash",
+                Salt = "salt",
+                AvatarUploadId = avatar.UploadId
+            });
+            await dbContext.SaveChangesAsync();
+        }
+
+        await Sweep();
+
+        await _objectStorage.DidNotReceive().DeleteAsync(Arg.Any<string>(), Arg.Any<CancellationToken>());
+        (await RemainingUploads()).Should().Be(1);
+    }
+
+    private static Upload UnsavedAvatar(DateTimeOffset createdUtc, string objectKey)
+    {
+        var upload = NewUpload(removed: false, deletedUtc: null, objectKey);
+        upload.Type = UploadType.UserAvatar;
+        upload.Status = UploadStatus.Confirmed;
+        upload.CreatedUtc = createdUtc;
+        return upload;
     }
 }

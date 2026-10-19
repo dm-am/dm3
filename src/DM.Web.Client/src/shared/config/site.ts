@@ -12,8 +12,16 @@ export const SITE_FOUNDED_YEAR = 2007;
 
 /** One of the addresses the site answers on. */
 export interface SiteAddress {
-  /** What the address is called in the interface. */
+  /**
+   * What the address is called under the heading of the sidebar block
+   * ("Серверы сайта"), which gives the word its context.
+   */
   name: string;
+  /**
+   * The full name, for a sentence with no heading over it: the text of a toast
+   * and of a letter ("попробуйте Основной сервер").
+   */
+  title: string;
   /** Host, exactly as a visitor would type it. */
   host: string;
   /**
@@ -45,8 +53,18 @@ export interface SiteAddress {
  * of that trade.
  */
 export const SITE_ADDRESSES: SiteAddress[] = [
-  { name: "Основной сервер", host: "dm.am", mark: { icon: "globe" } },
-  { name: "RU-прокси", host: "ru.l.dm.am", mark: { label: "RU" } },
+  {
+    name: "Основной",
+    title: "Основной сервер",
+    host: "dm.am",
+    mark: { icon: "globe" },
+  },
+  {
+    name: "RU-прокси",
+    title: "RU-прокси",
+    host: "ru.l.dm.am",
+    mark: { label: "RU" },
+  },
 ];
 
 /**
@@ -61,9 +79,7 @@ export const SITE_ADDRESSES: SiteAddress[] = [
  * One rule in one place: both the block that lists every address and the
  * failure toast that names the other one ask here which is which.
  */
-export function currentSiteAddress(
-  host: string = window.location.host,
-): SiteAddress {
+function currentSiteAddress(host: string = window.location.host): SiteAddress {
   return (
     SITE_ADDRESSES.find((address) => address.host === host) ?? SITE_ADDRESSES[0]
   );

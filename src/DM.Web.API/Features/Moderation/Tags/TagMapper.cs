@@ -1,3 +1,5 @@
+using DM.Domain.Core.Authorization;
+using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.BbRendering;
 using Riok.Mapperly.Abstractions;
 using DtoCreateTag = DM.Domain.Moderation.Features.Tags.CreateTag;
@@ -14,42 +16,55 @@ namespace DM.Web.API.Features.Moderation.Tags;
 /// </summary>
 [Mapper]
 [UseStaticMapper(typeof(BbTextMappers))]
-internal partial class TagMapper
+public partial class TagMapper
 {
+    private readonly IIdentityProvider _identityProvider;
+
+    public TagMapper(IIdentityProvider identityProvider)
+    {
+        _identityProvider = identityProvider;
+    }
+
     /// <summary>
     /// Domain tag group to its response DTO
     /// </summary>
     public partial TagGroup ToTagGroup(DtoTagGroup group);
 
     /// <summary>
-    /// Domain tag to its response DTO: the description both as typed, for the
-    /// edit window, and rendered, for the card
+    /// Domain tag to its response DTO, with the reader bound to the description
+    /// as its author: every reader of the catalogue is a moderator who may edit
+    /// it, so the edit window gets the source with the author_edit audience
     /// </summary>
-    [MapProperty(nameof(DtoTag.Description), nameof(Tag.DescriptionHtml))]
-    [MapProperty(nameof(DtoTag.Description), nameof(Tag.Description))]
-    public partial Tag ToTag(DtoTag tag);
+    public Tag ToTag(DtoTag tag)
+    {
+        var result = ToTagCore(tag);
+        result.Description?.BindAuthor(AnonymousIdentity.Of(_identityProvider.Current?.User));
+        return result;
+    }
+
+    private partial Tag ToTagCore(DtoTag tag);
 
     /// <summary>
     /// Create-group request to the domain command
     /// </summary>
-    public partial DtoCreateTagGroup ToCreateTagGroup(CreateTagGroupRequest request);
+    public partial DtoCreateTagGroup ToCreateTagGroup(TagGroupRequest request);
 
     /// <summary>
     /// Update-group request to the domain command. Id comes from the route,
     /// the service sets it.
     /// </summary>
     [MapperIgnoreTarget(nameof(DtoUpdateTagGroup.Id))]
-    public partial DtoUpdateTagGroup ToUpdateTagGroup(UpdateTagGroupRequest request);
+    public partial DtoUpdateTagGroup ToUpdateTagGroup(TagGroupRequest request);
 
     /// <summary>
     /// Create-tag request to the domain command
     /// </summary>
-    public partial DtoCreateTag ToCreateTag(CreateTagRequest request);
+    public partial DtoCreateTag ToCreateTag(TagRequest request);
 
     /// <summary>
     /// Update-tag request to the domain command. Id comes from the route,
     /// the service sets it.
     /// </summary>
     [MapperIgnoreTarget(nameof(DtoUpdateTag.Id))]
-    public partial DtoUpdateTag ToUpdateTag(UpdateTagRequest request);
+    public partial DtoUpdateTag ToUpdateTag(TagRequest request);
 }

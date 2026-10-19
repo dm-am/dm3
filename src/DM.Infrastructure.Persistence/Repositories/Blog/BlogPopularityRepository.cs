@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Popularity;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence.Shared.Subscriptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
@@ -32,15 +33,9 @@ internal class BlogPopularityRepository : IBlogPopularityRepository
         IReadOnlyCollection<Guid> blogIds,
         DateTimeOffset activeSince,
         CancellationToken cancellationToken = default) =>
-        await _dbContext.Subscriptions
-            .TagWith("DM.Blog.ActiveReaderCounts")
-            .Where(s => s.TargetType == SubscriptionTargetType.Blog &&
-                        blogIds.Contains(s.TargetId) &&
-                        s.Subscriber.LastActivityUtc.HasValue &&
-                        s.Subscriber.LastActivityUtc.Value > activeSince)
-            .GroupBy(s => s.TargetId)
-            .Select(g => new { BlogId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.BlogId, x => x.Count, cancellationToken);
+        await SubscriberSummaries.ActiveByTarget(
+            _dbContext.Subscriptions.TagWith("DM.Blog.ActiveReaderCounts"),
+            SubscriptionTargetType.Blog, blogIds, activeSince, cancellationToken);
 
     /// <inheritdoc />
     public async Task<int> ApplyScores(
@@ -66,7 +61,6 @@ internal class BlogPopularityRepository : IBlogPopularityRepository
                 }
 
                 blog.PopularityScore = score;
-                blog.PopularityScoreUpdatedUtc = calculatedUtc;
                 updated++;
             }
 

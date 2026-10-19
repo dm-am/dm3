@@ -1,18 +1,12 @@
-/**
- * Statistics API types
- * Matches the API DTOs in StatisticsDtos.cs
- */
+/** Matches the API DTOs in StatisticsDtos.cs. */
 
-/** Statistical value with today's delta */
-export interface StatValue {
-  /** Current total value */
+interface StatValue {
   value: number;
-  /** Change from start of day (UTC) */
+  /** Change since the start of the day (UTC). */
   todayDelta: number;
 }
 
-/** Total counts with daily deltas */
-export interface TotalsWithDelta {
+interface TotalsWithDelta {
   users: StatValue;
   characters: StatValue;
   games: StatValue;
@@ -21,8 +15,7 @@ export interface TotalsWithDelta {
   publications: StatValue;
 }
 
-/** Highlighted post information */
-export interface PostHighlight {
+interface PostHighlight {
   postId: string;
   gameId: string;
   gameTitle: string;
@@ -30,20 +23,15 @@ export interface PostHighlight {
   ratingSum?: number;
 }
 
-/** Live community statistics */
 export interface LiveStats {
-  /** Number of users currently online */
   online: number;
-  /** Total counts with today's changes */
   totals: TotalsWithDelta;
-  /** Most recently rated post (PostReview) */
-  lastReviewedPost?: PostHighlight;
-  /** Best post of the week by rating (sum of PostReview ratings) */
+  /** Best post of the week by the sum of PostReview ratings. */
   weeklyBestPost?: PostHighlight;
 }
 
-/** Time period specification (matches backend Period DTO) */
-export interface StatsPeriod {
+/** Matches the backend Period DTO. */
+interface StatsPeriod {
   year: number;
   /** Month 1-12; null for yearly periods */
   month?: number | null;
@@ -51,37 +39,29 @@ export interface StatsPeriod {
 
 /** Single leaderboard entry (player or game) */
 export interface LeaderboardEntry {
-  /**
-   * Ordinal position (1-based, no shared ranks): entries are ordered by
-   * score descending, ties broken by name, and numbered 1..N.
-   */
+  /** 1-based, no shared ranks: by score descending, ties by name. */
   rank: number;
-  /** Entity identifier (user or game GUID) */
   entityId: string;
-  /** Short public id for game entries (canonical 5-letter URL id); null for players */
+  /** The 5-letter URL id of a game; null for players. */
   publicId?: string | null;
-  /** Display name (username or game title) */
+  /** Username or game title. */
   name: string;
-  /** Score value (rating sum, posts count, or text volume). Always positive. */
+  /** Rating sum, posts count or text volume. Always positive. */
   score: number;
 }
 
-/**
- * Leaderboards for a period.
- * Matches backend Leaderboards DTO (GET /v1/leaderboards/{year}[/{month}]).
- */
+/** Matches the backend Leaderboards DTO (GET /v1/leaderboards/{year}[/{month}]). */
 export interface Leaderboards {
   period: StatsPeriod;
   topPlayersByRating: LeaderboardEntry[];
   topGamesByRating: LeaderboardEntry[];
   topPlayersByPosts: LeaderboardEntry[];
   topGamesByPosts: LeaderboardEntry[];
-  /** Top players by written text volume ("Самый многопишущий игрок") */
+  /** By written text volume ("Самый многопишущий игрок"). */
   topPlayersByVolume: LeaderboardEntry[];
-  /** Top blogs by rating (sum of likes on the blog's publications) */
+  /** By the sum of likes on the blog's publications. */
   topBlogsByRating?: LeaderboardEntry[];
-  /** Top blogs by publications count */
   topBlogsByPosts?: LeaderboardEntry[];
-  /** Top blog authors by written text volume (sum of publication content characters) */
+  /** By the characters of their publications. */
   topBlogAuthorsByVolume?: LeaderboardEntry[];
 }

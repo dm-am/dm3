@@ -5,12 +5,11 @@ using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Forum.Features.Comments;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Comments;
 using DM.Infrastructure.Persistence.Repositories.Blog;
 using DM.Infrastructure.Persistence.Repositories.Forum;
 using DM.Infrastructure.Persistence.Repositories.Game;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using NSubstitute;
 using Xunit;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -21,17 +20,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 /// Editing a comment leaves a trace, in all four discussions.
 /// </summary>
 /// <remarks>
-/// A comment row keeps no modification stamp of its own: CommentProjections
-/// derives ModifiedUtc from the newest entry of the edit history, and the client
-/// draws its "edited" mark from that field. All four repositories saved the new
-/// text and wrote no entry, each under the same comment saying tracking was
-/// handled by the history — so ModifiedUtc was null for every comment ever
-/// edited, and an edit was invisible to every reader. The forum's topic history
-/// is the same shape and has always been written.
-///
-/// All four branches are asserted here rather than one: a rule that holds in four
-/// places and is asserted in one is asserted in one, which is how this went
-/// unnoticed in the first place.
+/// CommentProjections derives ModifiedUtc from the newest history entry, and the client draws "edited"
+/// from it. All four discussions are asserted.
 /// </remarks>
 public class CommentEditRecordShould
 {
@@ -46,9 +36,7 @@ public class CommentEditRecordShould
 
     private static DmDbContext Context()
     {
-        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var context = InMemoryStore.Open();
 
         // The author row exists so the projection the update answers with can
         // join it - a comment's author is a required navigation.
@@ -83,9 +71,7 @@ public class CommentEditRecordShould
     }
 
     /// <summary>
-    /// The update answers with a projected comment; with the author row seeded
-    /// the compile-time projection runs fine on the in-memory provider, so the
-    /// write is simply awaited and the trace is read from the tracker.
+    /// The write is awaited and the trace read from the tracker.
     /// </summary>
     private static Task WriteAsync(Func<Task> update) => update();
 
@@ -143,9 +129,7 @@ public class CommentEditRecordShould
     }
 
     /// <summary>
-    /// A caller that does not say who is editing gets no trace rather than a failed
-    /// write: EditorUserId has a foreign key to Users, and Guid.Empty answers to
-    /// nobody.
+    /// A caller that names no editor gets no trace rather than a failed write: Guid.Empty answers to nobody.
     /// </summary>
     [Fact]
     public async Task WriteNoTraceWhenTheEditorIsUnknown()

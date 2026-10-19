@@ -1,5 +1,3 @@
-using DM.Domain.Core.Identity;
-
 namespace DM.Domain.Account.Features.Authentication;
 
 /// <summary>

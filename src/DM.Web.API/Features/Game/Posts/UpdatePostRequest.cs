@@ -4,13 +4,8 @@ namespace DM.Web.API.Features.Game.Posts;
 /// API DTO for editing an existing post
 /// </summary>
 /// <remarks>
-/// Two texts, and nothing else. The endpoint used to take the Post response
-/// DTO, so the contract asked for a room, a character, an author, an edit
-/// history, dice results and a rating to change a line of text — none of them
-/// required, none of them read, and no way for a reader of the document to tell
-/// which of the twelve fields mattered. Rerolling dice, reassigning the author
-/// and moving a post between rooms are not edits and never were: only the two
-/// texts have ever reached UpdatePost.
+/// Two texts, and nothing else: rerolling dice, reassigning the author and
+/// moving a post between rooms are not edits.
 /// </remarks>
 public class UpdatePostRequest
 {

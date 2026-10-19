@@ -2,8 +2,6 @@ using System;
 using System.Text;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Content;
-using DM.Domain.Core.Enums;
-using DM.Domain.Core.Parsing;
 using DM.Infrastructure.Core.Parsing;
 
 namespace DM.Infrastructure.Persistence.Repositories.Search;
@@ -24,6 +22,10 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 /// ([mod] is markup on some and text on others), so the surface here must be the
 /// one the body is displayed on. [private] is a node on every surface, and the
 /// plain text drops it on every one.
+/// </para>
+/// <para>
+/// The text is one for every reader, and which files a reader may open is his
+/// question: so no picture or link that names a file of the site is in it.
 /// </para>
 /// <para>
 /// The regexp in the generated column stays as a second lock. Two spellings of
@@ -50,8 +52,9 @@ internal static class SearchTextProjection
         string rendered;
         try
         {
-            var parser = (BbParserWrapper)Provider.GetForSurface(surface);
-            rendered = parser.RenderText(body, RenderContext.ForPlainText() with { Surface = surface });
+            var parser = Provider.GetForSurface(surface);
+            rendered = parser.RenderText(
+                body, RenderContext.ForPlainText() with { Surface = surface, WithholdsEveryUpload = true });
         }
         catch
         {
@@ -66,7 +69,8 @@ internal static class SearchTextProjection
             // opening, so no hidden word stands before the first one. The text is
             // the one the parser would have read: a character the parser removes
             // joins what stood around it, and "[pri" U+0001 "vate]" is a hidden
-            // block on the page.
+            // block on the page. The address of a file is cut the same way, for
+            // the index keeps it from every reader (WithholdsEveryUpload).
             return Collapse(BeforeHidingMarkup(ParserInput.Of(body)));
         }
 
@@ -76,7 +80,8 @@ internal static class SearchTextProjection
     }
 
     /// <summary>
-    /// The text up to the first "[private" in any case, or all of it.
+    /// The text up to the first "[private" in any case, or to the first identifier
+    /// of a file, whichever comes first, or all of it.
     /// </summary>
     /// <remarks>
     /// Compared ignoring case the way the runtime does it, which folds more than
@@ -87,7 +92,9 @@ internal static class SearchTextProjection
     private static string BeforeHidingMarkup(string text)
     {
         var at = text.IndexOf("[private", StringComparison.OrdinalIgnoreCase);
-        return at < 0 ? text : text[..at];
+        var before = at < 0 ? text : text[..at];
+        var file = UploadIdentifiers.FirstAt(before);
+        return file < 0 ? before : before[..file];
     }
 
     /// <summary>

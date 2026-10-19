@@ -1,30 +1,13 @@
-using System;
-using System.Collections.Generic;
-
 namespace DM.Domain.Core.Authorization;
 
 /// <summary>
 /// The empty user id and what it actually means: nobody is signed in.
 /// </summary>
 /// <remarks>
-/// Two habits of this codebase meet on <see cref="Guid.Empty"/>. Every
-/// repository filter takes the reader's id and is handed the empty one when
-/// there is no reader, and the guest subject carries the empty id as its own
-/// <see cref="IAuthorizationSubject.UserId"/>. A field that nobody filled in
-/// holds the empty id too, because that is what a Guid starts as.
-///
-/// So the empty id is not one identity among many - it is the absence of one,
-/// and every equality test that treats it as an identity answers "yes" for a
-/// visitor who is nobody against a field that says nothing. That is how a
-/// projection which forgot to fill the game master handed the master's sight
-/// of every [private] block to anonymous readers.
-///
-/// Nothing here is a policy decision; it is the one place that says the empty
-/// id may not be compared. Whoever holds ids that will be compared against a
-/// reader passes them through <see cref="WithoutAnonymous"/> on the way in,
-/// and whoever needs a reader's id for a comparison asks
-/// <see cref="Of(IAuthorizationSubject?)"/> for it and gets null when there is
-/// no reader.
+/// The guest carries the empty id and so does a field nobody filled in, so the
+/// empty id must never be compared as an identity: ids to compare against a reader
+/// pass through <see cref="WithoutAnonymous"/>, the reader's own through
+/// <see cref="Of(IAuthorizationSubject?)"/>.
 /// </remarks>
 public static class AnonymousIdentity
 {
@@ -48,17 +31,6 @@ public static class AnonymousIdentity
     /// The given ids without the empty one and without repetitions - the form
     /// a set of ids has to be in before a reader is matched against it.
     /// </summary>
-    public static IReadOnlyCollection<Guid> WithoutAnonymous(IEnumerable<Guid>? userIds)
-    {
-        if (userIds is null) return Array.Empty<Guid>();
-
-        var kept = new List<Guid>();
-        foreach (var userId in userIds)
-        {
-            if (Is(userId) || kept.Contains(userId)) continue;
-            kept.Add(userId);
-        }
-
-        return kept.Count == 0 ? Array.Empty<Guid>() : kept;
-    }
+    public static IReadOnlyCollection<Guid> WithoutAnonymous(IEnumerable<Guid>? userIds) =>
+        userIds?.Where(userId => !Is(userId)).Distinct().ToArray() ?? [];
 }

@@ -13,7 +13,6 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Security;
 /// </summary>
 internal class PasswordChangedNotificationGenerator : SecurityNotificationGenerator
 {
-    /// <inheritdoc />
     public PasswordChangedNotificationGenerator(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
         : base(dbContext, dateTimeProvider)
     {
@@ -33,13 +32,12 @@ internal class PasswordChangedNotificationGenerator : SecurityNotificationGenera
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { subject.UserId },
-            // No ActorId: a system event. The owner changed their own password,
-            // so there is no other person the recipient could have blacklisted.
+            UsersInterested = [subject.UserId],
+            // No ActorId: the owner changed his own password.
             Metadata = new
             {
-                Username = subject.Username,
-                EventTime = subject.EventTime
+                subject.Username,
+                subject.EventTime
             }
         };
     }

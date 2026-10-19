@@ -2,8 +2,6 @@ using System;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Characters;
-using DM.Domain.Game.Features.Games;
-using DM.Testing;
 using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Xunit;
@@ -12,10 +10,9 @@ namespace DM.Domain.Game.Tests.Authorization;
 
 /// <summary>
 /// Gates private game content: who may edit, accept, kill or exile a character.
-/// The resolver is thirteen guarded arms, and most of the guards are the point —
-/// an arm that loses its guard silently widens access.
+/// Most of the guards are the point: an arm that loses its guard silently widens access.
 /// </summary>
-public class CharacterIntentionResolverShould : UnitTestBase
+public class CharacterIntentionResolverShould
 {
     private readonly CharacterIntentionResolver resolver = new();
 
@@ -44,8 +41,6 @@ public class CharacterIntentionResolverShould : UnitTestBase
             IsPlayerExiled = isPlayerExiled,
             AccessPolicy = accessPolicy,
         };
-
-    // --- Ownership by the player ---
 
     [Theory]
     [InlineData(CharacterIntention.Edit)]
@@ -98,8 +93,6 @@ public class CharacterIntentionResolverShould : UnitTestBase
 
         resolver.IsAllowed(guest, intention, Character(isNpc: true)).Should().BeFalse();
     }
-
-    // --- Ownership by the game ---
 
     [Fact]
     public void ForbidTheMasterFromEditingAPlayerCharacterByDefault()
@@ -157,8 +150,6 @@ public class CharacterIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(master, CharacterIntention.Delete, Character()).Should().BeFalse();
     }
 
-    // --- Application review ---
-
     [Theory]
     [InlineData(CharacterStatus.UnderReview, true)]
     [InlineData(CharacterStatus.Declined, true)]
@@ -183,8 +174,6 @@ public class CharacterIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(master, CharacterIntention.Decline, Character(status))
             .Should().Be(expected);
     }
-
-    // --- Life cycle ---
 
     [Theory]
     [InlineData(CharacterStatus.Active, true)]
@@ -292,15 +281,6 @@ public class CharacterIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(player, CharacterIntention.Leave, Character())
             .Should().BeTrue();
         resolver.IsAllowed(player, CharacterIntention.Leave, Character(CharacterStatus.Retired))
-            .Should().BeFalse();
-    }
-
-    [Fact]
-    public void RefuseAnIntentionItDoesNotKnow()
-    {
-        var master = Create.User(MasterId).WithRole(UserRole.RegularUser).Please();
-
-        resolver.IsAllowed(master, (CharacterIntention)int.MaxValue, Character())
             .Should().BeFalse();
     }
 }

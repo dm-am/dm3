@@ -9,7 +9,6 @@ namespace DM.Domain.Community.Features.Awards;
 /// </summary>
 public class AwardType
 {
-    /// <summary>Catalog record identifier.</summary>
     public Guid Id { get; set; }
 
     /// <summary>Stable code ("contest_first", "popular_vote", "guesser").</summary>
@@ -25,22 +24,10 @@ public class AwardType
     /// <summary>Icon name from the game-icons sprite.</summary>
     public string IconName { get; set; } = string.Empty;
 
-    /// <summary>Lowest tier a catalog record may carry.</summary>
-    public const int MinTier = 1;
-
-    /// <summary>Highest tier a catalog record may carry.</summary>
-    /// <remarks>
-    /// The single source the validators read. While the bound lagged behind the
-    /// catalog, the record it excluded could not be edited at all: the edit form
-    /// resends the tier it was handed, so a rejected tier rejected every other
-    /// change with it.
-    /// </remarks>
-    public const int MaxTier = 5;
-
     /// <summary>
-    /// Visual style of the badge, null for none. 1 gold, 2 silver, 3 bronze — on
-    /// a literary contest these are the 1st/2nd/3rd places. 4 steel and 5 diamond
-    /// carry no place; the honorary record in the catalog is a 5.
+    /// The metal of the badge on <see cref="Catalogs.TierScale"/>, null for none. On a
+    /// literary contest gold, silver and bronze are the 1st/2nd/3rd places; the
+    /// honorary record in the catalog is platinum.
     /// </summary>
     public int? Tier { get; set; }
 
@@ -51,18 +38,13 @@ public class AwardType
     public bool IsActive { get; set; }
 }
 
-/// <summary>Request to create a new record in the award catalog.</summary>
 public class CreateAwardType
 {
-    /// <summary>Stable code.</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Title.</summary>
     public string Title { get; set; } = string.Empty;
-    /// <summary>Description.</summary>
     public string Description { get; set; } = string.Empty;
-    /// <summary>Icon name.</summary>
     public string IconName { get; set; } = string.Empty;
-    /// <summary>Tier (visual style).</summary>
+    /// <summary>Tier on <see cref="Catalogs.TierScale"/>.</summary>
     public int? Tier { get; set; }
     /// <summary>Display order within a series.</summary>
     public int SortOrder { get; set; }
@@ -73,18 +55,11 @@ public class CreateAwardType
 /// </summary>
 public class UpdateAwardType
 {
-    /// <summary>Identifier of the record being updated.</summary>
     public Guid Id { get; set; }
-    /// <summary>New title (null = leave unchanged).</summary>
     public string? Title { get; set; }
-    /// <summary>New description (null = leave unchanged).</summary>
     public string? Description { get; set; }
-    /// <summary>New icon (null = leave unchanged).</summary>
     public string? IconName { get; set; }
-    /// <summary>New tier (null = leave unchanged).</summary>
     public int? Tier { get; set; }
-    /// <summary>New SortOrder (null = leave unchanged).</summary>
     public int? SortOrder { get; set; }
-    /// <summary>New IsActive (null = leave unchanged).</summary>
     public bool? IsActive { get; set; }
 }

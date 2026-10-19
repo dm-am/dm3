@@ -1,27 +1,18 @@
 <script setup lang="ts">
 /**
- * InvitationsSection — outstanding invitations for the game plus the controls
- * to invite a player or a reader and to cancel a pending invitation. Backed by
- * the invitation gameApi; the list is held locally (not part of the shared
- * game store).
- *
- * Reading the list and writing it part company on the server: the read asks
- * GameIntention.EditSettings (the leads, the curating mentor and senior
- * moderation), while invite and cancel ask InvitePlayer / InviteReader /
- * CancelInvitation — the game roles alone. `canManage` carries that narrower
- * set, and the host page is the one that computes it.
- *
- * Sending an invitation says nothing in the corner: the row for it is in the
- * list right above the controls, carrying the moment it was sent. That the row
- * is there at all takes three things, and each of them is a way the list used
- * to lose it - see `sorted`, `load` and `invite` below. The blog twin of this
- * section is built the same way.
+ * The pending invitations of the game. The read asks EditSettings, inviting
+ * and cancelling the narrower `canManage`. A sent invitation is
+ * answered by its row in the list, not by a plate.
  */
 import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
-import { useGameDetailsStore, gameApi, type Invitation } from "@/entities/game";
-import { UserLink } from "@/entities/user";
-import { UserAutocomplete } from "@/entities/user";
+import {
+  useGameDetailsStore,
+  gameApi,
+  INVITATION_TYPE_LABELS,
+  type Invitation,
+} from "@/entities/game";
+import { UserAutocomplete, UserLink } from "@/entities/user";
 import { Select } from "@/shared/ui/Select";
 import Button from "@/shared/ui/Button/Button.vue";
 import { SettingsSection } from "@/shared/ui/SettingsSection";
@@ -31,6 +22,8 @@ import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { refusalHere } from "@/shared/lib/errors";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { shownOnPage } from "@/shared/lib/composables/useGuardedRequest";
 
 defineProps<{
   /** Whether the viewer may send and cancel invitations. */
@@ -41,32 +34,22 @@ const store = useGameDetailsStore();
 const { game } = storeToRefs(store);
 
 const invitations = ref<Invitation[]>([]);
-const loading = ref(false);
+/** The list has been read once: until then there is nothing to keep or to call empty. */
+const answered = ref(false);
+const loadFailed = ref(false);
+const LOAD_FAILED = "Не удалось загрузить приглашения";
 
 const username = ref("");
 const kind = ref<"player" | "reader">("player");
 const inviting = ref(false);
 
-const kindOptions = [
-  { value: "player", label: "Игрок" },
-  { value: "reader", label: "Читатель" },
-];
+const kindOptions = (["player", "reader"] as const).map((value) => ({
+  value,
+  label: INVITATION_TYPE_LABELS[value],
+}));
 
-const typeLabels: Record<string, string> = {
-  player: "Игрок",
-  reader: "Читатель",
-  assistant: "Ассистент",
-};
-
-/**
- * Oldest first, so the invitation just sent is the last row - the one next to
- * the controls that sent it.
- *
- * The order is the section's own, and here it is also the only one there is:
- * the endpoint reads the tokens of the game with no ORDER BY at all
- * (GameInvitationRepository.GetPendingInvitations), so served as they come the
- * rows land wherever the database happened to keep them.
- */
+// Oldest first, the one just sent next to the controls; the server sends no
+// order at all (GameInvitationRepository.GetPendingInvitations).
 const sentAt = (invitation: Invitation) =>
   new Date(invitation.createdUtc).getTime();
 
@@ -74,7 +57,6 @@ const sorted = computed(() =>
   [...invitations.value].sort((a, b) => sentAt(a) - sentAt(b)),
 );
 
-/** When the invitation went out, in the row that stands for it. */
 const sentLabel = (invitation: Invitation) =>
   `отправлено ${formatDateFull(invitation.createdUtc)}`;
 
@@ -82,30 +64,25 @@ const gameGuid = computed(() => game.value?.id ?? "");
 
 async function load() {
   if (!game.value) return;
-  loading.value = true;
-  const { data, error } = await gameApi.getGameInvitations(
-    game.value.publicId ?? game.value.id,
-  );
-  loading.value = false;
-  // A read that failed leaves the list alone. Emptying it on an error meant
-  // that a blip in the reload below answered a freshly sent invitation with
-  // "Активных приглашений нет".
-  if (error) return;
-  invitations.value = data?.resources ?? [];
+  const answer = await gameApi.getGameInvitations(game.value.publicId);
+  if (answer.error) {
+    // A failed reload leaves the list alone, so a blip keeps a sent invitation;
+    // a failed first read says so in the list's place.
+    if (!answered.value) {
+      shownOnPage(answer);
+      loadFailed.value = true;
+    }
+    return;
+  }
+  answered.value = true;
+  loadFailed.value = false;
+  invitations.value = answer.data?.resources ?? [];
 }
 
 onMounted(load);
 
-/**
- * The invitation the server has just answered with, put into the list in
- * place of the one it replaced.
- *
- * The server kills the live invitation of the same kind to the same person
- * before issuing this one (GameInvitationRepository.InvalidateAndCreate-
- * Invitation), so inviting somebody a second time is a replacement, not an
- * addition: what changes in the row is the moment it was sent. Taking the row
- * from the answer also means the reload that follows is free to fail.
- */
+// A second invitation of a kind replaces the first on the server
+// (GameInvitationRepository.InvalidateAndCreateInvitation).
 function remember(invitation: Invitation) {
   invitations.value = [
     ...invitations.value.filter(
@@ -119,14 +96,12 @@ function remember(invitation: Invitation) {
   ];
 }
 
-/** A refused invitation, under the row it was typed in, the name kept. */
 const inviteResult = useActionResult();
 
-/** The last refused "Отменить", under the row of the invitation it was about. */
 const cancelRefusal = ref<{ id: string; text: string } | null>(null);
 
 async function invite() {
-  if (!gameGuid.value || !username.value.trim()) return;
+  if (!username.value.trim()) return;
   inviting.value = true;
   inviteResult.clear();
   const { data, error } =
@@ -144,7 +119,6 @@ async function invite() {
 }
 
 async function cancel(invitation: Invitation) {
-  if (!gameGuid.value) return;
   cancelRefusal.value = null;
   const { error } = await gameApi.cancelInvitation(
     gameGuid.value,
@@ -164,8 +138,8 @@ async function cancel(invitation: Invitation) {
     <ul v-if="sorted.length" class="inv-list">
       <li v-for="inv in sorted" :key="inv.id" class="inv-item">
         <div class="inv-row">
-          <UserLink :user="inv.invitedUser" />
-          <span class="inv-type">{{ typeLabels[inv.type] ?? inv.type }}</span>
+          <UserLink :user="inv.invitedUser" hide-badge />
+          <span class="inv-type">{{ INVITATION_TYPE_LABELS[inv.type] }}</span>
           <span class="inv-sent">{{ sentLabel(inv) }}</span>
           <RemoveButton v-if="canManage" @click="cancel(inv)">
             Отменить
@@ -178,10 +152,14 @@ async function cancel(invitation: Invitation) {
         />
       </li>
     </ul>
-    <SecondaryText v-else-if="!loading">Активных приглашений нет</SecondaryText>
+    <div
+      v-else-if="!answered && !loadFailed"
+      class="inv-waiting"
+      aria-hidden="true"
+    />
+    <ErrorState v-else-if="!answered" :message="LOAD_FAILED" :retry="load" />
+    <SecondaryText v-else>Активных приглашений нет</SecondaryText>
 
-    <!-- The field, the list and the button in one line, the field taking
-         what the other two leave. -->
     <div v-if="canManage" class="invite-row">
       <UserAutocomplete
         v-model="username"
@@ -209,6 +187,8 @@ async function cancel(invitation: Invitation) {
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/Skeleton" as *
+
 .inv-list
   list-style: none
   display: flex
@@ -216,12 +196,17 @@ async function cancel(invitation: Invitation) {
   gap: $tiny
   margin-bottom: $small
 
+// The line of "Активных приглашений нет", the answer most sections get.
+.inv-waiting
+  width: 40%
+  height: 1.3 * $secondary-font-size
+  +skeleton-shimmer
+
 .inv-row
   display: flex
   align-items: center
   gap: $small
 
-// Under the invitation it is about, one list step from it.
 .inv-refusal
   --action-result-margin: #{$tiny} 0 0
 

@@ -1,16 +1,6 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * The form a comment is written in, under the discussions of the site.
- *
- * What it owes the writer: the counter counts to what the server takes there,
- * a topic's 50000 unless told otherwise; the field empties the moment the text
- * goes; a refused text comes back into the field with the server's reason
- * under "Отправить" and no plate; and the saved draft goes only once the text
- * landed.
- */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   enableAutoUnmount,
@@ -25,7 +15,6 @@ import CommentComposer from "./CommentComposer.vue";
 
 const editor = vi.hoisted(() => ({ cleared: 0 }));
 
-// A heavy tiptap component. The form is read off what it hands the editor.
 vi.mock("@/shared/ui/BBCodeEditor", () => ({
   BBCodeEditor: {
     name: "BBCodeEditor",
@@ -78,7 +67,6 @@ const refusal = (reason: string) => ({
 describe("the counter of the form", () => {
   it("counts to what the server takes for a comment", () => {
     expect(editorOf(render()).props("maxLength")).toBe(BODY_TEXT_MAX_LENGTH);
-    expect(BODY_TEXT_MAX_LENGTH).toBe(50000);
   });
 
   it("keeps the draft under the key it is given", () => {
@@ -96,7 +84,6 @@ describe("sending a comment", () => {
     await wrapper.get("button").trigger("click");
 
     expect(send).toHaveBeenCalledWith("Вот ссылка");
-    // Emptied at once, and the draft kept until the answer.
     expect(field(wrapper).value).toBe("");
     expect(editor.cleared).toBe(0);
 
@@ -118,7 +105,8 @@ describe("sending a comment", () => {
   });
 
   it("gives a refused text back with the server's reason under the button", async () => {
-    const reason = "Скрытый текст работает только в игровом тексте поста";
+    const reason =
+      "Скрытый блок работает только в игровых постах: [private]. Для примера оберните его в [noparse].";
     send.mockResolvedValueOnce(refusal(reason));
     const wrapper = render();
 

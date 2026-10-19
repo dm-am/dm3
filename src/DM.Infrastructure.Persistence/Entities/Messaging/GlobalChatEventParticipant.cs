@@ -39,15 +39,9 @@ public class GlobalChatEventParticipant
     /// </summary>
     public DateTimeOffset JoinedUtc { get; set; }
 
-    /// <summary>
-    /// The event
-    /// </summary>
     [ForeignKey(nameof(GlobalChatEventId))]
     public virtual GlobalChatEvent GlobalChatEvent { get; set; } = null!;
 
-    /// <summary>
-    /// The user
-    /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User User { get; set; } = null!;
 }

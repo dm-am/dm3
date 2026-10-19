@@ -42,7 +42,7 @@ internal class BotLinkRepository : IBotLinkRepository
     public async Task<Token?> FindValidToken(string code, CancellationToken ct = default)
     {
         var codeUpper = code.ToUpperInvariant();
-        var cutoffTime = _dateTimeProvider.Now.AddMinutes(-10);
+        var cutoffTime = _dateTimeProvider.Now - BotLinkCode.Lifetime;
 
         // Load pending BotLink tokens, then filter in memory by first 6 chars of GUID
         var candidates = await _dbContext.Tokens
@@ -68,7 +68,7 @@ internal class BotLinkRepository : IBotLinkRepository
     {
         await _dbContext.Tokens
             .Where(t => t.TokenId == tokenId)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true), ct);
+            .Retire(ct);
     }
 
     /// <inheritdoc />
@@ -76,13 +76,13 @@ internal class BotLinkRepository : IBotLinkRepository
     {
         await _dbContext.Tokens
             .Where(t => t.UserId == userId && t.Type == TokenType.NotificationBotLink)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true), ct);
+            .Retire(ct);
     }
 
     /// <inheritdoc />
     public async Task SetChannelId(Guid userId, string channelType, string? externalId, CancellationToken ct = default)
     {
-        var user = await _dbContext.Users.FindAsync(new object[] { userId }, ct);
+        var user = await _dbContext.Users.FindAsync([userId], ct);
         if (user == null) return;
 
         switch (channelType.ToLowerInvariant())
@@ -120,16 +120,7 @@ internal class BotLinkRepository : IBotLinkRepository
 
     /// <inheritdoc />
     public Task InitializeChannelPreferences(Guid userId, string channelType, CancellationToken ct = default) =>
-        UpsertChannelPreference(userId, channelType, new NotificationChannelPreference
-        {
-            Enabled = true,
-            EnabledCategories = new HashSet<NotificationCategory>
-            {
-                NotificationCategory.Messages,
-                NotificationCategory.Games,
-                NotificationCategory.Security
-            }
-        }, ct);
+        UpsertChannelPreference(userId, channelType, new NotificationChannelPreference(), ct);
 
     /// <inheritdoc />
     public async Task ClearChannelPreferences(Guid userId, string channelType, CancellationToken ct = default)
@@ -214,18 +205,13 @@ internal class BotLinkRepository : IBotLinkRepository
         // caller's string; the values travel as parameters — which is why raw
         // SQL is sound here.
         var statement = $$"""
-            INSERT INTO "UserSettings"
-                ("UserId", "Theme", "TopicsPerPage", "CommentsPerPage", "PostsPerPage",
-                 "MessagesPerPage", "EntitiesPerPage", "{{column}}")
-            VALUES ({0}, {1}, {2}, {3}, {4}, {5}, {6}, {7}::jsonb)
-            ON CONFLICT ("UserId") DO UPDATE SET "{{column}}" = {7}::jsonb
+            INSERT INTO "UserSettings" ("UserId", "Theme", "PageSize", "{{column}}")
+            VALUES ({0}, {1}, {2}, {3}::jsonb)
+            ON CONFLICT ("UserId") DO UPDATE SET "{{column}}" = {3}::jsonb
             """;
         await _dbContext.Database.ExecuteSqlRawAsync(
             statement,
-            [
-                userId, (int)defaults.Theme, defaults.TopicsPerPage, defaults.CommentsPerPage,
-                defaults.PostsPerPage, defaults.MessagesPerPage, defaults.EntitiesPerPage, json
-            ],
+            [userId, (int)defaults.Theme, defaults.PageSize, json],
             ct);
     }
 

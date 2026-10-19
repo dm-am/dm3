@@ -13,7 +13,6 @@ internal class ChatFactory : IChatFactory
 {
     private readonly IGuidFactory _guidFactory;
 
-    /// <inheritdoc />
     public ChatFactory(
         IGuidFactory guidFactory)
     {
@@ -35,16 +34,7 @@ internal class ChatFactory : IChatFactory
             ChatId = chatId,
             Type = ChatType.Direct
         };
-        var links = new[] { userId, otherUserId }
-            .Select(id => new CreateChatLinkEntity
-            {
-                UserChatLinkId = _guidFactory.Create(),
-                ChatId = chatId,
-                UserId = id,
-                IsRemoved = false
-            });
-
-        return (chat, links);
+        return (chat, CreateLinks(chatId, [userId, otherUserId]));
     }
 
     /// <inheritdoc />
@@ -57,28 +47,24 @@ internal class ChatFactory : IChatFactory
             Type = ChatType.Group,
             Title = title
         };
-        var links = participantIds
-            .Distinct()
-            .Select(id => new CreateChatLinkEntity
-            {
-                UserChatLinkId = _guidFactory.Create(),
-                ChatId = chatId,
-                UserId = id,
-                IsRemoved = false
-            });
-
-        return (chat, links);
+        return (chat, CreateLinks(chatId, participantIds));
     }
 
     /// <inheritdoc />
-    public CreateChatEntity CreateGameRoom(Guid roomId, string title)
+    public CreateChatEntity CreateGameRoom(Guid roomId, string title) => new()
     {
-        return new CreateChatEntity
+        ChatId = _guidFactory.Create(),
+        Type = ChatType.GameRoom,
+        Title = title,
+        RoomId = roomId
+    };
+
+    /// <inheritdoc />
+    public IEnumerable<CreateChatLinkEntity> CreateLinks(Guid chatId, IEnumerable<Guid> userIds) =>
+        userIds.Select(id => new CreateChatLinkEntity
         {
-            ChatId = _guidFactory.Create(),
-            Type = ChatType.GameRoom,
-            Title = title,
-            RoomId = roomId
-        };
-    }
+            UserChatLinkId = _guidFactory.Create(),
+            ChatId = chatId,
+            UserId = id
+        });
 }

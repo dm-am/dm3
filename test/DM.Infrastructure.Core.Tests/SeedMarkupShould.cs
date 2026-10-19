@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -16,16 +15,8 @@ namespace DM.Infrastructure.Core.Tests;
 /// The stand is seeded with markup the grammar accepts.
 /// </summary>
 /// <remarks>
-/// The seed is the first text anybody opening the stand reads, and a broken
-/// spelling in it looks like a broken renderer rather than like a typo. It
-/// carried [mention="..."], a form neither DM2 nor the grammar has, which the
-/// grammar shows as the text it is.
-///
-/// Two checks, because the seed is written in two ways. The asset files are
-/// whole texts, so they are parsed on every surface and no node may come out
-/// broken. The texts written inline in the seeding code are pieces of strings
-/// and interpolations, which no parser can read whole, so they are searched for
-/// the spellings the grammar refuses outright.
+/// The asset files are whole texts and are parsed on every surface; the inline texts are pieces of
+/// strings and are searched for the spellings the grammar refuses.
 /// </remarks>
 public class SeedMarkupShould
 {

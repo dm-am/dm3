@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Invitations;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Testing;
 using DM.Web.API.Features.Blog.Invitations;
 using AwesomeAssertions;
 using NSubstitute;
@@ -17,13 +16,8 @@ namespace DM.Web.API.Tests.Features.Blog;
 /// A blog invitation names its role in the same words as a game invitation and
 /// the account's list of received invitations.
 /// </summary>
-/// <remarks>
-/// The blog answered with the enum member's own name ("Assistant", "Reader")
-/// while the game and the account area answered with the API word ("assistant",
-/// "reader"), so the one screen that lists both kinds had to lower-case one of
-/// them to tell them apart.
-/// </remarks>
-public class BlogInvitationApiServiceShould : UnitTestBase
+/// <remarks>The account's list shows both kinds, so both answer with the API word.</remarks>
+public class BlogInvitationApiServiceShould
 {
     private readonly IBlogInvitationService _invitationService = Substitute.For<IBlogInvitationService>();
 
@@ -51,6 +45,26 @@ public class BlogInvitationApiServiceShould : UnitTestBase
             .CreateAssistantInvitation(blogId, "reader");
 
         invitation.Type.Should().Be("assistant");
+    }
+
+    /// <summary>
+    /// The invitee is a reference like any other: the role and the newbie mark
+    /// of the account, not a guest without one.
+    /// </summary>
+    [Fact]
+    public async Task NameTheInviteeWithTheRoleAndTheNewbieMark()
+    {
+        var blogId = Guid.NewGuid();
+        var invitation = Invitation(blogId, BlogRole.Assistant);
+        invitation.InvitedUser.Role = UserRole.Moderator;
+        invitation.InvitedUser.QuantityRating = 500;
+        _invitationService.GetPendingInvitations(blogId).Returns([invitation]);
+
+        var invitee = (await new BlogInvitationApiService(_invitationService).GetBlogInvitations(blogId))
+            .Single().InvitedUser;
+
+        invitee.Role.Should().Be(UserRole.Moderator);
+        invitee.IsNewbie.Should().BeFalse();
     }
 
     private static DomainBlogInvitation Invitation(Guid blogId, BlogRole role) => new()

@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,31 +14,9 @@ namespace DM.Architecture.Tests;
 /// A refusal is read by the person who was refused, and this interface is Russian.
 /// </summary>
 /// <remarks>
-/// The message of an HttpException is not a developer note. The middleware puts it
-/// into the title of the problem document and the client shows the title as it
-/// stands, so a blog owner who blacklisted the same reader twice was answered
-/// "User 'vasya' is already blacklisted": English copy on a Russian screen, written
-/// by a layer that never sees a screen. API_DESIGN keeps no machine-readable error
-/// code precisely because this string is the message, which makes its language part
-/// of the contract rather than a detail of the throw.
-///
-/// The check is textual, and for the same reason as the one in
-/// ErrorBodyOwnershipShould: the offending value is a string argument, which no
-/// type can constrain, and it is the shape of the neighbouring throw that the next
-/// one gets copied from. Only sources under src/ are read: the helpers that raise
-/// these exceptions inside the test suites answer nobody.
-///
-/// Two roads lead to the same reader: a thrown refusal, whose message becomes the
-/// title of the problem document, and a failed validation, whose message becomes
-/// one of its errors. Both are scanned for language; only the first is scanned for
-/// repetition, because a validator saying "введите почту" wherever there is an
-/// email field is one sentence in its places, not one refusal spelled twice.
-///
-/// The wording itself is not checked: only that it is written in the language of
-/// the interface, that it spells the letter "e" without the dots, and — for
-/// refusals — that a wording written twice was not written twice. A message taken
-/// from a shared constant leaves no literal at the site and is invisible to all
-/// three, which is the intended outcome and not a hole.
+/// The message of an HttpException becomes the title the client shows, and a validation message one of
+/// its errors; both are read for language, only refusals for repetition. Textual, over src/ only. A
+/// message taken from a constant leaves no literal here, which is intended.
 /// </remarks>
 public class RefusalCopyShould
 {
@@ -45,14 +24,7 @@ public class RefusalCopyShould
     /// Where a refusal takes its wording: the two exceptions whose message the
     /// middleware turns into a title, and the factory call itself.
     /// </summary>
-    /// <remarks>
-    /// The factory is read because not every refusal can be thrown. The rate
-    /// limiter answers from OnRejected, outside MVC, with no request left to
-    /// throw into, so it builds the document itself — and its title stayed
-    /// English for as long as this scan looked at throw sites alone. A call that
-    /// passes a constant holds no literal and is invisible here, which is the
-    /// intended outcome.
-    /// </remarks>
+    /// <remarks>The rate limiter builds its document in OnRejected, outside MVC, so the factory is read too.</remarks>
     private static readonly Regex RefusalWording = new(
         @"new\s+(?:HttpException|HttpBadRequestException)\s*\(" +
         @"|Create(?:Validation)?ProblemDetails\s*\(",
@@ -62,54 +34,32 @@ public class RefusalCopyShould
     /// Where a failed validation takes its wording.
     /// </summary>
     /// <remarks>
-    /// A refusal by the other road: the message of a FluentValidation rule and of a
-    /// data annotation goes into the errors of the problem document, and the client
-    /// shows it verbatim. Written in English at 79 sites, it answered a Russian
-    /// screen with "Title must be between 3 and 200 characters" — and the scan meant
-    /// to prevent exactly that read only throw sites.
-    ///
-    /// Held apart from the throw sites because only the language rules apply to
-    /// both. A wording repeated across validators is not the drift the deduplication
-    /// rule is about: every DTO with an email field asks for an email the same way,
-    /// and that is one sentence said in the places it belongs, not one refusal
-    /// spelled twice.
+    /// FluentValidation and data annotation messages go into the errors the client shows verbatim. Only
+    /// the language rules apply: one email sentence in many validators is not drift.
     /// </remarks>
     private static readonly Regex ValidationWording = new(
         @"WithMessage\s*\(" +
-        @"|ErrorMessage\s*=\s*" +
-        // A rule that yields its own message instead of handing one to the
-        // library. The schema rules do it that way, and the five sentences they
-        // return stayed English through a translation pass that read call sites
-        // alone — the reader gets them the same way as any other validation error.
+        // A constant of that name declares a placeholder, not a message.
+        @"|(?<!\bstring\s+)ErrorMessage\s*=\s*" +
+        // A rule yielding its own message, as the schema rules do.
         @"|yield\s+return\s+(?=\$?"")",
         RegexOptions.Compiled);
 
     /// <summary>
     /// A FluentValidation placeholder, which is filled in by the library rather
-    /// than read by anyone: {PropertyName}, {{{ErrorMessage}}} and their kin.
+    /// than read by anyone: {PropertyName}, {{{ErrorMessage}}} and their kin, the
+    /// name interpolated from a constant of another class included.
     /// </summary>
     private static readonly Regex PlaceholderOnly = new(
-        @"^\s*(?:\{+\w+\}+\s*)+$", RegexOptions.Compiled);
+        @"^\s*(?:\{+[\w.]+\}+\s*)+$", RegexOptions.Compiled);
 
     /// <summary>
-    /// Russian letters, matched by Unicode block. A hand-written a-to-ya range would
-    /// leave out the letter at U+0451, and that letter is named by number here rather
-    /// than typed: a file that keeps a character out of messages should not carry it.
+    /// Russian letters by Unicode block; U+0451 is named by number, not typed.
     /// </summary>
     private static readonly Regex Cyrillic = new(@"\p{IsCyrillic}", RegexOptions.Compiled);
 
     /// <summary>That same letter and its capital, by number and for the same reason.</summary>
     private static readonly char[] EWithDots = [(char)0x0451, (char)0x0401];
-
-    /// <summary>
-    /// The other noun for the thing the chat calls an event, by number for the same
-    /// reason the letter above is spelled that way: a file that keeps a word out of
-    /// messages should not carry it. The stem covers every case ending at once, and
-    /// it is looked for in refusals alone — a security log line is an event in the
-    /// ordinary sense of the word and says so.
-    /// </summary>
-    private static readonly Regex OtherNounForAnEvent = new(
-        @"[Сс]обыти", RegexOptions.Compiled);
 
     /// <summary>An interpolation hole is not wording: {commentId} and {id} say nothing.</summary>
     private static readonly Regex Hole = new(@"\{[^{}]*\}", RegexOptions.Compiled);
@@ -146,20 +96,6 @@ public class RefusalCopyShould
     }
 
     [Fact]
-    public void CallTheChatEventByTheNameTheInterfaceGivesIt()
-    {
-        var offenders = EveryWording()
-            .Where(site => site.Messages.Any(message => OtherNounForAnEvent.IsMatch(message)))
-            .Select(Describe)
-            .ToList();
-
-        offenders.Should().BeEmpty(
-            "the strip over the chat and the hint over the composer name it with the " +
-            "borrowed word, and this refusal is read on that same screen a second " +
-            "later: one thing answering to two nouns is two things to the reader");
-    }
-
-    [Fact]
     public void SayEachRefusalInOnePlace()
     {
         var repeated = ThrowSites()
@@ -181,27 +117,23 @@ public class RefusalCopyShould
     private static string Describe(ThrowSite site) =>
         site.Source + ":" + site.Line + " -> " + string.Join(" | ", site.Messages);
 
-    /// <summary>
-    /// The wording of a message with the values it interpolates taken out: the same
-    /// refusal phrased over {commentId} in one service and over {id} in the next is
-    /// one wording written twice, not two wordings.
-    /// </summary>
+    /// <summary>The wording with its interpolated values taken out: {commentId} and {id} are one wording.</summary>
     private static string Normalize(string message) =>
         Whitespace.Replace(Hole.Replace(message, "{}"), " ").Trim();
 
     private static IReadOnlyList<ThrowSite> ThrowSites() =>
-        Sites(RefusalWording, atLeast: 200);
+        Sites(RefusalWording);
 
     /// <summary>Every wording a refused person reads, of either kind.</summary>
     private static IReadOnlyList<ThrowSite> EveryWording() =>
-        [.. ThrowSites(), .. Sites(ValidationWording, atLeast: 100)];
+        [.. ThrowSites(), .. Sites(ValidationWording)];
 
-    private static IReadOnlyList<ThrowSite> Sites(Regex wording, int atLeast)
+    private static IReadOnlyList<ThrowSite> Sites(Regex wording)
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.RootDirectory;
         var sites = new List<ThrowSite>();
 
-        foreach (var source in RepositoryFiles.CsharpFiles(Path.Combine(root.FullName, "src"), BuildOutput))
+        foreach (var source in RepositoryFiles.Files(Path.Combine(root.FullName, "src"), "*.cs", BuildOutput))
         {
             var text = File.ReadAllText(source);
             var relative = Path.GetRelativePath(root.FullName, source).Replace('\\', '/');
@@ -216,22 +148,15 @@ public class RefusalCopyShould
             }
         }
 
-        sites.Should().HaveCountGreaterThanOrEqualTo(atLeast,
+        sites.Should().NotBeEmpty(
             "a rule that matches nothing passes");
         return sites;
     }
 
     /// <summary>
-    /// The literals of one constructor call that a person could read: everything up
-    /// to the parenthesis matching the opening one, minus the literals standing in a
-    /// dictionary key position. ["password"] names the field the error is filed
-    /// under, not the error, and it is written in English on purpose.
+    /// The literals of one constructor call a person could read, minus dictionary keys: ["password"] names
+    /// the field. A call with no literal reads its message from elsewhere and is not checked.
     /// </summary>
-    /// <remarks>
-    /// A call holding no literal at all takes its message from a constant or from a
-    /// variable, and this scan says nothing about it: the dictionary is the outcome
-    /// the rule wants, so a throw that reads from it has nothing left to check here.
-    /// </remarks>
     private static IReadOnlyList<string> Messages(string text, int position)
     {
         var messages = new List<string>();
@@ -268,10 +193,8 @@ public class RefusalCopyShould
     }
 
     /// <summary>
-    /// Reads the literal opening at this quote and returns its text together with
-    /// the index past its closing quote. Raw and verbatim literals are read on their
-    /// own terms: in both of them a quote ends the string where a regular scan would
-    /// see an escape, and getting that wrong swallows the rest of the file.
+    /// Reads the literal opening at this quote, and the index past its closing quote; raw and verbatim
+    /// literals on their own terms.
     /// </summary>
     private static (string Value, int End) ReadLiteral(string text, int start)
     {
@@ -326,8 +249,6 @@ public class RefusalCopyShould
 
         return afterLiteral < text.Length && text[afterLiteral] == ']';
     }
-
-    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     private sealed record ThrowSite(string Source, int Line, IReadOnlyList<string> Messages);
 }

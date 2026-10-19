@@ -7,12 +7,10 @@ namespace DM.Infrastructure.Core.Correlation;
 /// <summary>
 /// Correlation token storage
 /// </summary>
-internal class CorrelationTokenProvider : ICorrelationTokenProvider, DM.Domain.Core.Abstractions.ICorrelationTokenSetter
+internal class CorrelationTokenProvider : ICorrelationTokenProvider, ICorrelationTokenSetter
 {
     private Lazy<Guid> _token;
 
-    /// <param name="guidFactory"></param>
-    /// <inheritdoc />
     public CorrelationTokenProvider(IGuidFactory guidFactory)
     {
         _token = new Lazy<Guid>(guidFactory.Create);

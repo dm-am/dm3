@@ -1,14 +1,9 @@
 /**
- * Repeated code across the repository, counted the way the clean-up programme's
- * baseline counted it, so that the ceilings of duplicationRatchet.spec.ts are
- * numbers of the same kind as the ones they were taken from.
- *
- * A line is its code with the comments and every whitespace character taken out,
- * blank lines and import or using lines dropped. A repeat is a run of at least
- * eight such lines met in two places, where the eight carry at least 60
- * characters and four of them more than three. Overlapping repeats merge into
- * one piece, and the piece's redundant lines are all its places but the longest:
- * what deleting the copies would save.
+ * Repeated code across the repository, counted as the clean-up baseline counted
+ * it, for the ceilings of duplicationRatchet.spec.ts: a line is its code without
+ * comments, whitespace, imports and usings; a repeat is a run of eight such
+ * lines (60 characters, four lines over three) in two places, overlaps merged,
+ * every place but the longest redundant.
  */
 import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
@@ -34,7 +29,7 @@ const CLIENT = "src/DM.Web.Client/";
 const WINDOW = 8;
 
 /** Which group a repository path counts in, if any. */
-export function groupOf(path: string): Group | null {
+function groupOf(path: string): Group | null {
   const ext = extname(path);
   if (path.startsWith(`${CLIENT}src/`)) {
     if (path.endsWith(".spec.ts")) return "spec";
@@ -373,7 +368,7 @@ const TS_IMPORT_CLOSE =
   /\bfrom\s*['"][^'"]+['"]\s*;?$|^import\s*['"][^'"]+['"]\s*;?$|;$/;
 
 /** The lines a repeat is looked for in: code only, no whitespace, no imports. */
-export function normalLines(text: string, ext: string): Normal[] {
+function normalLines(text: string, ext: string): Normal[] {
   const script = [".ts", ".js", ".mjs", ".cjs"].includes(ext);
   const out: Normal[] = [];
   let inImport = false;
@@ -490,7 +485,7 @@ function merged(spans: [number, number][]): [number, number][] {
  * Redundant lines of one group: fragments whose places overlap in a file are
  * one piece, and a piece costs every place but its longest.
  */
-export function redundantLines(files: Normal[][]): number {
+function redundantLines(files: Normal[][]): number {
   const frags = fragments(files);
   const parent = frags.map((_, i) => i);
   const find = (x: number): number => {

@@ -7,7 +7,6 @@ namespace DM.Domain.Blog.Features.Blogs;
 /// <inheritdoc />
 internal class CreateBlogValidator : AbstractValidator<CreateBlog>
 {
-    /// <inheritdoc />
     public CreateBlogValidator()
     {
         RuleFor(x => x.Title)

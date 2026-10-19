@@ -46,6 +46,11 @@ async function mountAt(dirty: boolean) {
   return { router, wrapper };
 }
 
+/** Presses a button of the question, which stands in <body>. */
+function press(selector: string) {
+  document.body.querySelector<HTMLButtonElement>(selector)!.click();
+}
+
 describe("UnsavedChangesGuard", () => {
   beforeEach(() => vi.clearAllMocks());
 
@@ -58,13 +63,13 @@ describe("UnsavedChangesGuard", () => {
   });
 
   it("holds the navigation and stays when the answer is no", async () => {
-    const { router, wrapper } = await mountAt(true);
+    const { router } = await mountAt(true);
 
     const leaving = router.push("/elsewhere");
     await flushPromises();
     expect(router.currentRoute.value.path).toBe("/form");
 
-    wrapper.findComponent(UnsavedChangesGuard).vm.answer(false);
+    press(".dialog-btn-cancel");
     await leaving;
     await flushPromises();
 
@@ -72,12 +77,12 @@ describe("UnsavedChangesGuard", () => {
   });
 
   it("lets the navigation through when the answer is yes", async () => {
-    const { router, wrapper } = await mountAt(true);
+    const { router } = await mountAt(true);
 
     const leaving = router.push("/elsewhere");
     await flushPromises();
 
-    wrapper.findComponent(UnsavedChangesGuard).vm.answer(true);
+    press(".dialog-btn-submit");
     await leaving;
     await flushPromises();
 

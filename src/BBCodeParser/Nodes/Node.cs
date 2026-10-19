@@ -14,40 +14,17 @@ namespace BBCodeParser.Nodes
         protected List<Node> ChildNodes { get; set; }
         internal Node ParentNode { get; set; }
 
-        // DM3 addition against the original: the children of the node, in
-        // document order, for a reader of the tree that is not its renderer.
+        // DM3 addition against the original: the children in document order, for
+        // a reader of the tree that is not its renderer.
         public IReadOnlyList<Node> Children => (IReadOnlyList<Node>)ChildNodes ?? Array.Empty<Node>();
 
-        // DM3 addition against the original: the node this one stands in, null
-        // for the root, for a tag whose markup depends on where it stands.
+        // DM3 addition against the original: the node this one stands in, null for
+        // the root, for a tag whose markup depends on where it stands.
         public Node Parent => ParentNode;
 
-        // DM3 change against the original: the three internal abstract
-        // renderers - ToHtml, ToText and ToBb, each overridden once per node
-        // type and each calling itself on every child - are replaced by one
-        // abstract Emit plus the iterative walk in Render below.
-        //
-        // Why: the recursion was one stack frame per level of nesting, and a
-        // StackOverflowException is not catchable in .NET - the process is
-        // killed on the spot. Twenty kilobytes of text ([b] repeated six
-        // thousand times, no closing tags needed) reached the limit of the
-        // default 1 MB stack and took the whole API process down, and took it
-        // down again on every later attempt to render the page that post was
-        // on. The parser's own depth guard stood at 6000 and so never fired
-        // before the crash. Depth now costs heap, which is bounded by the
-        // guard in BbParser and by the length of the input, and no input
-        // reaches the runtime's stack limit any more.
-        //
-        // The same rewrite removes the quadratic string building the original
-        // had: every level used to allocate its own StringBuilder and hand its
-        // ToString() to the parent, which copied it into its own buffer, so
-        // text near the leaves was copied once per level above it. One shared
-        // buffer for the whole walk copies it once.
-        //
-        // And it closes a third defect for free: TagNode.ToHtml passed only
-        // filter down to its children and dropped filterAttributeValue, so the
-        // attribute transform ran on the children of the root and on nobody
-        // deeper. One walk carries both to every node.
+        // DM3 change against the original: the recursive renderers are replaced by
+        // Emit and the iterative walk in Render, because a StackOverflowException
+        // on deep nesting cannot be caught and kills the process.
 
         /// <summary>
         /// Write this node's own output and queue whatever has to follow it:
@@ -115,10 +92,8 @@ namespace BBCodeParser.Nodes
         /// Queue this node's children so that the first child is emitted first.
         /// </summary>
         /// <remarks>
-        /// Pushed back to front, because a stack hands them back in reverse.
-        /// Anything the caller has already pushed - a closing tag - therefore
-        /// comes off after all of them, which is what the recursive version got
-        /// from returning to its caller.
+        /// Pushed back to front, so a closing tag the caller pushed first comes off
+        /// after all of them.
         /// </remarks>
         internal void PushChildren(
             Stack<EmitStep> pending,
@@ -126,10 +101,8 @@ namespace BBCodeParser.Nodes
             Dictionary<string, string> childAliasSubstitutions,
             Func<Node, bool> filter)
         {
-            // DM3 addition against the original: a line left with nothing but
-            // what the filter erases goes with one of its line breaks (see
-            // ErasedLines). The filter is asked once per child, and the answer
-            // serves both the lines and the walk.
+            // DM3 addition against the original: a line left with nothing but what
+            // the filter erases goes with one of its line breaks (see ErasedLines).
             bool[] shown = null;
             Dictionary<int, TextNode> trimmed = null;
             if (filter != null)
@@ -170,14 +143,9 @@ namespace BBCodeParser.Nodes
             ChildNodes.Add(node);
         }
 
-        // DM3 addition against the original: whether what this node holds runs
-        // to the very end of the text - the root does, and so does a tag nobody
-        // closed that stands last in a node that does. Read by ErasedLines, for
-        // which the end of the text ends a line.
-        //
-        // Remembered per node, and asked without recursion: a tag soup nests
-        // thousands of levels deep, and a walk to the root from every level of
-        // it would cost the square of the depth.
+        // DM3 addition against the original: whether what this node holds runs to
+        // the end of the text, for ErasedLines. Remembered per node, so a deep tag
+        // soup does not cost the square of its depth.
         internal bool ReachesTextEnd()
         {
             var path = new List<Node>();
@@ -199,8 +167,7 @@ namespace BBCodeParser.Nodes
                 }
 
                 var siblings = node.ParentNode.ChildNodes;
-                if ((node is TagNode tag && tag.IsClosed) ||
-                    siblings.Count == 0 || !ReferenceEquals(siblings[siblings.Count - 1], node))
+                if ((node is TagNode tag && tag.IsClosed) || !ReferenceEquals(siblings[siblings.Count - 1], node))
                 {
                     reaches = false;
                     node.reachesTextEnd = false;
@@ -211,8 +178,7 @@ namespace BBCodeParser.Nodes
                 node = node.ParentNode;
             }
 
-            // Every node on the way up stood last and open, so each reaches the
-            // end exactly when the one it stands in does.
+            // Every node on the way up stood last and open, so each answers as its parent.
             foreach (var step in path)
             {
                 step.reachesTextEnd = reaches;

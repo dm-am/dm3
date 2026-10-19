@@ -3,22 +3,20 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.Entities.Account;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Game;
 
 /// <summary>
-/// The shared half of the three game invitations. Each answers its own event
-/// about its own kind of token and tells the invited person; the token is read
-/// the same way for all three, and the notification each hands back is written
-/// where the notification rules can read it — in the generator's own file.
+/// The shared half of the three game invitations.
 /// </summary>
+/// <remarks>
+/// Each generator writes its notification in its own file, where the notification rules read it.
+/// </remarks>
 internal abstract class GameInvitationNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     protected GameInvitationNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -30,16 +28,14 @@ internal abstract class GameInvitationNotificationGenerator : BaseNotificationGe
     protected abstract TokenType TokenType { get; }
 
     /// <summary>
-    /// The invitation the event is about, or null when there is nothing to tell
-    /// anybody about: the events carry no idempotency key and are redelivered
-    /// after the token or the game has gone.
+    /// The invitation the event is about, or null once the token or the game has gone.
     /// </summary>
     /// <param name="tokenId">Token identifier the event carries</param>
     /// <returns>The invitation, or null</returns>
     protected async Task<Invitation?> Subject(Guid tokenId)
     {
         var tokenType = TokenType;
-        var data = await _dbContext.Tokens
+        var tokenData = await _dbContext.Tokens
             .Where(t => t.TokenId == tokenId && t.Type == tokenType)
             .Select(t => new
             {
@@ -47,19 +43,19 @@ internal abstract class GameInvitationNotificationGenerator : BaseNotificationGe
                 t.EntityId,
                 t.CreatorId,
                 GameTitle = t.Game!.Title,
-                MasterId = t.Game.MasterId,
+                t.Game.MasterId,
                 InviterUsername = t.Game.Master!.Username
             })
             .FirstOrDefaultAsync();
 
-        return data is { EntityId: not null }
+        return tokenData is { EntityId: not null }
             ? new Invitation(
-                data.UserId,
-                data.EntityId.Value,
-                data.CreatorId,
-                data.GameTitle,
-                data.MasterId,
-                data.InviterUsername)
+                tokenData.UserId,
+                tokenData.EntityId.Value,
+                tokenData.CreatorId,
+                tokenData.GameTitle,
+                tokenData.MasterId,
+                tokenData.InviterUsername)
             : null;
     }
 
@@ -67,10 +63,7 @@ internal abstract class GameInvitationNotificationGenerator : BaseNotificationGe
     /// One invitation: who was invited, to which game, and by whom.
     /// </summary>
     /// <remarks>
-    /// The inviter is the token's creator, master or assistant. Falling back to
-    /// the master keeps the filter on the person InviterUsername names when a
-    /// token carries no creator, the way BlogInvitationRepository resolves its
-    /// inviter.
+    /// Falls back to the master for a token without a creator, as BlogInvitationRepository does.
     /// </remarks>
     protected sealed record Invitation(
         Guid UserId,

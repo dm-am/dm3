@@ -10,17 +10,8 @@ namespace DM.Architecture.Tests;
 /// A page that says there is more says what to ask for it with.
 /// </summary>
 /// <remarks>
-/// The two halves of a cursor envelope are a flag and a cursor, and nothing ties
-/// them together. Message search reported HasPrev from the second page on while
-/// its PrevCursor stayed null — because it walks forward only and has no reverse
-/// cursor to give — so any client reading the contract as written was told there
-/// was a page back and handed nothing to ask for it with. Nothing failed: the
-/// endpoint answered, the page was correct, and the flag was a lie only a client
-/// that tried to act on it would find.
-///
-/// Asserted on the initializers rather than on a running endpoint, because the
-/// endpoint needs a database and the defect is entirely visible in the four lines
-/// that build the result.
+/// The flag and the cursor are not tied together by anything. Asserted on the initializers: the
+/// endpoint needs a database and the defect is visible where the result is built.
 /// </remarks>
 public class CursorEnvelopeShould
 {
@@ -42,7 +33,7 @@ public class CursorEnvelopeShould
         var constructions = RepositoryFiles.ProductionSources()
             .SelectMany(path => Construction
                 .Matches(File.ReadAllText(path))
-                .Select(match => (Path: Relative(path), Body: match.Groups["body"].Value)))
+                .Select(match => (Path: RepositoryFiles.Relative(path), Body: match.Groups["body"].Value)))
             .ToList();
 
         constructions.Should().NotBeEmpty(
@@ -50,9 +41,7 @@ public class CursorEnvelopeShould
             "passes whatever they say");
 
         constructions
-            // A flag that is a constant false claims nothing, and the cursor beside
-            // it is allowed to be null. Anything else - a variable, a condition - is
-            // a claim, and a claim needs something to act on.
+            // A constant false claims nothing; anything else is a claim that needs a cursor.
             .Where(built => Assigned(built.Body, flag) is not (null or "false"))
             .Where(built => Assigned(built.Body, cursor) is null or "null")
             .Select(built => built.Path)
@@ -61,8 +50,4 @@ public class CursorEnvelopeShould
                 "ask for that page with, so one without the other is an invitation to a " +
                 "request that cannot be made");
     }
-
-    private static string Relative(string path) => Path.GetRelativePath(RepositoryRoot, path);
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

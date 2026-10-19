@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Net;
 using DM.Domain.Core.Exceptions;
@@ -14,9 +15,23 @@ namespace DM.Web.API.Shared.Authentication;
 /// </summary>
 internal class AuthenticationRequiredAttribute : TypeFilterAttribute
 {
-    /// <inheritdoc />
     public AuthenticationRequiredAttribute() : base(typeof(AuthenticationRequiredFilter))
     {
+    }
+
+    /// <summary>
+    /// Refuses a caller who is not signed in.
+    /// </summary>
+    /// <remarks>
+    /// Thrown rather than answered: the body of a refusal has one author,
+    /// ErrorHandlingMiddleware.
+    /// </remarks>
+    internal static void EnsureAuthenticated([NotNull] IIdentity? identity)
+    {
+        if (identity?.User == null || !identity.User.IsAuthenticated)
+        {
+            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
+        }
     }
 
     /// <summary>
@@ -27,28 +42,14 @@ internal class AuthenticationRequiredAttribute : TypeFilterAttribute
     {
         public void OnAuthorization(AuthorizationFilterContext context)
         {
-            // [AllowAnonymous] is metadata, and this filter is not the framework's
-            // authorization middleware, so nothing reads it on our behalf. The
-            // attribute sits on the class here and is lifted off single actions —
-            // confirming an email change, finishing a username change — which are
-            // the actions a person reaches by following a link from their mailbox,
-            // often in a browser where they are not signed in. Those answered 401
-            // and the link looked broken.
+            // Nothing reads [AllowAnonymous] for this filter, and the actions a
+            // link from a letter opens lift the class-level requirement with it.
             if (context.ActionDescriptor.EndpointMetadata.OfType<IAllowAnonymous>().Any())
             {
                 return;
             }
 
-            // Thrown rather than answered with a result of this filter's own.
-            // The body of a refusal has one author, ErrorHandlingMiddleware, and
-            // the hand-built one here carried neither the correlation token every
-            // other refusal carries nor a sentence in the language of the screen
-            // it is shown on.
-            var identity = identityProvider.Current;
-            if (identity?.User == null || !identity.User.IsAuthenticated)
-            {
-                throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
-            }
+            EnsureAuthenticated(identityProvider.Current);
         }
     }
 }

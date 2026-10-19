@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Blog.Features.Invitations;
+using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Invitations;
 
 namespace DM.Web.API.Features.Personal.Invitations;
 
-/// <inheritdoc />
-internal class PersonalInvitationApiService : IPersonalInvitationApiService
+public class PersonalInvitationApiService
 {
     private readonly IGameInvitationService _gameMemberService;
     private readonly IBlogInvitationService _blogInvitationService;
@@ -23,90 +24,53 @@ internal class PersonalInvitationApiService : IPersonalInvitationApiService
         _blogInvitationService = blogInvitationService;
     }
 
-    /// <inheritdoc />
     public async Task<IEnumerable<ReceivedInvitation>> GetMyInvitations()
     {
-        var gameInvitations = await _gameMemberService.GetUserInvitations();
-        var blogInvitations = await _blogInvitationService.GetUserPendingInvitations();
-
-        var result = new List<ReceivedInvitation>();
-
-        foreach (var inv in gameInvitations)
+        var games = (await _gameMemberService.GetUserInvitations()).Select(inv => new ReceivedInvitation
         {
-            result.Add(new ReceivedInvitation
-            {
-                Id = inv.TokenId,
-                EntityId = inv.GameId,
-                EntityType = "game",
-                EntityTitle = inv.GameTitle,
-                InviterUsername = inv.InvitedBy.Username,
-                Type = inv.TargetRole.ToApiString(),
-                CreatedUtc = inv.CreatedUtc
-            });
-        }
-
-        foreach (var inv in blogInvitations)
+            Id = inv.TokenId,
+            EntityId = inv.GameId,
+            EntityType = "game",
+            EntityTitle = inv.GameTitle,
+            InviterUsername = inv.InvitedBy.Username,
+            Type = inv.TargetRole.ToApiString(),
+            CreatedUtc = inv.CreatedUtc
+        });
+        var blogs = (await _blogInvitationService.GetUserPendingInvitations()).Select(inv => new ReceivedInvitation
         {
-            result.Add(new ReceivedInvitation
-            {
-                Id = inv.TokenId,
-                EntityId = inv.BlogId,
-                EntityType = "blog",
-                EntityTitle = inv.BlogTitle,
-                InviterUsername = inv.InvitedBy.Username,
-                Type = inv.TargetRole.ToApiString(),
-                CreatedUtc = inv.CreatedUtc
-            });
-        }
+            Id = inv.TokenId,
+            EntityId = inv.BlogId,
+            EntityType = "blog",
+            EntityTitle = inv.BlogTitle,
+            InviterUsername = inv.InvitedBy.Username,
+            Type = inv.TargetRole.ToApiString(),
+            CreatedUtc = inv.CreatedUtc
+        });
 
-        return result.OrderByDescending(i => i.CreatedUtc);
+        return games.Concat(blogs).OrderByDescending(i => i.CreatedUtc).ToList();
     }
 
-    /// <inheritdoc />
-    public async Task AcceptInvitation(Guid tokenId)
+    public Task AcceptInvitation(Guid tokenId) =>
+        Settle(tokenId, id => _gameMemberService.AcceptInvitation(id), _blogInvitationService.AcceptInvitation);
+
+    public Task RejectInvitation(Guid tokenId) =>
+        Settle(tokenId, id => _gameMemberService.RejectInvitation(id), _blogInvitationService.RejectInvitation);
+
+    // The token does not say whose it is: the game invitations are asked first.
+    private async Task Settle(Guid tokenId, Func<Guid, Task> inGame, Func<Guid, Task> inBlog)
     {
-        // Try game invitations first (unified service handles all game invitation types)
-        var gameInvitations = await _gameMemberService.GetUserInvitations();
-        if (gameInvitations.Any(i => i.TokenId == tokenId))
+        if ((await _gameMemberService.GetUserInvitations()).Any(i => i.TokenId == tokenId))
         {
-            await _gameMemberService.AcceptInvitation(tokenId);
+            await inGame(tokenId);
             return;
         }
 
-        // Try blog invitations (unified service handles all blog invitation types)
-        var blogInvitations = await _blogInvitationService.GetUserPendingInvitations();
-        if (blogInvitations.Any(i => i.TokenId == tokenId))
+        if ((await _blogInvitationService.GetUserPendingInvitations()).Any(i => i.TokenId == tokenId))
         {
-            await _blogInvitationService.AcceptInvitation(tokenId);
+            await inBlog(tokenId);
             return;
         }
 
-        throw new DM.Domain.Core.Exceptions.HttpException(
-            System.Net.HttpStatusCode.NotFound,
-            "Invitation not found or already processed");
-    }
-
-    /// <inheritdoc />
-    public async Task RejectInvitation(Guid tokenId)
-    {
-        // Try game invitations first (unified service handles all game invitation types)
-        var gameInvitations = await _gameMemberService.GetUserInvitations();
-        if (gameInvitations.Any(i => i.TokenId == tokenId))
-        {
-            await _gameMemberService.RejectInvitation(tokenId);
-            return;
-        }
-
-        // Try blog invitations (unified service handles all blog invitation types)
-        var blogInvitations = await _blogInvitationService.GetUserPendingInvitations();
-        if (blogInvitations.Any(i => i.TokenId == tokenId))
-        {
-            await _blogInvitationService.RejectInvitation(tokenId);
-            return;
-        }
-
-        throw new DM.Domain.Core.Exceptions.HttpException(
-            System.Net.HttpStatusCode.NotFound,
-            "Invitation not found or already processed");
+        throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFoundOrSettled);
     }
 }

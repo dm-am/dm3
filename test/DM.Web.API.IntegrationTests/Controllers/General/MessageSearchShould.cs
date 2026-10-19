@@ -1,11 +1,7 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Threading.Tasks;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Web.API.IntegrationTests.Helpers;
@@ -17,9 +13,8 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
 /// <summary>
-/// What a search preview may show is decided by the same rules as what the page
-/// shows, and the preview is the harder half: it is built in the database, out of
-/// a stored projection, for a reader the projection knows nothing about.
+/// A search preview follows the rules of the page, though it is built in the database for a reader the
+/// projection knows nothing about.
 /// </summary>
 public class MessageSearchShould : IntegrationTestBase
 {
@@ -44,20 +39,8 @@ public class MessageSearchShould : IntegrationTestBase
     /// the results of a stranger's search.
     /// </summary>
     /// <remarks>
-    /// The leak this pins had three links and every one of them was invisible.
-    /// The [img] content pattern ran to the next [/img] anywhere in the post, so
-    /// the unclosed tag joined up with the closing tag of the following image and
-    /// swallowed the private block whole; what is swallowed is filed as a URL
-    /// before the parse, so it never becomes a node and the visibility filter is
-    /// never asked about it; and the plain-text walk that the stored search text
-    /// is projected with handed it back word for word. ts_headline then opened a
-    /// window around the PUBLIC word — the index had refused to tokenise the
-    /// private one, which is what made it look safe — and the window ran straight
-    /// through the block into the reply of every reader of the room.
-    ///
-    /// The reader here is neither the author, nor a game lead, nor an addressee,
-    /// and the room is open, which is the ordinary case rather than an unusual
-    /// one: the post is in TestGame, whose master is the test user.
+    /// ts_headline opens a window around a public word, so a block swallowed into an unclosed image would run
+    /// into the preview. The reader is a stranger in an open room of TestGame.
     /// </remarks>
     [Fact]
     public async Task ShowNoPrivateTextToAStrangerSearchingForAWordBesideIt()
@@ -91,9 +74,7 @@ public class MessageSearchShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// And the column itself holds none of it, which is the half that matters
-    /// after the fact: a preview is one reader of this string and the next one
-    /// written over it will be another.
+    /// The column itself holds none of it.
     /// </summary>
     [Fact]
     public async Task KeepPrivateTextOutOfTheStoredProjectionEntirely()
@@ -127,17 +108,8 @@ public class MessageSearchShould : IntegrationTestBase
     /// the block still previews without it.
     /// </summary>
     /// <remarks>
-    /// The two tests above pin the projection, and a projection is a process:
-    /// every row written before the fix landed still carries what it wrote, and
-    /// nothing rewrites them on read. So the preview has to cut the block out of
-    /// the document it is handed, the way the fallback beside it always has —
-    /// ts_headline reads that document rather than the vector, so the strip in
-    /// the generated column decides which rows match and says nothing at all
-    /// about what is shown.
-    ///
-    /// The column is poisoned here by hand, because that is the only way to hold
-    /// this layer down on its own: with the parse fixed, no body a test can write
-    /// produces such a row any more.
+    /// ts_headline reads the document, not the vector, so the preview cuts the block out itself. The column is
+    /// poisoned by hand: no body a test can write produces such a row.
     /// </remarks>
     [Fact]
     public async Task ShowNoPrivateTextFromAProjectionWrittenBeforeTheFix()
@@ -218,9 +190,7 @@ public class MessageSearchShould : IntegrationTestBase
         public Guid Id { get; set; }
 
         /// <summary>
-        /// Runs of the preview rather than a marked-up string, for the reason
-        /// SnippetSegment carries: the marks are the database's and nobody escapes
-        /// them.
+        /// Runs of the preview rather than a marked-up string, as SnippetSegment says.
         /// </summary>
         public IReadOnlyList<SnippetSegment> Snippet { get; set; } = [];
     }

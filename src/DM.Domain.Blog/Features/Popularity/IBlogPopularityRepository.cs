@@ -22,24 +22,23 @@ public interface IBlogPopularityRepository
     /// and dropping it out of the count would empty its place in the listing the
     /// moment its author stopped writing.
     /// </remarks>
-    Task<IReadOnlyCollection<Guid>> GetScorableBlogIds(CancellationToken cancellationToken = default);
+    Task<IReadOnlyCollection<Guid>> GetScorableBlogIds(CancellationToken ct = default);
 
     /// <summary>
     /// Per blog, how many subscribers have visited the site since
     /// <paramref name="activeSince" />.
     /// </summary>
     Task<IReadOnlyDictionary<Guid, int>> CountActiveReaders(
-        IReadOnlyCollection<Guid> blogIds, DateTimeOffset activeSince, CancellationToken cancellationToken = default);
+        IReadOnlyCollection<Guid> blogIds, DateTimeOffset activeSince, CancellationToken ct = default);
 
     /// <summary>
-    /// Writes the scores, touching only the blogs whose value actually moved.
+    /// Writes the scores, touching only the blogs whose value actually moved and
+    /// stamping them with <paramref name="calculatedUtc" />. A blog absent from
+    /// <paramref name="scores" /> scores zero.
     /// </summary>
-    /// <param name="scores">Score per blog; a blog absent from the map scores zero.</param>
-    /// <param name="calculatedUtc">Moment stamped on the blogs that changed.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Number of blogs whose score changed.</returns>
     Task<int> ApplyScores(
         IReadOnlyDictionary<Guid, int> scores,
         DateTimeOffset calculatedUtc,
-        CancellationToken cancellationToken = default);
+        CancellationToken ct = default);
 }

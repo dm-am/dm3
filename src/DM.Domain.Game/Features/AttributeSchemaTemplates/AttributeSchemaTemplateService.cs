@@ -36,8 +36,7 @@ internal class AttributeSchemaTemplateService : IAttributeSchemaTemplateService
 
     /// <inheritdoc />
     /// <remarks>
-    /// No gate: the catalogue is what the creation form offers, and the form is
-    /// open to anyone who can reach the page behind it.
+    /// No gate: the catalogue is what the open creation form offers.
     /// </remarks>
     public Task<IEnumerable<AttributeSchemaTemplate>> GetAllAsync(CancellationToken ct = default) =>
         _repository.GetTemplates(ct);
@@ -50,10 +49,7 @@ internal class AttributeSchemaTemplateService : IAttributeSchemaTemplateService
 
     /// <inheritdoc />
     /// <remarks>
-    /// The rank is asked before the body is read. The attribute on the action
-    /// answers the same question at the edge; this one answers it for every
-    /// caller of the service, so a second door to the catalogue cannot be opened
-    /// by forgetting an attribute.
+    /// The rank is asked here as well as at the edge, so a second caller cannot forget it.
     /// </remarks>
     public async Task<AttributeSchemaTemplate> CreateAsync(
         CreateAttributeSchemaTemplate create, CancellationToken ct = default)
@@ -138,8 +134,7 @@ internal class AttributeSchemaTemplateService : IAttributeSchemaTemplateService
     }
 
     /// <summary>
-    /// One title, one template: a second one under the same name is
-    /// indistinguishable in the list the creation form offers.
+    /// Two templates under one title are indistinguishable in the creation form.
     /// </summary>
     private static HttpException TitleTaken(string title) =>
         new HttpException(HttpStatusCode.Conflict, $"Шаблон схемы \"{title}\" уже есть");

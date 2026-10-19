@@ -1,0 +1,66 @@
+// The notices of a guest card: the warning box and the statuses.
+@use "Themes" as *
+@use "Variables" as *
+
+/// A rule of the site, or a caution before a step that cannot be taken back.
+/// The neutral frame of the fields: neither is an error.
+.auth-surface .auth-warnbox
+  margin: 0 0 1rem
+  padding: .8rem 1rem
+  font-size: $secondary-font-size
+  line-height: 1.5
+  border: 1px solid $border
+  border-radius: $border-radius
+
+  b
+    display: block
+    margin-bottom: 4px
+
+/// The box that opens a screen with a prohibition, centred.
+.auth-surface .auth-warnbox--notice
+  text-align: center
+
+/// The verdict of a whole screen, arriving with the movement auth-status-in
+/// (AuthSurface.sass).
+.auth-surface .auth-status
+  position: relative
+  display: flex
+  align-items: center
+  justify-content: center
+  width: 48px
+  height: 48px
+  margin: 0 auto $medium
+  font-size: 2rem
+  line-height: 1
+  animation: auth-status-in $duration-slow ease-out
+
+.auth-surface .auth-status--ok
+  color: $accent-green
+
+/// The warning sign where the card offers a next step ("Ссылка устарела"), the
+/// cross where there is none ("Ссылка недействительна", "Почта занята").
+.auth-surface .auth-status--warn
+  color: $accent-yellow
+
+/// Drawn of two bars: a typed cross varies with the font that loaded.
+.auth-surface .auth-status--error
+  color: $accent-red
+  font-size: 0
+
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    left: 50%
+    top: 50%
+    width: 24px
+    height: 3px
+    margin: -1.5px 0 0 -12px
+    border-radius: 2px
+    background-color: currentColor
+
+  &::before
+    transform: rotate(45deg)
+
+  &::after
+    transform: rotate(-45deg)

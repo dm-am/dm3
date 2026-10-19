@@ -1,4 +1,6 @@
+using DM.Domain.Core.Authorization;
 using DM.Infrastructure.Core;
+using DM.Infrastructure.Core.Authorization;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Core.Logging;
@@ -19,25 +21,16 @@ public class Startup
     private readonly IConfiguration _configuration;
     private readonly IWebHostEnvironment _environment;
 
-    /// <summary>
-    ///
-    /// </summary>
-    /// <param name="configuration"></param>
-    /// <param name="environment">The host's answer about the environment, so logging cannot give a second one</param>
+    /// <summary>Takes the host's answer about the environment, so logging cannot give a second one.</summary>
     public Startup(IConfiguration configuration, IWebHostEnvironment environment)
     {
         _configuration = configuration;
         _environment = environment;
     }
 
-    /// <summary>
-    ///
-    /// </summary>
-    /// <param name="services"></param>
     public void ConfigureServices(IServiceCollection services)
     {
         services
-            .AddOptions()
             .AddDmCoreConfiguration(_configuration)
             .AddDmMessageQueuing(_configuration)
             .AddDmMailConfiguration(_configuration)
@@ -48,22 +41,11 @@ public class Startup
 
         services.AddHostedService<MailConsumer>();
 
-        // This worker exists to consume from the broker, so a broker it cannot
-        // reach is exactly the condition its health has to report. A bare
-        // AddHealthChecks() answered Healthy no matter what.
         services.AddDmBrokerHealthCheck(_configuration, ["messaging", "ready"]);
 
-        services.AddMvc();
+        services.AddScoped<IAuthorizationContextProvider, NoAuthorizationContextProvider>();
 
-        // The intention manager arrives with the core module and asks who the
-        // authorization is about; this host serves no request, so it refuses
-        // rather than answers: see NoAuthorizationContextProvider.
-        services.AddScoped<DM.Domain.Core.Authorization.IAuthorizationContextProvider,
-            Sending.NoAuthorizationContextProvider>();
-
-        // The DI modules and the host's own scan, after everything the host
-        // wires explicitly: the scans only fill gaps behind the registrations
-        // above.
+        // After the explicit registrations: the scans only fill gaps.
         services
             .AddDmMessaging()
             .AddDmCore()
@@ -73,9 +55,8 @@ public class Startup
     /// <summary>
     /// Ready to work
     /// </summary>
-    /// <param name="applicationBuilder"></param>
     public void Configure(IApplicationBuilder applicationBuilder)
     {
-        applicationBuilder.UseDmWorkerEndpoints(route => route.MapControllers());
+        applicationBuilder.UseDmWorkerEndpoints();
     }
 }

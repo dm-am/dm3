@@ -6,13 +6,11 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Comments;
 
-/// <inheritdoc />
-internal class GameCommentLikeApiService : IGameCommentLikeApiService
+public class GameCommentLikeApiService
 {
     private readonly IGameCommentLikeService _likeService;
     private readonly UserMapper _mapper;
 
-    /// <inheritdoc />
     public GameCommentLikeApiService(
         IGameCommentLikeService likeService,
         UserMapper mapper)
@@ -21,13 +19,11 @@ internal class GameCommentLikeApiService : IGameCommentLikeApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<User>> LikeComment(Guid commentId)
     {
         var user = await _likeService.LikeCommentAsync(commentId);
         return new Envelope<User>(_mapper.ToUser(user));
     }
 
-    /// <inheritdoc />
     public Task UnlikeComment(Guid commentId) => _likeService.UnlikeCommentAsync(commentId);
 }

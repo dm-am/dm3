@@ -1,18 +1,7 @@
 import { nextTick, onBeforeUnmount, onMounted, ref, type Ref } from "vue";
 import { POPOVER_GAP, VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
 
-/**
- * Where a panel that drops from an anchor stands, as fixed coordinates.
- *
- * Fixed and not absolute, because the anchors this serves stand in boxes that
- * cut what sticks out of them: the row of actions of a profile scrolls sideways
- * on a phone, and a panel positioned inside it was clipped to the row's height.
- * The arithmetic is the date field's (DateInput): under the anchor with the gap
- * every dropdown keeps, above it when there is no room below, and pushed back
- * inside the window at either side, so on a phone the panel stands against
- * the right edge instead of running off it. Re-read on every scroll and resize
- * while the panel is up, and whenever the panel changes its size.
- */
+// Fixed, not absolute: the anchors stand in boxes that clip, like a profile's sideways-scrolling row.
 export function useAnchoredPosition(
   anchor: () => HTMLElement | null,
   panel: Ref<HTMLElement | null>,
@@ -50,8 +39,7 @@ export function useAnchoredPosition(
   onMounted(() => {
     update();
     nextTick(update);
-    // Passive: the listener only reads geometry, and a blocking one on the
-    // scroll path makes the browser wait for it before every frame.
+    // Passive: a blocking listener on the scroll path delays every frame.
     document.addEventListener("scroll", update, {
       passive: true,
       capture: true,

@@ -1,29 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * The correction form, which is what replaced the delete control.
- *
- * A warning cannot be withdrawn, so this dialog is the only thing that still
- * changes one, and everything it sends is read by strangers afterwards: the
- * points decide what the user's total counts, and the explanation is drawn
- * under the warning in the open log. That is why an empty explanation must not
- * reach the wire at all rather than merely grey out a button — the server
- * refuses it, and a form that asks anyway teaches the moderator that the field
- * is optional.
- *
- * The field starts on the points the warning carries now: a form that opened on
- * zero would turn every correction of the wording into a correction of the
- * points as well, silently.
- *
- * The window is the site's own (Dialog, Form, FormField), because the request
- * is the window's now: it waits for the answer, says a refusal in itself and
- * closes on success alone. Only the library tier underneath and the list
- * control are reduced to what this dialog decides.
- */
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { defineComponent, h } from "vue";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -33,28 +11,19 @@ import ChangeWarningPointsDialog from "./ChangeWarningPointsDialog.vue";
 const changeWarningPoints = vi.hoisted(() => vi.fn());
 
 vi.mock("@/entities/moderation", () => ({
-  moderationApi: { changeWarningPoints },
+  warningApi: { changeWarningPoints },
 }));
 
-// The library tier is a box that holds the card: every closing the window
-// makes is its own decision, and that decision is what is read below.
-vi.mock("vue-final-modal", () => ({
-  VueFinalModal: defineComponent({
-    name: "VueFinalModal",
-    setup:
-      (_props, { slots }) =>
-      () =>
-        h("div", { class: "vfm-content" }, slots.default?.()),
-  }),
-}));
+vi.mock("vue-final-modal", async () =>
+  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+);
 
 const OWNED = { ownsRefusal: true, ownsRateLimit: true };
 
 const SelectStub = {
   props: ["modelValue", "options", "id"],
   emits: ["update:modelValue"],
-  // Compiled at runtime, so the template is plain JS: a TypeScript cast on
-  // the event target is a syntax error here.
+  // Compiled at runtime: a TypeScript cast here is a syntax error.
   template: `<select :id="id" class='select-stub' :value="modelValue"
     @change="$emit('update:modelValue', $event.target.value)">
     <option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option>
@@ -137,7 +106,7 @@ describe("the warning points dialog", () => {
     ]);
   });
 
-  it("sends the new points and the explanation, padding gone", async () => {
+  it("sends the new points and the explanation as typed", async () => {
     changeWarningPoints.mockResolvedValue(accepted(0));
 
     const w = render();
@@ -146,16 +115,11 @@ describe("the warning points dialog", () => {
 
     expect(changeWarningPoints).toHaveBeenCalledWith(
       "w-1",
-      { points: 0, reason: "Нарушения не было, модератор ошибся" },
+      { points: 0, reason: "  Нарушения не было, модератор ошибся  " },
       OWNED,
     );
   });
 
-  /**
-   * The explanation is what the reader of the log is left with, so a form with
-   * an empty one asks for nothing at all: the control that would make the
-   * request is shut before it is pressed.
-   */
   it("does not send a correction with no explanation behind it", async () => {
     const w = render();
     await w.find(".select-stub").setValue("0");
@@ -166,7 +130,6 @@ describe("the warning points dialog", () => {
     expect(shut(w)).toEqual([]);
   });
 
-  /** The server refuses over 2000, and the form says so instead of finding out. */
   it("does not send an explanation longer than the server takes", async () => {
     const w = render();
     await send(w, "я".repeat(2001));
@@ -185,13 +148,6 @@ describe("the warning points dialog", () => {
     expect(shut(w)).toEqual([[false]]);
   });
 
-  /**
-   * A refusal leaves the dialog open with what the moderator typed still in it,
-   * and says why in the window, over the buttons: reporting success on a
-   * request the server threw away is how a correction that never happened gets
-   * believed, and a plate in the corner beside a window is the same refusal
-   * said somewhere the moderator is not looking.
-   */
   it("keeps the form open and says the refusal in itself", async () => {
     changeWarningPoints.mockResolvedValue(refused(404));
 

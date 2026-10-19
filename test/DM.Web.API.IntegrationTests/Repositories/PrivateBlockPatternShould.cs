@@ -1,7 +1,4 @@
-using System;
-using System.Linq;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using DM.Domain.Core.Content;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -16,19 +13,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// PostgreSQL and in .NET.
 /// </summary>
 /// <remarks>
-/// Three paths share it: the stored tsvector a post is indexed by, the ILike
-/// filter of the room search, and the snippet the search results show. Two of
-/// them run in Postgres and one in .NET, and the two engines read the same string
-/// differently — Postgres takes the greediness of a whole expression from its
-/// first quantifier, so a greedy optional attribute made the lazy body greedy
-/// too, and one substitution ate everything between the first opening tag and
-/// the last closing one. Public text standing between two private blocks was
-/// dropped from the index, from the filter and from the preview; the .NET copy of
-/// the same string kept it. Nobody saw an error either way — the text was simply
-/// unfindable.
-///
-/// Runs against the container Postgres, because the question is what that engine
-/// does with the string rather than what the string looks like.
+/// The stored tsvector, the room filter and the snippet share it, two in Postgres and one in .NET; Postgres takes a
+/// whole expression's greediness from its first quantifier. Against the container Postgres.
 /// </remarks>
 public class PrivateBlockPatternShould : IntegrationTestBase
 {

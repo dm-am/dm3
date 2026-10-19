@@ -2,44 +2,30 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Signing out is a statement about the server, not about this browser.
- *
- * All five operations used to read the answer as if it could only be a success.
- * The two sign-outs cleared the viewer whatever came back, so a refused or lost
- * request produced a guest interface over a session the cookie keeps alive for
- * a year; `register` and `signIn` returned null for any refusal that named no
- * field, which is the same value they return for a completed one; and
- * `fetchUser` wrote the empty answer through, signing people out of the
- * interface on a 500.
- */
+// Signing out is a statement about the server, not about this browser.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import type { GeneralError } from "@/shared/api/models/common";
-import type {
-  LoginCredentials,
-  RegisterCredentials,
-} from "@/shared/api/models/account";
+import type { LoginCredentials } from "@/shared/api/models/account";
 
 const {
-  mockRegister,
   mockSignIn,
   mockCompleteTwoFactorLogin,
   mockSignOut,
   mockLogoutAll,
   mockGetMyProfile,
+  mockGetMyPreferences,
 } = vi.hoisted(() => ({
-  mockRegister: vi.fn(),
   mockSignIn: vi.fn(),
   mockCompleteTwoFactorLogin: vi.fn(),
   mockSignOut: vi.fn(),
   mockLogoutAll: vi.fn(),
   mockGetMyProfile: vi.fn(),
+  mockGetMyPreferences: vi.fn(),
 }));
 
 vi.mock("../api/accountApi", () => ({
   default: {
-    register: mockRegister,
     signIn: mockSignIn,
     completeTwoFactorLogin: mockCompleteTwoFactorLogin,
     signOut: mockSignOut,
@@ -48,14 +34,17 @@ vi.mock("../api/accountApi", () => ({
 }));
 
 vi.mock("../api/personalApi", () => ({
-  default: { getMyProfile: mockGetMyProfile },
+  default: {
+    getMyProfile: mockGetMyProfile,
+    getMyPreferences: mockGetMyPreferences,
+  },
 }));
 
 import { Theme } from "@/shared/api/models/personal";
 import { useAuthStore } from "@/shared/stores";
+import { useUiStore } from "@/shared/stores/ui";
 import { useToast } from "@/shared/lib/composables/useToast";
 import {
-  register,
   signIn,
   completeSecondFactor,
   signOut,
@@ -66,15 +55,21 @@ import {
 
 const viewer = { id: "user-1", username: "SolohinLex" };
 
+/** The page size the account chose, not the default. */
+const chosen = 50;
+
+/** The preferences of that account, as GET /v1/users/me/preferences answers. */
+const preferences = {
+  theme: Theme.Dark,
+  pageSize: chosen,
+};
+
+/** What the viewer carries of them: the theme for a new device and the page size. */
+const carried = { theme: Theme.Dark, pageSize: chosen };
+
 const credentials: LoginCredentials = {
   email: "solohin@example.com",
   password: "correct-horse",
-};
-
-const signUp: RegisterCredentials = {
-  email: "solohin@example.com",
-  password: "correct-horse",
-  acceptedRules: true,
 };
 
 type Refusal = { data: null; error: GeneralError };
@@ -106,6 +101,7 @@ beforeEach(() => {
   localStorage.clear();
   setActivePinia(createPinia());
   vi.clearAllMocks();
+  mockGetMyPreferences.mockResolvedValue({ data: preferences, error: null });
   const { toasts, dismiss } = useToast();
   [...toasts.value].forEach((t) => dismiss(t.id));
 });
@@ -176,12 +172,10 @@ describe("signIn", () => {
     expect(useAuthStore().isAuthenticated).toBe(false);
   });
 
-  // The envelope, not a bare user: that is what POST /v1/account/login answers
-  // with. Mocked flat here, this test passed while the store was being handed
-  // the whole envelope in place of the viewer.
+  // POST /v1/account/login answers with an envelope, not a bare user.
   it("adopts the user the server returned", async () => {
     mockSignIn.mockResolvedValue({
-      data: { user: viewer, preferences: { theme: Theme.Light, paging: {} } },
+      data: { user: viewer, preferences },
       error: null,
     });
 
@@ -189,22 +183,47 @@ describe("signIn", () => {
 
     expect(outcome).toEqual({ stage: "signedIn" });
     expect(useAuthStore().user?.username).toBe("SolohinLex");
+    expect(useAuthStore().user).not.toHaveProperty("preferences");
   });
 
-  it("does not take the envelope for the viewer", async () => {
+  it("puts the theme and the page size of the account on the viewer", async () => {
     mockSignIn.mockResolvedValue({
-      data: { user: viewer, preferences: { theme: Theme.Light, paging: {} } },
+      data: { user: viewer, preferences },
       error: null,
     });
 
     await signIn(credentials);
 
-    expect(useAuthStore().user).not.toHaveProperty("preferences");
+    expect(useAuthStore().user?.settings).toEqual(carried);
   });
 
-  // A success with no viewer in it. Read as "no error, therefore a session",
-  // this closed the dialog, left the store empty and lost the half-finished
-  // login: the account with a factor on it could not sign in at all.
+  // The account theme is the starting one of a device that never chose: before
+  // the viewer carried it, the device was handed undefined and kept its own.
+  it("starts a device that never chose a theme on the theme of the account", async () => {
+    mockSignIn.mockResolvedValue({
+      data: { user: viewer, preferences },
+      error: null,
+    });
+
+    await signIn(credentials);
+
+    expect(useUiStore().theme).toBe(Theme.Dark);
+  });
+
+  it("leaves the theme a device chose as it is", async () => {
+    localStorage.setItem("dm_theme", Theme.Light);
+    setActivePinia(createPinia());
+    mockSignIn.mockResolvedValue({
+      data: { user: viewer, preferences },
+      error: null,
+    });
+
+    await signIn(credentials);
+
+    expect(useUiStore().theme).toBe(Theme.Light);
+  });
+
+  // A success with no viewer in it: the login is half-finished.
   it("reports the second factor instead of an empty session", async () => {
     mockSignIn.mockResolvedValue({
       data: { twoFactorRequired: true },
@@ -237,7 +256,7 @@ describe("completeSecondFactor", () => {
       data: {
         resource: {
           user: viewer,
-          preferences: { theme: Theme.Light, paging: {} },
+          preferences,
         },
       },
       error: null,
@@ -246,22 +265,7 @@ describe("completeSecondFactor", () => {
     expect(await completeSecondFactor("123456")).toBeNull();
     expect(useAuthStore().user?.username).toBe("SolohinLex");
     expect(useAuthStore().user).not.toHaveProperty("resource");
-  });
-});
-
-describe("register", () => {
-  it("hands back a rate limit instead of a created account", async () => {
-    mockRegister.mockResolvedValue(refused(429));
-
-    const failure = await register(signUp);
-
-    expect(failure?.status).toBe(429);
-  });
-
-  it("reports nothing when the account was created", async () => {
-    mockRegister.mockResolvedValue(done());
-
-    expect(await register(signUp)).toBeNull();
+    expect(useAuthStore().user?.settings).toEqual(carried);
   });
 });
 
@@ -275,14 +279,33 @@ describe("fetchUser", () => {
     expect(auth.isAuthenticated).toBe(true);
     expect(localStorage.getItem("user")).not.toBeNull();
   });
+
+  // The settings form saves and then refreshes the viewer: the lists read the size off it.
+  it("brings the theme and the page size saved on the account", async () => {
+    signedIn();
+    mockGetMyProfile.mockResolvedValue({ data: viewer, error: null });
+
+    await fetchUser();
+
+    expect(useAuthStore().user?.settings).toEqual(carried);
+    expect(JSON.parse(localStorage.getItem("user") ?? "null").settings).toEqual(
+      carried,
+    );
+  });
+
+  it("keeps the settings the viewer had when they did not load", async () => {
+    signedIn();
+    mockGetMyProfile.mockResolvedValue({ data: viewer, error: null });
+    await fetchUser();
+    mockGetMyPreferences.mockResolvedValue(refused(500));
+
+    await fetchUser();
+
+    expect(useAuthStore().user?.settings).toEqual(carried);
+  });
 });
 
-/**
- * The browser may hold nobody while the cookie holds a session: site data
- * cleared, a sign-in on another address of the site. The page used to take the
- * empty copy for the answer and drew a guest over a live session until the
- * reader signed in again.
- */
+// The browser may hold nobody while the cookie holds a session.
 describe("restoreSession", () => {
   it("signs the page in when the server holds a session the browser forgot", async () => {
     mockGetMyProfile.mockResolvedValue({ data: viewer, error: null });
@@ -293,8 +316,10 @@ describe("restoreSession", () => {
     expect(JSON.parse(localStorage.getItem("user") ?? "null")).toMatchObject(
       viewer,
     );
+    expect(useAuthStore().user?.settings).toEqual(carried);
     // Asked as a probe: its 401 is a guest, not an expired session.
     expect(mockGetMyProfile).toHaveBeenCalledWith({ probesSession: true });
+    expect(mockGetMyPreferences).toHaveBeenCalledWith({ probesSession: true });
   });
 
   it("leaves a guest a guest, without a word, when the server says nobody", async () => {
@@ -327,6 +352,6 @@ describe("restoreSession", () => {
 
     expect(useAuthStore().user?.username).toBe("Solohin");
     // Not a probe: a 401 here is a session that ran out, and says so.
-    expect(mockGetMyProfile).toHaveBeenCalledWith();
+    expect(mockGetMyProfile).not.toHaveBeenCalledWith({ probesSession: true });
   });
 });

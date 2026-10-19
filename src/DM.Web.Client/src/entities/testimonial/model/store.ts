@@ -12,39 +12,19 @@ import {
 } from "@/shared/lib/utils/keyedCache";
 import { unwrapResource } from "@/shared/api";
 import { testimonialApi } from "../api";
+import type { RequestOptions } from "@/shared/api/interceptor";
 
-/**
- * Website testimonials store
- * Manages website testimonials (positive reviews about the platform)
- * - Plain text only (NO BBCode)
- * - One testimonial per user
- * - NO likes support
- */
+// Plain text, one per user, no likes.
 export const useTestimonialStore = defineStore("testimonials", () => {
   const testimonials = ref<ListEnvelope<WebsiteTestimonial> | null>(null);
   const loading = ref(false);
   const error = ref<string | null>(null);
 
-  /**
-   * The shared cache, not a third hand-written one.
-   *
-   * What stood here was a single slot plus a timestamp, keyed by
-   * `JSON.stringify(query)` — which is key order, so the same search built by
-   * two call sites in two field orders missed each other, and the one slot
-   * meant paging back a page always went to the network. Both are properties
-   * of the bookkeeping, and the bookkeeping is `shared/lib/utils/keyedCache`:
-   * `stableCacheKey` sorts the fields and drops the empty ones, and the cache
-   * keeps a page per key.
-   */
   const cache = createKeyedCache<ListEnvelope<WebsiteTestimonial>>({
     ttlMs: 60_000,
   });
 
-  /**
-   * Fetch testimonials (60s cache per query).
-   * @returns true on success (or fresh cache hit), false on failure.
-   * On failure previously loaded data is kept intact and `error` is set.
-   */
+  /** False on a failure, which keeps the data already loaded. */
   async function fetchTestimonials(
     query: WebsiteTestimonialsQuery,
     force = false,
@@ -67,7 +47,6 @@ export const useTestimonialStore = defineStore("testimonials", () => {
     loading.value = false;
 
     if (apiError || !data) {
-      // Keep stale data so consumers can still show something
       error.value = "Не удалось загрузить отзывы";
       return false;
     }
@@ -77,39 +56,27 @@ export const useTestimonialStore = defineStore("testimonials", () => {
     return true;
   }
 
-  /** `options` rides to the request: the confirmation that asks prints a refusal. */
   async function removeTestimonial(
     id: WebsiteTestimonialId,
-    options?: Parameters<typeof testimonialApi.deleteTestimonial>[1],
+    options?: RequestOptions,
   ) {
     const { error } = await testimonialApi.deleteTestimonial(id, options);
     if (!error && testimonials.value) {
       testimonials.value.resources = testimonials.value.resources.filter(
         (r) => r.id !== id,
       );
-      // Every other page still holds the list as it was a moment ago. With one
-      // slot this could not happen; with a page per key it can, and a reader
-      // paging back would meet the testimonial they just removed.
+      // Every other cached page still holds the removed one.
       cache.clear();
     }
     return { error };
   }
 
-  /**
-   * Post a testimonial signed by `authorUsername`.
-   *
-   * The author is named rather than taken from the session: only senior
-   * moderation may create one and it is always posted on someone else's
-   * behalf (WebsiteTestimonialIntentionResolver.Create).
-   */
+  // The author is named: senior moderation always posts one on someone else's behalf.
   async function createTestimonial(authorUsername: string, text: string) {
     const { data, error } = await testimonialApi.createTestimonial({
       authorUsername,
       text,
     });
-    // The endpoint answers with an Envelope. Unshifting the envelope itself
-    // put a resource-shaped nothing at the head of the list: no author, no
-    // text, and the card rendering it had neither to draw.
     const created = unwrapResource<WebsiteTestimonial>(data);
     if (!error && created && testimonials.value) {
       testimonials.value.resources.unshift(created);
@@ -118,14 +85,7 @@ export const useTestimonialStore = defineStore("testimonials", () => {
     return { data: created, error };
   }
 
-  /**
-   * Rewrite the text of one testimonial in place.
-   *
-   * The row on screen is replaced with what the server answered rather than
-   * with what was typed, so the modification stamp the card shows is the one
-   * the server recorded. Every cached page is dropped for the same reason
-   * removal drops them: another page may hold this entry as it was.
-   */
+  // With the server's answer, so the card shows the modification stamp it recorded.
   async function updateTestimonial(id: WebsiteTestimonialId, text: string) {
     const { data, error } = await testimonialApi.updateTestimonial(id, {
       text,

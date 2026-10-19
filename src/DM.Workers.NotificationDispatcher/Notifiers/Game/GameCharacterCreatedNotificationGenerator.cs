@@ -19,7 +19,6 @@ internal class GameCharacterCreatedNotificationGenerator : BaseNotificationGener
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public GameCharacterCreatedNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -34,7 +33,7 @@ internal class GameCharacterCreatedNotificationGenerator : BaseNotificationGener
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var data = await _dbContext.Characters
+        var characterData = await _dbContext.Characters
             .Where(c => c.CharacterId == entityId && !c.IsNpc)
             .Select(c => new
             {
@@ -47,24 +46,21 @@ internal class GameCharacterCreatedNotificationGenerator : BaseNotificationGener
             })
             .FirstOrDefaultAsync();
 
-        if (data == null)
+        if (characterData == null)
         {
             yield break;
         }
 
-        // Direct game members: Master and Assistants (always notified)
-        var usersInterested = new HashSet<Guid> { data.GameMasterId };
-        usersInterested.UnionWith(data.AssistantIds);
+        var usersInterested = new HashSet<Guid> { characterData.GameMasterId };
+        usersInterested.UnionWith(characterData.AssistantIds);
 
-        // Subscribers with CharacterUpdates enabled
         var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Game,
-            data.GameId,
+            characterData.GameId,
             SubscriptionSettings.CharacterUpdates);
         usersInterested.UnionWith(readerSubscriptions.Select(s => s.SubscriberId));
 
-        // Don't notify the character author
-        usersInterested.Remove(data.AuthorId!.Value);
+        usersInterested.Remove(characterData.AuthorId!.Value);
 
         if (usersInterested.Count == 0)
         {
@@ -74,12 +70,12 @@ internal class GameCharacterCreatedNotificationGenerator : BaseNotificationGener
         yield return new CreateNotification
         {
             UsersInterested = usersInterested,
-            ActorId = data.AuthorId,
+            ActorId = characterData.AuthorId,
             Metadata = new
             {
-                AuthorUsername = data.Username,
-                GameTitle = data.Title,
-                GameId = data.GameId.EncodeToReadable()
+                AuthorUsername = characterData.Username,
+                GameTitle = characterData.Title,
+                GameId = characterData.GameId.EncodeToReadable()
             }
         };
     }

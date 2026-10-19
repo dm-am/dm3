@@ -1,18 +1,5 @@
-/**
- * The rated-posts request, built in one place.
- *
- * Five surfaces ask the posts endpoint the same question — which posts got
- * reviews: /pulse, the two profile subpages, a game's "Оцененные посты" and the
- * moderation worklist. Each used to translate the filter state into query
- * params on its own, and two of the copies had neither the date filters nor
- * paging: they sent one fixed page and drew whatever came back, so the same
- * filter bar answered differently depending on the page it stood on.
- *
- * What a page adds to the reader's filter is its SCOPE — whose posts, of which
- * game. A scope is what the route says the page is about, so it wins over the
- * same filter arriving in the URL.
- */
-import gameApi from "../api/gameApi";
+// The rated-posts request of every surface that asks it, so one filter bar answers alike.
+import type { RatedPostsQuery } from "./postTypes";
 
 /** The filter state the shared pulse filter keeps in the URL. */
 export interface PulseSearchParams {
@@ -29,43 +16,27 @@ export interface PulseSearchParams {
   size?: number;
 }
 
-/** The query the posts endpoint actually takes. */
-export type RatedPostsApiParams = NonNullable<
-  Parameters<typeof gameApi.getRatedPosts>[0]
->;
-
-/**
- * Whose rated posts a page is about.
- *
- * "site" is the whole website — /pulse and the moderation worklist narrow the
- * list by time and by nothing else.
- */
+/** Whose rated posts a page is about; "site" is the whole website. */
 export type RatedPostsScope =
   | { kind: "author"; username: string }
   | { kind: "reviewer"; username: string }
   | { kind: "game"; gameId: string }
   | { kind: "site" };
 
-/**
- * Build API params for the rated-posts request.
- * Invalid date strings (e.g. hand-edited URL params) are ignored
- * instead of producing an Invalid Date that throws on toISOString().
- */
+/** A date edited by hand into the address is ignored rather than thrown on. */
 export function buildRatedPostsParams(
   params: PulseSearchParams,
   scope: RatedPostsScope = { kind: "site" },
-): RatedPostsApiParams {
-  const apiParams: RatedPostsApiParams = {
+): RatedPostsQuery {
+  const apiParams: RatedPostsQuery = {
     sortBy: params.sortBy || "lastreview",
     sortOrder: params.sortOrder || "desc",
     hasReviews: true,
   };
 
   if (params.search) apiParams.search = params.search;
-  if (params.minRating !== undefined && params.minRating !== null)
-    apiParams.minRating = params.minRating;
-  if (params.maxRating !== undefined && params.maxRating !== null)
-    apiParams.maxRating = params.maxRating;
+  if (params.minRating != null) apiParams.minRating = params.minRating;
+  if (params.maxRating != null) apiParams.maxRating = params.maxRating;
   if (params.authorUsernames)
     apiParams.authorUsernames = params.authorUsernames;
   if (params.createdFrom) {
@@ -92,11 +63,8 @@ export function buildRatedPostsParams(
     case "game":
       apiParams.gameId = scope.gameId;
       break;
-    case "site":
-      break;
   }
 
-  // Pagination
   const pageSize = params.size || 20;
   apiParams.take = pageSize;
   if (params.number && params.number > 1) {

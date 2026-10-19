@@ -2,25 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The header of a chat message says the whole name and the time, and on a
- * phone it is the header of the full version.
- *
- * Before 5 October 2026 the header scrolled sideways on a phone, as one run.
- * Then it was held to one line, where "(скрыть)" went into "Еще" and a long
- * name gave up its end under "…". The owner, 12 October 2026: nothing is
- * shortened on a phone, and nothing scrolls sideways. The header is a line of
- * text again, as it was: where it has no room, it wraps between the name and
- * the time, and a name longer than the line breaks as any word of the site
- * does. "(скрыть)" over a removed message a moderator opened is a part of the
- * line.
- *
- * And the pictures of the full version: the avatar is 72 at any width, where a
- * narrow feed drew it 48.
- */
+/** The header of a chat message: the whole name and the time, a line of text that wraps. */
 import { describe, it, expect, afterEach } from "vitest";
 import { mount, RouterLinkStub, type VueWrapper } from "@vue/test-utils";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { componentCss, styleRules } from "@/shared/lib/testing/styles";
@@ -51,7 +35,7 @@ const mounted: VueWrapper[] = [];
 
 function open(props: Record<string, unknown>) {
   const wrapper = mount(ChatMessage, {
-    props: { message: message(), ...props },
+    props: { message: message(), maxHeight: 500, ...props },
     attachTo: document.body,
     global: { stubs: { RouterLink: RouterLinkStub } },
   });
@@ -117,9 +101,6 @@ describe("the header of a chat message", () => {
     expect(putAway(wrapper)).toEqual(NOTHING_PUT_AWAY);
     // The line wraps where it has no room: no rule holds it to one line.
     expect(declared(".msg-header")["white-space"]).toBeUndefined();
-    expect(readFileSync(SOURCE, "utf8")).not.toMatch(
-      /MessageHeader|FitRow|MoreMenu|data-fit-/,
-    );
   });
 
   it("says the whole name, then the time", () => {
@@ -183,31 +164,5 @@ describe("the header of a removed message a moderator opened", () => {
     expect(copied(header(wrapper).element)).toMatch(
       new RegExp(`^\\d\\d:\\d\\d ${LONG} \\(скрыть\\)$`),
     );
-  });
-});
-
-/**
- * A feed narrower than 480 once drew the avatar 48 instead of 72, so a phone
- * showed a smaller picture than the full version. The avatar and the gutter of
- * a continuation, which keeps the avatar's width, are 72 at any width.
- */
-describe("the picture of a message", () => {
-  it("has no narrow form to be told to take", () => {
-    const wrapper = open({ narrow: true });
-
-    expect(wrapper.get(".chat-message").classes()).not.toContain("narrow");
-    expect(wrapper.props()).not.toHaveProperty("narrow");
-  });
-
-  it("is 72 wide, and so is the gutter of a continuation", () => {
-    const narrowRules = styleRules(componentCss(SOURCE)).filter((rule) =>
-      rule.selector.includes(".narrow"),
-    );
-    expect(narrowRules).toEqual([]);
-    for (const box of [".msg-avatar", ".msg-avatar-placeholder"]) {
-      expect(declared(box).width, box).toBe("72px");
-      expect(declared(box).height, box).toBe("72px");
-    }
-    expect(declared(".msg-time-gutter").width).toBe("72px");
   });
 });

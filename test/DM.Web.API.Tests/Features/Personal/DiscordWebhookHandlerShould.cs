@@ -57,12 +57,6 @@ public class DiscordWebhookHandlerShould : UnitTestBase
         """;
 
     [Fact]
-    public void HaveDiscordBotType()
-    {
-        _handler.BotType.Should().Be("discord");
-    }
-
-    [Fact]
     public async Task AnswerPongToPing()
     {
         var response = await _handler.HandleAsync(Payload("""{"type": 1}"""));
@@ -109,7 +103,7 @@ public class DiscordWebhookHandlerShould : UnitTestBase
     {
         _botLinkService
             .VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>())
-            .Returns(new BotLinkResult { Success = false, Error = "Invalid or expired code" });
+            .Returns(new BotLinkResult { Success = false, Error = "Код неверный или истек" });
 
         var response = await _handler.HandleAsync(Payload(ConnectInGuild));
 

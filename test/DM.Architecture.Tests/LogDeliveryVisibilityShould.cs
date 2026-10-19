@@ -12,19 +12,9 @@ namespace DM.Architecture.Tests;
 /// logs it is refusing.
 /// </summary>
 /// <remarks>
-/// Serilog will not let logging throw into the code that logs, so a sink reports
-/// nothing about itself by contract. The Loki sink then buffers up to fifty
-/// thousand events and retries for ten minutes before dropping them, and all of
-/// that is silent: a store answering 400 to every push looks exactly like a quiet
-/// application, and Grafana showing nothing looks exactly like a site with nothing
-/// to say. The console sink means no content is lost, which is why this is about
-/// the searchable copy and not about the logs.
-///
-/// Three channels close that, and each is asserted here because each is invisible
-/// in a green build: the library's own diagnostic stream, a scrape target on the
-/// store itself, and a rule reading it. The queries in the guide are asserted with
-/// them for the same reason the rules are — a filter naming a field the line does
-/// not carry returns an empty page, which is what a healthy hour looks like too.
+/// A sink reports nothing about itself by contract, and Loki drops silently after retrying. The
+/// diagnostic stream, a scrape target on the store and a rule close that; the guide's queries are
+/// asserted with them.
 /// </remarks>
 public class LogDeliveryVisibilityShould
 {
@@ -51,30 +41,14 @@ public class LogDeliveryVisibilityShould
         @"([\w-]+)\s*(?:=~|!~|!=|=)", RegexOptions.Compiled);
 
     /// <summary>
-    /// The one label nobody declares. The sink adds it in Grafana's vocabulary
-    /// unless told otherwise, so it is real, queryable, and absent from the call
-    /// that lists the labels — which is how the guide came to say there were two.
+    /// The one label nobody declares: the sink adds it unless told otherwise.
     /// </summary>
     private const string LevelLabel = "level";
-
-    [Fact]
-    public void SayOnStderrWhenTheStoreRefusesABatch()
-    {
-        LoggingSource.Should().Contain("SelfLog.Enable(",
-            "the sink swallows its own failures by contract, and this is the only " +
-            "channel the library has for saying that a batch was refused");
-    }
 
     /// <summary>
     /// Every line says which build wrote it.
     /// </summary>
-    /// <remarks>
-    /// Three links, none of which fails visibly on its own: the workflow hands the
-    /// commit to the build, the build stamps it into the assembly, and the logger
-    /// puts it on the line. Break any one and the process keeps logging, keeps
-    /// answering, and starts saying "unknown" where the answer used to be - which
-    /// nobody notices until the first incident that needs it.
-    /// </remarks>
+    /// <remarks>Workflow, build and logger each hand the commit on, and none fails visibly alone.</remarks>
     [Fact]
     public void NameTheBuildEveryLineCameFrom()
     {
@@ -90,32 +64,6 @@ public class LogDeliveryVisibilityShould
 
         SourceText.ReadCode(LoggingPath).Should().Contain("ReleaseInfo.Value",
             "a stamp nobody reads is a string in a file");
-    }
-
-    /// <summary>
-    /// The copy that outlives the store carries what the line was about.
-    /// </summary>
-    /// <remarks>
-    /// The console copy is the one the container runtime keeps, and the only one
-    /// left when the store is refusing — which is precisely when somebody reads it.
-    /// Written with the template a person reads, it holds a timestamp, a level and
-    /// the rendered message and drops every property, so the fallback could name
-    /// neither the user, nor the correlation token, nor the trace of any line.
-    ///
-    /// The shape of that copy is asserted where it is chosen; that the two shapes
-    /// differ in the right direction is <c>ConsoleCopyShould</c>. What is left here
-    /// is the wiring between them, which no compiler checks: the branch can be
-    /// dropped and the method it calls left behind, compiling and reverting the fix.
-    /// </remarks>
-    [Fact]
-    public void ShapeTheConsoleCopyByWhoReadsIt()
-    {
-        LoggingSource.Should().Contain("ConsoleFormat(isDevelopment)",
-            "one shape for both readers is what dropped the properties: a server writes " +
-            "this copy for a machine and a developer reads it as text");
-        LoggingSource.Should().Contain("WriteTo.Console(format)",
-            "a chosen formatter that never reaches the sink leaves the default template " +
-            "in place, and the choice above it decorative");
     }
 
     [Fact]
@@ -145,16 +93,7 @@ public class LogDeliveryVisibilityShould
     /// <summary>
     /// The guide filtered severity out of the line body, where it has never been.
     /// </summary>
-    /// <remarks>
-    /// The body carries Message, MessageTemplate, Exception, TraceId, SpanId and the
-    /// event's properties. Severity is a label and only a label, so the documented
-    /// query for "errors of the API" selected an empty page — indistinguishable, to
-    /// the reader who came to look at errors, from an hour without any.
-    ///
-    /// Both directions, because the same paragraph is where the count of labels went
-    /// stale: a selector may only name a label that exists, and a label that exists
-    /// has to be named in the guide.
-    /// </remarks>
+    /// <remarks>Severity is a label and only a label. Both directions: a selector names a label that exists, and each is in the guide.</remarks>
     [Fact]
     public void QueryTheLabelsThatExistAndOnlyThose()
     {

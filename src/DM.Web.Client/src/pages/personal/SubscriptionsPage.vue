@@ -1,29 +1,12 @@
 <script setup lang="ts">
 /**
- * "Подписки": everything the reader follows, in the sections the site names
- * things by, as lists the way the site draws its lists ("- " and the name, the
- * action a grey word after " | ", as in the left column and in the cabinet of
- * DM2). A filter over one mixed column used to stand here, with a badge of the
- * type on every row and a button on every row: the sections show it all at
- * once and count it, so neither the filter nor the badges are needed.
- *
- * "Отписаться" does not take the row away. The word turns into its opposite and
- * the count in the heading goes down, so a press on the wrong row is put right
- * in the same place, with the settings the subscription had (the same way "В
- * черный список" turns into its way back on a profile). A row the reader left
- * goes on the next visit. So the page keeps its own list of what it opened on,
- * and asks the store only whether each of those is still followed.
- *
- * A person's row says what the subscription sends and opens the panel the
- * profile opens under "Подписан" (UserSubscriptionPanel), so the kinds are
- * changed here as well as there.
- *
- * Game and blog names are coloured by status, as everywhere on the site
- * (UI_STANDARDS, "Цвет ссылок игр и блогов по статусу"): green while new,
- * grey once closed. The row of a subscription carries the status of its game
- * or blog and the day it opened (targetStatus, targetActivatedUtc), and the
- * rule of "new" is the one of GameLink and BlogLink (useGameDisplay and
- * useBlogDisplay).
+ * Everything the reader follows, in the site's sections, as the site draws its
+ * lists. "Отписаться" does not take the row away: the word turns into its
+ * opposite and the count goes down, so a wrong press is put right in place
+ * with the old settings; the row goes on the next visit. So the page keeps
+ * its own list of what it opened on and asks the store whether each is still
+ * followed. Game and blog names are coloured by status, by the rule of
+ * GameLink and BlogLink.
  */
 import { computed, onMounted, reactive, ref, watch } from "vue";
 import type { RouteLocationRaw } from "vue-router";
@@ -49,17 +32,13 @@ import {
 } from "@/shared/ui/CaptionLine";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { BlockTitle, PageTitle, SecondaryText } from "@/shared/ui/Layout";
+import SubscriptionListSkeleton from "./SubscriptionListSkeleton.vue";
 
 /** A section of the page and the words its rows say. */
 interface Section {
   type: SubscriptionTargetType;
   title: string;
-  /**
-   * The name of a target that no longer exists. None for a person: a removed
-   * account is named the way every surface names it, by RemovedAccountLink, a
-   * link of the ordinary colour to the profile that gathers what removed
-   * accounts left (owner, 12 October 2026: not grey, like any other name).
-   */
+  /** The name of a target that no longer exists; none for a person, named by RemovedAccountLink. */
   gone: string | null;
   unsubscribe: string;
   subscribe: string;
@@ -68,8 +47,7 @@ interface Section {
   subscribeFailed: string;
 }
 
-// A blog is followed by reading it, and its panel calls the subscription so:
-// "Добавить в читаемое" / "Убрать из читаемого".
+// A blog is followed by reading it, and its panel says so.
 const SECTIONS: readonly Section[] = [
   {
     type: SubscriptionTargetType.Game,
@@ -132,9 +110,7 @@ const keyOf = (type: SubscriptionTargetType, targetId: string) =>
 /** Every target seen on this visit, in the order it was first seen. */
 const rows = ref<Row[]>([]);
 
-// The list the page opened on, and anything subscribed since. A subscription
-// that goes leaves its row where it was; one that comes back refreshes the
-// settings the row will restore the next time.
+// A subscription that goes leaves its row; one that comes back refreshes the settings the row restores.
 watch(
   () => store.subscriptions,
   (list) => {
@@ -169,7 +145,6 @@ const live = (row: Row): Subscription | undefined =>
   store.getSubscription(row.type, row.targetId);
 
 const byName = (a: Row, b: Row) => {
-  // A target that is gone has no name to sort by and goes to the end.
   if (!a.title || !b.title) return a.title ? -1 : b.title ? 1 : 0;
   return a.title.localeCompare(b.title, "ru", { sensitivity: "base" });
 };
@@ -192,11 +167,7 @@ interface Line {
 const { isNew: isNewGame } = useGameDisplay();
 const { isNew: isNewBlog } = useBlogDisplay();
 
-/**
- * The colour a game or a blog is named in: grey once closed, which outranks
- * green, and green while it opened less than a week ago. Topics and people
- * keep the colour of a link.
- */
+/** Grey once closed, which outranks green while it opened less than a week ago. */
 function toneOf(row: Row): Line["tone"] {
   const isNew =
     row.type === SubscriptionTargetType.Game
@@ -240,11 +211,9 @@ const sections = computed(() =>
 );
 
 /**
- * Where a row's name leads. Named routes: a game lives at /game/:id, a topic
- * addressed by id goes through the resolver route, and a profile is addressed
- * by name, which is why the row carries targetUsername. A target that is gone
- * has no link: every one of these would open an error page. A removed person
- * is the exception, named by RemovedAccountLink in the template (Section.gone).
+ * Where a row's name leads, by named routes. A target that is gone has no
+ * link, since each would open an error page; a removed person is named by
+ * RemovedAccountLink in the template.
  */
 function targetLocation(row: Row): RouteLocationRaw | null {
   if (!row.title) return null;
@@ -273,30 +242,38 @@ const pending = reactive(new Set<string>());
 /** The last refused press, under the row it was made in. */
 const refusal = ref<{ key: string; text: string } | null>(null);
 
-async function unsubscribe(row: Row, section: Section) {
-  const subscription = live(row);
-  if (!subscription || pending.has(row.key)) return;
-  pending.add(row.key);
-  refusal.value = null;
-  const error = await store.unsubscribe(subscription.id);
-  pending.delete(row.key);
-  if (!error) return;
-  const text = refusalHere(error, section.unsubscribeFailed);
-  if (text) refusal.value = { key: row.key, text };
-}
-
-async function resubscribe(row: Row, section: Section) {
+async function press(
+  row: Row,
+  call: () => ReturnType<typeof store.subscribe>,
+  failure: string,
+) {
   if (pending.has(row.key)) return;
   pending.add(row.key);
   refusal.value = null;
-  const error = await store.subscribe(row.type, row.targetId, row.settings);
+  const error = await call();
   pending.delete(row.key);
   if (!error) return;
-  const text = refusalHere(error, section.subscribeFailed);
+  const text = refusalHere(error, failure);
   if (text) refusal.value = { key: row.key, text };
 }
 
-// --- The panel of a person's subscription ---
+function unsubscribe(row: Row, section: Section) {
+  const subscription = live(row);
+  if (!subscription) return;
+  return press(
+    row,
+    () => store.unsubscribe(subscription.id),
+    section.unsubscribeFailed,
+  );
+}
+
+function resubscribe(row: Row, section: Section) {
+  return press(
+    row,
+    () => store.subscribe(row.type, row.targetId, row.settings),
+    section.subscribeFailed,
+  );
+}
 
 /** The row the panel is open under, and the rows it may hang from. */
 const panelFor = ref<string | null>(null);
@@ -329,15 +306,12 @@ function closePanel(returnFocus: boolean) {
   }
 }
 
-// --- Loading ---
-
 const loadFailed = computed(
   () => !!store.subscriptionsError && !store.subscriptions,
 );
 
-// The page says a failed load where the list would stand, so the plate the
-// interceptor raised for it comes down. Sync: the plate is held only until
-// the end of the task the answer arrived in.
+// The page says a failed load in place, so the interceptor's plate comes down;
+// sync, since the plate is held only until the end of the answer's task.
 watch(
   () => store.subscriptionsError,
   (error) => {
@@ -353,15 +327,14 @@ onMounted(() => store.fetchSubscriptions());
   <div class="subscriptions-page">
     <PageTitle>Подписки</PageTitle>
 
-    <SecondaryText v-if="store.subscriptionsLoading && !rows.length"
-      >Загрузка...</SecondaryText
-    >
-
     <ErrorState
-      v-else-if="loadFailed"
+      v-if="loadFailed"
       message="Не удалось загрузить подписки"
       :retry="() => store.fetchSubscriptions(true)"
     />
+
+    <!-- Before the list answers: its skeleton, and no word of an empty list. -->
+    <SubscriptionListSkeleton v-else-if="!store.subscriptions" />
 
     <SecondaryText v-else-if="!rows.length" class="subscriptions-intro"
       >Подписок нет. Подписаться на игру или блог можно на их странице, на
@@ -388,13 +361,11 @@ onMounted(() => store.fetchSubscriptions());
             :ref="(el) => rememberRow(line.row.key, el)"
             class="subscription-row"
           >
-            <!-- The dash and the line, the dash hanging: what wraps goes on
-                 under the name and not under the dash. -->
+            <!-- The dash hangs: what wraps goes on under the name. -->
             <div class="subscription-head">
               <span class="subscription-dash" aria-hidden="true">- </span
               ><CaptionLine size="secondary" class="subscription-line">
-                <!-- The name runs on from the dash as words of the line and
-                     wraps at its spaces; the rest of the line moves whole. -->
+                <!-- The name wraps at its spaces as words of the line; the rest moves whole. -->
                 <CaptionPart flow>
                   <router-link
                     v-if="line.to"
@@ -424,7 +395,6 @@ onMounted(() => store.fetchSubscriptions());
                   @click="unsubscribe(line.row, section)"
                   >{{ section.unsubscribe }}</CaptionAction
                 >
-                <!-- A target that is gone is left, not followed again. -->
                 <CaptionAction
                   v-else-if="line.row.title"
                   :disabled="pending.has(line.row.key)"
@@ -452,52 +422,37 @@ onMounted(() => store.fetchSubscriptions());
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
+@use "@/shared/ui/CaptionLine/dashList" as *
 
-// The page stands where every page of the column stands: no padding of its
-// own, which pushed the heading 16 to the right of its neighbours.
 
 .subscriptions-intro
   margin-bottom: $small
 
 .subscriptions-list
-  list-style: none
-  padding: 0
-  margin: 0
+  +dash-list
 
-// A line of the list: the name in the size of the text, the rest of the line
-// grey and a step smaller, as the caption line of a comment reads.
+// The name in the size of the text, the rest grey and a step smaller, as a comment's caption line.
 .subscription-row
   font-size: $font-size
-  line-height: 1.5
 
 .subscription-dash
   color: $text-muted
 
-// "- " hangs: a line that wraps goes on under the name, not under the dash.
-// The block is indented by the dash and its first line takes the indent back.
-// 0.548em is the advance of "- " in PT Sans (8.77 at 16), measured on the
-// page as CaptionLine measures its bar.
-$dash: 0.548em
-
 .subscription-head
-  padding-left: $dash
-  text-indent: -$dash
+  +dash-hang
 
 .subscription-line
-  // The parts of the line are boxes of their own, and each would take the
-  // indent back on its own first line.
+  // Each part is a box of its own and would take the indent back on its first line.
   text-indent: 0
 
-  // The name in the size of the text. The line breaks at its gaps and inside
-  // the name, which flows as words of the line (CaptionPart flow).
+  // The line breaks at its gaps and inside the name (CaptionPart flow).
   :deep(.subscription-title)
     font-size: $font-size
 
   :deep(.subscription-title--gone)
     color: $text-muted
 
-  // A game or a blog in the colour of its status, as the site names them.
   :deep(.subscription-title--new)
     +link-tone($accent-green, $accent-green-hover)
 

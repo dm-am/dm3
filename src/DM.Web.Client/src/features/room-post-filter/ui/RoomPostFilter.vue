@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * The filter bar of a game room: the pulse bar (search, "Фильтры", sort) built
- * from the same shared controls, with the two filters only a room has — the
- * characters and whether a post has reviews — and the room's own order as the
- * default sort.
- */
 import { computed, ref, watch } from "vue";
 import { vClickOutside } from "@/shared/directives";
 import {
@@ -38,7 +32,6 @@ import {
 } from "../model";
 
 const props = defineProps<{
-  /** The game's characters, to pick from and to name in the bubbles. */
   characters: Character[];
 }>();
 
@@ -86,12 +79,9 @@ function navigateBack() {
   navPath.value = null;
 }
 
-// ── Characters ──
-
 const WITHOUT_CHARACTER_LABEL = "Без персонажа";
 const characterQuery = ref("");
 
-/** Every character of the game by id, for the bubbles. */
 const characterNames = computed(
   () => new Map(props.characters.map((c) => [c.id as string, c.name])),
 );
@@ -101,13 +91,9 @@ function characterLabel(id: string): string {
   return characterNames.value.get(id) ?? "Персонаж";
 }
 
-// Every character that has been in play: a post keeps the character it was
-// written by whatever became of the character later, so a retired one stays.
-// One still under review, or declined, has never written a post.
+// A post keeps its character whatever became of it, so a retired one stays.
 const WROTE_POSTS = new Set(["Active", "Retired"]);
 
-// The ones already chosen stand in the bubbles and leave the list, the way the
-// authors do.
 const characterOptions = computed<ListOption[]>(() => {
   const chosen = filterState.value.characters;
   const options: ListOption[] = [];
@@ -115,7 +101,7 @@ const characterOptions = computed<ListOption[]>(() => {
     options.push({
       value: WITHOUT_CHARACTER,
       label: WITHOUT_CHARACTER_LABEL,
-      hint: "Мастер и помощники от своего имени",
+      hint: "Мастер и ассистенты от своего имени",
     });
   }
   const sorted = props.characters
@@ -126,7 +112,7 @@ const characterOptions = computed<ListOption[]>(() => {
     options.push({
       value: c.id as string,
       label: c.name,
-      hint: c.isNpc ? "NPC" : c.author?.username,
+      hint: c.isNpc ? "Неигровой персонаж" : c.author?.username,
     });
   }
   return options;
@@ -137,8 +123,6 @@ function handleCharacterSelect(id: string) {
   characterQuery.value = "";
 }
 
-// ── Reviews ──
-
 const reviewOptions: (ListOption & { value: RoomPostReviews })[] = [
   { value: "with", label: "С оценками", hint: "Пост кто-то оценил" },
   { value: "without", label: "Без оценок", hint: "Пост пока никто не оценил" },
@@ -148,8 +132,6 @@ function handleReviewsSelect(value: string) {
   setReviews(value as RoomPostReviews);
   closeDropdown();
 }
-
-// ── Rating and date ──
 
 function handleRatingApply(min: number | null, max: number | null) {
   setRatingRange(min, max);
@@ -171,9 +153,6 @@ function handleDateClear() {
   closeDropdown();
 }
 
-// ── Sort ──
-
-// The room's own order first: it is the default and what the room is.
 const sortOptions = [
   {
     value: "created",
@@ -208,8 +187,6 @@ function handleSortSelect(value: string, direction?: "asc" | "desc") {
 function handleSortOrderChange(order: "asc" | "desc") {
   setSort(filterState.value.sortBy, order);
 }
-
-// ── Bubbles ──
 
 const hasAuthorFilter = computed(
   () => filterState.value.authorUsernames.size > 0,
@@ -270,7 +247,6 @@ function clearAll() {
   clearFilters();
 }
 
-// Backspace in an empty search takes the last bubble off the row.
 function handleSearchKeydown(event: KeyboardEvent) {
   if (event.key !== "Backspace" || localInput.value) return;
   const state = filterState.value;
@@ -285,8 +261,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
   event.preventDefault();
 }
 
-// The menu reopens at its root (useFilterDropdown drops the level on close),
-// and the character search typed last time goes with it.
+// The menu reopens at its root, and the character search goes with it.
 watch(showDropdown, (open) => {
   if (!open) characterQuery.value = "";
 });
@@ -452,7 +427,6 @@ watch(showDropdown, (open) => {
 
   +filter-bar
   +filter-button
-  +filter-responsive
 
 +filter-dropdown-base
 +dropdown-search-input

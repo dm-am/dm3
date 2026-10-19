@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Messages;
 using AwesomeAssertions;
@@ -14,15 +12,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// A chat names its newest message, whatever order two writers commit in.
 /// </summary>
 /// <remarks>
-/// LastMessageId is what the list of conversations orders by and what the preview
-/// under each of them shows. It used to be assigned unconditionally by every send:
-/// CreatedUtc is stamped before the write reaches the chat row, so the message that
-/// commits last is not necessarily the newest one, and a send that waited on a lock,
-/// a retry or a slow round trip pointed the conversation back at an older line.
-///
-/// Run against PostgreSQL because the fix is a row lock plus a conditional set-based
-/// statement: neither has an in-memory implementation, and the defect is not
-/// observable at all without two writers running against one chat.
+/// LastMessageId orders the conversations and gives the preview, and CreatedUtc is stamped before the write, so the
+/// last commit is not always the newest. Against PostgreSQL: a row lock and a conditional set-based statement.
 /// </remarks>
 public class ChatLastMessagePointerShould : IntegrationTestBase
 {
@@ -61,11 +52,7 @@ public class ChatLastMessagePointerShould : IntegrationTestBase
     /// <summary>
     /// The pointer does not walk backwards when an older message lands last.
     /// </summary>
-    /// <remarks>
-    /// Written in order rather than in parallel: which of two concurrent sends commits
-    /// last is exactly what a test cannot pin down, and the defect is about the one that
-    /// does.
-    /// </remarks>
+    /// <remarks>In order, not in parallel: which concurrent send commits last cannot be pinned.</remarks>
     [Fact]
     public async Task LeaveThePointerOnTheNewerMessageWhenAnOlderOneArrivesAfterIt()
     {
@@ -87,16 +74,8 @@ public class ChatLastMessagePointerShould : IntegrationTestBase
     /// conversation's last line backwards.
     /// </summary>
     /// <remarks>
-    /// The same promise as the two above, pinned on an ordering rather than left
-    /// to which of two parallel calls the scheduler starts first: the newer
-    /// message is held open by hand, in the shape the repository sends one in (the
-    /// chat row taken, the message written, the pointer moved), and the older
-    /// message is sent by the real call. What that call must not do is move the
-    /// pointer to itself, and it can only know not to by reading the chat after
-    /// the wait.
-    ///
-    /// Only a live database can be asked whether one write waits for another,
-    /// which is why this is here and not in the domain tests.
+    /// The newer message is held open by hand in the repository's shape and the older one sent by the real call,
+    /// which must read the chat after the wait.
     /// </remarks>
     [Fact]
     public async Task WaitForTheSendInFlightAndLeaveItsNewerMessageOnThePointer()
@@ -133,14 +112,7 @@ public class ChatLastMessagePointerShould : IntegrationTestBase
     /// A deletion of the last line decides the pointer after the send in flight
     /// beside it.
     /// </summary>
-    /// <remarks>
-    /// The successor of the message being removed is read from the chat, and a read
-    /// cannot see the message another transaction has written but not committed: the
-    /// deletion picked the newest line it could see, which was an older one, and wrote
-    /// it over the pointer the send had just moved. The conversation then showed a
-    /// preview older than its own last message, and nothing recomputes the pointer
-    /// afterwards.
-    /// </remarks>
+    /// <remarks>The successor is read from the chat, and a read cannot see an uncommitted message.</remarks>
     [Fact]
     public async Task LeaveThePointerOnTheMessageSentWhileTheLastLineWasBeingDeleted()
     {
@@ -176,16 +148,7 @@ public class ChatLastMessagePointerShould : IntegrationTestBase
     /// <summary>
     /// The pointer names the message this call wrote.
     /// </summary>
-    /// <remarks>
-    /// The chat update handed in beside the message carries an identifier of its
-    /// own, and the statement that moves the pointer compares the chat's current
-    /// line against the pair (CreatedUtc, MessageId). Built from one message's
-    /// timestamp and another's identifier, that pair belongs to no message at all:
-    /// the comparison is made against a row nobody wrote, and whatever it answers
-    /// the pointer ends up naming a line whose timestamp was never looked at. The
-    /// two identifiers agree everywhere they are handed in from today, which is
-    /// exactly why nothing would report it if one day they stopped.
-    /// </remarks>
+    /// <remarks>The pointer statement compares (CreatedUtc, MessageId), which must come from one message.</remarks>
     [Fact]
     public async Task PointAtTheMessageItWroteAndNotAtTheOneNamedBesideIt()
     {

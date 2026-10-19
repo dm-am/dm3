@@ -11,27 +11,13 @@ namespace DM.Architecture.Tests;
 /// by line, with each line knowing whether it is prose or a block of code.
 /// </summary>
 /// <remarks>
-/// Every markdown file a commit would carry, less three kinds that are not
-/// documentation written to the rules. docs/STATUS.md is the output of its script
-/// (StatusDocumentShould holds it to the byte), so a rule for prose would be a rule
-/// for the script. A file under a tests/fixtures folder is the input of a test, and
-/// its text is whatever that test needs to feed in. An audit report at the root
-/// (named AUDIT and its number) quotes the violations it names, as
-/// InterfaceVocabularyShould says.
-///
-/// The registers of the gates built on this walk share one contract, the one
-/// SizeRatchetShould and DocumentSizeShould keep: a register records what the tree
-/// holds today and is compared with it from both ends. A count past the record
-/// fails, and so does a count below it or a record with nothing behind it, because
-/// a record left above its file is room to grow back into. The cleanup goes by the
-/// register, and the register only shrinks.
+/// Every markdown file a commit carries, less docs/STATUS.md (a script's output) and an audit report at
+/// the root. A register is held to the tree from both ends and only shrinks, as SizeRatchetShould's.
 /// </remarks>
 internal static class HandwrittenDocuments
 {
     /// <summary>The one generated document, written by scripts/docs/build-status.mjs.</summary>
     public const string Generated = "docs/STATUS.md";
-
-    private const string FixtureFolder = "/tests/fixtures/";
 
     private const string AuditReport = "AUDIT-";
 
@@ -103,7 +89,6 @@ internal static class HandwrittenDocuments
         .Where(path => path.EndsWith(".md", StringComparison.OrdinalIgnoreCase))
         .Select(path => (FullPath: path, Path: Relative(path)))
         .Where(file => file.Path != Generated &&
-                       !file.Path.Contains(FixtureFolder, StringComparison.Ordinal) &&
                        !file.Path.StartsWith(AuditReport, StringComparison.Ordinal))
         .OrderBy(file => file.Path, StringComparer.Ordinal)
         .Select(file => new Document(file.Path, file.FullPath, Lines(File.ReadAllText(file.FullPath))))

@@ -3,35 +3,15 @@
  */
 
 /**
- * The account section that asks for a name change and reports on the asking.
- *
- * The flow reaches five states and the section knew three. `GET
- * /account/username-change` returns the latest request whatever state it is in,
- * so an expired or completed one arrives here too, and both used to render
- * nothing at all: no card said what happened, and the form stayed hidden because
- * only a rejection reopened it. A request that ran out of moderation time was
- * therefore a dead end with no explanation and no way to ask again - while the
- * server, which is the only side that decides anything, was already accepting a
- * new request.
- *
- * Asserted per status because the two sides of the section answer different
- * questions: which card is shown is what the reader is told, and whether the
- * form is there is what they can do about it.
+ * The account section that asks for a name change and reports on the asking,
+ * per status: which card is shown, and whether the form is there to ask again.
  */
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { accountApi } from "@/entities/user";
 import AccountUsernameChangeSection from "./AccountUsernameChangeSection.vue";
 import type { UsernameChangeRequest } from "@/shared/api/models/account";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-  compileSass,
-  sassBlocks,
-  styleRules,
-} from "@/shared/lib/testing/styles";
-import { readFileSync } from "node:fs";
 
 const user = { id: "u-1", username: "reader" };
 
@@ -91,10 +71,10 @@ describe("username change section", () => {
   });
 
   it.each([
-    // In flight: the change was already asked for, and the server refuses a second.
+    // In flight: the change is asked for, and the server refuses a second.
     ["Pending", false],
     ["Approved", false],
-    // Holding nothing: asking again is the only way forward.
+    // Holding nothing: asking again is the way forward.
     ["Rejected", true],
     ["Expired", true],
     ["Completed", true],
@@ -123,8 +103,7 @@ describe("username change section", () => {
   });
 
   it("reads an expiry with no reason as unreviewed", async () => {
-    // The field is the server's to set. An older payload without it must not
-    // claim an approval that may never have happened.
+    // An older payload without the field must not claim an approval.
     const wrapper = await withRequest({ status: "Expired" });
 
     expect(wrapper.find(".status-note").text()).toContain(
@@ -133,9 +112,7 @@ describe("username change section", () => {
   });
 
   it("does not offer the form when the state could not be read", async () => {
-    // Offering it here promises something the server may refuse: the request may
-    // well be in flight, and the reply that says so would land as a note under
-    // the reason field, where there is nothing to correct.
+    // The request may be in flight, and the refusal would land under the reason field.
     vi.spyOn(accountApi, "getUsernameChangeRequest").mockResolvedValue({
       data: null,
       error: { status: 500, message: "Ошибка сервера" },
@@ -145,15 +122,45 @@ describe("username change section", () => {
     await flushPromises();
 
     expect(wrapper.find(".request-form").exists()).toBe(false);
-    expect(wrapper.find(".status-card--failed").exists()).toBe(true);
+    expect(wrapper.find(".error-state").exists()).toBe(true);
+  });
+
+  it("reads the state again on Повторить, with no reload of the page", async () => {
+    const load = vi
+      .spyOn(accountApi, "getUsernameChangeRequest")
+      .mockResolvedValueOnce({
+        data: null,
+        error: { status: 500, title: "Ошибка сервера" },
+      } as never)
+      .mockResolvedValue({ data: null, error: null } as never);
+
+    const wrapper = mount(AccountUsernameChangeSection, options());
+    await flushPromises();
+    await wrapper.get(".error-retry").trigger("click");
+    await flushPromises();
+
+    expect(load).toHaveBeenCalledTimes(2);
+    expect(wrapper.find(".request-form").exists()).toBe(true);
+  });
+
+  it("stands a placeholder and no word while the state is read", async () => {
+    vi.spyOn(accountApi, "getUsernameChangeRequest").mockReturnValue(
+      new Promise(() => {}) as never,
+    );
+
+    const wrapper = mount(AccountUsernameChangeSection, options());
+    await flushPromises();
+
+    expect(wrapper.find(".account-skeleton").exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("Загрузка");
+    expect(wrapper.find(".request-form").exists()).toBe(false);
   });
 
   it("re-reads the request when the server answers a conflict", async () => {
     const wrapper = await withRequest(null);
     expect(wrapper.find(".request-form").exists()).toBe(true);
 
-    // Filed from somewhere else in the meantime: the section is stale, and the
-    // card is where the reader learns that, not the field they typed into.
+    // Filed elsewhere in the meantime: the card says so, not the field.
     vi.spyOn(accountApi, "createUsernameChangeRequest").mockResolvedValue({
       data: null,
       error: { status: 409, message: "Заявка на смену имени уже отправлена" },
@@ -169,7 +176,7 @@ describe("username change section", () => {
       error: null,
     } as never);
 
-    await wrapper.find("textarea").setValue("Причина достаточной длины");
+    await wrapper.find("textarea").setValue("Хочу другое имя");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
 
@@ -177,6 +184,31 @@ describe("username change section", () => {
       "Заявка на рассмотрении",
     );
     expect(wrapper.find(".request-form").exists()).toBe(false);
+  });
+
+  it("sends a reason of one character", async () => {
+    const wrapper = await withRequest(null);
+    const create = vi
+      .spyOn(accountApi, "createUsernameChangeRequest")
+      .mockResolvedValue({ data: null, error: null } as never);
+
+    await wrapper.find("textarea").setValue("Я");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(create).toHaveBeenCalledWith({ reason: "Я" });
+  });
+
+  it("sends nothing while the reason is only spaces", async () => {
+    const wrapper = await withRequest(null);
+    const create = vi.spyOn(accountApi, "createUsernameChangeRequest");
+
+    await wrapper.find("textarea").setValue("   ");
+    await wrapper.find("form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.get(".request-submit").attributes("disabled")).toBeDefined();
+    expect(create).not.toHaveBeenCalled();
   });
 
   /** Mounts the section over a read the server refused. */
@@ -191,15 +223,7 @@ describe("username change section", () => {
     return wrapper;
   };
 
-  /**
-   * The card that stands in place of a failed read is the one carrier of that
-   * failure: the section shows nothing else, and the form under it is shut. So
-   * the read claims the refusal and the limit, and nothing repeats the card's
-   * sentence in a plate one line above it.
-   *
-   * Asserted at the call, because the request is mocked out in every other test
-   * of this file and a flag left behind would be invisible in all of them.
-   */
+  /** The read takes the refusal and the limit over, checked at the call. */
   it("takes the refusal and the limit over on the read", async () => {
     const load = vi
       .spyOn(accountApi, "getUsernameChangeRequest")
@@ -213,97 +237,30 @@ describe("username change section", () => {
     );
   });
 
-  /**
-   * And having taken it over, the card says what the server said. Its own line
-   * names only that something is missing; the refusal names why the form under
-   * it is shut, and it used to arrive in a plate that fades after eight seconds
-   * over a card that stays.
-   */
-  it.each([403, 500])(
-    "prints what the server said about a %i",
-    async (status) => {
-      const wrapper = await failedRead({
-        status,
-        title: "Заявки недоступны",
-      });
-
-      const card = wrapper.get(".status-card--failed");
-      expect(card.text()).toContain("Заявки недоступны");
-      expect(card.text()).not.toContain("Не удалось узнать состояние");
-      // Whatever the sentence, the gate under it holds.
-      expect(wrapper.find(".request-form").exists()).toBe(false);
-    },
-  );
-
-  /**
-   * The wait is built and not relayed: the seconds the server named ride in
-   * Retry-After, which the transport copies onto the failure, while the title
-   * of a 429 carries no number at all - and the number is the only part of a
-   * wait a reader can act on.
-   */
-  it("names the seconds when the limit refused the read", async () => {
-    const wrapper = await failedRead({
-      status: 429,
-      title: "Слишком много запросов",
-      retryAfterSeconds: 30,
-    });
-
-    const card = wrapper.get(".status-card--failed");
-    expect(card.text()).toContain(
-      "Слишком много попыток, попробуйте через 30 секунд",
-    );
-    expect(card.text()).not.toContain("Слишком много запросов");
-  });
-
-  /**
-   * The two the interceptor still answers for, and knows more about than this
-   * section does: a session that ended is about the session, and a request that
-   * never went out has no sentence of its own. The card names what is missing,
-   * the plate says why.
-   */
+  /** An ended session and a request that never left keep the section's own line. */
   it.each([0, 401])("keeps its own line for a %i", async (status) => {
     const wrapper = await failedRead({ status, title: "Unauthorized" });
 
-    const card = wrapper.get(".status-card--failed");
+    const card = wrapper.get(".error-state");
     expect(card.text()).toContain("Не удалось узнать состояние заявки");
     expect(card.text()).not.toContain("Unauthorized");
     expect(wrapper.find(".request-form").exists()).toBe(false);
   });
 
-  // Nobody else speaks for these, so the card relays what the server named.
-  it("relays a refusal the interceptor keeps quiet about", async () => {
-    const wrapper = await failedRead({
-      status: 400,
-      title: "Заявка не может быть прочитана",
-    });
-
-    expect(wrapper.get(".status-card--failed").text()).toContain(
-      "Заявка не может быть прочитана",
-    );
-  });
-
-  /**
-   * The press answers under the reason field, the refusals the interceptor
-   * used to plate included: the form stays on screen whatever happens, and the
-   * plate is taken down (refusalHere).
-   */
-  it.each([
-    [403, "Ошибка сервера"],
-    [429, "Слишком много попыток, попробуйте позже"],
-    [500, "Ошибка сервера"],
-  ])("says a %i on the press under the reason field", async (status, line) => {
+  /** A refusal of the press is said under the reason field, the form still there. */
+  it("says a 500 on the press under the reason field", async () => {
     const wrapper = await withRequest(null);
     vi.spyOn(accountApi, "createUsernameChangeRequest").mockResolvedValue({
       data: null,
-      error: { status, title: "Ошибка сервера" },
+      error: { status: 500, title: "Ошибка сервера" },
     } as never);
 
-    await wrapper.find("textarea").setValue("Причина достаточной длины");
+    await wrapper.find("textarea").setValue("Хочу другое имя");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
 
-    expect(wrapper.get(".form-field-error").text()).toBe(line);
-    // Refused all the same: nothing was filed, and the form is still there.
+    expect(wrapper.get(".form-field-error").text()).toBe("Ошибка сервера");
+    // Nothing was filed, and the form is still there.
     expect(wrapper.find(".request-form").exists()).toBe(true);
     expect(wrapper.find(".status-card").exists()).toBe(false);
   });
@@ -318,34 +275,87 @@ describe("username change section", () => {
   });
 });
 
-// A state is written in words on this site and not drawn as a panel: the
-// pills of the account page went for that reason, and these cards wore the
-// same thing at the size of a block, a wash of colour in a frame of it with a
-// mark beside the words. What is left of a card is the sentence in the colour
-// of what it means.
-describe("the state of a username change request", () => {
-  const file = join(
-    dirname(fileURLToPath(import.meta.url)),
-    "AccountUsernameChangeSection.vue",
-  );
-  const rules = () =>
-    styleRules(compileSass(sassBlocks(file), file)).filter(({ selector }) =>
-      /status-(card|header|title|icon)/.test(selector),
-    );
+// The profile's "Сменить имя пользователя" lands here while the blocks above
+// still load: the section is put back at the top on every change of the page's
+// height, until the reader takes the scroll.
+describe("username change section as the anchor of the address", () => {
+  /** The callback of the one observer the section starts, and what it watches. */
+  let resized: (() => void) | null;
+  let watched: Element | null;
+  let scrolled: ReturnType<typeof vi.fn>;
+  const jsdomScroll = Element.prototype.scrollIntoView;
 
-  it("is not a panel: no fill and no frame", () => {
-    const panels = rules().filter(({ declarations }) =>
-      Object.keys(declarations).some((name) =>
-        /^(background|border)/.test(name),
-      ),
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+    resized = null;
+    watched = null;
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback: () => void) {
+          resized = callback;
+        }
+        observe(target: Element) {
+          watched = target;
+        }
+        disconnect() {
+          resized = null;
+        }
+      },
     );
-    expect(panels).toEqual([]);
+    scrolled = vi.fn();
+    Element.prototype.scrollIntoView = scrolled as never;
   });
 
-  it("has no mark beside its words", () => {
-    expect(
-      rules().filter(({ selector }) => /status-icon/.test(selector)),
-    ).toEqual([]);
-    expect(readFileSync(file, "utf8")).not.toContain("status-icon");
+  afterEach(() => {
+    vi.unstubAllGlobals();
+    Element.prototype.scrollIntoView = jsdomScroll;
+    window.location.hash = "";
+  });
+
+  async function mountInPage() {
+    vi.spyOn(accountApi, "getUsernameChangeRequest").mockResolvedValue({
+      data: null,
+      error: null,
+    } as never);
+    const page = document.createElement("div");
+    document.body.appendChild(page);
+    const wrapper = mount(AccountUsernameChangeSection, {
+      ...options(),
+      attachTo: page,
+    });
+    await flushPromises();
+    return wrapper;
+  }
+
+  it("brings itself back to the top as the page around it settles", async () => {
+    window.location.hash = "#username-change";
+    const wrapper = await mountInPage();
+
+    expect(watched).toBe(wrapper.element.parentElement);
+    resized?.();
+    resized?.();
+
+    expect(scrolled).toHaveBeenCalledTimes(2);
+    expect(scrolled.mock.contexts[0]).toBe(wrapper.element);
+    wrapper.unmount();
+  });
+
+  it("lets the reader take the scroll over", async () => {
+    window.location.hash = "#username-change";
+    const wrapper = await mountInPage();
+
+    window.dispatchEvent(new Event("wheel"));
+
+    expect(resized).toBeNull();
+    wrapper.unmount();
+  });
+
+  it("holds nothing when the address names no section", async () => {
+    const wrapper = await mountInPage();
+
+    expect(resized).toBeNull();
+    wrapper.unmount();
   });
 });

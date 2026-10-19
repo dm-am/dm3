@@ -2,12 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The trash in the corner of a testimonial is an admin's, and nobody else is
- * shown it. It asks before it deletes: the question waits shut for the server,
- * prints a refusal in itself, so the request tells the interceptor to stay
- * quiet, and closes once the entry is gone.
- */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";

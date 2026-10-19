@@ -2,26 +2,10 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The blog's blacklist: what the section hands the shared list.
- *
- * The twin of pages/game/settings/BlacklistSection.spec.ts, and it is a
- * separate file for the same reason the two sections are separate: they share
- * BlacklistEditor and nothing else.
- *
- * A name is put on with the field and "Добавить", the last line of the
- * table of the list, which wait
- * for the `add` the section hands them. What these catch:
- *  - `await` dropped from the reload: the field empties over the old list,
- *    and the row arrives a round trip later;
- *  - the reload dropped altogether: the name never appears without F5;
- *  - a refused add reported as a good one, or said in a plate in the corner
- *    as well as under the field;
- *  - the field suggesting the author and the assistants, whom the server
- *    refuses;
- *  - a list that did not come said to be empty;
- *  - the line of what the list does in other words than the blog's.
- */
+// What the blog's section hands the shared BlacklistEditor (the game twin is
+// pages/game/settings/BlacklistSection.spec.ts): the awaited reload before the
+// field empties, a refusal under the field, no suggestion of the people who
+// run the blog, a failed load not said as empty, the line of what the list does.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -52,11 +36,7 @@ function pending<T>() {
 const listOf = (users: User[]) =>
   ({ data: { resources: users }, error: null }) as never;
 
-/**
- * The blacklist of a blog, open in front of its author: one name on screen,
- * and the second list request held back, so the test can look at the screen
- * between the answer to the block and the answer to the list.
- */
+/** One name on screen, the second list request held back, so the screen is seen between the two answers. */
 async function mountSection(first: unknown = listOf([LANCELOT])) {
   setActivePinia(createPinia());
   const store = useBlogDetailsStore();
@@ -97,7 +77,7 @@ async function addByField(wrapper: Section, username: string) {
   await flushPromises();
 }
 
-describe("BlacklistSection (блог)", () => {
+describe("BlacklistSection of a blog", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));
@@ -105,7 +85,7 @@ describe("BlacklistSection (блог)", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("не очищает поле, пока список не показал новое имя", async () => {
+  it("keeps the field until the list shows the new name", async () => {
     const { wrapper, reload } = await mountSection();
     const add = vi.spyOn(blogApi, "addToBlacklist").mockResolvedValue({
       data: MORDRED,
@@ -114,8 +94,7 @@ describe("BlacklistSection (блог)", () => {
 
     await addByField(wrapper, "Мордред");
 
-    // The server took the block; the list has not answered yet. The field
-    // keeps the name, so it does not empty over a list that says nothing.
+    // The server took the block, the list has not answered: the field keeps the name.
     expect(add).toHaveBeenCalledWith("the-blog-guid", "Мордред");
     expect(namesOnScreen(wrapper)).toEqual(["Ланселот"]);
     expect(field(wrapper).props("modelValue")).toBe("Мордред");
@@ -129,7 +108,7 @@ describe("BlacklistSection (блог)", () => {
     expect(saidOutLoud()).toEqual([]);
   });
 
-  it("пишет отказ под полем и не трогает список", async () => {
+  it("writes a refusal under the field and leaves the list alone", async () => {
     const { wrapper } = await mountSection();
     vi.spyOn(blogApi, "addToBlacklist").mockResolvedValue({
       data: null,
@@ -152,7 +131,7 @@ describe("BlacklistSection (блог)", () => {
     expect(saidOutLoud()).toEqual([]);
   });
 
-  it("не дает полю подсказывать тех, кто ведет блог", async () => {
+  it("suggests nobody who leads the blog", async () => {
     const { wrapper } = await mountSection();
 
     expect([...(field(wrapper).props("exclude") as string[])]).toEqual(
@@ -160,9 +139,8 @@ describe("BlacklistSection (блог)", () => {
     );
   });
 
-  // The bin of a row answers under the row of the name it was pressed on,
-  // and the name stays in the list; it used to be a plate in the corner.
-  it("на отказе удаления оставляет имя и говорит об отказе под ним", async () => {
+  // The bin answers under the row it was pressed on, and the name stays.
+  it("keeps the name on a refused removal and says the refusal under it", async () => {
     const { wrapper } = await mountSection();
     vi.spyOn(blogApi, "removeFromBlacklist").mockResolvedValue({
       data: null,
@@ -183,7 +161,7 @@ describe("BlacklistSection (блог)", () => {
     expect(saidOutLoud()).toEqual([]);
   });
 
-  it("говорит о неудачной загрузке, а не о пустом списке", async () => {
+  it("says a failed load, not an empty list", async () => {
     const { wrapper } = await mountSection({
       data: null,
       error: { status: 500, title: "", type: "", traceId: "t" },
@@ -193,9 +171,8 @@ describe("BlacklistSection (блог)", () => {
     expect(wrapper.text()).not.toContain("В черном списке пока никого нет");
   });
 
-  // What the list does, in this blog's own words:
-  // the editor is shared, the line is the section's.
-  it("говорит под заголовком, что делает список", async () => {
+  // The editor is shared; the line is the section's.
+  it("says under the heading what the list does", async () => {
     const { wrapper } = await mountSection();
 
     expect(wrapper.get(".settings-section h2").text()).toBe("Черный список");

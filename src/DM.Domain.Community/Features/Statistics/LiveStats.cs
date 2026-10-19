@@ -90,9 +90,6 @@ public class PostHighlight
     /// </summary>
     public Guid GameId { get; set; }
 
-    /// <summary>
-    /// Game title
-    /// </summary>
     public string GameTitle { get; set; } = string.Empty;
 
     /// <summary>

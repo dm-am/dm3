@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Authentication.Credentials;
@@ -10,19 +11,15 @@ namespace DM.Web.API.Middleware;
 /// <summary>
 /// Middleware for user authentication
 /// </summary>
-public class AuthenticationMiddleware
+internal class AuthenticationMiddleware
 {
     private readonly RequestDelegate _next;
 
-    /// <inheritdoc />
     public AuthenticationMiddleware(RequestDelegate next)
     {
         _next = next;
     }
 
-    /// <summary>
-    /// Before request
-    /// </summary>
     public async Task InvokeAsync(HttpContext httpContext,
         ICredentialsStorage credentialsStorage,
         IWebAuthenticationService authenticationService,
@@ -31,33 +28,20 @@ public class AuthenticationMiddleware
     {
         if (identityProvider.Current == null)
         {
-            var tokenCredentials = await credentialsStorage.ExtractToken(httpContext);
+            var tokenCredentials = credentialsStorage.ExtractToken(httpContext);
             if (tokenCredentials != null)
             {
                 await authenticationService.Authenticate(tokenCredentials, httpContext);
             }
             else
             {
-                // Set guest identity for unauthenticated requests
-                identitySetter.Current = DM.Domain.Account.Features.Authentication.Identity.Guest();
+                identitySetter.Current = Identity.Guest();
             }
         }
 
-        // Tagging log events with the caller belongs to the host, not to the
-        // identity store: PushProperty returns the disposable that pops the
-        // enricher back off, and only a request-scoped frame knows when that
-        // should happen. The identity storage used to push from its own setter
-        // and drop the disposable, so every assignment left a frame behind.
+        // Pushed here, by the request-scoped frame that knows when to pop it.
         var username = identityProvider.Current?.User?.Username;
-        if (string.IsNullOrEmpty(username))
-        {
-            await _next(httpContext);
-            return;
-        }
-
-        using (LogContext.PushProperty("User", username))
-        {
-            await _next(httpContext);
-        }
+        using var userProperty = string.IsNullOrEmpty(username) ? null : LogContext.PushProperty("User", username);
+        await _next(httpContext);
     }
 }

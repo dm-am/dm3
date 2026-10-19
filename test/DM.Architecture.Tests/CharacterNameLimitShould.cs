@@ -1,5 +1,4 @@
 using System.Globalization;
-using System.IO;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Configuration;
 using AwesomeAssertions;
@@ -11,18 +10,7 @@ namespace DM.Architecture.Tests;
 /// The validator, the stored column and the form stop a character name at the
 /// same character.
 /// </summary>
-/// <remarks>
-/// The limit lived in one of the three places. The validators refused a name
-/// over fifty, the column took any length at all, and the form let a hundred
-/// characters be typed and then answered the save with a message naming neither
-/// the field nor a number. Nothing in between could fail, because none of the
-/// three can read the other two.
-///
-/// Read out of the sources rather than out of the model: the migration and the
-/// two snapshots are what a database is built from, and the client cannot be
-/// asked at all from here. A number is compared rather than a phrase, so a
-/// failure says which of the three moved.
-/// </remarks>
+/// <remarks>Read out of the sources: the migration and snapshots build the database, the client cannot be asked.</remarks>
 public class CharacterNameLimitShould
 {
     private const string CharacterEntity =
@@ -31,17 +19,12 @@ public class CharacterNameLimitShould
     private static readonly Regex ClientLimit =
         new(@"CHARACTER_NAME_MAX_LENGTH\s*=\s*(\d+)", RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    private static string Read(params string[] parts) =>
-        File.ReadAllText(Path.Combine(RepositoryRoot, Path.Combine(parts)));
-
     [Fact]
     public void BeSpelledOnceForBothValidators()
     {
         foreach (var validator in new[] { "CreateCharacterValidator.cs", "UpdateCharacterValidator.cs" })
         {
-            var source = Read("src", "DM.Domain.Game", "Features", "Characters", validator);
+            var source = RepositoryFiles.Read("src", "DM.Domain.Game", "Features", "Characters", validator);
 
             source.Should().Contain("MaximumLength(CharacterPolicy.NameMaxLength)",
                 $"{validator} answers the save, and the number it answers with belongs to the policy");
@@ -78,7 +61,7 @@ public class CharacterNameLimitShould
     [Fact]
     public void BeTheNumberTheFormStopsTypingAt()
     {
-        var declared = ClientLimit.Match(Read(
+        var declared = ClientLimit.Match(RepositoryFiles.Read(
             "src", "DM.Web.Client", "src", "shared", "lib", "constants", "game.ts"));
 
         declared.Success.Should().BeTrue(
@@ -87,9 +70,4 @@ public class CharacterNameLimitShould
             CharacterPolicy.NameMaxLength,
             "a form that accepts more than the validator does turns a finished name into a refusal");
     }
-
-    /// <summary>
-    /// Text between an opening marker and the first terminator after it: enough to
-    /// read one table or one entity, and loud when either is gone or renamed.
-    /// </summary>
 }

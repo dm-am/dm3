@@ -1,14 +1,15 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Personal.Features.Notifications;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Game;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
-using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Tests;
 
@@ -16,12 +17,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// One game with one room, one character and the pendencies whose recipient the
 /// generators have to work out.
 /// </summary>
-/// <remarks>
-/// Deliberately small. The rows here exist to make the recipient rules
-/// distinguishable — the character's author is not the person waited for, and
-/// neither is the person who wrote the pendency down — so that a generator
-/// answering the wrong one of the three cannot pass.
-/// </remarks>
+/// <remarks>The character's author, the person waited for and the one who wrote the pendency are kept apart.</remarks>
 internal static class NotificationSeed
 {
     private static Guid Id(string tail) => Guid.Parse("00000000-0000-0000-0000-0000000000" + tail);
@@ -162,5 +158,12 @@ internal static class NotificationSeed
             CreatedUtc = created,
             FulfilledUtc = fulfilled
         };
+    }
+
+    /// <summary>A generator's answer of one notification.</summary>
+    internal static async IAsyncEnumerable<CreateNotification> One(CreateNotification notification)
+    {
+        yield return notification;
+        await Task.CompletedTask;
     }
 }

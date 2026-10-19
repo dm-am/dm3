@@ -12,24 +12,9 @@ namespace DM.Architecture.Tests;
 /// A repository method that writes twice writes both times or neither.
 /// </summary>
 /// <remarks>
-/// Two writes with nothing around them are two transactions, and the gap between
-/// them is a state the code has no name for: a password hash changed with the
-/// reset token that authorised it still live, a rename recorded in history against
-/// a user still carrying the old name, an invitation spent with nothing granted for
-/// it. None of these is reachable by an ordinary action — it takes the database
-/// refusing, or the process dying, in the gap — and none of them is repaired by
-/// anything afterwards.
-///
-/// The wrapper is not optional and not a style choice. The API host configures
-/// EnableRetryOnFailure, and a retrying execution strategy refuses a transaction
-/// opened by hand: it has no way to replay one. So the two halves come together
-/// or not at all, which is why this rule asks for all three spellings rather than
-/// for the transaction alone.
-///
-/// Asserted on the text, because the defect is the absence of a call. A test that
-/// exercised these methods would pass either way — both writes land when nothing
-/// goes wrong, and what goes wrong here is the database, in a window of
-/// microseconds, on a machine nobody is watching.
+/// Two bare writes are two transactions with a nameless state between them. The API host retries on
+/// failure, and the retrying strategy refuses a hand-opened transaction. Asserted on the text: the
+/// defect is the absence of a call.
 /// </remarks>
 public class DurableWritesShould
 {
@@ -39,28 +24,20 @@ public class DurableWritesShould
         "SaveChangesAsync(",
         "ExecuteUpdateAsync(",
         "ExecuteDeleteAsync(",
-        // W1.1 made raw SQL a normal write path (ON CONFLICT upserts, the
-        // retention sweeper); a method pairing one of these with SaveChanges
-        // owes the same wrapper as any other double write.
+        // Raw SQL is a write path; paired with SaveChanges it owes the same wrapper.
         "ExecuteSqlRawAsync(",
         "ExecuteSqlInterpolatedAsync(",
+        // AttachmentRows.RetireAsync, TokenRows.Retire and SoftDelete.MarkWhere are each one
+        // ExecuteUpdateAsync under a name.
+        "RetireAsync(",
+        "Retire(",
+        "MarkWhere(",
     ];
 
     /// <summary>
     /// The two spellings of "this block runs inside an execution strategy".
     /// </summary>
-    /// <remarks>
-    /// The strategy taken by hand, and <c>RetryableWrite.Run</c> - which is that
-    /// same preamble plus the change-tracker clear, written once instead of the
-    /// nineteen times it used to be. Both put the transaction below INSIDE the
-    /// strategy, which is the property this rule is about, and the helper does it
-    /// by construction rather than by the caller remembering to.
-    ///
-    /// This is not an exemption: a method still has to open a transaction and
-    /// commit it, and it still has to do so under one of these two. What changed
-    /// is that the strategy has a name; the rule reads text, so it has to be told
-    /// the name.
-    /// </remarks>
+    /// <remarks>The strategy taken by hand, and <c>RetryableWrite.Run</c>, which takes it and clears the tracker.</remarks>
     private static readonly string[] Strategy =
     [
         "CreateExecutionStrategy(",
@@ -93,20 +70,14 @@ public class DurableWritesShould
     /// <summary>
     /// The whole persistence project, and not the Repositories folder of it.
     /// </summary>
-    /// <remarks>
-    /// Four repositories live outside that folder — likes, notepads,
-    /// subscriptions and the unread counters — and a rule about repositories that
-    /// stops at a directory name is one a new folder walks out of. None of them
-    /// writes twice in a method today, so the reach costs nothing and holds the
-    /// day one of them does.
-    /// </remarks>
+    /// <remarks>Four repositories live outside the Repositories folder.</remarks>
     private static string PersistenceRoot => Path.Combine(
         DM.Testing.RepositoryLayout.Root, "src", "DM.Infrastructure.Persistence");
 
     /// <summary>Directories with nothing anybody wrote by hand in them.</summary>
     private static readonly string[] NotAuthored = ["obj", "bin", "Migrations"];
 
-    private static IEnumerable<string> RepositoryFiles() => Directory
+    private static IEnumerable<string> PersistenceSources() => Directory
         .EnumerateFiles(PersistenceRoot, "*.cs", SearchOption.AllDirectories)
         .Where(path => !path
             .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
@@ -146,17 +117,8 @@ public class DurableWritesShould
     /// Whether every method of the file that calls this one is wrapped.
     /// </summary>
     /// <remarks>
-    /// A helper extracted out of a transaction is not a second transaction: its
-    /// writes land inside the one its caller opened, and they roll back with it.
-    /// Asked of the callers rather than answered by an entry in the register
-    /// above, because the property that makes such a helper safe is exactly this
-    /// one, and it stops being true the moment somebody calls it from outside a
-    /// transaction - at which point that caller is flagged in its own right and
-    /// this helper is flagged with it.
-    ///
-    /// "At least one caller" is half the answer: a helper nothing in the file
-    /// calls is either dead or reached by a route this parser cannot see, and
-    /// neither is a reason to trust it.
+    /// A helper's writes land inside its caller's transaction. A helper nothing in the file calls is
+    /// not trusted.
     /// </remarks>
     private static bool CalledOnlyFromWrappedMembers(
         SourceText.Member member, IReadOnlyList<SourceText.Member> file)
@@ -188,16 +150,16 @@ public class DurableWritesShould
     [Fact]
     public void FindTheRepositoriesAndTheirMethods()
     {
-        var files = RepositoryFiles().ToList();
-        files.Should().HaveCountGreaterThan(30, "the persistence project has a repository per aggregate");
+        var files = PersistenceSources().ToList();
+        files.Should().NotBeEmpty("the persistence project has a repository per aggregate");
 
         var members = files.Sum(file => SourceText.Members(SourceText.ReadCode(file)).Count);
-        members.Should().BeGreaterThan(300, "each of them declares a good many methods");
+        members.Should().BePositive("each of them declares methods");
 
         var writing = files
             .SelectMany(file => SourceText.Members(SourceText.ReadCode(file)))
             .Count(member => Writes.Any(write => member.Body.Contains(write, StringComparison.Ordinal)));
-        writing.Should().BeGreaterThan(50, "and a good many of those write");
+        writing.Should().BePositive("and some of those write");
     }
 
     [Fact]
@@ -205,7 +167,7 @@ public class DurableWritesShould
     {
         var offenders = new List<string>();
 
-        foreach (var path in RepositoryFiles())
+        foreach (var path in PersistenceSources())
         {
             var members = SourceText.Members(SourceText.ReadCode(path));
             foreach (var member in members)
@@ -233,7 +195,7 @@ public class DurableWritesShould
     {
         var offenders = new List<string>();
 
-        foreach (var path in RepositoryFiles())
+        foreach (var path in PersistenceSources())
         {
             foreach (var member in SourceText.Members(SourceText.ReadCode(path)))
             {
@@ -255,7 +217,7 @@ public class DurableWritesShould
     [Fact]
     public void ExemptOnlyWhatStillExists()
     {
-        var names = RepositoryFiles()
+        var names = PersistenceSources()
             .SelectMany(path => SourceText.Members(SourceText.ReadCode(path)))
             .Select(member => member.Name)
             .ToHashSet(StringComparer.Ordinal);

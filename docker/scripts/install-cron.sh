@@ -17,23 +17,21 @@ fi
 # Ensure log file exists and is writable
 touch "$LOG_FILE"
 
-# Where verify-backup.sh leaves its verdict for node-exporter to publish. The
-# exit code alone reached nobody: cron mails it, and the server has no MTA.
+# Where verify-backup.sh leaves its verdict for node-exporter: cron mail reached nobody,
+# since the server has no MTA.
 TEXTFILE_DIR="${TEXTFILE_DIR:-/var/lib/node_exporter/textfile}"
 mkdir -p "$TEXTFILE_DIR"
 
 # Install crontab entries
 CRON_MARKER="# DM3 automated backups"
-# verify-backup.sh runs last and exits non-zero when an artefact is missing,
-# tiny or corrupted. A backup nobody verifies is not a backup: without this
-# entry the first sign of trouble is a failed restore.
+# verify-backup.sh runs last: a backup nobody verifies shows its first fault at the restore.
 CRON_JOBS="$CRON_MARKER
 0 2 * * * $SCRIPT_DIR/backup-postgres.sh >> $LOG_FILE 2>&1
 0 4 * * * $SCRIPT_DIR/backup-storage.sh >> $LOG_FILE 2>&1
 0 5 * * * $SCRIPT_DIR/verify-backup.sh >> $LOG_FILE 2>&1"
 
 # Remove old DM3 cron entries if present, then add new ones
-(crontab -l 2>/dev/null | grep -v "$CRON_MARKER" | grep -v "backup-postgres.sh" | grep -v "backup-storage.sh" | grep -v "verify-backup.sh"; echo "$CRON_JOBS") | crontab -
+(crontab -l 2>/dev/null | grep -v -e "$CRON_MARKER" -e "backup-postgres.sh" -e "backup-storage.sh" -e "verify-backup.sh"; echo "$CRON_JOBS") | crontab -
 
 echo "Backup cron jobs installed:"
 echo "  02:00 - PostgreSQL backup"

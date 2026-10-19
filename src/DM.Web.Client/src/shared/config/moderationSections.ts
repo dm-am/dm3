@@ -36,7 +36,7 @@ export const MODERATION_GROUPS = [
   "funds",
 ] as const;
 
-export type ModerationGroup = (typeof MODERATION_GROUPS)[number];
+type ModerationGroup = (typeof MODERATION_GROUPS)[number];
 
 export interface ModerationSection {
   /** Route name of the section's page. */

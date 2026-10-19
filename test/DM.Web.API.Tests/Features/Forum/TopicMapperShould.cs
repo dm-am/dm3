@@ -1,6 +1,5 @@
 using System;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Parsing;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
@@ -14,25 +13,20 @@ using DomainTopic = DM.Domain.Forum.Features.Topics.Topic;
 namespace DM.Web.API.Tests.Features.Forum;
 
 /// <summary>
-/// PATCH carries "not sent" as null and the write model must keep saying it:
-/// the domain updates only the fields that arrived, so a mapper that defaults
-/// an omitted one re-introduces the bug where pinning a topic blanked its
-/// title.
+/// PATCH carries "not sent" as null and the write model keeps saying it: the domain updates only the
+/// fields that arrived.
 /// </summary>
 public class TopicMapperShould : UnitTestBase
 {
-    private TopicMapper CreateMapper()
+    private static TopicMapper CreateMapper()
     {
-        var userMapper = new UserMapper(Mock<IImgproxyUrlBuilder>());
+        var userMapper = new UserMapper();
         return new TopicMapper(userMapper, new BoardMapper(userMapper));
     }
 
     /// <summary>
-    /// The topic description is a BbText the client edits: getTopicForUpdate
-    /// sends X-Dm-Audience: author_edit, and the converter honors that only
-    /// when the envelope names the author. A topic without the envelope
-    /// degrades the author's editor fetch to Display - and saving what the
-    /// editor got back silently unwraps an author-moderator's [mod] markup.
+    /// The topic description is a BbText the client edits with X-Dm-Audience: author_edit, which the converter
+    /// honors only when the envelope names the author.
     /// </summary>
     [Fact]
     public void WrapTheDescriptionInAnAuthorAwareEnvelope()
@@ -71,9 +65,8 @@ public class TopicMapperShould : UnitTestBase
     }
 
     /// <summary>
-    /// The domain resolves a board by alias, title or id and compares the
-    /// value with the current board title to decide whether the edit is a
-    /// move - so the free-form field must arrive as BoardTitle verbatim.
+    /// The domain resolves a board by alias, title or id and compares it with the current title, so the field
+    /// arrives as BoardTitle verbatim.
     /// </summary>
     [Fact]
     public void CarryTheBoardAsATitle()

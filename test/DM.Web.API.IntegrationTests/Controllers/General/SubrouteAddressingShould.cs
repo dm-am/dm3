@@ -1,9 +1,4 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Net.Http;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -22,18 +17,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// a reader who takes no part in it as the table below records.
 /// </summary>
 /// <remarks>
-/// The public id is turned into an identifier in three places that disagree: the
-/// game asks its domain service, the blog loads the whole blog through the read
-/// that applies its visibility, the chat loads the whole chat, and every
-/// controller of a subroute calls one of them before the service of its own
-/// feature. Where that resolution happens is a detail; what each subroute
-/// answers is the contract. The table holds it for the owner of the game, blog
-/// or chat by either identifier, for two addresses nobody holds, for a
-/// signed-in reader who takes no part, and for a guest, so moving the
-/// resolution cannot change a cell without saying so.
-///
-/// Read off the routes the host registered, so a subroute added without a row
-/// here fails the coverage rule rather than passing unasked.
+/// The public id is resolved in three places that disagree, so the table holds what each subroute answers for
+/// every caller; read off the registered routes, so a new subroute without a row fails.
 /// </remarks>
 public class SubrouteAddressingShould : IntegrationTestBase
 {
@@ -41,10 +26,8 @@ public class SubrouteAddressingShould : IntegrationTestBase
     private const string UnknownPublicId = "zzzzz";
 
     /// <summary>
-    /// The answers by template, column by column: the owner by identifier and by
-    /// public id; a public id and an identifier nobody holds; a reader who takes
-    /// no part, by identifier and by public id; a guest, by identifier and by
-    /// public id.
+    /// The answers by template: owner by identifier and public id, two addresses nobody holds, a reader who takes
+    /// no part, a guest, each by identifier and public id.
     /// </summary>
     private static readonly IReadOnlyDictionary<string, string> Matrix = new Dictionary<string, string>
     {

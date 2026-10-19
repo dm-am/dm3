@@ -17,23 +17,13 @@ namespace DM.Web.API.Tests.Features.General;
 /// An instance either has the push queue subscribed or says that it has not.
 /// </summary>
 /// <remarks>
-/// The subscription used to be attempted five times over 62 seconds and then
-/// abandoned, which is shorter than a broker restart: an API that came up while
-/// RabbitMQ was still starting served every request with push silently off for
-/// the life of the process. Nothing inside the host reported it, and the rule that
-/// would have (RealtimePushWithoutConsumer) needs the broker scraped and five
-/// minutes, over a queue that an unsubscribed consumer never declares.
-///
-/// Driven through the real background service with the wait injected as zero: what
-/// is asserted is the loop and the state it leaves behind, and a test that spent
-/// the ladder in real time would assert the same thing an hour later.
+/// A broker restart outlasts any finite ladder. Driven through the real background service with the wait
+/// injected as zero.
 /// </remarks>
 public class RealtimeSubscriptionShould : UnitTestBase
 {
     /// <summary>
-    /// Failures before the subscription opens. Above any finite ladder this
-    /// consumer could carry (the five it used to), so passing means the loop does
-    /// not run out rather than that the outage was short enough.
+    /// Failures before the subscription opens, above any finite ladder this consumer could carry.
     /// </summary>
     private const int FailuresBeforeSuccess = 7;
 
@@ -86,12 +76,7 @@ public class RealtimeSubscriptionShould : UnitTestBase
     /// <summary>
     /// A stopping host is not waited on by the retries.
     /// </summary>
-    /// <remarks>
-    /// The loop is unbounded now, so the token is the only thing that ends it: a
-    /// retry that does not observe cancellation would hold the shutdown for as
-    /// long as the broker stays down, which is the failure the previous finite
-    /// ladder at least ended on its own.
-    /// </remarks>
+    /// <remarks>The loop is unbounded, so the token is the only thing that ends it.</remarks>
     [Fact]
     public async Task StopAttemptingWhenTheHostStops()
     {

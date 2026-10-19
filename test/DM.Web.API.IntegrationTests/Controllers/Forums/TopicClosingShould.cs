@@ -13,12 +13,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 /// Who closes and reopens a topic, through the edit form's PATCH.
 /// </summary>
 /// <remarks>
-/// The author closes their own topic and reopens it if they closed it; the board's
-/// moderators and the administrators close and reopen any. A closed topic stays
-/// shut to its author's edits, and the reopening request is the one that opens it,
-/// text and all. Driven over HTTP
-/// because the rule is split between the resolver and the service, and a test of
-/// either half alone would keep passing while the two disagreed.
+/// The author closes their own topic and reopens what they closed; the board's moderators and the
+/// administrators close and reopen any. Over HTTP: the rule is split between the resolver and the service.
 /// </remarks>
 public class TopicClosingShould : IntegrationTestBase
 {
@@ -48,9 +44,7 @@ public class TopicClosingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// What a moderator closed stays closed to the author, or the closing would last
-    /// one click: it is usually closed to stop the discussion in it. Once the
-    /// moderator reopens it, the topic is the author's to close again.
+    /// What a moderator closed stays closed to the author until the moderator reopens it.
     /// </summary>
     [Fact]
     public async Task KeepATopicAModeratorClosedShutToItsAuthor()
@@ -115,9 +109,7 @@ public class TopicClosingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Reopening is where the ban has to hold on its own: the request is not asked
-    /// the edit rule of the closed topic, so the closing rule is the only gate, and
-    /// a reopened topic would take the banned author's text with it.
+    /// Reopening is not asked the edit rule of the closed topic, so the closing rule is the only gate.
     /// </summary>
     [Theory]
     [InlineData(9304, false, true)]

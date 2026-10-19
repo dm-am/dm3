@@ -26,10 +26,7 @@ internal class TestCompromisedPasswordChecker : ICompromisedPasswordChecker
 }
 
 /// <summary>
-/// Custom WebApplicationFactory for integration tests.
-///
-/// Uses PostgreSQL via Testcontainers for 100% compatibility with production.
-/// The container is managed by DatabaseFixture and shared across all tests.
+/// The host under test, over the PostgreSQL container DatabaseFixture shares across all tests.
 /// </summary>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
@@ -45,27 +42,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
     {
         // Add test configuration overrides
         builder.ConfigureAppConfiguration((context, config) =>
-        {
-            config.AddInMemoryCollection(new Dictionary<string, string?>
-            {
-                // Point RabbitMQ to the test container
-                ["RabbitMqConfiguration:Endpoint"] = _databaseFixture.RabbitMqConnectionString,
-                // Disable rate limiting in tests
-                ["RateLimiting:Enabled"] = "false",
-                // The encryption key has no default in the repository, so the host
-                // refuses to start without one. A fixed throwaway key keeps the
-                // tests deterministic and is never a deployment's key.
-                ["CryptoConfiguration:KeyBase64"] = "ZG0zLWludGVncmF0aW9uLXRlc3RzLXRocm93YXdheS0=",
-                // Lower lockout threshold and disable progressive delays for faster tests
-                ["AuthenticationConfiguration:AccountLockoutThreshold"] = "5",
-                ["AuthenticationConfiguration:LoginDelaySchedule:0:0"] = "1000",
-                ["AuthenticationConfiguration:LoginDelaySchedule:0:1"] = "0",
-                ["AuthenticationConfiguration:LoginDelaySchedule:1:0"] = "1000",
-                ["AuthenticationConfiguration:LoginDelaySchedule:1:1"] = "0",
-                ["AuthenticationConfiguration:LoginDelaySchedule:2:0"] = "1000",
-                ["AuthenticationConfiguration:LoginDelaySchedule:2:1"] = "0"
-            });
-        });
+            config.AddInMemoryCollection(TestConfiguration()));
 
         builder.ConfigureServices(services =>
         {
@@ -73,49 +50,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             // This runs BEFORE Startup.Configure(), so our middleware is added first
             services.AddSingleton<IStartupFilter, TestAuthenticationStartupFilter>();
 
-            // Remove background services that cause resource leaks or external connections in tests
-            var backgroundServicesToRemove = new[]
-            {
-                typeof(RealtimeNotificationConsumer), // RabbitMQ connection attempts
-                typeof(WarmupService), // background warmup competes with tests for the pool
-                typeof(TokenCleanupService), // Token cleanup uses DB — avoid race conditions
-                typeof(SessionCleanupService), // periodic session purge — avoid race conditions
-                typeof(RetentionSweepService), // periodic retention sweep — tests call the processor directly
-                typeof(OutboxRelayService), // outbox relay — tests drive the processor directly, a live loop would claim their rows
-                typeof(PendingRegistrationCleanupService), // DB cleanup — avoid race conditions
-                typeof(UsernameChangeCleanupService), // DB cleanup — avoid race conditions
-                // period digests — the tests drive the processor directly, and a
-                // live loop generates the very periods they are about: it claims
-                // them before the test can, posts topics on the news board while
-                // the test is counting them, and repoints the board between the
-                // two statements the cleanup takes its topics away with
-                typeof(PeriodDigestService)
-            };
-
-            foreach (var serviceType in backgroundServicesToRemove)
-            {
-                var descriptor = services.FirstOrDefault(d => d.ImplementationType == serviceType);
-                if (descriptor != null)
-                {
-                    services.Remove(descriptor);
-                }
-            }
-
-            // Remove all DbContext-related registrations from the real app. The
-            // lease is part of the pool's plumbing: left behind, it asks for the
-            // removed pool, which the validating build refuses at startup.
-            var dbContextDescriptors = services
-                .Where(d => d.ServiceType == typeof(DbContextOptions<DmDbContext>) ||
-                            d.ServiceType == typeof(DmDbContext) ||
-                            d.ServiceType.FullName?.Contains("DbContextPool") == true ||
-                            d.ServiceType.FullName?.Contains("DbContextLease") == true ||
-                            d.ServiceType.FullName?.Contains("DbContextOptions") == true)
-                .ToList();
-
-            foreach (var descriptor in dbContextDescriptors)
-            {
-                services.Remove(descriptor);
-            }
+            RemoveBackgroundServices(services);
 
             // Override HIBP password checker with a test stub
             // Remove the real HttpClient-based implementation
@@ -127,51 +62,116 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             }
             services.AddSingleton<ICompromisedPasswordChecker, TestCompromisedPasswordChecker>();
 
-            // Register DbContext with PostgreSQL connection string from Testcontainers.
-            // EnableRetryOnFailure mirrors Startup: with a retrying execution strategy
-            // EF refuses a user-initiated transaction, so code that opens one without
-            // going through CreateExecutionStrategy fails in production and nowhere else.
-            services.AddDbContext<DmDbContext>(options =>
-            {
-                options.UseNpgsql(_databaseFixture.ConnectionString,
-                        npgsql => npgsql.EnableRetryOnFailure(
-                            maxRetryCount: 3,
-                            maxRetryDelay: TimeSpan.FromSeconds(5),
-                            errorCodesToAdd: null))
-                    .EnableSensitiveDataLogging()
-                    .EnableDetailedErrors();
-            }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
-
-            // The bucket, as a dictionary. WebApplicationFactory runs this
-            // callback after Startup.ConfigureServices, so the registration here
-            // is the last descriptor and the one the host resolves — see
-            // InMemoryObjectStorage for why S3 is the one dependency not
-            // containerised. RemoveAll on top, so the scanned pairs cannot even
-            // sit on the enumerable.
-            services.RemoveAll<DM.Domain.Core.Uploads.IObjectStorage>();
-            services.AddSingleton<DM.Domain.Core.Uploads.IObjectStorage, InMemoryObjectStorage>();
-
-            // Every letter, copied where a test can read it — see
-            // RecordingMailSender for why a copy is the only way to see one from
-            // in here. Wrapped rather than replaced: the registered sender is
-            // built as the host would build it and keeps doing its whole job
-            // underneath, so nothing this suite covered stops being covered.
-            var mail = services.Last(d => d.ServiceType == typeof(DM.Domain.Core.Mail.IMailSender));
-            services.Remove(mail);
-            services.Add(ServiceDescriptor.Describe(
-                typeof(DM.Domain.Core.Mail.IMailSender),
-                provider => new RecordingMailSender(
-                    (DM.Domain.Core.Mail.IMailSender)ActivatorUtilities.CreateInstance(
-                        provider, mail.ImplementationType!)),
-                mail.Lifetime));
+            ReplaceStores(services);
+            RecordMail(services);
         });
+    }
+
+    private Dictionary<string, string?> TestConfiguration() => new()
+    {
+        // Point RabbitMQ to the test container, as its user: the development settings carry the stand's password.
+        ["RabbitMqConfiguration:Endpoint"] = _databaseFixture.RabbitMqConnectionString,
+        ["RabbitMqConfiguration:Username"] = DatabaseFixture.BrokerUsername,
+        ["RabbitMqConfiguration:Password"] = DatabaseFixture.BrokerPassword,
+        // Disable rate limiting in tests
+        ["RateLimiting:Enabled"] = "false",
+        // The encryption key has no default in the repository, so the host
+        // refuses to start without one. A fixed throwaway key keeps the
+        // tests deterministic and is never a deployment's key.
+        ["CryptoConfiguration:KeyBase64"] = "ZG0zLWludGVncmF0aW9uLXRlc3RzLXRocm93YXdheS0=",
+        // Lower lockout threshold and disable progressive delays for faster tests
+        ["AuthenticationConfiguration:AccountLockoutThreshold"] = "5",
+        ["AuthenticationConfiguration:LoginDelaySchedule:0:0"] = "1000",
+        ["AuthenticationConfiguration:LoginDelaySchedule:0:1"] = "0",
+        ["AuthenticationConfiguration:LoginDelaySchedule:1:0"] = "1000",
+        ["AuthenticationConfiguration:LoginDelaySchedule:1:1"] = "0",
+        ["AuthenticationConfiguration:LoginDelaySchedule:2:0"] = "1000",
+        ["AuthenticationConfiguration:LoginDelaySchedule:2:1"] = "0"
+    };
+
+    // Remove background services that cause resource leaks or external connections in tests
+    private static void RemoveBackgroundServices(IServiceCollection services)
+    {
+        var backgroundServicesToRemove = new[]
+        {
+            typeof(RealtimeNotificationConsumer), // RabbitMQ connection attempts
+            typeof(WarmupService), // background warmup competes with tests for the pool
+            typeof(TokenCleanupService), // Token cleanup uses DB — avoid race conditions
+            typeof(SessionCleanupService), // periodic session purge — avoid race conditions
+            typeof(RetentionSweepService), // periodic retention sweep — tests call the processor directly
+            typeof(OutboxRelayService), // outbox relay — tests drive the processor directly, a live loop would claim their rows
+            typeof(PendingRegistrationCleanupService), // DB cleanup — avoid race conditions
+            typeof(UsernameChangeCleanupService), // DB cleanup — avoid race conditions
+            // Period digests: the tests drive the processor directly, and a live loop would claim their periods.
+            typeof(PeriodDigestService)
+        };
+
+        foreach (var serviceType in backgroundServicesToRemove)
+        {
+            var descriptor = services.FirstOrDefault(d => d.ImplementationType == serviceType);
+            if (descriptor != null)
+            {
+                services.Remove(descriptor);
+            }
+        }
+    }
+
+    private void ReplaceStores(IServiceCollection services)
+    {
+        // Remove all DbContext-related registrations from the real app. The
+        // lease is part of the pool's plumbing: left behind, it asks for the
+        // removed pool, which the validating build refuses at startup.
+        var dbContextDescriptors = services
+            .Where(d => d.ServiceType == typeof(DbContextOptions<DmDbContext>) ||
+                        d.ServiceType == typeof(DmDbContext) ||
+                        d.ServiceType.FullName?.Contains("DbContextPool") == true ||
+                        d.ServiceType.FullName?.Contains("DbContextLease") == true ||
+                        d.ServiceType.FullName?.Contains("DbContextOptions") == true)
+            .ToList();
+
+        foreach (var descriptor in dbContextDescriptors)
+        {
+            services.Remove(descriptor);
+        }
+
+        // Register DbContext with PostgreSQL connection string from Testcontainers.
+        // EnableRetryOnFailure mirrors Startup: with a retrying execution strategy
+        // EF refuses a user-initiated transaction, so code that opens one without
+        // going through CreateExecutionStrategy fails in production and nowhere else.
+        services.AddDbContext<DmDbContext>(options =>
+        {
+            options.UseNpgsql(_databaseFixture.ConnectionString,
+                    npgsql => npgsql.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: TimeSpan.FromSeconds(5),
+                        errorCodesToAdd: null))
+                .EnableSensitiveDataLogging()
+                .EnableDetailedErrors();
+        }, ServiceLifetime.Scoped, ServiceLifetime.Scoped);
+
+        // The bucket, as a dictionary (see InMemoryObjectStorage): registered last, and RemoveAll on top.
+        services.RemoveAll<DM.Domain.Core.Uploads.IObjectStorage>();
+        services.AddSingleton<DM.Domain.Core.Uploads.IObjectStorage, InMemoryObjectStorage>();
+    }
+
+    // Every letter copied where a test can read it (see RecordingMailSender); the real sender keeps working underneath.
+    private static void RecordMail(IServiceCollection services)
+    {
+        var mail = services.Last(d => d.ServiceType == typeof(DM.Domain.Core.Mail.IMailSender));
+        services.Remove(mail);
+        services.Add(ServiceDescriptor.Describe(
+            typeof(DM.Domain.Core.Mail.IMailSender),
+            provider => new RecordingMailSender(
+                (DM.Domain.Core.Mail.IMailSender)ActivatorUtilities.CreateInstance(
+                    provider, mail.ImplementationType!)),
+            mail.Lifetime));
     }
 
     /// <summary>
     /// Create a test user for authenticated requests
     /// </summary>
     public static GeneralUser CreateTestUser(
-        string username = TestConstants.TestUserUsername,
+        string username = TestConstants.TestUserLogin,
         UserRole role = UserRole.RegularUser)
     {
         return new GeneralUser
@@ -191,7 +191,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         return new GeneralUser
         {
             UserId = TestConstants.AdminUserId,
-            Username = TestConstants.AdminUserUsername,
+            Username = TestConstants.AdminUserLogin,
             Role = UserRole.Admin,
             AccessPolicy = AccessPolicy.NotSpecified
         };
@@ -205,7 +205,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         return new GeneralUser
         {
             UserId = TestConstants.SecondUserId,
-            Username = TestConstants.SecondUserUsername,
+            Username = TestConstants.SecondUserLogin,
             Role = UserRole.RegularUser,
             AccessPolicy = AccessPolicy.NotSpecified
         };
@@ -219,7 +219,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         return new GeneralUser
         {
             UserId = TestConstants.ModeratorUserId,
-            Username = TestConstants.ModeratorUserUsername,
+            Username = TestConstants.ModeratorUserLogin,
             Role = UserRole.Moderator,
             AccessPolicy = AccessPolicy.NotSpecified
         };
@@ -233,7 +233,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         return new GeneralUser
         {
             UserId = TestConstants.SeniorModeratorUserId,
-            Username = TestConstants.SeniorModeratorUserUsername,
+            Username = TestConstants.SeniorModeratorUserLogin,
             Role = UserRole.SeniorModerator,
             AccessPolicy = AccessPolicy.NotSpecified
         };

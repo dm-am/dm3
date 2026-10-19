@@ -1,27 +1,15 @@
 import { AchievementMetric } from "@/shared/api/models/achievements";
 import type { User } from "@/shared/api/models/community";
 
-/**
- * SSOT mapping of a metric → value from the user profile.
- *
- * The paired backend resolver is `AchievementMetricResolver.GetValue`.
- * When adding a new metric both functions change together.
- *
- * All sources are denormalized profile counters, except
- * `DaysSinceRegistration`, which is computed from `registeredUtc` on
- * the fly (a single subtraction, no network requests).
- */
+/** A metric's value off the profile, paired with the server's AchievementMetricResolver. */
 export function getMetricValue(metric: AchievementMetric, user: User): number {
   switch (metric) {
     case AchievementMetric.GamePostsAuthored:
-      // The same metric as the "новичок до 100 постов" rule on the backend
-      // (the User.QuantityRating field).
       return user.rating?.totalPosts ?? 0;
     case AchievementMetric.DaysSinceRegistration:
       return daysSinceRegistration(user);
     case AchievementMetric.PostReviewScoreSum:
-      // Signed score; negatives are clamped to zero — thresholds are defined
-      // as positive numbers, a negative score will never reach them.
+      // Thresholds are positive, so a negative score counts as zero.
       return Math.max(0, user.rating?.postReviewScoreSum ?? 0);
     case AchievementMetric.GamesHosted:
       return user.gamesHosting ?? 0;
@@ -36,19 +24,15 @@ export function getMetricValue(metric: AchievementMetric, user: User): number {
     case AchievementMetric.GlobalChatMessages:
       return user.globalChatMessages ?? 0;
     case AchievementMetric.BansReceived:
-      // "Резиновая уточка" — an easter egg for the duckling-terrorists meme.
-      // Count the bans issued (excluding soft-deleted).
       return user.bansReceived ?? 0;
     case AchievementMetric.GameDrops:
-      // "Дропы" — games the user left voluntarily
-      // (Retired character + IsPlayerLeft). Death and exile do not count.
+      // Games left voluntarily: death and exile do not count.
       return user.gameDrops ?? 0;
     case AchievementMetric.PublicationsAuthored:
-      // "Публикации" — blog articles. Drafts count too.
+      // Drafts count too.
       return user.publicationsAuthored ?? 0;
     case AchievementMetric.LikesReceived:
-      // "Лайки" — total likes on topics, publications, comments
-      // and chat messages. Game posts go through "Рейтинг".
+      // Game posts are counted by the rating instead.
       return user.likesReceived ?? 0;
     default:
       return 0;
@@ -56,7 +40,7 @@ export function getMetricValue(metric: AchievementMetric, user: User): number {
 }
 
 function daysSinceRegistration(user: User): number {
-  const reg = user.registeredUtc ?? user.registrationUtc;
+  const reg = user.registeredUtc;
   if (!reg) return 0;
   const ts = new Date(reg).getTime();
   if (Number.isNaN(ts)) return 0;

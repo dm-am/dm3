@@ -2,28 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The queue "Обращения", as moderation works it: one queue of every ticket
- * the reader's role is shown, complaints and the support desk alike.
- *
- * A queue draws its tickets in the block every screen draws a ticket with, so
- * the moderator reads a ticket the way its author does, with one line more:
- * who wrote it. The reason of each leads to the ticket's page, and the open
- * tickets stand first, the newest of them on top. A ticket that waits for
- * moderation has the red "*" after its state: it waits for the reader, unless
- * he filed it himself.
- *
- * Its two filters are the two lists over it, as they stood before 5 October
- * 2026: "Тип обращения" and "Статус", a choice in either applied at once. A
- * choice goes into the address, and the address is what the queue is asked
- * by. They are checked through a real router on both sides, because the
- * address is where they live: a filter that reached the request but not the
- * address would hand over a link to the whole queue. The statuses are the four
- * a ticket is stored with and named by on every screen, in the words they had
- * before 5 October: whose turn it is ("Ожидает ответа модерации", "Ожидает
- * ответа пользователя") or how it ended. Nobody takes a ticket in hand any
- * more (owner, 12.10, line 51), so no status is told apart by who took it.
- */
+// The queue: tickets in the block every screen draws one with, the red "*"
+// where a ticket waits for the reader. The two filters live in the address
+// and are checked through a real router on both sides.
 import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import {
   enableAutoUnmount,
@@ -54,7 +35,6 @@ const ticket = (over: Partial<Ticket>): Ticket => ({
   subtype: "UserComplaint",
   createdUtc: "2026-10-01T10:00:00Z",
   description: "Текст",
-  descriptionHtml: "Текст",
   comment: "",
   commentsCount: 0,
   ...over,
@@ -155,35 +135,21 @@ describe("a queue of tickets", () => {
     });
   });
 
-  // The server sends the tickets the reader's role is shown, and the queue
-  // draws every one of them: the support desk's stand among the complaints.
-  it("puts the open tickets first, the newest on top, whatever their reason", async () => {
+  // The server stands the queue in order (status, then newest first) and sends
+  // the reasons the reader's role is shown; the queue draws every one as it came.
+  it("draws every ticket in the order the server sent it, whatever its reason", async () => {
     const { wrapper } = await render([
-      ticket({
-        id: "closed",
-        status: "Closed",
-        createdUtc: "2026-10-05T10:00:00Z",
-      }),
-      ticket({
-        id: "asked",
-        status: "WaitingForUser",
-        createdUtc: "2026-10-04T10:00:00Z",
-      }),
-      ticket({ id: "older", createdUtc: "2026-09-01T10:00:00Z" }),
-      ticket({ id: "newer", createdUtc: "2026-10-02T10:00:00Z" }),
-      ticket({
-        id: "bug",
-        subtype: "Bug",
-        createdUtc: "2026-09-15T10:00:00Z",
-      }),
+      ticket({ id: "asked", status: "WaitingForUser" }),
+      ticket({ id: "bug", subtype: "Bug" }),
+      ticket({ id: "closed", status: "Closed" }),
+      ticket({ id: "open", createdUtc: "2026-09-01T10:00:00Z" }),
     ]);
 
-    // Waiting for moderation first, then waiting for the author, then ended.
     expect(
       wrapper
         .findAllComponents(TicketThread)
         .map((block) => (block.props("ticket") as Ticket).id),
-    ).toEqual(["newer", "bug", "older", "asked", "closed"]);
+    ).toEqual(["asked", "bug", "closed", "open"]);
   });
 
   it("names in each caption how many answers it holds and whose turn it is", async () => {
@@ -200,9 +166,8 @@ describe("a queue of tickets", () => {
     expect(caption).toContain("Ожидает ответа пользователя");
   });
 
-  // A ticket waiting for moderation waits for every moderator it is shown to,
-  // but not for its author, a moderator himself; one waiting for the user
-  // waits for its author alone.
+  // A ticket waiting for moderation waits for every moderator but its author;
+  // one waiting for the user waits for its author alone.
   it("marks with the star the tickets that wait for the reader", async () => {
     const mine = {
       id: "u-reader",
@@ -256,10 +221,7 @@ describe("the filters of a queue", () => {
     document.body.innerHTML = "";
   });
 
-  /**
-   * The two lists under their captions, as before 5 October 2026, and not
-   * the filter line with its panel and bubbles.
-   */
+  // The two lists under their captions.
   it("stands as two lists under their captions", async () => {
     const { wrapper } = await render([ticket({})]);
 
@@ -277,9 +239,7 @@ describe("the filters of a queue", () => {
     expect(optionWords(wrapper, "Тип обращения")).toEqual([
       "Все типы",
       "Жалоба на пользователя",
-      "Предложение по улучшению сайта",
     ]);
-    // The four a ticket is stored with, in the order the queue stands in.
     expect(optionWords(wrapper, "Статус")).toEqual([
       "Все статусы",
       "Ожидает ответа модерации",
@@ -289,9 +249,7 @@ describe("the filters of a queue", () => {
     ]);
   });
 
-  // The reasons each role is shown, by the rule of the server
-  // (TicketVisibility): a reason the reader is never shown would narrow the
-  // queue to nothing.
+  // The reasons each role is shown, by the server's rule (TicketVisibility).
   it("offers a senior moderator the complaints about a junior's decision too", async () => {
     signIn("SeniorModerator");
     const { wrapper } = await render([ticket({})]);
@@ -300,7 +258,6 @@ describe("the filters of a queue", () => {
       "Все типы",
       "Жалоба на пользователя",
       "Жалоба на решение младшего модератора",
-      "Предложение по улучшению сайта",
     ]);
   });
 
@@ -313,7 +270,6 @@ describe("the filters of a queue", () => {
       "Жалоба на пользователя",
       "Жалоба на решение младшего модератора",
       "Жалоба на решение старшего модератора",
-      "Предложение по улучшению сайта",
       "Ошибка",
       "Восстановление доступа",
       "Проблемы с регистрацией",
@@ -365,11 +321,7 @@ describe("the filters of a queue", () => {
     expect(getTickets).toHaveBeenCalledWith({ subtype: undefined });
   });
 
-  /**
-   * A type the reader's role is not shown or a status that is no more ("В
-   * работе" of the taking in hand) is no filter at all: a request the server
-   * would answer with an empty queue would read as a queue with nothing in it.
-   */
+  // A value the queue does not know is no filter at all.
   it("takes a value it does not know for no filter", async () => {
     const { wrapper, getTickets } = await render([ticket({})], {
       subtype: "Bug",
@@ -383,11 +335,11 @@ describe("the filters of a queue", () => {
 
   it("shows what the address holds", async () => {
     const { wrapper } = await render([ticket({})], {
-      subtype: "SiteImprovementSuggestion",
+      subtype: "UserComplaint",
       status: "Closed",
     });
 
-    expect(chosen(wrapper, "Тип обращения")).toBe("SiteImprovementSuggestion");
+    expect(chosen(wrapper, "Тип обращения")).toBe("UserComplaint");
     expect(chosen(wrapper, "Статус")).toBe("Closed");
   });
 
@@ -416,10 +368,7 @@ describe("the filters of a queue", () => {
     expect(wrapper.text()).not.toContain("Обращений пока нет");
   });
 
-  /**
-   * The back button moves the address under the queue while an answer is on
-   * its way; what the address names last is what stays.
-   */
+  // What the address names last is what stays.
   it("keeps the queue the address names when an older answer lands late", async () => {
     const answers = new Map<string, (value: unknown) => void>();
     const { wrapper, getTickets } = await render([]);

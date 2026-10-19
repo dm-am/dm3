@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using DM.Domain.Core.Events;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -11,19 +12,8 @@ namespace DM.Architecture.Tests;
 /// The properties of the event outbox that no test of its behavior can hold.
 /// </summary>
 /// <remarks>
-/// From W1.5 on, publishing a domain event is an INSERT into OutboxEvents and
-/// the relay is the one thing that talks to the exchange. Each rule here guards
-/// a way that arrangement can quietly stop being true: a second IEventProducer
-/// implementation would bring fire-and-forget back without touching a call
-/// site; a transaction inside the producer would either swallow the caller's
-/// changes or promise an atomicity the design explicitly does not have; a claim
-/// without SKIP LOCKED would let the two relays of a deployment window mark
-/// each other's rows; and a mark written before the publish would record
-/// "delivered" about a message the broker never took.
-///
-/// Asserted on the sources where the property is an order of calls or a SQL
-/// clause, and on the loaded assemblies where it is a count of types - the same
-/// split every neighbor of this file uses.
+/// Publishing an event is an INSERT into OutboxEvents and the relay alone talks to the exchange.
+/// Asserted on the sources for an order of calls or a SQL clause, on the assemblies for a count.
 /// </remarks>
 public class EventOutboxShould
 {
@@ -52,15 +42,13 @@ public class EventOutboxShould
     }
 
     /// <summary>
-    /// The producer neither opens a transaction nor wraps itself in an execution
-    /// strategy: the insert is a second, separate commit after the
-    /// domain one - joining a transaction would smuggle in an atomicity the
-    /// design rejected, and opening one would wrap a single write for nothing.
+    /// The producer neither opens a transaction nor wraps itself in an execution strategy: the insert
+    /// is a separate commit after the domain one.
     /// </summary>
     [Fact]
     public void KeepTheProducerOutOfTransactions()
     {
-        var text = File.ReadAllText(Path.Combine(RepositoryRoot, Producer));
+        var text = File.ReadAllText(Path.Combine(RepositoryLayout.Root, Producer));
 
         text.Should().Contain("SaveChangesAsync(",
             "the producer stores the event with one commit of the scoped context, and a " +
@@ -75,13 +63,12 @@ public class EventOutboxShould
     }
 
     /// <summary>
-    /// The claim locks what it takes and skips what is locked (D9), and the
-    /// mark follows the publish.
+    /// The claim locks what it takes and skips what is locked, and the mark follows the publish.
     /// </summary>
     [Fact]
     public void ClaimWithSkipLockedAndMarkOnlyAfterPublishing()
     {
-        var text = File.ReadAllText(Path.Combine(RepositoryRoot, Processor));
+        var text = File.ReadAllText(Path.Combine(RepositoryLayout.Root, Processor));
 
         text.Should().Contain("FOR UPDATE SKIP LOCKED",
             "in the deployment window two relays run at once, and without the lock both " +
@@ -114,6 +101,4 @@ public class EventOutboxShould
             "whoever publishes InvokedEvent outside the relay publishes rows nothing " +
             "stored, with EventIds nothing can retry, into an ordering nothing enforces");
     }
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

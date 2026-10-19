@@ -3,14 +3,9 @@
  */
 
 /**
- * The clock the site shows time by. The owner's word on it: a signed-in reader
- * sees every date and time in the zone of the account, a guest in the zone of
- * the device. An account with no zone is UTC, as the letters read it.
- *
- * The device here is in Moscow, set before anything reads the clock, so the
- * guest's answers below are Moscow's and not the machine's the suite runs on.
- * The machine's own zone comes back after the file, for the files that follow
- * in the same worker.
+ * The clock the site shows time by: the account's zone for a signed-in reader,
+ * the device's for a guest, UTC for an account without one. The device is set
+ * to Moscow before anything reads the clock, and restored after the file.
  */
 const MACHINE_ZONE = process.env.TZ;
 process.env.TZ = "Europe/Moscow";
@@ -30,7 +25,7 @@ import {
 } from "./datetime";
 import { formatChatTime, groupMessagesWithSeparators } from "./chat";
 import { setAccountTimeZone } from "./timeZone";
-import { HumanDate } from "@/shared/ui/Date";
+import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import type { Message } from "@/shared/api/models/common/message";
 
 /** One post of a game room, written at 20:09 UTC on 26 September. */

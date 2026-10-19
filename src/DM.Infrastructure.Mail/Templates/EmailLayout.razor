@@ -1,20 +1,7 @@
 @*
-    Каркас письма: логотип, колонка чтения, подпись под чертой.
-
-    Логотип идет ссылкой cid:logo — картинка прикреплена к письму как inline-часть
-    multipart/related, а не забирается по URL. Так она видна в клиенте, который по
-    умолчанию не грузит внешние изображения, и просмотр письма не сообщает нам, что
-    его открыли.
-
-    Параметров несколько, и ни один не назван Model, поэтому сканер шаблонов
-    проходит мимо этого компонента и не считает его шаблоном письма.
-
-    Колонку центрирует margin: auto, и почтовый Outlook для Windows этот отступ
-    у div не понимает: письмо у него прижимается к левому краю. Условный
-    комментарий ниже видит только он, и для него колонка обернута в таблицу
-    фиксированной ширины по центру. Остальные клиенты комментарий не читают.
-    Компилятор Razor выбрасывает HTML-комментарии из разметки, поэтому он
-    вставлен строкой.
+    The logo is an inline cid part, shown by a client that blocks external images.
+    No parameter is named Model, so the template scan skips this component.
+    Outlook for Windows ignores margin: auto; its conditional comment is a string, because Razor drops HTML comments.
 *@
 <html lang="ru">
 <body style="@EmailConstants.BodyStyles">
@@ -28,18 +15,10 @@
     @ChildContent
 
     <hr style="@EmailConstants.RuleStyles"/>
-    @*
-        Подвал одной строкой и общей формулой: два серых абзаца подряд под чертой
-        читаются как второе письмо, пришитое к первому.
-    *@
+    @* One footer line: two grey paragraphs under the rule read as a second letter. *@
     <p style="@EmailConstants.FooterStyles">Письмо отправлено автоматически и не требует ответа</p>
     </div>
-    @*
-        Перечня адресов сайта под карточкой нет: письмо говорит о своем деле, а
-        не о том, какими дверями сайт открывается. Читателю, у которого дверь из
-        кнопки не открылась, вторую дверь дает ссылка под самой кнопкой
-        (ActionButton), и там она про тот же шаг, а не про корень сайта.
-    *@
+    @* No list of site addresses: ActionButton links the same step through the others. *@
 </div>
 @((MarkupString)EmailConstants.OutlookColumnClose)
 </body>

@@ -2,22 +2,10 @@
  * @vitest-environment jsdom
  */
 
-/**
- * A publication had no page. The feed card named it in plain text, the profile
- * spotlight did the same, and a notification about a new publication, a like on
- * one or a comment under one opened the blog — the reader was handed the whole
- * feed and left to find the text the notification was about.
- *
- * What this holds: the page reads the publication named in the address, hands
- * it to the card the product decided a publication looks like, runs its
- * discussion against the publication's own endpoints, and offers the composer
- * by the publication's answer about the viewer (viewer.canComment), which the
- * server asks with the code that refuses the comment: published, the blog's
- * blacklist and the ban. A draft has no discussion at all: nothing to read and
- * nothing to write. Comments of a publication cannot be turned off. The blog's
- * blacklist closes a published one to writing and not to reading: it stays,
- * empty or not, with the plaque of a refusal where the form would be.
- */
+// The page reads the publication in the address, hands it to the card, runs
+// its discussion on the publication's endpoints and offers the composer by the
+// publication's answer about the viewer. The blacklist closes writing, not
+// reading.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { defineComponent, h, watchEffect } from "vue";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
@@ -42,8 +30,7 @@ vi.mock("vue-router", async (importOriginal) => ({
   useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
 }));
 
-// The card is the topic-copy bubble and has its own spec; here only the fact
-// that the publication reaches it matters.
+// The card has its own spec; here only the publication reaching it matters.
 vi.mock("@/features/publication", () => ({
   PublicationCard: {
     name: "PublicationCard",
@@ -52,8 +39,7 @@ vi.mock("@/features/publication", () => ({
   },
 }));
 
-// The section itself is the site-wide one (its own spec covers it): what this
-// page owes it is the wiring, which the stub exposes as props.
+// The site-wide section has its own spec; the stub exposes the wiring as props.
 vi.mock("@/widgets/discussion", () => ({
   DiscussionSection: {
     name: "DiscussionSection",
@@ -88,12 +74,10 @@ const PUBLICATION: Publication = {
   preview: "",
   author: { username: "SolohinLex" },
   createdUtc: "2026-08-01T10:00:00Z",
-  isPublished: true,
   viewCount: 0,
   commentCount: 2,
   likes: [],
-  // As a signed-in reader is answered: a guest is told no by the server, and
-  // the page must not take this "yes" for his.
+  // As a signed-in reader is answered; a guest is told no by the server.
   viewer: { canComment: true },
 } as unknown as Publication;
 
@@ -105,8 +89,7 @@ function render({
   const pinia = createPinia();
   setActivePinia(pinia);
   useAuthStore().user = username ? ({ username } as never) : null;
-  // The blog the shell has loaded around the page: its blacklist is the
-  // publication's too.
+  // The blog the shell has loaded: its blacklist is the publication's too.
   useBlogDetailsStore().blog = {
     id: "blog-guid",
     viewerBlacklisted: blacklisted,
@@ -121,8 +104,7 @@ function render({
     error: null,
   } as never);
 
-  // The zone shell renders the heading, so the section this page announces is
-  // what the test can see of it.
+  // The zone shell renders the heading, so the announced section is what the test sees.
   const announced = { value: undefined as string | undefined };
   const host = defineComponent({
     setup() {
@@ -157,14 +139,12 @@ describe("PublicationPage", () => {
     const { wrapper, announced } = render();
     await flushPromises();
 
-    // The address slot alone: what travels beside it is how the refusal is
-    // carried, and that is the subject of its own check below.
+    // The address alone; how the refusal is carried is checked below.
     const [askedFor] =
       vi.mocked(blogApi.getPublication).mock.calls.at(-1) ?? [];
     expect(askedFor).toBe("pub-readable");
     expect(wrapper.find(".card-stub").text()).toContain("Полет над гнездом");
-    // The card is the page, so it draws no title of its own: the heading of
-    // the zone reads "{блог} | {публикация}", and this is its second half.
+    // The card draws no title: the zone heading reads "{блог} | {публикация}".
     expect(announced.value).toBe("Полет над гнездом");
     expect(
       wrapper.findComponent({ name: "PublicationCard" }).props("standalone"),
@@ -176,8 +156,7 @@ describe("PublicationPage", () => {
     await flushPromises();
 
     const props = discussion(wrapper);
-    // The guid the server answered with, never the readable id from the URL:
-    // both open the publication, and one of them is what the comments hang on.
+    // The guid the server answered with, which the comments hang on.
     expect(props.recordId).toBe("pub-guid");
 
     await (props.load as (q: unknown) => unknown)({ number: 2 });
@@ -198,8 +177,7 @@ describe("PublicationPage", () => {
 
     const props = discussion(wrapper);
     expect(props.canComment).toBe(false);
-    // Not closed either: a guest is told to sign in, and signing in opens the
-    // composer here.
+    // Not closed: a guest is told to sign in, and signing in opens the composer.
     expect(props.closedHint).toBeUndefined();
   });
 
@@ -210,8 +188,7 @@ describe("PublicationPage", () => {
     expect(discussion(wrapper).canComment).toBe(true);
   });
 
-  // A ban is nothing the page can see in the publication: the answer of the
-  // server is the only thing that says no, and it is enough.
+  // A ban is only the server's answer, and it is enough.
   it("offers nothing where the publication takes no comment from the reader", async () => {
     const { wrapper } = render({
       username: "gamer",
@@ -224,7 +201,7 @@ describe("PublicationPage", () => {
     expect(props.closedHint).toBeUndefined();
   });
 
-  // A feed carries no answer, and an answer that did not come is no "yes".
+  // A feed carries no answer, and no answer is no "yes".
   it("offers nothing on a publication that says nothing about the viewer", async () => {
     const { wrapper } = render({
       username: "gamer",
@@ -235,9 +212,7 @@ describe("PublicationPage", () => {
     expect(discussion(wrapper).canComment).toBe(false);
   });
 
-  // The answer is about whoever held the session when the publication was
-  // read: the guest who signs in from the prompt under the comments is asked
-  // about again, and gets the form by the new answer.
+  // The answer is about whoever held the session; a sign-in asks again.
   it("reads the publication again when the viewer changes", async () => {
     const { wrapper } = render({
       publication: { ...PUBLICATION, viewer: { canComment: false } },
@@ -256,23 +231,7 @@ describe("PublicationPage", () => {
     expect(discussion(wrapper).canComment).toBe(true);
   });
 
-  // A draft is not discussed, so it has no discussion at all: no composer for
-  // the author reading it, and no sentence promising comments later.
-  it("draws no discussion under a draft", async () => {
-    const { wrapper } = render({
-      username: "SolohinLex",
-      publication: { ...PUBLICATION, isPublished: false },
-    });
-    await flushPromises();
-
-    expect(wrapper.find(".card-stub").exists()).toBe(true);
-    expect(wrapper.find(".discussion-stub").exists()).toBe(false);
-    expect(wrapper.text()).not.toContain("после публикации");
-  });
-
-  // The blog's blacklist reaches its publications: the discussion is read and
-  // not written by the one on the list, and the line in the composer's place
-  // says why.
+  // The one on the blacklist reads the discussion and the line says why he cannot write.
   it("says the blog's blacklist under the discussion", async () => {
     const { wrapper } = render({
       username: "gamer",
@@ -304,17 +263,8 @@ describe("PublicationPage", () => {
     expect(wrapper.find(".discussion-stub").exists()).toBe(false);
   });
 
-  /**
-   * A broken server was announced twice on this page: the card said the API's
-   * sentence where the text should have been, and the response interceptor put
-   * the same sentence in a plate over it. The interceptor keeps quiet for a
-   * request that says it draws the refusal itself, which this one is — the card
-   * is the whole page when the read fails, and a plate in the corner explains
-   * an empty screen to nobody.
-   *
-   * The flags are what is asserted, not the absent toast: the interceptor lives
-   * in the HTTP client, and the client is behind the mocked service here.
-   */
+  // The card is the whole page when the read fails, so the read owns the 5xx;
+  // asserted on the flags, since the client is behind the mocked service.
   it("takes a 5xx over from the interceptor and says it in the card", async () => {
     const pinia = createPinia();
     setActivePinia(pinia);
@@ -334,9 +284,7 @@ describe("PublicationPage", () => {
   });
 
   it("says the wait in the card, with the seconds the server asked for", async () => {
-    // The limiter's title names the refusal without the number, and the number
-    // is the part a reader acts on. Taking the refusal over means the card has
-    // to carry the sentence that holds it, or the wait is lost with the plate.
+    // The 429 title carries no number, so the card says the seconds itself.
     const pinia = createPinia();
     setActivePinia(pinia);
     vi.spyOn(blogApi, "getPublication").mockResolvedValue({

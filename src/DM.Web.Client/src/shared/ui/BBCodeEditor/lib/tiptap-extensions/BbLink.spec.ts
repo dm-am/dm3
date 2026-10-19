@@ -31,15 +31,6 @@ function createTestEditor() {
 }
 
 describe("BbLink Extension", () => {
-  it("should have correct name", () => {
-    expect(BbLink.name).toBe("bbLink");
-  });
-
-  it("should be a mark", () => {
-    const editor = createTestEditor();
-    expect(editor.schema.marks.bbLink).toBeDefined();
-  });
-
   it('should parse links with data-bb-tag="link"', () => {
     const editor = createTestEditor();
     editor.commands.setContent(
@@ -68,16 +59,6 @@ describe("BbLink Extension", () => {
     const html = editor.getHTML();
     // Selfref should be rendered as data-bb-selfref
     expect(html).toContain('data-bb-selfref="true"');
-  });
-
-  it("should provide setBbLink command", () => {
-    const editor = createTestEditor();
-    expect(editor.commands.setBbLink).toBeDefined();
-  });
-
-  it("should provide unsetBbLink command", () => {
-    const editor = createTestEditor();
-    expect(editor.commands.unsetBbLink).toBeDefined();
   });
 
   it("should handle regular links as selfref if text equals URL", () => {

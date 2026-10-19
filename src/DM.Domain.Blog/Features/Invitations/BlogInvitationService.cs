@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
@@ -16,7 +15,6 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Events;
-using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 
 namespace DM.Domain.Blog.Features.Invitations;
 
@@ -34,7 +32,6 @@ internal class BlogInvitationService : IBlogInvitationService
     private readonly IEventProducer _eventProducer;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public BlogInvitationService(
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
@@ -60,51 +57,33 @@ internal class BlogInvitationService : IBlogInvitationService
     }
 
     /// <inheritdoc />
-    public async Task<BlogInvitation> InviteAssistant(Guid blogId, string username)
-    {
-        var blog = await _blogService.GetBlogAsync(blogId);
-        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.InviteAssistant, blog);
-
-        var user = await _userLookupService.GetAsync(username);
-        var userId = user.UserId;
-
-        await ValidateInvitation(userId);
-
-        return await CreateInvitation(blogId, userId, username, TokenType.BlogAssistantInvitation);
-    }
+    public Task<BlogInvitation> InviteAssistant(Guid blogId, string username) =>
+        Invite(blogId, username, BlogIntention.InviteAssistant, TokenType.BlogAssistantInvitation);
 
     /// <inheritdoc />
-    public async Task<BlogInvitation> InviteReader(Guid blogId, string username)
+    public Task<BlogInvitation> InviteReader(Guid blogId, string username) =>
+        Invite(blogId, username, BlogIntention.InviteReader, TokenType.BlogReaderInvitation);
+
+    private async Task<BlogInvitation> Invite(Guid blogId, string username, BlogIntention intention, TokenType type)
     {
-        var blog = await _blogService.GetBlogAsync(blogId);
-        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.InviteReader, blog);
+        var blog = await _intentionManager.GetPermittedBlogAsync(_blogService, intention, blogId);
 
         var user = await _userLookupService.GetAsync(username);
-        var userId = user.UserId;
 
-        await ValidateInvitation(userId);
-
-        return await CreateInvitation(blogId, userId, username, TokenType.BlogReaderInvitation);
-    }
-
-    private async Task ValidateInvitation(Guid userId)
-    {
-        // The blog's own blacklist is not asked: inviting somebody the blog
-        // listed is the owner's own decision, and the list closes comments only.
-        //
-        // The invitee's personal blacklist, the way the game asks it
-        // (GameInvitationService): not the inviter's own list, which restricts
-        // the people on it and not its owner.
+        // The invitee's personal blacklist, as the game asks it; the blog's own list
+        // closes comments only, and the inviter's restricts the people on it.
         var currentUserId = _identityProvider.Current.User.UserId;
-        if (await _userBlacklistChecker.IsBlockedAsync(userId, currentUserId))
+        if (await _userBlacklistChecker.IsBlockedAsync(user.UserId, currentUserId))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteThisUser);
         }
+
+        return await CreateInvitation(blogId, blog.Title, user.UserId, username, type);
     }
 
-    private async Task<BlogInvitation> CreateInvitation(Guid blogId, Guid userId, string username, TokenType type)
+    private async Task<BlogInvitation> CreateInvitation(
+        Guid blogId, string blogTitle, Guid userId, string username, TokenType type)
     {
-        // Invalidate existing invitations of same type for this user
         var existingInvites = await _repository.FindInvitations(blogId, userId, type);
         var tokenId = _guidFactory.Create();
         var now = _dateTimeProvider.Now;
@@ -123,12 +102,11 @@ internal class BlogInvitationService : IBlogInvitationService
         await _eventProducer.SendAsync(EventType.BlogInvitationCreated, tokenId);
 
         var currentUser = _identityProvider.Current.User;
-        var blog = await _blogService.GetBlogAsync(blogId);
         return new BlogInvitation
         {
             TokenId = tokenId,
             BlogId = blogId,
-            BlogTitle = blog.Title,
+            BlogTitle = blogTitle,
             InvitedUser = new GeneralUser { UserId = userId, Username = username },
             InvitedBy = new GeneralUser { UserId = currentUser.UserId, Username = currentUser.Username },
             TargetRole = type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
@@ -138,75 +116,63 @@ internal class BlogInvitationService : IBlogInvitationService
     }
 
     /// <inheritdoc />
-    public Task AcceptInvitation(Guid tokenId) =>
-        ProcessInvitation(tokenId, true);
+    public async Task AcceptInvitation(Guid tokenId)
+    {
+        var invitation = await ReadOwnInvitation(tokenId);
+
+        if (invitation.TargetRole == BlogRole.Assistant)
+        {
+            // The assistant row and the spent invitation go in together, so the
+            // invitation cannot stay live next to somebody who holds what it grants.
+            await _repository.AcceptAssistantInvitation(new AddBlogAssistantEntity
+            {
+                BlogId = invitation.BlogId,
+                UserId = _identityProvider.Current.User.UserId,
+                JoinedUtc = _dateTimeProvider.Now
+            }, tokenId);
+        }
+        else
+        {
+            // Past BlogUserService.Subscribe, the public door that refuses a private
+            // draft, which is exactly the blog an invitation is issued for. The
+            // subscription goes first: it is idempotent, so following the link again
+            // repairs a break, while the other order would spend the invitation.
+            await _subscriptionService.SubscribeAsync(invitation.BlogId);
+            await _repository.Invalidate(tokenId);
+        }
+
+        await _eventProducer.SendAsync(EventType.BlogInvitationAccepted, tokenId);
+    }
 
     /// <inheritdoc />
-    public Task RejectInvitation(Guid tokenId) =>
-        ProcessInvitation(tokenId, false);
-
-    private async Task ProcessInvitation(Guid tokenId, bool accept)
+    public async Task RejectInvitation(Guid tokenId)
     {
-        var userId = _identityProvider.Current.User.UserId;
+        await ReadOwnInvitation(tokenId);
+
+        await _repository.Invalidate(tokenId);
+        await _eventProducer.SendAsync(EventType.BlogInvitationRejected, tokenId);
+    }
+
+    private async Task<BlogInvitation> ReadOwnInvitation(Guid tokenId)
+    {
         var invitation = await _repository.GetInvitation(tokenId);
 
-        // Validate invitation exists and matches current user
-        if (invitation == null || invitation.InvitedUser.UserId != userId)
+        if (invitation == null || invitation.InvitedUser.UserId != _identityProvider.Current.User.UserId)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
-        // Check if it's a valid blog invitation type (Reader or Assistant)
         if (invitation.TargetRole != BlogRole.Assistant && invitation.TargetRole != BlogRole.Reader)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
-        // Check if invitation has expired
         if (_dateTimeProvider.Now > invitation.ExpiresUtc)
         {
             throw new HttpException(HttpStatusCode.Gone, RefusalMessage.InvitationExpired);
         }
 
-        if (accept)
-        {
-            if (invitation.TargetRole == BlogRole.Assistant)
-            {
-                // The assistant row and the spent invitation go in together: written
-                // separately, a refusal in between left the invitation live next to
-                // somebody who already holds what it grants.
-                await _repository.AcceptAssistantInvitation(new AddBlogAssistantEntity
-                {
-                    BlogId = invitation.BlogId,
-                    UserId = userId,
-                    JoinedUtc = _dateTimeProvider.Now
-                }, tokenId);
-            }
-            else
-            {
-                // Straight to the subscription, not through BlogService.Subscribe:
-                // that method is the public door and refuses a blog whose drafts
-                // are private, which is exactly the blog an invitation is issued
-                // for. Routed through it, a reader invitation to a private blog
-                // could never be accepted — the invited user got 403 on the only
-                // path that redeems it. The game side redeems its own reader
-                // invitation the same way, past its own public door.
-                //
-                // The subscription first and the token second: subscribing is
-                // idempotent, so a break between the two is repaired by following the
-                // same link again, while the other order would spend the invitation
-                // and leave nothing for the second attempt to do.
-                await _subscriptionService.SubscribeAsync(invitation.BlogId);
-                await _repository.Invalidate(tokenId);
-            }
-
-            await _eventProducer.SendAsync(EventType.BlogInvitationAccepted, tokenId);
-        }
-        else
-        {
-            await _repository.Invalidate(tokenId);
-            await _eventProducer.SendAsync(EventType.BlogInvitationRejected, tokenId);
-        }
+        return invitation;
     }
 
     /// <inheritdoc />
@@ -218,7 +184,7 @@ internal class BlogInvitationService : IBlogInvitationService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
-        var blog = await _blogService.GetBlogAsync(invitation.BlogId);
+        var blog = await _blogService.GetUnfiltered(invitation.BlogId);
         _intentionManager.ThrowIfForbidden(BlogIntention.CancelInvitation, blog);
 
         await _repository.Invalidate(tokenId);
@@ -229,11 +195,8 @@ internal class BlogInvitationService : IBlogInvitationService
     /// <inheritdoc />
     public async Task<IEnumerable<BlogInvitation>> GetPendingInvitations(Guid blogId)
     {
-        var blog = await _blogService.GetBlogAsync(blogId);
-        // The invitations list feeds the settings page, and assistants can
-        // invite readers, so the read follows EditSettings — the same shape the
-        // game side takes, where GetPendingInvitations demands EditSettings too.
-        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.EditSettings, blog);
+        // The list feeds the settings page, and assistants invite readers, as on the game side.
+        await _intentionManager.GetPermittedBlogAsync(_blogService, BlogIntention.EditSettings, blogId);
 
         return await _repository.GetPendingInvitations(blogId);
     }

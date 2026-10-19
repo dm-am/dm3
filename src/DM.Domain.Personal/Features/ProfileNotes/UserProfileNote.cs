@@ -17,9 +17,6 @@ public class UserProfileNote
     /// </summary>
     public string SubjectUsername { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Subject user ID
-    /// </summary>
     public Guid SubjectUserId { get; set; }
 
     /// <summary>

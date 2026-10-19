@@ -15,7 +15,7 @@ namespace DM.Web.API.Features.Community.Achievements;
 /// Compile-time mapper for achievements
 /// </summary>
 [Mapper]
-internal partial class AchievementMapper
+public partial class AchievementMapper
 {
     /// <summary>
     /// Domain category to its response DTO

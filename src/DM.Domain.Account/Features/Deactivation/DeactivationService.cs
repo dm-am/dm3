@@ -11,7 +11,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
 using Microsoft.Extensions.Logging;
-using ReservedName = DM.Domain.Core.Users.RemovedAccount;
 
 namespace DM.Domain.Account.Features.Deactivation;
 
@@ -60,10 +59,7 @@ internal class DeactivationService : IDeactivationService
 
         var targetUser = await _userLookupService.GetAsync(username);
 
-        // The reach of a ban (ModerationRank): there is deliberately no in-app
-        // authority over a site owner, and a rank cannot be turned against an
-        // equal rank - two senior moderators would otherwise remove each other,
-        // and this one is not a two-day window that somebody can undo.
+        // The reach of a ban, see ModerationRank.
         if (!ModerationRank.Reaches(currentUser.Role, targetUser.Role))
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
@@ -100,7 +96,7 @@ internal class DeactivationService : IDeactivationService
         // "Аккаунт удален" and its lookalikes are the signature of every removed
         // account (the DM2 shared account is imported as one of them), and a live
         // row under that name would take the signature and the profile address.
-        if (ReservedName.IsReserved(account.Username))
+        if (RemovedAccount.IsReserved(account.Username))
         {
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.ReservedNameNotRestorable);
         }
@@ -115,13 +111,13 @@ internal class DeactivationService : IDeactivationService
     }
 
     /// <inheritdoc />
-    public async Task<(IReadOnlyList<RemovedAccount> Accounts, PagingResult Paging)> GetRemovedAccounts(
+    public async Task<(IReadOnlyList<RemovedAccountRow> Accounts, PagingResult Paging)> GetRemovedAccounts(
         RemovedAccountsQuery query, CancellationToken cancellationToken = default)
     {
         var currentUser = RequireModeration();
 
         var totalCount = await _repository.CountRemoved(query.Search, cancellationToken);
-        var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
+        var paging = new PagingData(query, _identityProvider.Current.Settings.PageSize, totalCount);
         var accounts = await _repository.GetRemoved(query.Search, paging, cancellationToken);
 
         // The address is an administrator's to read: a moderated profile shows it
@@ -155,9 +151,8 @@ internal class DeactivationService : IDeactivationService
     /// Send the letter the decision earns, when there is an address to send it to.
     /// </summary>
     /// <remarks>
-    /// An account always has an address, which is why a missing one is worth a
-    /// line in the log rather than a refusal: the decision has already been taken
-    /// and written down, and failing the request now would only hide it.
+    /// A missing address is a line in the log rather than a refusal: the decision
+    /// is already written down.
     /// </remarks>
     private Task Notify(string? email, Func<string, Task> send)
     {

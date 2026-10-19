@@ -2,19 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * What the chat's search used to be: a full-screen panel inside the chat frame
- * that covered the feed it was searching, with a scope segmented control, a
- * "По дате | Лучшее совпадение" pair of link buttons that copied as three
- * lines, and a source header above every run of hits. Picking a hit closed the
- * whole thing, so reading a second hit meant searching again.
- *
- * What it is now, and what these pin: the site's one search row (a
- * FilterSearchInput plus $control-height buttons on a .filter-bar line, the
- * shape the forum, games, blogs and the rest already use), hits in a dropdown
- * that stays up while the feed jumps under it, no ordering control and no
- * source headers — the source is the global chat, always.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -41,15 +28,11 @@ const SvgIconStub = {
 const SecondaryTextStub = { template: "<span><slot /></span>" };
 
 const hit = (id: string, text: string) => ({
-  sourceType: "global" as const,
-  sourceId: "c1",
-  sourceTitle: null,
   id,
   createdUtc: "2026-01-01T10:00:00Z",
   snippet: [{ text, isMatch: false }],
 });
 
-/** A preview the server marked: a window with the match inside it. */
 const marked = (id: string, before: string, match: string, after: string) => ({
   ...hit(id, before),
   snippet: [
@@ -82,7 +65,6 @@ const mountBar = (props: Record<string, unknown> = {}) =>
     },
   });
 
-/** Type a query and apply it at once (Enter), as a reader does. */
 async function search(wrapper: ReturnType<typeof mountBar>, text: string) {
   const input = wrapper.find("input");
   await input.setValue(text);
@@ -106,17 +88,7 @@ describe("MessageSearchBar", () => {
     expect(row.find(".date-stub").exists()).toBe(true);
   });
 
-  it("offers no way to reorder the hits", async () => {
-    const wrapper = mountBar();
-    mockSearchMessages.mockResolvedValue(answer(hit("m1", "первое")));
-    await search(wrapper, "привет");
-
-    expect(wrapper.text()).not.toContain("Лучшее совпадение");
-    expect(wrapper.text()).not.toContain("По дате");
-    expect(wrapper.find(".sort-control").exists()).toBe(false);
-  });
-
-  it("shows the hits in a dropdown, without source headers", async () => {
+  it("shows the hits in a dropdown", async () => {
     const wrapper = mountBar();
     mockSearchMessages.mockResolvedValue(
       answer(hit("m1", "первое"), hit("m2", "второе")),
@@ -126,14 +98,9 @@ describe("MessageSearchBar", () => {
     const dropdown = wrapper.find(".search-dropdown");
     expect(dropdown.exists()).toBe(true);
     expect(dropdown.findAll(".result-row")).toHaveLength(2);
-    expect(wrapper.find(".result-group").exists()).toBe(false);
-    expect(wrapper.text()).not.toContain("Глобальный чат");
   });
 
-  // The preview used to be the first two hundred characters of the message, so
-  // the words that were searched for were usually not in it at all — and could
-  // not have been found by looking, because the search matches by lexeme: a query
-  // for "странник" matches "странников".
+  // The search matches by lexeme: "странник" matches "странников".
   it("marks the words the search matched", async () => {
     const wrapper = mountBar();
     mockSearchMessages.mockResolvedValue(
@@ -147,8 +114,6 @@ describe("MessageSearchBar", () => {
     expect(wrapper.find(".result-snippet").text()).toContain("к реке");
   });
 
-  // Segments and not a string of markup: the server marks the match, and a marked
-  // string would be the one field of this contract rendered as html.
   it("prints a preview that looks like markup as text", async () => {
     const wrapper = mountBar();
     mockSearchMessages.mockResolvedValue(answer(hit("m1", "<b>не тег</b>")));

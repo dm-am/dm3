@@ -35,6 +35,15 @@ public sealed class RenderContextEnvelope
 
     private readonly Guid? _postAuthorUserId;
 
+    /// <summary>
+    /// Whether the viewer may edit this text, by the same check the write of it
+    /// makes. Whoever may edit a text gets its AuthorEdit source as its author
+    /// does: the editor saves what it was handed, so a rendering handed to it would
+    /// be written back into the text. Asked only of a viewer who is not the author
+    /// and asked for the source; null for a text only its author edits.
+    /// </summary>
+    public Func<IIntentionManager, bool>? EditableBy { get; init; }
+
     /// <summary>Game the post belongs to.</summary>
     public Guid? GameId { get; init; }
 
@@ -67,9 +76,20 @@ public sealed class RenderContextEnvelope
 
     private readonly IReadOnlyCollection<Guid> _gameLeadUserIds = Array.Empty<Guid>();
 
-    /// <summary>Per-post override opening [private] to every room reader.</summary>
-    public bool PostSharePrivateWithAll { get; init; }
+    /// <summary>Per-game override opening addressed [private] blocks to every room reader.</summary>
+    public bool GameShowPrivateMessages { get; init; }
 
-    /// <summary>Per-room override opening [private] to every room reader.</summary>
+    /// <summary>Per-room override opening addressed [private] blocks to every room reader.</summary>
     public bool RoomViewPrivateText { get; init; }
+
+    /// <summary>
+    /// Files of the post it keeps from the viewer, whose pictures and links the
+    /// render cuts out (<see cref="RenderContext.WithheldUploadIds"/>).
+    /// </summary>
+    /// <remarks>
+    /// Decided by the mapping profile for the reader the response is rendered
+    /// for, by PostAttachmentVisibility, the answer the strip under the post is
+    /// drawn from: the converter applies it and does not decide it again.
+    /// </remarks>
+    public IReadOnlySet<Guid> WithheldUploadIds { get; init; } = new HashSet<Guid>();
 }

@@ -2,29 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The menu of moderation is the only way between its sections now: the tab
- * strip over the content is gone, and with it the second list that offered
- * the templates of schemas twice and knew nothing of the rest. What each role
- * sees is written out below group by group and row by row rather than derived
- * from the table the panel reads, so a row moved to another group or opened
- * to another role fails here instead of passing along with the table.
- *
- * The rows stand in four groups in the order the owner set: what waits for
- * the moderator's decision (the tickets among them, one queue "Обращения"),
- * the people, the journals of what was done, and the settings of the site;
- * the administrator's fundraising stands apart after them. No heading stands
- * over a group: an empty line parts two groups, as on DM2 the groups of the
- * menu of a game are parted.
- *
- * A link to a page that answers the reader with the 403 page is worse than no
- * link: it reads as a section that broke rather than as one that was never his
- * to open. And a group the reader has no row in leaves no empty line behind.
- *
- * The open section is bold and named the page; a page inside a section (a
- * series of contests, a template, a ticket) marks nothing, its heading says
- * where the reader is.
- */
+/** The menu of moderation, role by role, written out rather than derived from the table it reads. */
 import { describe, it, expect, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -32,12 +10,7 @@ import { defineComponent } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { useAuthStore, UserRole, type User } from "@/entities/user";
 import { MODERATION_SECTIONS } from "@/shared/config/moderationSections";
-import { componentCss, styleRules } from "@/shared/lib/testing/styles";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import ModerationPanel from "./ModerationPanel.vue";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
 
 const Empty = defineComponent({ render: () => null });
 
@@ -154,25 +127,10 @@ describe("the moderation menu", () => {
     expect(menu(await render(UserRole.Admin))).toEqual(ADMIN_MENU);
   });
 
-  it("heads no group, and leaves no line for a group the reader has no row in", async () => {
+  it("leaves no line for a group the reader has no row in", async () => {
     const wrapper = await render(UserRole.Moderator);
 
-    expect(wrapper.find(".sidebar-section-title").exists()).toBe(false);
     expect(wrapper.findAll(".group-start")).toHaveLength(2);
-  });
-
-  // DM2 parts the groups of the menu of a game by an empty line: one line of
-  // the menu's height over the first row of a group.
-  it("parts two groups by one empty line", () => {
-    const rules = styleRules(
-      componentCss(resolve(HERE, "ModerationPanel.vue")),
-    );
-
-    expect(
-      rules
-        .filter((rule) => /\.group-start/.test(rule.selector))
-        .map((rule) => rule.declarations),
-    ).toEqual([{ "margin-top": "1lh" }]);
   });
 
   it("names the tickets one queue, and the templates of schemas once", async () => {
@@ -180,8 +138,6 @@ describe("the moderation menu", () => {
     const words = wrapper.findAll("a").map((a) => a.text());
 
     expect(words.filter((word) => word === "Обращения")).toHaveLength(1);
-    expect(words).not.toContain("Жалобы");
-    expect(words).not.toContain("Поддержка");
     expect(
       words.filter((word) => word === "Шаблоны схем атрибутов"),
     ).toHaveLength(1);

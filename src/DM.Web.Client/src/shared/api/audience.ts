@@ -1,18 +1,12 @@
 /**
- * Rendering audience — semantic intent for BBCode output from the server.
- * Mirrors the backend RenderAudience enum. The server renders HTML
- * appropriate for the requested audience; clients never render BBCode
- * themselves.
+ * What the server renders BBCode for (RenderAudience on the backend); the
+ * client never renders BBCode itself, and the author is given it unrendered.
  */
 export const RENDER_AUDIENCE = {
   /** Standard read surface. Privacy tags filtered per viewer permissions. */
   Display: "display",
-  /** Author loading own content into the editor. Round-trip via data-bb-*. */
+  /** Author loading own content into the editor: the BBCode as typed. */
   AuthorEdit: "author_edit",
-  /** Plain text (emails, notifications). Privacy tags unconditionally stripped. */
-  PlainText: "plain_text",
-  /** Link preview / embed. NSFW-safe tag set, privacy tags stripped. */
-  EmbedSafe: "embed_safe",
 } as const;
 
 export type RenderAudience =

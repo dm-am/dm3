@@ -15,12 +15,8 @@ const store = useBoardsStore();
 const { boards, boardsLoading, boardsError } = storeToRefs(store);
 const { user } = storeToRefs(useAuthStore());
 
-// Columns for boards table. The table lays out "auto" (DataTable), so the
-// "Последняя активность" cells (longest username + "DD.MM.YYYY в HH:mm")
-// take the room they need on one line where the column has it (1920), and
-// the width-less "Описание" absorbs the remaining space — descriptions render
-// on a single line wherever the viewport allows. In a narrower column the
-// name and the date take a line each.
+// The table lays out "auto", so the last activity takes one line where the
+// column has room, and the width-less description absorbs the rest.
 const columns: Column[] = [
   { key: "title", label: "Раздел", width: "18%", align: "left" },
   {
@@ -37,12 +33,11 @@ const columns: Column[] = [
   },
 ];
 
-// Map boards to include 'id' as string for DataTable requirement
+// DataTable wants a string id
 const boardsData = computed(() =>
   (boards.value ?? []).map((b) => ({ ...b, id: b.id as string })),
 );
 
-// Determine last activity type: "comment" | "topic" | null
 type LastActivityType = "comment" | "topic" | null;
 type BoardRow = (typeof boardsData)["value"][number];
 
@@ -54,22 +49,15 @@ function getLastActivityType(board: BoardRow): LastActivityType {
   if (hasComment && !hasTopic) return "comment";
   if (!hasComment && hasTopic) return "topic";
 
-  // Both exist - compare dates
   const commentDate = new Date(board.lastComment!.createdUtc).getTime();
   const topicDate = new Date(board.lastTopic!.createdUtc).getTime();
   return commentDate >= topicDate ? "comment" : "topic";
 }
 
 /**
- * Link to the last-comment topic, targeting the page containing that
- * comment. The board payload only carries board-wide aggregate counts
- * (Board.CommentsCount), not the per-topic comment count needed to compute
- * ceil(topicCommentsCount / size) — that field does not exist on
- * BoardLastComment (see DM.Web.Api/Features/Forum/Boards/Board.cs). Using
- * the board-wide total here would produce a page number worse than "none"
- * for boards with many topics, so this stays a plain topic+hash link
- * (matches the pre-existing behavior) until the backend exposes the
- * target topic's own CommentsCount on BoardLastComment.
+ * The topic of the last comment, with its hash and no page: the board payload
+ * carries no comment count of that topic, and the board-wide total would give
+ * a page worse than none.
  */
 function lastCommentLink(board: BoardRow) {
   const lastComment = board.lastComment;
@@ -81,11 +69,7 @@ function lastCommentLink(board: BoardRow) {
   };
 }
 
-/**
- * Link to the last-created topic at the page it appears on within the
- * board's topic list (pinned topics aside), so a fresh topic still resolves
- * to the right page instead of always assuming page 1.
- */
+/** The last topic at the page of the board's list it stands on. */
 function lastTopicLink(board: BoardRow) {
   const lastTopic = board.lastTopic;
   if (!lastTopic) return null;
@@ -95,11 +79,7 @@ function lastTopicLink(board: BoardRow) {
   };
 }
 
-/**
- * The unread comments of the whole forum, for the line under the heading. A
- * guest has none: the server answers a guest with the totals in these fields,
- * since there is nothing a guest could have read.
- */
+/** The forum's unread comments; a guest is answered with the totals, so has none. */
 const unreadComments = computed(() =>
   user.value
     ? (boards.value ?? []).reduce(
@@ -109,15 +89,11 @@ const unreadComments = computed(() =>
     : 0,
 );
 
-/**
- * "Отметить прочитанными" of the line: the whole forum marked read, and the
- * refusal handed back to the line to say, or null once done.
- */
+/** Marks the whole forum read; returns the refusal or null. */
 async function markAllAsRead(): Promise<GeneralError | null> {
   const { error } = await forumApi.markForumAsRead();
   if (error) return error;
-  // Update local state (cast needed for Served<number> type). The line goes
-  // with the count, and the sidebar's counters read the same boards.
+  // Served<number> needs the cast; the sidebar's counters read the same boards.
   for (const board of boards.value ?? []) {
     (board as { unreadCommentsCount: number }).unreadCommentsCount = 0;
     (board as { unreadTopicsCount: number }).unreadTopicsCount = 0;
@@ -133,12 +109,9 @@ onMounted(() => store.fetchBoards());
 </script>
 
 <template>
-  <!-- The h1 "Форум" comes from the persistent ForumPage shell. The boards
-       table below is the index's own navigation, so this page goes straight
-       to the table — no board strip (it would duplicate the table, and the
-       shell hides it on the index) and no lead text. The line of the unread
-       stands under the heading only while there is something to mark: the
-       button it replaces stood shaded over a forum read to the end. -->
+  <!-- The h1 comes from the ForumPage shell; the boards table is this page's
+       navigation, so no board strip. The unread line stands while there is
+       something to mark. -->
   <UnreadLine
     :count="unreadComments"
     :mark="markAllAsRead"
@@ -146,7 +119,6 @@ onMounted(() => store.fetchBoards());
     done="Все топики прочитаны"
   />
 
-  <!-- Error state: a failed load must not be presented as an empty list. -->
   <ErrorState
     v-if="boardsError && !boardsData.length"
     message="Не удалось загрузить разделы"
@@ -193,7 +165,6 @@ onMounted(() => store.fetchBoards());
     </template>
 
     <template #cell-lastActivity="{ row }">
-      <!-- Last activity is a comment -->
       <template
         v-if="getLastActivityType(row) === 'comment' && row.lastComment"
       >
@@ -208,7 +179,6 @@ onMounted(() => store.fetchBoards());
             ><human-date :date="row.lastComment.createdUtc" /></router-link
         ></Tooltip>
       </template>
-      <!-- Last activity is a new topic -->
       <template
         v-else-if="getLastActivityType(row) === 'topic' && row.lastTopic"
       >
@@ -222,7 +192,6 @@ onMounted(() => store.fetchBoards());
             ><human-date :date="row.lastTopic.createdUtc" /></router-link
         ></Tooltip>
       </template>
-      <!-- No activity -->
       <span v-else class="muted">{{ VALUE_UNAVAILABLE }}</span>
     </template>
   </DataTable>

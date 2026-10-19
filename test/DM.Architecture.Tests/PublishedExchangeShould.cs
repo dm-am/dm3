@@ -12,17 +12,8 @@ namespace DM.Architecture.Tests;
 /// A publisher does not depend on somebody else having consumed first.
 /// </summary>
 /// <remarks>
-/// The client has a call that declares a producer's exchange and never makes it,
-/// so the exchanges of this system existed only because the consumers declare
-/// what they subscribe to. On a stand where the mail worker had never started,
-/// every letter was published to an exchange that was not there — and with no
-/// confirmation asked for, the broker's refusal reached nobody at all: the
-/// account was written, the request answered 200, and the reader waited for an
-/// activation letter that had never been queued.
-///
-/// Asserted on the sources, because the parameters are built inside hosts that
-/// need a live broker to reach that line, and the declaration is a hosted service
-/// that needs one too.
+/// Without a declaration the exchange exists only once a consumer declared it. Asserted on the
+/// sources: the parameters are built behind a live broker.
 /// </remarks>
 public class PublishedExchangeShould
 {
@@ -68,20 +59,8 @@ public class PublishedExchangeShould
     /// places, each for its own reason, and nowhere else.
     /// </summary>
     /// <remarks>
-    /// The letter is what a registration or a password reset owes the reader, and
-    /// nothing left behind can reconstruct it, so a refusal there has to reach the
-    /// caller. The outbox relay waits for the opposite reason: the row it is about
-    /// to mark published is the durable record of the event, and a mark without
-    /// the broker's confirm would record "delivered" about a message the broker
-    /// may not have taken — the silent loss coming back through another door. The
-    /// wait is affordable there because the relay is background work: the rule
-    /// "nobody waits on the bus" protected an HTTP caller the relay does not have.
-    ///
-    /// Both directions, because the interesting failure is a third producer
-    /// acquiring the wait: it is one property on a parameters object, and adding
-    /// it to a producer inside a request reads like making things safer while
-    /// quietly moving every write in the site behind the availability of the
-    /// broker.
+    /// The letter owes the reader a refusal, and the relay's mark must follow the confirm. A third producer
+    /// in a request would put every write behind the broker.
     /// </remarks>
     [Fact]
     public void WaitForTheBrokerOnlyWhereTheMessageIsTheWholeObligation()

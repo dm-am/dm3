@@ -7,15 +7,11 @@ import { computed, ref } from "vue";
 const props = withDefaults(
   defineProps<{
     blog: Blog | BlogRef;
-    counters: boolean;
     alwaysShowCounters?: boolean;
     prefix?: string;
-    /** Show author and assistants */
-    showAuthors?: boolean;
   }>(),
   {
     prefix: "- ",
-    showAuthors: false,
   },
 );
 
@@ -28,28 +24,20 @@ const {
   isNew,
 } = useBlogDisplay();
 
-// Closed blog: muted grey until hover. Muted takes priority over "new".
 const isClosedBlog = computed(() => props.blog.status === "Closed");
 
-// Blog is "new" if activated < 7 days ago
-const isNewBlog = computed(() => !isClosedBlog.value && isNew(props.blog));
+const isNewBlog = computed(() => isNew(props.blog));
 
-// Prefer the short public id for the URL; fall back to the GUID (the blog
-// route is publicId-tolerant on the backend).
 const blogRoute = computed(() => ({
   name: "blog",
   params: { id: props.blog.publicId ?? props.blog.id },
 }));
 const hovered = ref(false);
-const showCounters = computed(
-  () => props.counters && (props.alwaysShowCounters || hovered.value),
-);
+const showCounters = computed(() => props.alwaysShowCounters || hovered.value);
 
-// Counter values using shared composable
 const publicationsCount = computed(() => getUnreadPublications(props.blog));
 const commentsCount = computed(() => getUnreadComments(props.blog));
 
-// Tooltips using shared composable
 const publicationsTooltip = computed(() =>
   formatUnreadPublicationsTooltip(publicationsCount.value),
 );
@@ -83,22 +71,14 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .link
   display: block
 
-.muted
-  color: $text-muted
-
-// A blog that is new: the site's green link.
 .new-item
   +link-tone($accent-green, $accent-green-hover)
 
-// Closed blogs: the site's grey link.
 .closed-item
   +muted-link
-
-.counters
-  transition: opacity 0.15s ease
 </style>

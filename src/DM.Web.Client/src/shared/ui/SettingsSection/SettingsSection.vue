@@ -1,11 +1,4 @@
 <script setup lang="ts">
-/**
- * SettingsSection — the boxed panel used across game/blog settings tabs
- * (blacklist, roles, invitations, info, rooms, rubrics). Owns the shared
- * `.settings-section` chrome so individual sections stop re-declaring it.
- * The heading is rendered through BlockTitle; pass `title` for a plain
- * string or use the #title slot for richer headings.
- */
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 
 defineProps<{ title?: string }>();
@@ -13,16 +6,13 @@ defineProps<{ title?: string }>();
 
 <template>
   <section class="settings-section">
-    <BlockTitle v-if="title || $slots.title">
-      <slot name="title">{{ title }}</slot>
-    </BlockTitle>
+    <BlockTitle v-if="title">{{ title }}</BlockTitle>
     <slot />
   </section>
 </template>
 
 <style scoped lang="sass">
-// Square: a panel of content and not a control (owner's standard, 27
-// September 2026; the radius is the mark of what the reader operates).
+// Square: a panel of content and not a control, the radius is the mark of what the reader operates.
 .settings-section
   margin-bottom: $big
   padding: $medium

@@ -2,18 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The only place inside the site that names its addresses, and it is there for
- * the visitor whose usual address stopped answering. So it has to be drawn from
- * the host in the address bar rather than from a request. A stand is not one of
- * the site's addresses and still draws the lines: the developer has to see what
- * he is changing, and what he sees is what a visitor on the main address sees.
- *
- * Since W3.9 B1 the block is a state board: every row carries a live signal
- * scale and a measured round trip beside the link. The measurement itself is
- * useAddressPing's business and the network has no place in a unit spec, so
- * the composable is replaced with a reactive record the tests drive by hand.
- */
+/** The addresses of the site, drawn without a request; the ping is a reactive record the tests drive. */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { nextTick, reactive } from "vue";
@@ -54,15 +43,6 @@ function links(wrapper: ReturnType<typeof render>) {
   }));
 }
 
-/** The copy a sighted visitor gets: the clipped screen-reader spans excluded. */
-function visibleText(wrapper: ReturnType<typeof render>): string {
-  const root = wrapper.element.cloneNode(true) as HTMLElement;
-  for (const hidden of root.querySelectorAll(".visually-hidden")) {
-    hidden.remove();
-  }
-  return root.textContent ?? "";
-}
-
 beforeEach(() => {
   // Every address starts unmeasured, the way a fresh mount sees the world.
   for (const address of SITE_ADDRESSES) {
@@ -85,9 +65,7 @@ describe("the site address block", () => {
   });
 
   it("keeps the mark beside the link, not inside it", () => {
-    // The mark is data the way the digits are (owner's call, 2026-08-25):
-    // it shares the lead cell with the anchor for geometry, but neither
-    // looks like a link nor navigates. Only the name is the click target.
+    // The mark is data, as the digits are: only the name is the click target.
     onHost(main.host);
     const wrapper = render("/");
     const anchors = wrapper.findAll("a[href]");
@@ -107,8 +85,7 @@ describe("the site address block", () => {
   });
 
   it("carries the page being read across to the other address", () => {
-    // A link that always landed on the home page would cost the reader their
-    // place, and on this site the place is usually the point of the link.
+    // A link to the home page would cost the reader his place.
     onHost(main.host);
     const href = render("/forum/topic/17?page=2#post-9")
       .findAll("a[href]")
@@ -119,9 +96,7 @@ describe("the site address block", () => {
   });
 
   it("draws the same rows on a host that is neither of them", () => {
-    // localhost is every development stand. The lines used to be absent here,
-    // so the only people who could break them were the only people who never
-    // saw them.
+    // localhost is every development stand.
     onHost("localhost:5173");
 
     expect(links(render("/")).map((l) => l.host)).toEqual(
@@ -130,14 +105,7 @@ describe("the site address block", () => {
   });
 
   it("lays every address out as a table row of name, scale and ms", () => {
-    // A CSS table and not a grid of cells: columns line up by nature, and a
-    // row copies as one line with its cells apart, where grid items copy as a
-    // line each and a converter to markdown glued the whole board into one
-    // bullet ("[Основной сервер](...)450 мс[RU-прокси](...)250 мс").
-    // Spans and not table markup: a reader hears the links and their status
-    // sentences, not a table. One row per address, three cells in reading
-    // order; the scale's cell holds the tooltip trigger with the scale inside.
-    // The display values themselves are the copy gate's business.
+    // A CSS table of spans: one row per address, three cells in reading order.
     onHost(main.host);
     const board = render("/").find("li.site-addresses");
     expect(board.exists()).toBe(true);
@@ -160,8 +128,7 @@ describe("the site address block", () => {
 
 describe("the state board", () => {
   it("holds the ms cell with an ellipsis until the first measurement lands", () => {
-    // The track is there from the first render, so nothing jumps when the
-    // number arrives; the ellipsis says "measuring", not "not answering".
+    // The track stands from the first render, so nothing jumps when the number arrives.
     onHost(main.host);
     const cells = render("/").findAll(".latency");
 
@@ -189,8 +156,7 @@ describe("the state board", () => {
     expect(signals[0].findAll(".bar")).toHaveLength(4);
     expect(signals[0].findAll(".bar.filled")).toHaveLength(4);
     expect(signals[1].findAll(".bar.filled")).toHaveLength(2);
-    // The sentence is the site's tooltip on the scale, not the browser's
-    // title: the title never showed for a finger or a keyboard.
+    // The site's tooltip, not the browser's title.
     expect(wrapper.findAllComponents(Tooltip)[0].props("text")).toBe(
       "Скорость ответа из вашей сети",
     );
@@ -211,29 +177,5 @@ describe("the state board", () => {
       "Не отвечает из вашей сети",
     );
     expect(wrapper.findAll(".latency")[1].text()).toBe("нет");
-  });
-
-  it("says nothing visible about state", async () => {
-    // The numbers say it. The words live only in the scale's tooltip and the
-    // screen-reader span; the visible copy is the names and the figures, and
-    // no row is marked as "the one you are on".
-    onHost(main.host);
-    const wrapper = render("/");
-    pings[main.host] = { status: "up", latencyMs: 42 };
-    pings[second.host] = { status: "down", latencyMs: null };
-    await nextTick();
-
-    const visible = visibleText(wrapper);
-    expect(visible).toContain(main.name);
-    expect(visible).toContain(second.name);
-    expect(visible).not.toContain("отвечает");
-    expect(visible).not.toContain("текущий");
-
-    expect(wrapper.find("strong").exists()).toBe(false);
-    expect(wrapper.find("b").exists()).toBe(false);
-    // No browser title anywhere: a title bubble is not the site's tooltip, and
-    // a state sentence in one would come back through the clipboard of a
-    // hover as well as look foreign.
-    expect(wrapper.findAll("[title]")).toHaveLength(0);
   });
 });

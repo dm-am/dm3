@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Account.Features.Availability;
 using DM.Domain.Account.Features.Deactivation;
 using DM.Domain.Account.Features.EmailChange;
@@ -16,12 +14,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Deactivation sets IsRemoved and nothing else, and the unique indexes over lower("Email")
-/// and lower("Username") carry no predicate, so a deactivated account goes on holding its
-/// address and its login. Every check that answers "may a new account take this" has to see
-/// that row: asked through the global soft-delete filter it reports free what the database
-/// refuses, and the refusal reaches the person as a 500 on the link that confirms the
-/// registration, after the letter has been sent.
+/// A deactivated account keeps its address and login: the unique indexes over lower("Email") and lower("Username")
+/// carry no predicate, so every "may a new account take this" check sees that row.
 /// </summary>
 public class AccountReservationShould : IntegrationTestBase
 {
@@ -30,9 +24,7 @@ public class AccountReservationShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Every caller at once, because they answer one question and used to answer it several
-    /// different ways: the registration validator, the activation validator, the email change,
-    /// the rename, and the two probes the forms call while the person is still typing.
+    /// Every caller at once: the two validators, the email change, the rename and the two probes of the forms.
     /// </summary>
     [Fact]
     public async Task RefuseTheAddressAndTheLoginOfADeactivatedAccount()
@@ -62,9 +54,7 @@ public class AccountReservationShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The other half of the rule, and the half that decides it: uniqueness covers the whole
-    /// table. Freeing a deactivated address would mean a predicate on these indexes, and two
-    /// rows would then hold one address the moment either of them came back.
+    /// Uniqueness covers the whole table: a predicate would let two rows hold one address once either came back.
     /// </summary>
     [Fact]
     public async Task LeaveTheDatabaseRefusingASecondAccountOnTheSameAddress()
@@ -97,9 +87,7 @@ public class AccountReservationShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// An account of its own per run: the fixture's database is shared, and a reservation
-    /// somebody else seeded would make the assertions depend on them. Deactivated through the
-    /// repository the site uses, so the test cannot drift from what deactivation does.
+    /// An account of its own per run, deactivated through the repository the site uses.
     /// </summary>
     private async Task<(Guid UserId, string Username, string Email)> SeedDeactivatedAccountAsync()
     {

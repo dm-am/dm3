@@ -1,20 +1,7 @@
 <script setup lang="ts">
 /**
- * ProfileBestPublicationSection — the user's most-liked published publication
- * across every blog they author. Sibling to ProfileBestPostSection but for
- * blogs: same role (spotlight inside the relevant profile tab), same
- * empty / loading affordances (a GamePostSkeleton while loading, matching
- * ProfileBestPostSection).
- *
- * Backend contract: `GET /v1/users/{username}/best-publication` returns
- * an envelope with `resource: Publication | null`. `null` is the success
- * case for "no publications yet" — the API doesn't 404 in that case, so
- * we branch on the resource being null instead of catching errors.
- *
- * Rendering: the publication goes through PublicationCard — the
- * publication's own presentational card. (Its current internals mirror the
- * topic card by product decision; that is PublicationCard's concern, not
- * this page's.)
+ * The user's most-liked publication across his blogs. The endpoint answers no
+ * publication with a null resource, not a 404.
  */
 import { onMounted, ref, watch } from "vue";
 import { blogApi } from "@/entities/blog";
@@ -32,8 +19,7 @@ const props = defineProps<{
 const publication = ref<Publication | null>(null);
 const loaded = ref(false);
 
-// The section refetches when the profile changes under it, so two answers can
-// be on the wire at once and the slower one used to win.
+// The profile can change under the section: the guard drops the older answer.
 const { loading, error, run } = useGuardedRequest({
   message: "Не удалось загрузить лучшую публикацию",
   clearErrorOnStart: true,

@@ -10,17 +10,9 @@ namespace DM.Infrastructure.Persistence.InitialData;
 /// holds, and the sheet the development seed gives every game it creates.
 /// </summary>
 /// <remarks>
-/// Initial data of the schema rather than of the development seed. The creation
-/// form starts a game from the default template, and a catalogue with nothing in
-/// it leaves a new site with no sheet to start from; the seeder was the only
-/// thing that wrote this row, and a database built by the migration alone had
-/// none. So the row goes in with the schema, the way the boards and the system
-/// user do, and the seeder reads the same definition instead of keeping a copy.
-///
-/// Every identifier is pinned. The migration carries them as literals, and the
-/// attribute values of seeded characters address the specifications by them. A
-/// specification identifier is unique inside one sheet, not between sheets, so
-/// every game holding the same ones is what makes a reseed idempotent.
+/// Initial data of the schema, so a site built by the migration alone has a sheet to
+/// start a game from. Every identifier is pinned: the migration carries them as
+/// literals and seeded characters address the specifications by them.
 /// </remarks>
 public static class DefaultAttributeSchema
 {
@@ -133,18 +125,17 @@ public static class DefaultAttributeSchema
         {
             new()
             {
-                Id = HitPointsId, Title = "HP", Order = 0, IsDescriptor = false, IsHidden = false,
-                Constraints = new NumberAttributeConstraints { Required = false }
+                Id = HitPointsId, Title = "HP", Order = 0,
+                Constraints = new NumberAttributeConstraints()
             },
             new()
             {
-                Id = AlignmentId, Title = "Мировоззрение", Order = 1, IsDescriptor = true, IsHidden = false,
+                Id = AlignmentId, Title = "Мировоззрение", Order = 1, IsDescriptor = true,
                 Constraints = new ListAttributeConstraints
                 {
-                    Required = false,
                     Kind = ListValueKind.Text,
                     Values = AlignmentNames
-                        .Select(a => new ListAttributeValue { Value = a, Modifier = null })
+                        .Select(a => new ListAttributeValue { Value = a })
                         .ToList()
                 }
             }
@@ -156,11 +147,8 @@ public static class DefaultAttributeSchema
             Id = ability.Id,
             Title = ability.Title,
             Order = abilitiesFrom + index,
-            IsDescriptor = false,
-            IsHidden = false,
             Constraints = new ListAttributeConstraints
             {
-                Required = false,
                 Kind = ListValueKind.TextNumber,
                 Values = AbilityRungs
                     .Select(rung => new ListAttributeValue { Value = rung.Value, Modifier = rung.Modifier })
@@ -174,9 +162,7 @@ public static class DefaultAttributeSchema
             Id = field.Id,
             Title = field.Title,
             Order = narrativeFrom + index,
-            IsDescriptor = false,
-            IsHidden = false,
-            Constraints = new BbCodeAttributeConstraints { Required = false, MaxLength = BbCodeFieldLength }
+            Constraints = new BbCodeAttributeConstraints { MaxLength = BbCodeFieldLength }
         }));
 
         return specifications;
@@ -189,9 +175,7 @@ public static class DefaultAttributeSchema
         Title = Title,
         Specifications = Specifications(),
         IsDefault = true,
-        CreatedByUserId = null,
         CreatedUtc = Shipped,
-        UpdatedUtc = Shipped,
-        IsRemoved = false
+        UpdatedUtc = Shipped
     };
 }

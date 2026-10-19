@@ -4,10 +4,8 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
-using DM.Infrastructure.Persistence.Entities.Game.Links;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
@@ -17,7 +15,7 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Characters;
 /// DAL model for character
 /// </summary>
 [Table("Characters")]
-public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
+public class Character : ISoftDeletable
 {
     /// <summary>
     /// Character identifier
@@ -60,9 +58,6 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// Name
-    /// </summary>
     [MaxLength(CharacterPolicy.NameMaxLength)]
     public string Name { get; set; } = null!;
 
@@ -85,9 +80,6 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     /// <inheritdoc />
     public DateTimeOffset? DeletedUtc { get; set; }
 
-    /// <summary>
-    /// Game
-    /// </summary>
     [ForeignKey(nameof(GameId))]
     public virtual Game Game { get; set; } = null!;
 
@@ -103,27 +95,9 @@ public class Character : ISoftDeletable, IHasEditHistory<CharacterEdit>
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
 
-    /// <summary>
-    /// Edit history
-    /// </summary>
-    [InverseProperty(nameof(CharacterEdit.Character))]
-    public virtual ICollection<CharacterEdit> Edits { get; set; } = [];
-
-    /// <summary>
-    /// Attribute values
-    /// </summary>
     [InverseProperty(nameof(CharacterAttribute.Character))]
     public virtual ICollection<CharacterAttribute> Attributes { get; set; } = [];
 
-    /// <summary>
-    /// Room access
-    /// </summary>
-    [InverseProperty(nameof(RoomAccess.Character))]
-    public virtual ICollection<RoomAccess> RoomLinks { get; set; } = [];
-
-    /// <summary>
-    /// Posts
-    /// </summary>
     [InverseProperty(nameof(Post.Character))]
     public virtual ICollection<Post> Posts { get; set; } = [];
 }

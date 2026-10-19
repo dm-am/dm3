@@ -8,13 +8,14 @@ import { useAuthStore, UsernameInput, accountApi } from "@/entities/user";
 import type { User } from "@/shared/api/models/community";
 import Button from "@/shared/ui/Button/Button.vue";
 import { symbols } from "@/shared/lib/utils/icons";
-import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
+import { readFieldError } from "@/shared/lib/errors/validationErrors";
 import { unwrapResource } from "@/shared/api";
 import { LETTER_NOT_SENT } from "@/shared/lib/errors";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { supportFor } from "@/entities/ticket";
+import { ACTIVATION_RESENT, linkLifetimeNote } from "@/features/auth";
 
-// State machine for activation flow
 type ActivationPhase =
   | "loading"
   | "selectUsername"
@@ -24,104 +25,56 @@ type ActivationPhase =
   | "submitting"
   | "success";
 
-/**
- * The one sentence for a name that is not to be had, word for word the one
- * UsernameInput prints under the field.
- *
- * The server answers in codes, and the shared vocabulary reads `Taken` as
- * "Уже занято" - a third wording for the thing the reader has already been
- * told in the field's own line. Every other code keeps the vocabulary's
- * sentence: those are about the characters, not about the owner.
- */
+/** A taken name, in the words UsernameInput prints under the field, not the vocabulary's "Уже занято". */
 const NAME_UNAVAILABLE = "Это имя занято";
 
 const router = useRouter();
 const userStore = useAuthStore();
 
-// State
 const phase = ref<ActivationPhase>("loading");
 
 /**
- * Whether the other tab has already finished the activation.
- *
- * Read through a function on purpose: both callers assign a literal phase
- * before they await, and a comparison written inline there is narrowed by the
- * compiler against that literal - it does not know the channel can move the
- * phase while the request is on the wire.
+ * Whether the other tab has finished the activation. A function: inline, the
+ * compiler narrows the comparison to the phase just assigned before the await.
  */
 const finishedElsewhere = (): boolean => phase.value === "success";
 const pendingEmail = ref<string>("");
 const token = ref<string>("");
 const username = ref("");
 const usernameAvailable = ref(false);
-/**
- * The name the finished screen greets, and the whole of what that screen reads.
- *
- * The tab that ran the activation takes it out of the account the server sent
- * back; the tab that only heard about the activation over the channel has the
- * name and nothing else - and needs nothing else. The account itself reaches
- * that tab without this page: `updateUser` writes it to localStorage, and the
- * auth store of every other tab listens for that write.
- */
+/** The name the finished screen greets, the one thing a tab told over the channel has. */
 const activatedName = ref("");
 const error = ref<string | null>(null);
 
-// Resend state
-const resendEmail = ref("");
 const resendLoading = ref(false);
 const resendSuccess = ref(false);
+/** How long the link of the letter resent lives, as the answer named it. */
+const resentHours = ref<number>();
 
-// The block the name field stands in. The field itself belongs to a shared
-// component, so the caret is placed through the wrapper this page owns rather
-// than through a handle bolted onto UsernameInput for one caller.
+// The wrapper of the shared field, through which the caret is placed.
 const nameBlock = ref<HTMLElement | null>(null);
 
-// BroadcastChannel for cross-tab sync
 let channel: BroadcastChannel | null = null;
 
-// Check if username is valid to proceed to confirmation
-const canProceed = computed(() => {
-  return (
-    phase.value === "selectUsername" &&
-    username.value.length >= 2 &&
-    username.value.length <= 20 &&
-    usernameAvailable.value
-  );
-});
-
-// Check if ready to submit (on confirmation step)
 const canSubmit = computed(() => {
   return phase.value === "confirmUsername";
 });
 
 onMounted(async () => {
-  // The value arrives in the fragment and is cleared from the address as it is
-  // read: in the path it went into browser history and into the access log of
-  // the edge, for a value that is the single factor of the confirmation.
+  // From the fragment, cleared from the address as it is read: in the path it went into history and the access log.
   token.value = readConfirmationToken();
 
-  // No line of our own about what is missing: the card already says the link is
-  // not a link, and the only word this page had for the missing value was the
-  // name of the thing in the database. `error` carries the server's own
-  // sentence and nothing else.
+  // No line of our own about the missing value: the card says the link is not a link.
   if (!token.value) {
     phase.value = "notFound";
     return;
   }
 
-  // Setup BroadcastChannel for cross-tab sync
   if (typeof BroadcastChannel !== "undefined") {
     channel = new BroadcastChannel("dm_activation");
     channel.onmessage = (event) => {
-      // The letter opened in two tabs, and one of them got there first. This
-      // one used to be carried off to the home page and told about it in a
-      // toast, over a card that has a finished screen of its own and a message
-      // that carries the name to put on it. So both tabs end where the
-      // activation ends: on the same card, in the same words.
-      //
-      // A message with no name in it is not that screen, and there is nothing
-      // honest to stand in for the name, so the tab stays where it is: its own
-      // attempt comes back from the server as a link that opens nothing.
+      // The other tab finished first: this one ends on the same finished screen.
+      // A message without a name stays where it is.
       const name: unknown = event.data?.username;
       if (
         event.data?.type === "activated" &&
@@ -134,18 +87,9 @@ onMounted(async () => {
     };
   }
 
-  // Try to get saved email from registration
-  const savedEmail = sessionStorage.getItem("dm_pending_email");
-  if (savedEmail) {
-    resendEmail.value = savedEmail;
-  }
-
-  // Check token status
   await checkTokenStatus();
 
-  // The screen holds one field, and the reader arrived here to fill it in. The
-  // check has to answer first, so the field is a render away from the mount and
-  // cannot be focused from the mount itself.
+  // The field is a render after the check, so it is focused after it.
   if (phase.value === "selectUsername") await focusName();
 });
 
@@ -165,20 +109,16 @@ async function checkTokenStatus() {
     token.value,
   );
 
-  // The other tab finished while this check was on the wire. The finished
-  // screen is the last word of the flow, and a verdict on a link that is spent
-  // by now must not take it off the card.
+  // The other tab finished while the check was out: a verdict on a spent link must not replace the finished screen.
   if (finishedElsewhere()) return;
 
   if (apiError) {
-    // 404 - token not found
     phase.value = "notFound";
     return;
   }
 
   if (data) {
     pendingEmail.value = data.email;
-    resendEmail.value = data.email;
 
     if (data.status === "ready") {
       phase.value = "selectUsername";
@@ -189,7 +129,6 @@ async function checkTokenStatus() {
 }
 
 function proceedToConfirm() {
-  if (!canProceed.value) return;
   phase.value = "confirmUsername";
 }
 
@@ -202,29 +141,22 @@ async function submitActivation() {
 
   phase.value = "submitting";
 
-  // The account is created here, and it starts in the zone of the device it
-  // is finished on: the site shows a signed-in reader's time in the zone of
-  // the account, and an account without one is UTC. Left out where the
-  // browser will not say.
+  // The account starts in the zone of this device, left out where the browser will not say.
   const { data, error: apiError } = await accountApi.activate(token.value, {
     username: username.value,
     timeZoneId: deviceTimeZone() || undefined,
   });
 
-  // As in checkTokenStatus: the other tab may have finished while this attempt
-  // was on the wire, and the refusal it earns for a token already spent would
-  // replace the news of the activation with a dead link.
+  // As in checkTokenStatus: the refusal for a token already spent must not replace the finished screen.
   if (finishedElsewhere()) return;
 
   if (apiError) {
     const errors = parseApiErrors(apiError);
-    // A name that is somebody else's is refused in the sentence the field uses,
-    // whichever side of the wire the refusal came from. See NAME_UNAVAILABLE.
+    // A taken name in the words of the field, from either side of the wire.
     const usernameError = errors["username"]?.includes("Taken")
       ? NAME_UNAVAILABLE
-      : getFieldError(errors, "username");
+      : readFieldError(errors, "username");
 
-    // Username errors - go back to selection
     if (usernameError) {
       error.value = usernameError;
       phase.value = "selectUsername";
@@ -232,12 +164,9 @@ async function submitActivation() {
       return;
     }
 
-    // Token errors or other errors. What the server said, or nothing: the card
-    // names the failure in its own heading, and a sentence invented here to
-    // fill the gap says the same thing a second time in worse words.
+    // What the server said, or nothing: the card's heading names the failure.
     error.value = Object.values(errors).flat()[0] ?? null;
 
-    // Check if it might be 410 Gone (expired)
     if (apiError.status === 410) {
       phase.value = "expired";
     } else {
@@ -246,46 +175,33 @@ async function submitActivation() {
     return;
   }
 
-  // Out of the envelope. Stored as it came, the session held the wrapper
-  // instead of the account - and the auth store writes that to localStorage -
-  // so right after activation the header greeted a signed-in visitor with no
-  // name, the link to the profile led nowhere, and the other tab was told
-  // somebody named undefined had activated.
+  // Out of the envelope: stored as it came, the session held the wrapper and not the account.
   const activated = unwrapResource<User>(data);
   if (activated) {
-    // Success!
     userStore.updateUser(activated);
     activatedName.value = activated.username;
     phase.value = "success";
 
-    // Notify other tabs
     channel?.postMessage({ type: "activated", username: activated.username });
-
-    // Clean up sessionStorage
-    sessionStorage.removeItem("dm_pending_email");
   }
 }
 
-/**
- * A refused resend, in the line above the button the way this card says its
- * other refusals (.activation-refusal). The offer stays on the card with the
- * button live, so the reader can press again; the plate the interceptor held
- * for the same refusal is taken down.
- */
+/** A refused resend, over the button, which stays live. */
 const resendResult = useActionResult();
 
 async function resend() {
-  if (!resendEmail.value) return;
+  if (!pendingEmail.value) return;
 
   resendLoading.value = true;
   resendResult.clear();
 
   try {
-    const { error } = await accountApi.recover(resendEmail.value);
+    const { data, error } = await accountApi.recover(pendingEmail.value);
     if (error) {
       resendResult.refuse(error, LETTER_NOT_SENT);
       return;
     }
+    resentHours.value = data?.linkLifetimeHours;
     resendSuccess.value = true;
   } finally {
     resendLoading.value = false;
@@ -300,42 +216,28 @@ function goToProfile() {
   }
 }
 
-// The one way out of a dead link, and the same one on every screen that answers
-// one. A card that offers a choice makes the reader decide which door his own
-// case fits, and he is the one person who cannot tell: the home page is where
-// both doors stand anyway. Owner's decision.
+// The one way out of a dead link, as on every screen that answers one: the home page has both doors.
 function goHome() {
   router.push("/");
 }
 </script>
 
 <template>
-  <!-- A page and not a dialog: nothing dims the ground behind it, so the card
-       carries a frame of its own and there is no cross to close it with. -->
+  <!-- A page and not a dialog, so the card has a frame of its own and no cross. -->
   <div class="auth-surface activation-page">
-    <!-- The card says how wide it wants to be, because the sheet cannot work
-         that out from what stands inside it. Every answer here is a mark, a
-         heading and a line or two, so the narrow measure holds in all of
-         them. -->
+    <!-- Every answer is a mark, a heading and a line or two: the narrow measure. -->
     <div
       class="auth-card auth-card--framed auth-card--center auth-card--compact"
     >
-      <!-- Checking the link. The phase existed and the template had no branch
-           for it: someone arriving from the letter on a slow connection saw an
-           empty card with "Нужна помощь? Обратитесь в поддержку" under it —
-           the signal that something is broken, at the moment nothing is.
-           EmailChangePage, the third page of this family, does it this way. -->
+      <!-- Checking the link: never an empty card under the support line. -->
       <p v-if="phase === 'loading'" class="auth-note activation-loading">
         Проверяем ссылку...
       </p>
 
-      <!-- Step 1: Username Selection -->
       <template v-else-if="phase === 'selectUsername'">
         <h1 class="auth-title">Выберите имя</h1>
 
-        <!-- The card is centred, the field is not: a label, the box under it
-             and the verdict under that read from the left, as everywhere else
-             on the site something is filled in. -->
+        <!-- The card is centred, the field is not: it reads from the left, as every field of the site. -->
         <div ref="nameBlock" class="activation-name">
           <label class="auth-label" for="activation-username">
             Имя пользователя
@@ -354,15 +256,14 @@ function goHome() {
         <Button
           type="button"
           variant="primary"
-          class="auth-button submit-button"
-          :disabled="!canProceed"
+          class="auth-button"
+          :disabled="!usernameAvailable"
           @click="proceedToConfirm"
         >
           Продолжить
         </Button>
       </template>
 
-      <!-- Step 2: Confirm Username -->
       <template
         v-else-if="phase === 'confirmUsername' || phase === 'submitting'"
       >
@@ -375,15 +276,10 @@ function goHome() {
 
         <div class="auth-label-row">
           <span class="auth-label">Имя пользователя</span>
-          <!-- A real space, so the row copies as one line (Reset.sass,
-               .copy-space). -->
+          <!-- A real space, so the row copies as one line. -->
           <span class="copy-space">{{ " " }}</span>
-          <!-- "Изменить" goes back a step in code and nowhere in the address
-               bar, so the control is a button, wearing the guest surface's own
-               secondary action to read as the <a> it replaces. While the
-               request is in flight it is disabled for real: the class it used
-               to carry dimmed the link and took the mouse away from it, leaving
-               the keyboard free to step back mid-request. -->
+          <!-- "Изменить" goes back a step and nowhere in the address, so it is a button
+               in the guest surface's secondary action, shut while the request is out. -->
           <button
             type="button"
             class="auth-action"
@@ -400,7 +296,7 @@ function goHome() {
         <Button
           type="button"
           variant="primary"
-          class="auth-button submit-button"
+          class="auth-button"
           :disabled="!canSubmit"
           :loading="phase === 'submitting'"
           @click="submitActivation"
@@ -409,15 +305,12 @@ function goHome() {
         </Button>
       </template>
 
-      <!-- Success state -->
       <template v-else-if="phase === 'success'">
         <div class="auth-status auth-status--ok" aria-hidden="true">
           {{ symbols.checkmark }}
         </div>
         <h1 class="auth-title">Регистрация завершена</h1>
-        <!-- No bang after the name. The heading above already says the whole
-             news, and an exclamation mark under it congratulates the reader a
-             second time. -->
+        <!-- No bang after the name: the heading already says the news. -->
         <p class="auth-text">
           Добро пожаловать, <b>{{ activatedName }}</b>
         </p>
@@ -431,26 +324,21 @@ function goHome() {
         </Button>
       </template>
 
-      <!-- Expired state. One attempt from this screen: the offer is replaced by
-           the receipt rather than joined by it, so there is no button left to
-           press a second time. -->
+      <!-- One attempt: the offer is replaced by the receipt, so nothing is pressed twice. -->
       <template v-else-if="phase === 'expired' && !resendSuccess">
-        <!-- The warning sign by the rule at .auth-status--warn in
-             AuthSurface.sass: the site can take the next step for the reader,
-             and the button under the card is that step. -->
+        <!-- The warning sign: the site can take the next step, the button under the card. -->
         <div class="auth-status auth-status--warn" aria-hidden="true">
           {{ symbols.warning }}
         </div>
-        <!-- The heading the other two expired links carry. It used to name the
-             letter as well, and a reader holding three links from this site
-             read three different events where there is one. -->
+        <!-- The heading the other two expired links carry. -->
         <h1 class="auth-title">Ссылка устарела</h1>
 
         <p class="auth-text">
           Отправить новую ссылку для активации на <b>{{ pendingEmail }}</b
           >?
         </p>
-        <p class="auth-note">Ссылка действительна 48 часов</p>
+        <!-- Before the letter goes out no answer has named the hours: the fallback. -->
+        <p class="auth-note">{{ linkLifetimeNote() }}</p>
         <p
           v-if="resendResult.refusal.value"
           class="activation-refusal"
@@ -470,35 +358,24 @@ function goHome() {
         </Button>
       </template>
 
-      <!-- The letter is out. The same receipt the registration ends on, in the
-           same words: a reader who asked for a second letter is waiting for the
-           very thing the first one promised, so the card that tells him so is
-           the one he has already seen. Nothing has gone wrong here, so the mark
-           of a failed state is gone with the offer, and so is the offer of
-           help under the card. -->
+      <!-- The receipt the registration ends on, in its words; no mark and no offer of help. -->
       <template v-else-if="phase === 'expired'">
         <h1 class="auth-title">Проверьте почту</h1>
         <p class="auth-text" role="status">
-          Мы отправили повторное письмо со ссылкой для активации на
+          {{ ACTIVATION_RESENT }}
           <b>{{ pendingEmail }}</b>
         </p>
-        <p class="auth-note">Ссылка действительна 48 часов</p>
+        <p v-if="resentHours !== undefined" class="auth-note">
+          {{ linkLifetimeNote(resentHours) }}
+        </p>
       </template>
 
-      <!-- Not Found state -->
       <template v-else-if="phase === 'notFound'">
-        <!-- The cross by the rule at .auth-status--warn in AuthSurface.sass:
-             a link that opens nothing leaves this card no next step, unlike the
-             expired one above it. It is drawn by the surface and not typed, so
-             no glyph goes inside it. -->
+        <!-- The cross: a link that opens nothing leaves no next step. Drawn by the surface. -->
         <div class="auth-status auth-status--error" aria-hidden="true" />
         <h1 class="auth-title">Ссылка недействительна</h1>
 
-        <!-- Two causes in one line. The link is dead either because the account
-             behind it is already activated, or because the pending registration
-             it belonged to is gone and there is nothing left to activate. The
-             server's own text for this state said the same thing in worse
-             words, so it is gone. -->
+        <!-- Two causes in one line: the account is activated already, or the registration is gone. -->
         <p class="auth-text">
           {{
             error ||
@@ -506,10 +383,7 @@ function goHome() {
           }}
         </p>
 
-        <!-- One control, and the same one the other five dead links carry. The
-             card used to offer the sign-in and the registration side by side,
-             which asks the reader to pick the cause of a failure he cannot see;
-             both doors stand on the home page anyway. -->
+        <!-- The one control all the dead links carry. -->
         <Button
           type="button"
           variant="primary"
@@ -520,12 +394,10 @@ function goHome() {
         </Button>
       </template>
 
-      <!-- Nothing has gone wrong on the two screens that end well - the finished
-           registration and the receipt for the new letter - so there is nobody
-           to ask for help: the offer stands under every other answer. -->
+      <!-- Help is offered under every answer but the two that end well. -->
       <p
         v-if="phase !== 'success' && phase !== 'loading' && !resendSuccess"
-        class="auth-footnote help-section"
+        class="auth-footnote"
       >
         Нужна помощь? Обратитесь в
         <router-link :to="supportFor('RegistrationIssue')"
@@ -537,78 +409,45 @@ function goHome() {
 </template>
 
 <style scoped lang="sass">
+@use "@/assets/styles/AuthTokens" as *
+
 .activation-page
   margin: $major auto
   padding: 0 $medium
 
-// The card says what it is doing rather than standing empty; the line is the
-// whole body, so it carries no bottom gap of its own.
+// The line is the whole body, so it has no bottom gap.
 .activation-loading
   margin: 0
 
 .activation-name
   text-align: left
 
-  // UsernameInput draws the verdict on the name inside its own root, so the
-  // strip AuthSurface hangs on `.auth-field + .auth-message` cannot reach it.
-  // It is rebuilt one level in: the field gives up its 2rem, the verdict line
-  // starts on the usual 3px and holds the rest of the strip open, and the
-  // button below stands 2rem under the field whatever the line says.
-  //
-  // The extra class carries the specificity — a bare `.auth-field` here ties
-  // with the sheet's own two-level selector, and a tie is settled by whichever
-  // stylesheet the bundler happened to emit last.
+  // The verdict is drawn inside UsernameInput, out of reach of the strip of
+  // _AuthField.sass, so the strip is rebuilt one level in; the extra class
+  // carries the specificity, or the order of the sheets would decide.
   .activation-name__field
     margin-bottom: 0
 
     :deep(.username-status)
-      margin-top: 3px
-      min-height: calc(2rem - 3px)
+      margin-top: $auth-strip-gap
+      min-height: calc(#{$auth-strip} - #{$auth-strip-gap})
 
-  // The refusal of the server stands under the field in the page's own line,
-  // and the field's verdict goes out while it does. The component checked the
-  // name a moment earlier and knows nothing of what the submit came back with,
-  // so it would keep printing "Имя свободно" and a green tick over a name the
-  // server has just refused as somebody else's - one screen answering the same
-  // question twice, in opposite directions.
+  // While the server's refusal stands, the field's own verdict goes: it would
+  // still say "Имя свободно" over a name just refused.
   &.activation-name__field--refused
     :deep(.username-status)
       display: none
 
-    // The mark inside the field. The component prints the ✗ of the icon set
-    // for a refusal; the guest surface draws its crosses from two bars,
-    // because every typographic cross in the fonts the site ships is thinner
-    // than the ✓ standing beside it and how much thinner depends on which font
-    // actually loaded. The component is shared and its markup is not this
-    // page's to change, so the recipe of .auth-field-status--error is repeated
-    // on the icon it does render.
+    // The cross of the guest surface, from two bars, on the icon the shared field
+    // renders: a typographic cross is thinner than the tick beside it.
     :deep(.status-icon.unavailable)
       width: 16px
       height: 16px
       font-size: 0
 
-      &::before,
-      &::after
-        content: ""
-        position: absolute
-        left: 50%
-        top: 50%
-        width: 14px
-        height: 2px
-        margin: -1px 0 0 -7px
-        border-radius: 1px
-        background-color: currentColor
+      +auth-bar-cross
 
-      &::before
-        transform: rotate(45deg)
-
-      &::after
-        transform: rotate(-45deg)
-
-// A refusal that came back from the server after the name had already passed
-// the check in the field. It has no place in the strip — the strip is showing
-// the verdict on what is typed there now — so it takes a line of its own above
-// the button.
+// A refusal after the name passed the field's check: a line of its own over the button.
 .activation-refusal
   margin: 0 0 $small
   font-size: $secondary-font-size
@@ -616,10 +455,7 @@ function goHome() {
   color: $accent-red
   text-align: left
 
-// The step back to the name wears the guest surface's own secondary action, so
-// the look is not rebuilt here. What is left is the one state no other .auth-
-// action has: this page shuts the control while the activation is on the wire,
-// and a control that is dead has to look it.
+// The secondary action of the guest surface; this page shuts it while the activation is out.
 .auth-action:disabled
   opacity: $disabled-opacity
   cursor: default

@@ -30,15 +30,11 @@ public static class GameParticipationFilters
     /// </param>
     /// <param name="userId">User whose participation is asked about</param>
     public static Expression<Func<DbGame, bool>> Participating(DmDbContext dbContext, Guid userId) => game =>
-        // Master
         game.MasterId == userId ||
-        // Mentor
         game.MentorId == userId ||
-        // Assistant
         game.Assistants.Any(a => a.UserId == userId) ||
-        // Player (has active character)
         game.Characters.Any(c => !c.IsRemoved && c.Status == CharacterStatus.Active && c.AuthorId == userId) ||
-        // Reader (subscriber)
+        // A reader is a subscriber.
         dbContext.Subscriptions.Any(s =>
             s.TargetType == SubscriptionTargetType.Game &&
             s.TargetId == game.GameId &&

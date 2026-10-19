@@ -6,13 +6,11 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Community.WebsiteTestimonials;
 
-/// <inheritdoc />
-internal class WebsiteTestimonialApiService : IWebsiteTestimonialApiService
+public class WebsiteTestimonialApiService
 {
     private readonly IWebsiteTestimonialService _testimonialService;
     private readonly WebsiteTestimonialMapper _mapper;
 
-    /// <inheritdoc />
     public WebsiteTestimonialApiService(
         IWebsiteTestimonialService testimonialService,
         WebsiteTestimonialMapper mapper)
@@ -21,7 +19,6 @@ internal class WebsiteTestimonialApiService : IWebsiteTestimonialApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<WebsiteTestimonialDto>> GetList(WebsiteTestimonialsQuery query)
     {
         var (testimonials, paging) = await _testimonialService.GetListAsync(query);
@@ -29,26 +26,18 @@ internal class WebsiteTestimonialApiService : IWebsiteTestimonialApiService
         return new ListEnvelope<WebsiteTestimonialDto>(apiTestimonials, new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<WebsiteTestimonialDto>> Get(Guid id)
     {
         var testimonial = await _testimonialService.GetAsync(id);
         return new Envelope<WebsiteTestimonialDto>(_mapper.ToTestimonial(testimonial));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<WebsiteTestimonialDto>> Create(CreateWebsiteTestimonialRequest request)
     {
-        var createTestimonial = new CreateWebsiteTestimonial
-        {
-            AuthorUsername = request.AuthorUsername,
-            Text = request.Text
-        };
-        var testimonial = await _testimonialService.CreateAsync(createTestimonial);
+        var testimonial = await _testimonialService.CreateAsync(_mapper.ToCreateTestimonial(request));
         return new Envelope<WebsiteTestimonialDto>(_mapper.ToTestimonial(testimonial));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<WebsiteTestimonialDto>> Update(Guid id, UpdateWebsiteTestimonialRequest request)
     {
         var updateTestimonial = new UpdateWebsiteTestimonial
@@ -60,6 +49,5 @@ internal class WebsiteTestimonialApiService : IWebsiteTestimonialApiService
         return new Envelope<WebsiteTestimonialDto>(_mapper.ToTestimonial(testimonial));
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid id) => _testimonialService.DeleteAsync(id);
 }

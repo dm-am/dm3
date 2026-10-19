@@ -8,8 +8,6 @@
  */
 import { Tooltip } from "@/shared/ui/Tooltip";
 
-defineOptions({ name: "FilterApplyButton" });
-
 withDefaults(
   defineProps<{
     /** Button label */
@@ -39,7 +37,7 @@ const emit = defineEmits<{
     <button
       type="button"
       class="filter-apply-btn"
-      :class="[`filter-apply-btn--${variant}`]"
+      :class="`filter-apply-btn--${variant}`"
       :disabled="disabled"
       @click="emit('click')"
     >
@@ -49,7 +47,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
 .filter-apply-btn
   width: 100%

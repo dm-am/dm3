@@ -1,6 +1,8 @@
 using System;
-using System.Text.RegularExpressions;
+using DM.Domain.Account.Authorization;
+using DM.Domain.Account.Configuration;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Authorization;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
@@ -9,57 +11,53 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 using DM.Domain.Core.Users;
+using Microsoft.Extensions.Options;
 
 namespace DM.Domain.Account.Features.UsernameChange;
 
 /// <inheritdoc />
-internal partial class UsernameChangeService : IUsernameChangeService
+internal class UsernameChangeService : IUsernameChangeService
 {
-    // Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
-    // Whitespace: not at start/end, not consecutive
-    // See: docs/conventions/USERNAME_POLICY.md
-    [GeneratedRegex(UsernamePolicy.Pattern)]
-    private static partial Regex UsernameValidationRegex();
-
     private readonly IValidator<CreateUsernameChangeRequest> _validator;
     private readonly IUsernameChangeRepository _repository;
     private readonly IUsernameHistoryRepository _historyRepository;
     private readonly IIdentityProvider _identityProvider;
+    private readonly IIntentionManager _intentionManager;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IUsernameChangeMailSender _notificationSender;
+    private readonly TokenConfiguration _tokenConfig;
 
     public UsernameChangeService(
         IValidator<CreateUsernameChangeRequest> validator,
         IUsernameChangeRepository repository,
         IUsernameHistoryRepository historyRepository,
         IIdentityProvider identityProvider,
+        IIntentionManager intentionManager,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IUsernameChangeMailSender notificationSender)
+        IUsernameChangeMailSender notificationSender,
+        IOptions<TokenConfiguration> tokenOptions)
     {
         _validator = validator;
         _repository = repository;
         _historyRepository = historyRepository;
         _identityProvider = identityProvider;
+        _intentionManager = intentionManager;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _notificationSender = notificationSender;
+        _tokenConfig = tokenOptions.Value;
     }
 
     /// <inheritdoc />
     public async Task<UsernameChangeRequestEntry> CreateAsync(CreateUsernameChangeRequest request)
     {
-        var currentUser = _identityProvider.Current.User;
-        if (!currentUser.IsAuthenticated)
-            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
+        var currentUser = _identityProvider.RequireAuthenticated();
 
         await _validator.ValidateAndThrowAsync(request);
 
-        // A request awaiting a moderator and an approval whose name is not yet
-        // chosen are both changes already in flight. A finished one - rejected,
-        // completed, or expired by either deadline - holds nothing, and asking
-        // again is the only way forward from it.
+        // A pending request and an approval whose name is not chosen yet are both in flight.
         var existing = await _repository.GetActiveByUserId(currentUser.UserId, _dateTimeProvider.Now);
         if (existing != null)
             throw new HttpException(HttpStatusCode.Conflict,
@@ -105,9 +103,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
     /// <inheritdoc />
     public async Task<UsernameChangeRequestEntry?> GetCurrentUserRequestAsync()
     {
-        var currentUser = _identityProvider.Current.User;
-        if (!currentUser.IsAuthenticated)
-            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
+        var currentUser = _identityProvider.RequireAuthenticated();
 
         var entity = await _repository.GetLatestByUserId(currentUser.UserId);
         if (entity == null) return null;
@@ -116,10 +112,8 @@ internal partial class UsernameChangeService : IUsernameChangeService
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyCollection<UsernameChangeRequestEntry>> GetPendingRequestsAsync()
-    {
-        return await _repository.GetPendingRequests();
-    }
+    public Task<IReadOnlyCollection<UsernameChangeRequestEntry>> GetPendingRequestsAsync() =>
+        _repository.GetPendingRequests();
 
     /// <inheritdoc />
     public async Task<UsernameChangeRequestEntry> GetByIdAsync(Guid requestId)
@@ -142,12 +136,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         if (request.Status != UsernameChangeRequestStatus.Pending)
             throw new HttpException(HttpStatusCode.Conflict, "Заявка уже рассмотрена");
 
-        // Resolving is approving or rejecting and nothing else. The status arrives
-        // in the body and used to be written through unchecked, so a request could
-        // be filed as Completed or Expired: it left the queue looking finished
-        // while no name changed and no approval link went out. Those two statuses
-        // are reached by the flow itself - one by the user finishing the change,
-        // one by the expiry job - and are not a moderator's to assert.
+        // Completed and Expired are reached by the flow itself, not by a moderator.
         if (resolve.Status != UsernameChangeRequestStatus.Approved &&
             resolve.Status != UsernameChangeRequestStatus.Rejected)
         {
@@ -161,9 +150,9 @@ internal partial class UsernameChangeService : IUsernameChangeService
 
         if (resolve.Status == UsernameChangeRequestStatus.Approved)
         {
-            // Generate approval token (user will use this to complete the change)
             request.ApprovalToken = _guidFactory.Create();
-            request.ApprovalTokenExpiresUtc = now.AddHours(48); // Token valid for 48 hours
+            // The letter says the same hours: they reach it from the same setting.
+            request.ApprovalTokenExpiresUtc = now + TimeSpan.FromHours(_tokenConfig.UsernameChangeApprovalTokenLifetimeHours);
         }
 
         request.Status = resolve.Status;
@@ -173,7 +162,6 @@ internal partial class UsernameChangeService : IUsernameChangeService
 
         await _repository.Update(request);
 
-        // Send notification to user about approval/rejection
         if (!string.IsNullOrEmpty(request.UserEmail))
         {
             if (resolve.Status == UsernameChangeRequestStatus.Approved && request.ApprovalToken.HasValue)
@@ -198,17 +186,12 @@ internal partial class UsernameChangeService : IUsernameChangeService
         var entity = await _repository.GetByApprovalToken(token);
         if (entity == null) return null;
 
-        // A name already chosen through this link is not the same event as a link
-        // that ran out, and the page says opposite things about them. Both used to
-        // answer null, so both came out as "ссылка недействительна или устарела" -
-        // told to someone whose name had in fact been changed.
+        // A name already chosen through this link is not a link that ran out.
         if (entity.Status == UsernameChangeRequestStatus.Completed)
             return UsernameChangeApprovalInfo.Used();
 
-        // Everything else the approval can no longer be: the hourly pass has moved
-        // the request to Expired, or it has not run yet and only the stored moment
-        // says so, or a moderator rolled the rename back. All three leave the
-        // reader the same thing to do - ask again - so they are one answer.
+        // Expired by the hourly pass or by the stored moment, or rolled back: all
+        // three leave the reader asking again.
         if (entity.Status != UsernameChangeRequestStatus.Approved ||
             entity.ApprovalTokenExpiresUtc < _dateTimeProvider.Now)
         {
@@ -227,32 +210,24 @@ internal partial class UsernameChangeService : IUsernameChangeService
 
         var now = _dateTimeProvider.Now;
 
-        // Asked before the clock, and not after it: the moment stored on a spent
-        // request is the one its approval carried, so a link used on the first day
-        // and opened again on the third answered "срок действия истек" to someone
-        // whose name had already been changed.
+        // Asked before the clock: a spent request keeps the moment its approval carried.
         if (request.Status == UsernameChangeRequestStatus.Completed)
             throw new HttpException(HttpStatusCode.Conflict, "Имя уже изменено по этой ссылке");
 
-        // Check if token is expired
         if (request.ApprovalTokenExpiresUtc < now)
             throw new HttpException(HttpStatusCode.NotFound, "Срок действия ссылки истек");
 
-        // Check if request is in approved state (not yet completed)
         if (request.Status != UsernameChangeRequestStatus.Approved)
             throw new HttpException(HttpStatusCode.Conflict, "Заявка не одобрена");
 
-        // Validate username format
-        if (string.IsNullOrWhiteSpace(newUsername) || !UsernameValidationRegex().IsMatch(newUsername.Trim()))
+        if (string.IsNullOrWhiteSpace(newUsername) || !UsernamePolicy.IsValid(newUsername.Trim()))
             throw new HttpException(HttpStatusCode.BadRequest, "Недопустимое имя");
 
         newUsername = newUsername.Trim();
 
-        // Validate new username availability
         var usernameAvailable = await _repository.IsUsernameAvailable(newUsername);
 
-        // FIX: Allow user to reclaim their own old username
-        // Only check if the username is reserved by OTHER users
+        // The user may reclaim their own old username
         var usernameReserved = await _historyRepository.IsUsernameReservedForOthers(newUsername, request.UserId);
 
         // Approval and choice are days apart, so the name can be gone by the time
@@ -260,10 +235,8 @@ internal partial class UsernameChangeService : IUsernameChangeService
         if (!usernameAvailable || usernameReserved)
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UsernameTaken);
 
-        // The history row, the new name and the resolved request go in together.
-        // Written one at a time, a refusal in between left a rename half applied -
-        // and, worst of the three, a renamed user whose request was still pending,
-        // which is one approval spent on two renames.
+        // The history row, the new name and the resolved request go in together,
+        // so a refusal cannot leave a rename half applied.
         var history = new CreateUsernameHistory
         {
             UsernameHistoryId = _guidFactory.Create(),
@@ -275,10 +248,8 @@ internal partial class UsernameChangeService : IUsernameChangeService
         };
 
         request.RequestedUsername = newUsername;
-        // Completed is what spends the approval; every path that could spend it
-        // twice is refused above. The token itself stays on the row, because
-        // erasing it is what made a used link and an unknown one the same row-less
-        // lookup - and the reader of a used link was told the link was bad.
+        // Completed spends the approval; the token stays so that a used link is
+        // told apart from an unknown one.
         request.Status = UsernameChangeRequestStatus.Completed;
         request.UserUsername = newUsername; // Update the local copy for MapToEntry
 
@@ -288,10 +259,7 @@ internal partial class UsernameChangeService : IUsernameChangeService
         }
         catch (DuplicateEntityException)
         {
-            // The checks above are reads, and a name can be taken between them and
-            // this write; the history of the name being left behind can refuse it
-            // outright. Either way the reader keeps the form and picks another
-            // name, so the answer is the one the pre-check gives.
+            // A name taken between the reads above and this write: the pre-check's answer.
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UsernameTaken);
         }
 
@@ -301,27 +269,26 @@ internal partial class UsernameChangeService : IUsernameChangeService
     /// <inheritdoc />
     public async Task<UsernameChangeRequestEntry> RollbackAsync(Guid requestId)
     {
+        // Renames another user, so the method guards itself rather than trusting
+        // whatever endpoint ends up calling it.
+        _intentionManager.ThrowIfForbidden(AccountIntention.RollbackUsernameChange);
+
         var currentUser = _identityProvider.Current.User;
         var request = await _repository.GetById(requestId);
         if (request == null)
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UsernameChangeRequestNotFound);
 
-        // Can only rollback completed requests
         if (request.Status != UsernameChangeRequestStatus.Completed)
             throw new HttpException(HttpStatusCode.Conflict, "Откатить можно только завершенную смену имени");
 
-        // Find the previous username from history
         var history = await _historyRepository.GetLatestByUserId(request.UserId);
         if (history == null)
             throw new HttpException(HttpStatusCode.Conflict, "Откат невозможен: нет истории смены имени");
 
-        // The history entry shows: OldUsername -> NewUsername
-        // To rollback, we need to set username back to OldUsername
         var previousUsername = history.OldUsername;
         var currentUsername = request.UserUsername!;
 
-        // Check if previous username is still available (someone else might have taken it)
-        // Note: UsernameFree checks Users + UsernameHistory. For rollback, we check only Users (excluding self)
+        // Only Users is asked, excluding self: the history holds the user's own old name
         var usernameAvailable = await _repository.IsUsernameAvailable(previousUsername, request.UserId);
         if (!usernameAvailable)
             throw new HttpException(HttpStatusCode.Conflict,
@@ -340,7 +307,6 @@ internal partial class UsernameChangeService : IUsernameChangeService
             ApprovedById = currentUser.UserId
         };
 
-        // Mark request as rejected (rolled back)
         request.Status = UsernameChangeRequestStatus.Rejected;
         request.ResolverComment = ResolutionComment.Join(
             request.ResolverComment,
@@ -353,9 +319,6 @@ internal partial class UsernameChangeService : IUsernameChangeService
         }
         catch (DuplicateEntityException)
         {
-            // Same two structures as the rename above, and the same answer the
-            // check a few lines up gives: the name the rollback aims at is not
-            // free to take.
             throw new HttpException(HttpStatusCode.Conflict,
                 RefusalMessage.UsernameRollbackBlocked(previousUsername));
         }

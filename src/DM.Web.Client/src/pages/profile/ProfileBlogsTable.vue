@@ -1,40 +1,28 @@
 <script setup lang="ts">
 /**
- * ProfileBlogsTable — the user's hosted blogs (owner or assistant) as a
- * table with search, sort and REAL server-side pagination — same
- * query-driven `number`/`size` contract as the /blogs list page (see
- * widgets/blogs-table/BlogsDataTable.vue), reusing the existing
- * `usePaging().entitiesPerPage` page-size source. Blogs have no "player"
- * role, so there is no host/player toggle — the table covers hosted
- * blogs, and the gray reader-blogs line (ProfileBlogs) covers
- * subscriptions separately.
- *
- * Blog titles link to the blog page ('blog' route).
- *
- * `blogApi.getBlogsByHost` (entities/blog, out of this zone's ownership)
- * doesn't accept `skip`/`number` — it's a single-call-site convenience
- * wrapper for the "load up to N, no paging" case. Rather than extend that
- * shared API surface, this table calls the underlying `Api.get` client
- * directly with the same `hostUsernames` + `skip`/`take` query shape
- * `blogApi.getPublicBlogs` already uses for its own paging conversion.
- *
- * Four states: loading skeleton (DataTable) → error line → empty
- * (two-state) → content.
+ * The blogs the user hosts as a table with search, sort and server paging, on
+ * the contract of /blogs.
  */
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
-import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
+import { DataTable, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { CounterPair } from "@/shared/ui/CounterPair";
 import { FilterSearchInput, SortButton } from "@/shared/ui/Filters";
 import Paging from "@/shared/ui/Paging/Paging.vue";
-import { Api } from "@/shared/api";
-import { BlogStatusBadge, useBlogDisplay, type Blog } from "@/entities/blog";
+import {
+  BlogStatusBadge,
+  blogApi,
+  useBlogDisplay,
+  type Blog,
+} from "@/entities/blog";
 import { RemovedAccountLink, UserLink } from "@/entities/user";
+import { BLOG_COLUMNS } from "@/widgets/blogs-table";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
+import { parsePageNumber } from "@/shared/lib/filters";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
@@ -45,7 +33,7 @@ const props = defineProps<{
 
 const route = useRoute();
 const router = useRouter();
-const { entitiesPerPage } = usePaging();
+const { pageSize } = usePaging();
 
 const {
   buildStatusTooltip,
@@ -57,8 +45,7 @@ const {
   isNew,
 } = useBlogDisplay();
 
-// `searchInput` is the immediate v-model; `search` is the debounced value
-// that actually drives the request (avoids a fetch per keystroke).
+// `search` is the debounced `searchInput`, one fetch per pause.
 const searchInput = ref("");
 const search = ref("");
 const sortBy = ref<"created" | "title">("created");
@@ -72,15 +59,10 @@ watch(searchInput, (value) => {
   }, 300);
 });
 
-const pageNumber = computed(() => {
-  const raw = route.query.number;
-  if (!raw) return 1;
-  const n = parseInt(String(raw), 10);
-  return !isNaN(n) && n > 0 ? n : 1;
-});
+const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 const apiParams = computed(() => {
-  const pageSize = entitiesPerPage.value;
+  const size = pageSize.value;
   const params: {
     hostUsernames: string[];
     search?: string;
@@ -93,18 +75,17 @@ const apiParams = computed(() => {
     search: search.value || undefined,
     sortBy: sortBy.value,
     sortOrder: sortOrder.value,
-    take: pageSize,
+    take: size,
   };
   if (pageNumber.value > 1) {
-    params.skip = (pageNumber.value - 1) * pageSize;
+    params.skip = (pageNumber.value - 1) * size;
   }
   return params;
 });
 
 const envelope = ref<ListEnvelope<Blog> | null>(null);
 
-// clearErrorOnStart: what this table did before the composable — the error line
-// goes away while the next page loads.
+// The error line goes while the next page loads.
 const { loading, error, run } = useGuardedRequest({
   message: "Не удалось загрузить блоги",
   clearErrorOnStart: true,
@@ -112,7 +93,7 @@ const { loading, error, run } = useGuardedRequest({
 
 function fetchBlogs() {
   return run(
-    () => Api.get<ListEnvelope<Blog>>("blogs", apiParams.value),
+    () => blogApi.getHostedBlogs(apiParams.value),
     (data) => {
       envelope.value = data;
     },
@@ -130,8 +111,7 @@ const emptyText = computed(() =>
     : "Пользователь не ведет блогов",
 );
 
-// Reset pagination when the search term changes — page 3 of an old query
-// is meaningless for a new one and would render a fake-empty table.
+// A page of the old query means nothing for a new one.
 watch(search, () => {
   if (route.query.number) {
     const query = { ...route.query };
@@ -140,8 +120,7 @@ watch(search, () => {
   }
 });
 
-// Re-fetch whenever the effective query changes. Stringify dedupes
-// adjacent identical states.
+// Refetch on every change of the query; the string dedupes identical ones.
 const paramsKey = computed(() => JSON.stringify(apiParams.value));
 watch(paramsKey, () => fetchBlogs(), { immediate: true });
 
@@ -163,29 +142,14 @@ function handleSortOrder(order: "asc" | "desc") {
   sortOrder.value = order;
 }
 
-// Columns mirror /blogs (BlogsDataTable): same keys, order, widths and
-// cell formats.
-const columns: Column[] = [
-  { key: "title", label: "Название", align: "left" },
-  { key: "authors", label: "Ведущие", width: "23.7%", align: "left" },
-  { key: "status", label: "Статус блога", width: "23.7%", align: "left" },
-  { key: "readers", label: "Читатели", width: "10.6%", align: "center" },
-];
-
-// aria-sort only announces columns the table actually renders: "created"
-// has no column here (same as /blogs), so sort state maps to "title" only.
+// aria-sort for drawn columns only: "created" has none, so the sort maps to "title".
 const currentSort = computed<SortState | undefined>(() =>
   sortBy.value === "title"
     ? { key: "title", direction: sortOrder.value }
     : undefined,
 );
 
-// Closed blogs never get the green "new" highlight (matches BlogLink)
-function isNewHighlight(blog: Blog): boolean {
-  return blog.status !== "Closed" && isNew(blog);
-}
-
-// Paging scrolls the blogs table back into view (not the page top)
+// Paging scrolls the table back into view, not the page top.
 const tableRef = ref<{ $el: HTMLElement } | null>(null);
 function pagingAnchor(): HTMLElement | null {
   return tableRef.value?.$el ?? null;
@@ -215,7 +179,7 @@ function pagingAnchor(): HTMLElement | null {
     <DataTable
       v-if="!error || blogs.length > 0"
       ref="tableRef"
-      :columns="columns"
+      :columns="BLOG_COLUMNS"
       :data="blogs"
       :loading="loading"
       :show-row-numbers="true"
@@ -223,14 +187,14 @@ function pagingAnchor(): HTMLElement | null {
       :sort="currentSort"
       :empty-text="emptyText"
     >
-      <!-- Title column: Title (unread/comments), same format as /blogs -->
+      <!-- Title, unread and comments, as /blogs. -->
       <template #cell-title="{ row }">
         <router-link
           :to="{ name: 'blog', params: { id: row.publicId ?? row.id } }"
           :class="[
             'blog-link',
             {
-              'new-item': isNewHighlight(row),
+              'new-item': isNew(row),
               'closed-item': row.status === 'Closed',
             },
           ]"
@@ -250,7 +214,7 @@ function pagingAnchor(): HTMLElement | null {
         />
       </template>
 
-      <!-- Authors column (unified with games "Ведущие") -->
+      <!-- Authors, as the masters of a game. -->
       <template #cell-authors="{ row }">
         <UserLink
           v-if="row.author"
@@ -264,7 +228,7 @@ function pagingAnchor(): HTMLElement | null {
         >
       </template>
 
-      <!-- Status column with date tooltip -->
+      <!-- Status, its date in the tooltip. -->
       <template #cell-status="{ row }">
         <Tooltip :text="buildStatusTooltip(row)" focusable>
           <span class="status-wrapper">
@@ -273,7 +237,7 @@ function pagingAnchor(): HTMLElement | null {
         </Tooltip>
       </template>
 
-      <!-- Readers column (unified with games) -->
+      <!-- Readers, as on games. -->
       <template #cell-readers="{ row }">
         <Tooltip :text="buildReadersTooltip(row)" focusable>
           <span class="readers-count">{{ row.subscribersCount ?? 0 }}</span>
@@ -299,24 +263,19 @@ function pagingAnchor(): HTMLElement | null {
   flex-direction: column
   gap: $medium
 
-// As before 5 October 2026: the sort goes under the field whole where the
-// two do not fit one line.
+// The sort goes under the field whole where the two do not fit one line.
 .controls
   display: flex
   flex-wrap: wrap
   align-items: center
   gap: $small
 
-// Search fills all free space (same as the /blogs filter bar, where the
-// search input is flex: 1).
+// The search takes the free space, as on /blogs.
 .search
   flex: 1
-  min-width: 200px
+  min-width: $search-field-min-width
 
 .blog-link
-  color: $link
-  &:hover
-    color: $link-hover
   &.new-item
     color: $accent-green
     &:hover

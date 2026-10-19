@@ -26,19 +26,9 @@ public class DiceRoll
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Is appended flag
-    /// </summary>
-    public bool IsAdditional { get; set; }
-
-    /// <summary>
     /// Only GM and post author can see hidden rolls
     /// </summary>
     public bool IsHidden { get; set; }
-
-    /// <summary>
-    /// Fair roll result can only be seen after the post was created
-    /// </summary>
-    public bool IsFair { get; set; }
 
     /// <summary>
     /// Number of dice (X in XdY)

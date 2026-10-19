@@ -13,13 +13,8 @@ namespace DM.Infrastructure.Persistence.Tests;
 /// Every constraint type survives the jsonb round trip whole.
 /// </summary>
 /// <remarks>
-/// The hierarchy is stored inside the schema's Specifications column, and the
-/// serializer is what decides which subclass a node comes back as: the
-/// discriminator lives in the written JSON, not in the compiler's view of the
-/// code. A subclass dropped from the [JsonDerivedType] list, or a renamed
-/// discriminator, loses fields silently — including "no limit", the absence
-/// the number types have to carry — which is why each of the four is pinned
-/// end to end, through the same options the column reads and writes with.
+/// The discriminator lives in the written JSON, so each of the four types is pinned end to end through the
+/// options the column uses, "no limit" included.
 /// </remarks>
 public class AttributeConstraintsSerializationShould
 {

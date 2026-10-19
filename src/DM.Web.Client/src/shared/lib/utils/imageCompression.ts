@@ -1,22 +1,14 @@
 /**
- * Client-side image compression — cuts the avatar down to 1024×1024 (max side)
- * before upload, saving bandwidth on mobile. Symmetric with the backend
- * OriginalMaxDimension=1024.
- *
- * No dependencies: pure Canvas API. WebP output if the browser supports it,
- * otherwise a JPEG fallback. Quality 90 — a size/visual balance.
- *
- * If the file is already under the size limits, it is returned as is (no-op).
+ * Cuts an avatar down to 1024 on the longer side before upload, as the backend
+ * OriginalMaxDimension does: Canvas only, WebP where supported, else JPEG, at
+ * quality 90. A file within the limits is returned as is.
  */
 
 const MAX_DIMENSION = 1024;
 const TARGET_QUALITY = 0.9;
 const MIN_COMPRESS_THRESHOLD_BYTES = 200 * 1024; // <200 KB — do not compress
 
-/**
- * Whether WebP encoding is supported in canvas.toBlob.
- * Test a 1×1 canvas → blob and read the mime. Cached per session.
- */
+/** Whether canvas.toBlob encodes WebP, tested once on a 1×1 canvas. */
 let webpSupportPromise: Promise<boolean> | null = null;
 function isWebpSupported(): Promise<boolean> {
   if (webpSupportPromise) return webpSupportPromise;
@@ -39,10 +31,8 @@ export interface CompressOptions {
 }
 
 /**
- * Compress an image via Canvas. Returns a new File with a .webp extension
- * (or a .jpg fallback) and the original base name. If the image is already
- * small (area ≤ MAX×MAX and size ≤ 200 KB), returns the original
- * File unchanged (no-op).
+ * A new File (.webp, or .jpg) with the original base name; a small image
+ * (area ≤ MAX×MAX and ≤ 200 KB) is returned unchanged.
  */
 export async function compressImage(
   file: File,
@@ -109,10 +99,7 @@ function canvasToBlob(
   return new Promise((resolve) => canvas.toBlob(resolve, type, quality));
 }
 
-/**
- * createImageBitmap with an <img>+canvas fallback for Safari, where
- * createImageBitmap may not support all formats.
- */
+/** Safari's createImageBitmap refuses some formats; the <img> path decodes them. */
 async function createImageBitmapSafe(
   file: File,
 ): Promise<ImageBitmap | HTMLImageElement | null> {

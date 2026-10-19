@@ -8,9 +8,6 @@ namespace DM.Domain.Moderation.Features.ProfileNotes;
 /// </summary>
 public class ModeratedProfileNote
 {
-    /// <summary>
-    /// Note identifier
-    /// </summary>
     public Guid Id { get; set; }
 
     /// <summary>
@@ -23,70 +20,9 @@ public class ModeratedProfileNote
     /// </summary>
     public GeneralUser Author { get; set; } = null!;
 
-    /// <summary>
-    /// Note text
-    /// </summary>
     public string Text { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Creation date (UTC)
-    /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// Last modification date (UTC)
-    /// </summary>
     public DateTimeOffset? ModifiedUtc { get; set; }
-}
-
-/// <summary>
-/// Entity DTO for creating a moderated profile note (repository level)
-/// </summary>
-public class CreateModeratedProfileNoteEntity
-{
-    /// <summary>
-    /// Note identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// User identifier (who the note is about)
-    /// </summary>
-    public Guid UserId { get; set; }
-
-    /// <summary>
-    /// Author identifier (moderator who wrote the note)
-    /// </summary>
-    public Guid AuthorId { get; set; }
-
-    /// <summary>
-    /// Note text
-    /// </summary>
-    public string Text { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Creation timestamp
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
-}
-
-/// <summary>
-/// Entity DTO for updating a moderated profile note (repository level)
-/// </summary>
-public class UpdateModeratedProfileNoteEntity
-{
-    /// <summary>
-    /// Note identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Note text
-    /// </summary>
-    public string? Text { get; set; }
-
-    /// <summary>
-    /// Update timestamp
-    /// </summary>
-    public DateTimeOffset ModifiedUtc { get; set; }
 }

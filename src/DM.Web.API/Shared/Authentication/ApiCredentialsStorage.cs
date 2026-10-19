@@ -1,7 +1,6 @@
 using System;
 using System.Threading.Tasks;
 using DM.Domain.Account.Configuration;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.Authentication.Credentials;
 using DM.Web.API.Shared.Configuration;
@@ -15,16 +14,9 @@ namespace DM.Web.API.Shared.Authentication;
 /// Tokens are never exposed to JavaScript - stored securely in HttpOnly cookies.
 /// </summary>
 /// <remarks>
-/// Security features:
-/// - HttpOnly: Cookie cannot be accessed by JavaScript (XSS protection)
-/// - Secure: set from the transport of the request, so the cookie is marked
-///   Secure on https and plain on http. A Secure cookie handed out over http is
-///   dropped by the browser without an error: the login answers 200 and the next
-///   request arrives anonymous
-/// - SameSite=Lax: Cookie withheld from cross-site subrequests, but still sent
-///   on top-level navigation, which activation and password-reset links from
-///   email depend on. CSRF is covered by the origin check middleware.
-/// - Path=/: Cookie available for all API endpoints
+/// SameSite=Lax withholds the cookie from cross-site subrequests and still sends
+/// it on top-level navigation, which the links in letters depend on; CSRF is the
+/// origin check middleware's.
 /// </remarks>
 internal class ApiCredentialsStorage : ICredentialsStorage
 {
@@ -45,17 +37,10 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     }
 
     /// <inheritdoc />
-    public Task<TokenCredentials?> ExtractToken(HttpContext httpContext)
-    {
-        if (!httpContext.Request.Cookies.TryGetValue(AuthCookieName, out var authToken))
-        {
-            return Task.FromResult<TokenCredentials?>(null);
-        }
-
-        return string.IsNullOrEmpty(authToken)
-            ? Task.FromResult<TokenCredentials?>(null)
-            : Task.FromResult<TokenCredentials?>(new TokenCredentials { Token = authToken });
-    }
+    public TokenCredentials? ExtractToken(HttpContext httpContext) =>
+        httpContext.Request.Cookies[AuthCookieName] is { Length: > 0 } authToken
+            ? new TokenCredentials { Token = authToken }
+            : null;
 
     /// <inheritdoc />
     public Task Load(HttpContext httpContext, IIdentity identity)
@@ -86,38 +71,27 @@ internal class ApiCredentialsStorage : ICredentialsStorage
     }
 
     /// <summary>
-    /// Attributes every write of the session cookie repeats
+    /// Attributes every write of the session cookie, and of the second-factor
+    /// challenge cookie, repeats
     /// </summary>
     /// <remarks>
     /// One place on purpose: a browser overwrites a cookie only when the incoming
-    /// attributes match the stored ones, so the login and the logout halves
-    /// diverging leaves a session that logging out cannot clear.
+    /// attributes match the stored ones, so the writing and the clearing halves
+    /// diverging leaves a cookie that logging out cannot clear.
     /// </remarks>
-    private static CookieOptions SessionCookieOptions(
+    internal static CookieOptions SessionCookieOptions(
         HttpContext httpContext,
         SessionCookieConfiguration config) => new()
         {
             HttpOnly = true,
-            // Empty means host-only, which is what an omitted Domain gives and what
-            // every deployment has today. A named domain widens the cookie to every
-            // host under it, so one session covers all the addresses the site
-            // answers on. It travels through the same helper as the logout half on
-            // purpose: a browser replaces a cookie only when the incoming
-            // attributes match the stored ones, and Domain is one of them, so the
-            // two halves disagreeing leaves a session that logging out cannot
-            // clear.
+            // Empty means host-only; SessionCookieConfiguration.Domain says when to name one.
             Domain = string.IsNullOrWhiteSpace(config.Domain)
             ? null
             : config.Domain,
-            // Same-as-request, which is the framework's own cookie policy. The host
-            // name says nothing about the transport: the deployed stand answers plain
-            // http on a domain, and a Secure cookie there is dropped by the browser
-            // without a word, so the login returns 200 and the next request arrives
-            // anonymous. IsHttps reads X-Forwarded-Proto once a trusted proxy is
-            // configured, so a stand that gains TLS starts marking the cookie Secure
-            // with no code change.
+            // Same-as-request: a Secure cookie over plain http is dropped by the
+            // browser in silence. IsHttps follows X-Forwarded-Proto from a trusted proxy.
             Secure = httpContext.Request.IsHttps,
-            SameSite = SameSiteMode.Lax, // Sent on top-level navigation so email links keep the session
+            SameSite = SameSiteMode.Lax,
             Path = "/",
             IsEssential = true
         };

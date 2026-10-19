@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,7 +15,7 @@ using Microsoft.Extensions.Logging;
 namespace DM.Web.API.HostedServices;
 
 /// <summary>
-/// Warmup service that preloads DB connections and JIT compiles critical paths on startup
+/// Opens the DB connections and compiles the hottest EF Core queries on startup.
 /// </summary>
 internal class WarmupService : IHostedService
 {
@@ -31,23 +32,22 @@ internal class WarmupService : IHostedService
 
     public Task StartAsync(CancellationToken cancellationToken)
     {
+        // Not awaited and never fatal: a cold query is slower, not wrong.
         _ = Task.Run(async () =>
         {
             _logger.LogInformation("[Warmup] Starting application warmup...");
-            var startTime = DateTime.UtcNow;
+            var started = Stopwatch.GetTimestamp();
 
             try
             {
-                // Mapping is compile-time (Mapperly) since the AutoMapper
-                // retirement, so the DB is the one thing left to warm.
                 await WarmupDb(cancellationToken);
 
-                var duration = DateTime.UtcNow - startTime;
-                _logger.LogInformation("[Warmup] Completed in {Duration}ms", duration.TotalMilliseconds);
+                _logger.LogInformation("[Warmup] Completed in {Duration}ms",
+                    Stopwatch.GetElapsedTime(started).TotalMilliseconds);
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "[Warmup] Failed (non-critical): {Message}", ex.Message);
+                _logger.LogWarning(ex, "[Warmup] Failed (non-critical)");
             }
         }, cancellationToken);
         return Task.CompletedTask;
@@ -58,23 +58,17 @@ internal class WarmupService : IHostedService
         using var scope = _serviceProvider.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DmDbContext>();
 
-        // Warmup simple games query
         await db.Games.Where(g => !g.IsRemoved && g.Status == ModuleStatus.Active)
             .Take(10).Select(g => g.GameId).ToListAsync(ct);
 
-        // Warmup tags
         await db.Tags.CountAsync(ct);
 
-        // Warmup the session lookup - the hottest query on the site: every
-        // authenticated request starts with this primary-key read.
+        // The hottest query on the site: every authenticated request starts with it.
         await db.UserSessions
             .Where(s => s.SessionId == Guid.Empty && s.UserId == Guid.Empty)
             .FirstOrDefaultAsync(ct);
 
-        // Warmup the participating games list through the game projection.
-        // This pre-compiles the EF Core query. Both predicates are the storage
-        // filters the repository itself applies, so the product rules in this
-        // query cannot drift from the rules the list is served with.
+        // The storage filters the repository applies, so the warmed query is the one served.
         var dummyUserId = Guid.Empty;
         await db.Games
             .Where(GameAccessibilityFilters.GameAvailable(dummyUserId))
@@ -82,8 +76,6 @@ internal class WarmupService : IHostedService
             .ProjectToGame()
             .Take(1)
             .ToListAsync(ct);
-
-        _logger.LogDebug("[Warmup] EF Core queries compiled");
     }
 
     public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;

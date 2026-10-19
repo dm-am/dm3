@@ -4,16 +4,7 @@ import type { LiveStats } from "@/shared/api/models/community";
 import { unwrapResource } from "@/shared/api";
 import { statisticsApi } from "../api";
 
-/**
- * Default polling interval: 60 seconds.
- *
- * SiteStatistics shows approximate community counters (total users,
- * online, games, posts, etc.). There is no functional benefit to
- * sub-minute precision — the backend caches the aggregated result for
- * two minutes, so faster polling just produces redundant round-trips.
- * 60s keeps the header numbers fresh enough while halving the bandwidth
- * budget compared to the previous 30s default.
- */
+// The server caches the counters for two minutes, so faster polling only repeats them.
 const DEFAULT_POLL_INTERVAL = 60_000;
 
 export const useStatisticsStore = defineStore("statistics", () => {
@@ -24,35 +15,24 @@ export const useStatisticsStore = defineStore("statistics", () => {
 
   let pollIntervalId: ReturnType<typeof setInterval> | null = null;
 
-  // Computed getters for convenient access
   const online = computed(() => stats.value?.online ?? 0);
-  const users = computed(
-    () => stats.value?.totals?.users ?? { value: 0, todayDelta: 0 },
-  );
-  const characters = computed(
-    () => stats.value?.totals?.characters ?? { value: 0, todayDelta: 0 },
-  );
-  const games = computed(
-    () => stats.value?.totals?.games ?? { value: 0, todayDelta: 0 },
-  );
-  const posts = computed(
-    () => stats.value?.totals?.gamePosts ?? { value: 0, todayDelta: 0 },
-  );
-  const blogs = computed(
-    () => stats.value?.totals?.blogs ?? { value: 0, todayDelta: 0 },
-  );
-  const publications = computed(
-    () => stats.value?.totals?.publications ?? { value: 0, todayDelta: 0 },
-  );
+  const total = (key: keyof LiveStats["totals"]) =>
+    computed(() => stats.value?.totals[key] ?? { value: 0, todayDelta: 0 });
+  const users = total("users");
+  const characters = total("characters");
+  const games = total("games");
+  const posts = total("gamePosts");
+  const blogs = total("blogs");
+  const publications = total("publications");
 
-  async function fetch() {
+  async function fetchStats() {
     if (loading.value) return;
     loading.value = true;
     error.value = null;
 
     const response = await statisticsApi.getLiveStats();
     if (response.error) {
-      // Keep previously loaded stats (if any) — the next poll may recover.
+      // The stats already loaded stay; the next poll may recover.
       error.value = "Не удалось загрузить статистику";
     } else if (response.data) {
       stats.value = unwrapResource<LiveStats>(response.data);
@@ -61,21 +41,14 @@ export const useStatisticsStore = defineStore("statistics", () => {
     loaded.value = true;
   }
 
-  /**
-   * The statistics blocks on screen that asked for the polling. The header and
-   * the right column of a phone each draw one while the shell switches between
-   * them, and the block that goes must not stop the polling of the one that
-   * stays. A set and not a count: a block mounted in a hidden tab starts once
-   * on mount and once more when the tab is shown, and a count would never come
-   * back down to zero for it, polling a hidden tab from then on.
-   */
+  // A set and not a count: a block in a hidden tab starts twice and stops once.
   const pollers = new Set<object>();
 
   function startPolling(poller: object, interval = DEFAULT_POLL_INTERVAL) {
     pollers.add(poller);
     if (pollIntervalId) return;
-    fetch(); // Fetch immediately
-    pollIntervalId = setInterval(fetch, interval);
+    fetchStats();
+    pollIntervalId = setInterval(fetchStats, interval);
   }
 
   function stopPolling(poller: object) {
@@ -86,12 +59,10 @@ export const useStatisticsStore = defineStore("statistics", () => {
   }
 
   return {
-    // State
     stats,
     loading,
     loaded,
     error,
-    // Getters
     online,
     users,
     characters,
@@ -99,8 +70,7 @@ export const useStatisticsStore = defineStore("statistics", () => {
     posts,
     blogs,
     publications,
-    // Actions
-    fetch,
+    fetchStats,
     startPolling,
     stopPolling,
   };

@@ -1,25 +1,9 @@
 <script setup lang="ts">
 /**
- * ProfileGameReviewsList — the game-reviews flavor of
- * `ProfileTestimonialsFrame`. Used by both pages: "Полученные рецензии на
- * игры" and "Написанные рецензии на игры".
- *
- * What is local here:
- *  - endpoint: `getUserGameReviews` (received) vs `getWrittenUserGameReviews`
- *    (written);
- *  - the card: `GameReviewCard`, which sits in the same speech bubble as a
- *    recommendation — the text is visible at once instead of hiding behind an
- *    accordion row, and the authorship is links rather than a comma-joined
- *    string;
- *  - the texts, including the "written" relabel of the "Автор" sort option to
- *    "Игра": every review there is authored by the profile owner, so sorting
- *    by author is meaningless, and the backend already sorts this scope by the
- *    other side of the pair (GameReviewRepository.ApplySort). Only the label,
- *    the hint and the search placeholder change; the value sent stays
- *    "author".
- * Everything else — filter, fetch, states, paging — is the frame. The footer
- * names BOTH sides of the pair in both modes, the way the recommendation
- * lists do.
+ * The game reviews of a profile on ProfileTestimonialsFrame, received or
+ * written. In "written" every review is the owner's, so the "Автор" sort is
+ * relabelled "Игра"; the server sorts that scope by the other side and the
+ * value sent stays "author".
  */
 import { computed } from "vue";
 import { userApi, type GameReviewsQuery } from "@/entities/user";
@@ -29,15 +13,9 @@ import ProfileTestimonialsFrame from "./ProfileTestimonialsFrame.vue";
 
 const props = defineProps<{
   username: string;
-  /**
-   * "received" — reviews of the games this user masters.
-   * "written"  — reviews this user wrote.
-   * Determines which of userApi.getUserGameReviews /
-   * getWrittenUserGameReviews is called, and (via `routeName` below) where the
-   * pagination links lead.
-   */
+  /** Received: reviews of the games this user masters; written: the reviews he wrote. */
   mode: "received" | "written";
-  /** The current page's route name — for Paging.to. */
+  /** The route of the page, for the paging links. */
   routeName: "received-game-reviews" | "given-game-reviews";
 }>();
 

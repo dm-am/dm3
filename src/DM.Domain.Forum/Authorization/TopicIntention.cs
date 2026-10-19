@@ -5,9 +5,6 @@ namespace DM.Domain.Forum.Authorization;
 /// </summary>
 public enum TopicIntention
 {
-    /// <summary>
-    /// Create a comment on the topic
-    /// </summary>
     CreateComment = 0,
 
     /// <summary>
@@ -15,9 +12,6 @@ public enum TopicIntention
     /// </summary>
     Edit = 1,
 
-    /// <summary>
-    /// Like the topic
-    /// </summary>
     Like = 2,
 
     /// <summary>

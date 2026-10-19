@@ -1,14 +1,12 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Core.Notepads;
 using DM.Domain.Personal.Features.Notepads;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Personal.Notepads;
 
-/// <inheritdoc />
-internal class UserNotepadApiService : IUserNotepadApiService
+public class UserNotepadApiService
 {
     private readonly IUserNotepadService _notepadService;
     private readonly NotepadMapper _mapper;
@@ -21,7 +19,6 @@ internal class UserNotepadApiService : IUserNotepadApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<NotepadEntryResponse>> GetEntries()
     {
         var entries = await _notepadService.GetEntries();
@@ -29,34 +26,23 @@ internal class UserNotepadApiService : IUserNotepadApiService
             entries.Select(_mapper.ToResponse).ToList());
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<NotepadEntryResponse>> GetEntry(Guid entryId)
     {
         var entry = await _notepadService.GetEntry(entryId);
         return new Envelope<NotepadEntryResponse>(_mapper.ToResponse(entry));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<NotepadEntryResponse>> CreateEntry(CreateNotepadEntryRequest request)
     {
-        var createEntry = _mapper.ToCreateEntry(request);
-
-        var entry = await _notepadService.CreateEntry(createEntry);
+        var entry = await _notepadService.CreateEntry(_mapper.ToCreateEntry(request));
         return new Envelope<NotepadEntryResponse>(_mapper.ToResponse(entry));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<NotepadEntryResponse>> UpdateEntry(Guid entryId, UpdateNotepadEntryRequest request)
     {
-        var updateEntry = _mapper.ToUpdateEntry(request);
-
-        var entry = await _notepadService.UpdateEntry(entryId, updateEntry);
+        var entry = await _notepadService.UpdateEntry(entryId, _mapper.ToUpdateEntry(request));
         return new Envelope<NotepadEntryResponse>(_mapper.ToResponse(entry));
     }
 
-    /// <inheritdoc />
-    public async Task DeleteEntry(Guid entryId)
-    {
-        await _notepadService.DeleteEntry(entryId);
-    }
+    public Task DeleteEntry(Guid entryId) => _notepadService.DeleteEntry(entryId);
 }

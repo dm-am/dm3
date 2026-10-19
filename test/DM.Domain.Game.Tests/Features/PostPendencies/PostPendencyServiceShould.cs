@@ -11,7 +11,8 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Characters;
+using DM.Domain.Game.Features.RoomAccesses;
 using DM.Domain.Game.Features.PostPendencies;
 using DM.Domain.Game.Features.Rooms;
 using DM.Testing.Dsl;
@@ -27,13 +28,13 @@ namespace DM.Domain.Game.Tests.Features.PostPendencies;
 
 public class PostPendencyServiceShould : UnitTestBase
 {
-    private readonly IIntentionManager _intentionManager;
-    private readonly IRoomService _roomService;
-    private readonly IPostPendencyRepository _repository;
-    private readonly IEventProducer _producer;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IPostPendencyFactory _factory;
-    private readonly PostPendencyService _service;
+    private readonly IIntentionManager intentionManager;
+    private readonly IRoomService roomService;
+    private readonly IPostPendencyRepository repository;
+    private readonly IEventProducer producer;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IPostPendencyFactory factory;
+    private readonly PostPendencyService service;
 
     public PostPendencyServiceShould()
     {
@@ -42,31 +43,31 @@ public class PostPendencyServiceShould : UnitTestBase
             .ValidateAsync(Arg.Any<ValidationContext<CreatePostPendency>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
 
-        _intentionManager = Mock<IIntentionManager>();
+        intentionManager = Mock<IIntentionManager>();
 
-        _roomService = Mock<IRoomService>();
+        roomService = Mock<IRoomService>();
 
-        var factory = _factory = Mock<IPostPendencyFactory>();
+        factory = Mock<IPostPendencyFactory>();
         factory.Create(Arg.Any<CreatePostPendency>(), Arg.Any<Guid>(), Arg.Any<Guid>())
             .Returns(new CreatePostPendencyEntity());
 
-        _repository = Mock<IPostPendencyRepository>();
+        repository = Mock<IPostPendencyRepository>();
 
-        _producer = Mock<IEventProducer>();
-        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        producer = Mock<IEventProducer>();
+        producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
-        _identityProvider = Mock<IIdentityProvider>();
+        identityProvider = Mock<IIdentityProvider>();
         var identity = Identities.User(Guid.NewGuid(), "testuser");
-        _identityProvider.Current.Returns(identity);
+        identityProvider.Current.Returns(identity);
 
-        _service = new PostPendencyService(
+        service = new PostPendencyService(
             validator,
-            _roomService,
-            _intentionManager,
+            roomService,
+            intentionManager,
             factory,
-            _repository,
-            _producer,
-            _identityProvider);
+            repository,
+            producer,
+            identityProvider);
     }
 
     [Fact]
@@ -76,12 +77,12 @@ public class PostPendencyServiceShould : UnitTestBase
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), CharacterId = characterId };
         var room = CreateRoomWithAccesses(characterId, Guid.NewGuid());
 
-        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
-        _repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency());
+        roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency());
 
-        await _service.CreateAsync(createPendency);
+        await service.CreateAsync(createPendency);
 
-        _intentionManager.Received(1).ThrowIfForbidden(RoomIntention.CreatePostPendency, room);
+        intentionManager.Received(1).ThrowIfForbidden(RoomIntention.CreatePostPendency, room);
     }
 
     [Fact]
@@ -89,7 +90,7 @@ public class PostPendencyServiceShould : UnitTestBase
     {
         var waitingForUserId = Guid.NewGuid();
         var characterId = Guid.NewGuid();
-        var currentUserId = _identityProvider.Current.User.UserId;
+        var currentUserId = identityProvider.Current.User.UserId;
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), CharacterId = characterId };
 
         var room = new RoomToUpdate
@@ -116,9 +117,9 @@ public class PostPendencyServiceShould : UnitTestBase
             }
         };
 
-        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
 
-        var act = async () => await _service.CreateAsync(createPendency);
+        var act = async () => await service.CreateAsync(createPendency);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
@@ -132,13 +133,13 @@ public class PostPendencyServiceShould : UnitTestBase
         var createPendency = new CreatePostPendency { RoomId = Guid.NewGuid(), CharacterId = characterId };
         var room = CreateRoomWithAccesses(characterId, Guid.NewGuid());
 
-        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
-        _repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency { Id = pendencyId });
+        roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency { Id = pendencyId });
 
-        await _service.CreateAsync(createPendency);
+        await service.CreateAsync(createPendency);
 
-        await _repository.Received(1).Create(Arg.Any<CreatePostPendencyEntity>());
-        await _producer.Received(1).SendAsync(EventType.RoomPendencyCreated, pendencyId);
+        await repository.Received(1).Create(Arg.Any<CreatePostPendencyEntity>());
+        await producer.Received(1).SendAsync(EventType.RoomPendencyCreated, pendencyId);
     }
 
     /// <summary>
@@ -157,12 +158,12 @@ public class PostPendencyServiceShould : UnitTestBase
             Character = new Character { Id = Guid.NewGuid(), Author = new GeneralUser { UserId = Guid.NewGuid() } }
         }).ToList();
 
-        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
-        _repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency());
+        roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        repository.Create(Arg.Any<CreatePostPendencyEntity>()).Returns(new PostPendency());
 
-        await _service.CreateAsync(createPendency);
+        await service.CreateAsync(createPendency);
 
-        _factory.Received(1).Create(createPendency, _identityProvider.Current.User.UserId, playerId);
+        factory.Received(1).Create(createPendency, identityProvider.Current.User.UserId, playerId);
     }
 
     /// <summary>
@@ -180,12 +181,12 @@ public class PostPendencyServiceShould : UnitTestBase
             ? CreateRoomWithAccesses(characterId, playerId: null)
             : CreateRoomWithAccesses(Guid.NewGuid(), Guid.NewGuid());
 
-        _roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
+        roomService.GetWithGameAsync(Arg.Any<Guid>()).Returns(room);
 
-        var act = async () => await _service.CreateAsync(createPendency);
+        var act = async () => await service.CreateAsync(createPendency);
 
         await act.Should().ThrowAsync<HttpBadRequestException>();
-        await _repository.DidNotReceive().Create(Arg.Any<CreatePostPendencyEntity>());
+        await repository.DidNotReceive().Create(Arg.Any<CreatePostPendencyEntity>());
     }
 
     [Fact]
@@ -194,12 +195,12 @@ public class PostPendencyServiceShould : UnitTestBase
         var pendencyId = Guid.NewGuid();
         var pendency = new PostPendency { Id = pendencyId };
 
-        _repository.Get(pendencyId).Returns(pendency);
-        _repository.Delete(pendencyId).Returns(Task.CompletedTask);
+        repository.Get(pendencyId).Returns(pendency);
+        repository.Delete(pendencyId).Returns(Task.CompletedTask);
 
-        await _service.DeleteAsync(pendencyId);
+        await service.DeleteAsync(pendencyId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(RoomIntention.DeletePostPendency, pendency);
+        intentionManager.Received(1).ThrowIfForbidden(RoomIntention.DeletePostPendency, pendency);
     }
 
     [Fact]
@@ -208,13 +209,13 @@ public class PostPendencyServiceShould : UnitTestBase
         var pendencyId = Guid.NewGuid();
         var pendency = new PostPendency { Id = pendencyId };
 
-        _repository.Get(pendencyId).Returns(pendency);
-        _repository.Delete(pendencyId).Returns(Task.CompletedTask);
+        repository.Get(pendencyId).Returns(pendency);
+        repository.Delete(pendencyId).Returns(Task.CompletedTask);
 
-        await _service.DeleteAsync(pendencyId);
+        await service.DeleteAsync(pendencyId);
 
-        await _repository.Received(1).Delete(pendencyId);
-        await _producer.Received(1).SendAsync(EventType.RoomPendencyDeleted, pendencyId);
+        await repository.Received(1).Delete(pendencyId);
+        await producer.Received(1).SendAsync(EventType.RoomPendencyDeleted, pendencyId);
     }
 
     /// <summary>

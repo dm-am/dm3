@@ -1,13 +1,7 @@
-/**
- * The discussion query, in one place.
- *
- * Comments hang off four records — topic, game, blog, publication — and the
- * four endpoints behind them read the same set: text search, authors, period,
- * sort. The forum client spelled the conversion to skip/take itself while the
- * game and blog clients sent a page number and nothing else, which is the whole
- * reason those two discussions had no search on screen. One shape and one
- * builder, so a filter the server learns reaches every discussion at once.
- */
+// One shape and one wire conversion for the comments of a topic, game, blog
+// and publication, so a filter the server learns reaches every discussion.
+
+import { pageSkip } from "./pageSkip";
 
 /** Filter, sort and paging of a comments list, as the client states them. */
 export type CommentsQuery = {
@@ -33,12 +27,8 @@ export type CommentsQuery = {
 const DEFAULT_SIZE = 20;
 
 /**
- * The query as wire params: the page number becomes skip/take, and the author
- * filter becomes `authorUsernames`.
- *
- * The wire name is the one the API vocabulary fixes for a repeatable username
- * filter (API_DESIGN.md); `authors` is what this type and the route query call
- * it, and renaming the route would break every link already written down.
+ * The query as wire params. authorUsernames is the API's name for a repeatable
+ * username filter; authors stays in the route query, where links already use it.
  */
 export function toCommentsQueryParams(
   query: CommentsQuery = {},
@@ -48,7 +38,8 @@ export function toCommentsQueryParams(
     take: size,
   };
 
-  if (query.number && query.number > 1) params.skip = (query.number - 1) * size;
+  const skip = pageSkip(query.number ?? 1, size);
+  if (skip !== undefined) params.skip = skip;
   if (query.search) params.search = query.search;
   if (query.authors?.length) params.authorUsernames = query.authors;
   if (query.createdFromUtc) params.createdFromUtc = query.createdFromUtc;

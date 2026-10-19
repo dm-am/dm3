@@ -4,19 +4,13 @@ using DM.Domain.Core.Dto;
 namespace DM.Domain.Community.Features.WebsiteTestimonials;
 
 /// <summary>
-/// Domain DTO for website testimonial (positive review about the website)
+/// Positive review about the website, one per user
 /// </summary>
 /// <remarks>
-/// Plain text only - NO BBCode support.
-/// Only positive testimonials are allowed.
-/// One testimonial per user.
-/// NO likes support.
+/// Plain text, no BBCode rendering, and no likes.
 /// </remarks>
 public class WebsiteTestimonial
 {
-    /// <summary>
-    /// Testimonial identifier
-    /// </summary>
     public Guid Id { get; set; }
 
     /// <summary>
@@ -24,18 +18,9 @@ public class WebsiteTestimonial
     /// </summary>
     public GeneralUser Author { get; set; } = null!;
 
-    /// <summary>
-    /// Creation moment (UTC)
-    /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// Last modification moment (UTC)
-    /// </summary>
     public DateTimeOffset? ModifiedUtc { get; set; }
 
-    /// <summary>
-    /// Testimonial content (plain text, NO BBCode)
-    /// </summary>
     public string Text { get; set; } = string.Empty;
 }

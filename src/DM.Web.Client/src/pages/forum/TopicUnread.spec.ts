@@ -25,12 +25,12 @@ vi.mock("vue-router", () => ({
 }));
 
 /** Where the screen sends the reader for this answer of the server. */
-async function landing(answer: unknown, commentsPerPage?: number) {
+async function landing(answer: unknown, pageSize?: number) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  if (commentsPerPage)
+  if (pageSize)
     useAuthStore().user = {
-      settings: { paging: { commentsPerPage } },
+      settings: { pageSize },
     } as never;
   const asked = vi
     .spyOn(forumApi, "getFirstUnreadComment")

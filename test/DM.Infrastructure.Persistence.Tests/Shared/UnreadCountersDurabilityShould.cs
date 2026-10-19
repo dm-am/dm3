@@ -1,11 +1,10 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Metrics;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Shared.UnreadCounters;
+using DM.Testing;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Logging;
@@ -19,22 +18,8 @@ namespace DM.Infrastructure.Persistence.Tests.Shared;
 /// happened.
 /// </summary>
 /// <remarks>
-/// Every caller of the three adjusting writes reaches them after its own write
-/// has been committed, and the increment is not part of that transaction. So an
-/// exception from here used to travel back up through a service that had already
-/// committed and answer the caller with a failure for work that was done: the
-/// reader saw their own post on the page beside an error saying it was not saved,
-/// and a retry wrote it a second time.
-///
-/// The creating and removing writes are the opposite case and are asserted as
-/// such. A marker that was never created is not a wrong number - it is an entity
-/// nobody is counting at all - and the reservation that puts those writes before
-/// the relational row exists so that the failure arrives while the row can still
-/// be rolled back. Swallowing them would quietly destroy that ordering.
-///
-/// An unreachable address rather than a mock of the provider: what has to hold is
-/// that a real failure of a real client does not escape, and a mock would only
-/// prove that a thrown exception is caught.
+/// The adjusting writes run after the caller's commit and must not fail it; the creating and removing writes
+/// run before the row and must fail. An unreachable address rather than a mock of the provider.
 /// </remarks>
 public class UnreadCountersDurabilityShould
 {
@@ -75,28 +60,7 @@ public class UnreadCountersDurabilityShould
     public async Task CountTheAdjustmentItGaveUpOn()
     {
         var lost = new List<string?>();
-        using var listener = new MeterListener
-        {
-            InstrumentPublished = (instrument, self) =>
-            {
-                if (instrument.Name == "dm.storage.write_lost")
-                {
-                    self.EnableMeasurementEvents(instrument);
-                }
-            },
-        };
-
-        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
-        {
-            foreach (var tag in tags)
-            {
-                if (tag.Key == "operation")
-                {
-                    lost.Add(tag.Value?.ToString());
-                }
-            }
-        });
-        listener.Start();
+        using var listener = CounterTags.Listen("dm.storage.write_lost", "operation", lost);
 
         await Repository().IncrementAsync(Guid.NewGuid(), UnreadEntryType.Message);
 

@@ -7,7 +7,6 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Characters;
-using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
@@ -29,7 +28,6 @@ internal class CharacterRepository : ICharacterRepository
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public CharacterRepository(
         DmDbContext dbContext,
         IGameAttributeSchemaRepository gameSchemas,
@@ -41,8 +39,6 @@ internal class CharacterRepository : ICharacterRepository
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
     }
-
-    #region Validation Operations
 
     public Task<GameAttributeSchema> GetGameSchema(Guid gameId) =>
         _gameSchemas.Get(gameId);
@@ -56,10 +52,6 @@ internal class CharacterRepository : ICharacterRepository
 
         return await _gameSchemas.Get(gameId);
     }
-
-    #endregion
-
-    #region Read Operations
 
     public async Task<IEnumerable<Character>> GetCharacters(Guid gameId)
     {
@@ -96,10 +88,6 @@ internal class CharacterRepository : ICharacterRepository
                            !c.IsNpc &&
                            c.Status == CharacterStatus.Active);
     }
-
-    #endregion
-
-    #region Write Operations
 
     public async Task<Character> Create(CreateCharacterEntity createCharacter)
     {
@@ -184,10 +172,8 @@ internal class CharacterRepository : ICharacterRepository
     /// Locks the game row for the rest of the transaction.
     /// </summary>
     /// <remarks>
-    /// Taken as the first statement of the transaction, before anything the
-    /// decision depends on is read. A lock taken later buys nothing: a statement
-    /// that waited on it still answers from the snapshot it started with and does
-    /// not see what the transaction it waited for has committed.
+    /// Taken as the first statement of the transaction: a statement that waited on a
+    /// later lock still answers from the snapshot it started with.
     /// </remarks>
     private Task LockGameAsync(Guid gameId) => _dbContext.Database.ExecuteSqlRawAsync(
         """SELECT "GameId" FROM "Games" WHERE "GameId" = {0} FOR UPDATE""", gameId);
@@ -225,7 +211,8 @@ internal class CharacterRepository : ICharacterRepository
         """, characterId);
 
     /// <summary>
-    /// Increases RecruitmentPcLimit if active players exceed it
+    /// Increases RecruitmentPcLimit if active players exceed it: only upwards, so a
+    /// character leaving never rewrites what the master announced
     /// </summary>
     /// <remarks>
     /// Reached only from the branch that took the game row first, so both reads
@@ -299,52 +286,14 @@ internal class CharacterRepository : ICharacterRepository
             var newStatus = updateCharacter.Status ?? oldStatus;
             var isNpc = updateCharacter.IsNpc ?? character.IsNpc;
 
-            // Update fields if provided
-            if (updateCharacter.Status.HasValue)
-                character.Status = updateCharacter.Status.Value;
-
-            if (updateCharacter.IsDead.HasValue)
-                character.IsDead = updateCharacter.IsDead.Value;
-
-            if (updateCharacter.IsPlayerLeft.HasValue)
-                character.IsPlayerLeft = updateCharacter.IsPlayerLeft.Value;
-
-            if (updateCharacter.IsPlayerExiled.HasValue)
-                character.IsPlayerExiled = updateCharacter.IsPlayerExiled.Value;
-
-            if (!string.IsNullOrEmpty(updateCharacter.Name))
-                character.Name = updateCharacter.Name;
-
-            if (updateCharacter.IsNpc.HasValue)
-                character.IsNpc = updateCharacter.IsNpc.Value;
-
-            if (updateCharacter.AccessPolicy.HasValue)
-                character.AccessPolicy = updateCharacter.AccessPolicy.Value;
-
-            // Modification tracking is handled via Edit history, not inline ModifiedUtc
-
+            ApplyChanges(character, updateCharacter);
             await _dbContext.SaveChangesAsync();
 
-            // The values, as upserts settled by the unique pair rather than by a
-            // read this method took first. Replacing the sheet of a game deletes
-            // the rows of every specification it dropped, and that delete can
-            // land between a read here and the write it decided: the read then
-            // said "update", the update reached no row, and EF answered the
-            // player with a failure over a value they were allowed to write.
-            // Now either direction of that race ends the same way - one orphan
-            // row until the next replacement, and the player's save accepted.
-            if (updateCharacter.Attributes != null && updateCharacter.Attributes.Any())
-            {
-                foreach (var attr in updateCharacter.Attributes)
-                {
-                    await UpsertAttribute(updateCharacter.CharacterId, attr.Id, attr.Value);
-                }
-            }
+            await WriteAttributes(updateCharacter.CharacterId, updateCharacter.Attributes);
 
-            // Adjust RecruitmentPcLimit when non-NPC character status changes
-            if (!isNpc && oldStatus != newStatus)
+            if (!isNpc && newStatus == CharacterStatus.Active && oldStatus != CharacterStatus.Active)
             {
-                await AdjustPcLimitAsync(character.GameId, oldStatus, newStatus);
+                await AdjustPcLimitOnActivationAsync(character.GameId);
             }
 
             await transaction.CommitAsync();
@@ -357,24 +306,59 @@ internal class CharacterRepository : ICharacterRepository
     }
 
     /// <summary>
-    /// Raises the stated limit when a character joins the active roster
+    /// Writes the fields the change carries onto the tracked character, and
+    /// leaves the rest as they are.
     /// </summary>
     /// <remarks>
-    /// Only upwards, and only to the live count. Nothing reads
-    /// RecruitmentPcLimit as a gate — whether recruitment is open is its own
-    /// flag — so the number exists to be read beside the count of active
-    /// characters, and the one state it must never be in is below it.
-    ///
-    /// A character leaving used to take the number down with it
-    /// (Math.Max(activeCount, limit - 1)). Nothing needed that: it quietly
-    /// rewrote what the master announced, so a game recruiting five players
-    /// began claiming four the moment one left.
+    /// Modification tracking is handled via Edit history, not inline ModifiedUtc.
     /// </remarks>
-    private async Task AdjustPcLimitAsync(Guid gameId, CharacterStatus oldStatus, CharacterStatus newStatus)
+    private static void ApplyChanges(DbCharacter character, UpdateCharacterEntity updateCharacter)
     {
-        if (newStatus == CharacterStatus.Active && oldStatus != CharacterStatus.Active)
+        if (updateCharacter.Status.HasValue)
+            character.Status = updateCharacter.Status.Value;
+
+        if (updateCharacter.IsDead.HasValue)
+            character.IsDead = updateCharacter.IsDead.Value;
+
+        if (updateCharacter.IsPlayerLeft.HasValue)
+            character.IsPlayerLeft = updateCharacter.IsPlayerLeft.Value;
+
+        if (updateCharacter.IsPlayerExiled.HasValue)
+            character.IsPlayerExiled = updateCharacter.IsPlayerExiled.Value;
+
+        if (!string.IsNullOrEmpty(updateCharacter.Name))
+            character.Name = updateCharacter.Name;
+
+        if (updateCharacter.IsNpc.HasValue)
+            character.IsNpc = updateCharacter.IsNpc.Value;
+
+        if (updateCharacter.AccessPolicy.HasValue)
+            character.AccessPolicy = updateCharacter.AccessPolicy.Value;
+    }
+
+    /// <summary>
+    /// Writes the attribute values the change carries, if any.
+    /// </summary>
+    /// <remarks>
+    /// The values, as upserts settled by the unique pair rather than by a read
+    /// this method took first. Replacing the sheet of a game deletes the rows of
+    /// every specification it dropped, and that delete can land between a read
+    /// here and the write it decided: the read then said "update", the update
+    /// reached no row, and EF answered the player with a failure over a value
+    /// they were allowed to write. Now either direction of that race ends the
+    /// same way - one orphan row until the next replacement, and the player's
+    /// save accepted.
+    /// </remarks>
+    private async Task WriteAttributes(Guid characterId, IEnumerable<CharacterAttributeInput>? attributes)
+    {
+        if (attributes == null)
         {
-            await AdjustPcLimitOnActivationAsync(gameId);
+            return;
+        }
+
+        foreach (var attr in attributes)
+        {
+            await UpsertAttribute(characterId, attr.Id, attr.Value);
         }
     }
 
@@ -397,6 +381,4 @@ internal class CharacterRepository : ICharacterRepository
                         c.Status == CharacterStatus.UnderReview)
             .ExecuteUpdateAsync(setters => setters.SetProperty(c => c.Status, CharacterStatus.Declined), ct);
     }
-
-    #endregion
 }

@@ -1,21 +1,7 @@
 /**
- * Composable for content truncation with expand/collapse.
- *
- * Scope (what this composable does):
- *   - Track whether the referenced content element overflows a given
- *     max-height budget (reactive to content changes via watchContent).
- *   - Expose `needsTruncation` + `isExpanded` state and `contentStyle`
- *     for the content container.
- *   - NO DOM mutation. Callers are responsible for pre-trimming leading/
- *     trailing whitespace from their HTML via `trimHtmlWhitespace` in a
- *     computed before passing to v-html. Pushing that responsibility up
- *     keeps this composable side-effect-free and keeps Vue reactivity
- *     the single source of truth over the slot DOM.
- *
- * Typical usage is indirect — prefer the <TruncatedContent> shared
- * component in @/shared/ui/TruncatedContent, which wires this up for
- * the common "show more" pattern with accessibility, media shrinkage,
- * and hard-cut visual contract baked in.
+ * Whether the content overflows a max-height budget, with the expand state and
+ * the container style; no DOM mutation (callers pre-trim with
+ * trimHtmlWhitespace). Prefer <TruncatedContent>, which wires it up.
  */
 
 import {
@@ -28,10 +14,7 @@ import {
 } from "vue";
 
 export interface ContentTruncationOptions {
-  /** Overflow threshold in px — content counts as truncatable when its
-   * scrollHeight exceeds this value (default: 150). Callers that snap
-   * their visual clamp to whole lines (TruncatedContent) pass a derived
-   * threshold here, not the raw budget. */
+  /** scrollHeight past this is truncatable (default 150); TruncatedContent passes a line-snapped one. */
   maxHeight?: number | Ref<number>;
   /** Enable truncation (default: true) */
   enabled?: boolean | Ref<boolean> | ComputedRef<boolean>;
@@ -70,7 +53,6 @@ export function useContentTruncation(
     onContentMounted,
   } = options;
 
-  // Normalize options to refs
   const maxHeight = computed(() =>
     typeof maxHeightOption === "number"
       ? maxHeightOption
@@ -80,12 +62,10 @@ export function useContentTruncation(
     typeof enabledOption === "boolean" ? enabledOption : enabledOption.value,
   );
 
-  // State
   const isExpanded = ref(false);
   const isOverflowing = ref(false);
   const contentRef = ref<HTMLElement | null>(null);
 
-  // Computed
   const needsTruncation = computed(() => enabled.value && isOverflowing.value);
 
   const contentStyle = computed(() => {
@@ -94,7 +74,6 @@ export function useContentTruncation(
     return { maxHeight: `${maxHeight.value}px` };
   });
 
-  // Methods
   function checkOverflow(): void {
     if (contentRef.value && enabled.value) {
       isOverflowing.value = contentRef.value.scrollHeight > maxHeight.value;

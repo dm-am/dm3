@@ -1,24 +1,5 @@
 <script setup lang="ts">
-/**
- * CreateBlogForm — "Создание блога" (doc 4.2.3.6.5).
- *
- * Laid out as the creation of a game is, DM2's one form of captioned rows
- * (_FormRows.sass): the title and who sees the blog in the making beside their
- * captions, the box under them, the description over the whole width.
- *
- * Mirrors the CreateGameForm pattern: typed payload (CreateBlogInput ->
- * backend CreateBlogRequest), field-level FluentValidation errors mapped
- * back onto the form, the non-field failures in a line under the button (the
- * plate the response interceptor held for them taken down), redirect to the
- * created blog. The description is raw BBCode source on this endpoint (unlike
- * the read side, which returns server-rendered HTML), so it gets the BBCode
- * editor.
- *
- * "Перенести мой черный список" is CopyBlacklistOption: drawn only when the
- * author's own list has somebody on it, starting where the account setting
- * stands. The form sends what the box shows, and leaves the field out where
- * there is no box, so the server applies the setting itself.
- */
+// The description is raw BBCode on this endpoint, so it gets the editor.
 import { ref, computed } from "vue";
 import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -34,11 +15,13 @@ import {
   DraftVisibility,
   type CreateBlogInput,
 } from "@/entities/blog";
-import { parseApiErrors, getFieldError } from "@/shared/lib/utils/apiErrors";
+import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
+import { readFieldError } from "@/shared/lib/errors/validationErrors";
 import type { BadRequestError } from "@/shared/api/models/common";
 import { UnsavedChangesGuard } from "@/shared/ui/UnsavedChangesGuard";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
+import { BLOG_TITLE_MAX_LENGTH } from "@/shared/lib/constants/blog";
 
 const router = useRouter();
 const { user } = storeToRefs(useAuthStore());
@@ -49,15 +32,13 @@ const visibilityOptions = [
   { value: DraftVisibility.Private, label: "Только участники" },
 ];
 
-// Form state (mirrors backend CreateBlogRequest defaults)
 const title = ref("");
 const description = ref("");
 const draftVisibility = ref(DraftVisibility.Public);
 /** Undefined while there is no box: the server then follows the setting. */
 const copyBlacklist = ref<boolean | undefined>(undefined);
 
-// See CreateGameForm: released once the blog exists, so the form's own
-// navigation is not questioned.
+// Released once the blog exists, so the form's own navigation is not questioned.
 const saved = ref(false);
 const dirty = computed(
   () => !saved.value && !!(title.value.trim() || description.value.trim()),
@@ -71,7 +52,6 @@ const canCreate = computed(() => {
   return user.value && title.value.trim().length > 0;
 });
 
-/** What the server said that no field of the form shows, under the button. */
 const createResult = useActionResult();
 
 function clearErrors() {
@@ -88,7 +68,7 @@ async function handleSubmit() {
 
   try {
     const blogData: CreateBlogInput = {
-      title: title.value.trim(),
+      title: title.value,
       description: description.value,
       draftVisibility: draftVisibility.value,
       copyBlacklist: copyBlacklist.value,
@@ -98,21 +78,17 @@ async function handleSubmit() {
 
     if (apiError) {
       const errors = parseApiErrors(apiError as BadRequestError);
-      titleError.value = getFieldError(errors, "title") || "";
-      descriptionError.value = getFieldError(errors, "description") || "";
+      titleError.value = readFieldError(errors, "title") || "";
+      descriptionError.value = readFieldError(errors, "description") || "";
 
       if (!titleError.value && !descriptionError.value) {
-        // What a field can show it has shown; the rest - a refusal, a rate
-        // limit, a broken server, a 400 that named no field of this form -
-        // stands under the button that was pressed.
         createResult.refuse(apiError, "Не удалось создать блог");
       }
       return;
     }
 
     if (data) {
-      // Same as game creation: the lists are cached, so without refreshing
-      // them the new blog is missing from /blogs and from the sidebar.
+      // The lists are cached: without a refresh the new blog is missing until they expire.
       saved.value = true;
       await blogsStore.invalidateBlogLists();
       router.push({
@@ -138,7 +114,7 @@ async function handleSubmit() {
         v-model="title"
         type="text"
         id="title"
-        maxlength="200"
+        :maxlength="BLOG_TITLE_MAX_LENGTH"
         @input="titleError = ''"
       />
     </form-field>
@@ -203,8 +179,6 @@ async function handleSubmit() {
 .create-blog-form .row
   +form-row
 
-// The box stands where the boxes of the game's form do: at the left edge of
-// the form, a step from the rows over it and the description under it.
 .copy-option
   margin: $medium 0
 

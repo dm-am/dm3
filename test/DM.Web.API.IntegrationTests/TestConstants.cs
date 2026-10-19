@@ -20,9 +20,7 @@ public static class TestConstants
     public const string InactiveUser2Username = "inactiveuser2";
 
     // Boards
-    // Deliberately outside the range InitialCreate seeds: this id used to be
-    // 0...001, which is the shipped "Общий" board, so the fixture was silently
-    // testing against a board that only looked like its own.
+    // Outside the range InitialCreate seeds, which ships the "Общий" board as 0...001.
     public static readonly Guid TestBoardId = Guid.Parse("00000000-0000-0000-0000-0000000000b0");
     public const string TestBoardTitle = "Test Board";
 
@@ -41,10 +39,7 @@ public static class TestConstants
     public static readonly Guid TestRoomId = Guid.Parse("00000000-0000-0000-0000-000000000041");
 
     /// <summary>
-    /// The alias TestGame is reachable by. The fixture derives public ids from
-    /// the seeding order ($"game{'a' + index}") and TestGame is first, so this
-    /// name has to agree with that order — it is asserted by the read that
-    /// compares the alias and GUID forms of GET /v1/games/{id}.
+    /// The alias TestGame is reachable by: the fixture derives public ids from the seeding order, TestGame first.
     /// </summary>
     public const string TestGamePublicId = "gamea";
 
@@ -67,6 +62,9 @@ public static class TestConstants
     // Messages (for direct/group chat testing)
     public static readonly Guid TestMessageId = Guid.Parse("00000000-0000-0000-0000-000000000060");
 
+    /// <summary>The password the accounts a test registers sign in with.</summary>
+    public const string Password = "TestPass123ok";
+
     // User logins (usernames)
     public const string TestUserLogin = "testuser";
     public const string AdminUserLogin = "admin";
@@ -74,14 +72,6 @@ public static class TestConstants
     public const string ModeratorUserLogin = "moderator";
     public const string MentorUserLogin = "mentor";
     public const string SeniorModeratorUserLogin = "seniormod";
-
-    // Aliases for usernames (same as logins)
-    public const string TestUserUsername = TestUserLogin;
-    public const string AdminUserUsername = AdminUserLogin;
-    public const string SecondUserUsername = SecondUserLogin;
-    public const string ModeratorUserUsername = ModeratorUserLogin;
-    public const string MentorUserUsername = MentorUserLogin;
-    public const string SeniorModeratorUserUsername = SeniorModeratorUserLogin;
 
     // Chats
     public static readonly Guid TestChatId = Guid.Parse("00000000-0000-0000-0000-000000000070");
@@ -109,37 +99,7 @@ public static class TestConstants
     public static readonly Guid SeniorModeratorTestimonialId = Guid.Parse("00000000-0000-0000-0000-000000000095");
 
     // Additional testimonial users (for pagination/filter testing)
-    public static readonly Guid[] TestimonialUserIds =
-    [
-        Guid.Parse("00000000-0000-0000-0000-0000000000a0"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a1"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a2"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a3"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a4"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a5"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a6"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a7"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a8"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000a9"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000aa"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000ab"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000ac"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000ad"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000ae"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000af"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c0"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c1"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c2"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c3"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c4"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c5"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c6"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c7"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c8"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000c9"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000ca"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000cb"),
-    ];
+    public static readonly Guid[] TestimonialUserIds = Ids(0xa0, 0xc0);
 
     public static readonly string[] TestimonialUsernames =
     [
@@ -150,35 +110,10 @@ public static class TestConstants
         "Шут", "Маг", "Охотник", "Жрица", "Воин", "Ведьмак",
     ];
 
-    public static readonly Guid[] AdditionalTestimonialIds =
-    [
-        Guid.Parse("00000000-0000-0000-0000-0000000000b0"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b1"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b2"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b3"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b4"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b5"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b6"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b7"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b8"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000b9"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000ba"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000bb"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000bc"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000bd"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000be"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000bf"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d0"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d1"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d2"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d3"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d4"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d5"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d6"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d7"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d8"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000d9"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000da"),
-        Guid.Parse("00000000-0000-0000-0000-0000000000db"),
-    ];
+    public static readonly Guid[] AdditionalTestimonialIds = Ids(0xb0, 0xd0);
+
+    /// <summary>Twenty-eight identifiers: sixteen from the first byte on, twelve from the second.</summary>
+    private static Guid[] Ids(int first, int second) => Enumerable.Range(0, 28)
+        .Select(i => new Guid($"00000000-0000-0000-0000-0000000000{(i < 16 ? first + i : second + i - 16):x2}"))
+        .ToArray();
 }

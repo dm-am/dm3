@@ -1,17 +1,8 @@
 <script setup lang="ts">
 /**
- * TagDialog — create or edit a game tag (group / title / description /
- * sortOrder). Dialog twin of the former hand-rolled modal in
- * ModerationTags.vue.
- *
- * The window runs the request (Dialog `action`): it waits for the answer,
- * prints a refusal in itself and closes on success alone. A typed description
- * is multi-line text, so the window asks before it is dropped.
- *
- * The description is the tag's tooltip, whose one tag is [tip]: the field
- * writes it with two buttons and checks it as the page will read it
- * (HintField), and the preview under it draws the tooltip a reader will get
- * (HintPreview).
+ * Creates or edits a game tag. The window runs the request; a typed
+ * description is asked about before it is dropped. The description is the
+ * tag's tooltip.
  */
 import { ref, computed } from "vue";
 import {
@@ -24,11 +15,10 @@ import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select, type SelectOption } from "@/shared/ui/Select";
-import HintField from "./HintField.vue";
-import HintPreview from "./HintPreview.vue";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{
-  /** Tag to edit; null creates a new tag. */
+  /** Tag to edit, its description as typed (author_edit); null creates a new tag. */
   tag: ModerationTag | null;
   /** All groups for the group selector. */
   groups: ModerationTagGroup[];
@@ -68,7 +58,7 @@ async function send() {
     description: description.value || undefined,
     sortOrder: sortOrder.value,
   };
-  const flags = { ownsRefusal: true, ownsRateLimit: true };
+  const flags = OWNS_REFUSAL;
   const result = props.tag
     ? await gameTagApi.updateTag(props.tag.id, body, flags)
     : await gameTagApi.createTag(body, flags);
@@ -106,11 +96,11 @@ async function send() {
         field="description"
         optional
       >
-        <HintField id="tag-description" v-model="description" />
-      </FormField>
-
-      <FormField label="Предпросмотр" name="tag-preview">
-        <HintPreview :description="description" :title="title" />
+        <textarea
+          id="tag-description"
+          v-model="description"
+          rows="3"
+        ></textarea>
       </FormField>
 
       <FormField label="Порядок сортировки" name="tag-sort" field="sortOrder">

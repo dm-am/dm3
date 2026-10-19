@@ -1,22 +1,5 @@
 <script setup lang="ts">
-/**
- * BlacklistAddRow — the way a name is put on every blacklist of the site: a
- * field for the username and "Добавить" beside it, the last line of the table
- * of the list (BlacklistEditor), and not a window. It is the row "Управление
- * ролями" invites an assistant with: the field of the site's other name
- * fields, the main button, a step of 8 between them.
- *
- * `add` sends the request and resolves to its failure, or null once the list
- * holds the name. "Добавить" is hatched until a name is chosen from the
- * suggestions, while the request is on the wire and while a rate limit counts
- * down. A refusal stands under the row with the chosen name kept in the field,
- * and the plate the interceptor held for it is taken down (useActionResult); a
- * success empties the field.
- *
- * The field does not suggest the names in `exclude` (the server would refuse
- * them) and looks among everyone, the people who have not come by for a month
- * too: the troll who stays away is the one a blacklist is for.
- */
+// Suggests everyone, the long absent too: the troll who stays away is the one a blacklist is for.
 import { ref } from "vue";
 import { UserAutocomplete } from "@/entities/user";
 import type { GeneralError } from "@/shared/api/models/common";
@@ -33,7 +16,6 @@ const props = defineProps<{
 const username = ref("");
 const adding = ref(false);
 
-/** A refused "Добавить", under the field the name was chosen in. */
 const addResult = useActionResult();
 
 async function submitAdd() {
@@ -76,8 +58,6 @@ async function submitAdd() {
 </template>
 
 <style scoped lang="sass">
-// The invite row of "Управление ролями": field and button on one line, a step
-// of 8 apart, their tops level.
 .bl-add-row
   display: flex
   align-items: flex-start

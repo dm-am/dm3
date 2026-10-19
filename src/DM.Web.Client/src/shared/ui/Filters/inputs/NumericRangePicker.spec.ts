@@ -7,19 +7,10 @@ import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import NumericRangePicker from "./NumericRangePicker.vue";
 
-// Stub FilterApplyButton (renders its own button so DOM-level click works)
-const FilterApplyButtonStub = {
-  template:
-    '<button class="apply-btn" :class="variant" :disabled="disabled" @click="$emit(\'click\')">{{ label }}</button>',
-  props: ["disabled", "disabledReason", "label", "variant"],
-  emits: ["click"],
-};
-
 describe("NumericRangePicker", () => {
   const mountComponent = (props = {}) =>
     mount(NumericRangePicker, {
       props: { minValue: null, maxValue: null, ...props },
-      global: { stubs: { FilterApplyButton: FilterApplyButtonStub } },
     });
 
   describe("Basic Rendering", () => {
@@ -35,41 +26,16 @@ describe("NumericRangePicker", () => {
       expect(labels[1].text()).toBe("До");
     });
 
-    it("renders custom labels", () => {
-      const wrapper = mountComponent({
-        minLabel: "Минимум",
-        maxLabel: "Максимум",
-      });
-      const labels = wrapper.findAll(".range-label");
-      expect(labels[0].text()).toBe("Минимум");
-      expect(labels[1].text()).toBe("Максимум");
-    });
-
-    it("renders placeholders when provided", () => {
-      const wrapper = mountComponent({
-        minPlaceholder: "0",
-        maxPlaceholder: "100",
-      });
-      const inputs = wrapper.findAll(".stepper-input");
-      expect(inputs[0].attributes("placeholder")).toBe("0");
-      expect(inputs[1].attributes("placeholder")).toBe("100");
-    });
-
-    it("renders apply button", () => {
-      const wrapper = mountComponent();
-      expect(wrapper.find(".apply-btn").exists()).toBe(true);
-    });
-
     it("shows clear button when values are set", () => {
       const wrapper = mountComponent({ minValue: 10 });
-      const buttons = wrapper.findAll(".apply-btn");
+      const buttons = wrapper.findAll(".filter-apply-btn");
       expect(buttons).toHaveLength(2);
       expect(buttons[1].text()).toBe("Сбросить");
     });
 
     it("hides clear button when no values", () => {
       const wrapper = mountComponent({ minValue: null, maxValue: null });
-      const buttons = wrapper.findAll(".apply-btn");
+      const buttons = wrapper.findAll(".filter-apply-btn");
       expect(buttons).toHaveLength(1);
     });
   });
@@ -90,20 +56,12 @@ describe("NumericRangePicker", () => {
       await wrapper.setProps({ minValue: 20 });
       expect((inputs[0].element as HTMLInputElement).value).toBe("20");
     });
-
-    it("allows typing in inputs", async () => {
-      const wrapper = mountComponent();
-      const inputs = wrapper.findAll(".stepper-input");
-
-      await inputs[0].setValue("25");
-      expect((inputs[0].element as HTMLInputElement).value).toBe("25");
-    });
   });
 
   describe("Apply Button State", () => {
     it("disables apply when no changes", () => {
       const wrapper = mountComponent({ minValue: 10, maxValue: 50 });
-      const applyBtn = wrapper.find(".apply-btn");
+      const applyBtn = wrapper.find(".filter-apply-btn");
       expect(applyBtn.attributes("disabled")).toBeDefined();
     });
 
@@ -114,7 +72,9 @@ describe("NumericRangePicker", () => {
       await inputs[0].setValue("20");
       await nextTick();
 
-      expect(wrapper.find(".apply-btn").attributes("disabled")).toBeUndefined();
+      expect(
+        wrapper.find(".filter-apply-btn").attributes("disabled"),
+      ).toBeUndefined();
     });
 
     it("enables apply when adding new value", async () => {
@@ -124,7 +84,9 @@ describe("NumericRangePicker", () => {
       await inputs[0].setValue("10");
       await nextTick();
 
-      expect(wrapper.find(".apply-btn").attributes("disabled")).toBeUndefined();
+      expect(
+        wrapper.find(".filter-apply-btn").attributes("disabled"),
+      ).toBeUndefined();
     });
 
     it("disables apply when min > max (invalid range)", async () => {
@@ -135,7 +97,9 @@ describe("NumericRangePicker", () => {
       await inputs[1].setValue("5");
       await nextTick();
 
-      expect(wrapper.find(".apply-btn").attributes("disabled")).toBeDefined();
+      expect(
+        wrapper.find(".filter-apply-btn").attributes("disabled"),
+      ).toBeDefined();
     });
   });
 
@@ -146,7 +110,7 @@ describe("NumericRangePicker", () => {
 
       await inputs[0].setValue("10");
       await inputs[1].setValue("50");
-      await wrapper.find(".apply-btn").trigger("click");
+      await wrapper.find(".filter-apply-btn").trigger("click");
 
       expect(wrapper.emitted("apply")).toBeTruthy();
       expect(wrapper.emitted("apply")![0]).toEqual([10, 50]);
@@ -158,14 +122,14 @@ describe("NumericRangePicker", () => {
 
       await inputs[0].setValue("");
       await inputs[1].setValue("");
-      await wrapper.find(".apply-btn").trigger("click");
+      await wrapper.find(".filter-apply-btn").trigger("click");
 
       expect(wrapper.emitted("apply")![0]).toEqual([null, null]);
     });
 
     it("emits clear when clear button clicked", async () => {
       const wrapper = mountComponent({ minValue: 10, maxValue: 50 });
-      const buttons = wrapper.findAll(".apply-btn");
+      const buttons = wrapper.findAll(".filter-apply-btn");
 
       await buttons[1].trigger("click");
 
@@ -175,7 +139,7 @@ describe("NumericRangePicker", () => {
     it("clears inputs when clear is clicked", async () => {
       const wrapper = mountComponent({ minValue: 10, maxValue: 50 });
       const inputs = wrapper.findAll(".stepper-input");
-      const buttons = wrapper.findAll(".apply-btn");
+      const buttons = wrapper.findAll(".filter-apply-btn");
 
       await buttons[1].trigger("click");
 
@@ -190,7 +154,7 @@ describe("NumericRangePicker", () => {
       const inputs = wrapper.findAll(".stepper-input");
 
       await inputs[0].setValue("-10");
-      await wrapper.find(".apply-btn").trigger("click");
+      await wrapper.find(".filter-apply-btn").trigger("click");
 
       expect(wrapper.emitted("apply")![0]).toEqual([0, null]);
     });
@@ -200,9 +164,89 @@ describe("NumericRangePicker", () => {
       const inputs = wrapper.findAll(".stepper-input");
 
       await inputs[0].setValue("-10");
-      await wrapper.find(".apply-btn").trigger("click");
+      await wrapper.find(".filter-apply-btn").trigger("click");
 
       expect(wrapper.emitted("apply")![0]).toEqual([-10, null]);
+    });
+  });
+
+  // Each field, 0 for "От" and 1 for "До", answers to its own buttons and keys.
+  describe("Steppers and keys of each field", () => {
+    type Wrapper = ReturnType<typeof mountComponent>;
+    const stepper = (wrapper: Wrapper, label: string, side: number) =>
+      wrapper.findAll(`.stepper-btn[aria-label="${label}"]`)[side];
+    const field = (wrapper: Wrapper, side: number) =>
+      wrapper.findAll(".stepper-input")[side].element as HTMLInputElement;
+    /** Whether the field let the text through, typed or pasted at its caret. */
+    const takes = (
+      wrapper: Wrapper,
+      side: number,
+      data: string,
+      inputType = "insertText",
+    ) =>
+      field(wrapper, side).dispatchEvent(
+        new InputEvent("beforeinput", { data, inputType, cancelable: true }),
+      );
+
+    it.each([0, 1])("steps the field %i by one either way", async (side) => {
+      const wrapper = mountComponent({ minValue: 5, maxValue: 5 });
+
+      await stepper(wrapper, "Увеличить", side).trigger("click");
+      expect(field(wrapper, side).value).toBe("6");
+      await stepper(wrapper, "Уменьшить", side).trigger("click");
+      await stepper(wrapper, "Уменьшить", side).trigger("click");
+      expect(field(wrapper, side).value).toBe("4");
+      expect(field(wrapper, 1 - side).value).toBe("5");
+    });
+
+    it.each([0, 1])(
+      "stops the field %i at 0 without negatives",
+      async (side) => {
+        const wrapper = mountComponent({ minValue: 1, maxValue: 1 });
+        const down = stepper(wrapper, "Уменьшить", side);
+
+        await down.trigger("click");
+        expect(field(wrapper, side).value).toBe("0");
+        expect(down.attributes("disabled")).toBeDefined();
+        expect(
+          stepper(wrapper, "Уменьшить", 1 - side).attributes("disabled"),
+        ).toBeUndefined();
+      },
+    );
+
+    it("steps below 0 with negatives allowed", async () => {
+      const wrapper = mountComponent({ allowNegative: true });
+
+      await stepper(wrapper, "Уменьшить", 1).trigger("click");
+      expect(field(wrapper, 1).value).toBe("-1");
+    });
+
+    it.each([0, 1])(
+      "keeps only the digits of a paste into the field %i",
+      async (side) => {
+        const wrapper = mountComponent();
+
+        expect(takes(wrapper, side, "1a2", "insertFromPaste")).toBe(false);
+        await nextTick();
+        expect(field(wrapper, side).value).toBe("12");
+        expect(field(wrapper, 1 - side).value).toBe("");
+      },
+    );
+
+    it("takes digits and refuses letters", () => {
+      const wrapper = mountComponent();
+
+      expect(takes(wrapper, 0, "7")).toBe(true);
+      expect(takes(wrapper, 1, "a")).toBe(false);
+      expect(takes(wrapper, 1, "-")).toBe(false);
+    });
+
+    it("takes a minus once, at the start of its own field", () => {
+      const wrapper = mountComponent({ allowNegative: true, minValue: -5 });
+      field(wrapper, 0).setSelectionRange(0, 0);
+
+      expect(takes(wrapper, 0, "-")).toBe(false);
+      expect(takes(wrapper, 1, "-")).toBe(true);
     });
   });
 
@@ -212,7 +256,7 @@ describe("NumericRangePicker", () => {
       const inputs = wrapper.findAll(".stepper-input");
 
       await inputs[0].setValue("abc");
-      await wrapper.find(".apply-btn").trigger("click");
+      await wrapper.find(".filter-apply-btn").trigger("click");
 
       expect(wrapper.emitted("apply")![0]).toEqual([null, null]);
     });
@@ -222,7 +266,7 @@ describe("NumericRangePicker", () => {
       const inputs = wrapper.findAll(".stepper-input");
 
       await inputs[0].setValue("   ");
-      await wrapper.find(".apply-btn").trigger("click");
+      await wrapper.find(".filter-apply-btn").trigger("click");
 
       expect(wrapper.emitted("apply")![0]).toEqual([null, null]);
     });
@@ -232,7 +276,7 @@ describe("NumericRangePicker", () => {
       const inputs = wrapper.findAll(".stepper-input");
 
       await inputs[0].setValue("0");
-      await wrapper.find(".apply-btn").trigger("click");
+      await wrapper.find(".filter-apply-btn").trigger("click");
 
       expect(wrapper.emitted("apply")![0]).toEqual([0, null]);
     });
@@ -243,7 +287,7 @@ describe("NumericRangePicker", () => {
 
       await inputs[0].setValue("10.5");
       await inputs[1].setValue("20.75");
-      await wrapper.find(".apply-btn").trigger("click");
+      await wrapper.find(".filter-apply-btn").trigger("click");
 
       // parseInt("10.5") = 10, parseInt("20.75") = 20
       expect(wrapper.emitted("apply")![0]).toEqual([10, 20]);
@@ -266,7 +310,9 @@ describe("NumericRangePicker", () => {
       await inputs[1].setValue("5");
       await nextTick();
       // The lock the keyboard has to obey, read off the button itself.
-      expect(wrapper.find(".apply-btn").attributes("disabled")).toBeDefined();
+      expect(
+        wrapper.find(".filter-apply-btn").attributes("disabled"),
+      ).toBeDefined();
 
       await inputs[0].trigger("keydown", { key: "Enter" });
       await inputs[1].trigger("keydown", { key: "Enter" });

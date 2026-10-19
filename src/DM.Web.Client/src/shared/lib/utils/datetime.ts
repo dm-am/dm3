@@ -10,23 +10,17 @@ import { accountTimeZone } from "./timeZone";
 dayjs.extend(utc);
 
 /**
- * The two spellings the site renders a date in, and the two short forms used
- * where the year is implied by context.
- *
- * Written here and nowhere else. The pattern used to be a literal at every call
- * site — seventeen of them across nine files — and a literal repeated that many
- * times is not a format but a coincidence: one of the copies said "DD.MM" where
- * its neighbour two lines down said "DD.MM.YYYY", and nothing in either file
- * says which was meant. DateFormatSpellingShould keeps them here.
- *
- * The space after "в" is a no-break one (U+00A0): the preposition goes to the
- * next line together with the time. In a narrow cell the line broke after it,
- * "01.01.2020 в" on one line and "03:00" alone on the next.
+ * The spellings the site renders a date in, kept here only
+ * (DateFormatSpellingShould). The space after "в" is a no-break one: the
+ * preposition wraps with the time.
  */
 export const DATE_FORMAT = "DD.MM.YYYY";
 export const DATE_TIME_FORMAT = "DD.MM.YYYY [в]\u00a0HH:mm";
 export const DAY_MONTH_FORMAT = "DD.MM";
 export const DAY_MONTH_TIME_FORMAT = "DD.MM [в]\u00a0HH:mm";
+
+/** A day with no time of day, the spelling of a date input and of a day key: "2026-09-27". */
+export const DAY = "YYYY-MM-DD";
 
 /** A day of the calendar with no time of day: "2026-09-27". */
 const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
@@ -35,11 +29,8 @@ const CALENDAR_DAY = /^\d{4}-\d{2}-\d{2}$/;
 const zoneFormats = new Map<string, Intl.DateTimeFormat | null>();
 
 /**
- * How far the clock of `zone` stands from UTC at the moment `at`, in
- * minutes, or null for a zone this browser does not know.
- *
- * Asked of the browser's own zone database for that very moment, so a zone on
- * summer time is read at the offset it had then and not the one it has today.
+ * How far `zone` stands from UTC at the moment `at`, in minutes, by the
+ * browser's zone database for that moment; null for an unknown zone.
  */
 function offsetAt(zone: string, at: number): number | null {
   let format = zoneFormats.get(zone);
@@ -79,18 +70,10 @@ function offsetAt(zone: string, at: number): number | null {
 }
 
 /**
- * A moment as the site shows it: on the clock of the account for a signed-in
- * reader, on the clock of the device for a guest. The owner's word, and the
- * one place it is kept: every date and time the site prints goes through
- * here, the formatters below and HumanDate included. An empty zone on the
- * account is UTC, as the letters read it.
- *
- * A bare day of the calendar ("2026-09-27", a filter's bound, a separator of
- * the chat) is not a moment and has no zone: it is the same day on every
- * clock, and it is returned as that day. Moved to a zone, the midnight it was
- * read as would fall on the previous day west of the device.
- *
- * Without an argument, now.
+ * A moment as the site shows it: on the account's clock for a signed-in
+ * reader, the device's for a guest; every printed date goes through here. An
+ * empty zone is UTC. A bare calendar day has no zone and is returned as that
+ * day. Without an argument, now.
  */
 export function siteTime(date?: ConfigType): Dayjs {
   const moment = dayjs(date);
@@ -115,13 +98,9 @@ const INPUT_FORMAT = "YYYY-MM-DDTHH:mm";
 const INPUT_VALUE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})(?::(\d{2}))?$/;
 
 /**
- * A moment as the value of a date-and-time field, on the site's clock
- * (siteTime). Without an argument, now.
- *
- * The field holds a time of day with no zone, and the reader fills it in by the
- * clock the site shows them: the card of a poll printed "20:00" by the account,
- * so its editor has to open on 20:00 as well, not on the device's reading of
- * the same moment. fromSiteInput is the way back.
+ * A moment as the value of a date-and-time field on the site's clock, the clock
+ * the reader fills it in by. Without an argument, now. fromSiteInput is the
+ * way back.
  */
 export function toSiteInput(date?: ConfigType): string {
   return siteTime(date).format(INPUT_FORMAT);
@@ -129,11 +108,7 @@ export function toSiteInput(date?: ConfigType): string {
 
 /**
  * The moment a date-and-time field names, read on the site's clock, as ISO in
- * UTC; null for a field that holds no date and time (cleared).
- *
- * `new Date(value)` read the field on the device's clock, so a reader whose
- * account is in Tokyo on a device in Moscow typed 20:00 and sent 20:00 Moscow:
- * six hours off the time the site then printed back to them.
+ * UTC; null for a cleared field.
  */
 export function fromSiteInput(value: string): string | null {
   const match = INPUT_VALUE.exec(value);
@@ -142,10 +117,8 @@ export function fromSiteInput(value: string): string | null {
     .slice(1)
     .map((part) => Number(part ?? 0));
 
-  // The wall time taken as if it were UTC, then moved by the zone's offset.
-  // The offset is asked twice, at the wall time and at the moment the first
-  // answer gives, so a change to or from summer time between the two lands on
-  // the side the zone itself keeps.
+  // The wall time as UTC, moved by the offset asked twice, so a summer-time
+  // change between the two lands on the zone's own side.
   const wall = Date.UTC(year, month - 1, day, hour, minute, second);
   const zone = accountTimeZone.value;
   const first = zone === null ? null : offsetAt(zone, wall);
@@ -160,17 +133,9 @@ export function fromSiteInput(value: string): string | null {
 }
 
 /**
- * Format a date string as "DD.MM.YYYY" (site time, siteTime), date only, no time.
- *
- * The empty token is a parameter so that exactly one place owns the format
- * string while a caller that needs a falsy placeholder can ask for one: a filter
- * chip renders "" where a table cell renders the sitewide missing-value token,
- * and that is the only thing the four separate implementations this replaced
- * actually disagreed about.
- *
- * Parsing goes through dayjs on purpose. A bare "YYYY-MM-DD" is local midnight
- * to dayjs and UTC midnight to `new Date`, so the naive route shifts the day by
- * one for anyone west of Greenwich.
+ * Format a date string as "DD.MM.YYYY" (site time, siteTime), date only. The
+ * empty token is a parameter: a chip renders "", a cell the missing-value
+ * token. Parsed by dayjs: `new Date` reads a bare date as UTC midnight.
  */
 export function formatDate(
   dateStr: string | null | undefined,
@@ -190,14 +155,8 @@ export function formatDateFull(dateStr: string | null | undefined): string {
 }
 
 /**
- * Start of the week the site means by "за неделю", as an ISO string.
- *
- * Seven days back from now, not the calendar Monday. The calendar boundary
- * emptied every block built on it for the first hours of every Monday: the best
- * post of the week and the pulse both went blank while the site had a week of
- * posts behind them, and the seed had to clamp its own data to the boundary to
- * hide it. A reader who asks for the week means the last seven days, and this
- * window never has a hole in it.
+ * Start of the week the site means by "за неделю": seven days back, not the
+ * calendar Monday, which emptied the week's blocks every Monday morning.
  */
 export function getWeekStartUtc(): string {
   const start = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

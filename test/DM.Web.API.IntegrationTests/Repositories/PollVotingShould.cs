@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Community.Features.Polls;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -18,14 +15,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// One voter, one option, and the write is what says so.
 /// </summary>
 /// <remarks>
-/// The primary key of PollVotes is (PollId, UserId) and the vote is
-/// INSERT ... ON CONFLICT DO NOTHING: a check before the write reads, decides
-/// and writes, and two requests arriving together both read a ballot without
-/// this voter on it. Asserted against a live Postgres because the key and the
-/// conflict clause are the only place the rule runs at all — the domain tests
-/// mock the repository and see nothing. The foreign keys hold the rest: a
-/// vote by a voter, for an option or in a poll that does not exist is
-/// unrepresentable.
+/// The primary key (PollId, UserId) and INSERT ... ON CONFLICT DO NOTHING are the only place the rule runs; the
+/// foreign keys make a vote for something missing unrepresentable.
 /// </remarks>
 public class PollVotingShould : IntegrationTestBase
 {
@@ -98,9 +89,7 @@ public class PollVotingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The voter is a foreign key. A ghost vote — one pointing at a user
-    /// the database does not hold — is refused by the constraint, which is what
-    /// buried the seeder's self-healing block.
+    /// The voter is a foreign key: a vote for a user the database does not hold is refused.
     /// </summary>
     [Fact]
     public async Task RefuseAVoteOfAVoterWhoDoesNotExist()
@@ -119,7 +108,7 @@ public class PollVotingShould : IntegrationTestBase
         var act = () => dbContext.SaveChangesAsync();
 
         await act.Should().ThrowAsync<DbUpdateException>(
-            "a vote without a voter is the state the seeder used to repair by hand");
+            "a vote without a voter counts for nobody");
     }
 
     private static async Task<Guid> SeedVoter(IServiceScope scope)

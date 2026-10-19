@@ -1,13 +1,14 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Users;
-using Npgsql;
 using Microsoft.EntityFrameworkCore;
 using DbUsernameChangeRequest = DM.Infrastructure.Persistence.Entities.Account.UsernameChangeRequest;
 
@@ -16,6 +17,25 @@ namespace DM.Infrastructure.Persistence.Repositories.Account;
 /// <inheritdoc />
 internal class UsernameChangeRepository : IUsernameChangeRepository
 {
+    private static readonly Expression<Func<DbUsernameChangeRequest, UsernameChangeRequest>> Projection =
+        r => new UsernameChangeRequest
+        {
+            RequestId = r.RequestId,
+            UserId = r.UserId,
+            RequestedUsername = r.RequestedUsername,
+            Reason = r.Reason,
+            Status = r.Status,
+            CreatedUtc = r.CreatedUtc,
+            ApprovalToken = r.ApprovalToken,
+            ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
+            ResolvedUtc = r.ResolvedUtc,
+            ResolvedByUserId = r.ResolvedByUserId,
+            ResolverComment = r.ResolverComment,
+            UserEmail = r.User.Email,
+            UserUsername = r.User.Username,
+            ResolverUsername = r.ResolvedBy != null ? r.ResolvedBy.Username : null
+        };
+
     private readonly DmDbContext _dbContext;
 
     public UsernameChangeRepository(DmDbContext dbContext)
@@ -28,33 +48,12 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
         Guid userId, DateTimeOffset now, CancellationToken ct = default)
     {
         return await _dbContext.UsernameChangeRequests
-            // Approved holds that status until the hourly pass moves it, so the
-            // status alone would keep refusing a new request for up to an hour
-            // after the approval link had already died - while the link itself
-            // answered "expired" and offered nothing. The stored moment is what
-            // every other reader of this row trusts, and it is trusted here too.
+            // The stored expiry, not the status alone: Approved holds until the hourly pass moves it.
             .Where(r => r.UserId == userId &&
                         (r.Status == UsernameChangeRequestStatus.Pending ||
                          (r.Status == UsernameChangeRequestStatus.Approved &&
-                          r.ApprovalTokenExpiresUtc.HasValue &&
-                          r.ApprovalTokenExpiresUtc.Value > now)))
-            .Select(r => new UsernameChangeRequest
-            {
-                RequestId = r.RequestId,
-                UserId = r.UserId,
-                RequestedUsername = r.RequestedUsername,
-                Reason = r.Reason,
-                Status = r.Status,
-                CreatedUtc = r.CreatedUtc,
-                ApprovalToken = r.ApprovalToken,
-                ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
-                ResolvedUtc = r.ResolvedUtc,
-                ResolvedByUserId = r.ResolvedByUserId,
-                ResolverComment = r.ResolverComment,
-                UserEmail = r.User.Email,
-                UserUsername = r.User.Username,
-                ResolverUsername = r.ResolvedBy != null ? r.ResolvedBy.Username : null
-            })
+                          r.ApprovalTokenExpiresUtc > now)))
+            .Select(Projection)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -64,23 +63,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
         return await _dbContext.UsernameChangeRequests
             .Where(r => r.UserId == userId)
             .OrderByDescending(r => r.CreatedUtc)
-            .Select(r => new UsernameChangeRequest
-            {
-                RequestId = r.RequestId,
-                UserId = r.UserId,
-                RequestedUsername = r.RequestedUsername,
-                Reason = r.Reason,
-                Status = r.Status,
-                CreatedUtc = r.CreatedUtc,
-                ApprovalToken = r.ApprovalToken,
-                ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
-                ResolvedUtc = r.ResolvedUtc,
-                ResolvedByUserId = r.ResolvedByUserId,
-                ResolverComment = r.ResolverComment,
-                UserEmail = r.User.Email,
-                UserUsername = r.User.Username,
-                ResolverUsername = r.ResolvedBy != null ? r.ResolvedBy.Username : null
-            })
+            .Select(Projection)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -89,23 +72,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     {
         return await _dbContext.UsernameChangeRequests
             .Where(r => r.RequestId == requestId)
-            .Select(r => new UsernameChangeRequest
-            {
-                RequestId = r.RequestId,
-                UserId = r.UserId,
-                RequestedUsername = r.RequestedUsername,
-                Reason = r.Reason,
-                Status = r.Status,
-                CreatedUtc = r.CreatedUtc,
-                ApprovalToken = r.ApprovalToken,
-                ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
-                ResolvedUtc = r.ResolvedUtc,
-                ResolvedByUserId = r.ResolvedByUserId,
-                ResolverComment = r.ResolverComment,
-                UserEmail = r.User.Email,
-                UserUsername = r.User.Username,
-                ResolverUsername = r.ResolvedBy != null ? r.ResolvedBy.Username : null
-            })
+            .Select(Projection)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -133,23 +100,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     {
         return await _dbContext.UsernameChangeRequests
             .Where(r => r.ApprovalToken == token)
-            .Select(r => new UsernameChangeRequest
-            {
-                RequestId = r.RequestId,
-                UserId = r.UserId,
-                RequestedUsername = r.RequestedUsername,
-                Reason = r.Reason,
-                Status = r.Status,
-                CreatedUtc = r.CreatedUtc,
-                ApprovalToken = r.ApprovalToken,
-                ApprovalTokenExpiresUtc = r.ApprovalTokenExpiresUtc,
-                ResolvedUtc = r.ResolvedUtc,
-                ResolvedByUserId = r.ResolvedByUserId,
-                ResolverComment = r.ResolverComment,
-                UserEmail = r.User.Email,
-                UserUsername = r.User.Username,
-                ResolverUsername = r.ResolvedBy != null ? r.ResolvedBy.Username : null
-            })
+            .Select(Projection)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -175,7 +126,7 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
         {
             await _dbContext.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // The service checks for a request in flight before it writes; this is
             // the race where two requests sent at once both pass that check. The
@@ -194,16 +145,22 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
 
         if (entity == null) return;
 
-        entity.RequestedUsername = request.RequestedUsername;
         entity.Reason = request.Reason;
+        ApplyDecision(entity, request);
+
+        await _dbContext.SaveChangesAsync(ct);
+    }
+
+    /// <summary>The fields a decision on the request writes.</summary>
+    private static void ApplyDecision(DbUsernameChangeRequest entity, UsernameChangeRequest request)
+    {
+        entity.RequestedUsername = request.RequestedUsername;
         entity.Status = request.Status;
         entity.ApprovalToken = request.ApprovalToken;
         entity.ApprovalTokenExpiresUtc = request.ApprovalTokenExpiresUtc;
         entity.ResolvedUtc = request.ResolvedUtc;
         entity.ResolvedByUserId = request.ResolvedByUserId;
         entity.ResolverComment = request.ResolverComment;
-
-        await _dbContext.SaveChangesAsync(ct);
     }
 
     /// <inheritdoc />
@@ -227,31 +184,17 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
         });
 
         user.Username = history.NewUsername;
+        ApplyDecision(entity, request);
 
-        entity.RequestedUsername = request.RequestedUsername;
-        entity.Status = request.Status;
-        entity.ApprovalToken = request.ApprovalToken;
-        entity.ApprovalTokenExpiresUtc = request.ApprovalTokenExpiresUtc;
-        entity.ResolvedUtc = request.ResolvedUtc;
-        entity.ResolvedByUserId = request.ResolvedByUserId;
-        entity.ResolverComment = request.ResolverComment;
-
-        // All three rows are tracked, so one SaveChanges is the transaction and an
-        // explicit one here would be machinery around a guarantee already given.
+        // All three rows are tracked, so one SaveChanges is the transaction.
         try
         {
             await _dbContext.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
-            // Two unique structures stand over this write and either can refuse
-            // it. The index over lower("Username") refuses a name taken between
-            // the service's check and here; the unique index over the history's
-            // OldUsername refuses a name the account is leaving behind for the
-            // second time, which needs no race at all - only an account that
-            // once took its previous name back. Translated the way Add above
-            // translates it, because the untranslated failure of the storage
-            // engine reached the reader as a 500.
+            // Refused by lower("Username") for a name taken after the check, or by the
+            // history's OldUsername for a name the account leaves behind a second time.
             _dbContext.ChangeTracker.Clear();
             throw new DuplicateEntityException("Duplicate username or username history entry", ex);
         }
@@ -260,7 +203,6 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
     /// <inheritdoc />
     public async Task<bool> IsUsernameAvailable(string username, Guid? excludeUserId = null, CancellationToken ct = default) =>
         !await AccountReservation.UsernameTaken(_dbContext.Users, username, excludeUserId, ct);
-
 
     /// <inheritdoc />
     public Task<int> ExpireUnreviewedRequests(
@@ -283,19 +225,10 @@ internal class UsernameChangeRepository : IUsernameChangeRepository
         _dbContext.UsernameChangeRequests
             .TagWith("DM.Account.ExpireUsernameChangeApprovals")
             .Where(r => r.Status == UsernameChangeRequestStatus.Approved &&
-                        r.ApprovalTokenExpiresUtc.HasValue &&
-                        r.ApprovalTokenExpiresUtc.Value < now)
-            // Expired is what withdraws the approval; the service refuses anything
-            // that is not Approved. The token stays on the row so the page opened
-            // from the letter can still find it and say that it ran out, instead of
-            // finding nothing and calling the link invalid.
-            // Same rule as ResolutionComment.Join, restated as an expression the
-            // provider can translate: no comment means the reason stands alone
-            // rather than after a bar with nothing before it, and the result is
-            // cut to the column length. The cut matters more here than anywhere
-            // else - this is one statement over every lapsed approval, so a
-            // single overlong comment would roll back the whole pass, hourly and
-            // without a sound.
+                        r.ApprovalTokenExpiresUtc < now)
+            // The token stays on the row so the page from the letter can say it ran out.
+            // The comment is ResolutionComment.Join as a translatable expression, cut to
+            // the column length so one overlong comment cannot roll back the whole pass.
             .ExecuteUpdateAsync(
                 s => s.SetProperty(r => r.Status, UsernameChangeRequestStatus.Expired)
                       .SetProperty(r => r.ResolverComment, r =>

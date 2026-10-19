@@ -11,22 +11,16 @@ namespace DM.Web.API.Features.Community.Polls;
 /// <summary>
 /// API controller for managing community polls
 /// </summary>
-/// <remarks>
-/// Polls allow users to create community votes with multiple options.
-/// Only moderators and admins can create, update, or delete polls.
-/// Authenticated users can vote on active polls.
-/// </remarks>
 [ApiController]
 [Route("v1/polls")]
 [ApiExplorerSettings(GroupName = "Community")]
 [Tags("Polls")]
 public class PollController : ControllerBase
 {
-    private readonly IPollApiService _apiService;
+    private readonly PollApiService _apiService;
 
-    /// <inheritdoc />
     public PollController(
-        IPollApiService apiService)
+        PollApiService apiService)
     {
         _apiService = apiService;
     }
@@ -47,7 +41,7 @@ public class PollController : ControllerBase
     /// Create new global poll
     /// </summary>
     /// <remarks>
-    /// Requires moderator or admin role. Poll must have at least 2 options.
+    /// Requires SeniorModerator role or higher. Poll must have at least 2 options.
     /// </remarks>
     /// <param name="request">Poll creation request with options</param>
     /// <response code="201">Poll created successfully</response>

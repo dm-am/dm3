@@ -26,10 +26,7 @@ import {
 import { UserMultiSelect } from "@/entities/user";
 import type { BubbleValue } from "@/shared/ui/Filters";
 
-// `hideAuthorFilter` — for pages with an implicit author scope (the profile
-// "Полученные оценки" / "Оценил чужих постов" subpages): the scope is set
-// by the container via a query param, the "Авторы" filter button is hidden
-// to avoid confusing the user.
+// Pages with an implicit author scope (profile subpages) hide the "Авторы" filter.
 const props = withDefaults(
   defineProps<{
     hideAuthorFilter?: boolean;
@@ -49,21 +46,14 @@ const {
   clearFilters,
 } = usePulseFilter();
 
-// Search input (with debounce)
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
   setSearch,
 );
 
-// =============================================================================
-// SINGLE FILTER DROPDOWN (with navigation, like GamesFilter)
-// =============================================================================
-
 const { showDropdown, navPath, closeDropdown, toggleDropdown } =
   useFilterDropdown();
 
-// Root level filter options. The "Авторы" option is hidden when the host
-// has nailed the author scope down (profile subpages).
 const filterOptions = computed(() => {
   const items = [
     { key: "rating", label: "Рейтинг", hint: "Диапазон рейтинга поста" },
@@ -83,15 +73,12 @@ function navigateBack() {
   navPath.value = null;
 }
 
-function getDropdownTitle(): string | null {
-  if (!navPath.value) return null;
-  if (navPath.value.filter === "rating") return "Рейтинг";
-  if (navPath.value.filter === "author") return "Авторы";
-  if (navPath.value.filter === "date") return "Дата создания";
-  return null;
-}
+const dropdownTitle = computed(
+  () =>
+    filterOptions.value.find((o) => o.key === navPath.value?.filter)?.label ??
+    "",
+);
 
-// Rating range
 function handleRatingApply(min: number | null, max: number | null) {
   setRatingRange(min, max);
   closeDropdown();
@@ -102,7 +89,6 @@ function handleRatingClear() {
   closeDropdown();
 }
 
-// Date range
 function handleDateApply(from: string | null, to: string | null) {
   setCreatedRange(from, to);
   closeDropdown();
@@ -113,7 +99,6 @@ function handleDateClear() {
   closeDropdown();
 }
 
-// Sort options
 const sortOptions = [
   {
     value: "lastreview",
@@ -139,13 +124,10 @@ function handleSortSelect(value: string, direction?: "asc" | "desc") {
   setSort(value as PulseSortBy, direction);
 }
 
-// This filter has no toggle action of its own, so the flip is expressed as a
-// re-sort on the field already in effect.
+// No toggle action of its own: the flip is a re-sort on the field in effect.
 function handleSortOrderChange(order: "asc" | "desc") {
   setSort(filterState.value.sortBy, order);
 }
-
-// ── Bubbles ──
 
 const hasRatingFilter = computed(
   () =>
@@ -181,8 +163,7 @@ const dateBubbleLabel = computed(() =>
   }),
 );
 
-// Game filter has no dropdown UI — it arrives via the ?game= URL param
-// (deep link). The bubble makes it visible and removable.
+// The game arrives only via ?game= (a deep link); the bubble makes it visible and removable.
 const hasGameFilter = computed(() => filterState.value.gameId !== null);
 
 const gameTitle = ref<string | null>(null);
@@ -193,9 +174,7 @@ watch(
     gameTitle.value = null;
     if (!gameId) return;
     const { data } = await gameApi.getGame(gameId);
-    // Ignore stale response if the filter changed meanwhile;
-    // on fetch failure the bubble falls back to the generic label.
-    // The details endpoint wraps the game in a single-resource envelope.
+    // A stale answer is ignored; on failure the bubble keeps the generic label.
     if (filterState.value.gameId === gameId && data) {
       gameTitle.value = data.resource?.title ?? null;
     }
@@ -216,7 +195,6 @@ function clearAll() {
   clearFilters();
 }
 
-// Backspace removes last active filter when search input is empty
 function handleSearchKeydown(event: KeyboardEvent) {
   if (event.key === "Backspace" && !localInput.value) {
     if (hasDateFilter.value) {
@@ -240,9 +218,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
 <template>
   <div class="pulse-filter">
-    <!-- Filter bar row -->
     <div class="filter-bar">
-      <!-- Search -->
       <FilterSearchInput
         v-model="localInput"
         placeholder="Поиск по тексту поста"
@@ -251,7 +227,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @keydown="handleSearchKeydown"
       />
 
-      <!-- Single filter dropdown with navigation -->
       <div v-click-outside="closeDropdown" class="filter-section">
         <FilterButton
           label="Фильтры"
@@ -261,14 +236,12 @@ function handleSearchKeydown(event: KeyboardEvent) {
         />
 
         <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <!-- Header with back navigation (when inside a filter) -->
           <FilterDropdownHeader
             v-if="navPath"
-            :title="getDropdownTitle() ?? ''"
+            :title="dropdownTitle"
             @back="navigateBack"
           />
 
-          <!-- Root level: list of filter types -->
           <template v-if="!navPath">
             <FilterDropdownItem
               v-for="option in filterOptions"
@@ -280,11 +253,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Level 2: authors guard — even if the URL came with author=X
-               manually, in hideAuthor mode the sublevel cannot be opened
-               (the option is absent from filterOptions above).
-               include-inactive, so the author of an old post who has not
-               been here for 30 days stays findable. -->
+          <!-- Shut in hideAuthor mode even with ?author= in the address; include inactive: an author away for 30 days stays findable. -->
           <UserMultiSelect
             v-if="!hideAuthorFilter && navPath?.filter === 'author'"
             :selected-users="filterState.authorUsernames"
@@ -294,7 +263,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @remove="removeAuthor"
           />
 
-          <!-- Level 2: Rating range -->
           <NumericRangePicker
             v-if="navPath?.filter === 'rating'"
             :min-value="filterState.minRating"
@@ -304,7 +272,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @clear="handleRatingClear"
           />
 
-          <!-- Level 2: Date range -->
           <DateRangePicker
             v-if="navPath?.filter === 'date'"
             :from-value="filterState.createdFrom"
@@ -315,7 +282,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         </FilterDropdown>
       </div>
 
-      <!-- Sort -->
       <SortButton
         :options="sortOptions"
         :sort-by="filterState.sortBy"
@@ -325,7 +291,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
       />
     </div>
 
-    <!-- Active filters row (bubbles) -->
     <BubblesRow v-if="hasBubbles" @clear-all="clearAll">
       <FilterBubble
         v-if="hasRatingFilter"
@@ -379,7 +344,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
   +filter-bar
   +filter-button
-  +filter-responsive
 
 +filter-dropdown-base
 </style>

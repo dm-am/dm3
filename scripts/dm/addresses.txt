@@ -1,0 +1,13 @@
+# Local service addresses, one "<name> <url>" per line. The one list that scripts/dm.ps1 and
+# scripts/dm.sh both read: the name API is also where the readiness checks of the seed command
+# are asked. The ports are the ones docker/docker-compose.yml publishes (Frontend is the Vite
+# dev server, run separately).
+API http://localhost:5000
+Swagger http://localhost:5000/swagger
+RabbitMQ http://localhost:15672
+Storage http://localhost:9000
+Mailpit http://localhost:8025
+Grafana http://localhost:3000
+Prometheus http://localhost:9090
+Jaeger http://localhost:16686
+Frontend http://localhost:5173

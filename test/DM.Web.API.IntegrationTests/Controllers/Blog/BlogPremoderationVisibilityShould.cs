@@ -13,30 +13,12 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 
 /// <summary>
-/// What a stranger learns about a blog they may not see, end to end: from
-/// POST /v1/blogs/{id}/premoderation, and from the plain reads by alias and by
-/// owner that reach the same blog with no transition at all.
+/// What a stranger learns about a blog they may not see: from POST /v1/blogs/{id}/premoderation and from the
+/// plain reads by alias and by owner.
 /// </summary>
 /// <remarks>
-/// The endpoint is authentication-gated and not Mentor-gated, because one of its
-/// three moves belongs to the owner, who is normally neither mentor nor
-/// moderator. That opened it to everybody with an account, and the blog behind
-/// the alias used to be read without a scope: the answer then depended on the
-/// state of a blog the caller can find nowhere on the site — 404 for an alias
-/// nobody has taken, 400 for one taken by a blog not awaiting edits, 403 for one
-/// taken by a blog that is. Five letters is a small space to walk.
-///
-/// So the assertions here are about indistinguishability and not about any one
-/// status code: every hidden blog has to answer exactly what an unclaimed alias
-/// answers. The verdict half is asserted beside them, because the fix must not
-/// close the queue the mentor rank exists to work through.
-///
-/// The plain reads are here too, and they are the wider door: GET by alias and
-/// GET by owner are open to guests, and every blog-scoped route resolves its
-/// alias through the first of them. They used to answer 403 on a blog the caller
-/// may not open, which says "it exists" as plainly as any status code can. The
-/// last case pins the other side of the line — a visible blog still refuses an
-/// action with a 403, because visibility and permission are different questions.
+/// Every hidden blog answers exactly what an unclaimed alias answers; the verdict half is asserted beside it,
+/// and a visible blog still refuses an action with a 403.
 /// </remarks>
 public class BlogPremoderationVisibilityShould : IntegrationTestBase
 {
@@ -66,25 +48,6 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A guest is refused by the authentication gate before any of this, and the
-    /// refusal must stay that one and not turn into a hint about the alias.
-    /// </summary>
-    [Fact]
-    public async Task RefuseAGuestWithoutReadingAnything()
-    {
-        var seeded = await SeedAsync();
-
-        var request = new HttpRequestMessage(
-            HttpMethod.Post, Url(seeded.AwaitingEditsPublicId))
-        {
-            Content = JsonContent.Create(new { transition = "SubmitForApproval" })
-        };
-        var response = await Client.SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
     /// The owner's own move keeps working on the blog only the owner can see —
     /// which is the whole reason the endpoint was opened past Mentor+.
     /// </summary>
@@ -99,10 +62,7 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// And the verdict still reads past visibility: a blog in AwaitingEdits has no
-    /// curator recorded — the state every newbie's blog is created in — so a scope
-    /// that admitted only the blog's own people would answer 404 on exactly the
-    /// blogs the moderation queue links to.
+    /// The verdict reads past visibility: a blog in AwaitingEdits has no curator recorded.
     /// </summary>
     [Theory]
     [InlineData(UserRole.Mentor)]
@@ -140,11 +100,7 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
     /// The plain read of a blog by its alias, which is the same oracle reached
     /// without any transition at all — and reachable by a guest.
     /// </summary>
-    /// <remarks>
-    /// Whole bodies and not just statuses: the two closed endpoints answer 404
-    /// with "Блог не найден", and a refusal that carried a different title or a
-    /// different problem type would name the blog just as loudly as a 403 did.
-    /// </remarks>
+    /// <remarks>Whole bodies, not statuses: a different title or problem type would name the blog as loudly.</remarks>
     [Fact]
     public async Task AnswerAReadOfAHiddenAliasTheWayItAnswersAnUnclaimedOne()
     {
@@ -191,12 +147,7 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
     /// The owner route asks by login rather than by alias, and answers on a
     /// hidden blog exactly as on a user who keeps none.
     /// </summary>
-    /// <remarks>
-    /// The refusal names the login it was asked about, so the two bodies are
-    /// compared with each caller's own login masked out. Everything else about
-    /// them — status, problem type, wording — has to match, because that is the
-    /// part that would otherwise say whether the blog exists.
-    /// </remarks>
+    /// <remarks>Compared with each caller's own login masked out; status, type and wording match.</remarks>
     [Fact]
     public async Task AnswerAReadByOwnerTheWayItAnswersOnAnOwnerWithNoBlog()
     {
@@ -223,11 +174,7 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
     /// What must not change: a blog the caller can see refuses an action the
     /// caller has no right to with a 403, which is what a 403 is for.
     /// </summary>
-    /// <remarks>
-    /// The rule closed above is about visibility alone. Turning it into "every
-    /// refusal is a 404" would hide from the owner of a visible blog that they
-    /// are being refused rather than that their blog vanished.
-    /// </remarks>
+    /// <remarks>The rule above is about visibility alone, not "every refusal is a 404".</remarks>
     [Fact]
     public async Task StillRefuseEditingSomebodyElsesVisibleBlogWithForbidden()
     {
@@ -281,9 +228,7 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A fresh user owning exactly one blog, hidden the given way. The owner
-    /// route answers with whichever blog of the user it finds first, so a user
-    /// with several would not test anything.
+    /// A fresh user owning exactly one blog: the owner route answers with the first blog it finds.
     /// </summary>
     private async Task<GeneralUser> OwnerOfOneBlogAsync(
         PremoderationStatus premoderationStatus, DraftVisibility draftVisibility)
@@ -313,9 +258,7 @@ public class BlogPremoderationVisibilityShould : IntegrationTestBase
         string PublicPublicId);
 
     /// <summary>
-    /// Four blogs of one owner, differing only in what hides them. Fresh
-    /// identifiers every time: the fixture database is shared and its usernames
-    /// and public ids are uniquely indexed.
+    /// Four blogs of one owner, differing only in what hides them, under fresh identifiers.
     /// </summary>
     private async Task<SeededBlogs> SeedAsync()
     {

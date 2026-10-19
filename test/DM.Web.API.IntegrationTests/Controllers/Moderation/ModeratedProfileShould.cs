@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using AwesomeAssertions;
@@ -17,15 +12,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
 /// <summary>
-/// The moderated profile answered 500 for every caller, through three separate
-/// defects stacked on one endpoint: two LINQ shapes with no translation (a
-/// distinct count inside a group projection, and a constructor call inside
-/// another) and an AutoMapper configuration gap on the derived DTO. Nothing exercised the
-/// endpoint, so all three shipped.
-///
-/// The test drives it with login records present — the empty-table path went
-/// through the same broken queries but returned before the aggregates could
-/// fail, which is how this stayed hidden.
+/// The moderated profile answers with login records present, which is where its aggregates run.
 /// </summary>
 public class ModeratedProfileShould : IntegrationTestBase
 {
@@ -88,14 +75,14 @@ public class ModeratedProfileShould : IntegrationTestBase
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             var root = document.RootElement;
 
-            root.GetProperty("username").GetString().Should().Be(TestConstants.SecondUserUsername);
+            root.GetProperty("username").GetString().Should().Be(TestConstants.SecondUserLogin);
 
             var ip = root.GetProperty("ipAddresses").EnumerateArray().Single();
             ip.GetProperty("ipAddress").GetString().Should().Be(sharedIp);
             ip.GetProperty("loginsCount").GetInt32().Should().Be(2);
 
             var linked = root.GetProperty("linkedProfiles").EnumerateArray().Single();
-            linked.GetProperty("username").GetString().Should().Be(TestConstants.TestUserUsername);
+            linked.GetProperty("username").GetString().Should().Be(TestConstants.TestUserLogin);
             linked.GetProperty("sharedIpsCount").GetInt32().Should().Be(1);
 
             root.GetProperty("loginHistory").EnumerateArray().Should().HaveCount(2);
@@ -108,12 +95,7 @@ public class ModeratedProfileShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The buttons of the profile offer a warning and a ban by the rank rule the
-    /// two services refuse by (ModerationRank): only to a rank below the
-    /// caller's, never to an administrator. A moderator saw "Выдать
-    /// предупреждение" on the profile of a senior moderator and of an
-    /// administrator, and a senior moderator "Выдать бан" on an
-    /// administrator's, each a write the server then refused.
+    /// The buttons offer a warning and a ban by the rank rule the services refuse by (ModerationRank).
     /// </summary>
     [Theory]
     [InlineData("moderator", TestConstants.TestUserLogin, true, false)]
@@ -149,12 +131,8 @@ public class ModeratedProfileShould : IntegrationTestBase
     /// What each rank is shown of a profile and offered on it, flag by flag.
     /// </summary>
     /// <remarks>
-    /// The flags are decided by rank thresholds, and the same thresholds decide
-    /// what the moderation services refuse, so the answer is held here whichever
-    /// layer computes it. Every flag that is on for a rank is listed; every other
-    /// one is off. The subject is an ordinary member, below every caller,
-    /// with a note from each of the three callers, so a note is either the
-    /// caller's own or another moderator's.
+    /// The same rank thresholds decide the flags and the refusals. The subject is an ordinary member with a note from
+    /// each caller.
     /// </remarks>
     [Theory]
     [InlineData(UserRole.Moderator, new[]
@@ -258,9 +236,7 @@ public class ModeratedProfileShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A member of no rank with an address and a note from each of the three
-    /// callers. Made per test: notes on a shared user would be counted by every
-    /// test that reads that user's profile.
+    /// A member of no rank with an address and a note from each caller, made per test.
     /// </summary>
     /// <returns>The member's username.</returns>
     private async Task<string> SeedSubjectWithNotesAsync()

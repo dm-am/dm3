@@ -12,7 +12,6 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
-using DM.Domain.Core.Uploads;
 using DM.Domain.Core.Users;
 using DM.Domain.Personal.Authorization;
 using FluentValidation;
@@ -27,47 +26,35 @@ internal class UserService : IUserService
     private readonly IIntentionManager _intentionManager;
     private readonly ICache _cache;
     private readonly IValidator<UpdateUser> _validator;
-    private readonly IUploadGarbageCollector _uploadsCleanup;
     private readonly IGuidFactory _guidFactory;
     private readonly IRealtimeAvatarBroadcaster _avatarBroadcaster;
-    private readonly IBbTagNameCase _tagNames;
 
-    /// <inheritdoc />
     public UserService(
         IIdentityProvider identityProvider,
         IUserRepository repository,
         IIntentionManager intentionManager,
         ICache cache,
         IValidator<UpdateUser> validator,
-        IUploadGarbageCollector uploadsCleanup,
         IGuidFactory guidFactory,
-        IRealtimeAvatarBroadcaster avatarBroadcaster,
-        IBbTagNameCase tagNames)
+        IRealtimeAvatarBroadcaster avatarBroadcaster)
     {
         _identityProvider = identityProvider;
         _repository = repository;
         _intentionManager = intentionManager;
         _cache = cache;
         _validator = validator;
-        _uploadsCleanup = uploadsCleanup;
         _guidFactory = guidFactory;
         _avatarBroadcaster = avatarBroadcaster;
-        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
-    public async Task<(IEnumerable<GeneralUser> users, PagingResult paging)> GetAsync(
+    public async Task<(IEnumerable<GeneralUser> Users, PagingResult Paging)> GetAsync(
         PagingQuery query,
         UserActivityFilter filter,
         string? search = null,
         UserRole? role = null,
         UserSort sort = UserSort.Name)
     {
-        if (filter == UserActivityFilter.Pending)
-        {
-            _intentionManager.ThrowIfForbidden(UserIntention.ViewPendingUsers);
-        }
-
         // One instance for both reads, so the total and the page describe the
         // same set.
         var userFilter = new UserFilter
@@ -79,66 +66,36 @@ internal class UserService : IUserService
         };
 
         var totalCount = await _repository.CountUsersAsync(userFilter);
-        var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
+        var paging = new PagingData(query, _identityProvider.Current.Settings.PageSize, totalCount);
         var users = await _repository.GetUsersAsync(paging, userFilter);
         return (users, paging.Result);
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> GetAsync(string username)
-    {
-        var user = await _repository.GetUserAsync(username);
-        if (user == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
-        }
-
-        return user;
-    }
+    public async Task<GeneralUser> GetAsync(string username) =>
+        await _repository.GetUserAsync(username)
+        ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
 
     /// <inheritdoc />
-    public async Task<GeneralUser> GetAsync(Guid userId)
-    {
-        var user = await _repository.GetUserAsync(userId);
-        if (user == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundById(userId));
-        }
-
-        return user;
-    }
+    public async Task<GeneralUser> GetAsync(Guid userId) =>
+        await _repository.GetUserAsync(userId)
+        ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundById(userId));
 
     /// <inheritdoc />
-    public async Task<UserDetails> GetDetailsAsync(string username)
-    {
-        var user = await _cache.GetOrCreateAsync(
+    public async Task<UserDetails> GetDetailsAsync(string username) =>
+        await _cache.GetOrCreateAsync(
             CacheKeys.UserDetails(username),
             () => _repository.GetUserDetailsAsync(username),
-            CachePolicy.Medium);
-
-        if (user == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
-        }
-
-        return user;
-    }
+            CachePolicy.Medium)
+        ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundByUsername(username));
 
     /// <inheritdoc />
-    public async Task<UserDetails> GetDetailsAsync(Guid userId)
-    {
-        var user = await _cache.GetOrCreateAsync(
+    public async Task<UserDetails> GetDetailsAsync(Guid userId) =>
+        await _cache.GetOrCreateAsync(
             CacheKeys.UserDetails(userId),
             () => _repository.GetUserDetailsAsync(userId),
-            CachePolicy.Medium);
-
-        if (user == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundById(userId));
-        }
-
-        return user;
-    }
+            CachePolicy.Medium)
+        ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotFoundById(userId));
 
     /// <inheritdoc />
     public async Task<UserDetails> UpdateAsync(UpdateUser updateUser)
@@ -150,13 +107,13 @@ internal class UserService : IUserService
         var userEntityUpdate = new UpdateUserEntity
         {
             UserId = user.UserId,
-            Status = updateUser.Status?.Trim(),
+            Status = AuthoredText.AsTyped(updateUser.Status),
             UpdateStatus = updateUser.Status != null,
-            Name = updateUser.Name?.Trim(),
+            Name = AuthoredText.AsTyped(updateUser.Name),
             UpdateName = updateUser.Name != null,
-            Location = updateUser.Location?.Trim(),
+            Location = AuthoredText.AsTyped(updateUser.Location),
             UpdateLocation = updateUser.Location != null,
-            Info = _tagNames.ToLowerCase(updateUser.Info?.Trim(), BbTagSet.Common),
+            Info = AuthoredText.AsTyped(updateUser.Info),
             UpdateInfo = updateUser.Info != null,
             RatingDisabled = updateUser.RatingDisabled.HasValue
                 ? Optional<bool>.WithValue(updateUser.RatingDisabled.Value)
@@ -166,7 +123,6 @@ internal class UserService : IUserService
                 : default
         };
 
-        // Handle avatar from presigned URL upload
         if (updateUser.AvatarUploadId.HasValue)
         {
             var confirmedUploadId = await _repository.GetConfirmedAvatarUpload(
@@ -183,17 +139,11 @@ internal class UserService : IUserService
 
             userEntityUpdate.AvatarUploadId = Optional<Guid>.WithValue(confirmedUploadId.Value);
 
-            // Link upload to user entity and mark old uploads as obsolete
             await _repository.LinkAvatarUpload(user.UserId, confirmedUploadId.Value);
-            await _uploadsCleanup.CollectObsoleteAsync(user.UserId, UploadType.UserAvatar);
-
-            // Broadcast to open tabs so avatars in chats/comments
-            // refresh without a reload. Best-effort, do not fail if SignalR is down.
-            // The payload contains only userId — the client reloads its own data.
             await _avatarBroadcaster.BroadcastAvatarChangedAsync(user.UserId);
         }
 
-        // Handle contacts replacement (if provided, replace all contacts)
+        // Contacts, when given, replace all contacts
         if (updateUser.Contacts != null)
         {
             var newContacts = updateUser.Contacts.Select((c, i) => new UserContactEntity
@@ -212,28 +162,16 @@ internal class UserService : IUserService
             UserId = user.UserId
         };
 
-        // Update settings if provided
         if (updateUser.Settings != null)
         {
             settingsEntityUpdate.Theme = Optional<Theme>.WithValue(updateUser.Settings.Theme);
             settingsEntityUpdate.UpdateTimeZone = true;
             settingsEntityUpdate.TimeZoneId = updateUser.Settings.TimeZoneId;
-
-            if (updateUser.Settings.Paging != null)
-            {
-                settingsEntityUpdate.CommentsPerPage = Optional<int>.WithValue(updateUser.Settings.Paging.CommentsPerPage);
-                settingsEntityUpdate.TopicsPerPage = Optional<int>.WithValue(updateUser.Settings.Paging.TopicsPerPage);
-                settingsEntityUpdate.MessagesPerPage = Optional<int>.WithValue(updateUser.Settings.Paging.MessagesPerPage);
-                settingsEntityUpdate.PostsPerPage = Optional<int>.WithValue(updateUser.Settings.Paging.PostsPerPage);
-                settingsEntityUpdate.EntitiesPerPage = Optional<int>.WithValue(updateUser.Settings.Paging.EntitiesPerPage);
-            }
+            settingsEntityUpdate.PageSize = Optional<int>.WithValue(updateUser.Settings.PageSize);
         }
 
         await _repository.UpdateUser(userEntityUpdate, settingsEntityUpdate);
-
-        // Invalidate cache for both username and userId lookups
-        await _cache.InvalidateAsync(CacheKeys.UserDetails(updateUser.Username));
-        await _cache.InvalidateAsync(CacheKeys.UserDetails(user.UserId));
+        await InvalidateProfile(updateUser.Username, user.UserId);
 
         return await GetDetailsAsync(updateUser.Username);
     }
@@ -241,23 +179,23 @@ internal class UserService : IUserService
     /// <inheritdoc />
     public async Task RemoveAvatarAsync(Guid userId)
     {
-        // Intent check: only the user themselves (or an admin) may reset the avatar.
         var user = await GetAsync(userId);
         _intentionManager.ThrowIfForbidden(UserIntention.Edit, user);
 
         await _repository.UnlinkAvatarUpload(userId);
 
-        // Best-effort cleanup (S3 + DB cleanup is done by the background GC worker).
-        await _uploadsCleanup.CollectObsoleteAsync(userId, UploadType.UserAvatar);
-
-        await _cache.InvalidateAsync(CacheKeys.UserDetails(userId));
-        await _cache.InvalidateAsync(CacheKeys.UserDetails(user.Username));
-
-        // Push to open tabs — the avatar is now null/default.
+        await InvalidateProfile(user.Username, userId);
         await _avatarBroadcaster.BroadcastAvatarChangedAsync(userId);
     }
 
-    // ═══ IUserLookupService ═══
+    /// <summary>A profile is cached by name and by identifier.</summary>
+    private async Task InvalidateProfile(string username, Guid userId)
+    {
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(username));
+        await _cache.InvalidateAsync(CacheKeys.UserDetails(userId));
+    }
+
+    // IUserLookupService
 
     /// <inheritdoc />
     public async Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default) =>

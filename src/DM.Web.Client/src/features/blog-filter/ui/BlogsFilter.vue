@@ -35,33 +35,21 @@ const {
   clearFilters,
 } = useBlogsFilter();
 
-// =============================================================================
-// SEARCH INPUT (with debounce)
-// =============================================================================
-
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
   setSearch,
 );
 
-// =============================================================================
-// FILTER DROPDOWN (with navigation)
-// =============================================================================
-
 const {
   showDropdown,
   navPath,
-  closeDropdown: closeDropdownBase,
+  closeDropdown,
   toggleDropdown,
   navigateBack: navigateBackBase,
 } = useFilterDropdown();
 
-function closeDropdown() {
-  closeDropdownBase();
-}
-
 function navigateBack() {
-  // If at level 3 (date range input), go back to date type selection
+  // From level 3 (date range input) back to the choice of the date type.
   if (navPath.value?.group) {
     navPath.value = { filter: navPath.value.filter };
     return;
@@ -69,14 +57,12 @@ function navigateBack() {
   navigateBackBase();
 }
 
-// Root level filter options
 const filterOptions = [
   { key: "status", label: "Статус блога", hint: "Оформляется, Открыт, Закрыт" },
   { key: "host", label: "Ведущие", hint: "Автор или ассистент" },
   { key: "dates", label: "Даты", hint: "Фильтр по датам" },
 ];
 
-// Date type options (level 2)
 const dateTypeOptions = [
   { value: "created", label: "Создание блога", hint: "По дате создания блога" },
   {
@@ -87,7 +73,6 @@ const dateTypeOptions = [
   { value: "closed", label: "Закрытие блога", hint: "По дате закрытия блога" },
 ];
 
-// Status options for OptionsList
 const statusListOptions = STATUS_OPTIONS.filter((o) => o.value !== "any").map(
   (o) => ({
     value: o.value,
@@ -117,26 +102,10 @@ function getDropdownTitle(): string | null {
   return null;
 }
 
-// =============================================================================
-// STATUS
-// =============================================================================
-
 function handleStatusSelect(value: string) {
   setStatus(value as StatusFilter);
   closeDropdown();
 }
-
-// =============================================================================
-// HOSTS
-// =============================================================================
-
-function handleAddHost(username: string) {
-  addHost(username);
-}
-
-// =============================================================================
-// DATE RANGES
-// =============================================================================
 
 function getCurrentDateValues(): { from: string | null; to: string | null } {
   const group = navPath.value?.group;
@@ -190,20 +159,12 @@ function hasCurrentDateFilter(): boolean {
   return from !== null || to !== null;
 }
 
-// =============================================================================
-// SORT
-// =============================================================================
-
 const sortOptions = SORT_OPTIONS.map((o) => ({
   value: o.value,
   label: o.label,
   hint: o.hint,
   defaultDirection: o.defaultDirection,
 }));
-
-// =============================================================================
-// BUBBLES
-// =============================================================================
 
 const hasStatusFilter = computed(() => filterState.value.status !== "any");
 const statusLabel = computed(() => {
@@ -250,8 +211,7 @@ const closedDateLabel = computed(() => {
   });
 });
 
-// Sort is driven by the SortButton, not the filter bubbles — it must NOT
-// trigger the "Сбросить" row (consistent with Games / Pulse / Polls).
+// The sort is the SortButton's: it does not raise the "Сбросить" row.
 const hasBubbles = computed(() => {
   const state = filterState.value;
   return (
@@ -263,26 +223,19 @@ const hasBubbles = computed(() => {
   );
 });
 
-// Hosts bubble values
 const hostsBubbleValues = computed(() =>
   [...filterState.value.hostUsernames]
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), "ru"))
     .map((username) => ({ id: username, label: username })),
 );
 
-function handleRemoveHost(id: string) {
-  removeHost(id);
-}
-
 function clearAll() {
   localInput.value = "";
   clearFilters();
 }
 
-// Search input keyboard handler (for Backspace to remove filters)
 function handleSearchKeydown(event: KeyboardEvent) {
   if (event.key === "Backspace" && !localInput.value) {
-    // Remove filters in reverse order
     if (hasClosedDateFilter.value) {
       event.preventDefault();
       setClosedRange(null, null);
@@ -315,9 +268,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
 <template>
   <div class="blogs-filter">
-    <!-- Filter bar row -->
     <div class="filter-bar">
-      <!-- Search input -->
       <FilterSearchInput
         v-model="localInput"
         placeholder="Поиск по названию"
@@ -326,7 +277,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
         <FilterButton
           :active="showDropdown"
@@ -335,14 +285,12 @@ function handleSearchKeydown(event: KeyboardEvent) {
         />
 
         <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"
             :title="getDropdownTitle() ?? ''"
             @back="navigateBack"
           />
 
-          <!-- Root level items -->
           <template v-if="!navPath">
             <FilterDropdownItem
               v-for="item in filterOptions"
@@ -354,25 +302,22 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Status options -->
           <OptionsList
             v-if="navPath?.filter === 'status'"
             :options="statusListOptions"
             @select="handleStatusSelect"
           />
 
-          <!-- Hosts multi-select: include-inactive, so the host of a blog
-               who has not been here for 30 days stays findable -->
+          <!-- Include inactive: a host away for 30 days stays findable. -->
           <UserMultiSelect
             v-if="navPath?.filter === 'host'"
             :selected-users="filterState.hostUsernames"
             placeholder="Поиск ведущего"
             include-inactive
-            @add="handleAddHost"
-            @remove="handleRemoveHost"
+            @add="addHost"
+            @remove="removeHost"
           />
 
-          <!-- Date type selection (level 2) -->
           <template v-if="navPath?.filter === 'dates' && !navPath.group">
             <FilterDropdownItem
               v-for="item in dateTypeOptions"
@@ -384,7 +329,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Date range picker (level 3) -->
           <DateRangePicker
             v-if="navPath?.filter === 'dates' && navPath.group"
             :from-value="getCurrentDateValues().from"
@@ -396,7 +340,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         </FilterDropdown>
       </div>
 
-      <!-- Sort -->
       <SortButton
         :options="sortOptions"
         :sort-by="filterState.sortBy"
@@ -406,9 +349,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
       />
     </div>
 
-    <!-- Active filters row (bubbles) -->
     <BubblesRow v-if="hasBubbles" @clear-all="clearAll">
-      <!-- Status bubble -->
       <FilterBubble
         v-if="hasStatusFilter"
         prefix="Статус:"
@@ -416,16 +357,14 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @remove="setStatus('any')"
       />
 
-      <!-- Hosts bubble -->
       <ExpandableBubble
         v-if="filterState.hostUsernames.size > 0"
         :prefix="filterState.hostUsernames.size > 1 ? 'Ведущие:' : 'Ведущий:'"
         :values="hostsBubbleValues"
         :max-visible="1"
-        @remove="handleRemoveHost"
+        @remove="removeHost"
       />
 
-      <!-- Created date bubble -->
       <FilterBubble
         v-if="hasCreatedDateFilter"
         prefix="Создание:"
@@ -433,7 +372,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @remove="setCreatedRange(null, null)"
       />
 
-      <!-- Activated date bubble -->
       <FilterBubble
         v-if="hasActivatedDateFilter"
         prefix="Открытие:"
@@ -441,7 +379,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @remove="setActivatedRange(null, null)"
       />
 
-      <!-- Closed date bubble -->
       <FilterBubble
         v-if="hasClosedDateFilter"
         prefix="Закрытие:"
@@ -462,9 +399,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
   +filter-bar
   +filter-button
-  +filter-responsive
 
-// Search input inside dropdown
 +dropdown-search-input
 +filter-dropdown-base
 </style>

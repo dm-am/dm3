@@ -8,10 +8,8 @@ namespace DM.Domain.Game.Features.Posts;
 /// What a reader asks of a page of one room's posts
 /// </summary>
 /// <remarks>
-/// The same filters the rated feed (<see cref="PostsQuery"/>) takes, under the
-/// same names, plus the two only a room has: the characters and posts written
-/// without one. A post keeps its number in the room whatever the view: the
-/// number is its place in the order the room is written in, not on the page.
+/// The filters of <see cref="PostsQuery"/> under the same names, plus the characters. A post keeps its
+/// number in the room whatever the view.
 /// </remarks>
 public class RoomPostsQuery : PagingQuery
 {
@@ -19,8 +17,7 @@ public class RoomPostsQuery : PagingQuery
     /// Search by post text (case-insensitive contains)
     /// </summary>
     /// <remarks>
-    /// The text a reader sees, not the body as written: the markup is not part of
-    /// what is matched, and neither is anything the reader is not shown.
+    /// The text a reader sees: neither the markup nor anything hidden from him is matched.
     /// </remarks>
     public string? Search { get; set; }
 
@@ -36,17 +33,13 @@ public class RoomPostsQuery : PagingQuery
     public string? SortOrder { get; set; }
 
     /// <summary>
-    /// Filter by post author usernames (repeat the parameter for several)
+    /// Repeat the parameter for several
     /// </summary>
     public IReadOnlyCollection<string>? AuthorUsernames { get; set; }
 
     /// <summary>
-    /// Filter by the characters the posts are written by (repeat the parameter for several)
+    /// With <see cref="WithoutCharacter"/> one set: posts by any of these or, with the flag, without one
     /// </summary>
-    /// <remarks>
-    /// Together with <see cref="WithoutCharacter"/> the choice is one set: posts by
-    /// any of these characters or, when the flag is set, written without one.
-    /// </remarks>
     public IReadOnlyCollection<Guid>? CharacterIds { get; set; }
 
     /// <summary>

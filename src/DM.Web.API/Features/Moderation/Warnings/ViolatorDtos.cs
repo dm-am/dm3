@@ -2,8 +2,6 @@ using System;
 using System.ComponentModel.DataAnnotations;
 using DM.Web.API.Features.Moderation.Bans;
 using DM.Web.API.Shared.Dto;
-// Aliased rather than imported whole: the domain namespace carries a Violator and
-// a Ban of its own, and this file declares the one and nests the other.
 using WarningPolicy = DM.Domain.Moderation.Features.Warnings.WarningPolicy;
 
 namespace DM.Web.API.Features.Moderation.Warnings;
@@ -14,16 +12,9 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 public class Violator
 {
     /// <summary>
-    /// The denominator of the "N/6" the violators table shows, and the count at
-    /// which it colours the row.
+    /// The denominator the violators table draws points against and colours the row
+    /// at: the count the automatic ban fires at.
     /// </summary>
-    /// <remarks>
-    /// The same number the automatic ban fires at, taken from the domain rather
-    /// than written again here: a scale on the screen that disagreed with the line
-    /// the site bans at would colour the row at one count and ban at another. The
-    /// sum behind it is over every warning a user still carries, with no date
-    /// filter - no window is measured anywhere, and none is described.
-    /// </remarks>
     public const int WarningPointsScale = WarningPolicy.AutoBanPointsThreshold;
 
     /// <summary>
@@ -62,11 +53,6 @@ public class ViolatorsQuery
     /// Ban state: "all" (default) - points or active ban,
     /// "banned" - active ban only, "points-only" - points without a ban
     /// </summary>
-    /// <remarks>
-    /// Named after what it filters, per the query vocabulary in API_DESIGN.md.
-    /// It was `filter`, which says only that the endpoint filters — a name a
-    /// consumer cannot read a meaning out of and cannot guess a value for.
-    /// </remarks>
     /// <example>all</example>
     [RegularExpression("^(all|banned|points-only)$",
         ErrorMessage = "Недопустимое значение фильтра")]

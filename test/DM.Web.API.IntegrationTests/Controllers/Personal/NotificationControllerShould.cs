@@ -9,9 +9,6 @@ using DbNotification = DM.Infrastructure.Persistence.Entities.Personal.Notificat
 
 namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 
-/// <summary>
-/// Integration tests for NotificationController
-/// </summary>
 public class NotificationControllerShould : IntegrationTestBase
 {
     /// <summary>
@@ -40,13 +37,7 @@ public class NotificationControllerShould : IntegrationTestBase
     /// <summary>
     /// A row of the list says what happened, where it leads, when, and with what.
     /// </summary>
-    /// <remarks>
-    /// The list used to carry the event and the bag and nothing else, and the page
-    /// named the event and built the link out of a table of its own that knew
-    /// twenty-four events of fifty-nine. The words and the path come from the
-    /// table the letter is written from, read off the stored bag, whose keys are
-    /// camelCase where the generator wrote them PascalCase.
-    /// </remarks>
+    /// <remarks>The words and the path come from the letter's table, read off the stored bag, whose keys are camelCase.</remarks>
     [Fact]
     public async Task ListWhatHappenedWhereItLeadsAndWhen()
     {
@@ -69,14 +60,6 @@ public class NotificationControllerShould : IntegrationTestBase
             "the details are the fields the letter prints, the identifiers and the status left out");
     }
 
-    /// <summary>
-    /// A notification read stays in the list, marked read.
-    /// </summary>
-    /// <remarks>
-    /// The list dropped the flag on the join, so the page could not tell a read
-    /// row from an unread one and hid the rows it had marked until the next
-    /// reload brought them back.
-    /// </remarks>
     [Fact]
     public async Task KeepAReadNotificationInTheListMarkedRead()
     {
@@ -220,114 +203,56 @@ public class NotificationControllerShould : IntegrationTestBase
             .ToArray();
 
     [Fact]
-    public async Task GetNotifications_RequiresAuthentication()
+    public async Task GetNotificationsRequiresAuthentication()
     {
-        // Act
         var response = await Client.GetAsync("/v1/users/me/notifications");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task GetNotifications_WithAuth_ReturnsOk()
+    public async Task GetNotificationsWithAuthReturnsOk()
     {
-        // Arrange
         var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/users/me/notifications");
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
-    public async Task GetUnreadCount_RequiresAuthentication()
+    public async Task GetUnreadCountRequiresAuthentication()
     {
-        // Act
         var response = await Client.GetAsync("/v1/users/me/notifications/unread");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task GetUnreadCount_WithAuth_ReturnsOk()
+    public async Task GetUnreadCountWithAuthReturnsOk()
     {
-        // Arrange
         var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/users/me/notifications/unread");
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     [Fact]
-    public async Task MarkNotificationAsRead_RequiresAuthentication()
+    public async Task GetNotificationSettingsRequiresAuthentication()
     {
-        // Arrange
-        var notificationId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.DeleteAsync($"/v1/users/me/notifications/{notificationId}/unread");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task MarkAllNotificationsAsRead_RequiresAuthentication()
-    {
-        // Act
-        var response = await Client.DeleteAsync("/v1/users/me/notifications/unread");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task GetNotificationSettings_RequiresAuthentication()
-    {
-        // Act
         var response = await Client.GetAsync("/v1/users/me/notifications/settings");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task GetNotificationSettings_WithAuth_ReturnsOk()
+    public async Task GetNotificationSettingsWithAuthReturnsOk()
     {
-        // Arrange
         var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/users/me/notifications/settings");
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task GenerateBotLinkCode_RequiresAuthentication()
-    {
-        // Act
-        var response = await Client.PostAsync("/v1/users/me/notifications/bots/telegram", null);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task DisconnectBot_RequiresAuthentication()
-    {
-        // Act
-        var response = await Client.DeleteAsync("/v1/users/me/notifications/bots/telegram");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

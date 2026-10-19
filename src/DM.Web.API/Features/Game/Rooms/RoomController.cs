@@ -22,21 +22,18 @@ namespace DM.Web.API.Features.Game.Rooms;
 [Tags("Rooms")]
 public class RoomController : ControllerBase
 {
-    private readonly IRoomApiService _roomApiService;
-    private readonly IRoomAccessApiService _accessApiService;
-    private readonly IPostPendencyApiService _postPendencyApiService;
-    private readonly IPostApiService _postApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly RoomApiService _roomApiService;
+    private readonly RoomAccessApiService _accessApiService;
+    private readonly PostPendencyApiService _postPendencyApiService;
+    private readonly PostApiService _postApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <summary>
-    /// Creates a new instance of RoomController
-    /// </summary>
     public RoomController(
-        IRoomApiService roomApiService,
-        IRoomAccessApiService accessApiService,
-        IPostPendencyApiService postPendencyApiService,
-        IPostApiService postApiService,
-        IGameApiService gameApiService)
+        RoomApiService roomApiService,
+        RoomAccessApiService accessApiService,
+        PostPendencyApiService postPendencyApiService,
+        PostApiService postApiService,
+        GameApiService gameApiService)
     {
         _roomApiService = roomApiService;
         _accessApiService = accessApiService;
@@ -149,10 +146,7 @@ public class RoomController : ControllerBase
     /// <response code="404">Room not found</response>
     [HttpPost("{id}/accesses", Name = nameof(PostAccess))]
     [AuthenticationRequired]
-    // An access grant has no address of its own - there is no GET for one - so
-    // no Location is set. It used to point at the room, which is not what was
-    // created, and the identifier DELETE /v1/rooms/accesses/{id} needs was in
-    // the body all along.
+    // An access grant has no address of its own, so no Location is set.
     [ProducesResponseType(typeof(Envelope<RoomAccess>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]

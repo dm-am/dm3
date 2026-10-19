@@ -1,27 +1,15 @@
-/**
- * Starting character sheets the site offers when a game is created.
- *
- * A template is a copy source and nothing more: a game that starts from one
- * keeps its own sheet afterwards, and renaming or removing the template later
- * reaches no game.
- */
+// A template is only a copy source: a game keeps its own sheet afterwards.
 import type { AttributeSpecification } from "@/shared/api/models/game/attributeSchemas";
 
 export interface AttributeSchemaTemplate {
   id: string;
   title: string;
-  /**
-   * Whether the creation form starts from this one. Read-only here: it is moved
-   * by an action of its own, not by writing the template.
-   */
+  /** Whether the creation form starts from it; moved by an action of its own. */
   isDefault: boolean;
   specifications: AttributeSpecification[];
 }
 
-/**
- * The whole writable part of a template, for both creation and replacement:
- * both write every field, so one shape answers for both.
- */
+/** The writable part of a template, for creation and replacement alike. */
 export interface AttributeSchemaTemplateRequest {
   title: string;
   /** Every identifier inside is handed out by the server. */

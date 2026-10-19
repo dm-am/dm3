@@ -26,18 +26,12 @@ export interface UseApiResourceReturn<T> {
 }
 
 /**
- * Unified composable for API data fetching with caching.
- *
- * Features:
- * - Automatic caching with configurable TTL
- * - Stale-while-revalidate pattern
- * - Prevents parallel fetches
- * - Error handling
+ * API data with a TTL cache, stale-while-revalidate and one fetch at a time.
  *
  * @example
  * ```ts
  * const { data: games, fetch, reset } = useApiResource(
- *   () => gameApi.getOwnGames(),
+ *   () => gameCatalogApi.getParticipatingGames(),
  *   { cacheMs: 60_000 }
  * );
  *
@@ -55,32 +49,17 @@ export function useApiResource<T>(
   const error = ref<GeneralError | null>(null);
   const loading = ref(false);
 
-  // The one implementation of "is this still fresh" in the client. What stood
-  // here was a `lastFetched` timestamp and its own `now - lastFetched > cacheMs`
-  // — the same arithmetic as keyedCache, with its own answer at the boundary and
-  // its own idea of what invalidation does. Two implementations of freshness is
-  // how a change to one of them silently stops applying to half the screens.
-  //
-  // Freshness and not a cache: the payload lives in the `data` ref above, which
-  // is what components render and what reset() clears. A one-slot cache was
-  // written to here for a while and never read from, which read as "the value is
-  // cached" and meant nothing.
+  // Freshness from keyedCache, the one implementation of it; the payload lives
+  // in the data ref, which reset() clears.
   const freshness = createFreshness(cacheMs);
 
-  // Discards the answer to a request that a newer one has superseded. Without it
-  // a slow first response overwrites a fresh forced one, and a response that
-  // arrives after reset() resurrects the data reset() cleared.
+  // A slow answer must not overwrite a forced one or revive what reset() cleared.
   const guard = createRequestGuard();
 
-  // The promise a caller can join. A second fetch() while one is in flight used
-  // to get an already-resolved promise back, so `await fetch()` returned before
-  // any data existed — and callers that read the store right after the await
-  // (the sidebar blocks decide "failed" that way) drew an error on a healthy
-  // request.
+  // A second fetch() joins the one in flight, so `await fetch()` means data.
   let blockingInFlight: Promise<void> | null = null;
 
-  // Background refreshes are deduplicated but never joined: joining one would
-  // make stale-while-revalidate block, which is the one thing it exists not to do.
+  // Background refreshes are never joined: that would make them block.
   let backgroundInFlight = false;
 
   async function fetch(force = false): Promise<void> {
@@ -105,14 +84,8 @@ export function useApiResource<T>(
       backgroundInFlight = true;
       fetcher()
         .then(({ data: newData, error: fetchError }) => {
-          // Lowered before the staleness check, not after. The flag says "my
-          // request came back", not "my answer still counts": cleared after the
-          // check, it stayed raised for good whenever a forced fetch or an
-          // invalidate() bumped the guard while this refresh was on the wire,
-          // and from then on every background refresh of that resource
-          // returned at the flag above without asking the server. The data on
-          // screen then aged forever. invalidateGameLists() invalidates six
-          // resources at once after a mutation, so one overlap was enough.
+          // Lowered before the staleness check: a bumped guard left the flag
+          // raised for good, and the resource never refreshed again.
           backgroundInFlight = false;
           if (!guard.isCurrent(requestId)) return;
           if (fetchError) {
@@ -134,18 +107,13 @@ export function useApiResource<T>(
       return;
     }
 
-    // No data or force — wait for load. loading and error are set synchronously,
-    // before the first await, so a caller that renders right after calling
-    // fetch() already sees the spinner.
+    // Set before the first await, so a caller rendering right after sees the spinner.
     const requestId = guard.next();
     loading.value = true;
     error.value = null;
 
-    // `force` is handed to the fetcher, not just acted on here. Dropping this
-    // resource's own copy is only half of a forced read when the endpoint
-    // answers `public, max-age=300`: the browser and the shared cache still
-    // hold theirs, and a catalogue refetched right after a moderator edited it
-    // came back pre-edit. A fetcher that takes the flag asks the origin.
+    // Handed to the fetcher: a forced read of a `public, max-age=300` endpoint
+    // must also bypass the browser's and the shared cache.
     const run = (async () => {
       try {
         const { data: newData, error: fetchError } = await fetcher(force);
@@ -171,31 +139,18 @@ export function useApiResource<T>(
     return run;
   }
 
-  /**
-   * The mutation counterpart of reset(): the data on screen is now known to be
-   * out of date, so fetch it again — but do not blank it first.
-   *
-   * reset() was being used for this, and it nulls the data. The blocks that
-   * read it (the sidebar lists) fetch on mount and on a change of user, and the
-   * shell is mounted once for the whole session, so nothing ever fetched again:
-   * creating a game emptied "Мои игры" until a hard reload. Staleness became
-   * absence, which is worse than the staleness it was meant to fix.
-   */
+  /** Fetches again after a mutation without blanking the data first, as reset() does. */
   function invalidate(): Promise<void> {
     freshness.expire();
 
-    // Nothing loaded means nothing on screen to correct, and the next fetch
-    // will read fresh data anyway. Refetching here would put a request on the
-    // wire for every list the caller invalidates, most of which no mounted
-    // component is showing.
+    // Nothing on screen to correct, and the next fetch reads fresh anyway.
     if (data.value === null) return Promise.resolve();
 
     return fetch(true);
   }
 
   function reset(): void {
-    // Bump the guard so any answer still in flight is dropped instead of
-    // repopulating the state this just cleared — logout is the caller.
+    // A logout: answers still in flight are dropped.
     guard.next();
     data.value = null;
     error.value = null;
@@ -208,10 +163,7 @@ export function useApiResource<T>(
   return { data, error, loading, fetch, invalidate, reset };
 }
 
-/**
- * Specialized version for list endpoints that return ListEnvelope.
- * Extracts .resources from the response.
- */
+/** For list endpoints: extracts .resources of the ListEnvelope. */
 export function useApiList<T>(
   fetcher: (fresh?: boolean) => Promise<ApiResult<{ resources: T[] }>>,
   options: UseApiResourceOptions = {},

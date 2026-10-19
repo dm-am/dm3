@@ -7,7 +7,6 @@ namespace DM.Domain.Messaging.Features.Messages;
 /// <inheritdoc />
 internal class UpdateMessageValidator : AbstractValidator<UpdateMessage>
 {
-    /// <inheritdoc />
     public UpdateMessageValidator()
     {
         RuleFor(m => m.MessageId)
@@ -18,11 +17,9 @@ internal class UpdateMessageValidator : AbstractValidator<UpdateMessage>
             .MaximumLength(BodyTextLimits.MaxLength).WithMessage(ValidationError.Long)
             .When(m => m.Text != null);
 
-        // No chat surface declares [private], and an edit is the other way the
-        // tag gets into a stored message.
+        // An edit is the other way the tag gets into a stored message (CreateMessageValidator).
         RuleFor(m => m.Text)
             .Must(text => !PrivateBlockMarkup.ContainsPrivateMarkup(text))
-            .WithMessage(m => PrivateBlockMarkup.DescribeSurfaceRefusal(m.Text))
-            .When(m => m.Text != null);
+            .WithMessage(m => PrivateBlockMarkup.DescribeSurfaceRefusal(m.Text));
     }
 }

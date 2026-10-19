@@ -1,8 +1,5 @@
 <script setup lang="ts">
-// Thin game layout: the game title (H1) and a <router-view> for the active
-// sub-page. Status, system, setting, master and assistants live in the info
-// table (GameDetails), not duplicated in a header strip. All per-game
-// navigation and actions live in the left-sidebar GamePanel.
+// Game layout: the title (H1) and the router-view of the active sub-page.
 import { computed, onUnmounted, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -29,30 +26,9 @@ const route = useRoute();
 const gameStore = useGameDetailsStore();
 const { game, gameError, gameErrorStatus } = storeToRefs(gameStore);
 
-// The failure of the game load, as a page rather than as a sentence: a game
-// that does not exist, one the viewer may not read and a server that fell over
-// were all drawn as "Не удалось загрузить игру", which reads as a network
-// glitch in all three cases.
-//
-// Derived from the store, not kept in a local ref. The store owns "the current
-// game" and every reload writes the refusal into it (the shell's own load, a
-// sub-page's, the refresh a status transition runs), while a copy in the shell
-// knew only about the loads the shell itself started. A game that answered 403
-// to any other reload left `game` null with the local code still null, and the
-// page then held its loading skeleton instead of saying anything.
-//
-// The status is read through the sentence and not instead of it: an error that
-// carries no status leaves gameErrorStatus null, and keying the page on the
-// status alone would hold that skeleton in exactly the same way. Zero is a
-// status too (client.ts fills it for a request that never reached the API), so
-// truthiness is not the test either.
-//
-// Gone is read as "не найдена", the default. GameService answers Gone for every
-// id that addresses nothing this reader may see — a deleted game, a mistyped id
-// and a game hidden from them are one answer — so "удалена" would be a sentence
-// the server never made: a typo in the address would be reported as somebody
-// having deleted the game. Only the topic endpoint separates the two, and
-// goneMeansRemoved exists for it (errorConfig.ts).
+// From the store, which every reload of the game writes, not only the shell's.
+// Gone stays "не найдена": the server answers Gone for a typo too.
+// Keyed on the sentence, not the status: a request that never left carries status 0.
 const errorCode = computed(() =>
   gameError.value
     ? errorCodeForStatus(gameErrorStatus.value ?? undefined)
@@ -61,25 +37,12 @@ const errorCode = computed(() =>
 
 const gameId = computed(() => route.params.id as string);
 
-// The zone shell owns both the heading on the page and the name of the tab, and
-// they are the same sentence: the game name first (it is what tells two tabs
-// apart when the browser truncates it), the section of the active sub-route
-// second. Composed once, so the two cannot disagree — before this the heading
-// said only the game, the sub-page drew a second h1 saying "Настройки игры",
-// and the tab said a third thing.
-//
-// A sub-route whose section is data — a character's name, an NPC sheet — cannot
-// put it in meta and announces it through provideZoneSection instead.
-//
-// While the error page is showing, the error owns the title: there is no game
-// behind the id, so the section alone would name a page the reader is not
-// looking at. Same rule and same source as the forum shell (ForumPage.vue).
+// One sentence for the heading and the tab, so the two cannot disagree.
 const announced = provideZoneSection();
 const heading = computed(() =>
   joinTitleSegments(game.value?.title, announced.value ?? route.meta.section),
 );
-// A muted word after the heading ("архив" of an archived room), announced by
-// the sub-page. Left out of the tab title: it is a state, not a name.
+// A state word after the heading; left out of the tab title.
 const marker = provideZoneMarker();
 
 useDocumentTitle(() =>
@@ -88,23 +51,12 @@ useDocumentTitle(() =>
 
 async function load(id: string) {
   const { ok } = await gameStore.loadGame(id);
-  // The refusal itself is already in the store, which is what the error page
-  // reads. Rooms are only worth preloading for a game that opened: the error
-  // page carries no navigation, and the second request would just collect its
-  // own refusal.
   if (!ok) return;
   await gameStore.loadRooms(id);
 }
 
-// Participation is a server field: the roles arrive with the game itself,
-// computed for whoever held the session at fetch time. The blog shell derives
-// its roles on the client and revives in place when the login dialog closes;
-// here the same login — and a logout — kept drawing the previous identity's
-// pages until a full reload: a signed-in master stayed refused, a signed-out
-// one kept the management UI. Every sub-page reads the store this refetch
-// writes, so the shell is the one place to watch. The username and not the
-// user object: updateUser also rewrites settings, and those must not refetch
-// the zone.
+// The roles arrive with the game, so another user means another fetch.
+// The username, not the user: a settings update must not refetch the zone.
 const { user } = storeToRefs(useAuthStore());
 watch(
   () => user.value?.username ?? null,
@@ -117,12 +69,7 @@ useFetchData(
     {
       param: (p) => p.id,
       callback: (id) => {
-        // Wipe first. The detail store is a single bag for "the current game",
-        // not keyed by id, and /game/A/... and /game/B/... share one route
-        // record, so the shell never unmounts and the onUnmounted reset never
-        // fires on a sidebar click. Without this, posts, characters, comments,
-        // notepad and blacklist of the previous game stayed on screen under the
-        // new title until each sub-page happened to refetch.
+        // One store for the current game; the shell outlives a change of game.
         gameStore.reset();
         return load(id as string);
       },
@@ -138,9 +85,7 @@ onUnmounted(() => {
 <template>
   <template v-if="game">
     <div class="game-header">
-      <!-- The gap before the marker is a " " text node, not a margin: a margin
-           is drawn but not copied, and the heading would reach the clipboard
-           glued to it. -->
+      <!-- A text node, not a margin: the copied heading keeps the gap. -->
       <page-title
         >{{ heading
         }}<template v-if="marker"
@@ -154,8 +99,6 @@ onUnmounted(() => {
 
   <ErrorPage v-else-if="errorCode" :code="errorCode" />
 
-  <!-- Loading: twin of the loaded header (skeleton-parity). Reuses
-       .game-header so the margins match; the twin itself owns its geometry. -->
   <div v-else class="game-header">
     <PageTitleSkeleton />
   </div>
@@ -165,8 +108,6 @@ onUnmounted(() => {
 .game-header
   margin-bottom: $medium
 
-// The same quiet tag the room drew beside its own title before the title
-// moved up here: secondary size, normal weight, muted.
 .heading-marker
   font-size: $secondary-font-size
   font-weight: normal

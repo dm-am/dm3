@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using DM.Infrastructure.Persistence.Repositories.Game;
+using DM.Testing;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -15,21 +16,11 @@ namespace DM.Infrastructure.Persistence.Tests.Shared.Users;
 /// A nested user costs the columns the formula names, not the users row.
 /// </summary>
 /// <remarks>
-/// GeneralUserProjections is a stored expression spliced into every list
-/// projection. As an opaque method the same formula forced EF to materialise
-/// the whole users row per nested author - password hash, salt, pending
-/// email, bio - on some forty list paths. The statement is what states the
-/// width, so the test reads the statement: every users column the SQL
-/// references must be one the formula (or a join, or the soft-delete filter)
-/// actually needs, for the two hottest representative paths - the posts of a
-/// room and the games catalog.
+/// GeneralUserProjections is spliced into every list projection; the statement states the width, read for
+/// the posts of a room and the games catalog.
 /// </remarks>
 public class UserProjectionWidthShould
 {
-    private static DmDbContext Probe() => new(new DbContextOptionsBuilder<DmDbContext>()
-        // Statement text only: the connection is never opened.
-        .UseNpgsql("Host=localhost;Database=projection-width-probe;Username=probe;Password=probe")
-        .Options);
 
     /// <summary>
     /// The users columns the shared formula reads, plus the members a query
@@ -70,11 +61,7 @@ public class UserProjectionWidthShould
         sql.Should().NotContain("\"Salt\"");
         sql.Should().NotContain("PendingEmail");
 
-        // The second factor lives in tables of its own precisely so that it can
-        // never ride along in a projection of a user, and a list read has no
-        // reason to name them. Asserted rather than assumed: the day somebody
-        // adds "does this author have a factor" to a nested user, the secret
-        // starts travelling with every page of a room.
+        // The second factor lives in tables of its own so it never rides along with a user.
         sql.Should().NotContain("UserTwoFactors");
         sql.Should().NotContain("UserTwoFactorRecoveryCodes");
         sql.Should().NotContain("Secret");
@@ -91,7 +78,7 @@ public class UserProjectionWidthShould
     [Fact]
     public void FetchOnlyTheFormulaColumnsForRoomPosts()
     {
-        using var context = Probe();
+        using var context = ProbeContext.Open();
         var roomId = Guid.NewGuid();
 
         var sql = context.Set<DbPost>()
@@ -105,7 +92,7 @@ public class UserProjectionWidthShould
     [Fact]
     public void FetchOnlyTheFormulaColumnsForTheGamesCatalog()
     {
-        using var context = Probe();
+        using var context = ProbeContext.Open();
 
         var sql = context.Set<DbGame>()
             .ProjectToGame()

@@ -1,11 +1,10 @@
 name: Security Scanning
 
 on:
-  # Called from the build workflow rather than triggered beside it, so that the
-  # jobs which publish images can name these in `needs`. Triggered separately,
-  # they ran on the same push and finished whenever they finished: an image with
-  # a red CodeQL or a red ZAP reached the registry, took the `latest` tag on
-  # main, and watchtower installed it within five minutes.
+  # Called from the build workflow rather than triggered beside it, so the publishing jobs can
+  # name these in `needs`. Triggered separately, they ran on the same push and finished
+  # whenever: an image with a red CodeQL or ZAP reached the registry and watchtower installed
+  # it within five minutes.
   workflow_call:
     # Which scans the change needs, as the map of scripts/ci-paths.json decided
     # in the changes job of the caller. One input per job, named as the job.
@@ -16,8 +15,8 @@ on:
       zap-scan:
         type: boolean
         default: true
-  # The weekly full scan stands on its own: it is about the code as it sits, not
-  # about a change, and there is no build to gate.
+  # The weekly full scan stands on its own: it is about the code as it sits, and there is no
+  # build to gate.
   schedule:
     - cron: '0 3 * * 0'
 
@@ -25,26 +24,23 @@ permissions:
   contents: read
 
 concurrency:
-  # A literal name, not ${{ github.workflow }}. Called through workflow_call, this
-  # runs inside the caller and github.workflow is the CALLER's name, so that
-  # expression asks for the group the caller is already holding — GitHub answers
-  # that by cancelling the run this job lives in. Since publishing waits on this
-  # job, the whole graph would stop before an image ever reached the registry.
+  # A literal name, not ${{ github.workflow }}: called through workflow_call, that is the
+  # CALLER's name, i.e. the group the caller already holds, and GitHub would cancel the run
+  # this job lives in.
   group: security-scanning-${{ github.ref }}
   cancel-in-progress: true
 
-# Every job pins its runner image: ubuntu-latest becomes Ubuntu 26 on 2026-10-19, and we move when we choose.
+# Every job pins its runner image, so we move when we choose. timeout-minutes ends a hang
+# instead of holding the branch for GitHub's six hours; it is far above the real time on
+# purpose, since a ceiling guessed close turns a slow runner into a red build.
 jobs:
-  # Static analysis. DAST (below) only sees what it can reach over HTTP; the
-  # defect classes that matter most here — unescaped output reaching a rendered
-  # surface, injection, unsafe deserialisation — are source-level.
+  # Static analysis: the defect classes that matter most here (unescaped output reaching a
+  # rendered surface, injection, unsafe deserialisation) are source-level, which the DAST
+  # below cannot see.
   codeql:
     # On its own schedule there are no inputs, and an absent input reads as
     # false, so the weekly scan is let through by name.
     if: github.event_name == 'schedule' || inputs.codeql
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Far above the real time on purpose:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     runs-on: ubuntu-24.04
     permissions:
@@ -54,9 +50,7 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          # manual: the build below is what CodeQL traces. Without an explicit
-          # build-mode the action falls back to autobuild, which picks its own
-          # command and can analyse a different set of assemblies.
+          # manual: the build below is what CodeQL traces; the autobuild default picks its own command.
           - language: csharp
             build-mode: manual
           - language: javascript-typescript
@@ -69,9 +63,8 @@ jobs:
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.build-mode }}
-          # security-extended, not security-and-quality: the latter adds
-          # maintainability queries that would bury real findings under
-          # thousands of style alerts on a 276k-line codebase.
+          # security-extended, not security-and-quality, which adds maintainability queries that
+          # bury real findings under style alerts.
           queries: security-extended
 
       - name: Setup .NET
@@ -91,19 +84,12 @@ jobs:
 
   zap-scan:
     if: github.event_name == 'schedule' || inputs.zap-scan
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Far above the real time on purpose:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 60
     runs-on: ubuntu-24.04
     env:
-      # docker/.env.example ends with Development for local work, and a scan of
-      # Development is a scan of a surface that never ships: Swagger is mapped
-      # only there and the content policy relaxes its script-src for it, so the
-      # tool both sees what production does not have and misses what it does.
-      # Through the environment rather than by rewriting a line of the file, the
-      # way the throwaway encryption key below is handed in: compose prefers the
-      # environment over .env.
+      # docker/.env.example ends with Development, and a scan of Development is a scan of a
+      # surface that never ships (Swagger is mapped only there and the content policy relaxes
+      # script-src). Through the environment, which compose prefers over .env.
       ASPNETCORE_ENVIRONMENT: Production
     steps:
       - uses: actions/checkout@v7
@@ -111,30 +97,16 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
-      # The example file ships the encryption key and the imgproxy signing pair
-      # empty, and compose declares all three with ${...:?} — which rejects an
-      # empty value, not just a missing one. Copying the example alone left every
-      # step below dead. Throwaway values are generated here because this stack
-      # is torn down with the job.
-      #
-      # Through the environment rather than by rewriting the lines in .env:
-      # compose prefers the environment over the file, so this keeps working if
-      # the example ever gains a value, a comment or trailing whitespace — the
-      # anchored sed it replaces would have silently matched nothing.
+      # The example file ships the encryption key empty, and compose declares it with ${...:?},
+      # which rejects an empty value. init-env.sh creates docker/.env with throwaway values;
+      # this stack is torn down with the job.
       - name: Generate the throwaway secrets compose refuses to start without
         run: |
-          echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
-          echo "IMGPROXY_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-          echo "IMGPROXY_SALT=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-
-      - name: Create .env for Docker Compose
-        run: |
-          cp docker/.env.example docker/.env
+          bash docker/scripts/init-env.sh local
           cd docker && docker compose config --quiet
 
-      # --build on the migration line: its image is the API image, and that is
-      # now the tag the registry publishes. Compose pulls a missing image before
-      # it considers building one, so without this the schema would come from the
+      # --build on the migration line: its image is the API image, and compose pulls a missing
+      # image before it considers building one, so otherwise the schema would come from the
       # published build and the scan would run against a different commit.
       - name: Start infrastructure with Docker Compose
         run: |
@@ -156,12 +128,10 @@ jobs:
           touch zap.yaml report_json.json report_md.md report_html.html
           chmod 777 zap.yaml report_json.json report_md.md report_html.html
 
-      # fail_action makes this a gate: the scan fails the job on any alert its
-      # rule file does not silence, not only on rules marked FAIL. Triage lives
-      # in .zap/rules.tsv - a rule is either left alone, and then it breaks the
-      # build, or explicitly IGNORE'd with a stated reason. Reading it the other
-      # way round is the trap: the file holds no FAIL line and the gate still
-      # works, because silence is the failing state here, not the passing one.
+      # fail_action makes this a gate: the scan fails the job on any alert its rule file does
+      # not silence. Triage lives in .zap/rules.tsv: a rule is either left alone, and then it
+      # breaks the build, or IGNORE'd with a stated reason. The file holds no FAIL line and the
+      # gate still works, because silence is the failing state.
       - name: OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.15.0
         with:

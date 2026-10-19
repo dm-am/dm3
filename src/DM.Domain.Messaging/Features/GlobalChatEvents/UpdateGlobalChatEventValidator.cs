@@ -7,17 +7,10 @@ using FluentValidation;
 namespace DM.Domain.Messaging.Features.GlobalChatEvents;
 
 /// <summary>
-/// Validator for chat event modification DTO model.
+/// The rules of creation, each under a null check: null keeps what is stored.
 /// </summary>
-/// <remarks>
-/// The edit path had no validator at all, so every rule the create path states
-/// held only until the author pressed edit. Each rule below is the create rule
-/// under a null check, because null here means "keep what is stored" rather
-/// than "clear it".
-/// </remarks>
 internal class UpdateGlobalChatEventValidator : AbstractValidator<UpdateGlobalChatEvent>
 {
-    /// <inheritdoc />
     public UpdateGlobalChatEventValidator(IDateTimeProvider dateTimeProvider)
     {
         RuleFor(e => e.Id)
@@ -28,17 +21,13 @@ internal class UpdateGlobalChatEventValidator : AbstractValidator<UpdateGlobalCh
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(GlobalChatEventFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long));
 
-        When(e => e.Description != null, () =>
-        {
-            RuleFor(e => e.Description)
-                .MaximumLength(GlobalChatEventFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long);
+        RuleFor(e => e.Description)
+            .MaximumLength(GlobalChatEventFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long);
 
-            // The description renders on the Comment surface, which does not
-            // declare [private]: the tag is not markup there and hides nothing.
-            RuleFor(e => e.Description)
-                .Must(description => !PrivateBlockMarkup.ContainsPrivateMarkup(description))
-                .WithMessage(e => PrivateBlockMarkup.DescribeSurfaceRefusal(e.Description));
-        });
+        // The Comment surface does not declare [private]: the tag would hide nothing there.
+        RuleFor(e => e.Description)
+            .Must(description => !PrivateBlockMarkup.ContainsPrivateMarkup(description))
+            .WithMessage(e => PrivateBlockMarkup.DescribeSurfaceRefusal(e.Description));
 
         When(e => e.StartsUtc.HasValue, () =>
             RuleFor(e => e.StartsUtc!.Value)

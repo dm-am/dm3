@@ -5,13 +5,14 @@ using System.Net;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Exceptions;
+using DomainResolveUsernameChangeRequest = DM.Domain.Account.Features.UsernameChange.ResolveUsernameChangeRequest;
 
 namespace DM.Web.API.Features.Moderation.UsernameChanges;
 
 /// <summary>
 /// API service for username change request moderation
 /// </summary>
-internal class UsernameChangeApiService : IUsernameChangeApiService
+public class UsernameChangeApiService
 {
     private readonly IUsernameChangeService _usernameChangeService;
     private readonly UsernameChangeMapper _mapper;
@@ -24,14 +25,12 @@ internal class UsernameChangeApiService : IUsernameChangeApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<IEnumerable<UsernameChangeRequest>> GetPendingRequestsAsync()
     {
         var requests = await _usernameChangeService.GetPendingRequestsAsync();
-        return requests.Select(r => _mapper.ToRequest(r));
+        return requests.Select(_mapper.ToRequest);
     }
 
-    /// <inheritdoc />
     public async Task<UsernameChangeRequest> GetByIdAsync(Guid id)
     {
         var request = await _usernameChangeService.GetByIdAsync(id);
@@ -40,10 +39,9 @@ internal class UsernameChangeApiService : IUsernameChangeApiService
         return _mapper.ToRequest(request);
     }
 
-    /// <inheritdoc />
     public async Task<UsernameChangeRequest> ResolveAsync(Guid id, ResolveUsernameChangeRequest resolve)
     {
-        var domainResolve = new DM.Domain.Account.Features.UsernameChange.ResolveUsernameChangeRequest
+        var domainResolve = new DomainResolveUsernameChangeRequest
         {
             RequestId = id,
             Status = resolve.Status,

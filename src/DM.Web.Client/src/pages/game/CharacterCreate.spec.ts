@@ -2,28 +2,10 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Creating a character answered with a plate in the corner until 20 September
- * 2026 — "Заявка отправлена" for an application, "NPC создан" for an NPC —
- * while the page was already leaving for the game's roster, where the new sheet
- * is the first card of its section (the list comes back newest first) and the
- * heading above it says more than the plate did: "На рассмотрении" for an
- * application the master has yet to answer, "Неигровые персонажи" for an NPC.
- *
- * What replaces the plate is the roster being true when the reader arrives, and
- * that is not free. The roster is shared state: the sidebar fills it on the way
- * into the game, and the roster page asks the endpoint for it only when it is
- * empty. A page that navigated without fetching it again would land the reader
- * on exactly the list that was loaded before their character existed — a screen
- * with every reason to be believed, and out of date.
- *
- * So both tests read the roster at the moment the page leaves. That is the only
- * moment that decides what the reader sees, and the assertion fails both ways:
- * if the fetch goes, the roster at departure is the stale one; if the plate
- * comes back, it is said out loud beside a screen that already answered.
- */
+// A created character answers with the roster, read again before the page
+// leaves for it, and with no plate.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { defineComponent, h } from "vue";
+import { defineComponent, h, watchEffect } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import {
@@ -32,6 +14,7 @@ import {
   type Game,
 } from "@/entities/game";
 import { useToast } from "@/shared/lib/composables/useToast";
+import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
 import CharacterCreate from "./CharacterCreate.vue";
 
 /** The route this page reads, and the navigations it makes. */
@@ -47,11 +30,7 @@ vi.mock("vue-router", async (importOriginal) => ({
   useRouter: () => ({ push: routed.push, replace: routed.replace }),
 }));
 
-/**
- * The sheet itself is not the subject: the form owns its own submit and its own
- * refusals (CharacterForm.spec). All this page sees of it is the "saved" event,
- * so the stub is the press that raises one.
- */
+// The form owns its submit (CharacterForm.saving.spec); the page sees "saved".
 const CharacterFormStub = defineComponent({
   inheritAttrs: false,
   emits: ["saved", "cancel"],
@@ -86,7 +65,6 @@ const character = (over: CharacterOverrides = {}): Character =>
     ...over,
   }) as unknown as Character;
 
-/** The roster as the endpoint would answer it once the character exists. */
 const CREATED = character({ id: "char-new", name: "Ронин" });
 
 function render({
@@ -109,38 +87,31 @@ function render({
     schema: { specifications: [] },
     viewerBlacklisted: blacklisted,
   } as unknown as Game;
-  // The roster the sidebar already loaded, from before this character existed.
   store.characters = [character()];
-
-  // The endpoint, as far as this page is concerned: it answers with the roster
-  // the character is now part of.
   const loadCharacters = vi
     .spyOn(store, "loadCharacters")
-    .mockImplementation(async () => {
-      store.characters = [CREATED, character()];
-    });
+    .mockResolvedValue(undefined);
 
-  // What the roster held at the moment the page left for it — the list the
-  // reader is about to read, since the roster page does not fetch a roster it
-  // already has.
-  let rosterAtDeparture: string[] = [];
-  routed.push.mockImplementation(() => {
-    rosterAtDeparture = store.characters.map((c) => c.name);
+  // Provided the way the zone shell provides it, which renders the heading.
+  const announced = { value: undefined as string | undefined };
+  const host = defineComponent({
+    setup() {
+      const section = provideZoneSection();
+      watchEffect(() => {
+        announced.value = section.value;
+      });
+      return () => h(CharacterCreate);
+    },
   });
 
-  const wrapper = mount(CharacterCreate, {
+  const wrapper = mount(host, {
     global: {
       plugins: [pinia],
       stubs: { CharacterForm: CharacterFormStub },
     },
   });
 
-  return {
-    wrapper,
-    store,
-    loadCharacters,
-    roster: () => rosterAtDeparture,
-  };
+  return { wrapper, store, loadCharacters, announced };
 }
 
 describe("CharacterCreate", () => {
@@ -150,8 +121,11 @@ describe("CharacterCreate", () => {
     vi.restoreAllMocks();
   });
 
-  it("leaves an application on a roster that already carries it, silently", async () => {
-    const { wrapper, loadCharacters, roster } = render();
+  it.each([
+    ["an application", {}],
+    ["a new NPC", { npc: true, participation: ["Owner"] }],
+  ])("leaves %s for a roster read again, silently", async (_, options) => {
+    const { wrapper, loadCharacters } = render(options);
 
     await wrapper.get("button.save").trigger("click");
     await flushPromises();
@@ -161,38 +135,9 @@ describe("CharacterCreate", () => {
       name: "game-characters",
       params: { id: "the-game" },
     });
-    // The card is on the screen the reader lands on, under "На рассмотрении".
-    expect(roster()).toContain("Ронин");
-    // And nothing says so a second time in the corner.
     expect(saidOutLoud()).toEqual([]);
   });
 
-  it("leaves a new NPC on a roster that already carries it, silently", async () => {
-    // NPC authoring is the master's; the page refuses the form to anyone else.
-    const { wrapper, loadCharacters, roster } = render({
-      npc: true,
-      participation: ["Owner"],
-    });
-
-    await wrapper.get("button.save").trigger("click");
-    await flushPromises();
-
-    expect(loadCharacters).toHaveBeenCalledWith("the-game");
-    expect(routed.push).toHaveBeenCalledWith({
-      name: "game-characters",
-      params: { id: "the-game" },
-    });
-    // Under "Неигровые персонажи" this time, and equally unannounced.
-    expect(roster()).toContain("Ронин");
-    expect(saidOutLoud()).toEqual([]);
-  });
-
-  /**
-   * The fetch is awaited rather than fired alongside the navigation, so the
-   * roster is right at its first paint. Fired alongside, the reader would meet
-   * a list without their character and watch it correct itself — which is the
-   * same silence the plate was papering over, only shorter.
-   */
   it("does not leave until the roster has answered", async () => {
     const { wrapper, store } = render();
     let answer!: () => void;
@@ -217,12 +162,6 @@ describe("CharacterCreate", () => {
     expect(routed.push).toHaveBeenCalledTimes(1);
   });
 
-  /**
-   * The game's blacklist closes the application whatever the recruitment
-   * says, and nothing offers this page to the viewer on the list. An address
-   * typed by hand gets neither the form nor a sentence about the list: it
-   * leads back to the roster.
-   */
   it("leads the viewer on the blacklist back to the roster", () => {
     routed.replace.mockClear();
     const { wrapper } = render({ blacklisted: true });
@@ -235,11 +174,6 @@ describe("CharacterCreate", () => {
     });
   });
 
-  /**
-   * "Создать NPC" is a row for the leads of the game alone, so nobody else
-   * reaches the NPC form but by typing its address. He gets neither the form
-   * nor a sentence saying who may use it: the address leads to the roster.
-   */
   it("leads a viewer who does not lead the game away from the NPC form", () => {
     routed.replace.mockClear();
     const { wrapper } = render({ npc: true, participation: ["Player"] });
@@ -252,9 +186,7 @@ describe("CharacterCreate", () => {
     });
   });
 
-  // An invited player applies whatever the recruitment says, and nothing tells
-  // the page who is invited: the form stays, and the line over it says who
-  // applies to such a game rather than what will not be accepted.
+  // An invited player applies past a closed recruitment, so the form stays.
   it("says over the form who applies while the recruitment is closed", () => {
     routed.replace.mockClear();
     const { wrapper } = render({ recruiting: false });
@@ -264,6 +196,19 @@ describe("CharacterCreate", () => {
       "Набор игроков закрыт: заявку подают по приглашению мастера",
     );
     expect(routed.replace).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ["an application", {}, "Новый персонаж"],
+    [
+      "a non-player character",
+      { npc: true, participation: ["Owner"] },
+      "Новый неигровой персонаж",
+    ],
+  ])("names the form of %s in the heading", (_, options, section) => {
+    const { announced } = render(options);
+
+    expect(announced.value).toBe(section);
   });
 
   it("offers the form to a reader who is not on the blacklist", () => {

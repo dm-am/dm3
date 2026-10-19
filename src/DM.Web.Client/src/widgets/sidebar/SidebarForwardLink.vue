@@ -1,9 +1,5 @@
 <script setup lang="ts">
-/**
- * Bold "- <link>" forward link used at the bottom of sidebar list blocks
- * (e.g. "Все игры с набором", "Все блоги"). Extracted from the six
- * sidebar blocks that hand-rolled the same "- " prefix + bold link markup.
- */
+/** The bold "- <link>" at the bottom of a sidebar list. */
 import type { RouteLocationRaw } from "vue-router";
 
 defineProps<{
@@ -19,9 +15,6 @@ defineProps<{
 </template>
 
 <style scoped lang="sass">
-.muted
-  color: $text-muted
-
 .forward
   font-weight: bold
 </style>

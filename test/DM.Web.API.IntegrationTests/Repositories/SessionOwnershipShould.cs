@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -12,13 +10,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// <summary>
 /// A session authenticates only the pair it was issued for.
 /// </summary>
-/// <remarks>
-/// The row carries its owner and the lookup filters by both halves of the
-/// token: a session id that exists but belongs to somebody else resolves to
-/// nothing. The rule used to be held by the document being keyed by its owner;
-/// on rows it is the predicate, and the predicate only exists against a live
-/// store.
-/// </remarks>
+/// <remarks>The lookup filters by both halves of the token, a predicate that only exists against a live store.</remarks>
 public class SessionOwnershipShould : IntegrationTestBase
 {
     public SessionOwnershipShould(DatabaseFixture databaseFixture) : base(databaseFixture)

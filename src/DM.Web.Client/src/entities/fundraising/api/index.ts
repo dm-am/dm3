@@ -1,2 +1,2 @@
 export { default as fundraisingApi } from "./fundraisingApi";
-export type { Fundraising, UpdateFundraisingRequest } from "./fundraisingApi";
+export type { Fundraising } from "./fundraisingApi";

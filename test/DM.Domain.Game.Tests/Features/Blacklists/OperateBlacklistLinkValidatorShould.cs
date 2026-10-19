@@ -14,18 +14,18 @@ namespace DM.Domain.Game.Tests.Features.Blacklists;
 public class OperateBlacklistLinkValidatorShould : UnitTestBase
 {
     private readonly OperateBlacklistLinkValidator validator;
-    private readonly IUserLookupService userLookupServiceMock;
+    private readonly IUserLookupService userLookupService;
 
     public OperateBlacklistLinkValidatorShould()
     {
-        userLookupServiceMock = Mock<IUserLookupService>();
-        validator = new OperateBlacklistLinkValidator(userLookupServiceMock);
+        userLookupService = Mock<IUserLookupService>();
+        validator = new OperateBlacklistLinkValidator(userLookupService);
     }
 
     [Fact]
     public async Task PassForValidInput()
     {
-        userLookupServiceMock
+        userLookupService
             .UsernameExistsAsync("existinguser", Arg.Any<CancellationToken>()).Returns(true);
 
         var input = new OperateBlacklistLink
@@ -82,7 +82,7 @@ public class OperateBlacklistLinkValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenUserDoesNotExist()
     {
-        userLookupServiceMock
+        userLookupService
             .UsernameExistsAsync("nonexistentuser", Arg.Any<CancellationToken>()).Returns(false);
 
         var input = new OperateBlacklistLink

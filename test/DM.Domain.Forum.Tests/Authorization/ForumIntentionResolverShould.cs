@@ -1,5 +1,4 @@
 using System;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Authorization;
@@ -34,7 +33,7 @@ public class ForumIntentionResolverShould : UnitTestBase
 
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
-            ForumIntention.CreateTopic,
+            BoardIntention.CreateTopic,
             new Board
             {
                 CreateTopicPolicy = BoardAccessPolicy.Guest | BoardAccessPolicy.SeniorModerator
@@ -47,7 +46,7 @@ public class ForumIntentionResolverShould : UnitTestBase
     {
         resolver.IsAllowed(
                 Create.User().Please(),
-                ForumIntention.CreateTopic,
+                BoardIntention.CreateTopic,
                 new Board())
             .Should().BeFalse();
     }
@@ -63,7 +62,7 @@ public class ForumIntentionResolverShould : UnitTestBase
 
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
-            ForumIntention.CreateTopic,
+            BoardIntention.CreateTopic,
             new Board
             {
                 CreateTopicPolicy = BoardAccessPolicy.Administrator | BoardAccessPolicy.SeniorModerator
@@ -79,7 +78,7 @@ public class ForumIntentionResolverShould : UnitTestBase
 
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.RegularUser).WithAccessPolicy(AccessPolicy.DemocraticBan).Please(),
-            ForumIntention.CreateTopic,
+            BoardIntention.CreateTopic,
             new Board { CreateTopicPolicy = BoardAccessPolicy.RegularUser });
 
         // The board policy admits the role; the ban is what refuses
@@ -91,7 +90,7 @@ public class ForumIntentionResolverShould : UnitTestBase
     {
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Moderator).Please(),
-            ForumIntention.AdministrateTopics,
+            BoardIntention.AdministrateTopics,
             new Board
             {
                 ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
@@ -104,7 +103,7 @@ public class ForumIntentionResolverShould : UnitTestBase
     {
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
-            ForumIntention.AdministrateTopics,
+            BoardIntention.AdministrateTopics,
             new Board
             {
                 ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
@@ -118,7 +117,7 @@ public class ForumIntentionResolverShould : UnitTestBase
         var userId = Guid.NewGuid();
         var actual = resolver.IsAllowed(
             Create.User(userId).WithRole(UserRole.SeniorModerator).Please(),
-            ForumIntention.AdministrateTopics,
+            BoardIntention.AdministrateTopics,
             new Board
             {
                 ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid(), userId }
@@ -127,9 +126,9 @@ public class ForumIntentionResolverShould : UnitTestBase
     }
 
     [Theory]
-    [InlineData(ForumIntention.CreateTopic)]
-    [InlineData(ForumIntention.AdministrateTopics)]
-    public void AllowNothingWhenUserGuest(ForumIntention intention)
+    [InlineData(BoardIntention.CreateTopic)]
+    [InlineData(BoardIntention.AdministrateTopics)]
+    public void AllowNothingWhenUserGuest(BoardIntention intention)
     {
         resolver.IsAllowed(AuthenticatedUser.Guest, intention, new Board()).Should().BeFalse();
     }

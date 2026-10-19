@@ -11,10 +11,9 @@ import {
   toQueryValue,
   parsePageNumber,
 } from "@/shared/lib/filters";
-import { UserRole } from "@/entities/user";
+import { UserRole, type UsersSearchParams } from "@/entities/user";
 import type {
   UsersFilterState,
-  UsersSearchParams,
   ActivityFilter,
   OnlineFilter,
   RoleFilter,
@@ -26,19 +25,11 @@ import {
   EXPERIENCE_OPTIONS,
 } from "./types";
 
-// =============================================================================
-// RETURN TYPE
-// =============================================================================
-
 export interface UsersFilterComposable {
-  /** Current filter state (computed from URL) */
   filterState: ComputedRef<UsersFilterState>;
-  /** API search parameters (computed from filterState) */
   searchParams: ComputedRef<UsersSearchParams>;
-  /** Whether any filters are active */
   hasActiveFilters: ComputedRef<boolean>;
 
-  // Actions
   setSearch: (search: string) => void;
   setActivity: (activity: ActivityFilter) => void;
   setOnlineFilter: (onlineFilter: OnlineFilter) => void;
@@ -53,10 +44,6 @@ export interface UsersFilterComposable {
   toggleSortOrder: () => void;
   clearFilters: () => void;
 }
-
-// =============================================================================
-// ACTION TYPES (Discriminated Union)
-// =============================================================================
 
 type UsersFilterAction =
   | { type: "SET_SEARCH"; search: string }
@@ -77,19 +64,10 @@ type UsersFilterAction =
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
 
-// =============================================================================
-// PURE REDUCER (Testable, no side effects)
-// =============================================================================
-
-/**
- * Pure reducer function - applies action to state and returns new state.
- * This is the ONLY place where state transformation logic lives.
- */
 function reducer(
   state: UsersFilterState,
   action: UsersFilterAction,
 ): UsersFilterState {
-  // Clone state to avoid mutation
   const newState: UsersFilterState = { ...state };
 
   switch (action.type) {
@@ -99,7 +77,7 @@ function reducer(
 
     case "SET_ACTIVITY":
       newState.activity = action.activity;
-      // Reset online filter when changing activity (only relevant for active)
+      // The online filter is only relevant for active users.
       if (action.activity !== "active") {
         newState.onlineFilter = "all";
       }
@@ -151,16 +129,11 @@ function reducer(
       return createDefaultState();
 
     default: {
-      // Exhaustiveness check - TypeScript will error if we miss a case
       const _exhaustive: never = action;
       return _exhaustive;
     }
   }
 }
-
-// =============================================================================
-// VALIDATION & PARSING
-// =============================================================================
 
 const validSortByValues = new Set<string>(SORT_OPTIONS.map((o) => o.value));
 const validActivityValues = new Set<string>(["active", "inactive", "all"]);
@@ -174,6 +147,31 @@ function createDefaultState(): UsersFilterState {
   return { ...DEFAULT_FILTER_STATE };
 }
 
+function readCount(raw: LocationQuery[string] | undefined): number | null {
+  if (!raw) return null;
+  const value = parseInt(String(raw), 10);
+  return isNaN(value) ? null : value;
+}
+
+function readChoice<T extends string>(
+  raw: LocationQuery[string] | undefined,
+  choices: Set<string>,
+  fallback: T,
+): T {
+  if (!raw) return fallback;
+  const value = String(raw);
+  return choices.has(value) ? (value as T) : fallback;
+}
+
+// A zero is a count too.
+function writeCount(
+  query: Record<string, string>,
+  key: string,
+  value: number | null,
+): void {
+  if (value !== null) query[key] = String(value);
+}
+
 function parseQueryToState(query: LocationQuery): UsersFilterState {
   const state = createDefaultState();
 
@@ -181,69 +179,31 @@ function parseQueryToState(query: LocationQuery): UsersFilterState {
     state.search = String(query.search).slice(0, 200);
   }
 
-  if (query.activity) {
-    const activity = String(query.activity);
-    if (validActivityValues.has(activity)) {
-      state.activity = activity as ActivityFilter;
-    }
-  }
+  state.activity = readChoice(
+    query.activity,
+    validActivityValues,
+    state.activity,
+  );
+  state.onlineFilter = readChoice(
+    query.online,
+    validOnlineValues,
+    state.onlineFilter,
+  );
+  state.role = readChoice(query.role, validRoleValues, state.role);
+  state.experience = readChoice(
+    query.experience,
+    validExperienceValues,
+    state.experience,
+  );
 
-  if (query.online) {
-    const online = String(query.online);
-    if (validOnlineValues.has(online)) {
-      state.onlineFilter = online as OnlineFilter;
-    }
-  }
-
-  if (query.role) {
-    const role = String(query.role);
-    if (validRoleValues.has(role)) {
-      state.role = role as RoleFilter;
-    }
-  }
-
-  if (query.experience) {
-    const experience = String(query.experience);
-    if (validExperienceValues.has(experience)) {
-      state.experience = experience as ExperienceFilter;
-    }
-  }
-
-  if (query.ratingMin) {
-    const val = parseInt(String(query.ratingMin), 10);
-    if (!isNaN(val)) state.ratingMin = val;
-  }
-  if (query.ratingMax) {
-    const val = parseInt(String(query.ratingMax), 10);
-    if (!isNaN(val)) state.ratingMax = val;
-  }
-
-  if (query.gamesHostingMin) {
-    const val = parseInt(String(query.gamesHostingMin), 10);
-    if (!isNaN(val)) state.gamesHostingMin = val;
-  }
-  if (query.gamesHostingMax) {
-    const val = parseInt(String(query.gamesHostingMax), 10);
-    if (!isNaN(val)) state.gamesHostingMax = val;
-  }
-
-  if (query.gamesPlayingMin) {
-    const val = parseInt(String(query.gamesPlayingMin), 10);
-    if (!isNaN(val)) state.gamesPlayingMin = val;
-  }
-  if (query.gamesPlayingMax) {
-    const val = parseInt(String(query.gamesPlayingMax), 10);
-    if (!isNaN(val)) state.gamesPlayingMax = val;
-  }
-
-  if (query.blogsHostingMin) {
-    const val = parseInt(String(query.blogsHostingMin), 10);
-    if (!isNaN(val)) state.blogsHostingMin = val;
-  }
-  if (query.blogsHostingMax) {
-    const val = parseInt(String(query.blogsHostingMax), 10);
-    if (!isNaN(val)) state.blogsHostingMax = val;
-  }
+  state.ratingMin = readCount(query.ratingMin);
+  state.ratingMax = readCount(query.ratingMax);
+  state.gamesHostingMin = readCount(query.gamesHostingMin);
+  state.gamesHostingMax = readCount(query.gamesHostingMax);
+  state.gamesPlayingMin = readCount(query.gamesPlayingMin);
+  state.gamesPlayingMax = readCount(query.gamesPlayingMax);
+  state.blogsHostingMin = readCount(query.blogsHostingMin);
+  state.blogsHostingMax = readCount(query.blogsHostingMax);
 
   state.registeredFromUtc = parseDateFromUrl(
     toQueryValue(query.registeredFromUtc),
@@ -266,195 +226,154 @@ function buildQueryFromState(state: UsersFilterState): Record<string, string> {
 
   if (state.search) query.search = state.search;
 
-  // Activity (only if non-default)
   if (state.activity !== def.activity) {
     query.activity = state.activity;
   }
 
-  // Online (only if activity is active and online is non-default)
   if (state.activity === "active" && state.onlineFilter !== def.onlineFilter) {
     query.online = state.onlineFilter;
   }
 
-  // Role
   if (state.role !== def.role) {
     query.role = state.role;
   }
 
-  // Experience (if non-default)
   if (state.experience !== def.experience) {
     query.experience = state.experience;
   }
 
-  // Rating range (if set)
-  if (state.ratingMin !== null) query.ratingMin = String(state.ratingMin);
-  if (state.ratingMax !== null) query.ratingMax = String(state.ratingMax);
+  writeCount(query, "ratingMin", state.ratingMin);
+  writeCount(query, "ratingMax", state.ratingMax);
+  writeCount(query, "gamesHostingMin", state.gamesHostingMin);
+  writeCount(query, "gamesHostingMax", state.gamesHostingMax);
+  writeCount(query, "gamesPlayingMin", state.gamesPlayingMin);
+  writeCount(query, "gamesPlayingMax", state.gamesPlayingMax);
+  writeCount(query, "blogsHostingMin", state.blogsHostingMin);
+  writeCount(query, "blogsHostingMax", state.blogsHostingMax);
 
-  // Games hosting range
-  if (state.gamesHostingMin !== null)
-    query.gamesHostingMin = String(state.gamesHostingMin);
-  if (state.gamesHostingMax !== null)
-    query.gamesHostingMax = String(state.gamesHostingMax);
-
-  // Games playing range
-  if (state.gamesPlayingMin !== null)
-    query.gamesPlayingMin = String(state.gamesPlayingMin);
-  if (state.gamesPlayingMax !== null)
-    query.gamesPlayingMax = String(state.gamesPlayingMax);
-
-  // Blogs hosting range
-  if (state.blogsHostingMin !== null)
-    query.blogsHostingMin = String(state.blogsHostingMin);
-  if (state.blogsHostingMax !== null)
-    query.blogsHostingMax = String(state.blogsHostingMax);
-
-  // Date range
   if (state.registeredFromUtc)
     query.registeredFromUtc = state.registeredFromUtc;
   if (state.registeredToUtc) query.registeredToUtc = state.registeredToUtc;
 
-  // Sort (only if non-default)
   if (state.sortBy !== def.sortBy) query.sortBy = state.sortBy;
   if (state.sortOrder !== def.sortOrder) query.sortOrder = state.sortOrder;
 
   return query;
 }
 
-// =============================================================================
-// MODULE-LEVEL DISPATCHER (created once per module)
-// =============================================================================
-
 const dispatcher = createFilterDispatcher<UsersFilterState, UsersFilterAction>({
   buildQuery: buildQueryFromState,
   name: "useUsersFilter",
 });
 
-// =============================================================================
-// COMPOSABLE
-// =============================================================================
+function usersSearchParams(
+  state: UsersFilterState,
+  pageNumber: number | undefined,
+  size: number,
+): UsersSearchParams {
+  const params: UsersSearchParams = {};
 
-/**
- * Users filter composable with action-based state management.
- *
- * Architecture:
- * - URL is the single source of truth (filterState is computed from route.query)
- * - All mutations go through dispatch() which applies actions via pure reducer
- * - Actions batch via module-level debounce - rapid clicks merge into single navigation
- * - Pure reducer is testable in isolation without router
- */
+  if (state.search) params.search = state.search;
+
+  // Activity is always sent.
+  params.activity = state.activity;
+
+  if (state.activity === "active" && state.onlineFilter === "online") {
+    params.isOnline = true;
+  }
+
+  if (state.role !== "all") {
+    params.role = state.role as UserRole;
+  }
+
+  if (state.experience === "newbie") {
+    params.isNewbie = true;
+  } else if (state.experience === "experienced") {
+    params.isNewbie = false;
+  }
+
+  if (state.ratingMin !== null) params.minRating = state.ratingMin;
+  if (state.ratingMax !== null) params.maxRating = state.ratingMax;
+
+  if (state.gamesHostingMin !== null)
+    params.minGamesHosting = state.gamesHostingMin;
+  if (state.gamesHostingMax !== null)
+    params.maxGamesHosting = state.gamesHostingMax;
+
+  if (state.gamesPlayingMin !== null)
+    params.minGamesPlaying = state.gamesPlayingMin;
+  if (state.gamesPlayingMax !== null)
+    params.maxGamesPlaying = state.gamesPlayingMax;
+
+  if (state.blogsHostingMin !== null)
+    params.minBlogsHosting = state.blogsHostingMin;
+  if (state.blogsHostingMax !== null)
+    params.maxBlogsHosting = state.blogsHostingMax;
+
+  if (state.registeredFromUtc)
+    params.registeredFromUtc = dateToApiStart(state.registeredFromUtc);
+  if (state.registeredToUtc)
+    params.registeredToUtc = dateToApiEnd(state.registeredToUtc);
+
+  params.sortBy = state.sortBy;
+  params.sortOrder = state.sortOrder;
+
+  if (pageNumber) params.number = pageNumber;
+
+  params.size = size;
+  return params;
+}
+
+// A sort alone does not filter.
+function hasActiveUsersFilters(state: UsersFilterState): boolean {
+  const def = DEFAULT_FILTER_STATE;
+  return (
+    state.search !== def.search ||
+    state.activity !== def.activity ||
+    state.onlineFilter !== def.onlineFilter ||
+    state.role !== def.role ||
+    state.experience !== def.experience ||
+    state.ratingMin !== def.ratingMin ||
+    state.ratingMax !== def.ratingMax ||
+    state.gamesHostingMin !== def.gamesHostingMin ||
+    state.gamesHostingMax !== def.gamesHostingMax ||
+    state.gamesPlayingMin !== def.gamesPlayingMin ||
+    state.gamesPlayingMax !== def.gamesPlayingMax ||
+    state.blogsHostingMin !== def.blogsHostingMin ||
+    state.blogsHostingMax !== def.blogsHostingMax ||
+    state.registeredFromUtc !== def.registeredFromUtc ||
+    state.registeredToUtc !== def.registeredToUtc
+  );
+}
+
+// The URL is the single source of truth; actions batch through one module-level debounce.
 export function useUsersFilter(): UsersFilterComposable {
   const route = useRoute();
   const router = useRouter();
-  const { entitiesPerPage } = usePaging();
+  const { pageSize } = usePaging();
 
-  // Set router for dispatcher
   dispatcher.setRouter(router);
 
-  // Filter state derived from URL (single source of truth)
   const filterState = computed<UsersFilterState>(() =>
     parseQueryToState(route.query),
   );
 
-  // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
 
-  // Dispatch helper
   const dispatch = (action: UsersFilterAction) =>
     dispatcher.dispatch(action, reducer, getCurrentState);
 
-  // Convert to API params
-  const searchParams = computed<UsersSearchParams>(() => {
-    const state = filterState.value;
-    const params: UsersSearchParams = {};
+  const searchParams = computed(() =>
+    usersSearchParams(
+      filterState.value,
+      parsePageNumber(route.query.number),
+      pageSize.value,
+    ),
+  );
 
-    if (state.search) params.search = state.search;
-
-    // Activity filter (always send)
-    params.activity = state.activity;
-
-    // Online filter (only when activity is "active" and online is selected)
-    if (state.activity === "active" && state.onlineFilter === "online") {
-      params.isOnline = true;
-    }
-
-    // Role
-    if (state.role !== "all") {
-      params.role = state.role as UserRole;
-    }
-
-    // Experience filter (applies to all roles)
-    if (state.experience === "newbie") {
-      params.isNewbie = true;
-    } else if (state.experience === "experienced") {
-      params.isNewbie = false;
-    }
-
-    // Rating range
-    if (state.ratingMin !== null) params.minRating = state.ratingMin;
-    if (state.ratingMax !== null) params.maxRating = state.ratingMax;
-
-    // Games hosting range
-    if (state.gamesHostingMin !== null)
-      params.minGamesHosting = state.gamesHostingMin;
-    if (state.gamesHostingMax !== null)
-      params.maxGamesHosting = state.gamesHostingMax;
-
-    // Games playing range
-    if (state.gamesPlayingMin !== null)
-      params.minGamesPlaying = state.gamesPlayingMin;
-    if (state.gamesPlayingMax !== null)
-      params.maxGamesPlaying = state.gamesPlayingMax;
-
-    // Blogs hosting range
-    if (state.blogsHostingMin !== null)
-      params.minBlogsHosting = state.blogsHostingMin;
-    if (state.blogsHostingMax !== null)
-      params.maxBlogsHosting = state.blogsHostingMax;
-
-    // Date range
-    if (state.registeredFromUtc)
-      params.registeredFromUtc = dateToApiStart(state.registeredFromUtc);
-    if (state.registeredToUtc)
-      params.registeredToUtc = dateToApiEnd(state.registeredToUtc);
-
-    // Sort
-    params.sortBy = state.sortBy;
-    params.sortOrder = state.sortOrder;
-
-    // Page number (from URL query directly)
-    const pageNumber = parsePageNumber(route.query.number);
-    if (pageNumber) params.number = pageNumber;
-
-    params.size = entitiesPerPage.value;
-    return params;
-  });
-
-  // Active filters check
-  const hasActiveFilters = computed(() => {
-    const state = filterState.value;
-    const def = DEFAULT_FILTER_STATE;
-    return (
-      state.search !== def.search ||
-      state.activity !== def.activity ||
-      state.onlineFilter !== def.onlineFilter ||
-      state.role !== def.role ||
-      state.experience !== def.experience ||
-      state.ratingMin !== def.ratingMin ||
-      state.ratingMax !== def.ratingMax ||
-      state.gamesHostingMin !== def.gamesHostingMin ||
-      state.gamesHostingMax !== def.gamesHostingMax ||
-      state.gamesPlayingMin !== def.gamesPlayingMin ||
-      state.gamesPlayingMax !== def.gamesPlayingMax ||
-      state.blogsHostingMin !== def.blogsHostingMin ||
-      state.blogsHostingMax !== def.blogsHostingMax ||
-      state.registeredFromUtc !== def.registeredFromUtc ||
-      state.registeredToUtc !== def.registeredToUtc
-    );
-  });
-
-  // ==========================================================================
-  // ACTION DISPATCHERS (thin wrappers around dispatch)
-  // ==========================================================================
+  const hasActiveFilters = computed(() =>
+    hasActiveUsersFilters(filterState.value),
+  );
 
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search });

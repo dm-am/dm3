@@ -12,54 +12,51 @@ using DM.Domain.Personal.Features.Notifications;
 using DM.Testing.Dsl;
 using DM.Testing;
 using AwesomeAssertions;
+using Microsoft.Extensions.Logging.Abstractions;
 using NSubstitute;
 using Xunit;
 
-using Microsoft.Extensions.Logging.Abstractions;
 namespace DM.Domain.Personal.Tests.Features.Notifications;
 
 public class NotificationServiceShould : UnitTestBase
 {
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly INotificationFactory _factory;
-    private readonly INotificationRepository _repository;
-    private readonly IUserBlacklistChecker _blacklistChecker;
-    private readonly NotificationService _service;
-    private readonly Guid _currentUserId = Guid.NewGuid();
-    private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly INotificationFactory factory;
+    private readonly INotificationRepository repository;
+    private readonly IUserBlacklistChecker blacklistChecker;
+    private readonly NotificationService service;
+    private readonly Guid currentUserId = Guid.NewGuid();
+    private readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
     public NotificationServiceShould()
     {
-        _identityProvider = Mock<IIdentityProvider>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _factory = Mock<INotificationFactory>();
-        _repository = Mock<INotificationRepository>();
-        _blacklistChecker = Mock<IUserBlacklistChecker>();
+        identityProvider = Mock<IIdentityProvider>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
+        factory = Mock<INotificationFactory>();
+        repository = Mock<INotificationRepository>();
+        blacklistChecker = Mock<IUserBlacklistChecker>();
 
-        var settings = new UserSettings
-        {
-            Paging = new PagingSettings { EntitiesPerPage = 10 }
-        };
-        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser, settings);
-        _identityProvider.Current.Returns(identity);
-        _dateTimeProvider.Now.Returns(_now);
+        var settings = new UserSettings { PageSize = 10 };
+        var identity = Identities.User(currentUserId, "CurrentUser", UserRole.RegularUser, settings);
+        identityProvider.Current.Returns(identity);
+        dateTimeProvider.Now.Returns(now);
 
-        _service = new NotificationService(
-            _identityProvider,
-            _dateTimeProvider,
-            _factory,
-            _repository,
-            _blacklistChecker,
+        service = new NotificationService(
+            identityProvider,
+            dateTimeProvider,
+            factory,
+            repository,
+            blacklistChecker,
             NullLogger<NotificationService>.Instance);
     }
 
     [Fact]
     public async Task CountUnreadNotificationsForCurrentUser()
     {
-        _repository.CountUnread(_currentUserId).Returns(5);
+        repository.CountUnread(currentUserId).Returns(5);
 
-        var result = await _service.CountUnreadAsync();
+        var result = await service.CountUnreadAsync();
 
         result.Should().Be(5);
     }
@@ -67,16 +64,30 @@ public class NotificationServiceShould : UnitTestBase
     [Fact]
     public async Task GetNotificationsWithPaging()
     {
-        _repository.Count(_currentUserId).Returns(25);
-        _repository.GetNotifications(_currentUserId, Arg.Any<PagingData>()).Returns([]);
+        repository.Count(currentUserId).Returns(25);
+        repository.GetNotifications(currentUserId, Arg.Any<PagingData>()).Returns([]);
 
         var query = new PagingQuery { Skip = 0, Take = 10 };
-        var result = await _service.GetAsync(query);
+        await service.GetAsync(query);
 
-        result.Should().NotBeNull();
-        await _repository.Received(1).GetNotifications(
-            _currentUserId,
+        await repository.Received(1).GetNotifications(
+            currentUserId,
             Arg.Is<PagingData>(p => p.Skip == 0 && p.Take == 10));
+    }
+
+    /// <summary>
+    /// A request that names no size is served the reader's own, as every paged
+    /// list is: one number on the account for all of them.
+    /// </summary>
+    [Fact]
+    public async Task ServeTheReadersPageSizeWhenTheQueryNamesNone()
+    {
+        repository.Count(currentUserId).Returns(25);
+        repository.GetNotifications(currentUserId, Arg.Any<PagingData>()).Returns([]);
+
+        var (_, paging) = await service.GetAsync(new PagingQuery { Skip = 0, Take = 0 });
+
+        paging.PageSize.Should().Be(10);
     }
 
     [Fact]
@@ -98,28 +109,19 @@ public class NotificationServiceShould : UnitTestBase
             }
         };
 
-        _factory.Create(Arg.Any<CreateNotification>(), _now).Returns(ci =>
-        {
-            var n = ci.ArgAt<CreateNotification>(0); var d = ci.ArgAt<DateTimeOffset>(1); return new CreateNotificationEntity
-            {
-                UsersInterested = n.UsersInterested,
-                EventType = n.EventType,
-                Metadata = n.Metadata
-            };
-        });
+        PassThroughFactory();
 
-        _repository.Create(Arg.Any<CreateNotificationEntity[]>()).Returns(Task.CompletedTask);
+        repository.Create(Arg.Any<CreateNotificationEntity[]>()).Returns(Task.CompletedTask);
 
-        await _service.CreateAsync(createNotifications);
+        await service.CreateAsync(createNotifications);
 
-        _factory.Received(2).Create(Arg.Any<CreateNotification>(), _now);
-        await _repository.Received(1).Create(Arg.Any<CreateNotificationEntity[]>());
+        factory.Received(2).Create(Arg.Any<CreateNotification>(), now);
+        await repository.Received(1).Create(Arg.Any<CreateNotificationEntity[]>());
     }
 
     [Fact]
     public async Task NotStoreNotificationsNobodyCanRead()
     {
-        var addressedId = Guid.NewGuid();
         var createNotifications = new[]
         {
             new CreateNotification
@@ -136,27 +138,13 @@ public class NotificationServiceShould : UnitTestBase
             }
         };
 
-        _factory.Create(Arg.Any<CreateNotification>(), _now).Returns(ci =>
-        {
-            var n = ci.ArgAt<CreateNotification>(0); var d = ci.ArgAt<DateTimeOffset>(1); return new CreateNotificationEntity
-            {
-                NotificationId = n.UsersInterested.Any() ? addressedId : Guid.NewGuid(),
-                UsersInterested = n.UsersInterested,
-                EventType = n.EventType,
-                Metadata = n.Metadata
-            };
-        });
+        PassThroughFactory();
 
         CreateNotificationEntity[]? stored = null;
-        _repository.Create(Arg.Any<CreateNotificationEntity[]>())
-            .Returns(Task.CompletedTask)
-            .AndDoes(ci =>
-            {
-                var n = ci.ArgAt<IEnumerable<CreateNotificationEntity>>(0);
-                stored = n.ToArray();
-            });
+        repository.Create(Arg.Do<IEnumerable<CreateNotificationEntity>>(n => stored = n.ToArray()))
+            .Returns(Task.CompletedTask);
 
-        var result = (await _service.CreateAsync(createNotifications)).ToArray();
+        var result = (await service.CreateAsync(createNotifications)).ToArray();
 
         stored.Should().NotBeNull();
         stored!.Should().HaveCount(1);
@@ -188,27 +176,13 @@ public class NotificationServiceShould : UnitTestBase
             }
         };
 
-        _factory.Create(Arg.Any<CreateNotification>(), _now).Returns(ci =>
-        {
-            var n = ci.ArgAt<CreateNotification>(0); var d = ci.ArgAt<DateTimeOffset>(1); return new CreateNotificationEntity
-            {
-                NotificationId = Guid.NewGuid(),
-                UsersInterested = n.UsersInterested,
-                EventType = n.EventType,
-                Metadata = n.Metadata
-            };
-        });
+        PassThroughFactory();
 
         CreateNotificationEntity[]? stored = null;
-        _repository.Create(Arg.Any<CreateNotificationEntity[]>())
-            .Returns(Task.CompletedTask)
-            .AndDoes(ci =>
-            {
-                var n = ci.ArgAt<IEnumerable<CreateNotificationEntity>>(0);
-                stored = n.ToArray();
-            });
+        repository.Create(Arg.Do<IEnumerable<CreateNotificationEntity>>(n => stored = n.ToArray()))
+            .Returns(Task.CompletedTask);
 
-        var result = (await _service.CreateAsync(createNotifications)).ToArray();
+        var result = (await service.CreateAsync(createNotifications)).ToArray();
 
         stored.Should().NotBeNull();
         stored!.Should().ContainSingle().Which.EventType.Should().Be(EventType.LikedMessage);
@@ -220,18 +194,9 @@ public class NotificationServiceShould : UnitTestBase
     [Fact]
     public async Task NotTouchTheRepositoryWhenNoNotificationHasRecipients()
     {
-        _factory.Create(Arg.Any<CreateNotification>(), _now).Returns(ci =>
-        {
-            var n = ci.ArgAt<CreateNotification>(0); var d = ci.ArgAt<DateTimeOffset>(1); return new CreateNotificationEntity
-            {
-                NotificationId = Guid.NewGuid(),
-                UsersInterested = n.UsersInterested,
-                EventType = n.EventType,
-                Metadata = n.Metadata
-            };
-        });
+        PassThroughFactory();
 
-        var result = await _service.CreateAsync([
+        var result = await service.CreateAsync([
             new CreateNotification
             {
                 EventType = EventType.NewGlobalChatMessage,
@@ -239,15 +204,12 @@ public class NotificationServiceShould : UnitTestBase
             }
         ]);
 
-        await _repository.DidNotReceive().Create(Arg.Any<CreateNotificationEntity[]>());
+        await repository.DidNotReceive().Create(Arg.Any<CreateNotificationEntity[]>());
         result.Should().HaveCount(1);
     }
 
     /// <summary>
-    /// Blocking somebody is a statement about hearing from them at all, and the
-    /// notification list, the mail and the bots are where the site speaks
-    /// loudest. Two recipients, one of whom blocked the actor: the other still
-    /// gets it.
+    /// Blocking somebody is a statement about hearing from them at all, the other recipient still gets it.
     /// </summary>
     [Fact]
     public async Task NotAddressARecipientWhoBlockedTheActor()
@@ -256,21 +218,16 @@ public class NotificationServiceShould : UnitTestBase
         var blocker = Guid.NewGuid();
         var bystander = Guid.NewGuid();
 
-        _blacklistChecker
+        blacklistChecker
             .GetOwnersBlockingAsync(actorId, Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(new HashSet<Guid> { blocker });
 
         PassThroughFactory();
         CreateNotificationEntity[]? stored = null;
-        _repository.Create(Arg.Any<CreateNotificationEntity[]>())
-            .Returns(Task.CompletedTask)
-            .AndDoes(ci =>
-            {
-                var n = ci.ArgAt<IEnumerable<CreateNotificationEntity>>(0);
-                stored = n.ToArray();
-            });
+        repository.Create(Arg.Do<IEnumerable<CreateNotificationEntity>>(n => stored = n.ToArray()))
+            .Returns(Task.CompletedTask);
 
-        var result = await _service.CreateAsync([
+        var result = await service.CreateAsync([
             new CreateNotification
             {
                 EventType = EventType.LikedBlogComment,
@@ -294,9 +251,9 @@ public class NotificationServiceShould : UnitTestBase
     public async Task NotConsultTheBlacklistForANotificationWithNoActor()
     {
         PassThroughFactory();
-        _repository.Create(Arg.Any<CreateNotificationEntity[]>()).Returns(Task.CompletedTask);
+        repository.Create(Arg.Any<CreateNotificationEntity[]>()).Returns(Task.CompletedTask);
 
-        await _service.CreateAsync([
+        await service.CreateAsync([
             new CreateNotification
             {
                 EventType = EventType.GameClosureWarning,
@@ -304,26 +261,24 @@ public class NotificationServiceShould : UnitTestBase
             }
         ]);
 
-        await _blacklistChecker.DidNotReceive().GetOwnersBlockingAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+        await blacklistChecker.DidNotReceive().GetOwnersBlockingAsync(Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
-    /// One statement per actor, not per recipient: a publication notifies every
-    /// subscriber of the blog, and a read each would put the whole audience into
-    /// the query count of one event.
+    /// One read per actor, not per recipient: a publication notifies every subscriber of the blog.
     /// </summary>
     [Fact]
     public async Task AskTheBlacklistOnceForTheWholeAudienceOfAnActor()
     {
         var actorId = Guid.NewGuid();
-        _blacklistChecker
+        blacklistChecker
             .GetOwnersBlockingAsync(actorId, Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>())
             .Returns(new HashSet<Guid>());
 
         PassThroughFactory();
-        _repository.Create(Arg.Any<CreateNotificationEntity[]>()).Returns(Task.CompletedTask);
+        repository.Create(Arg.Any<CreateNotificationEntity[]>()).Returns(Task.CompletedTask);
 
-        await _service.CreateAsync([
+        await service.CreateAsync([
             new CreateNotification
             {
                 EventType = EventType.NewPublication,
@@ -332,32 +287,24 @@ public class NotificationServiceShould : UnitTestBase
             }
         ]);
 
-        await _blacklistChecker.Received(1).GetOwnersBlockingAsync(actorId, Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
+        await blacklistChecker.Received(1).GetOwnersBlockingAsync(actorId, Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<CancellationToken>());
     }
 
     /// <summary>
-    /// The bus delivers at least once, so a redelivered event asks to create the
-    /// notifications its first delivery already stored. The pair (EventId,
-    /// EventType) names one logical notification; what is stored under it is
-    /// dropped from both the write and the answer, so no channel repeats it.
+    /// The bus delivers at least once, and the pair (EventId, EventType) names one logical notification.
     /// </summary>
     [Fact]
     public async Task DropNotificationsAlreadyStoredForTheSameEvent()
     {
         var eventId = Guid.NewGuid();
-        _repository.GetCreatedEventTypes(eventId).Returns(new HashSet<EventType> { EventType.NewTopic });
+        repository.GetCreatedEventTypes(eventId).Returns(new HashSet<EventType> { EventType.NewTopic });
 
         PassThroughFactory();
         CreateNotificationEntity[]? stored = null;
-        _repository.Create(Arg.Any<CreateNotificationEntity[]>())
-            .Returns(Task.CompletedTask)
-            .AndDoes(ci =>
-            {
-                var n = ci.ArgAt<IEnumerable<CreateNotificationEntity>>(0);
-                stored = n.ToArray();
-            });
+        repository.Create(Arg.Do<IEnumerable<CreateNotificationEntity>>(n => stored = n.ToArray()))
+            .Returns(Task.CompletedTask);
 
-        var result = await _service.CreateAsync([
+        var result = await service.CreateAsync([
             new CreateNotification
             {
                 EventType = EventType.NewTopic,
@@ -388,9 +335,9 @@ public class NotificationServiceShould : UnitTestBase
     public async Task AnswerNothingWhenTheWholeEventWasAlreadyStored()
     {
         var eventId = Guid.NewGuid();
-        _repository.GetCreatedEventTypes(eventId).Returns(new HashSet<EventType> { EventType.NewMessage });
+        repository.GetCreatedEventTypes(eventId).Returns(new HashSet<EventType> { EventType.NewMessage });
 
-        var result = await _service.CreateAsync([
+        var result = await service.CreateAsync([
             new CreateNotification
             {
                 EventType = EventType.NewMessage,
@@ -400,21 +347,19 @@ public class NotificationServiceShould : UnitTestBase
         ]);
 
         result.Should().BeEmpty();
-        await _repository.DidNotReceive().Create(Arg.Any<CreateNotificationEntity[]>());
+        await repository.DidNotReceive().Create(Arg.Any<CreateNotificationEntity[]>());
     }
 
     /// <summary>
-    /// No EventId means there is nothing to deduplicate against - a message from
-    /// before the key existed - so the write proceeds without a lookup rather
-    /// than treating every legacy message as a replay of one and the same event.
+    /// No EventId means there is nothing to deduplicate against, so the write proceeds without a lookup.
     /// </summary>
     [Fact]
     public async Task NotConsultTheStoreForANotificationWithoutEventId()
     {
         PassThroughFactory();
-        _repository.Create(Arg.Any<CreateNotificationEntity[]>()).Returns(Task.CompletedTask);
+        repository.Create(Arg.Any<CreateNotificationEntity[]>()).Returns(Task.CompletedTask);
 
-        var result = await _service.CreateAsync([
+        var result = await service.CreateAsync([
             new CreateNotification
             {
                 EventType = EventType.NewMessage,
@@ -422,16 +367,17 @@ public class NotificationServiceShould : UnitTestBase
             }
         ]);
 
-        await _repository.DidNotReceive().GetCreatedEventTypes(Arg.Any<Guid>());
-        await _repository.Received(1).Create(Arg.Any<CreateNotificationEntity[]>());
+        await repository.DidNotReceive().GetCreatedEventTypes(Arg.Any<Guid>());
+        await repository.Received(1).Create(Arg.Any<CreateNotificationEntity[]>());
         result.Should().ContainSingle();
     }
 
     /// <summary>Entity that mirrors the request it was built from.</summary>
     private void PassThroughFactory() =>
-        _factory.Create(Arg.Any<CreateNotification>(), _now).Returns(ci =>
+        factory.Create(Arg.Any<CreateNotification>(), now).Returns(ci =>
         {
-            var n = ci.ArgAt<CreateNotification>(0); return new CreateNotificationEntity
+            var n = ci.ArgAt<CreateNotification>(0);
+            return new CreateNotificationEntity
             {
                 NotificationId = Guid.NewGuid(),
                 UsersInterested = n.UsersInterested,
@@ -444,20 +390,20 @@ public class NotificationServiceShould : UnitTestBase
     public async Task MarkSingleNotificationAsRead()
     {
         var notificationId = Guid.NewGuid();
-        _repository.MarkAsRead(notificationId, _currentUserId).Returns(Task.CompletedTask);
+        repository.MarkAsRead(notificationId, currentUserId).Returns(Task.CompletedTask);
 
-        await _service.MarkAsReadAsync(notificationId);
+        await service.MarkAsReadAsync(notificationId);
 
-        await _repository.Received(1).MarkAsRead(notificationId, _currentUserId);
+        await repository.Received(1).MarkAsRead(notificationId, currentUserId);
     }
 
     [Fact]
     public async Task MarkAllNotificationsAsRead()
     {
-        _repository.MarkAsRead(_currentUserId).Returns(Task.CompletedTask);
+        repository.MarkAsRead(currentUserId).Returns(Task.CompletedTask);
 
-        await _service.MarkAllAsReadAsync();
+        await service.MarkAllAsReadAsync();
 
-        await _repository.Received(1).MarkAsRead(_currentUserId);
+        await repository.Received(1).MarkAsRead(currentUserId);
     }
 }

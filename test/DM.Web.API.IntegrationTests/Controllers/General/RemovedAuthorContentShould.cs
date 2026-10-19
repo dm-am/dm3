@@ -21,20 +21,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// What a removed account wrote stays where it was written, signed by nobody.
 /// </summary>
 /// <remarks>
-/// The account row is hidden by the global soft-delete filter, and the author of a
-/// topic, a post or a comment and the master of a game are required navigations.
-/// Nested into a projection, a required navigation to a filtered row is an inner
-/// join, so the row the author wrote fell out of every list together with the
-/// author: the removed master's game vanished from the catalogue, his topic from
-/// its board, his post from the room it moved on. After the DM2 import every
-/// account removed there over twenty years authors part of every old game, so this
-/// is not an edge of the product but most of its history.
-///
-/// Each surface is asked about a world of its own, written straight to the tables:
-/// what is under test is how the reads treat an author that is already gone, not
-/// how the author got there. The client renders a missing author as "Аккаунт
-/// удален", so a null is the whole of the expected answer - and nothing of the
-/// removed row may come with it, neither the name nor the address.
+/// A required navigation to a soft-deleted account is an inner join. Each surface gets a world of its own written
+/// to the tables; a null author is the whole answer, the client renders it as "Аккаунт удален".
 /// </remarks>
 public class RemovedAuthorContentShould : IntegrationTestBase
 {
@@ -175,7 +163,6 @@ public class RemovedAuthorContentShould : IntegrationTestBase
             Title = $"Board {marker}",
             Alias = $"b-{marker}",
             Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = BoardAccessPolicy.RegularUser,
             TopicsCount = 1,
         });

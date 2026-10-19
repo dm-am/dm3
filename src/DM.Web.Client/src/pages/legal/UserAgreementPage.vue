@@ -1,37 +1,12 @@
 <script setup lang="ts">
-/**
- * UserAgreementPage — the "Пользовательское соглашение" page.
- * This page is the single source of truth for the user agreement text.
- * `sections` is the single source of truth for section ids/titles feeding
- * the `<section>` headings below.
- */
 import { supportFor } from "@/entities/ticket";
-import LegalDocument, { type LegalSection } from "./LegalDocument.vue";
-
-const sections: LegalSection[] = [
-  { id: "general", title: "1. Общие положения" },
-  { id: "terms", title: "2. Термины и определения" },
-  { id: "registration", title: "3. Регистрация и учетная запись" },
-  { id: "user-rights", title: "4. Права и обязанности Пользователя" },
-  { id: "content", title: "5. Контент и интеллектуальная собственность" },
-  { id: "moderation", title: "6. Правила и модерация" },
-  { id: "liability", title: "7. Ограничение ответственности" },
-  { id: "age", title: "8. Возрастные ограничения" },
-  { id: "termination", title: "9. Срок действия и прекращение" },
-  { id: "changes", title: "10. Изменение Соглашения" },
-  { id: "applicable-law", title: "11. Применимое право" },
-  { id: "contacts", title: "12. Контакты" },
-];
+import LegalDocument from "./LegalDocument.vue";
 </script>
 
 <template>
-  <legal-document
-    title="Пользовательское соглашение"
-    revision-date="31 марта 2026 года"
-    publication-date="31 марта 2026 года"
-  >
-    <section :id="sections[0].id">
-      <h2>{{ sections[0].title }}</h2>
+  <legal-document title="Пользовательское соглашение">
+    <section id="general">
+      <h2>1. Общие положения</h2>
       <p>
         1.1. Настоящее Пользовательское соглашение регулирует отношения между
         администрацией платформы Dungeon Master и физическим лицом, использующим
@@ -57,8 +32,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[1].id">
-      <h2>{{ sections[1].title }}</h2>
+    <section id="terms">
+      <h2>2. Термины и определения</h2>
       <dl class="term-list">
         <div class="term-item">
           <dt>Платформа</dt>
@@ -91,8 +66,8 @@ const sections: LegalSection[] = [
       </dl>
     </section>
 
-    <section :id="sections[2].id">
-      <h2>{{ sections[2].title }}</h2>
+    <section id="registration">
+      <h2>3. Регистрация и учетная запись</h2>
       <p>
         3.1. Регистрация доступна физическим лицам, достигшим возраста 18 лет.
       </p>
@@ -110,14 +85,14 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[3].id">
-      <h2>{{ sections[3].title }}</h2>
+    <section id="user-rights">
+      <h2>4. Права и обязанности Пользователя</h2>
       <p>Пользователь имеет право:</p>
       <ul>
         <li>Использовать функциональные возможности Платформы</li>
         <li>Создавать и управлять ролевыми играми</li>
         <li>Участвовать в играх других Пользователей</li>
-        <li>Вести личный блог, публиковать материалы на форуме</li>
+        <li>Вести личный блог, создавать топики на форуме</li>
         <li>Создавать персонажей и их истории</li>
         <li>Запросить удаление своей учетной записи</li>
       </ul>
@@ -132,8 +107,8 @@ const sections: LegalSection[] = [
       </ul>
     </section>
 
-    <section :id="sections[4].id">
-      <h2>{{ sections[4].title }}</h2>
+    <section id="content">
+      <h2>5. Контент и интеллектуальная собственность</h2>
       <p>
         5.1. Пользователь сохраняет авторские права на созданный им оригинальный
         контент.
@@ -164,8 +139,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[5].id">
-      <h2>{{ sections[5].title }}</h2>
+    <section id="moderation">
+      <h2>6. Правила и модерация</h2>
       <p>
         6.1. Порядок поведения на Платформе, перечень запрещенного контента,
         система санкций и механизм обжалования определяются
@@ -178,8 +153,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[6].id">
-      <h2>{{ sections[6].title }}</h2>
+    <section id="liability">
+      <h2>7. Ограничение ответственности</h2>
       <p>
         7.1. Платформа предоставляется "как есть". Администрация не гарантирует
         бесперебойную работу.
@@ -194,8 +169,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[7].id">
-      <h2>{{ sections[7].title }}</h2>
+    <section id="age">
+      <h2>8. Возрастные ограничения</h2>
       <p>8.1. Платформа предназначена для лиц, достигших возраста 18 лет.</p>
       <p>8.2. На Платформе может размещаться контент категории 18+.</p>
       <p>
@@ -204,8 +179,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[8].id">
-      <h2>{{ sections[8].title }}</h2>
+    <section id="termination">
+      <h2>9. Срок действия и прекращение</h2>
       <p>9.1. Соглашение действует бессрочно с момента регистрации.</p>
       <p>
         9.2. Пользователь вправе в любое время запросить удаление учетной
@@ -226,8 +201,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[9].id">
-      <h2>{{ sections[9].title }}</h2>
+    <section id="changes">
+      <h2>10. Изменение Соглашения</h2>
       <p>
         Администрация вправе изменять Соглашение. При существенных изменениях
         Пользователи уведомляются через Платформу. Продолжение использования
@@ -235,8 +210,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[10].id">
-      <h2>{{ sections[10].title }}</h2>
+    <section id="applicable-law">
+      <h2>11. Применимое право</h2>
       <p>
         Настоящее Соглашение регулируется законодательством Российской
         Федерации. Споры рассматриваются в суде по месту нахождения
@@ -244,8 +219,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[11].id">
-      <h2>{{ sections[11].title }}</h2>
+    <section id="contacts">
+      <h2>12. Контакты</h2>
       <p>
         По вопросам, связанным с Соглашением, обращайтесь через
         <router-link :to="supportFor('AgreementQuestion')"

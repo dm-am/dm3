@@ -1,24 +1,14 @@
 <template>
   <nav aria-label="Разделы: игры, блоги, форум">
     <ul class="blocks">
-      <!-- Context panels (doc 4.2.1.3-4.2.1.5) — exactly one can match, the
-           zones are route-exclusive (game / blog / moderation). Rendered
-           above the global blocks so the current context leads. -->
-      <GamePanel
-        v-if="isGameRoute && routeGameId"
-        :key="routeGameId"
-        :game-id="routeGameId"
-      />
+      <!-- One context panel at most, above the global blocks -->
+      <GamePanel v-if="routeGameId" :key="routeGameId" :game-id="routeGameId" />
       <BlogPanel
-        v-else-if="isBlogRoute && routeBlogId"
+        v-else-if="routeBlogId"
         :key="routeBlogId"
         :blog-id="routeBlogId"
       />
       <ModerationPanel v-else-if="showModerationPanel" />
-      <!-- Mentor panel (doc 4.2.1.6) — site-wide for Mentor+ users; the
-           panel itself decides visibility (hidden until data confirms a
-           non-empty curated list), so it mounts for any authed user. -->
-      <MentorPanel v-if="userStore.user" />
       <OwnedGames v-if="userStore.user" />
       <OwnedBlogs v-if="userStore.user" />
       <RecruitingGames />
@@ -39,21 +29,16 @@ import RecruitingGames from "./RecruitingGames.vue";
 import ActiveGames from "./ActiveGames.vue";
 import { useAuthStore, userIsModerator } from "@/entities/user";
 
-// Below-fold: lazy-loaded to reduce initial bundle
+// Below the fold: loaded after the page.
 const FinishedGames = defineAsyncComponent(() => import("./FinishedGames.vue"));
 const ActiveBlogs = defineAsyncComponent(() => import("./ActiveBlogs.vue"));
 const ForumBoards = defineAsyncComponent(() => import("./ForumBoards.vue"));
 
-// Conditional context panels: lazy-loaded so their entity stores/features
-// stay out of the main bundle (LeftSidebar itself is statically imported by
-// the router). Each mounts only on its own zone or user role.
+// The context panels, loaded only where they mount.
 const GamePanel = defineAsyncComponent(() => import("./GamePanel.vue"));
 const BlogPanel = defineAsyncComponent(() => import("./BlogPanel.vue"));
-// One declaration per line, like its neighbours: the longest panel name is the
-// only thing that pushes this one past the print width.
 // prettier-ignore
 const ModerationPanel = defineAsyncComponent(() => import("./ModerationPanel.vue"));
-const MentorPanel = defineAsyncComponent(() => import("./MentorPanel.vue"));
 
 const userStore = useAuthStore();
 const route = useRoute();
@@ -63,16 +48,12 @@ const routeGameId = computed(() =>
   isGameRoute.value ? (route.params.id as string) : "",
 );
 
-// Blog zone (any /blogs/:id sub-route) — mirrors the gameZone gate.
 const isBlogRoute = computed(() => route.meta.blogZone === true);
 const routeBlogId = computed(() =>
   isBlogRoute.value ? (route.params.id as string) : "",
 );
 
-// Moderation zone (/moderation/*) — pure navigation panel, no params. Hidden
-// below Moderator: the zone's addresses admit any authenticated viewer (the
-// zone's shell answers him with the 403 page), and a panel of staff links none
-// of which would open is not navigation.
+// Hidden below Moderator: none of the panel's links would open for him.
 const isModerationRoute = computed(() => route.meta.moderationZone === true);
 const showModerationPanel = computed(
   () => isModerationRoute.value && userIsModerator(userStore.user),

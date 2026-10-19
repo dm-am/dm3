@@ -7,14 +7,11 @@ using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 namespace DM.Infrastructure.Persistence.Shared.Users;
 
 /// <summary>
-/// SSOT for projecting the avatar source file from <see cref="DbUpload"/>.
+/// The one projection of the avatar source file from <see cref="DbUpload"/>.
 ///
-/// Returns a single source: <see cref="AvatarPicture.SourceObjectKey"/>
-/// (for the imgproxy URL builder at the API layer) and <see cref="AvatarPicture.SourceUrl"/>
-/// (a direct public URL for the original variant without transforms).
-///
-/// Thumbnail variants (small/medium) are generated on-the-fly via imgproxy
-/// at serving time — no pre-generated files in S3.
+/// Returns the source: <see cref="AvatarPicture.SourceObjectKey"/> and
+/// <see cref="AvatarPicture.SourceUrl"/>, the direct public URL of the original,
+/// beside which its thumbnails lie.
 ///
 /// The formula exists once, as <see cref="Projection"/>. Inside an EF query
 /// it is inlined with <see cref="ExpressionSplicer.Splice{T,TResult}"/>, so

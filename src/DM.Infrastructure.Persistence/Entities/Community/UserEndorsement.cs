@@ -10,7 +10,7 @@ namespace DM.Infrastructure.Persistence.Entities.Community;
 /// DAL model for user endorsement (positive recommendation between users)
 /// </summary>
 /// <remarks>
-/// The Text field is plain text (owner decision) - no BBCode rendering.
+/// The Text field is plain text, not BBCode.
 /// Only positive endorsements are allowed - this is a recommendation system.
 /// One endorsement per author-target pair.
 /// </remarks>

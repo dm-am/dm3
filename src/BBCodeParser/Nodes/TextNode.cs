@@ -23,18 +23,14 @@ namespace BBCodeParser.Nodes
         /// The text as the author typed it, before any substitution.
         /// </summary>
         /// <remarks>
-        /// Read by TagNode.EmitList, which has to tell whitespace between list
-        /// items from words between them and cannot do it after substitution:
-        /// by then a newline has already become a line break. Read by a content
-        /// tag as well, whose value is the text as typed.
+        /// DM3 addition against the original: public, so a filter can read the
+        /// address a content tag holds before the walk decides to draw it.
         /// </remarks>
-        internal string Text => text;
+        public string Text => text;
 
         /// <summary>
-        /// This text less one line break at its start, CR LF or LF, for the text
-        /// that stands straight after a block that ends its line (see
-        /// Tag.DropsLineBreakAfter). A CR alone is not a line break on the page
-        /// (see the substitutions of BbParserProvider) and stays.
+        /// This text less one leading CR LF or LF, for the text right after a block
+        /// that ends its line (Tag.DropsLineBreakAfter).
         /// </summary>
         internal TextNode WithoutLeadingLineBreak()
         {
@@ -46,7 +42,7 @@ namespace BBCodeParser.Nodes
             return text.StartsWith("\n", StringComparison.Ordinal) ? new TextNode(text.Substring(1)) : this;
         }
 
-        private static string SubstituteText(string text, Dictionary<string, string> substitutions)
+        internal static string SubstituteText(string text, Dictionary<string, string> substitutions)
         {
             return substitutions == null
                 ? text
@@ -54,10 +50,7 @@ namespace BBCodeParser.Nodes
                     (current, substitution) => current.Replace(substitution.Key, substitution.Value));
         }
 
-        // DM3 change against the original: ToHtml, ToText and ToBb are folded
-        // into this one step. See Node.cs. The substitutions applied are the ones
-        // the walk hands in - both tables for HTML, the text table alone for
-        // text (see NodeTree.ToText), security only for BBCode source.
+        // DM3 change against the original: the three renderers folded into one step.
         internal override void Emit(
             StringBuilder output,
             Stack<EmitStep> pending,
@@ -66,7 +59,7 @@ namespace BBCodeParser.Nodes
             Func<Node, bool> filter,
             Func<Node, string, string> filterAttributeValue)
         {
-            if (step.Mode == EmitMode.Bb || step.Mode == EmitMode.BbInLowerCase)
+            if (step.Mode == EmitMode.Bb)
             {
                 output.Append(SubstituteText(text, securitySubstitutions));
                 return;

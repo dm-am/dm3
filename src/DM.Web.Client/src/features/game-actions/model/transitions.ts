@@ -1,66 +1,57 @@
-import {
-  ClosedReason,
-  GameStatus,
-  GameStatusTransition,
-} from "@/entities/game";
+import { GameStatusTransition } from "@/entities/game";
+import { BlogStatusTransition } from "@/entities/blog";
+import { ClosedReason, ModuleStatus } from "@/shared/api/models/common";
+import type { StatusTransitionOption } from "@/shared/ui/StatusButtons";
 
-export interface StatusTransitionOption {
-  value: GameStatusTransition;
-  label: string;
-  /** Destructive / significant transition — worth a confirmation prompt. */
-  danger?: boolean;
+/** What a game and a blog say differently over the one machine of ModuleStatusTransition.cs. */
+export interface StatusMachineWords<T extends string> {
+  /** The module's transitions; a module without Finish is never offered it. */
+  moves: { Start: T; Freeze: T; Close: T; Reopen: T; Finish?: T };
+  /** The verb that takes a draft live. */
+  start: string;
+  /** The module in the accusative, as every label ends. */
+  noun: string;
 }
 
-/**
- * Status transitions offered for the current game status. The backend rejects
- * any illegal move; this list only avoids showing obviously-inapplicable ones.
- * Single source of truth shared by the sidebar panel and the settings page.
- *
- * Mirrors the domain state machine (ModuleStatusTransition.cs):
- *   Start:  Draft -> Active
- *   Finish: Active -> Closed (Finished)
- *   Freeze: Active -> Closed (Frozen)
- *   Close:  Active or Closed+Frozen -> Closed (None)
- *   Reopen: Closed (any reason) -> Active
- */
-export function availableStatusTransitions(
-  status: GameStatus | undefined,
+export const GAME_STATUS_WORDS: StatusMachineWords<GameStatusTransition> = {
+  moves: GameStatusTransition,
+  start: "Начать",
+  noun: "игру",
+};
+
+// A blog is not a story that ends: its transitions have no Finish.
+export const BLOG_STATUS_WORDS: StatusMachineWords<BlogStatusTransition> = {
+  moves: BlogStatusTransition,
+  start: "Опубликовать",
+  noun: "блог",
+};
+
+// Hides obviously inapplicable moves; the server rejects any illegal one (ModuleStatusTransition.cs).
+export function availableStatusTransitions<T extends string>(
+  { moves, start, noun }: StatusMachineWords<T>,
+  status: ModuleStatus | undefined,
   closedReason?: ClosedReason,
-): StatusTransitionOption[] {
-  if (status === GameStatus.Draft) {
-    return [{ value: GameStatusTransition.Start, label: "Начать игру" }];
+): StatusTransitionOption<T>[] {
+  const close = { value: moves.Close, label: `Закрыть ${noun}`, danger: true };
+  if (status === ModuleStatus.Draft) {
+    return [{ value: moves.Start, label: `${start} ${noun}` }];
   }
-  if (status === GameStatus.Active) {
+  if (status === ModuleStatus.Active) {
+    const finish = moves.Finish
+      ? [{ value: moves.Finish, label: `Завершить ${noun}` }]
+      : [];
     return [
-      { value: GameStatusTransition.Finish, label: "Завершить игру" },
-      { value: GameStatusTransition.Freeze, label: "Заморозить игру" },
-      {
-        value: GameStatusTransition.Close,
-        label: "Закрыть игру",
-        danger: true,
-      },
+      ...finish,
+      { value: moves.Freeze, label: `Заморозить ${noun}` },
+      close,
     ];
   }
-  if (status === GameStatus.Closed) {
-    // Two distinct labels for the same Reopen transition (doc 4.2.1.3):
-    // a frozen game is "resumed" (Frozen->Active), a finished/closed game is
-    // "re-opened" (Finished/None->Active).
-    const reopenLabel =
-      closedReason === ClosedReason.Frozen
-        ? "Возобновить игру"
-        : "Переоткрыть игру";
-    const options: StatusTransitionOption[] = [
-      { value: GameStatusTransition.Reopen, label: reopenLabel },
-    ];
-    // A frozen game can also be closed for good (Closed+Frozen -> Closed+None).
+  if (status === ModuleStatus.Closed) {
+    // A frozen module is resumed, or given up on without being reopened first; any other is re-opened.
     if (closedReason === ClosedReason.Frozen) {
-      options.push({
-        value: GameStatusTransition.Close,
-        label: "Закрыть игру",
-        danger: true,
-      });
+      return [{ value: moves.Reopen, label: `Возобновить ${noun}` }, close];
     }
-    return options;
+    return [{ value: moves.Reopen, label: `Переоткрыть ${noun}` }];
   }
   return [];
 }

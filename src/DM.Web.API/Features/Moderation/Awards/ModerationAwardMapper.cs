@@ -9,7 +9,7 @@ namespace DM.Web.API.Features.Moderation.Awards;
 /// </summary>
 [Mapper]
 [UseStaticMapper(typeof(UserRefMappers))]
-internal partial class ModerationAwardMapper
+public partial class ModerationAwardMapper
 {
     /// <summary>
     /// Domain user award to the catalog row. AwardedBy and Note stay out of

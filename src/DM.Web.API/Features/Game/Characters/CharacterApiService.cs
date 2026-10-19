@@ -6,13 +6,11 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Characters;
 
-/// <inheritdoc />
-internal class CharacterApiService : ICharacterApiService
+public class CharacterApiService
 {
     private readonly ICharacterService _characterService;
     private readonly CharacterMapper _mapper;
 
-    /// <inheritdoc />
     public CharacterApiService(
         ICharacterService characterService,
         CharacterMapper mapper)
@@ -21,64 +19,51 @@ internal class CharacterApiService : ICharacterApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Character>> GetAll(Guid gameId)
     {
         var characters = await _characterService.GetAllAsync(gameId);
         return new ListEnvelope<Character>(characters.Select(_mapper.ToCharacter));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<CharacterDetails>> Get(Guid characterId)
     {
         var character = await _characterService.GetAsync(characterId);
-        return new Envelope<CharacterDetails>(_mapper.ToCharacterDetails(character));
+        return new Envelope<CharacterDetails>(
+            _mapper.ToCharacterDetails(character, await _characterService.MayEditAsync(characterId)));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<CharacterDetails>> Create(Guid gameId, CharacterDetails character)
     {
-        var createCharacter = _mapper.ToCreateCharacter(character);
+        var createCharacter = CharacterMapper.ToCreateCharacter(character);
         createCharacter.GameId = gameId;
         var createdCharacter = await _characterService.CreateAsync(createCharacter);
-
-        // Re-fetch through the read path so the response goes through
-        // CharacterAttributeValueFiller (BbCode -> valueBbText, list modifiers/titles,
-        // hidden-attribute redaction), matching the GET response shape.
-        var filledCharacter = await _characterService.GetAsync(createdCharacter.Id);
-        return new Envelope<CharacterDetails>(_mapper.ToCharacterDetails(filledCharacter));
+        return await Refetch(createdCharacter.Id);
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<CharacterDetails>> Update(Guid characterId, UpdateCharacterRequest request)
     {
-        var updateCharacter = _mapper.ToUpdateCharacter(request);
+        var updateCharacter = CharacterMapper.ToUpdateCharacter(request);
         updateCharacter.CharacterId = characterId;
         var updatedCharacter = await _characterService.UpdateAsync(updateCharacter);
-
-        // Re-fetch through the read path so the response goes through
-        // CharacterAttributeValueFiller (BbCode -> valueBbText, list modifiers/titles,
-        // hidden-attribute redaction), matching the GET response shape.
-        var filledCharacter = await _characterService.GetAsync(updatedCharacter.Id);
-        return new Envelope<CharacterDetails>(_mapper.ToCharacterDetails(filledCharacter));
+        return await Refetch(updatedCharacter.Id);
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<CharacterDetails>> ChangeStatus(
         Guid characterId, CharacterStatusChangeRequest request)
     {
         var changed = await _characterService.ChangeStatusAsync(characterId, request.Transition);
-
-        // Same re-fetch as Update, and for the same reason: the response has to go
-        // through the read path so attribute values come back in the shape a GET
-        // returns them.
-        var filledCharacter = await _characterService.GetAsync(changed.Id);
-        return new Envelope<CharacterDetails>(_mapper.ToCharacterDetails(filledCharacter));
+        return await Refetch(changed.Id);
     }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// A write answers through the read path, so the attribute values come back
+    /// filled and redacted as a GET returns them.
+    /// </summary>
+    private async Task<Envelope<CharacterDetails>> Refetch(Guid characterId) =>
+        new(_mapper.ToCharacterDetails(
+            await _characterService.GetAsync(characterId), await _characterService.MayEditAsync(characterId)));
+
     public Task Delete(Guid characterId) => _characterService.DeleteAsync(characterId);
 
-    /// <inheritdoc />
     public Task MarkAsRead(Guid gameId) => _characterService.MarkAsReadAsync(gameId);
 }

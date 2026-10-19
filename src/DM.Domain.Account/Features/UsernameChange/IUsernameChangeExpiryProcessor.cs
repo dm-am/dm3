@@ -17,14 +17,12 @@ public interface IUsernameChangeExpiryProcessor
     /// <summary>
     /// Expires requests no moderator looked at within the review window.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Number of requests expired.</returns>
     Task<int> ExpireUnreviewedAsync(CancellationToken cancellationToken = default);
 
     /// <summary>
     /// Expires approvals the requester never used before their token ran out.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Number of requests expired.</returns>
     Task<int> ExpireApprovalTokensAsync(CancellationToken cancellationToken = default);
 }

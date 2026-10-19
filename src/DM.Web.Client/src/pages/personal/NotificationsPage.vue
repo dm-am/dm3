@@ -15,6 +15,7 @@ import type {
 import type { GeneralError } from "@/shared/api/models/common";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { refusalHere } from "@/shared/lib/errors";
+import { usePaging } from "@/shared/lib/composables/usePaging";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import Button from "@/shared/ui/Button/Button.vue";
@@ -28,50 +29,34 @@ const notifications = ref<UserNotification[]>([]);
 const loading = ref(false);
 const hasMore = ref(true);
 const skip = ref(0);
-const take = 20;
+// A page of the list is as long as the reader's lists (account settings).
+const { pageSize: take } = usePaging();
 
 const LOAD_FAILED = "Не удалось загрузить уведомления";
 
-/**
- * Where Telegram and Discord are switched on: the section of the account page
- * that holds them. That section is the last of a long page, and a reader for
- * whom the bell is not enough looks for the bots here first.
- */
+/** Where Telegram and Discord are switched on: the account page's section. */
 const CHANNELS: RouteLocationRaw = { name: "account", hash: "#notifications" };
 
 /**
- * Why the page the reader asked for did not arrive: in place of the list for
- * the first page, under the rows already on screen for a later one.
- *
- * A failed load is the state of the page and not a plate over it, and a plate
- * in the corner over an empty list explains nothing (UI_STANDARDS,
- * "Всплывающие сообщения"). The api method has no seam for `ownsRefusal`, so
- * the page keeps quiet on the statuses the interceptor announces and prints
- * the rest in the server's words. Cleared by the next read that lands rows
- * on the screen, the reader's own or the unattended one.
+ * Why the page asked for did not arrive: in place of the list for the first
+ * page, under the rows for a later one. The api method has no seam for
+ * `ownsRefusal`, so the statuses the interceptor announces are left to it.
+ * Cleared by the next read that lands rows on the screen.
  */
 const loadRefusal = ref("");
 
-/**
- * Whether the rows on screen are the server's answer. "Нет уведомлений" is a
- * claim about the list, and a refused read makes none: without this a dead
- * server read as an empty list.
- */
+/** A refused read makes no claim that the list is empty. */
 const loadFailed = ref(false);
 
-/**
- * Notifications read on this page since it was opened, by id: opened from
- * their title or marked with the rest. A row says whether it was read when the
- * server answered with it, and the page does not rewrite what the server said;
- * it remembers what it has done since.
- */
+/** The list has answered: before it, the table's skeleton, and no word of an empty list. */
+const loaded = ref(false);
+
+/** Read on this page since it was opened, by id: the page does not rewrite what the server said. */
 const readHere = reactive(new Set<string>());
 
-/** Whether a row is still unread for the reader looking at it. */
 const isUnread = (notification: UserNotification): boolean =>
   !notification.isRead && !readHere.has(notification.id);
 
-/** The look of a title: bold while unread, grey once read. */
 const titleClass = (notification: UserNotification) =>
   isUnread(notification)
     ? "notification-title--unread"
@@ -83,23 +68,13 @@ const unseen = (page: UserNotification[]): UserNotification[] => {
   return page.filter((n) => !held.has(n.id));
 };
 
-/**
- * One detail as the letter about the same event writes it: the label, a
- * no-break space, the value. The space keeps the label from ending a line
- * alone; a moment is written in the reader's clock, like every date of the
- * site.
- */
+/** One detail as the letter writes it: the label, a no-break space, the value. */
 const detailText = (detail: NotificationDetail): string =>
   `${detail.label}:\u00A0${detail.isMoment ? formatDateFull(detail.value) : detail.value}`;
 
 /**
- * The columns of the list: what happened, where, who, when. A notification
- * is one row, as a letter is one row of the mail list of DM2 and a topic one
- * row of a board: the eye runs down the column it needs, and the title of
- * every row starts at the same edge. A column with a width of its own takes
- * it before the others, so only the date, whose words are the same in every
- * row, has one: the place and the people are as wide as their words, and what
- * happened takes the rest.
+ * One row per notification, as a letter is one row of DM2's mail list. Only
+ * the date has a width: the place and the people are as wide as their words.
  */
 const COLUMNS: Column[] = [
   { key: "event", label: "Событие", align: "left" },
@@ -132,54 +107,29 @@ const profileOf = (username: string): RouteLocationRaw => ({
 /** Guards the unattended re-read; `loading` belongs to the reader's own requests. */
 let refreshing = false;
 
-/**
- * A count that grew while a request was already in flight.
- *
- * The re-read such an arrival asks for is held back instead of being dropped:
- * whichever request stood in the way runs it once it settles. Without this, an
- * arrival during the reader's own page, or during a re-read already going,
- * left the screen a row short until the next arrival happened to come.
- */
+/** A count that grew during a request: its re-read is run once the request settles, not dropped. */
 let pendingRefresh = false;
 
 /**
- * Read the newest page and merge it into the list.
- *
- * A push is only a hint and this page never sees one: the socket feeds the
- * notification store, the store owns the unread count, and the truth is read
- * back over REST (API_DESIGN.md, "Realtime"). Deduplication is by id and the
- * rows already drawn are left in place, so the reader keeps their scroll
- * position: a reset would empty the list and throw them back to the top.
- *
- * `skip` counts the rows the server has answered with, not the rows on screen,
- * so prepending leaves it alone. An arrival does shift the window, but the
- * shifted row comes back inside the next page and deduplication drops it
- * there. Advancing `skip` as well would count one shift twice whenever a page
- * and an arrival interleave, and the row at the offset stepped over would
- * never be asked for again.
+ * Read the newest page and merge it by id, rows on screen left in place so
+ * the scroll stays. A push is only a hint: the store owns the count, the truth
+ * is read over REST. `skip` counts the server's rows, so prepending leaves it.
  */
 const readNewestPage = async () => {
-  const { data, error } = await notificationApi.getNotifications(0, take);
-  // Silent on failure: nobody asked for this request, and the next arrival or
-  // a page reload tries again. A toast here would report a fault the reader
-  // did nothing to cause.
+  const { data, error } = await notificationApi.getNotifications(0, take.value);
+  // Silent on failure: nobody asked for this request, and the next arrival tries again.
   if (error) return;
-  // Whatever this read puts on the screen is the server's answer, and a line
-  // under it about a page that did not arrive would be about another list.
+  // What this read puts on the screen is the server's answer.
   loadFailed.value = false;
   loadRefusal.value = "";
   const page = data?.resources || [];
   const fresh = unseen(page);
-  // A whole page of strangers means more arrived than one page holds, and
-  // splicing it on top would leave a hole between the two windows that no
-  // offset reaches any more. So the list becomes this page, which is the whole
-  // re-read the contract asks for: the newest window is already in hand, and
-  // asking the server for it a second time would only add a request whose
-  // refusal would leave the reader an empty list.
-  if (fresh.length === take) {
+  // A whole page of strangers means more arrived than a page holds: the list
+  // becomes this page rather than keep a hole between the two windows.
+  if (fresh.length === take.value) {
     notifications.value = page;
     skip.value = page.length;
-    hasMore.value = page.length === take;
+    hasMore.value = page.length === take.value;
     return;
   }
   if (fresh.length > 0) {
@@ -194,8 +144,7 @@ const refreshFirstPage = async () => {
   }
   refreshing = true;
   try {
-    // An arrival during the request below raises the flag again, and the loop
-    // reads once more rather than losing it.
+    // An arrival during the request raises the flag again, and the loop reads once more.
     do {
       pendingRefresh = false;
       await readNewestPage();
@@ -212,6 +161,7 @@ const fetchNotifications = async (reset = false) => {
     skip.value = 0;
     notifications.value = [];
     hasMore.value = true;
+    loaded.value = false;
   }
 
   loading.value = true;
@@ -220,68 +170,49 @@ const fetchNotifications = async (reset = false) => {
   try {
     const { data, error } = await notificationApi.getNotifications(
       skip.value,
-      take,
+      take.value,
     );
     if (error) {
-      // hasMore is left alone: a failed page is not the end of the list, and
-      // clearing it would turn a transient error into "больше ничего нет".
+      // A failed page is not the end of the list.
       loadFailed.value = true;
       loadRefusal.value = refusalHere(error, LOAD_FAILED) ?? "";
       return;
     }
     const newItems = data?.resources || [];
-    // Only rows not on screen yet are drawn, while skip and hasMore count the
-    // raw answer: they address a window on the server, not what is on screen.
+    // skip and hasMore count the raw answer: they address a window on the server.
     notifications.value = [...notifications.value, ...unseen(newItems)];
-    hasMore.value = newItems.length === take;
+    hasMore.value = newItems.length === take.value;
     skip.value += newItems.length;
   } finally {
     loading.value = false;
+    loaded.value = true;
     if (pendingRefresh) void refreshFirstPage();
   }
 };
 
-// Growth only. The count falls as well, since marking read is what this very
-// page does, and a fall says nothing arrived.
+// Growth only: marking read on this page is what makes the count fall.
 watch(unreadCount, (current, previous) => {
   if (current > previous) void refreshFirstPage();
 });
 
-/**
- * "Отметить прочитанными" of the line under the heading: everything marked
- * read, and the refusal handed back to the line to say, or null once done.
- *
- * The rows stay where they are and lose their bold: the list is the history
- * of what happened, read or not, and "Показать еще" still leads to the older
- * part of it.
- */
+/** Marks everything read; the rows stay, losing their bold. Returns the refusal or null. */
 const markAllAsRead = async (): Promise<GeneralError | null> => {
   const { error } = await notificationApi.markAsRead();
   if (error) return error;
   for (const notification of notifications.value) {
     readHere.add(notification.id);
   }
-  // The bell badge counts the very notifications this page just marked. The
-  // store owns that number, so it is told to read it back instead of being
-  // guessed at from here; immediate, because the reader is watching the badge
-  // they just acted on. The line under the heading goes with that number.
+  // The store owns the bell's count, so it reads it back at once.
   await notificationStore.fetchUnreadCount(true);
   return null;
 };
 
 /**
- * The title or the place pressed: the reader is on the way to what the
- * notification is about, and opening it is reading it. The way there does not wait for the
- * request, and the row is read on the page at once.
- *
- * The bell is re-read only once the server has answered the mark: read beside
- * it, the count can overtake the mark and show the old number, and read
- * without `immediate` it waits for the debounce of pushes. A refused mark is
- * not said anywhere, since the reader has left for the page the title led to;
- * the count read after it shows the truth, and the row is bold again on the
- * next visit.
+ * Opening a notification is reading it: the row is read on the page at once,
+ * and the bell is read again only after the server answered the mark, or the
+ * count could overtake it.
  */
-const open = async (notification: UserNotification) => {
+const markRead = async (notification: UserNotification) => {
   if (!isUnread(notification)) return;
   readHere.add(notification.id);
   try {
@@ -303,8 +234,7 @@ onMounted(() => fetchNotifications());
         >настройках аккаунта</router-link
       ></secondary-text
     >
-    <!-- The count is the bell's, which the store owns: the list holds read and
-         unread alike, and one page of it is not the number. -->
+    <!-- The bell's count, which the store owns: one page of the list is not the number. -->
     <UnreadLine
       :count="unreadCount"
       :mark="markAllAsRead"
@@ -312,23 +242,18 @@ onMounted(() => fetchNotifications());
       done="Все уведомления прочитаны"
     />
 
-    <secondary-text v-if="loading && notifications.length === 0"
-      >Загрузка...</secondary-text
-    >
-
-    <template v-else-if="notifications.length === 0 && !loadFailed">
+    <template v-if="loaded && notifications.length === 0 && !loadFailed">
       <secondary-text>Нет уведомлений</secondary-text>
     </template>
 
-    <!-- Newest first, read and unread together. An unread title is bold in
-         the colour of a link and a read one grey, as the mail list of DM2
-         tells its letters apart; a screen reader, which hears neither, is
-         told in words inside the title. The title and the place lead to what
-         the notification is about, the names to the profiles. -->
+    <!-- Newest first; an unread title bold, a read one grey, as in DM2's mail list,
+         and a screen reader is told in words inside the title. -->
+    <!-- Until the list answers, the table stands as its skeleton. -->
     <DataTable
-      v-else-if="notifications.length > 0"
+      v-else-if="!loaded || notifications.length > 0"
       :columns="COLUMNS"
       :data="rows"
+      :loading="!loaded"
       aria-label="Уведомления"
       class="notification-table"
     >
@@ -338,7 +263,7 @@ onMounted(() => fetchNotifications());
           :to="row.notification.url"
           class="notification-title"
           :class="titleClass(row.notification)"
-          @click="open(row.notification)"
+          @click="markRead(row.notification)"
           >{{ row.notification.title
           }}<span v-if="isUnread(row.notification)" class="visually-hidden"
             >, не прочитано</span
@@ -352,8 +277,7 @@ onMounted(() => fetchNotifications());
             >, не прочитано</span
           ></span
         >
-        <!-- What else the server wrote about it, under the title: every
-             detail a part of the caption line, whole. -->
+        <!-- Every other detail, a part of the caption line, whole. -->
         <CaptionLine
           v-if="row.parts.rest.length > 0"
           size="secondary"
@@ -368,15 +292,14 @@ onMounted(() => fetchNotifications());
         </CaptionLine>
       </template>
 
-      <!-- The place the notification leads to, and under it the larger
-           place it stands in ("Комната: ...", "Блог: ..."). -->
+      <!-- The place, and under it the larger place it stands in. -->
       <template #cell-place="{ row }">
         <template v-if="row.parts.places.length > 0">
           <router-link
             v-if="row.notification.url"
             :to="row.notification.url"
             class="notification-place"
-            @click="open(row.notification)"
+            @click="markRead(row.notification)"
             >{{ row.parts.places[0].value }}</router-link
           ><span v-else class="notification-place">{{
             row.parts.places[0].value
@@ -414,8 +337,7 @@ onMounted(() => fetchNotifications());
       </template>
     </DataTable>
 
-    <!-- Why the page asked for did not arrive: where the list would stand, or
-         under the rows already drawn. A plate in the corner used to say this. -->
+    <!-- Why the page did not arrive: where the list would stand, or under the rows. -->
     <ActionResult :text="loadRefusal" />
 
     <div v-if="hasMore && notifications.length > 0" class="load-more">
@@ -425,40 +347,34 @@ onMounted(() => fetchNotifications());
         :loading="loading"
         @click="fetchNotifications()"
       >
-        <template v-if="loading">Загрузка...</template>
-        <template v-else>Показать еще</template>
+        Показать еще
       </Button>
     </div>
   </div>
 </template>
 
 <style scoped lang="sass">
-// One step down from the line about the channels to what follows it.
 .channels-hint
   margin: 0 0 $medium
 
-// The title of what happened. A link keeps the colour and the hover of every
-// link of the site; a title that leads nowhere is text.
+// A title that leads nowhere is text.
 .notification-title--plain
   color: $text
 
 .notification-title--unread
   font-weight: bold
 
-// Read: grey, as a read letter of the mail list of DM2 is. Pointed at, it
-// answers as every link does.
+// Read: grey, as a read letter of DM2's mail list.
 .notification-title--read
   color: $text-muted
 
 a.notification-title--read:hover
   color: $link-hover
 
-// The details under a title or a place, a hair under it.
 .notification-details
   display: block
   margin-top: $tiny
 
-// Left, as every control of the column: the button stands under the list.
 .load-more
   margin-top: $medium
 </style>

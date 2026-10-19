@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Shared;
@@ -10,19 +8,9 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
 /// <summary>
-/// Comment.EntityId is polymorphic: it holds a TopicId, a GameId, a BlogId or a
-/// PublicationId, depending on which endpoint wrote the row. Only Topic.Comments is a
-/// mapped navigation (Blog.Comments, Game.Comments and Publication.Comments are
-/// [NotMapped] for exactly this reason), so EF emits FK_Comments_Topics_EntityId, and
-/// PostgreSQL then rejects every comment that is not on a forum topic: three of the four
-/// kinds. The constraint is deleted from the migration by hand, and regenerating the
-/// migration writes it back.
-///
-/// Same shape and same reason as InvitationTokenPersistenceShould: the model keeps the
-/// relationship, so the edit lives in the migration body alone, and only a database built
-/// by MigrateAsync can be asked whether it survived. MigrationShould cannot see this at
-/// all, because HasPendingModelChanges compares the model with the snapshot and both of
-/// them keep declaring the relationship.
+/// Comment.EntityId holds a TopicId, a GameId, a BlogId or a PublicationId, so FK_Comments_Topics_EntityId is
+/// deleted from the migration by hand and regenerating writes it back. Only a database built by MigrateAsync
+/// shows it, as for InvitationTokenPersistenceShould.
 /// </summary>
 public class PolymorphicCommentPersistenceShould : IntegrationTestBase
 {

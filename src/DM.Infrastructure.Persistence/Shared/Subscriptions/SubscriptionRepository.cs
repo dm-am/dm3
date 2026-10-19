@@ -5,9 +5,9 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Subscriptions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using SubscriptionEntity = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
+using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
 
 namespace DM.Infrastructure.Persistence.Shared.Subscriptions;
 
@@ -32,7 +32,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     /// and paying for the joins there would tax every published event.
     /// </remarks>
     private static IQueryable<Subscription> WithTargetNames(
-        DmDbContext dbContext, IQueryable<SubscriptionEntity> query) =>
+        DmDbContext dbContext, IQueryable<DbSubscription> query) =>
         query.Select(s => new Subscription
         {
             Id = s.SubscriptionId,
@@ -117,7 +117,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     /// <inheritdoc />
     public async Task<Subscription> CreateAsync(CreateSubscription subscription, CancellationToken ct = default)
     {
-        var entity = new SubscriptionEntity
+        var entity = new DbSubscription
         {
             SubscriptionId = subscription.SubscriptionId,
             SubscriberId = subscription.SubscriberId,
@@ -132,7 +132,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
         {
             await _dbContext.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // UNIQUE(SubscriberId, TargetType, TargetId). Every caller looks the
             // subscription up before asking for one, so this is two requests
@@ -158,7 +158,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     /// <inheritdoc />
     public async Task<Subscription> UpdateAsync(UpdateSubscription subscription, CancellationToken ct = default)
     {
-        var entity = await _dbContext.Subscriptions.FindAsync(new object[] { subscription.SubscriptionId }, ct);
+        var entity = await _dbContext.Subscriptions.FindAsync([subscription.SubscriptionId], ct);
         if (entity == null)
         {
             throw new InvalidOperationException($"Subscription {subscription.SubscriptionId} not found");
@@ -175,7 +175,7 @@ internal class SubscriptionRepository : ISubscriptionRepository
     /// <inheritdoc />
     public async Task DeleteAsync(Guid subscriptionId, CancellationToken ct = default)
     {
-        var subscription = await _dbContext.Subscriptions.FindAsync(new object[] { subscriptionId }, ct);
+        var subscription = await _dbContext.Subscriptions.FindAsync([subscriptionId], ct);
         if (subscription != null)
         {
             _dbContext.Subscriptions.Remove(subscription);

@@ -2,10 +2,6 @@ import { usePollsStore } from "@/entities/poll";
 import type { PollId, PollOptionId } from "@/entities/poll";
 import { notifyFailure } from "@/shared/lib/errors";
 
-/**
- * Poll voting actions. Wraps the entity store's vote / unvote with the
- * user-facing toast on failure, so the poll display stays presentational.
- */
 export function usePollVote() {
   const { vote, unvote } = usePollsStore();
 
@@ -15,7 +11,8 @@ export function usePollVote() {
   }
 
   async function cancelVote(pollId: PollId) {
-    await unvote(pollId);
+    const { error } = await unvote(pollId);
+    if (error) notifyFailure(error, "Не удалось отменить голос");
   }
 
   return { voteForOption, cancelVote };

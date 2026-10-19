@@ -5,7 +5,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Dto;
 using DM.Infrastructure.Core.Authorization;
-using DM.Testing;
 using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Xunit;
@@ -17,7 +16,7 @@ namespace DM.Infrastructure.Core.Tests.Authorization;
 /// authorize through it, so an inverted check here is a data-exposure bug in four
 /// modules at once.
 /// </summary>
-public class CommentIntentionResolverShould : UnitTestBase
+public class CommentIntentionResolverShould
 {
     private readonly CommentIntentionResolver resolver = new();
 

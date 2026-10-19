@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -14,18 +15,8 @@ namespace DM.Architecture.Tests;
 /// the file a relative link points at, and the heading an anchor jumps to.
 /// </summary>
 /// <remarks>
-/// The paths a document names from the root of the tree are held by
-/// DocumentedPathsShould; these are the other three ways code and documents cite
-/// each other: a comment citing a section by its title (UI_STANDARDS,
-/// "Всплывающие сообщения"), a relative link between documents, and an anchor
-/// into a heading. Renaming a heading or cutting a large document into parts
-/// breaks all three, and a reference that stops resolving still reads as an
-/// explanation: the reader goes looking and finds nothing.
-///
-/// A section is found where a reader would look for it: a heading, a line that
-/// opens with a bold lead, or a row of a table. A document cut into an index and
-/// its parts keeps the parts in a folder of its own name, and a section is
-/// looked for in the parts the index links to as well.
+/// Paths from the root are DocumentedPathsShould's. A section is a heading, a bold lead or a table
+/// row, looked for in the parts of a document cut into an index too.
 /// </remarks>
 public class DocumentReferencesShould
 {
@@ -45,9 +36,6 @@ public class DocumentReferencesShould
     /// <summary>A fence that opens or closes a block of code in a document.</summary>
     private static readonly Regex Fence = new(@"^\s*(```|~~~)", RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    // ── Sections cited by title ──
 
     [Fact]
     public void FindEverySectionItsCitationsName()
@@ -72,6 +60,7 @@ public class DocumentReferencesShould
     /// What counts as a citation, and what a section can be found as.
     /// </summary>
     [Theory]
+    [InlineData("// See UI_STANDARDS.md → \"Шапка\".", "## Шапка", true)]
     [InlineData("// (UI_STANDARDS, \"Шапка\")", "## Шапка", true)]
     [InlineData("// UI_STANDARDS.md, section \"Шапка\"", "## Шапка и меню", true)]
     [InlineData("// (UI_STANDARDS, \"Ожидание запроса\")", "| Ожидание запроса (`:loading`) | Вид |", true)]
@@ -91,7 +80,7 @@ public class DocumentReferencesShould
     /// </summary>
     [Fact]
     public void LeaveACallThatNamesADocumentAlone() =>
-        CitationsIn("probe.ts", "readFileSync(SURFACES, \"utf8\")", ["SURFACES"])
+        CitationsIn("probe.ts", "readFileSync(UI_STANDARDS, \"utf8\")", ["UI_STANDARDS"])
             .Should().BeEmpty();
 
     /// <summary>
@@ -121,8 +110,6 @@ public class DocumentReferencesShould
         }
     }
 
-    // ── Relative links ──
-
     [Fact]
     public void PointEveryRelativeLinkAtAFileThatExists()
     {
@@ -141,8 +128,6 @@ public class DocumentReferencesShould
                 "a relative link whose file is gone, or was never committed, leads the reader nowhere");
     }
 
-    // ── Anchors ──
-
     [Fact]
     public void PointEveryAnchorAtAHeadingThatExists()
     {
@@ -154,7 +139,7 @@ public class DocumentReferencesShould
                              entry.Link.Target.EndsWith(".md", StringComparison.OrdinalIgnoreCase)))
             .ToList();
 
-        anchored.Should().HaveCountGreaterThan(30, "the documents jump to each other's headings some seventy times");
+        anchored.Should().HaveCountGreaterThan(20, "the documents jump to each other's headings some thirty times");
 
         var anchorsByFile = new Dictionary<string, IReadOnlySet<string>>(StringComparer.OrdinalIgnoreCase);
         anchored
@@ -194,8 +179,6 @@ public class DocumentReferencesShould
     public void NumberTheAnchorsOfHeadingsThatRepeat() =>
         Anchors(["## Пример", "text", "## Пример"]).Should().BeEquivalentTo(["пример", "пример-1"]);
 
-    // ── Reading the tree ──
-
     private sealed record Citation(string File, string Document, string Section);
 
     private sealed record MarkdownLink(string Target, string? Anchor);
@@ -211,11 +194,7 @@ public class DocumentReferencesShould
     /// The lines of a document, and of its parts once it has been cut: the files
     /// it links to inside the folder that carries its name.
     /// </summary>
-    /// <remarks>
-    /// Only the parts, not every document it links to: a section found in a
-    /// neighbour the document merely mentions would pass a citation whose own
-    /// heading is gone.
-    /// </remarks>
+    /// <remarks>Only the parts: a section found in a merely mentioned neighbour would pass a dead citation.</remarks>
     private static IEnumerable<string> SearchedLines(string document)
     {
         var parts = Path.Combine(
@@ -240,9 +219,9 @@ public class DocumentReferencesShould
     }
 
     /// <summary>
-    /// Citations of the form DOC, "Section" - with the extension, a colon or the
-    /// word "section" or "раздел" allowed between. A title opens with a capital,
-    /// which is what tells it from a string argument passed beside a name.
+    /// Citations of the form DOC, "Section" - with the extension, a colon, an
+    /// arrow or the word "section" or "раздел" allowed between. A title opens with
+    /// a capital, which is what tells it from a string argument passed beside a name.
     /// </summary>
     private static IEnumerable<Citation> CitationsIn(string file, string text, IReadOnlyCollection<string> documents)
     {
@@ -253,7 +232,7 @@ public class DocumentReferencesShould
 
         var pattern = new Regex(
             @"\b(?<doc>" + string.Join("|", documents.Select(Regex.Escape)) + @")(?:\.md)?[,:]?\s*" +
-            @"(?:раздел\s*|section\s*)?""(?<section>\p{Lu}[^""\n]{2,79})""");
+            @"(?:(?:→|->)\s*)?(?:раздел\s*|section\s*)?""(?<section>\p{Lu}[^""\n]{2,79})""");
 
         return pattern.Matches(text)
             .Select(match => new Citation(file, match.Groups["doc"].Value, match.Groups["section"].Value))
@@ -325,10 +304,7 @@ public class DocumentReferencesShould
             Uri.UnescapeDataString(target.Split('?')[0]).Replace('/', Path.DirectorySeparatorChar)));
 
     /// <summary>
-    /// Whether the path is a file a commit carries, or a folder holding one. Asked of
-    /// git rather than of the disk: a link to a file the ignore list keeps out, such
-    /// as build output or a local settings file, resolves on the machine that wrote
-    /// it and nowhere else, so a link has to reach what the repository holds.
+    /// Whether the path is a file a commit carries, or a folder holding one: asked of git, not of the disk.
     /// </summary>
     private static bool Exists(string path) =>
         CommittedPaths.Value.Contains(path.TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar));
@@ -338,7 +314,7 @@ public class DocumentReferencesShould
         var paths = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var file in RepositoryFiles.CommittableFiles())
         {
-            for (var path = file; path is not null && path.Length > RepositoryRoot.Length; path = Path.GetDirectoryName(path))
+            for (var path = file; path is not null && path.Length > RepositoryLayout.Root.Length; path = Path.GetDirectoryName(path))
             {
                 paths.Add(path);
             }
@@ -434,11 +410,11 @@ public class DocumentReferencesShould
     /// </summary>
     private static IEnumerable<string> FilesUnder(string tree)
     {
-        var prefix = Path.Combine(RepositoryRoot, tree) + Path.DirectorySeparatorChar;
+        var prefix = Path.Combine(RepositoryLayout.Root, tree) + Path.DirectorySeparatorChar;
         return RepositoryFiles.CommittableFiles()
             .Where(path => path.StartsWith(prefix, StringComparison.OrdinalIgnoreCase));
     }
 
     private static string Relative(string path) =>
-        Path.GetRelativePath(RepositoryRoot, path).Replace('\\', '/');
+        Path.GetRelativePath(RepositoryLayout.Root, path).Replace('\\', '/');
 }

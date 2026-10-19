@@ -7,11 +7,7 @@ using Xunit;
 namespace DM.Infrastructure.Persistence.Tests.Shared.Queries;
 
 /// <summary>
-/// The splicer inlines a stored rule into a projection lambda: the marker
-/// call disappears, the rule's body appears with the argument substituted
-/// for its parameter, and a rule that itself splices another rule resolves
-/// all the way down. Every list projection of the site rides on this
-/// rewrite, so its mechanics get their own facts.
+/// The splicer inlines a stored rule into a projection lambda, recursively; every list projection rides on it.
 /// </summary>
 public class ExpressionSplicerShould
 {

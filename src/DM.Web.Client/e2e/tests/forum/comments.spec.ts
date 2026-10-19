@@ -2,12 +2,8 @@ import { test, expect } from "../../fixtures/auth";
 import type { Page } from "@playwright/test";
 
 /**
- * ".topics-row", ".topic-content", ".topic-opening" and ".opening-text" are
- * in no template: the topics table is a DataTable whose title cell holds an
- * `a.topic-link`, and a topic renders as a `.topic` card with its text in
- * `.topic-description`, the comments under it in `.comments-section`.
- * "Новости" is not a board alias either — the seed writes "general" and nine
- * more. Both tests clicked behind an `if` that was never true.
+ * A topic renders as a `.topic` card with its text in `.topic-description`,
+ * the comments under it in `.comments-section`.
  */
 
 /** Opens the first topic of the seeded "general" board. */

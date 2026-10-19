@@ -1,7 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
-using System.Text.Json.Serialization;
+
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Features.Community.Users;
@@ -47,7 +47,6 @@ public class GlobalChatEvent
     /// <summary>
     /// Event status (Scheduled, Live, Ended)
     /// </summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public GlobalChatEventStatus Status { get; set; }
 
     /// <summary>
@@ -127,7 +126,6 @@ public class GlobalChatEventSummary
     /// <summary>
     /// Event status
     /// </summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public GlobalChatEventStatus Status { get; set; }
 
     /// <summary>
@@ -150,7 +148,7 @@ public class CreateGlobalChatEventInput
     /// Event title
     /// </summary>
     [Required(ErrorMessage = "Введите заголовок")]
-    [StringLength(200, MinimumLength = 1, ErrorMessage = "Заголовок от 1 до 200 символов")]
+    [StringLength(200, ErrorMessage = "Заголовок от 1 до 200 символов")]
     public string Title { get; set; } = null!;
 
     /// <summary>
@@ -217,7 +215,7 @@ public class AddParticipantInput
     /// User username to add
     /// </summary>
     [Required(ErrorMessage = "Введите имя пользователя")]
-    [StringLength(20, MinimumLength = 1, ErrorMessage = "Имя пользователя от 1 до 20 символов")]
+    [StringLength(20, ErrorMessage = "Имя пользователя от 1 до 20 символов")]
     public string Username { get; set; } = null!;
 
     /// <summary>

@@ -1,21 +1,8 @@
 /**
- * What a toast can say, read out of the source without running it.
- *
- * Two gates read every plate the site raises: toastWidth.spec.ts measures each
- * line against the box, toastRegistry.spec.ts holds every success plate to a
- * written reason. Both ask the same question of a call - what can it put on
- * screen - and each used to carry its own copy of the scan that answers it, so
- * a blind spot fixed in one stayed open in the other. This is the one scan.
- *
- * WHERE THE LINE IS WRITTEN. A call does not always spell its sentence out. It
- * may hand over a constant, declared at the top of the file or imported from a
- * module of shared refusals; a table read by key; a computed that puts the noun
- * of the screen into a template; a prop, whose words are written by every
- * screen that draws the component. The scan follows the argument to those
- * words, and an empty answer means it found none - which each gate fails,
- * because a call nobody can read is a plate nobody checks.
- *
- * Spec-only, like styles.ts: it reads sources off disk.
+ * What a toast can say, read out of the source, for toastWidth.spec.ts and
+ * toastRegistry.spec.ts alike. The argument is followed to its words: a
+ * constant, an import, a table, a computed, a prop at every screen; an empty
+ * answer fails each gate, since a plate nobody can read is one nobody checks.
  */
 import { readdirSync, readFileSync } from "node:fs";
 import { dirname, posix, relative, resolve } from "node:path";
@@ -25,7 +12,7 @@ import { fileURLToPath } from "node:url";
 const CLIENT_SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 /** The four ways a toast is raised. */
-export const TOAST_KINDS = ["success", "error", "info", "warning"];
+const TOAST_KINDS = ["success", "error", "info", "warning"];
 
 /** Copy, as opposed to a key, a path or a class name. */
 export const CYRILLIC = /[а-яА-Я]/;
@@ -70,13 +57,8 @@ export const treeOf = (sources: Record<string, string>): Tree => ({
 });
 
 /**
- * The names a file calls a toast by, each with the kind it raises, for the
- * kinds asked about.
- *
- * Three forms are in use, and the renamed one matters most: a file that takes
- * `success` as `toastSuccess` raises the same plate, and a scan that missed it
- * would report an empty site. The others are the whole composable kept in a
- * constant and the composable called on the spot.
+ * The names a file calls a toast by, with their kinds: renamed (`success` as
+ * `toastSuccess`), the composable kept in a constant, or called on the spot.
  */
 const callers = (source: string, kinds: string[]): [string, string][] => {
   const names = new Map<string, string>(
@@ -103,13 +85,8 @@ const callers = (source: string, kinds: string[]): [string, string][] => {
 const LITERAL = /"([^"\\\n]*)"|'([^'\\\n]*)'|`([^`\\]*)`/g;
 
 /**
- * The source of the expression that starts at `from`, up to the comma that
- * ends the argument or the parenthesis that ends the call. A declaration also
- * ends at its semicolon: without it `const kind = action.value;` would run on
- * through the rest of the function.
- *
- * Quotes are skipped whole, because a message is free to hold a comma or a
- * bracket and the scan must not stop inside one.
+ * The source of the expression at `from`, up to the comma or parenthesis that
+ * ends the argument, or a declaration's semicolon; quotes are skipped whole.
  */
 const expressionAt = (
   source: string,
@@ -145,10 +122,8 @@ export interface Site {
   kind: string;
   argument: string;
   /**
-   * How the plate is raised. A call of notifyFailure says its sentence on its
-   * own only where the server named nothing, and on a general refusal it is the
-   * head of the interceptor's plate, "…: ошибка сервера" (generalPlate.ts), so
-   * a gate measures it both ways.
+   * How the plate is raised: notifyFailure speaks only where the server named
+   * nothing, and heads the general plate otherwise (generalPlate.ts).
    */
   via: "toast" | "notifyFailure";
   /**
@@ -219,11 +194,8 @@ const kebab = (name: string): string =>
   name.replace(/[A-Z]/g, (c) => "-" + c.toLowerCase()).replace(/^-/, "");
 
 /**
- * An expression without the conditions of its choices: in `on ? A : B` the
- * name `on` picks a sentence and says none, and a prop followed there is a
- * flag the screens bind to a boolean, which has no words to find. Read on
- * an expression whose strings are already blanked out, so a "?" inside a
- * sentence is no choice.
+ * An expression without the conditions of its choices (`on` in `on ? A : B`),
+ * read with its strings blanked so a "?" in a sentence is no choice.
  */
 const withoutConditions = (bare: string): string => {
   let out = bare;
@@ -249,24 +221,11 @@ const withoutConditions = (bare: string): string => {
 };
 
 /**
- * What an argument can say, followed to where its words are written.
- *
- * The argument's own strings come first. When it spells none, every name in it
- * is followed: a constant of the file, or an import traced through the index
- * files to the module that declares it; the declaration is read the same way,
- * so a table gives all its values and a computed gives the template inside it.
- * A prop is read at every screen that draws the component - a written
- * attribute is the value, a bound one an expression followed in that screen -
- * and a prop dropped into a template gives one sentence for each value.
- *
- * Past the call the scan keeps to the value. In a declaration it reads the
- * strings, the props and the names of CONSTANTS, and nothing else: followed
- * further, the key of FAILED[kind] would lead through the computed that
- * chooses the action into everything that computed reads, and a sentence
- * found there would be counted as a plate it is not. The names of CONSTANTS
- * are read beside the strings too, so a choice between a sentence and
- * ANOTHER_SENTENCE gives both. An empty answer means the argument was not
- * followed to anything.
+ * What an argument can say, followed to its words: its own strings, else every
+ * name in it (a constant, an import through the index files, a prop at every
+ * screen that draws the component). Past the call only strings, props and
+ * CONSTANT names are read, or the key of FAILED[kind] would lead into
+ * everything a computed reads.
  */
 export const scanOf = (tree: Tree) => {
   const present = new Set(tree.files);

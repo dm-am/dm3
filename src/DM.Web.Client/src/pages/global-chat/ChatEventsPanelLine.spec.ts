@@ -2,15 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The events line of the global chat, on its DOM side: what it says before
- * the list answers, when the list is refused and when it is empty; and that
- * it says all of it, every word and the title whole, on any width.
- *
- * A document that lays nothing out cannot say where a line wraps, so the wrap
- * itself is the live stand's to show; chatParity.spec.ts holds that nothing
- * in the strip's dress keeps it on one line.
- */
+// The events line on its DOM side: before the answer, refused, empty, and
+// every word whole on any width; the wrap itself is the live stand's to show.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -25,7 +18,7 @@ vi.mock("@/entities/global-chat/api/globalChatApi", () => ({
   default: { getEvents: (...args: unknown[]) => getEvents(...args) },
 }));
 
-import { useGlobalChatStore } from "@/entities/global-chat";
+import { useGlobalChatEventsStore } from "@/entities/global-chat";
 import ChatEventsPanel from "./ChatEventsPanel.vue";
 
 const HOUR = 3600 * 1000;
@@ -67,7 +60,7 @@ async function render(
   load: "pending" | "loaded" | "failed",
   events: GlobalChatEventSummary[] = [],
 ) {
-  const store = useGlobalChatStore();
+  const store = useGlobalChatEventsStore();
   store.events = events;
   store.eventsLoad = load;
   store.eventDetails.live = {
@@ -99,10 +92,7 @@ async function settled() {
 
 const line = (w: VueWrapper) => w.get(".row-main");
 
-// The clock stands at noon: the live event ends two hours from now, and after
-// 22:00 that end fell on the next day and was written with its date, so the
-// line under test changed with the hour the suite ran at. Only Date is faked;
-// the renders still run on real ticks.
+// Noon: an end after 22:00 would fall on the next day with its date. Only Date is faked.
 const NOON = new Date(2026, 6, 26, 12, 0);
 
 beforeEach(() => {
@@ -176,7 +166,7 @@ describe("повторить", () => {
     first.focus();
     first.click();
     await settled();
-    // Refused again: "повторить" is back, and so is the focus.
+    // Refused again: the focus is back on "повторить".
     expect(document.activeElement?.textContent?.trim()).toBe("повторить");
 
     getEvents.mockResolvedValueOnce({
@@ -185,8 +175,7 @@ describe("повторить", () => {
     });
     (document.activeElement as HTMLElement).click();
     await settled();
-    // The events are back: the focus is on "описание", the first control of
-    // the line, which opens what the line is about.
+    // The events are back: the focus is on "описание", the first control of the line.
     expect(document.activeElement?.textContent?.trim()).toBe("описание");
   });
 });
@@ -198,19 +187,13 @@ describe("the line says all of it on any width", () => {
     expect(line(w).text()).toBe(
       "Идет: Эвент live, до 14:00 | описание | +2 запланировано, ближайший\u00a027.07",
     );
-    // Nothing has left the line and nothing in it is cut to a width.
+    // Nothing has left the line and nothing in it is cut.
     expect(line(w).findAll("[hidden]")).toEqual([]);
     expect(line(w).findAll("[style]")).toEqual([]);
     expect(line(w).findAll("[title]")).toEqual([]);
   });
 
-  /**
-   * "ближайший" and its day are one unit of the line. On a 360 phone the line
-   * broke between them, and "27.07" stood alone on a line of its own under
-   * the word it belongs to. The space between them does not break, as the one
-   * after "в" in a date and a time does (CODE_STYLE), and a copy still reads
-   * it as a plain space.
-   */
+  // "ближайший" and its day are one unit: the space between them does not break.
   it('keeps "ближайший" and its day together', async () => {
     const w = await render("loaded", liveAndTwo());
 

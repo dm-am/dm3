@@ -8,15 +8,115 @@ using DM.Web.API.Shared.Dto;
 namespace DM.Web.API.Features.Moderation.Warnings;
 
 /// <summary>
-/// Warning DTO
+/// What a warning carries in the moderation list and in the open log alike
 /// </summary>
-public class Warning
+public abstract class WarningRecord
 {
     /// <summary>
     /// Warning identifier
     /// </summary>
     public Guid Id { get; set; }
 
+    /// <summary>
+    /// Kind of the offending content, a member of WarningEntityType: Comment, Topic,
+    /// Message (of the global chat), GameReview, PostReview, Profile for a warning on
+    /// the profile of the warned user. Null
+    /// for a warning to the user with no place, the one for what was done where nothing
+    /// is moderated.
+    /// </summary>
+    public string? EntityType { get; set; }
+
+    /// <summary>
+    /// Warning points as they stand now (0-6, 0 = the warning weighs nothing on
+    /// the violation scale)
+    /// </summary>
+    public int Points { get; set; }
+
+    /// <summary>
+    /// Warning points as the moderator who issued the warning set them
+    /// </summary>
+    public int OriginalPoints { get; set; }
+
+    /// <summary>
+    /// Username of the moderator who last changed the points, null while nobody
+    /// has changed them. Public along with the first signature: shown only the
+    /// first, a reader reads a verdict that no longer stands.
+    /// </summary>
+    public string? PointsChangedBy { get; set; }
+
+    /// <summary>
+    /// When the points were last changed
+    /// </summary>
+    public DateTimeOffset? PointsChangedUtc { get; set; }
+
+    /// <summary>
+    /// Why the points were changed, in the words of whoever changed them
+    /// </summary>
+    public string? PointsChangeText { get; set; }
+
+    /// <summary>
+    /// Why the warning was issued, rendered: the moderator writes it in the
+    /// markup of the site
+    /// </summary>
+    public CommonBbText Reason { get; set; } = null!;
+
+    /// <summary>
+    /// The offending text as it stood when the warning was issued, rendered by
+    /// the rules of its place. Null when the warning names no content, and for a
+    /// warning on a profile, whose words are in <see cref="Profile" />. In the
+    /// open log absent as well where the reader does not read the place or none is found.
+    /// </summary>
+    /// <remarks>
+    /// Written once, it survives an edit and a deletion of the content. Rendered,
+    /// not the source: the source may carry a hidden block the page shows nobody.
+    /// </remarks>
+    public CommonBbText? Evidence { get; set; }
+
+    /// <summary>
+    /// The profile as it stood when the warning was issued, for a warning on a
+    /// profile. Null for every other kind and for a removed account.
+    /// </summary>
+    public WarningProfile? Profile { get; set; }
+
+    /// <summary>
+    /// Site-relative address of the offending content. Null when the content is
+    /// gone or has no page a moderator could open. In the open log present only
+    /// where the reader could follow it: absent when the content or its place is
+    /// gone, when moderation took the text off the site, and when the reader does
+    /// not read the place.
+    /// </summary>
+    public string? EntityUrl { get; set; }
+
+    /// <summary>
+    /// Where the offending content stands, null when nothing says so and in the
+    /// open log for a place the reader does not read
+    /// </summary>
+    public WarningPlaceKind? PlaceKind { get; set; }
+
+    /// <summary>
+    /// Title of that place: the topic, the game, the blog or the publication.
+    /// Null for the global chat, which is named by its kind, and in the open log
+    /// for a place the reader does not read.
+    /// </summary>
+    public string? PlaceTitle { get; set; }
+
+    /// <summary>
+    /// When the offending content was written. In the open log null for a place
+    /// the reader does not read.
+    /// </summary>
+    public DateTimeOffset? EntityCreatedUtc { get; set; }
+
+    /// <summary>
+    /// Creation timestamp (UTC)
+    /// </summary>
+    public DateTimeOffset CreatedUtc { get; set; }
+}
+
+/// <summary>
+/// Warning DTO
+/// </summary>
+public class Warning : WarningRecord
+{
     /// <summary>
     /// User who received the warning
     /// </summary>
@@ -33,117 +133,30 @@ public class Warning
     public Guid? EntityId { get; set; }
 
     /// <summary>
-    /// Entity type (Comment, Message, Topic, or Profile for a warning on the
-    /// profile of the warned user)
-    /// </summary>
-    public string? EntityType { get; set; }
-
-    /// <summary>
-    /// Warning points as they stand now (0-6, 0 = the warning weighs nothing on
-    /// the violation scale)
-    /// </summary>
-    public int Points { get; set; }
-
-    /// <summary>
-    /// Warning points as the moderator who issued the warning set them
-    /// </summary>
-    public int OriginalPoints { get; set; }
-
-    /// <summary>
-    /// Username of the moderator who last changed the points, null while nobody
-    /// has changed them
-    /// </summary>
-    public string? PointsChangedBy { get; set; }
-
-    /// <summary>
-    /// When the points were last changed
-    /// </summary>
-    public DateTimeOffset? PointsChangedUtc { get; set; }
-
-    /// <summary>
-    /// Why the points were changed, in the words of whoever changed them
-    /// </summary>
-    public string? PointsChangeText { get; set; }
-
-    /// <summary>
     /// Whether this caller may change the points of this warning: a senior
     /// moderator may on any of them, a moderator on the ones he issued himself
     /// </summary>
     public bool CanChangePoints { get; set; }
-
-    /// <summary>
-    /// Why the warning was issued, rendered: the moderator writes it in the
-    /// markup of the site
-    /// </summary>
-    public CommonBbText Reason { get; set; } = null!;
-
-    /// <summary>
-    /// The offending text as it stood when the warning was issued, rendered the
-    /// way its place renders it. Null when the warning names no content, and for
-    /// a warning on a profile, whose words are in <see cref="Profile" />.
-    /// </summary>
-    /// <remarks>
-    /// The copy is written once and never rewritten, so it survives both an edit
-    /// and a deletion of the content it was taken from. It is rendered and not
-    /// handed over as written: a moderator used to read the source, tags and all,
-    /// and the source of a text may carry a hidden block the page never shows to
-    /// anybody, moderators included.
-    /// </remarks>
-    public CommonBbText? Evidence { get; set; }
-
-    /// <summary>
-    /// The profile as it stood when the warning was issued, for a warning on a
-    /// profile. Null for every other kind and for a removed account.
-    /// </summary>
-    public WarningProfile? Profile { get; set; }
-
-    /// <summary>
-    /// Site-relative address of the offending content. Null when the content is
-    /// gone or has no page a moderator could open.
-    /// </summary>
-    public string? EntityUrl { get; set; }
-
-    /// <summary>
-    /// Where the offending content stands, null when nothing says so
-    /// </summary>
-    public WarningPlaceKind? PlaceKind { get; set; }
-
-    /// <summary>
-    /// Title of that place: the topic, the game, the blog or the publication.
-    /// Null for the global chat, which is named by its kind.
-    /// </summary>
-    public string? PlaceTitle { get; set; }
-
-    /// <summary>
-    /// When the offending content was written
-    /// </summary>
-    public DateTimeOffset? EntityCreatedUtc { get; set; }
-
-    /// <summary>
-    /// Creation timestamp (UTC)
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
 }
 
 /// <summary>
 /// A row of the warning log everyone can read
 /// </summary>
 /// <remarks>
-/// Carries who was warned, by whom, for how many points, why and when, and the
-/// offending text with its place, as DM2's log did. The text is there always,
-/// the owner's word for it (05.10: "Всегда показывай"): edited or deleted
-/// afterwards, by its author or by moderation, it is still what the warning was
-/// given for. It is rendered by the rules of its place, so a hidden block is
-/// erased from it for everybody. The address alone is held back where a guest
-/// could not follow it: the place is closed to him or gone, or the text was
-/// taken off the site.
+/// The row of its reader. The offending text is there edited or deleted
+/// afterwards: it is still what the warning was given for. Where the reader does
+/// not read the place by its own read rule, or no place is found, the text, the
+/// place, its address and the date of the text are held back alike and the row
+/// says <see cref="AccessRestricted" />, so a refusal reads as an absence.
 /// </remarks>
-public class WarningLogEntry
+public class WarningLogEntry : WarningRecord
 {
     /// <summary>
-    /// Warning identifier
+    /// True where the reader does not read the place of the text, or none is
+    /// found: the row stands for it with one block of restricted access. Absent
+    /// otherwise.
     /// </summary>
-    public Guid Id { get; set; }
+    public bool? AccessRestricted { get; set; }
 
     /// <summary>
     /// User who received the warning
@@ -154,96 +167,6 @@ public class WarningLogEntry
     /// Moderator who issued the warning
     /// </summary>
     public UserRef Moderator { get; set; } = null!;
-
-    /// <summary>
-    /// Warning points as they stand now (0-6, 0 = the warning weighs nothing on
-    /// the violation scale)
-    /// </summary>
-    public int Points { get; set; }
-
-    /// <summary>
-    /// Warning points as the moderator who issued the warning set them
-    /// </summary>
-    public int OriginalPoints { get; set; }
-
-    /// <summary>
-    /// Username of the moderator who last changed the points, null while nobody
-    /// has changed them
-    /// </summary>
-    /// <remarks>
-    /// The second signature is public along with the first: one moderator warned
-    /// and wrote why, another took the points off because it was no violation,
-    /// and a reader shown only the first sentence reads a verdict that no longer
-    /// stands.
-    /// </remarks>
-    public string? PointsChangedBy { get; set; }
-
-    /// <summary>
-    /// When the points were last changed
-    /// </summary>
-    public DateTimeOffset? PointsChangedUtc { get; set; }
-
-    /// <summary>
-    /// Why the points were changed, in the words of whoever changed them
-    /// </summary>
-    public string? PointsChangeText { get; set; }
-
-    /// <summary>
-    /// Why the warning was issued, rendered: the moderator writes it in the
-    /// markup of the site
-    /// </summary>
-    public CommonBbText Reason { get; set; } = null!;
-
-    /// <summary>
-    /// Kind of the offending content (Comment, Topic, Message), Profile for a
-    /// warning on the profile of the warned user, null for a warning that names
-    /// nothing (one issued on a ticket about a person)
-    /// </summary>
-    public string? EntityType { get; set; }
-
-    /// <summary>
-    /// The offending text as it stood when the warning was issued, rendered by
-    /// the rules of its place. Null when the warning names no content, and for a
-    /// warning on a profile, whose words are in <see cref="Profile" />.
-    /// </summary>
-    public CommonBbText? Evidence { get; set; }
-
-    /// <summary>
-    /// The profile as it stood when the warning was issued, for a warning on a
-    /// profile: what the profile showed everybody then, shown in the open log as
-    /// the offending text is. Null for every other kind and for a removed
-    /// account.
-    /// </summary>
-    public WarningProfile? Profile { get; set; }
-
-    /// <summary>
-    /// Where the offending content stands, null when nothing says so
-    /// </summary>
-    public WarningPlaceKind? PlaceKind { get; set; }
-
-    /// <summary>
-    /// Title of that place: the topic, the game, the blog or the publication.
-    /// Null for the global chat, which is named by its kind.
-    /// </summary>
-    public string? PlaceTitle { get; set; }
-
-    /// <summary>
-    /// Site-relative address of the offending content. Present only where a
-    /// guest could follow it: absent when the content or its place is gone,
-    /// when moderation took the text off the site, and when the place is closed
-    /// to a guest.
-    /// </summary>
-    public string? EntityUrl { get; set; }
-
-    /// <summary>
-    /// When the offending content was written
-    /// </summary>
-    public DateTimeOffset? EntityCreatedUtc { get; set; }
-
-    /// <summary>
-    /// Creation timestamp (UTC)
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
 }
 
 /// <summary>
@@ -291,9 +214,13 @@ public class CreateWarningRequest
     public Guid? EntityId { get; set; }
 
     /// <summary>
-    /// Entity type: Comment, Message, Topic, or Profile for a warning on the
-    /// profile of the warned user, which the server then copies (the avatar, the
-    /// status and "О себе") as it stands at the moment of issue
+    /// The place, a member of WarningEntityType by name: Comment, Topic, Message (of
+    /// the global chat), GameReview, PostReview, or Profile for a warning on the
+    /// profile of the warned user, which the server
+    /// then copies (the avatar, the status and "О себе") as it stands at the moment of
+    /// issue. Left out for a warning to the user with no place and no copy, the one
+    /// for what was done in a game room or a conversation, which are not moderated. A
+    /// name outside the list is refused.
     /// </summary>
     /// <example>Comment</example>
     public string? EntityType { get; set; }
@@ -378,11 +305,6 @@ public class UserWarningsInfo
     /// <summary>
     /// How many warnings the profile carries, those corrected down to zero included
     /// </summary>
-    /// <remarks>
-    /// It counted living warnings back when a lifted one disappeared from the
-    /// list. Nothing disappears now, so the number is a count of the record, and
-    /// the weight is <see cref="TotalPoints" />.
-    /// </remarks>
     public int ActiveCount { get; set; }
 
     /// <summary>

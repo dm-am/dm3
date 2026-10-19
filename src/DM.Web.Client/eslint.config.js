@@ -17,7 +17,7 @@ import {
   LIMITS,
   REGISTER,
   recordedRules,
-} from "./sizeRatchet.js";
+} from "./src/gates/sizeRatchet.js";
 
 /**
  * What `eslint .` walks. Flat config has no `--ext`: the extensions a bare
@@ -56,6 +56,24 @@ const BARRELED = ["widgets", "features", "entities"];
 const SLICE_ENTRY = ["index.ts"];
 const isBarreled = (type) => BARRELED.includes(type);
 
+/** The native modals the design system replaces, with what to use instead. */
+const NATIVE_MODALS = {
+  confirm: "Use shared/ui/ConfirmDialog.",
+  alert: "Use useToast().",
+  prompt: "Use a dialog with a form field.",
+};
+
+/**
+ * A cast of a cast, `x as unknown as T` foremost, in either spelling of a cast.
+ * `as const` fixes the type of a literal and is no cast.
+ */
+const CAST_OF_A_CAST = {
+  selector:
+    ":matches(TSAsExpression, TSTypeAssertion) > :matches(TSAsExpression, TSTypeAssertion).expression:not([typeAnnotation.typeName.name='const'])",
+  message:
+    "A cast of a cast passes a value off as a type the compiler refused it: make the type of the value, or of its model, say what it holds.",
+};
+
 /**
  * Components the app registers globally, read out of the registration itself so
  * this config cannot drift from it: drop a `.component(...)` line and every
@@ -87,10 +105,10 @@ export default defineConfigWithVueTs(
   // `base` registers the plugin and the parser; `eslintRecommended` switches off
   // the core rules TypeScript already answers. Together they are what
   // `@vue/eslint-config-typescript` used to mean by default, and what this tree
-  // has been linted against. Its `recommended` is a strictly larger set (the
-  // whole typescript-eslint recommended preset, `no-explicit-any` foremost) —
-  // turning that on is a decision about the code, not about the linter, and
-  // belongs to whoever is prepared to work through what it finds.
+  // has been linted against. Its `recommended` is a strictly larger set, the
+  // whole typescript-eslint recommended preset: the shipped code takes
+  // `no-explicit-any` of it (dm/shipped below), and turning on the rest is a
+  // decision about the code, for whoever works through what it finds.
   vueTsConfigs.base,
   vueTsConfigs.eslintRecommended,
   prettier,
@@ -118,11 +136,8 @@ export default defineConfigWithVueTs(
         ...SLICED.map((layer) => ({
           type: `${layer}-x`,
           pattern: `src/${layer}/*/@x/*.ts`,
-          // `mode` is deprecated in v7, but its replacement (partialMatch:
-          // false) carries folder semantics and stops matching a door FILE,
-          // which is exactly what this element is. Revisit when v8 offers a
-          // file-shaped descriptor; until then the deprecation notice is the
-          // honest cost.
+          // `mode` is deprecated in v7; its replacement stops matching a door
+          // FILE, which this element is. Revisit with v8.
           mode: "full",
           capture: ["slice", "consumer"],
         })),
@@ -134,18 +149,10 @@ export default defineConfigWithVueTs(
         { type: "app", pattern: "src/app", partialMatch: false },
         { type: "shared", pattern: "src/shared", partialMatch: false },
       ],
-      // `@/…` is a TypeScript path mapping, so the resolver reads it out of the
-      // tsconfig that declares it instead of a second copy of the same map: an
-      // alias the compiler knows and the linter does not is an import boundaries
-      // silently stops checking.
-      // One project, not the whole reference graph: `boundaries/include` above
-      // stops at src/, and every extra project the resolver is handed is another
-      // tsconfig it parses per import for answers nothing asks of it. Handing it
-      // exactly one also keeps the map whole: with a single project the resolver
-      // takes the path mapping and never consults include/exclude, so the specs
-      // that tsconfig.app.json excludes still resolve. A second project here
-      // would turn that filter on, and an import it stops matching is one
-      // `boundaries/no-unknown` — off by design — would drop without a word.
+      // `@/…` is read out of the tsconfig that declares it. One project only:
+      // with a single project the resolver takes the path mapping and never
+      // consults include/exclude, so the specs tsconfig.app.json excludes still
+      // resolve.
       "import/resolver": {
         typescript: {
           project: "tsconfig.app.json",
@@ -178,45 +185,25 @@ export default defineConfigWithVueTs(
         },
       ],
 
-      // Accessibility, as a rule of the build rather than of a review.
-      //
-      // Until this block there was nothing: `plugin:vue/vue3-essential` says
-      // nothing about accessibility, and the only automated check on the site was
-      // one e2e spec measuring one tooltip. A <div> that answers a click and not
-      // a key, an <img> with no alt, an aria-* attribute misspelt into silence —
-      // all of it type-checks, lints, builds and renders, and the defect is
-      // invisible to anyone holding a mouse and looking at the screen. Every
-      // instance found by hand came back in the next screen written from the same
-      // template.
-      //
-      // Named one by one rather than through the plugin's recommended preset. A
-      // preset is a set someone switches off on the first red build; a list is a
-      // set whose every member was measured against this tree. What is missing
-      // from it is missing for a reason, and the reasons are below.
+      // Accessibility, as a rule of the build rather than of a review. Named one
+      // by one rather than through the plugin's preset: every member was
+      // measured against this tree, and what is missing is missing for a reason
+      // (below).
       "vuejs-accessibility/alt-text": "error",
       "vuejs-accessibility/anchor-has-content": "error",
       "vuejs-accessibility/aria-props": "error",
       "vuejs-accessibility/aria-role": "error",
       "vuejs-accessibility/aria-unsupported-elements": "error",
       "vuejs-accessibility/click-events-have-key-events": "error",
-      // A field the template ties to no name at all. An `id` satisfies it,
-      // because the `for` at the other end is what label-has-for checks; an
-      // `aria-label` satisfies it where the field has no caption of its own to
-      // point at — a search box, or one row of a group that a single caption
-      // names as a whole.
-      //
-      // The `Select` component is read by this rule as the native `select`: the
-      // plugin kebab-cases a tag before matching it, and both spellings come out
-      // the same word. So every use of it names its control at the call site,
-      // which is also the only way a caller's `<label for>` reaches the native
-      // element under that component's wrapper div.
+      // A field the template ties to no name at all. An `id` satisfies it (the
+      // `for` at the other end is label-has-for's), and so does an `aria-label`
+      // where the field has no caption of its own. The plugin reads `Select` as
+      // the native `select`, so every use names its control at the call site.
       "vuejs-accessibility/form-control-has-label": "error",
       "vuejs-accessibility/heading-has-content": "error",
       "vuejs-accessibility/iframe-has-title": "error",
-      // `some`, not the plugin's default `every`. `every` demands that a label
-      // both wrap its field and carry a `for`, which is a shape this tree never
-      // writes and FormField cannot produce: its label sits outside the row it
-      // names, and the wiring is done after mount.
+      // `some`, not the plugin's default `every`: FormField's label sits outside
+      // the row it names, so no label both wraps its field and carries a `for`.
       "vuejs-accessibility/label-has-for": [
         "error",
         { required: { some: ["nesting", "id"] } },
@@ -231,30 +218,20 @@ export default defineConfigWithVueTs(
       "vuejs-accessibility/role-has-required-aria-props": "error",
       "vuejs-accessibility/tabindex-no-positive": "error",
 
-      // Held back, and why. Each of these was run over the whole tree before
-      // being left out, and the count is what it produced.
+      // Held back, and why.
       //
-      // interactive-supports-focus (2) wants every role="option" focusable. Both
-      // sites are correct as they stand: the autocomplete keeps focus on the
-      // input and moves the selection with aria-activedescendant, and the
-      // notepad's roster uses a roving tabindex the rule cannot evaluate because
-      // it is a binding.
+      // interactive-supports-focus: both role="option" sites are correct (focus
+      // stays on the input with aria-activedescendant; the notepad's roster
+      // uses a roving tabindex the rule cannot evaluate).
       //
-      // no-onchange (1) objects to @change on a native <select>. jsx-a11y
-      // deprecated the same rule: the behaviour it protected against (VoiceOver
-      // submitting on arrow keys) is a decade gone, and @blur instead of @change
-      // would lose the value on the way out.
+      // no-onchange: jsx-a11y deprecated it, and @blur instead of @change would
+      // lose the value on the way out.
       //
-      // mouse-events-have-key-events (19) and no-static-element-interactions (22)
-      // are a real backlog rather than a false alarm — hover-only affordances and
-      // clickable divs. Turning either on is a screen-by-screen job, not a config
-      // line, and a red build that nobody can make green is how a11y linting gets
-      // switched off. Take them one component at a time.
+      // mouse-events-have-key-events and no-static-element-interactions are a
+      // real backlog (hover-only affordances, clickable divs): a screen-by-screen
+      // job, not a config line.
 
-      // Nothing checked that a template's components resolve. Vue answers an
-      // unregistered tag with a console warning, so lint, type-check and build
-      // all stay green while a page renders without its heading, and a component
-      // copied from a file that leaned on a global fails only at runtime. The
+      // An unregistered tag is only a console warning at run time, so the
       // globals above and the router's own two are the only names a template may
       // use without importing them.
       "vue/no-undef-components": [
@@ -269,31 +246,23 @@ export default defineConfigWithVueTs(
       ],
 
       // The design system has one confirmation dialog (shared/ui/ConfirmDialog)
-      // and one prompt, the editor's panel under its button
-      // (BBCodeEditor/InsertPanel). Native modals ignore the
-      // theme, cannot be styled, block the event loop and are untestable — seven
-      // destructive actions had drifted back onto them, including two halves of
-      // one copy-pasted screen. Both spellings are banned: the bare global and
-      // the window property.
+      // and one prompt, the editor's panel (BBCodeEditor/InsertPanel). Native
+      // modals ignore the theme, block the event loop and are untestable. Both
+      // spellings are banned: the bare global and the window property.
       "no-restricted-globals": [
         "error",
-        { name: "confirm", message: "Use shared/ui/ConfirmDialog." },
-        { name: "alert", message: "Use useToast()." },
-        { name: "prompt", message: "Use a dialog with a form field." },
+        ...Object.entries(NATIVE_MODALS).map(([name, message]) => ({
+          name,
+          message,
+        })),
       ],
       "no-restricted-properties": [
         "error",
-        {
+        ...Object.entries(NATIVE_MODALS).map(([property, message]) => ({
           object: "window",
-          property: "confirm",
-          message: "Use shared/ui/ConfirmDialog.",
-        },
-        { object: "window", property: "alert", message: "Use useToast()." },
-        {
-          object: "window",
-          property: "prompt",
-          message: "Use a dialog with a form field.",
-        },
+          property,
+          message,
+        })),
       ],
 
       // Files outside src/ (config, e2e) are simply not FSD elements.
@@ -310,12 +279,7 @@ export default defineConfigWithVueTs(
             "{{from.element.type}} may not import {{to.element.type}} this way: FSD allows downward imports only, into another slice through its index.ts barrel, and same-layer only through the target slice's @x door (docs/conventions/PATTERNS.md).",
           policies: [
             // Downward: any layer below, doors included - and into a sliced layer
-            // only through that slice's own barrel. The barrel half of the rule
-            // was written in PATTERNS.md and enforced nowhere: every deep import
-            // into another slice's internals passed lint and type-check while the
-            // document said the linter caught it. `fileInternalPath` on the
-            // existing policies does the job; `boundaries/entry-point` is
-            // deprecated in v7 and rewrites itself into exactly this.
+            // only through that slice's own barrel (`fileInternalPath`).
             ...LAYERS.flatMap((layer) =>
               [layer, `${layer}-x`].flatMap((from) =>
                 [
@@ -378,10 +342,89 @@ export default defineConfigWithVueTs(
     },
   },
 
+  // Code that does nothing. Each rule below found nothing when it was added, so
+  // it is on to keep it that way: a finding is code to delete, never a line to
+  // exempt. The rules of the family that did find something need a decision
+  // about the code, and are not here.
+  {
+    name: "dm/dead-code",
+    files: LINTED,
+    rules: {
+      // A ref="name" in a template that no script reads is an element named for
+      // nobody: the script that held it is gone and the name stayed behind.
+      "vue/no-unused-refs": "error",
+
+      // "a" + "b" inside a template expression is one string written in two
+      // pieces.
+      "vue/no-useless-concat": "error",
+
+      // A constructor that is empty or only forwards its arguments to super does
+      // what the one it replaces does.
+      "@typescript-eslint/no-useless-constructor": "error",
+
+      // export {} in a file that already imports or exports something is a
+      // leftover of the time the file had neither.
+      "@typescript-eslint/no-useless-empty-export": "error",
+
+      // {} as a type admits every value but null and undefined, which is rarely
+      // what the author meant; the type that was meant has a name.
+      "@typescript-eslint/no-empty-object-type": "error",
+
+      // A statement that computes a value and drops it is a call that lost its
+      // parentheses or a ternary written where an if was meant.
+      "@typescript-eslint/no-unused-expressions": "error",
+
+      // import { a as a } and { a: a } rename nothing.
+      "no-useless-rename": "error",
+
+      // { ["a"]: 1 } is { a: 1 }.
+      "no-useless-computed-key": "error",
+
+      // "a" + "b" between two literals is one literal.
+      "no-useless-concat": "error",
+
+      // A bare { } block that scopes no let, const or function only indents.
+      "no-lone-blocks": "error",
+
+      // x ? true : false is x, and x ? x : y is x || y.
+      "no-unneeded-ternary": "error",
+
+      // A label on a break or continue that already targets the loop it stands
+      // in names nothing.
+      "no-extra-label": "error",
+    },
+  },
+
+  // The code the app ships, the files tsconfig.app.json compiles: the specs and
+  // their harness hand over partial stand-ins on purpose.
+  {
+    name: "dm/shipped",
+    files: ["src/**/*.{ts,vue}"],
+    ignores: [
+      "src/**/*.spec.ts",
+      "src/**/*.fixtures.ts",
+      "src/**/*.doubles.ts",
+      "src/shared/lib/testing/**",
+    ],
+    rules: {
+      // any switches the compiler off for the value and for all it reaches.
+      "@typescript-eslint/no-explicit-any": "error",
+
+      // The script and the template alike.
+      "no-restricted-syntax": ["error", CAST_OF_A_CAST],
+      "vue/no-restricted-syntax": ["error", CAST_OF_A_CAST],
+
+      // The app tells the console a warning or an error; any other line is
+      // debugging left behind.
+      "no-console": ["error", { allow: ["warn", "error"] }],
+    },
+  },
+
   // Size: how much of a file, a component block and a function an agent has to
   // read at once. The limits and the files already past them live in
-  // sizeRatchet.js; the blocks below are the only place they reach the linter,
-  // and src/sizeRatchet.spec.ts checks that no file is held to anything else.
+  // src/gates/sizeRatchet.js; the blocks below are the only place they reach the
+  // linter, and src/gates/sizeRatchet.spec.ts checks that no file is held to
+  // anything else.
   {
     name: "dm/size",
     files: LINTED,

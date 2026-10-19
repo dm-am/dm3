@@ -1,96 +1,50 @@
+using System;
 using System.Collections.Generic;
-using Microsoft.Extensions.Logging.Abstractions;
 using System.Linq;
 using System.Reflection;
-using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using DM.Web.API.Features.Account.Authentication;
 using DM.Web.API.Features.Account.Registration;
 using DM.Web.API.Features.General.Tickets;
+using DM.Web.API.Shared.BotTrap;
 using AwesomeAssertions;
+using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.Mvc.Abstractions;
+using Microsoft.AspNetCore.Mvc.Filters;
+using Microsoft.AspNetCore.Routing;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.Account;
 
 /// <summary>
-/// A honeypot refusal is filed under a field the request declares.
+/// A form with its trap filled is refused before its action runs, under a field
+/// the request declares.
 /// </summary>
-/// <remarks>
-/// Three intake forms carry the same hidden field and refuse the same way. The
-/// login one filed its sentence under "identifier" - a name no request of this API
-/// declares and no form reads - so the one answer a caught client gets was
-/// addressed to nothing, while the two forms beside it named a real field.
-/// Asserted against the properties of the request type rather than against the
-/// literal key: a key spelled right today and left behind by a renamed field
-/// tomorrow is this same defect again.
-/// </remarks>
-public class HoneypotRefusalShould : UnitTestBase
+/// <remarks>Asserted against the properties of the request type, so a renamed field takes the key with it.</remarks>
+public class HoneypotRefusalShould
 {
     private const string Filled = "http://spam.example";
 
-    [Fact]
-    public async Task NameAFieldOfTheLoginRequest()
+    public static TheoryData<IHoneypotForm> FilledForms => new()
     {
-        var api = Mock<IAuthenticationApiService>();
-        var controller = new AuthenticationController(api);
+        new LoginRequest { Email = "bot@example.com", Password = "whatever", Website = Filled },
+        new RegistrationRequest
+        {
+            Email = "bot@example.com", Password = "whatever", AcceptedRules = true, Website = Filled
+        },
+        new CreateTicketIntakeRequest { Subject = "anything", Text = "anything", Website = Filled }
+    };
 
-        var refusal = await Assert.ThrowsAsync<HttpBadRequestException>(
-            () => controller.Login(new LoginRequest
-            {
-                Email = "bot@example.com",
-                Password = "whatever",
-                Website = Filled
-            }));
-
-        ShouldNameAVisibleFieldOf<LoginRequest>(refusal);
-        api.ShouldHaveReceivedNoCalls();
-    }
-
-    [Fact]
-    public async Task NameAFieldOfTheRegistrationRequest()
+    [Theory]
+    [MemberData(nameof(FilledForms))]
+    public void RefuseAFilledTrapUnderAVisibleField(IHoneypotForm form)
     {
-        var registration = Mock<IRegistrationApiService>();
-        var activation = Mock<IActivationApiService>();
-        var controller = new RegistrationController(
-            registration, activation, NullLogger<RegistrationController>.Instance);
+        var refusal = Assert.Throws<HttpBadRequestException>(() => Filter(form));
 
-        var refusal = await Assert.ThrowsAsync<HttpBadRequestException>(
-            () => controller.Register(new RegistrationRequest
-            {
-                Email = "bot@example.com",
-                Password = "whatever",
-                AcceptedRules = true,
-                Website = Filled
-            }));
-
-        ShouldNameAVisibleFieldOf<RegistrationRequest>(refusal);
-        registration.ShouldHaveReceivedNoCalls();
-    }
-
-    [Fact]
-    public async Task NameAFieldOfTheTicketRequest()
-    {
-        var tickets = Mock<ITicketIntakeApiService>();
-        var controller = new TicketIntakeController(tickets);
-
-        var refusal = await Assert.ThrowsAsync<HttpBadRequestException>(
-            () => controller.CreateTicketIntake(new CreateTicketIntakeRequest
-            {
-                Subject = "anything",
-                Text = "anything",
-                Website = Filled
-            }));
-
-        ShouldNameAVisibleFieldOf<CreateTicketIntakeRequest>(refusal);
-        tickets.ShouldHaveReceivedNoCalls();
-    }
-
-    private static void ShouldNameAVisibleFieldOf<TRequest>(HttpBadRequestException refusal)
-    {
+        refusal.Message.Should().Be(RefusalMessage.InvalidData);
         var field = refusal.ValidationErrors.Keys.Single().ToLowerInvariant();
-
-        Fields<TRequest>().Should().Contain(field,
+        Fields(form.GetType()).Should().Contain(field,
             "a client files the sentence under the field the answer names, and a name " +
             "the request does not carry belongs to no field on the form");
         field.Should().NotBe("website",
@@ -98,7 +52,39 @@ public class HoneypotRefusalShould : UnitTestBase
             "is shown either");
     }
 
-    private static IEnumerable<string> Fields<TRequest>() => typeof(TRequest)
+    [Fact]
+    public void LetAnEmptyTrapThrough()
+    {
+        var act = () => Filter(new LoginRequest { Email = "reader@example.com", Password = "secret" });
+
+        act.Should().NotThrow();
+    }
+
+    /// <summary>
+    /// The filter only sees a form that says it has a trap: a request with the
+    /// field and without the interface would go through with the field filled.
+    /// </summary>
+    [Fact]
+    public void KnowEveryRequestThatCarriesATrap()
+    {
+        var untrapped = typeof(HoneypotFilter).Assembly.GetTypes()
+            .Where(type => type.GetProperty(nameof(IHoneypotForm.Website)) != null)
+            .Where(type => !typeof(IHoneypotForm).IsAssignableFrom(type))
+            .Select(type => type.FullName);
+
+        untrapped.Should().BeEmpty();
+    }
+
+    private static void Filter(object request)
+    {
+        var action = new ActionContext(new DefaultHttpContext(), new RouteData(), new ActionDescriptor());
+        var context = new ActionExecutingContext(action, new List<IFilterMetadata>(),
+            new Dictionary<string, object?> { ["request"] = request }, controller: new object());
+
+        new HoneypotFilter().OnActionExecuting(context);
+    }
+
+    private static IEnumerable<string> Fields(Type request) => request
         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
         .Select(property => property.Name.ToLowerInvariant());
 }

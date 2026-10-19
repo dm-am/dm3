@@ -2,9 +2,6 @@ using System;
 
 namespace DM.Domain.Community.Features.UserEndorsements;
 
-/// <summary>
-/// Input DTO for creating a user endorsement
-/// </summary>
 public class CreateUserEndorsement
 {
     /// <summary>

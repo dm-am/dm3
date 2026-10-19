@@ -59,9 +59,6 @@ public class WebsiteTestimonial : ISoftDeletable
     /// <inheritdoc />
     public DateTimeOffset? DeletedUtc { get; set; }
 
-    /// <summary>
-    /// Author
-    /// </summary>
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;
 

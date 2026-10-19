@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
-using DM.Testing;
 using DM.Web.API.Shared.Configuration;
 using DM.Web.API.Shared.Http;
 using AwesomeAssertions;
@@ -17,7 +16,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-public class ReverseProxySupportShould : UnitTestBase
+public class ReverseProxySupportShould
 {
     private const string ProxyAddress = "172.20.0.7";
     private const string ClientAddress = "203.0.113.9";
@@ -113,14 +112,8 @@ public class ReverseProxySupportShould : UnitTestBase
     /// have to be written down.
     /// </summary>
     /// <remarks>
-    /// Each proxy appends the peer it saw to the header, so behind two of them the
-    /// visitor is two entries from the end. Left at one hop the application reads
-    /// the address of the nearer edge instead — one address for every visitor, which
-    /// makes the per-account rate limit a shared budget for the whole site and
-    /// writes the same address into every line of the login journal.
-    ///
-    /// The trusted entry is the address of that second edge and nothing wider: a
-    /// range covers whoever else lives in it, and the header they send is believed.
+    /// Behind two proxies the visitor is two entries from the end; the trusted entry is that second edge's
+    /// address, not a range.
     /// </remarks>
     [Fact]
     public async Task ReadThroughEveryEdgeThatWasDeclared()

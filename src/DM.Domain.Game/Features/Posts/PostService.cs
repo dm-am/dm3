@@ -1,8 +1,8 @@
-using DM.Domain.Game.Features.Games;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Authorization;
@@ -20,9 +20,6 @@ using FluentValidation;
 
 namespace DM.Domain.Game.Features.Posts;
 
-/// <summary>
-/// Unified service for post CRUD operations
-/// </summary>
 internal class PostService : IPostService
 {
     private readonly IValidator<CreatePost> _createValidator;
@@ -38,7 +35,7 @@ internal class PostService : IPostService
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IEventProducer _producer;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IBbTagNameCase _tagNames;
+    private readonly IPrivateBlockReading _privateBlockReading;
 
     public PostService(
         IValidator<CreatePost> createValidator,
@@ -54,7 +51,7 @@ internal class PostService : IPostService
         IUnreadCountersRepository unreadCountersRepository,
         IEventProducer producer,
         IIdentityProvider identityProvider,
-        IBbTagNameCase tagNames)
+        IPrivateBlockReading privateBlockReading)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -69,7 +66,7 @@ internal class PostService : IPostService
         _unreadCountersRepository = unreadCountersRepository;
         _producer = producer;
         _identityProvider = identityProvider;
-        _tagNames = tagNames;
+        _privateBlockReading = privateBlockReading;
     }
 
     #region Create
@@ -88,50 +85,42 @@ internal class PostService : IPostService
 
         var events = new List<EventType>(2) { EventType.NewPost };
 
-        // Check if this post fulfills any pendencies
         var hasPendencies = room.Pendencies.Any(p => p.WaitingForUser.UserId == identity.User.UserId);
         if (hasPendencies)
+        {
             events.Add(EventType.RoomPendencyFulfilled);
+        }
 
-        var metaText = createPost.MetagameText?.Trim();
-        // MetagameText (OOC) renders on the Comment surface where [mod] is a
-        // green mod block; strip it when authored by a non-moderator. GameText
-        // renders on the GamePost surface (no [mod]) and is left as-is.
+        // Only the metagame text is sanitized: the game text renders on the GamePost surface, which reads no [mod].
+        var metaText = AuthoredText.AsTyped(createPost.MetagameText);
         if (!string.IsNullOrEmpty(metaText))
-            metaText = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(metaText, identity.User.Role), BbTagSet.WithModBlock);
+        {
+            metaText = ModBlockSanitizer.SanitizeForAuthor(metaText, identity.User.Role);
+        }
 
         var now = _dateTimeProvider.Now;
-        // The names of the tags in lower case, as the site writes them
-        // (IBbTagNameCase); the game text reads no [mod].
-        var gameText = _tagNames.ToLowerCase(createPost.GameText.Trim(), BbTagSet.Common);
+        var gameText = createPost.GameText;
+        var postId = _guidFactory.Create();
+
+        // Dice are dropped when the room has rolling disabled, whatever the payload says.
+        // A roll cannot be produced again, so it is written in the post's transaction.
+        var diceSpecs = createPost.DiceRolls.ToList();
+        var rolls = diceSpecs.Count > 0 && room.Settings.DiceEnabled
+            ? _diceRoller.Roll(postId, now, diceSpecs)
+            : [];
 
         var entity = new CreatePostEntity
         {
-            PostId = _guidFactory.Create(),
+            PostId = postId,
             RoomId = createPost.RoomId,
             AuthorId = identity.User.UserId,
             CharacterId = createPost.CharacterId,
             GameText = gameText,
             MetagameText = metaText,
             PrivateAddresseeSnapshotJson = ResolvePrivateAddressees(gameText, room, null),
-            CreatedUtc = now
+            CreatedUtc = now,
+            DiceRolls = rolls
         };
-
-        // Roll any requested dice server-side (doc 4.2.2.13).
-        // The client already gates the composer on the room setting, but the
-        // server must not trust the payload — dice are dropped when the room
-        // has rolling disabled.
-        //
-        // The rolls travel inside the entity and the repository writes them in
-        // the post's own transaction: both land or neither does. A roll
-        // is the one thing here that cannot be produced again — rolling a second
-        // time answers a different number — and the transaction is what makes
-        // "rolls without a post" and "a post without its rolls" unrepresentable.
-        var diceSpecs = createPost.DiceRolls?.ToList() ?? new List<CreatePostDiceRoll>();
-        var rolls = diceSpecs.Count > 0 && room.Settings?.DiceEnabled == true
-            ? _diceRoller.Roll(entity.PostId, now, diceSpecs)
-            : [];
-        entity.DiceRolls = rolls;
 
         var createdPost = await _repository.Create(entity);
 
@@ -152,38 +141,29 @@ internal class PostService : IPostService
 
     public async Task<(IEnumerable<Post> posts, PagingResult paging)> GetAllAsync(Guid roomId, RoomPostsQuery query)
     {
-        // Reading is gated by the scope the room was fetched through:
-        // GameAccessibilityFilters.RoomAvailable admits an open room to anyone
-        // who may see the game, and a private one only to its leads and to the
-        // characters and readers the room was opened to. A room outside that
-        // scope is not refused, it is absent, and GetAsync answers 404 for it.
-        //
-        // What stood here asked whether the reader may CREATE a post, against a
-        // target type no resolver handles, so every read of every room answered
-        // 403 and the room page said it could not load its posts.
-        var room = await _roomService.GetAsync(roomId);
+        // Reading is gated by the scope the room is fetched through: a room outside it is a 404.
+        await _roomService.GetAsync(roomId);
 
         var identity = _identityProvider.Current;
         var totalCount = await _repository.Count(roomId, query, identity.User.UserId);
-        var paging = new PagingData(query, identity.Settings.Paging.PostsPerPage, totalCount);
+        var paging = new PagingData(query, identity.Settings.PageSize, totalCount);
         var posts = (await _repository.Get(roomId, query, paging, identity.User.UserId)).ToList();
 
-        // Enrich posts with dice rolls
-        await EnrichWithDiceRollsAsync(posts);
+        await EnrichWithDiceRollsAsync(posts, identity.User.UserId);
 
         return (posts, paging.Result);
     }
 
-    public async Task<Post> GetAsync(Guid postId)
+    public async Task<Post> GetAsync(Guid postId, CancellationToken ct = default)
     {
-        var post = await _repository.Get(postId, _identityProvider.Current.User.UserId);
+        var readerId = _identityProvider.Current.User.UserId;
+        var post = await _repository.Get(postId, readerId, ct);
         if (post == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
         }
 
-        // Enrich post with dice rolls
-        post.DiceRolls = await _diceRollRepository.GetByPostIdAsync(postId);
+        post.DiceRolls = (await _diceRollRepository.GetByPostIdAsync(postId, ct)).VisibleTo(post, readerId);
 
         return post;
     }
@@ -216,44 +196,44 @@ internal class PostService : IPostService
 
         var entity = new UpdatePostEntity
         {
-            PostId = updatePost.PostId
+            PostId = updatePost.PostId,
+            PostEditId = _guidFactory.Create(),
+            EditorUserId = currentUserId,
+            EditedUtc = _dateTimeProvider.Now
         };
 
-        // Submitted text the caller may not edit is refused. It used to be swapped
-        // for the stored text and saved, so an edit nobody was allowed to make came
-        // back 200 with the post as it was - the same response a successful edit
-        // produces. A request that submits no text asks for nothing and keeps the
-        // stored values: the lead who may only change the character reaches the
-        // branch below.
+        // Submitted text the caller may not edit is refused; no text keeps the stored values.
         if (updatePost.GameText != null || updatePost.MetagameText != null)
         {
             _intentionManager.ThrowIfForbidden(PostIntention.EditText, (post, room));
 
-            // PATCH semantics: an absent field keeps its value, an empty string
-            // clears it. Without the null check, editing only the in-game text
-            // wiped the out-of-character text, and omitting the in-game text threw.
+            // An absent field keeps its value, an empty string clears it.
             entity.GameText = updatePost.GameText == null
                 ? post.GameText
-                : _tagNames.ToLowerCase(updatePost.GameText.Trim(), BbTagSet.Common);
-            var metaText = updatePost.MetagameText?.Trim();
-            // MetagameText (OOC) renders on the Comment surface where [mod] is
-            // a green mod block; strip it when the editor is a non-moderator.
+                : updatePost.GameText;
+            var metaText = AuthoredText.AsTyped(updatePost.MetagameText);
             if (!string.IsNullOrEmpty(metaText))
-                metaText = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(
-                    metaText, _identityProvider.Current.User.Role), BbTagSet.WithModBlock);
+            {
+                metaText = ModBlockSanitizer.SanitizeForAuthor(metaText, _identityProvider.Current.User.Role);
+            }
+
             entity.MetagameText = updatePost.MetagameText == null ? post.MetagameText : metaText;
+
+            if (updatePost.GameText != null)
+            {
+                ThrowIfFileForAllOnlyInsideBlocks(entity.GameText, post);
+            }
         }
         else
         {
-            entity.GameText = post.GameText; // Keep original
+            entity.GameText = post.GameText;
             entity.MetagameText = post.MetagameText;
         }
 
         entity.PrivateAddresseeSnapshotJson = ResolvePrivateAddressees(
             entity.GameText, room, post.PrivateAddresseeSnapshotJson);
 
-        // Same rule for the character: a change the caller may not make is a
-        // refusal, an unchanged value is not a change.
+        // A change the caller may not make is a refusal, an unchanged value is not a change.
         if (updatePost.CharacterId != null && updatePost.CharacterId.HasChanged(post.Character?.Id))
         {
             _intentionManager.ThrowIfForbidden(RoomIntention.CreatePost, (room, updatePost.CharacterId.Value));
@@ -270,37 +250,50 @@ internal class PostService : IPostService
     }
 
     /// <summary>
-    /// Freeze who each [private=...] block of the post is for. Without this the
-    /// snapshot stayed at its default and the addressee rule — one of the five
-    /// in BBCODE_RENDERING.md — never fired for anyone: the player a line was
-    /// written to was the one reader who could not read it.
+    /// Freeze who each [private=...] block of the post is for.
     /// </summary>
     /// <remarks>
-    /// Names resolve against the characters that have access to the room, so a
-    /// block can only ever name someone who already reads it; a snapshot hands
-    /// out no access that room membership did not. Blocks an earlier save
-    /// resolved keep their ids — the rule is addressee-forever, and re-resolving
-    /// them on edit would revoke a player whose character has left since.
-    ///
-    /// The character travels beside its name because the snapshot compares by
-    /// identity: a name can be given up and taken by somebody else, and an edit
-    /// that writes a name whose character has changed is refused rather than
-    /// delivered to whoever the name used to mean. The refusal comes out of
-    /// <see cref="PrivateAddresseeSnapshot"/> as an ordinary bad-request, before
-    /// anything is written.
+    /// Names resolve against the characters with access to the room, so a snapshot hands out no access.
+    /// Blocks an earlier save resolved keep their ids: the rule is addressee-forever. The character travels
+    /// beside its name, so a name taken by somebody else is refused rather than delivered.
     /// </remarks>
     private static string ResolvePrivateAddressees(
         string gameText, RoomToUpdate? room, string? previousSnapshotJson) =>
-        PrivateAddresseeSnapshot.Build(gameText, previousSnapshotJson,
-            room?.Accesses
-                .Select(a => a.Character)
-                .Where(c => c is { Author: not null })
-                .Select(c => new PrivateAddressee(c!.Id, c.Name, c.Author!.UserId))
-            ?? []);
+        PrivateAddresseeSnapshot.Build(gameText, previousSnapshotJson, room?.PrivateAddressees() ?? []);
 
-    private async Task EnrichWithDiceRollsAsync(List<Post> posts)
+    public IReadOnlySet<Guid> Editable(IEnumerable<Post> posts) =>
+        posts.Where(p => _intentionManager.IsAllowed(PostIntention.EditText, p)).Select(p => p.Id).ToHashSet();
+
+    /// <summary>
+    /// Refuse a text that puts a file every reader sees only inside hidden blocks.
+    /// </summary>
+    /// <remarks>
+    /// The plate of the file would say "Все" while the text gives it to the readers of the blocks, and the
+    /// read of the file keeps it to them. The author is asked which of the two he means, rather than told
+    /// one thing and shown another; what he stored stays as he stored it.
+    /// </remarks>
+    private void ThrowIfFileForAllOnlyInsideBlocks(string gameText, Post post)
     {
-        if (posts.Count == 0) return;
+        var forAll = post.Attachments.Where(a => a.AddresseesJson == null).ToArray();
+        if (forAll.Length == 0)
+        {
+            return;
+        }
+
+        var inside = _privateBlockReading.OnlyInsideBlocks(gameText, forAll.Select(a => a.Id).ToArray());
+        if (forAll.FirstOrDefault(a => inside.Contains(a.Id)) is { } attachment)
+        {
+            throw new HttpException(
+                HttpStatusCode.BadRequest, RefusalMessage.FileForAllOnlyInsideHiddenBlock(attachment.FileName));
+        }
+    }
+
+    private async Task EnrichWithDiceRollsAsync(List<Post> posts, Guid readerId)
+    {
+        if (posts.Count == 0)
+        {
+            return;
+        }
 
         var postIds = posts.Select(p => p.Id).ToList();
         var diceRollsByPost = await _diceRollRepository.GetByPostIdsAsync(postIds);
@@ -308,7 +301,9 @@ internal class PostService : IPostService
         foreach (var post in posts)
         {
             if (diceRollsByPost.TryGetValue(post.Id, out var rolls))
-                post.DiceRolls = rolls;
+            {
+                post.DiceRolls = rolls.VisibleTo(post, readerId);
+            }
         }
     }
 
@@ -321,17 +316,10 @@ internal class PostService : IPostService
         var post = await GetAsync(postId);
         _intentionManager.ThrowIfForbidden(PostIntention.Delete, post);
 
-        // The author's post count moves inside Delete, in the transaction that
-        // removes the post: asked for separately here, the two could and did
-        // commit apart.
         var removed = await _repository.Delete(postId, _identityProvider.Current.User.UserId);
         if (!removed)
         {
-            // Somebody else removed this post between the read above and the
-            // write. The room's unread counter and the event belong to the
-            // removal that happened, and repeating them here takes the counter
-            // down twice for one post. The caller is answered the same either
-            // way: the post is gone, which is what they asked for.
+            // Removed by somebody else in between: the counter and the event belong to that removal.
             return;
         }
 

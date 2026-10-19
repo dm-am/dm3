@@ -1,22 +1,9 @@
 <script setup lang="ts">
-/**
- * The waiting twin of a moderation record (RecordBlock, RecordVerdictList and
- * RecordVerdict): the dashed square with its text and caption, and the
- * bulleted decision with its caption, in the geometry of the real thing.
- *
- * A warning and a ban are drawn on the same parts, so the lists of both wait
- * on this one twin; a copy per list drifts the first time the record changes
- * shape. The square of a row with no text is the caption alone, and the
- * caller says so: the number of lines is the list's to know.
- *
- * How many records to draw is the caller's, the way every skeleton of a list
- * takes it: the number belongs to the list being waited for, not to the block.
- */
+// One twin for the warning and the ban lists, which draw on the same parts.
 withDefaults(
   defineProps<{
-    /** Number of records to draw while the list loads */
     count?: number;
-    /** The square carries a line of text above its caption */
+    /** A line of text above the caption. */
     withText?: boolean;
   }>(),
   { count: 1, withText: true },
@@ -40,27 +27,23 @@ withDefaults(
 
 <style scoped lang="sass">
 @use "@/assets/styles/Skeleton" as *
+@use "@/assets/styles/CommentParts" as *
 
-// The same column and the same steps the real list keeps, so the list does not
-// shift when the answer arrives.
+// The steps of the real list, so it does not shift when the answer arrives.
 .record-skeleton-list
   display: flex
   flex-direction: column
   gap: $medium
   margin-bottom: $medium
 
-// RecordBlock: the comment's frame, ground and padding.
+// RecordBlock's frame.
 .skeleton-block
-  padding: $medium
-  border: 1px dashed $border
-  background-color: $bg-element
+  +comment-frame
 
-// RecordVerdictList and RecordVerdict: the list's step down and its indent,
-// the item's margin and its own indent.
+// The list of decisions and RecordVerdict together.
 .skeleton-verdict
   padding: ($small + $minor) 0 $minor ($big + $small + $small)
 
-// A line is the height of the line box it stands in for.
 .skeleton-line
   +skeleton-shimmer
 

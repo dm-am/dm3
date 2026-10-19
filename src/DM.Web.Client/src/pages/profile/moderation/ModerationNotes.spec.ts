@@ -3,17 +3,9 @@
  */
 
 /**
- * A moderator's note signs itself in one line: the date, the mark of an edit,
- * and what the reader may do with it, the actions after a bar each. They used
- * to be a row of their own under the text, the edit spelled "Изменить" where
- * every other signed thing on the site says "Редактировать", and the delete
- * drawn red.
- *
- * What is pinned is the line as it reads and copies: the edit mark runs into
- * the date with a space and no bar, the actions follow the last caption part
- * after one, and a note the reader may not touch ends on its date. While the
- * note is open in the editor the actions go, because the editor has buttons
- * of its own.
+ * A moderator's note signs itself in one caption line, as it reads and copies:
+ * the date, the edit mark run into it, then the actions after a bar, gone
+ * while the note is in the editor.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
@@ -25,8 +17,7 @@ const createModNote = vi.hoisted(() => vi.fn());
 
 vi.mock("@/entities/moderation", () => ({ moderationApi: { createModNote } }));
 
-// The editor is the site's BBCode editor, a world of its own; the line above
-// it is what is read here.
+// The editor is stubbed; the line above it is what is read.
 vi.mock("@/shared/ui/BBCodeEditor", () => ({
   BBCodeEditor: { template: "<div class='editor-stub' />" },
 }));
@@ -85,11 +76,7 @@ describe("ModerationNotes", () => {
   });
 });
 
-/**
- * The notes read the way the viewer's own note on the page reads: the text,
- * and a grey "Добавить" that opens the editor. The editor used to stand open
- * under the list at all times and pushed the rest of the panel down.
- */
+/** Notes add the way the viewer's own note does: a grey "Добавить" opens the editor. */
 describe("adding a moderator's note", () => {
   beforeEach(() => createModNote.mockReset());
 
@@ -144,7 +131,7 @@ describe("adding a moderator's note", () => {
 
     expect(createModNote).toHaveBeenCalledWith(
       "Нарушитель",
-      "Обещал исправиться",
+      " Обещал исправиться ",
     );
     expect(wrapper.find(".editor-stub").exists()).toBe(false);
     expect(wrapper.emitted("updated")).toHaveLength(1);

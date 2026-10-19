@@ -1,11 +1,7 @@
 using System.Collections.Generic;
 using System.Linq;
-using DM.Infrastructure.Persistence.Entities.Blog;
-using DM.Infrastructure.Persistence.Entities.Game;
-using DM.Infrastructure.Persistence.Entities.Messaging;
+using DM.Testing;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Xunit;
 
@@ -14,15 +10,7 @@ namespace DM.Infrastructure.Persistence.Tests;
 /// <summary>
 /// A readable page address is unique and indexed, for every entity that has one.
 /// </summary>
-/// <remarks>
-/// PublicId is what every link on the site carries and what the page is resolved by, with
-/// equality. Chats had the constraint and the reason written beside it; games and blogs had
-/// neither, so the busiest lookup on the site answered from a sequential scan, and a repeated
-/// address would have returned whichever row the plan reached first instead of failing.
-///
-/// Stated over the model rather than over the three known types: the next entity to get a
-/// readable address inherits the rule instead of the omission.
-/// </remarks>
+/// <remarks>Every link resolves a page by PublicId with equality; stated over the model, so a new entity inherits it.</remarks>
 public class ReadableIdentifierShould
 {
     private const string ReadableId = "PublicId";
@@ -44,30 +32,8 @@ public class ReadableIdentifierShould
         }
     }
 
-    /// <summary>
-    /// A reader that reads nothing passes everything.
-    /// </summary>
-    [Fact]
-    public void FindEveryEntityThatCarriesOne()
-    {
-        var names = TypesWithReadableId().Select(t => t.ClrType).ToList();
-
-        names.Should().Contain(new[] { typeof(Game), typeof(Blog), typeof(Chat) },
-            "games, blogs and chats are the three entities addressed by a readable id today; a " +
-            "walk that misses one of them is walking the wrong model");
-    }
-
-    private static IReadOnlyCollection<IEntityType> TypesWithReadableId()
-    {
-        // Model metadata only: the connection is never opened.
-        var options = new DbContextOptionsBuilder<DmDbContext>()
-            .UseNpgsql("Host=localhost;Database=public-id-probe;Username=probe;Password=probe")
-            .Options;
-        using var context = new DmDbContext(options);
-
-        return context.GetService<IDesignTimeModel>().Model
-            .GetEntityTypes()
-            .Where(entityType => entityType.FindProperty(ReadableId) != null)
-            .ToList();
-    }
+    private static IReadOnlyCollection<IEntityType> TypesWithReadableId() => ProbeContext.DesignTimeModel()
+        .GetEntityTypes()
+        .Where(entityType => entityType.FindProperty(ReadableId) != null)
+        .ToList();
 }

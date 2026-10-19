@@ -1,4 +1,3 @@
-using DM.Domain.Game.Features.Games;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -15,9 +14,6 @@ using FluentValidation;
 
 namespace DM.Domain.Game.Features.PostPendencies;
 
-/// <summary>
-/// Unified service for post pendency CRUD operations
-/// </summary>
 internal class PostPendencyService : IPostPendencyService
 {
     private readonly IValidator<CreatePostPendency> _validator;
@@ -46,20 +42,14 @@ internal class PostPendencyService : IPostPendencyService
         _identityProvider = identityProvider;
     }
 
-    #region Create
-
     public async Task<PostPendency> CreateAsync(CreatePostPendency createPostPendency)
     {
         await _validator.ValidateAndThrowAsync(createPostPendency);
-        // With the game, not without: the rule reads the roles of the game the
-        // room belongs to, and asked with the plain projection the check finds no
-        // resolver and refuses everybody.
+        // With the game: the rule reads its roles, and the plain projection finds no resolver.
         var room = await _roomService.GetWithGameAsync(createPostPendency.RoomId);
         _intentionManager.ThrowIfForbidden(RoomIntention.CreatePostPendency, room);
 
-        // The one waited for is the player of the character, read from the room:
-        // the character has to be let into it, and an NPC, which has no player,
-        // cannot be waited on.
+        // The character has to be let into the room, and an NPC has no player to wait on.
         var player = room.Accesses
             .Select(access => access.Character)
             .FirstOrDefault(character => character?.Id == createPostPendency.CharacterId)?
@@ -90,10 +80,6 @@ internal class PostPendencyService : IPostPendencyService
         return pendency;
     }
 
-    #endregion
-
-    #region Delete
-
     public async Task DeleteAsync(Guid pendencyId)
     {
         var pendency = await _repository.Get(pendencyId);
@@ -106,6 +92,4 @@ internal class PostPendencyService : IPostPendencyService
         await _repository.Delete(pendencyId);
         await _producer.SendAsync(EventType.RoomPendencyDeleted, pendencyId);
     }
-
-    #endregion
 }

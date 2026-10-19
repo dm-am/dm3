@@ -3,12 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
-using BBCodeParser;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
-using DM.Testing.Dsl;
 using DM.Testing.Markup;
 using Xunit;
 
@@ -20,17 +17,11 @@ namespace DM.Infrastructure.Core.Tests;
 /// reference reading of the rule (HiddenTextOracle).
 /// </summary>
 /// <remarks>
-/// The grammar table holds the spellings somebody thought of; these checks hold
-/// the combinations nobody did. Every word of a generated text is different, so
-/// a check can follow each one to every reader of every surface, to the plain
-/// text of the mail and to the embed, and say which reader got a word the rule
-/// keeps from them, or lost one the rule gives them. How a failure is reported
-/// and replayed: docs/guides/TESTING.md, section "Генеративные проверки
-/// разметки".
+/// Every word of a generated text is different, so each is followed to every reader; reporting and
+/// replay: docs/guides/TESTING.md, section "Генеративные проверки разметки".
 /// </remarks>
 public class BbMarkupPropertiesShould
 {
-    private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid LeadId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid StrangerId = Guid.Parse("44444444-4444-4444-4444-444444444444");
     private static readonly Guid AddresseeId = Guid.Parse("00000000-0000-0000-0001-000000000001");
@@ -62,12 +53,7 @@ public class BbMarkupPropertiesShould
     /// them read, and no other; the plain text and the embed carry no word of any
     /// block and every word outside them.
     /// </summary>
-    /// <remarks>
-    /// Besides the words, the blocks themselves are counted: a reader gets one
-    /// block element for every block they read whose every outer block they read
-    /// too, and the line "DungeonMaster, Assistant" never reaches a reader who
-    /// reads no block. A block with no word in it is still held that way.
-    /// </remarks>
+    /// <remarks>The blocks are counted too, and the line of recipients never reaches a reader who reads no block.</remarks>
     [Fact]
     public void ShowEveryReaderExactlyTheWordsTheBlocksLetThemRead() =>
         MarkupProperty.Check(nameof(ShowEveryReaderExactlyTheWordsTheBlocksLetThemRead), runs: 300,
@@ -88,12 +74,12 @@ public class BbMarkupPropertiesShould
                         if (wrong != null) return wrong;
                     }
 
-                    var plain = Render(() => Wrapper(Provider.GetForSurface(surface))
+                    var plain = BbVisibilityRender.RenderOrNull(() => Provider.GetForSurface(surface)
                         .RenderText(input, RenderContext.ForPlainText() with { Surface = surface }));
                     var plainWrong = Misread(reading, plain, reader: null, surface, $"plain text of {surface}");
                     if (plainWrong != null) return plainWrong;
 
-                    var embed = Render(() => Wrapper(Provider.GetSafeForSurface(surface))
+                    var embed = BbVisibilityRender.RenderOrNull(() => Provider.GetSafeForSurface(surface)
                         .RenderHtml(input, RenderContext.ForEmbedSafe(surface)));
                     var embedWrong = Misread(reading, embed, reader: null, surface, $"embed of {surface}");
                     if (embedWrong != null) return embedWrong;
@@ -108,15 +94,8 @@ public class BbMarkupPropertiesShould
     /// spelling, and not the tags around it that held nothing else.
     /// </summary>
     /// <remarks>
-    /// Two comparisons, for every reader of every surface and for the plain text
-    /// and the embed. Every block the reader does not read (the outermost ones:
-    /// what stands inside is gone with them) is first replaced by an empty bare
-    /// block, and the reader must get exactly what they got before: nothing in
-    /// the answer depends on what the block held or how it was spelled. Then it
-    /// is replaced by a character, and the reader of the original must get no
-    /// more empty elements than the reader of that text: a tag that held nothing
-    /// but the block would otherwise stay on the page, empty, where the author
-    /// wrote no empty tag.
+    /// An unread block is replaced by an empty bare block and the answer must not change; then by a
+    /// character, and the original must give no more empty elements.
     /// </remarks>
     [Fact]
     public void LeaveNoTraceOfABlockTheReaderDoesNotRead() =>
@@ -185,16 +164,8 @@ public class BbMarkupPropertiesShould
     /// with it: the reader gets what the text reads like without that line.
     /// </summary>
     /// <remarks>
-    /// The texts above put a block on a line of its own only now and then, so here
-    /// the blocks of a generated text, as they were spelled, are laid out on lines of
-    /// their own between plain words - at the start of the text, at its end, between
-    /// words or one after another, by the length of the text - and the new text is
-    /// read again from scratch: what is a block, and who reads it, is whatever the
-    /// rule makes of it. Every reader of every surface, the plain text and the embed
-    /// then have to get what they get for the same text with those lines taken out
-    /// (see <see cref="WithoutTheirLines" />). Nothing but words stands outside the
-    /// blocks, so no tag of the author's can be left out around them and blur what
-    /// taking a line out means.
+    /// The blocks of a generated text are laid out on lines of their own between plain words and read
+    /// again, against the same text without those lines (see <see cref="WithoutTheirLines" />).
     /// </remarks>
     [Fact]
     public void LeaveNoLineOfABlockTheReaderDoesNotRead() =>
@@ -289,17 +260,8 @@ public class BbMarkupPropertiesShould
     /// bare one.
     /// </summary>
     /// <remarks>
-    /// The lines are read over the whole text, and a break inside a block is none:
-    /// the block is one piece of whatever line it stands on.
-    ///
-    /// The blocks of a line taken out are spelled two ways, and a reader is right to
-    /// get either. Kept as empty blocks, they stand glued to the line next to theirs,
-    /// and a tag they were all of is still left out the way the renderer leaves it
-    /// out, rather than turning into the empty tag the author never typed; but glued
-    /// to an empty line they make a line of their own again, which the renderer then
-    /// takes out as well. Taken out, they leave no such line, and a tag they were all
-    /// of is left with its white space alone. Each spelling is the text without the
-    /// line wherever the other one is not.
+    /// A break inside a block is none. The blocks of a removed line are spelled two ways, kept empty or
+    /// taken out, and a reader is right to get either.
     /// </remarks>
     private static string WithoutTheirLines(string text, IReadOnlyList<HiddenBlock> blocks, bool keepEmptyBlocks)
     {
@@ -425,11 +387,11 @@ public class BbMarkupPropertiesShould
     }
 
     private static string? Plain(string input, BbSurface surface) =>
-        Render(() => Wrapper(Provider.GetForSurface(surface))
+        BbVisibilityRender.RenderOrNull(() => Provider.GetForSurface(surface)
             .RenderText(input, RenderContext.ForPlainText() with { Surface = surface }));
 
     private static string? Embed(string input, BbSurface surface) =>
-        Render(() => Wrapper(Provider.GetSafeForSurface(surface))
+        BbVisibilityRender.RenderOrNull(() => Provider.GetSafeForSurface(surface)
             .RenderHtml(input, RenderContext.ForEmbedSafe(surface)));
 
     /// <summary>
@@ -457,8 +419,8 @@ public class BbMarkupPropertiesShould
                           PrivateBlockMarkup.DescribeBalanceRefusal(input);
                 }
 
-                if (!balanced && !Regex.IsMatch(PrivateBlockMarkup.DescribeBalanceRefusal(input), @"символ \d+"))
-                    return "the refusal does not name the place: " + PrivateBlockMarkup.DescribeBalanceRefusal(input);
+                if (!balanced && !Regex.IsMatch(PrivateBlockMarkup.DescribeBalanceRefusal(input), @"\[/?[Pp][Rr][Ii][Vv][Aa][Tt][Ee]"))
+                    return "the refusal does not quote the spelling: " + PrivateBlockMarkup.DescribeBalanceRefusal(input);
 
                 var hiding = PrivateBlockMarkup.ContainsPrivateMarkup(input);
                 if (hiding != reading.HidingMarkupAt >= 0)
@@ -489,10 +451,6 @@ public class BbMarkupPropertiesShould
                 $"the table says {row.Input} is {(row.SaveRefused ? "refused" : "taken")} on {surface}");
         }
     }
-
-    // ════════════════════════════════════════════════════════════════
-    // What a reader got
-    // ════════════════════════════════════════════════════════════════
 
     /// <summary>
     /// What is wrong with what one reader got, or null. A null reader is a
@@ -539,7 +497,7 @@ public class BbMarkupPropertiesShould
     {
         var viewer = reader switch
         {
-            HiddenTextReader.Author => AuthorId,
+            HiddenTextReader.Author => BbVisibilityRender.AuthorId,
             HiddenTextReader.Lead => LeadId,
             HiddenTextReader.Addressee => AddresseeId,
             _ => StrangerId
@@ -549,38 +507,17 @@ public class BbMarkupPropertiesShould
         {
             Audience = RenderAudience.Display,
             Surface = surface,
-            Viewer = new TestSubject
-            {
-                UserId = viewer,
-                Role = UserRole.RegularUser,
-                IsAuthenticated = true,
-                AccessPolicy = AccessPolicy.NotSpecified
-            },
-            PostAuthorUserId = AuthorId,
+            Viewer = BbVisibilityRender.Viewer(UserRole.RegularUser, viewer),
+            PostAuthorUserId = BbVisibilityRender.AuthorId,
             GameLeadUserIds = [LeadId],
             PrivateAddresseeOwnerUserIdsByAttribute = snapshot.OwnerUserIdsByAttribute,
             PrivateAddresseeNamesByAttribute = snapshot.AddresseeNamesByAttribute,
             RoomViewPrivateText = reader == HiddenTextReader.RoomOverride,
-            PostSharePrivateWithAll = reader == HiddenTextReader.PostOverride
+            GameShowPrivateMessages = reader == HiddenTextReader.GameOverride
         };
 
-        return Render(() => Wrapper(Provider.GetForSurface(surface)).RenderHtml(input, context));
+        return BbVisibilityRender.RenderOrNull(() => Provider.GetForSurface(surface).RenderHtml(input, context));
     }
-
-    /// <summary>The render, or null where the page shows nothing: a tree too deep to build.</summary>
-    private static string? Render(Func<string> render)
-    {
-        try
-        {
-            return render();
-        }
-        catch (BbParserException)
-        {
-            return null;
-        }
-    }
-
-    private static BbParserWrapper Wrapper(IBbParser parser) => (BbParserWrapper)parser;
 
     /// <summary>The snapshot the save path builds from the text, for the room of "Вася" and "Петя".</summary>
     private static PrivateAddresseeSnapshotView Snapshot(string input) =>

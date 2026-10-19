@@ -36,7 +36,6 @@ check() {
 }
 
 for v in STORAGE_BUCKET STORAGE_APP_USER STORAGE_APP_PASSWORD \
-         STORAGE_IMGPROXY_USER STORAGE_IMGPROXY_PASSWORD \
          STORAGE_BACKUP_USER STORAGE_BACKUP_PASSWORD; do
     check "$v"
 done
@@ -53,8 +52,7 @@ esac
 #
 # dm-app reads and writes objects and cannot list them: the application only
 # ever addresses a key it stored in the database. Listing belongs to dm-backup,
-# which has to walk the bucket and cannot write. imgproxy parses untrusted image
-# data and only reads.
+# which has to walk the bucket and cannot write.
 #
 # Anonymous reads mirror UploadFolder.AnonymouslyReadable, prefix by prefix, and
 # grant no List: a public listing would turn the random part of every key into
@@ -65,8 +63,6 @@ cat > /tmp/s3.json <<JSON
 {"identities":[
  {"name":"dm-app","credentials":[{"accessKey":"$STORAGE_APP_USER","secretKey":"$STORAGE_APP_PASSWORD"}],
   "actions":["Read:$B","Write:$B"]},
- {"name":"dm-imgproxy","credentials":[{"accessKey":"$STORAGE_IMGPROXY_USER","secretKey":"$STORAGE_IMGPROXY_PASSWORD"}],
-  "actions":["Read:$B"]},
  {"name":"dm-backup","credentials":[{"accessKey":"$STORAGE_BACKUP_USER","secretKey":"$STORAGE_BACKUP_PASSWORD"}],
   "actions":["Read:$B","List:$B"]},
  {"name":"anonymous","actions":["Read:$B/avatars/*","Read:$B/characters/*"]}

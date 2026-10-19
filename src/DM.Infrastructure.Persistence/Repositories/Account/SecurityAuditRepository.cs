@@ -17,9 +17,6 @@ internal class SecurityAuditRepository : ISecurityAuditRepository
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <summary>
-    /// Creates a new security audit repository
-    /// </summary>
     public SecurityAuditRepository(
         DmDbContext dbContext,
         IGuidFactory guidFactory,

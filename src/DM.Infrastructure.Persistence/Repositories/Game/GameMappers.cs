@@ -3,6 +3,9 @@ using System.Linq;
 using System.Linq.Expressions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Blacklists;
+using DM.Domain.Game.Features.Characters;
+using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
@@ -13,8 +16,8 @@ using DbRoomAccess = DM.Infrastructure.Persistence.Entities.Game.Links.RoomAcces
 using DbPostPendency = DM.Infrastructure.Persistence.Entities.Game.Links.PostPendency;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
 using DtoGameTag = DM.Domain.Game.Features.Games.GameTag;
-using DtoRoomAccess = DM.Domain.Game.Features.Games.RoomAccess;
-using DtoPostPendency = DM.Domain.Game.Features.Games.PostPendency;
+using DtoRoomAccess = DM.Domain.Game.Features.RoomAccesses.RoomAccess;
+using DtoPostPendency = DM.Domain.Game.Features.PostPendencies.PostPendency;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
@@ -22,30 +25,13 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 /// <summary>
 /// Projection formulas for rooms, characters and games.
 ///
-/// The shared shapes (a room access, a pendency, a character, a tag, the
-/// room itself) are written once as expressions and inlined with
-/// <see cref="ExpressionSplicer"/> wherever they nest; the pendency
-/// SELECTION comes whole from <see cref="PostPendencyFilters.OfRoom"/> - the
-/// rule behind every turn star on the site - so a game can never claim a
-/// turn is awaited that the room behind it does not show.
-///
-/// The list DTO and the details are one member list, not two: the details
-/// formula is built from the list formula's bindings with
-/// <see cref="ExpressionSplicer.WithBaseBindings{TSource,TBase,TTier}"/> and
-/// only appends its own members. The room and the room-for-update are joined
-/// the same way.
-///
-/// This file used to claim that an initializer cannot be shared across a base
-/// and a derived target, and kept two copies of each list "identical member
-/// for member" by hand. The claim was false: GeneralUserProjections had been
-/// merging GeneralUser with AuthenticatedUser and UserDetails by exactly this
-/// mechanism all along. What the copies bought was drift - a member added to
-/// one target and forgotten in the other, which no build and no test reports.
+/// The shared shapes are written once and inlined with <see cref="ExpressionSplicer"/>;
+/// the pendency selection comes whole from <see cref="PostPendencyFilters.OfRoom"/>, so a
+/// game never claims a turn its room does not show. The details formula extends the list
+/// formula with <see cref="ExpressionSplicer.WithBaseBindings{TSource,TBase,TTier}"/>.
 /// </summary>
 public static class GameMappers
 {
-    // ═══ Shared member formulas (spliced, never invoked) ═══
-
     private static readonly Expression<Func<DbTag, DtoGameTag>> TagProjection =
         t => new DtoGameTag
         {
@@ -111,7 +97,7 @@ public static class GameMappers
                 ? RoomAccessTargetType.Character
                 : RoomAccessTargetType.Reader,
             Policy = l.Policy,
-            Character = l.Character == null ? null! : CharacterProjection.Splice(l.Character),
+            Character = l.Character == null ? null : CharacterProjection.Splice(l.Character),
             // The reader of a character grant is the character's author; the
             // grant timestamp and grantor are not stored.
             User = l.CharacterId.HasValue
@@ -119,7 +105,7 @@ public static class GameMappers
                 : GeneralUserProjections.Projection.Splice(l.ReaderUser)
         };
 
-    // CanView and Description are set by the repository; the unread counter
+    // CanView is set by the repository; the unread counter
     // is per reader. TotalPostsCount is a projection subquery over live
     // posts, mirroring the rubric counts on blogs. A room of chat has no posts:
     // its messages live in a chat the room has no navigation to, and
@@ -193,7 +179,7 @@ public static class GameMappers
                     IsNewbie = a.User.IsNewbie
                 })
                 .ToList(),
-            BlacklistedUsers = g.BlackList
+            BlacklistedUsers = g.Blacklist
                 .Select(l => new BlacklistedUser { UserId = l.BlockedUserId, LinkId = l.EntryId })
                 .ToList(),
             Recruitment = new GameRecruitment
@@ -251,8 +237,6 @@ public static class GameMappers
                     .ToList()
             });
 
-    // ═══ Queryable projections ═══
-
     // The room, game and pendency reads keep what removed accounts left in
     // them - a game whose master is gone, a turn marker he set - with the
     // user nested as nobody (RemovedAuthors).
@@ -302,7 +286,10 @@ public static class GameMappers
             CreatedUtc = c.CreatedUtc
         });
 
-    /// <summary>EF projection to the domain game (list shape)</summary>
+    /// <summary>
+    /// EF projection to the domain game (list shape). Read with AsSplitQuery: its
+    /// independent collections would multiply into a cartesian product in one query.
+    /// </summary>
     public static IQueryable<GameDto> ProjectToGame(this IQueryable<DbGame> query) =>
         query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(GameProjection));
 

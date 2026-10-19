@@ -1,32 +1,15 @@
-/**
- * Base message types for shared usage across entities
- * @module shared/api/models/common/message
- *
- * These types are extracted from entities/message to allow other entities
- * (like global-chat) to reference Message without creating entities→entities imports.
- *
- * FSD Rule: entities should import from shared, not from each other.
- */
+// In shared so that entities reference Message without importing each other.
 
 import type { User } from "./user";
-import type { Id, Served } from "@/shared/api/models";
+import type { Served } from "@/shared/api/models";
 
-// ============================================================================
-// Message Types
-// ============================================================================
+export type ChatId = Served<string>;
+export type MessageId = Served<string>;
 
-export type ChatId = Id<string>;
-export type MessageId = Id<string>;
-
-/**
- * Chat type enum (matches backend ChatType)
- */
+/** Matches the backend ChatType. */
 export type ChatType = "Direct" | "Group" | "Global";
 
-/**
- * Message edit history entry
- */
-export type MessageEdit = {
+type MessageEdit = {
   id: string;
   modifiedUtc: string;
   /** Null when the editor's account was removed. */
@@ -34,9 +17,8 @@ export type MessageEdit = {
 };
 
 /**
- * Base message DTO used across private chats and global chat.
- * Note: Fields like isRemoved, deletedBy, likes may be modified locally by stores,
- * so they don't use Served<T> wrapper.
+ * The message of private chats and the global chat. isRemoved, deletedBy and
+ * likes are set locally by stores, so they are not Served.
  */
 export type Message = {
   id: Served<MessageId>;
@@ -53,13 +35,10 @@ export type Message = {
 };
 
 /**
- * The reader's own total of unread messages, over every conversation they are
- * in. GET v1/chats/unread answers it inside an Envelope.
- *
- * The name is what pairs the mirror with the published schema
- * DM.Web.API.Features.Messaging.Chats.ChatUnreadCount in contract.spec.ts, so
- * it follows the DTO and not whatever the screen showing it is called.
+ * An unread total: over every conversation (GET v1/chats/unread) or over the
+ * notifications (GET v1/users/me/notifications/unread). The name pairs it with
+ * the DTO UnreadCount in contract.spec.ts.
  */
-export type ChatUnreadCount = {
+export type UnreadCount = {
   count: number;
 };

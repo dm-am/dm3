@@ -1,16 +1,12 @@
 using System;
 using System.IO;
-using System.Linq;
-using System.Net;
+using System.Globalization;
 using System.Text;
 using AwesomeAssertions;
-using BBCodeParser;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
 using DM.Testing;
-using DM.Testing.Dsl;
 using DM.Testing.Markup;
 using Xunit;
 
@@ -20,30 +16,15 @@ namespace DM.Infrastructure.Core.Tests;
 /// The corpus the client is held to is what the server renders today.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The editor draws its preview and reads the author's markup back by a
-/// converter of its own, and the only way to know it agrees with the server on
-/// texts nobody wrote down is to show it what the server did with them. So the
-/// server writes, for a fixed set of generated texts, what the author of each is
-/// shown, what the author's editor is given back, and whether the save path takes
-/// the text, into markupCorpus.golden.json in the client tree; the client's
-/// bbcodeProperties.spec.ts reads the file and compares its own answers.
-/// </para>
-/// <para>
-/// This test keeps the file honest: it writes the corpus again in memory and
-/// fails when the file says something else. A change to the renderer, the save
-/// path, the alphabet or the generator therefore turns this red until the file is
-/// written again (DM_MARKUP_CORPUS=write), and the client is then checked against
-/// the new answers. docs/guides/TESTING.md, section "Генеративные проверки
-/// разметки", has the commands.
-/// </para>
+/// The server writes its answers for generated texts into markupCorpus.golden.json, which the client's
+/// bbcodeProperties.spec.ts compares against; this fails until the file is written again
+/// (DM_MARKUP_CORPUS=write, docs/guides/TESTING.md, section "Генеративные проверки разметки").
 /// </remarks>
 public class BbMarkupCorpusShould
 {
     /// <summary>How many texts the corpus holds.</summary>
     private const int Size = 240;
 
-    private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
 
     private static readonly IBbParserProvider Provider = new BbParserProvider();
 
@@ -56,10 +37,7 @@ public class BbMarkupCorpusShould
     {
         var target = Environment.GetEnvironmentVariable("DM_MARKUP_CORPUS");
 
-        // A search beyond the corpus: another one, of the size DM_MARKUP_RUNS
-        // asks for, from seeds DM_MARKUP_SALT mixes, written where the variable
-        // points and compared with nothing. The client reads it from there when
-        // pointed at it the same way.
+        // A search beyond the corpus, written where the variable points and compared with nothing.
         if (target is { Length: > 0 } and not "write")
         {
             var runs = int.TryParse(Environment.GetEnvironmentVariable("DM_MARKUP_RUNS"), out var told) ? told : Size;
@@ -111,14 +89,10 @@ public class BbMarkupCorpusShould
             output.Append(index == 0 ? "" : ",\n").Append(Entry(sample.Text, surface, valid));
         }
 
-        // Every address of the alphabet, alone between the halves of each tag
-        // that takes one: which of them the page draws. The editor reads an
-        // address by the URL parser of the browser and the server by Uri, and
-        // the two take different shapes; this is where the client is told which
-        // ones the server takes.
+        // Every address of the alphabet in each tag that takes one: the browser and Uri take different shapes.
         output.Append("\n],\n\"addresses\":[\n");
         var addresses = MarkupAlphabet.Shared.Addresses;
-        var wrapper = (BbParserWrapper)Provider.GetForSurface(BbSurface.Comment);
+        var wrapper = Provider.GetForSurface(BbSurface.Comment);
         var reader = RenderContext.ForPlainText() with
         {
             Audience = RenderAudience.Display,
@@ -143,61 +117,46 @@ public class BbMarkupCorpusShould
 
     /// <summary>
     /// One text: its surface, whether it was generated as valid markup, and the
-    /// server's three answers about it.
+    /// server's answers about it: the page, the refusal and where it points.
     /// </summary>
     private static string Entry(string input, BbSurface surface, bool valid)
     {
-        var author = new TestSubject
-        {
-            UserId = AuthorId,
-            Role = UserRole.RegularUser,
-            IsAuthenticated = true,
-            AccessPolicy = AccessPolicy.NotSpecified
-        };
+        var author = BbVisibilityRender.Viewer(UserRole.RegularUser, BbVisibilityRender.AuthorId);
 
         // What the author reads on the page: every block of a game post, with the
         // line under it naming what the tag names (no snapshot is consulted).
-        var display = Render(() => ((BbParserWrapper)Provider.GetForSurface(surface)).RenderHtml(input,
+        var display = BbVisibilityRender.RenderOrNull(() => Provider.GetForSurface(surface).RenderHtml(input,
             new RenderContext
             {
                 Audience = RenderAudience.Display,
                 Surface = surface,
                 Viewer = author,
-                PostAuthorUserId = AuthorId
+                PostAuthorUserId = BbVisibilityRender.AuthorId
             }));
 
-        // What the author's editor is given back. A text too deep to render is
-        // given back as it was typed, as BbConverter gives it.
-        var authorEdit = Render(() => ((BbParserWrapper)Provider.GetForAuthorEdit(surface))
-            .RenderHtml(input, RenderContext.ForAuthorEdit(author, surface))) ?? WebUtility.HtmlEncode(input);
-
+        // The author's editor is given the input itself (BbConverter), so it is not written twice.
         var refusal = surface == BbSurface.GamePost
             ? PrivateBlockMarkup.IsBalanced(input) ? null : PrivateBlockMarkup.DescribeBalanceRefusal(input)
             : PrivateBlockMarkup.ContainsPrivateMarkup(input)
                 ? PrivateBlockMarkup.DescribeSurfaceRefusal(input)
                 : null;
 
+        // Where the refusal points, as a character number from 1: the refusal
+        // itself names none, and the editor's check is held to the same line.
+        var refusalAt = refusal == null
+            ? null
+            : surface == BbSurface.GamePost
+                ? PrivateBlockMarkup.LocateBalanceRefusal(input)
+                : PrivateBlockMarkup.LocatePrivateMarkup(input);
+
         return new StringBuilder("{")
             .Append("\"surface\":").Append(MarkupLiteral.Of(surface.ToString()))
             .Append(",\"valid\":").Append(valid ? "true" : "false")
             .Append(",\"input\":").Append(MarkupLiteral.Of(input))
             .Append(",\"display\":").Append(display == null ? "null" : MarkupLiteral.Of(display))
-            .Append(",\"authorEdit\":").Append(MarkupLiteral.Of(authorEdit))
             .Append(",\"refusal\":").Append(refusal == null ? "null" : MarkupLiteral.Of(refusal))
+            .Append(",\"refusalAt\":").Append(refusalAt is { } at ? (at + 1).ToString(CultureInfo.InvariantCulture) : "null")
             .Append('}')
             .ToString();
-    }
-
-    /// <summary>The render, or null for a tree too deep to build.</summary>
-    private static string? Render(Func<string> render)
-    {
-        try
-        {
-            return render();
-        }
-        catch (BbParserException)
-        {
-            return null;
-        }
     }
 }

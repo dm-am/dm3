@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -10,29 +11,8 @@ namespace DM.Architecture.Tests;
 /// A subscription being retried still notices the host stopping.
 /// </summary>
 /// <remarks>
-/// Every consumer in the tree opens its subscription behind a retry policy, and
-/// the two shapes differ by what giving up costs. The workers climb a finite
-/// ladder - five attempts, the wait doubling from one second, 62 seconds end to
-/// end - and then let the exception stop the host, which the container policy
-/// restarts: their ladder ends in another ladder. The API consumer has a site to
-/// serve and cannot be restarted over a broker outage, so its ladder is endless,
-/// capped at thirty seconds between attempts.
-///
-/// What both shapes share is the overload. The synchronous one spends its waits in
-/// Thread.Sleep on a thread pool thread and is handed no token, so a host asked to
-/// stop inside a broker outage waits every remaining attempt out with nothing able
-/// to interrupt it, and the cancellation is observed by nobody - and with an
-/// endless ladder that wait no longer even has a last attempt to end at. Both
-/// workers were moved to the asynchronous overload and the API consumer was left
-/// behind - beside a comment, in the worker next door, describing the very shape
-/// it kept.
-///
-/// A rule rather than one test, because the shape repeats: a fourth consumer is
-/// written by copying one of these three.
-///
-/// Asserted on the text with the comments removed, because which overload is
-/// called and what is passed to it is one line of composition, and reaching it at
-/// runtime needs a broker that refuses connections on cue.
+/// The synchronous overload spends its waits in Thread.Sleep with no token, so a stopping host
+/// waits every attempt out. Asserted on the text: reaching it at runtime needs a refusing broker.
 /// </remarks>
 public class ConsumerRetryCancellationShould
 {
@@ -79,7 +59,5 @@ public class ConsumerRetryCancellationShould
                 "the stop waits out every attempt that is left");
 
     private static string Absolute(string relative) => Path.Combine(
-        RepositoryRoot, relative.Replace('/', Path.DirectorySeparatorChar));
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
+        RepositoryLayout.Root, relative.Replace('/', Path.DirectorySeparatorChar));
 }

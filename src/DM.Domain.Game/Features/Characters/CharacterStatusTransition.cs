@@ -4,18 +4,8 @@ namespace DM.Domain.Game.Features.Characters;
 /// Requested change to a character's place in the game
 /// </summary>
 /// <remarks>
-/// The caller names the intent. The status alone does not carry it: Retired is
-/// reached by dying, by leaving and by being exiled, and each of the three is a
-/// different right held by a different person. The API used to take the target
-/// status with three booleans beside it and guess, which meant a request that
-/// named no reason had no arm to land in and answered 500.
-///
-/// Same shape as GameStatusTransition, for the same reason.
-///
-/// Every way back into play undoes a move of the lead: Accept undoes Decline,
-/// Resurrect undoes Kill, Readmit undoes Exile. A character its player took out
-/// of the game (Leave) is brought back by nobody, the player, the lead and the
-/// moderation alike.
+/// The caller names the intent: Retired is reached by dying, leaving and exile, each a different right.
+/// A way back undoes a move of the lead; nobody brings back a character its player took out (Leave).
 /// </remarks>
 public enum CharacterStatusTransition
 {
@@ -36,9 +26,6 @@ public enum CharacterStatusTransition
 
     /// <summary>Undo a death: Retired to Active. Game lead.</summary>
     Resurrect = 5,
-
-    // 6 was Return, the player bringing back a character he took out of the
-    // game. Removed: leaving is final.
 
     /// <summary>Undo an exile: Retired to Active. Game lead.</summary>
     Readmit = 7,

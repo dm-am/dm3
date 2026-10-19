@@ -168,7 +168,7 @@ async function answer(session, route, url, run) {
 }
 
 /** The address of one route, with its path parameters and query filled. */
-function addressOf(route, fixture) {
+function routeAddress(route, fixture) {
   const path = route.slice("GET ".length);
   const fill = PARAMETERS[path];
   const names = [...path.matchAll(/\{(\w+)\}/g)].map((m) => m[1]);
@@ -265,7 +265,7 @@ export async function runApiSnapshot({
   if (!update) rmSync(report, { recursive: true, force: true });
   const unfilled = [];
   for (const route of routes) {
-    const { url, missing } = addressOf(route, fixture);
+    const { url, missing } = routeAddress(route, fixture);
     if (missing) {
       unfilled.push(missing);
       continue;

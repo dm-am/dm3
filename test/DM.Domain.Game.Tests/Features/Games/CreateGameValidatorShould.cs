@@ -1,10 +1,11 @@
 using System;
-using DM.Domain.Core.Content;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Users;
+using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
 using FluentValidation.TestHelper;
@@ -16,24 +17,31 @@ namespace DM.Domain.Game.Tests.Features.Games;
 public class CreateGameValidatorShould : UnitTestBase
 {
     private readonly CreateGameValidator validator;
-    private readonly IUserLookupService userLookupServiceMock;
+    private readonly IUserLookupService userLookupService;
 
     public CreateGameValidatorShould()
     {
-        userLookupServiceMock = Mock<IUserLookupService>();
-        validator = new CreateGameValidator(userLookupServiceMock);
+        userLookupService = Mock<IUserLookupService>();
+        validator = new CreateGameValidator(userLookupService);
+    }
+
+    private static CreateGame ValidGame(Action<CreateGame>? change = null)
+    {
+        var game = new CreateGame
+        {
+            Title = "Valid Game Title",
+            SystemName = "D&D 5e",
+            NarrativeSetting = "Forgotten Realms",
+            Info = new string('a', GameFieldLimits.InfoMinLength)
+        };
+        change?.Invoke(game);
+        return game;
     }
 
     [Fact]
     public async Task PassForValidInput()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Game Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', 200)
-        };
+        var input = ValidGame();
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldNotHaveAnyValidationErrors();
@@ -42,14 +50,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenCommentsAccessModeIsNotInEnum()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Game Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', GameFieldLimits.InfoMinLength),
-            CommentsAccessMode = (CommentsAccessMode)30000
-        };
+        var input = ValidGame(g => g.CommentsAccessMode = (CommentsAccessMode)30000);
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.CommentsAccessMode)
@@ -59,13 +60,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenTitleIsEmpty()
     {
-        var input = new CreateGame
-        {
-            Title = "",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', 200)
-        };
+        var input = ValidGame(g => g.Title = "");
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
@@ -75,13 +70,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenTitleExceedsMaxLength()
     {
-        var input = new CreateGame
-        {
-            Title = new string('a', GameFieldLimits.TitleMaxLength + 1),
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('b', GameFieldLimits.InfoMinLength)
-        };
+        var input = ValidGame(g => g.Title = new string('a', GameFieldLimits.TitleMaxLength + 1));
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
@@ -93,21 +82,17 @@ public class CreateGameValidatorShould : UnitTestBase
     /// publishes is accepted here.
     /// </summary>
     /// <remarks>
-    /// The two layers used to disagree — the contract allowed 200 characters of
-    /// title and this validator cut it at 100 — so everything between the numbers
-    /// was accepted by the form and refused after the button. Checking only the
-    /// "one over the limit" case leaves that gap invisible: it fails either way.
+    /// Checking only one over the limit cannot see a validator stricter than the contract.
     /// </remarks>
     [Fact]
     public async Task AcceptFieldsFilledToTheLimitTheContractPublishes()
     {
-        var input = new CreateGame
+        var input = ValidGame(g =>
         {
-            Title = new string('a', GameFieldLimits.TitleMaxLength),
-            SystemName = new string('b', GameFieldLimits.SystemMaxLength),
-            NarrativeSetting = new string('c', GameFieldLimits.SettingMaxLength),
-            Info = new string('d', GameFieldLimits.InfoMinLength)
-        };
+            g.Title = new string('a', GameFieldLimits.TitleMaxLength);
+            g.SystemName = new string('b', GameFieldLimits.SystemMaxLength);
+            g.NarrativeSetting = new string('c', GameFieldLimits.SettingMaxLength);
+        });
 
         var result = await validator.TestValidateAsync(input);
 
@@ -120,13 +105,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenSystemNameIsEmpty()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Title",
-            SystemName = "",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', 200)
-        };
+        var input = ValidGame(g => g.SystemName = "");
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.SystemName)
@@ -136,13 +115,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenSystemNameExceedsMaxLength()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Title",
-            SystemName = new string('a', GameFieldLimits.SystemMaxLength + 1),
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('b', GameFieldLimits.InfoMinLength)
-        };
+        var input = ValidGame(g => g.SystemName = new string('a', GameFieldLimits.SystemMaxLength + 1));
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.SystemName)
@@ -152,13 +125,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenNarrativeSettingIsEmpty()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "",
-            Info = new string('a', 200)
-        };
+        var input = ValidGame(g => g.NarrativeSetting = "");
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.NarrativeSetting)
@@ -168,13 +135,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenNarrativeSettingExceedsMaxLength()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = new string('a', GameFieldLimits.SettingMaxLength + 1),
-            Info = new string('b', GameFieldLimits.InfoMinLength)
-        };
+        var input = ValidGame(g => g.NarrativeSetting = new string('a', GameFieldLimits.SettingMaxLength + 1));
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.NarrativeSetting)
@@ -184,13 +145,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenInfoIsEmpty()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = ""
-        };
+        var input = ValidGame(g => g.Info = "");
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Info)
@@ -200,13 +155,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenInfoIsTooShort()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', 199)
-        };
+        var input = ValidGame(g => g.Info = new string('a', GameFieldLimits.InfoMinLength - 1));
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Info)
@@ -216,17 +165,10 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenAssistantUsernameDoesNotExist()
     {
-        userLookupServiceMock
+        userLookupService
             .UsernameExistsAsync("nonexistent", Arg.Any<CancellationToken>()).Returns(false);
 
-        var input = new CreateGame
-        {
-            Title = "Valid Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', 200),
-            AssistantUsername = "nonexistent"
-        };
+        var input = ValidGame(g => g.AssistantUsername = "nonexistent");
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.AssistantUsername)
@@ -236,17 +178,10 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task PassWhenAssistantUsernameExists()
     {
-        userLookupServiceMock
+        userLookupService
             .UsernameExistsAsync("validassistant", Arg.Any<CancellationToken>()).Returns(true);
 
-        var input = new CreateGame
-        {
-            Title = "Valid Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', 200),
-            AssistantUsername = "validassistant"
-        };
+        var input = ValidGame(g => g.AssistantUsername = "validassistant");
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldNotHaveAnyValidationErrors();
@@ -259,21 +194,12 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenASpecificationCarriesNoTitle()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Game Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', GameFieldLimits.InfoMinLength),
-            AttributeSpecifications =
-            [
-                new CreateAttributeSpecification { Title = "", Type = AttributeSpecificationType.Text }
-            ]
-        };
+        var input = ValidGame(g => g.AttributeSpecifications =
+            [new CreateAttributeSpecification { Title = "", Type = AttributeSpecificationType.Text }]);
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor("AttributeSpecifications[0].Title")
-            .WithErrorMessage(ValidationError.Empty);
+            .WithErrorMessage("Введите название атрибута");
     }
 
     /// <summary>
@@ -283,24 +209,17 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenTwoSpecificationsClaimToBeTheDescriptor()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Game Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', GameFieldLimits.InfoMinLength),
-            AttributeSpecifications =
-            [
-                new CreateAttributeSpecification
-                {
-                    Title = "Раса", Type = AttributeSpecificationType.Text, IsDescriptor = true
-                },
-                new CreateAttributeSpecification
-                {
-                    Title = "Класс", Type = AttributeSpecificationType.Text, IsDescriptor = true, Order = 1
-                }
-            ]
-        };
+        var input = ValidGame(g => g.AttributeSpecifications =
+        [
+            new CreateAttributeSpecification
+            {
+                Title = "Раса", Type = AttributeSpecificationType.Text, IsDescriptor = true
+            },
+            new CreateAttributeSpecification
+            {
+                Title = "Класс", Type = AttributeSpecificationType.Text, IsDescriptor = true, Order = 1
+            }
+        ]);
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(g => g.AttributeSpecifications);
@@ -313,14 +232,7 @@ public class CreateGameValidatorShould : UnitTestBase
     [Fact]
     public async Task PassWhenNoSpecificationsAreSubmitted()
     {
-        var input = new CreateGame
-        {
-            Title = "Valid Game Title",
-            SystemName = "D&D 5e",
-            NarrativeSetting = "Forgotten Realms",
-            Info = new string('a', GameFieldLimits.InfoMinLength),
-            AttributeSpecifications = []
-        };
+        var input = ValidGame(g => g.AttributeSpecifications = []);
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldNotHaveAnyValidationErrors();

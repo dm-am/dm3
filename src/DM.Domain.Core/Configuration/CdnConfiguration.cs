@@ -1,8 +1,5 @@
 namespace DM.Domain.Core.Configuration;
 
-/// <summary>
-/// CDN configuration
-/// </summary>
 public class CdnConfiguration
 {
     /// <summary>
@@ -21,7 +18,7 @@ public class CdnConfiguration
     public string Region { get; set; } = string.Empty;
 
     /// <summary>
-    /// Files folder
+    /// Bucket name
     /// </summary>
     public string BucketName { get; set; } = string.Empty;
 
@@ -35,10 +32,6 @@ public class CdnConfiguration
     /// </summary>
     public string AccessKey { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Relative file destination
-    /// </summary>
-    public string Folder { get; set; } = string.Empty;
 
     /// <summary>
     /// Kind of S3 service the bucket lives in

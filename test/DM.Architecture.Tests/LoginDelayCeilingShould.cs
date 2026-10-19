@@ -10,25 +10,14 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The delay a wrong password costs stays under the timeout of the client asking.
 /// </summary>
-/// <remarks>
-/// It did not. The top step was thirty seconds and the client gives up at thirty,
-/// so from the tenth attempt on the answer never arrived: what the reader got was
-/// a toast about the connection dropping instead of "wrong password" — the site
-/// saying it is broken to somebody who is simply mistyping, and saying it for
-/// half a minute of spinner first.
-///
-/// Neither number fails anything on its own, and they live in different languages
-/// in different projects, so nothing but a rule can hold them together. The rule
-/// is a ratio rather than a pair of literals: the point is the gap, and copying
-/// either number here would make this file the third place to change.
-/// </remarks>
+/// <remarks>The numbers live in different languages and projects, so the rule is a ratio, not a pair of literals.</remarks>
 public class LoginDelayCeilingShould
 {
     /// <summary>The client gives up on a request after this many seconds.</summary>
     private static double ClientTimeoutSeconds()
     {
         var client = File.ReadAllText(Path.Combine(DM.Testing.RepositoryLayout.Root,
-            "src", "DM.Web.Client", "src", "shared", "api", "client.ts"));
+            "src", "DM.Web.Client", "src", "shared", "api", "interceptor.ts"));
 
         var timeout = Regex.Match(client, @"(?:timeout:|REQUEST_TIMEOUT_MS\s*=)\s*(\d+)");
         timeout.Success.Should().BeTrue("the client declares how long it waits");
@@ -54,11 +43,7 @@ public class LoginDelayCeilingShould
     /// <summary>
     /// A schedule that only ever goes up, and a first step that costs nothing.
     /// </summary>
-    /// <remarks>
-    /// Thresholds out of order silently shadow each other — the lookup takes the
-    /// first match — and a delay on the first attempt is a delay every reader pays
-    /// on the day they mistype once.
-    /// </remarks>
+    /// <remarks>The lookup takes the first match, so thresholds out of order shadow each other.</remarks>
     [Fact]
     public void GrowWithTheAttemptsAndStartFree()
     {

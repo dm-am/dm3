@@ -1,8 +1,8 @@
-using DM.Domain.Core.Content;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Blacklists;
@@ -20,25 +20,22 @@ using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Subscriptions;
+using DM.Domain.Game.Features.Rooms;
 using FluentValidation;
 using Microsoft.Extensions.Logging;
-using Game = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// Unified service for game CRUD operations
-/// </summary>
-internal class GameService : IGameService
+internal partial class GameService : IGameService
 {
     private readonly IValidator<GamesQuery> _gamesQueryValidator;
     private readonly IValidator<UpdateGame> _updateGameValidator;
-    private readonly IGameCreationValidator _creationValidator;
+    private readonly IValidator<CreateGame> _createGameValidator;
     private readonly IGameTagResolver _tagResolver;
     private readonly IIntentionManager _intentionManager;
     private readonly IGameAttributeSchemaRepository _gameSchemaRepository;
     private readonly IGameRepository _repository;
-    private readonly IGameUserRepository _userRepository;
+    private readonly IGameAssistantRepository _assistantRepository;
     private readonly IGameInvitationService _invitationService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IGameBlacklistRepository _gameBlacklistRepository;
@@ -50,20 +47,25 @@ internal class GameService : IGameService
     private readonly IEventProducer _producer;
     private readonly ICache _cache;
     private readonly ILogger<GameService> _logger;
-    private readonly IBbTagNameCase _tagNames;
+
+    private readonly GameUnreadCounters _unreadCounters;
 
     private const string TagListCacheKey = nameof(TagListCacheKey);
-    private const string GamesByStatusCacheKeyPrefix = "GamesByStatus_";
+
+    /// <summary>
+    /// A master deletes his started game only while it has fewer posts than this.
+    /// </summary>
+    private const int SelfDeletePostLimit = 10;
 
     public GameService(
         IValidator<GamesQuery> gamesQueryValidator,
         IValidator<UpdateGame> updateGameValidator,
-        IGameCreationValidator creationValidator,
+        IValidator<CreateGame> createGameValidator,
         IGameTagResolver tagResolver,
         IIntentionManager intentionManager,
         IGameAttributeSchemaRepository gameSchemaRepository,
         IGameRepository repository,
-        IGameUserRepository userRepository,
+        IGameAssistantRepository assistantRepository,
         IGameInvitationService invitationService,
         IIdentityProvider identityProvider,
         IGameBlacklistRepository gameBlacklistRepository,
@@ -74,17 +76,16 @@ internal class GameService : IGameService
         IGuidFactory guidFactory,
         IEventProducer producer,
         ICache cache,
-        ILogger<GameService> logger,
-        IBbTagNameCase tagNames)
+        ILogger<GameService> logger)
     {
         _gamesQueryValidator = gamesQueryValidator;
         _updateGameValidator = updateGameValidator;
-        _creationValidator = creationValidator;
+        _createGameValidator = createGameValidator;
         _tagResolver = tagResolver;
         _intentionManager = intentionManager;
         _gameSchemaRepository = gameSchemaRepository;
         _repository = repository;
-        _userRepository = userRepository;
+        _assistantRepository = assistantRepository;
         _invitationService = invitationService;
         _identityProvider = identityProvider;
         _gameBlacklistRepository = gameBlacklistRepository;
@@ -96,22 +97,19 @@ internal class GameService : IGameService
         _producer = producer;
         _cache = cache;
         _logger = logger;
-        _tagNames = tagNames;
+        _unreadCounters = new GameUnreadCounters(repository, unreadCountersRepository);
     }
 
     #region Create
 
     public async Task<GameDetails> CreateAsync(CreateGame createGame)
     {
-        _logger.LogDebug("Creating game. Title={Title}", createGame.Title);
-
-        await _creationValidator.ValidateAndAuthorize(createGame);
+        await _createGameValidator.ValidateAndThrowAsync(createGame);
+        _intentionManager.ThrowIfForbidden(GameIntention.Create);
         var author = _identityProvider.Current.User;
         var userId = author.UserId;
 
-        // The master picks tags by short id — the alias the tag list serves and
-        // the game filters take. The link table keys on the tags' own
-        // identifiers, so the translation happens where the catalog is read.
+        // Tags come by short id; the link table keys on the tags' own identifiers.
         var validTagIds = await _tagResolver.ResolveTagIds(createGame.Tags);
 
         var now = _dateTimeProvider.Now;
@@ -125,12 +123,8 @@ internal class GameService : IGameService
             Title = createGame.Title,
             SystemName = createGame.SystemName,
             NarrativeSetting = createGame.NarrativeSetting,
-            Info = _tagNames.ToLowerCase(createGame.Info, BbTagSet.Common),
+            Info = createGame.Info,
             Status = createGame.Draft ? ModuleStatus.Draft : ModuleStatus.Active,
-            // Whether the game is premoderated is decided by who is creating it,
-            // by the same rule a blog is decided by. Until this line existed the
-            // column took its default, which is Approved, and premoderation
-            // applied to nobody.
             PremoderationStatus = ModulePremoderationPolicy.InitialStatus(author),
             DraftVisibility = createGame.DraftVisibility,
             ActivatedUtc = createGame.Draft ? null : now,
@@ -146,57 +140,23 @@ internal class GameService : IGameService
             CreatedUtc = now
         };
 
-        var createRoomEntity = new CreateRoomEntity
-        {
-            RoomId = roomId,
-            GameId = gameId,
-            Title = "Игровая",
-            Type = RoomType.Default,
-            AccessType = RoomAccessType.Open,
-            ViewPrivateText = false,
-            ViewDiceResults = true,
-            DiceEnabled = true
-        };
-
-        // Markers first, row second, commit on the line after it returns — see
-        // UnreadCountersReservation for why that way round.
-        //
-        // The room is parented by its game, the way RoomService parents every room
-        // created afterwards. Left to the self-parented form, the first room of a
-        // game was its own parent, so it alone was missing from every read that
-        // sums a game's rooms.
+        // Markers first, row second, commit right after: see UnreadCountersReservation.
+        // The room is parented by its game, as RoomService parents every later room.
         await using var counters = await _unreadCountersRepository.ReserveAsync(
             UnreadMarker.UnderParent(roomId, gameId, UnreadEntryType.Message),
             UnreadMarker.SelfParented(gameId, UnreadEntryType.Message),
             UnreadMarker.SelfParented(gameId, UnreadEntryType.Character));
 
-        var createdGame = await _repository.Create(createGameEntity, createRoomEntity);
+        var createdGame = await _repository.Create(createGameEntity, FirstRoom(roomId, gameId));
         counters.Commit();
 
-        // The game is committed by now, so nothing below it may turn a created
-        // game into a 500: the caller would try again and end up with two. Each
-        // step below therefore states what its own failure costs.
+        // Committed by now: nothing below may turn a created game into a 500, or the caller makes two.
         await CopyBlacklistOnCreation(createGame, createdGame.Id, userId);
 
-        // After the copy, on purpose: an assistant named from the master's own
-        // blacklist is refused by the game's list instead of being invited into a
-        // game whose list already holds him.
-        if (!string.IsNullOrEmpty(createGame.AssistantUsername))
-        {
-            try
-            {
-                await _invitationService.InviteAssistant(createdGame.Id, createGame.AssistantUsername);
-            }
-            catch
-            {
-                _logger.LogWarning("Failed to invite assistant {Username} for game {GameId}",
-                    createGame.AssistantUsername, createdGame.Id);
-            }
-        }
+        // After the copy, so an assistant from the master's own blacklist is refused by the game's list.
+        await InviteAssistantOnCreation(createGame, createdGame.Id);
 
-        // A lost event costs the subscribers one notification, which SYSTEM.md
-        // allows — an event is not the carrier of the fact. The producer swallows
-        // and counts a refusal, so this needs no guard of its own.
+        // A lost event costs one notification, and the producer swallows a refusal itself.
         await _producer.SendAsync(EventType.NewGame, createdGame.Id);
 
         _logger.LogInformation("Game created successfully. GameId={GameId}, Title={Title}, MasterId={MasterId}",
@@ -205,28 +165,50 @@ internal class GameService : IGameService
         return createdGame;
     }
 
+    private static CreateRoomEntity FirstRoom(Guid roomId, Guid gameId) => new()
+    {
+        RoomId = roomId,
+        GameId = gameId,
+        Title = "Игровая",
+        Type = RoomType.Default,
+        AccessType = RoomAccessType.Open,
+        ViewPrivateText = false,
+        ViewDiceResults = true,
+        DiceEnabled = true
+    };
+
     /// <summary>
-    /// Copy the master's personal blacklist into a game just created.
+    /// A refused invitation is logged, not thrown: the game is committed by now.
     /// </summary>
-    /// <remarks>
-    /// One statement instead of a round trip per blocked user, the way the blog
-    /// side copies the same list. A lost copy costs the master a list they can
-    /// refill from the game's own blacklist screen, so a failure is logged and
-    /// not thrown. The request decides when it says anything; silent, the
-    /// master's account setting does, so the setting holds for every way a game
-    /// gets created.
-    /// </remarks>
+    private async Task InviteAssistantOnCreation(CreateGame createGame, Guid gameId)
+    {
+        if (!string.IsNullOrEmpty(createGame.AssistantUsername))
+        {
+            try
+            {
+                await _invitationService.InviteAssistant(gameId, createGame.AssistantUsername);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Failed to invite assistant {Username} for game {GameId}",
+                    createGame.AssistantUsername, gameId);
+            }
+        }
+    }
+
+    /// <summary>
+    /// A lost copy is refilled from the blacklist screen, so a failure is logged, not thrown.
+    /// </summary>
     private async Task CopyBlacklistOnCreation(CreateGame createGame, Guid gameId, Guid masterId)
     {
         try
         {
             var copyBlacklist = createGame.CopyBlacklist ??
-                                (await _userBlacklistChecker.GetSettings(masterId))
+                                (await _userBlacklistChecker.GetSettingsAsync(masterId))
                                 .HasFlag(UserBlacklistSettings.AutoPopulateContentBlacklist);
             if (copyBlacklist)
             {
-                var copied = await _gameBlacklistRepository.CopyFromPersonalBlacklist(gameId, masterId);
-                _logger.LogDebug("Copied personal blacklist to game blacklist with {Count} users", copied);
+                await _gameBlacklistRepository.CopyFromPersonalBlacklist(gameId, masterId);
             }
         }
         catch (Exception exception)
@@ -240,11 +222,7 @@ internal class GameService : IGameService
 
     #region Read
 
-    // Not CachePolicy.Permanent: the entry is not the tag catalog alone, it carries
-    // the number of active games per tag, and that number moves with every game
-    // created, retagged, activated or closed. The manual invalidation Permanent
-    // asks for could not hold it either - this cache lives in the process, so a
-    // game created on one instance would leave the counters of the rest stale.
+    // Not Permanent: the entry carries active games per tag, and the cache lives in one process.
     public Task<IEnumerable<GameTag>> GetTagsAsync() =>
         _cache.GetOrCreateAsync(TagListCacheKey, () => _repository.GetTags(), CachePolicy.Medium);
 
@@ -252,10 +230,7 @@ internal class GameService : IGameService
     {
         await _gamesQueryValidator.ValidateAndThrowAsync(query);
 
-        // Premoderation filter is a moderation worklist capability (Mentor+),
-        // guarded by the same targetless intention as taking a game into
-        // premoderation. Without this gate the public list would become an
-        // enumeration channel for games hidden by the Read intention.
+        // The premoderation filter is the moderation worklist, or the list would enumerate hidden games.
         if (query.PremoderationStatuses is { Count: > 0 })
         {
             _intentionManager.ThrowIfForbidden(GameIntention.SetStatusModeration);
@@ -264,7 +239,7 @@ internal class GameService : IGameService
         var identity = _identityProvider.Current;
         var currentUserId = identity.User.UserId;
         var isAnonymous = !identity.User.IsAuthenticated;
-        var pageSize = identity.Settings.Paging.EntitiesPerPage;
+        var pageSize = identity.Settings.PageSize;
 
         if (!isAnonymous && IsDiscoveryListing(query))
         {
@@ -273,9 +248,9 @@ internal class GameService : IGameService
             query.ExcludedMasterIds = hiddenMasters.Count > 0 ? hiddenMasters : null;
         }
 
-        if (isAnonymous && IsCacheableAnonymousQuery(query))
+        if (isAnonymous && GamesQueryCacheKey.IsCacheableAnonymousQuery(query))
         {
-            var cacheKey = BuildAnonymousCacheKey(query);
+            var cacheKey = GamesQueryCacheKey.BuildAnonymousCacheKey(query);
             var cached = await _cache.GetOrCreateAsync(cacheKey, async () =>
             {
                 var totalCount = await _repository.Count(query, Guid.Empty);
@@ -283,22 +258,15 @@ internal class GameService : IGameService
                 var gamesList = (await _repository.GetGames(pagingData, query, Guid.Empty)).ToArray();
                 if (gamesList.Length > 0)
                 {
-                    var ids = gamesList.Select(g => g.Id).ToArray();
-                    var postCounts = await _repository.GetTotalPostCounts(ids);
-                    var commentCounts = await _repository.GetTotalCommentCounts(ids);
-                    foreach (var game in gamesList)
-                    {
-                        game.UnreadPostsCount = postCounts.TryGetValue(game.Id, out var pc) ? pc : 0;
-                        game.UnreadCommentsCount = commentCounts.TryGetValue(game.Id, out var cc) ? cc : 0;
-                    }
+                    await _unreadCounters.FillTotals(gamesList);
                 }
                 return (games: gamesList, paging: pagingData.Result);
             }, CachePolicy.Medium);
             return cached;
         }
 
-        // Cache base data for authenticated users (short TTL, unread counters always fresh)
-        var queryKey = GetQueryKey(query);
+        // Short TTL; the unread counters are always read fresh.
+        var queryKey = GamesQueryCacheKey.GetQueryKey(query);
         var authCacheKey = $"AuthGames_{currentUserId}_{queryKey}_{pageSize}";
         var (games, pagingDataAuth) = await _cache.GetOrCreateAsync(authCacheKey, async () =>
         {
@@ -313,67 +281,29 @@ internal class GameService : IGameService
             return (games, pagingDataAuth.Result);
         }
 
-        var gameIds = games.Select(g => g.Id).ToArray();
-
-        // Anonymous users: show total counts (they can't mark anything as read)
+        // A guest marks nothing as read, so he sees the totals.
         if (isAnonymous)
         {
-            var postCounts = await _repository.GetTotalPostCounts(gameIds);
-            var commentCounts = await _repository.GetTotalCommentCounts(gameIds);
-            foreach (var game in games)
-            {
-                game.UnreadPostsCount = postCounts.TryGetValue(game.Id, out var pc) ? pc : 0;
-                game.UnreadCommentsCount = commentCounts.TryGetValue(game.Id, out var cc) ? cc : 0;
-            }
+            await _unreadCounters.FillTotals(games);
             return (games, pagingDataAuth.Result);
         }
 
-        // Authenticated users: show actual unread counts
-        await _unreadCountersRepository.FillEntityCounters(games, currentUserId,
-            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-        await _unreadCountersRepository.FillEntityCounters(games, currentUserId,
-            g => g.Id, g => g.UnreadCommentsCount);
-
-        // Identifiers, which is all the sum below reads. The method this replaces
-        // returned whole room rows with their pendencies and two whole users per
-        // pendency, and the caller discarded every one of them.
-        var gameRooms = await _repository.GetAvailableRoomIds(gameIds, currentUserId);
-        var allRoomIds = gameRooms.SelectMany(r => r.Value).ToArray();
-
-        if (allRoomIds.Length > 0)
-        {
-            var unreadPostCounters = await _unreadCountersRepository.SelectByEntitiesAsync(
-                currentUserId, UnreadEntryType.Message, allRoomIds);
-            foreach (var game in games)
-            {
-                if (!gameRooms.TryGetValue(game.Id, out var roomIds)) continue;
-                var gameRoomIds = roomIds.ToArray();
-                game.UnreadPostsCount = gameRoomIds.Sum(id =>
-                    unreadPostCounters.TryGetValue(id, out var count) ? count : 0);
-            }
-        }
+        await _unreadCounters.FillUnread(games, currentUserId);
 
         return (games, pagingDataAuth.Result);
     }
 
     /// <summary>
-    /// Whether the reader may pass a premoderation verdict, and so has to be able
-    /// to open the module the verdict is pending on.
+    /// The storage scope cannot ask the resolver, so the intention is asked here and handed down.
     /// </summary>
-    /// <remarks>
-    /// The intention itself, not a second reading of the rank: the storage scope
-    /// cannot ask the resolver, so the answer is taken here and handed down. One
-    /// right, one rule — GameIntention.Read admits the same reader on the way
-    /// back, or the row would be fetched only to be refused.
-    /// </remarks>
     private bool MayJudgePremoderation =>
         _intentionManager.IsAllowed(GameIntention.SetStatusModeration);
 
-    public async Task<Game> GetAsync(Guid gameId)
+    public async Task<Game> GetAsync(Guid gameId, CancellationToken ct = default)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
-        var game = Readable(await _repository.GetGame(gameId, currentUserId, MayJudgePremoderation));
-        await FillCounters(game, currentUserId);
+        var game = Readable(await _repository.GetGame(gameId, currentUserId, MayJudgePremoderation, ct));
+        await _unreadCounters.FillCounters(game, currentUserId);
         return game;
     }
 
@@ -382,8 +312,6 @@ internal class GameService : IGameService
         var currentUserId = _identityProvider.Current.User.UserId;
         var gameId = await _repository.FindGameIdByPublicId(publicId, currentUserId, MayJudgePremoderation);
 
-        // Same answer as the aggregate read gives for an id that addresses
-        // nothing visible, so a caller cannot tell which path it took.
         return gameId ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
     }
 
@@ -392,7 +320,7 @@ internal class GameService : IGameService
         var currentUserId = _identityProvider.Current.User.UserId;
         var game = Readable(
             await _repository.GetGameByPublicId(publicId, currentUserId, MayJudgePremoderation));
-        await FillCounters(game, currentUserId);
+        await _unreadCounters.FillCounters(game, currentUserId);
         return game;
     }
 
@@ -415,9 +343,7 @@ internal class GameService : IGameService
     }
 
     /// <summary>
-    /// The row is there, and this reader may see it. A game that is not visible
-    /// to the caller answers the same 404 an identifier that addresses nothing
-    /// does, so a caller cannot tell the two apart.
+    /// A game hidden from the caller answers the 404 of an identifier that addresses nothing.
     /// </summary>
     private T Readable<T>(T? game) where T : Game
     {
@@ -431,21 +357,7 @@ internal class GameService : IGameService
     }
 
     /// <summary>
-    /// The two per-viewer counters every read of a game carries.
-    /// </summary>
-    private async Task FillCounters<T>(T game, Guid currentUserId) where T : Game
-    {
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCommentsCount);
-        await _unreadCountersRepository.FillEntityCounters(new[] { game }, currentUserId,
-            g => g.Id, g => g.UnreadCharactersCount, UnreadEntryType.Character);
-    }
-
-    /// <summary>
-    /// A write answers with the details of the game as the details read gives
-    /// them: the repository hands back the row it wrote without the sheet and the
-    /// subscribers, and the answer of every write goes out through the details
-    /// mapping, which requires the sheet.
+    /// The written row comes back without the sheet and the subscribers the details mapping needs.
     /// </summary>
     private async Task<GameDetails> Answered(GameDetails written)
     {
@@ -453,23 +365,15 @@ internal class GameService : IGameService
         return written;
     }
 
-    /// <summary>
-    /// What the details read adds on top: the character sheet the game describes
-    /// its characters by, and the subscriber list.
-    /// </summary>
     /// <remarks>
-    /// Unconditional, and it throws when the row is missing. Every writer of a
-    /// game writes its sheet in the same save, so a game without one is a defect
-    /// of that write; answering with an empty sheet instead would show every
-    /// character of that game as having no attributes and let the next save
-    /// store that as the truth.
+    /// Throws without a sheet: an empty one would let the next save store no attributes as the truth.
     /// </remarks>
     private async Task FillDetails(GameDetails game, Guid currentUserId)
     {
         game.AttributeSchema = await _gameSchemaRepository.Get(game.Id);
 
         game.Subscribers = await _subscriptionService.GetSubscribersAsync(game.Id);
-        await FillCounters(game, currentUserId);
+        await _unreadCounters.FillCounters(game, currentUserId);
     }
 
     #endregion
@@ -480,52 +384,23 @@ internal class GameService : IGameService
     {
         await _updateGameValidator.ValidateAndThrowAsync(updateGame);
         var game = await GetDetailsAsync(updateGame.GameId);
-        // The settings page save, and nothing but it: this method writes the
-        // information form — title, system, setting, recruitment, privacy,
-        // tags — which is what the curator is here to help set up. Rooms, the
-        // blacklist and the roster keep the lead-only Edit in their own
-        // services, so one gate covers everything written here.
-        //
-        // The roster used to be the exception: an AssistantUsername field rode
-        // in on the update and invited an assistant as a side effect of saving
-        // settings. It is gone, field and all. It had been unreachable over
-        // HTTP ever since UpdateGameRequest started naming its editable fields
-        // and stopped naming that one, and the roster has its own door anyway:
-        // GameInvitationService.InviteAssistant, master-only.
+        // The settings page save: rooms, the blacklist and the roster keep Edit in their own services.
         _intentionManager.ThrowIfForbidden(GameIntention.EditSettings, game);
 
         var invokedEvents = new List<EventType> { EventType.ChangedGame };
 
-        // No status and no premoderation status here: a game moves through them by
-        // ChangeStatusAsync and ChangePremoderationAsync, which name the transition
-        // and refuse an illegal one with 400 and a forbidden one with 403. This path
-        // used to accept both fields, ask IsAllowed and, on a no, drop the field and
-        // answer 200 with the game unchanged - one product transition through two
-        // doors with different rules, and the quiet door was indistinguishable from
-        // success. The premoderation arm was unreachable on top of that: it required
-        // a target state its only legal transition never starts from.
+        // No status here: ChangeStatusAsync and ChangePremoderationAsync name the transition.
 
-        // Check if recruitment is being opened (was closed, now opening)
         var isOpeningRecruitment = !game.Recruitment.IsOpen &&
                                    updateGame.IsRecruitmentOpen == true;
 
-        // Opening recruitment is not a status transition, so no status event
-        // carries it: this is the only thing that reaches the people who asked to
-        // hear when a game starts looking for players.
+        // Not a status transition, so no status event carries it.
         if (isOpeningRecruitment)
         {
             invokedEvents.Add(EventType.GameRecruitmentOpened);
         }
 
-        // Same translation the creation form goes through: the caller names tags
-        // by short id, the link table keys on the tags' own identifiers, and an
-        // id the catalog does not know is dropped rather than refused. Null
-        // stays null all the way to the repository — that is how the update
-        // says "the master did not touch the tags", which an empty list, the
-        // way to clear them all, must not be confused with.
-        //
-        // The null arm is also what keeps the per-group tag limits off a game
-        // whose tags nobody touched; see ResolveTagIds for why that matters.
+        // Null means the tags were not touched, unlike an empty list, and keeps the group limits off.
         var tagIds = updateGame.Tags is null
             ? null
             : await _tagResolver.ResolveTagIds(updateGame.Tags);
@@ -539,13 +414,12 @@ internal class GameService : IGameService
             Title = updateGame.Title,
             SystemName = updateGame.SystemName,
             NarrativeSetting = updateGame.NarrativeSetting,
-            Info = _tagNames.ToLowerCase(updateGame.Info, BbTagSet.Common),
+            Info = updateGame.Info,
             HideDiceResult = updateGame.HideDiceResult,
             ShowPrivateMessages = updateGame.ShowPrivateMessages,
             HidePostStats = updateGame.HidePostStats,
             CommentsAccessMode = updateGame.CommentsAccessMode,
-            TagIds = tagIds,
-            UpdatedUtc = _dateTimeProvider.Now
+            TagIds = tagIds
         };
 
         var result = await Answered(await _repository.Update(updateEntity));
@@ -555,138 +429,13 @@ internal class GameService : IGameService
         return result;
     }
 
-    public async Task<GameDetails> ChangeStatusAsync(Guid gameId, ModuleStatusTransition transition)
-    {
-        var game = await GetDetailsAsync(gameId);
-        var now = _dateTimeProvider.Now;
-
-        // What only a game answers for: the intention that guards the move and
-        // the event it publishes. Which state the move is legal from and what
-        // state it produces is the machine a blog runs on too, and that lives
-        // in ModuleStatusPolicy.
-        var (intention, statusEvent) = transition switch
-        {
-            ModuleStatusTransition.Start =>
-                (GameIntention.SetStatusActive, EventType.StatusGameActive),
-            ModuleStatusTransition.Freeze =>
-                (GameIntention.SetStatusClosed, EventType.StatusGameFrozen),
-            ModuleStatusTransition.Finish =>
-                (GameIntention.SetStatusClosed, EventType.StatusGameFinished),
-            ModuleStatusTransition.Close =>
-                (GameIntention.SetStatusClosed, EventType.StatusGameClosed),
-            ModuleStatusTransition.Reopen =>
-                (GameIntention.SetStatusActive, EventType.StatusGameActive),
-            _ => throw new HttpException(
-                HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition)
-        };
-
-        // Legality first and authorization second, as before: an illegal move
-        // is answered 400 whether or not the caller could have made a legal one.
-        var change = ModuleStatusPolicy.Resolve(
-            transition,
-            new ModuleLifecycle(game.Status, game.ClosedReason, game.ActivatedUtc, game.ClosedUtc),
-            now);
-        _intentionManager.ThrowIfForbidden(intention, game);
-
-        var update = new UpdateGameEntity
-        {
-            GameId = gameId,
-            UpdatedUtc = now,
-            Status = change.Status,
-            ClosedReason = change.ClosedReason,
-            ClosedUtc = change.ClosedUtc,
-            ClearClosedUtc = change.ClearClosedUtc,
-            ActivatedUtc = change.ActivatedUtc,
-            // A game that closes stops looking for players. This is the field a
-            // blog has no counterpart for, and the moves that end at Closed are
-            // exactly Freeze, Finish and Close.
-            IsRecruitmentOpen = change.Status == ModuleStatus.Closed ? false : (bool?)null
-        };
-
-        var result = await Answered(await _repository.Update(update));
-        await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, statusEvent }, gameId);
-        return result;
-    }
-
-    public async Task<GameDetails> ChangePremoderationAsync(string id, ModulePremoderationTransition transition)
-    {
-        // Two moves belong to moderation and one to the master, so there is no
-        // single gate for the endpoint. The moderation pair is a rank, asked
-        // before anything is read: a stranger probing five-letter aliases has to
-        // be refused without learning whether the alias resolves. The master's
-        // move is a fact about the game and is asked once the game is in hand.
-        var isAuthorMove = transition == ModulePremoderationTransition.SubmitForApproval;
-        if (!isAuthorMove)
-        {
-            _intentionManager.ThrowIfForbidden(GameIntention.SetStatusModeration);
-        }
-
-        var currentUserId = _identityProvider.Current.User.UserId;
-
-        // The fetch goes straight to the repository, which takes either id form
-        // and skips the schema, subscriber and unread-counter reads
-        // GetDetailsAsync adds and this write never uses.
-        //
-        // Which scope it uses is the difference between the two kinds of move. A
-        // master always sees their own game, so the author's move reads through
-        // the ordinary accessibility scope and a stranger gets a 404 out of it. A
-        // mentor does not: the scope hands out a premoderated game only to its
-        // leads, its invitees and its assigned curator, and under this rule a
-        // module in AwaitingEdits has no curator yet — that is the state every
-        // newbie's game is created in. Read through the ordinary scope, the queue
-        // would answer 404 on exactly the games it exists to judge.
-        var parsed = Guid.TryParse(id, out var guid);
-        var game = isAuthorMove
-            ? parsed
-                // The author's move reads as the author and not as a judge, even
-                // when the author happens to hold the rank: submitting is a fact
-                // about the game, so the scope has to answer the master's
-                // question and not the mentor's.
-                ? await _repository.GetGameDetails(guid, currentUserId, mayJudgePremoderation: false)
-                : await _repository.GetGameDetailsByPublicId(id, currentUserId, mayJudgePremoderation: false)
-            : parsed
-                ? await _repository.GetGameDetailsForModeration(guid, currentUserId)
-                : await _repository.GetGameDetailsByPublicIdForModeration(id, currentUserId);
-        if (game == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
-        }
-
-        var gameId = game.Id;
-
-        // Legality first and authorization second, as in ChangeStatusAsync: a move
-        // the machine does not allow is a 400 whether or not the caller could have
-        // made a legal one.
-        var change = ModulePremoderationPolicy.Resolve(
-            transition, game.PremoderationStatus, currentUserId);
-        if (isAuthorMove)
-        {
-            _intentionManager.ThrowIfForbidden(GameIntention.SubmitForApproval, game);
-        }
-
-        var update = new UpdateGameEntity
-        {
-            GameId = gameId,
-            UpdatedUtc = _dateTimeProvider.Now,
-            MentorId = change.MentorId,
-            SetMentorId = change.SetMentorId,
-            PremoderationStatus = change.Status
-        };
-
-        var result = await Answered(await _repository.Update(update));
-        await _producer.SendAsync(new List<EventType> { EventType.ChangedGame, EventType.StatusGameModeration }, gameId);
-        return result;
-    }
-
     public async Task<GameDetails> ResetRecruitmentDateAsync(Guid gameId)
     {
-        // Admin-only action; the controller enforces the role. Read-gate still
-        // applies (active games are public, so an admin can always fetch them).
+        // Admin-only; the controller enforces the role.
         var game = await GetDetailsAsync(gameId);
         var update = new UpdateGameEntity
         {
             GameId = game.Id,
-            UpdatedUtc = _dateTimeProvider.Now,
             ClearRecruitmentStartedUtc = true
         };
 
@@ -707,23 +456,21 @@ internal class GameService : IGameService
         var currentUser = _identityProvider.Current.User;
         var isPrivilegedModerator = currentUser.Role >= UserRole.SeniorModerator;
 
-        // Master self-delete is restricted (SeniorModerator+ bypasses it): a
-        // master may only delete a game while it is still a draft, or while it
-        // is barely started — fewer than 10 posts and none of them rated.
+        // A master deletes only a draft or a barely started game; a senior moderator bypasses this.
         if (!isPrivilegedModerator && gameToRemove.Master?.UserId == currentUser.UserId &&
             gameToRemove.Status != ModuleStatus.Draft)
         {
             var postCounts = await _repository.GetTotalPostCounts(new[] { gameId });
             var totalPosts = postCounts.TryGetValue(gameId, out var pc) ? pc : 0;
             var hasRatedPosts = gameToRemove.PostReviewsCount > 0;
-            if (totalPosts >= 10 || hasRatedPosts)
+            if (totalPosts >= SelfDeletePostLimit || hasRatedPosts)
             {
                 throw new HttpException(HttpStatusCode.Forbidden,
-                    "Игру уже нельзя удалить: в ней 10 или больше постов или есть оцененные посты");
+                    $"Игру уже нельзя удалить: в ней {SelfDeletePostLimit} или больше постов или есть оцененные посты");
             }
         }
 
-        await _repository.Delete(gameId, _identityProvider.Current.User.UserId);
+        await _repository.Delete(gameId, currentUser.UserId);
         await _producer.SendAsync(EventType.DeletedGame, gameId);
     }
 
@@ -734,29 +481,24 @@ internal class GameService : IGameService
     public async Task<IEnumerable<GeneralUser>> GetAssistantsAsync(Guid gameId)
     {
         await GetAsync(gameId);
-        return await _userRepository.GetAssistants(gameId);
+        return await _assistantRepository.GetAssistants(gameId);
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// RemoveUser, not Edit. Removing an assistant has two handles — this one and
-    /// GameInvitationService.RemoveUser — and they asked different questions:
-    /// Edit resolves to master or assistant, so an assistant could remove a peer,
-    /// while the intention written for this very action resolves to master alone
-    /// and says so in its own comment. AUTHORIZATION.md describes the second
-    /// answer.
+    /// RemoveUser, not Edit: only the master removes an assistant.
     /// </remarks>
     public async Task RemoveAssistantAsync(Guid gameId, string username)
     {
         var game = await GetAsync(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.RemoveUser, game);
 
-        if (!await _userRepository.IsAssistantByUsername(gameId, username))
+        if (!await _assistantRepository.IsAssistantByUsername(gameId, username))
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Помощник не найден в этой игре");
+            throw new HttpException(HttpStatusCode.NotFound, "Ассистент не найден в этой игре");
         }
 
-        await _userRepository.RemoveAssistantByUsername(gameId, username);
+        await _assistantRepository.RemoveAssistantByUsername(gameId, username);
         await _producer.SendAsync(EventType.ChangedGame, gameId);
     }
 
@@ -765,140 +507,14 @@ internal class GameService : IGameService
     #region Private Methods
 
     /// <summary>
-    /// Whether an anonymous listing may be served from the shared cache.
+    /// A list the viewer browses, the one "Скрывать игры" cleans; not his own games, not a list
+    /// asked by a person's name, and not the moderation worklist.
     /// </summary>
-    /// <remarks>
-    /// The entry is shared by every anonymous reader, so what may be cached is
-    /// exactly what the key below can tell apart. Everything the key does not
-    /// carry has to be refused here instead — the two are one decision, which is
-    /// why they sit together and are checked against each other by a test that
-    /// walks the properties of the query.
-    ///
-    /// Two of these are not merely about the key. A premoderation filter is a
-    /// moderation capability, refused above for an anonymous caller by the
-    /// intention check; repeating it here means the correctness of a shared cache
-    /// entry does not rest on a guard in another method. Participation filters
-    /// are about a reader, and an anonymous caller is not one.
-    /// </remarks>
-    internal static bool IsCacheableAnonymousQuery(GamesQuery query) =>
-        query.Skip == 0
-        && string.IsNullOrEmpty(query.Search)
-        && query.RequiredTags == null
-        && query.OptionalTags == null
-        && query.ExcludedTags == null
-        && (query.OwnerUsernames == null || query.OwnerUsernames.Count == 0)
-        && string.IsNullOrEmpty(query.PlayerUsername)
-        && query.PlayerParticipation == null
-        // Absent rather than "not true". The repository acts on true alone, so
-        // false and absent are one listing and could share one entry - but then
-        // the key would no longer tell apart everything this agrees to serve, and
-        // that invariant is what is checked. A parameter that asks for nothing is
-        // not worth an exception to it.
-        && query.Participating is null
-        && query.PremoderationStatuses is null or { Count: 0 }
-        // Filled for a signed-in viewer alone; a listing cleaned for somebody
-        // must never become the entry every guest is served.
-        && query.ExcludedMasterIds is null or { Count: 0 }
-        && !query.CreatedFromUtc.HasValue && !query.CreatedToUtc.HasValue
-        && !query.ActivatedFromUtc.HasValue && !query.ActivatedToUtc.HasValue
-        && !query.ClosedFromUtc.HasValue && !query.ClosedToUtc.HasValue
-        && !query.RecruitmentStartedFromUtc.HasValue && !query.RecruitmentStartedToUtc.HasValue;
-
-    /// <summary>
-    /// The key one anonymous listing is stored under.
-    /// </summary>
-    /// <remarks>
-    /// Normalised the way the repository reads the same fields, and not the way
-    /// they arrived. The sort order used to be written into the key only when a
-    /// sort field came with it, while the repository reads the order in every
-    /// branch including the default one: ?sortOrder=asc and ?sortOrder=desc were
-    /// two different listings sharing one entry, so for the length of the entry's
-    /// life whichever arrived second was served the first one's page. The same
-    /// normalisation removes a cheaper waste beside it — SortBy differing only in
-    /// case, and statuses differing only in order, were separate entries holding
-    /// identical pages.
-    /// </remarks>
-    internal static string BuildAnonymousCacheKey(GamesQuery query)
-    {
-        var statusPart = query.Statuses is { Count: > 0 }
-            ? string.Join("_", query.Statuses.OrderBy(status => status))
-            : "all";
-        var recruitingPart = query.RecruitmentFilter.HasValue
-            ? $"_recruiting_{query.RecruitmentFilter.Value}"
-            : "";
-        var closedReasonPart = query.ClosedReasonFilter.HasValue
-            ? $"_closedReason_{query.ClosedReasonFilter.Value}"
-            : "";
-
-        // Exactly what ApplySorting reads: the field lowercased, and the order
-        // ascending only on a case-insensitive "asc" and descending otherwise.
-        var order = string.Equals(query.SortOrder, "asc", StringComparison.OrdinalIgnoreCase)
-            ? "asc"
-            : "desc";
-        var sortPart = $"_sort_{query.SortBy?.ToLowerInvariant() ?? ""}_{order}";
-
-        return $"{GamesByStatusCacheKeyPrefix}{statusPart}{recruitingPart}{closedReasonPart}" +
-            $"{sortPart}_take_{query.Take}";
-    }
-
-    /// <summary>
-    /// Whether the list is one the viewer browses rather than one they asked
-    /// about somebody by name: the lists "Скрывать игры" cleans.
-    /// </summary>
-    /// <remarks>
-    /// The switch hides the games of the people on the viewer's personal list
-    /// from the listings that offer games to read: the catalogue, the sidebars,
-    /// a search. It does not take away the viewer's own games, where they may
-    /// play under a master they blocked, nor answer "nothing" to a list the
-    /// viewer asked for by the master's or a player's name - that is a question
-    /// about the person, asked on purpose. The moderation queue is a worklist
-    /// and is never cleaned.
-    /// </remarks>
     private static bool IsDiscoveryListing(GamesQuery query) =>
         query.Participating != true &&
         query.OwnerUsernames is not { Count: > 0 } &&
         string.IsNullOrEmpty(query.PlayerUsername) &&
         query.PremoderationStatuses is not { Count: > 0 };
-
-    /// <summary>
-    /// Build the query part of a cache key
-    /// </summary>
-    private static string GetQueryKey(GamesQuery query)
-    {
-        var parts = new List<string>
-        {
-            query.Skip.ToString(),
-            query.Take.ToString(),
-            query.Search ?? "",
-            query.SortBy ?? "",
-            query.SortOrder ?? "",
-            query.Statuses != null ? string.Join(",", query.Statuses) : "",
-            query.RecruitmentFilter?.ToString() ?? "",
-            query.ClosedReasonFilter?.ToString() ?? "",
-            query.RequiredTags != null ? string.Join(",", query.RequiredTags) : "",
-            query.OptionalTags != null ? string.Join(",", query.OptionalTags) : "",
-            query.ExcludedTags != null ? string.Join(",", query.ExcludedTags) : "",
-            query.OwnerUsernames != null ? string.Join(",", query.OwnerUsernames) : "",
-            query.PlayerUsername ?? "",
-            query.PlayerParticipation?.ToString() ?? "",
-            query.Participating?.ToString() ?? "",
-            query.CreatedFromUtc?.ToString("O") ?? "",
-            query.CreatedToUtc?.ToString("O") ?? "",
-            query.ActivatedFromUtc?.ToString("O") ?? "",
-            query.ActivatedToUtc?.ToString("O") ?? "",
-            query.ClosedFromUtc?.ToString("O") ?? "",
-            query.ClosedToUtc?.ToString("O") ?? "",
-            query.RecruitmentStartedFromUtc?.ToString("O") ?? "",
-            query.RecruitmentStartedToUtc?.ToString("O") ?? "",
-            query.PremoderationStatuses != null ? string.Join(",", query.PremoderationStatuses) : "",
-            query.ExcludedMasterIds != null ? string.Join(",", query.ExcludedMasterIds.Order()) : ""
-        };
-        // The key carries the values themselves: a 32-bit hash of them lets two
-        // different queries of one user share a cached page. Parts are
-        // length-prefixed because free text (search, usernames) may contain the
-        // separator, and a plain join would leave the same collision open.
-        return string.Join("|", parts.Select(p => $"{p.Length}:{p}"));
-    }
 
     #endregion
 }

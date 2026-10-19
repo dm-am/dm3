@@ -1,24 +1,18 @@
 /**
- * Measures the client against the size limits of sizeRatchet.js, with the same
- * rules and the same parse as `eslint`, and names every offender.
- *
- * The rules are ESLint's own (max-lines, max-lines-per-function, complexity,
- * vue/max-lines-per-block), run through eslint.config.js so that a file is read
- * by the parser the linter reads it with. Each one is wrapped only to hear what
- * it reports: the node it blames is turned into a stable name, because ESLint
- * names a function "Arrow function" and places it by line, and a register keyed
- * by line numbers would go stale on every edit above the function.
+ * Measures the client against the limits of sizeRatchet.js with ESLint's own
+ * rules through eslint.config.js, each wrapped to hear what it reports and name
+ * the node stably rather than by line number.
  */
 import { ESLint, type Rule, type SourceCode } from "eslint";
 import { builtinRules } from "eslint/use-at-your-own-risk";
 import vue from "eslint-plugin-vue";
 import { relative } from "node:path";
 
-export interface FunctionSize {
+interface FunctionSize {
   lines?: number;
   complexity?: number;
 }
-export type Block = "script" | "template" | "style";
+type Block = "script" | "template" | "style";
 export interface FileSize {
   lines?: number;
   blocks?: Partial<Record<Block, number>>;
@@ -223,10 +217,8 @@ function isUnit(node: Node): boolean {
 const keysByProgram = new WeakMap<object, Map<Node, string>>();
 
 /**
- * Every unit of a file, keyed by the names of the units around it. Two units
- * with one chain are told apart by their order, counted over all of them rather
- * than over the offenders, so a key does not change when a sibling crosses a
- * limit.
+ * Every unit of a file keyed by the names around it; one chain is told apart
+ * by order over all units, so a key holds when a sibling crosses a limit.
  */
 function unitKeys(code: SourceCode): Map<Node, string> {
   const cached = keysByProgram.get(code.ast);

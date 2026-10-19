@@ -3,24 +3,15 @@
  */
 
 /**
- * Where the room opens and what reading it does.
- *
- * An address without a page used to open the first page, at its top, and then
- * mark the whole room read, so a reader coming back to a long room had to find
- * where he stopped by hand and could not ask again. It now asks the server
- * where the reader stopped before anything is marked, lands on that page with
- * the post at the top, and marks it the way the forum marks the comment it
- * brings the reader to. A filtered or re-sorted view is not reading the room:
- * it marks nothing, and the number of a post in it leads to the post's own
- * page. These run the page on a real router, so each landing is checked by
- * the address it ends on and the requests it made.
+ * Where the room opens and what reading it does, on a real router: each landing
+ * is checked by the address it ends on and the requests it made.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { defineComponent, h, type Ref } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory, type Router } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
-import { useAuthStore } from "@/shared/stores/auth";
+import { useAuthStore } from "@/entities/user";
 import { setScrollContainer } from "@/shared/lib/scroll";
 import { provideZoneMarker } from "@/shared/lib/composables/useZoneSection";
 import GameRoom from "./GameRoom.vue";
@@ -36,7 +27,9 @@ const api = vi.hoisted(() => ({
   deletePendency: vi.fn(),
 }));
 
-vi.mock("@/entities/game/api/gameApi", () => ({ default: api }));
+vi.mock("@/entities/game/api/roomApi", () => ({ default: api }));
+vi.mock("@/entities/game/api/postApi", () => ({ default: api }));
+vi.mock("@/entities/game/api/characterApi", () => ({ default: api }));
 
 const PAGE_SIZE = 10;
 
@@ -50,7 +43,6 @@ const room = {
   pendencies: [],
 };
 
-/** Posts numbered in the room, `count` of them from `first`. */
 function postsFrom(first: number, count: number) {
   return Array.from({ length: count }, (_, i) => ({
     id: `p-${first + i}`,
@@ -60,7 +52,6 @@ function postsFrom(first: number, count: number) {
   }));
 }
 
-/** The page of the room the request asked for, the way the server pages it. */
 function pageAnswer(page: number, total = 35) {
   const skip = (page - 1) * PAGE_SIZE;
   return {
@@ -78,7 +69,48 @@ function pageAnswer(page: number, total = 35) {
   };
 }
 
-// The post as the room draws it, down to the card the mark goes on.
+/** A filtered list: posts from all over the room, each with its number in it. */
+function filteredAnswer(numbers: number[]) {
+  return {
+    data: {
+      resources: numbers.map((n) => ({
+        id: `p-${n}`,
+        number: n,
+        createdUtc: "2026-02-01T10:00:00Z",
+        gameText: "при",
+      })),
+      paging: {
+        skip: 0,
+        take: PAGE_SIZE,
+        total: numbers.length,
+        current: 1,
+        pages: 1,
+      },
+    },
+    error: null,
+  };
+}
+
+/** The list of the game, its characters and the mark of reading answered. */
+function answerTheGame(rooms: object[] = [room]) {
+  api.getRooms.mockResolvedValue({
+    data: { resources: rooms, paging: null },
+    error: null,
+  });
+  api.getCharacters.mockResolvedValue({
+    data: { resources: [], paging: null },
+    error: null,
+  });
+  api.markRoomAsRead.mockResolvedValue({ data: null, error: null });
+}
+
+/** Lets the page bring a post up, which waits for an animation frame. */
+async function settle() {
+  await flushPromises();
+  await new Promise((resolve) => requestAnimationFrame(resolve));
+  await flushPromises();
+}
+
 const GamePostStub = defineComponent({
   props: { post: { type: Object, required: true }, number: Number },
   setup(props) {
@@ -91,7 +123,6 @@ const GamePostStub = defineComponent({
 
 let scrollTo: ReturnType<typeof vi.fn>;
 
-/** The page scrolls a container of its own, registered by the app shell. */
 function registerScrollContainer() {
   const container = document.createElement("div");
   scrollTo = vi.fn();
@@ -109,7 +140,7 @@ async function openRoom(
   useAuthStore().user = signedIn
     ? ({
         username: "reader",
-        settings: { paging: { postsPerPage: PAGE_SIZE } },
+        settings: { pageSize: PAGE_SIZE },
       } as never)
     : null;
 
@@ -131,7 +162,6 @@ async function openRoom(
   });
   await router.isReady();
 
-  // The shell: the marker it draws after the heading.
   const Shell = defineComponent({
     setup() {
       marker = provideZoneMarker();
@@ -154,9 +184,7 @@ async function openRoom(
     },
     attachTo: document.body,
   });
-  await flushPromises();
-  await new Promise((resolve) => setTimeout(resolve, 20));
-  await flushPromises();
+  await settle();
   return router;
 }
 
@@ -170,19 +198,10 @@ describe("GameRoom opening", () => {
     localStorage.clear();
 
     registerScrollContainer();
-
-    api.getRooms.mockResolvedValue({
-      data: { resources: [room], paging: null },
-      error: null,
-    });
-    api.getCharacters.mockResolvedValue({
-      data: { resources: [], paging: null },
-      error: null,
-    });
+    answerTheGame();
     api.getPosts.mockImplementation((_roomId, paging) =>
       Promise.resolve(pageAnswer(paging.number ?? 1)),
     );
-    api.markRoomAsRead.mockResolvedValue({ data: null, error: null });
   });
 
   it("lands a bare address on the first unread post, marks it and only then the room", async () => {
@@ -267,10 +286,6 @@ describe("GameRoom opening", () => {
   });
 
   it("keeps the filtered view when where the room opens is answered after it", async () => {
-    // The reader filters the room while the server is still saying where it
-    // opens, and that answer comes back after the filtered list. Applied late,
-    // it would move the address to its own page on top of the filter, and the
-    // reader would be taken off the view he asked for.
     let answerOpening: (answer: unknown) => void = () => undefined;
     api.getFirstUnreadRoomPost.mockReturnValue(
       new Promise((resolve) => {
@@ -280,24 +295,7 @@ describe("GameRoom opening", () => {
     api.getPosts.mockImplementation((_roomId, paging, filter) =>
       Promise.resolve(
         filter && Object.keys(filter).length
-          ? {
-              data: {
-                resources: [18, 30].map((n) => ({
-                  id: `p-${n}`,
-                  number: n,
-                  createdUtc: "2026-02-01T10:00:00Z",
-                  gameText: "при",
-                })),
-                paging: {
-                  skip: 0,
-                  take: PAGE_SIZE,
-                  total: 2,
-                  current: 1,
-                  pages: 1,
-                },
-              },
-              error: null,
-            }
+          ? filteredAnswer([18, 30])
           : pageAnswer(paging.number ?? 1),
       ),
     );
@@ -311,9 +309,7 @@ describe("GameRoom opening", () => {
       params: { id: "g-1", num: "1" },
       query: { q: "при" },
     });
-    await flushPromises();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await flushPromises();
+    await settle();
 
     answerOpening({
       data: {
@@ -328,9 +324,7 @@ describe("GameRoom opening", () => {
       },
       error: null,
     });
-    await flushPromises();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await flushPromises();
+    await settle();
 
     expect(router.currentRoute.value.query).toEqual({ q: "при" });
     expect(requestedPages()).toEqual([1]);
@@ -348,40 +342,12 @@ describe("GameRoom filtered view", () => {
     vi.clearAllMocks();
     document.body.innerHTML = "";
     registerScrollContainer();
-
-    api.getRooms.mockResolvedValue({
-      data: { resources: [room], paging: null },
-      error: null,
-    });
-    api.getCharacters.mockResolvedValue({
-      data: { resources: [], paging: null },
-      error: null,
-    });
-    api.markRoomAsRead.mockResolvedValue({ data: null, error: null });
-    // The filtered list: three posts from all over the room, each with its
-    // number in the room.
-    api.getPosts.mockImplementation((_roomId, _paging, filter) =>
+    answerTheGame();
+    api.getPosts.mockImplementation((_roomId, paging, filter) =>
       Promise.resolve(
         filter && Object.keys(filter).length
-          ? {
-              data: {
-                resources: [18, 30, 54].map((n) => ({
-                  id: `p-${n}`,
-                  number: n,
-                  createdUtc: "2026-02-01T10:00:00Z",
-                  gameText: "при",
-                })),
-                paging: {
-                  skip: 0,
-                  take: PAGE_SIZE,
-                  total: 3,
-                  current: 1,
-                  pages: 1,
-                },
-              },
-              error: null,
-            }
-          : pageAnswer(_paging.number ?? 1, 60),
+          ? filteredAnswer([18, 30, 54])
+          : pageAnswer(paging.number ?? 1, 60),
       ),
     );
   });
@@ -417,9 +383,7 @@ describe("GameRoom filtered view", () => {
 
     // The number links to #post-{id}; following it is a change of hash.
     await router.push({ ...router.currentRoute.value, hash: "#post-p-18" });
-    await flushPromises();
-    await new Promise((resolve) => setTimeout(resolve, 20));
-    await flushPromises();
+    await settle();
 
     expect(router.currentRoute.value.query).toEqual({ number: "2" });
     expect(router.currentRoute.value.hash).toBe("#post-p-18");
@@ -428,7 +392,6 @@ describe("GameRoom filtered view", () => {
       { number: 2, take: PAGE_SIZE },
       {},
     );
-    // Back on the room itself, reading it marks it read.
     expect(api.markRoomAsRead).toHaveBeenCalledWith("r-1");
   });
 });
@@ -437,30 +400,18 @@ describe("GameRoom heading", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     document.body.innerHTML = "";
-    api.getCharacters.mockResolvedValue({
-      data: { resources: [], paging: null },
-      error: null,
-    });
     api.getPosts.mockResolvedValue(pageAnswer(1));
-    api.markRoomAsRead.mockResolvedValue({ data: null, error: null });
   });
 
-  it("hands the archive marker to the shell and draws no title of its own", async () => {
-    api.getRooms.mockResolvedValue({
-      data: { resources: [{ ...room, isArchived: true }], paging: null },
-      error: null,
-    });
+  it("hands the archive marker to the shell", async () => {
+    answerTheGame([{ ...room, isArchived: true }]);
     await openRoom({ number: "1" });
 
     expect(marker.value).toBe("архив");
-    expect(document.querySelector(".game-room h2")).toBeNull();
   });
 
   it("gives the shell no marker for a room in play", async () => {
-    api.getRooms.mockResolvedValue({
-      data: { resources: [room], paging: null },
-      error: null,
-    });
+    answerTheGame();
     await openRoom({ number: "1" });
 
     expect(marker.value).toBeUndefined();

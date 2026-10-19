@@ -1,10 +1,11 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Moderation.Features.Warnings;
+using DM.Domain.Moderation.Features.Bans;
 using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbBan = DM.Infrastructure.Persistence.Entities.Moderation.Ban;
@@ -14,10 +15,13 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 /// <inheritdoc />
 internal class BanRepository : IBanRepository
 {
+    /// <summary>Not lifted, already started and not yet ended</summary>
+    private static Expression<Func<DbBan, bool>> InForceAt(DateTimeOffset now) => b =>
+        b.LiftedUtc == null && b.StartedUtc <= now && b.EndedUtc > now;
+
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public BanRepository(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
@@ -78,7 +82,8 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .Where(b => b.TargetUserId == userId && b.LiftedUtc == null && b.StartedUtc <= now && b.EndedUtc > now)
+            .Where(b => b.TargetUserId == userId)
+            .Where(InForceAt(now))
             .OrderByDescending(b => b.EndedUtc)
             .ProjectToBan()
             .FirstOrDefaultAsync(ct);
@@ -118,7 +123,7 @@ internal class BanRepository : IBanRepository
     public async Task Lift(Guid banId, Guid liftedByUserId, DateTimeOffset liftedUtc, string? reason,
         CancellationToken ct = default)
     {
-        var ban = await _dbContext.Bans.FindAsync(new object[] { banId }, ct);
+        var ban = await _dbContext.Bans.FindAsync([banId], ct);
         if (ban != null)
         {
             // Lifting a ban used to leave no trace at all: the reason reached the
@@ -127,7 +132,7 @@ internal class BanRepository : IBanRepository
             // hid the row from every query that could have read it back.
             ban.LiftedByUserId = liftedByUserId;
             ban.LiftedUtc = liftedUtc;
-            ban.LiftReason = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+            ban.LiftReason = string.IsNullOrWhiteSpace(reason) ? null : reason;
             await _dbContext.SaveChangesAsync(ct);
         }
     }
@@ -137,7 +142,7 @@ internal class BanRepository : IBanRepository
     {
         var now = _dateTimeProvider.Now;
         return await _dbContext.Bans
-            .Where(b => b.LiftedUtc == null && b.StartedUtc <= now && b.EndedUtc > now)
+            .Where(InForceAt(now))
             .OrderByDescending(b => b.StartedUtc)
             .ProjectToBan()
             .ToListAsync(ct);

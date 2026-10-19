@@ -11,7 +11,16 @@
   // what the specs compile a stylesheet with, so it reads sources off disk and
   // imports the sass compiler. Nothing the browser bundle may reach imports
   // it, and under this project its `node:fs` would have to be an error.
-  "exclude": ["src/**/*.spec.ts", "src/shared/lib/testing/**"],
+  //
+  // The last two are the harness of a spec that stands beside it: X.doubles.ts
+  // holds the stand-ins its vi.mock factories hand over, X.fixtures.ts the data
+  // and the mount. Only the specs import them, so they are the specs' too.
+  "exclude": [
+    "src/**/*.spec.ts",
+    "src/shared/lib/testing/**",
+    "src/**/*.doubles.ts",
+    "src/**/*.fixtures.ts"
+  ],
   "compilerOptions": {
     "composite": true,
     "paths": {

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -10,36 +11,19 @@ namespace DM.Architecture.Tests;
 /// there first.
 /// </summary>
 /// <remarks>
-/// A rate-limit partitioner is handed an HttpContext and called synchronously,
-/// so whatever it counts by has to be on that context already. One middleware
-/// puts the account there, reading the session cookie and nothing else. Drop it,
-/// or let it drift below the limiter, and every account-partitioned policy falls
-/// back to counting per address without a word — no error, no log line, no
-/// metric, just an office of a hundred people sharing ten uploads a minute
-/// again. That is the failure this replaced, and it is invisible from outside.
-///
-/// The other half of the order pulls the opposite way and matters as much: the
-/// limiter stays above authentication, so a flood is refused before it costs a
-/// session lookup. That constraint is the entire reason the account is read out
-/// of the cookie instead of taken from the identity, and a later reader who does
-/// not know it will "simplify" the pipeline straight back into the problem.
-///
-/// Source text is the only surface: an order of middleware is not expressible in
-/// types, and a pipeline assembled wrongly still starts, still answers, and
-/// still limits — just not whom it says it does.
+/// A partitioner is called synchronously, so the account must already be on the context; the limiter
+/// stays above authentication so a flood costs no session lookup. Source text: a wrong order still
+/// starts and still limits, only not whom it says.
 /// </remarks>
 public class RateLimitPipelineShould
 {
-    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     [Fact]
     public void NameTheAccountBeforeTheLimiterCountsAgainstIt()
     {
-        // Read as code and not as text: two slashes in front of the pipeline move
-        // none of the three calls below, so a commented-out Startup satisfied
-        // every comparison in this method.
+        // Read as code: a commented-out Startup must not satisfy the comparisons.
         var startup = SourceText.ReadCode(
-            Path.Combine(RepositoryRoot.FullName, "src", "DM.Web.API", "Startup.cs"));
+            Path.Combine(RepositoryLayout.RootDirectory.FullName, "src", "DM.Web.API", "Startup.cs"));
 
         var account = startup.IndexOf(
             "UseMiddleware<RateLimitAccountMiddleware>()", StringComparison.Ordinal);
@@ -62,24 +46,14 @@ public class RateLimitPipelineShould
     /// Every request leaves one line, and only one.
     /// </summary>
     /// <remarks>
-    /// The framework logs requests at Information, and the source override cuts
-    /// Microsoft to Warning to keep its noise out of the store — so the store held
-    /// what the application chose to say and nothing at all about what was asked of
-    /// it. A 404 nobody expected, a route answering 500 to one caller, the request
-    /// behind a slow page: none of them left a trace anywhere.
-    ///
-    /// The position is the other half. Below the error handler an exception passes
-    /// through the logging middleware, which records it as Error and rethrows — a
-    /// second entry on top of the one the handler writes, differing only in wording,
-    /// and two entries per failure is how a log stops being read. Above the
-    /// correlation middleware the line carries no token, which is the one thing that
-    /// ties a refusal to the request that caused it.
+    /// Microsoft logs are cut to Warning, so this is the only request line. Below the error handler it
+    /// would log each failure twice, above the correlation middleware without a token.
     /// </remarks>
     [Fact]
     public void WriteOneLinePerRequestBelowTheTokenAndAboveTheHandler()
     {
         var startup = SourceText.ReadCode(
-            Path.Combine(RepositoryRoot.FullName, "src", "DM.Web.API", "Startup.cs"));
+            Path.Combine(RepositoryLayout.RootDirectory.FullName, "src", "DM.Web.API", "Startup.cs"));
 
         var correlation = startup.IndexOf(
             "UseMiddleware<CorrelationMiddleware>()", StringComparison.Ordinal);
@@ -103,7 +77,7 @@ public class RateLimitPipelineShould
     public void SayInTheContractWhatABudgetIsCountedPer()
     {
         var document = File.ReadAllText(Path.Combine(
-            RepositoryRoot.FullName, "docs", "conventions", "API_DESIGN.md"));
+            RepositoryLayout.RootDirectory.FullName, "docs", "conventions", "API_DESIGN.md"));
 
         var start = document.IndexOf("## Rate Limiting", StringComparison.Ordinal);
         start.Should().BeGreaterThan(-1, "the published contract states the budgets");

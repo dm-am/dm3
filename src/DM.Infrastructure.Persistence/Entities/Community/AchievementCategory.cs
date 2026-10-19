@@ -2,13 +2,14 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using DM.Domain.Community.Features.Catalogs;
 using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
 /// <summary>
 /// DAL for an achievement category (a chain of tiers for one metric).
-/// SSOT for IconName, Description, Metric, SortOrder — everything shared
+/// The source of IconName, Description, Metric, SortOrder — everything shared
 /// by all 4 tiers of the chain. Tiers (AchievementType) store only what is
 /// unique per tier: Title, Threshold, Tier.
 /// </summary>
@@ -19,19 +20,19 @@ public class AchievementCategory
     public Guid AchievementCategoryId { get; set; }
 
     [Required]
-    [MaxLength(80)]
+    [MaxLength(CatalogFieldLimits.CodeMaxLength)]
     public string Code { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(200)]
+    [MaxLength(CatalogFieldLimits.TitleMaxLength)]
     public string Title { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(1000)]
+    [MaxLength(CatalogFieldLimits.DescriptionMaxLength)]
     public string Description { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(80)]
+    [MaxLength(CatalogFieldLimits.IconNameMaxLength)]
     public string IconName { get; set; } = string.Empty;
 
     public AchievementMetric Metric { get; set; }

@@ -1,7 +1,5 @@
 using System;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Moderation.Tickets;
 using DM.Web.API.Shared.BbRendering;
@@ -10,25 +8,21 @@ using AwesomeAssertions;
 using Xunit;
 using DomainTicket = DM.Domain.Moderation.Features.Tickets.Ticket;
 using DomainTicketComment = DM.Domain.Moderation.Features.Tickets.TicketComment;
-using DomainTicketDetails = DM.Domain.Moderation.Features.Tickets.TicketDetails;
 
 namespace DM.Web.API.Tests.Features.Moderation;
 
 /// <summary>
-/// The support form writes the ticket in the site markup, and the three screens
-/// that read it back (the moderation card, "Мои обращения" and the moderation
-/// queues) print it. The stored text goes out as written, for the author and
-/// for moderation to read the source, and once more in a carrier the serializer
-/// renders, so no screen has to print BBCode. The conversation goes out rendered.
+/// The ticket text goes out as written and once more in a carrier the serializer renders; the conversation
+/// goes out rendered.
 /// </summary>
 public class TicketMapperShould : UnitTestBase
 {
     private const string Body = "[b]Страница[/b] не открывается";
 
-    private TicketMapper Mapper() => new(new UserMapper(Mock<IImgproxyUrlBuilder>()));
+    private static TicketMapper Mapper() => new(new UserMapper());
 
     [Fact]
-    public void SendTheListRowBodyAsWrittenAndForRendering()
+    public void SendTheListRowBodyForRendering()
     {
         var result = Mapper().ToTicket(new DomainTicket
         {
@@ -36,8 +30,7 @@ public class TicketMapperShould : UnitTestBase
             Description = Body
         });
 
-        result.Description.Should().Be(Body);
-        result.DescriptionHtml.Should().BeOfType<InfoBbText>()
+        result.Description.Should().BeOfType<InfoBbText>()
             .Which.Value.Should().Be(Body);
     }
 
@@ -82,66 +75,6 @@ public class TicketMapperShould : UnitTestBase
 
         result.Author.Should().BeNull();
         result.IsGuest.Should().BeTrue();
-    }
-
-    /// <summary>
-    /// The page of a ticket carries the conversation, what the caller may do in
-    /// it, and who closed it.
-    /// </summary>
-    [Fact]
-    public void SendThePageWithTheConversationAndWhatTheCallerMayDo()
-    {
-        var ticketId = Guid.NewGuid();
-
-        var result = Mapper().ToTicketDetails(new DomainTicketDetails
-        {
-            TicketId = ticketId,
-            Description = Body,
-            Reporter = new GeneralUser { UserId = Guid.NewGuid(), Username = "Experienced" },
-            CommentsCount = 1,
-            Comments = [new DomainTicketComment { TicketCommentId = Guid.NewGuid(), Text = "Ответ" }],
-            ResolvedByUsername = "TestModerator",
-            CanComment = true,
-            CanResolve = true
-        });
-
-        result.Id.Should().Be(ticketId);
-        result.Reporter!.Username.Should().Be("Experienced");
-        result.Comments.Should().ContainSingle();
-        result.CommentsCount.Should().Be(1);
-        result.ResolvedByUsername.Should().Be("TestModerator");
-        result.CanComment.Should().BeTrue();
-        result.CanResolve.Should().BeTrue();
-        result.DescriptionHtml.Value.Should().Be(Body);
-    }
-
-    /// <summary>
-    /// The answer carries the status moderation chose with it, and none when it
-    /// chose none: the service reads a missing status as the author's answer or
-    /// as "waiting for the user".
-    /// </summary>
-    [Theory]
-    [InlineData(null)]
-    [InlineData(TicketStatus.Closed)]
-    public void SendTheStatusOfAnAnswerAsChosen(TicketStatus? status)
-    {
-        var result = Mapper().ToCreateTicketComment(new AnswerTicketRequest { Text = "Ответ", Status = status });
-
-        result.Text.Should().Be("Ответ");
-        result.Status.Should().Be(status);
-    }
-
-    /// <summary>
-    /// The guest answers by his token as the author, and the author chooses no
-    /// status.
-    /// </summary>
-    [Fact]
-    public void SendNoStatusWithTheAnswerOfTheGuest()
-    {
-        var result = Mapper().ToCreateTicketComment(new CreateTicketCommentRequest { Text = "Уточню" });
-
-        result.Text.Should().Be("Уточню");
-        result.Status.Should().BeNull();
     }
 
     /// <summary>

@@ -2,11 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The users filter read through the address: what an address means, what each
- * action writes into it, and that an address the filter wrote reads back as
- * itself.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import {
   filterOnListPage,
@@ -272,7 +267,6 @@ describe("useUsersFilter: what an action writes", () => {
 });
 
 describe("useUsersFilter: an address written reads back as itself", () => {
-  /** The address the filter writes for what it read off this one. */
   async function rewritten(query: Record<string, string>) {
     const { filter, settled, wrapper } = await on(query);
     filter.setSearch(filter.filterState.value.search);

@@ -45,10 +45,6 @@ public class CreatePostValidatorShould : UnitTestBase
     /// A body past the length limit is refused, and refused by length rather
     /// than by some other rule tripping over it.
     /// </summary>
-    /// <remarks>
-    /// The post form had no limit at all, so the parse and the render of every
-    /// open of the page were bounded by the request size and nothing else.
-    /// </remarks>
     [Fact]
     public async Task RefuseTextLongerThanTheLimit()
     {
@@ -202,5 +198,50 @@ public class CreatePostValidatorShould : UnitTestBase
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor("DiceRolls[0].DiceCount");
+    }
+
+    [Fact]
+    public async Task FailWhenDieHasMoreThanAThousandEdges()
+    {
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = "Valid text",
+            DiceRolls = new[] { new CreatePostDiceRoll { EdgesCount = 1001, DiceCount = 1 } }
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor("DiceRolls[0].EdgesCount");
+    }
+
+    [Fact]
+    public async Task FailWhenDieExplodesMoreThanAHundredTimes()
+    {
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = "Valid text",
+            DiceRolls = new[] { new CreatePostDiceRoll { EdgesCount = 6, DiceCount = 1, ExplosionCount = 101 } }
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor("DiceRolls[0].ExplosionCount.Value");
+    }
+
+    [Fact]
+    public async Task PassAtTheLimitsOfADie()
+    {
+        var input = new CreatePost
+        {
+            RoomId = Guid.NewGuid(),
+            GameText = "Valid text",
+            DiceRolls = new[]
+            {
+                new CreatePostDiceRoll { EdgesCount = 1000, DiceCount = 100, ExplosionCount = 100 }
+            }
+        };
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldNotHaveAnyValidationErrors();
     }
 }

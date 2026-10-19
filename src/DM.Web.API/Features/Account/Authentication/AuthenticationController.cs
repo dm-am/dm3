@@ -1,25 +1,18 @@
 using System;
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Shared.Authentication;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using DM.Web.API.Shared.RateLimiting;
+using DM.Web.API.Shared.Http;
 
 namespace DM.Web.API.Features.Account.Authentication;
 
 /// <summary>
 /// Authentication and session management
 /// </summary>
-/// <remarks>
-/// Manages user sessions using cookie-based authentication (BFF pattern).
-/// All endpoints are rate-limited to prevent brute-force attacks.
-/// Session cookies are HttpOnly and SameSite=Lax: Lax still travels on top-level
-/// navigation, which the activation and password-reset links sent by mail depend on.
-/// </remarks>
 [ApiController]
 [Route("v1/account")]
 [ApiExplorerSettings(GroupName = "Account")]
@@ -27,12 +20,9 @@ namespace DM.Web.API.Features.Account.Authentication;
 [EnableRateLimiting(RateLimitPolicies.Auth)]
 public class AuthenticationController : ControllerBase
 {
-    private readonly IAuthenticationApiService _authenticationApiService;
+    private readonly AuthenticationApiService _authenticationApiService;
 
-    /// <summary>
-    /// Creates a new instance of AuthenticationController
-    /// </summary>
-    public AuthenticationController(IAuthenticationApiService authenticationApiService)
+    public AuthenticationController(AuthenticationApiService authenticationApiService)
     {
         _authenticationApiService = authenticationApiService;
     }
@@ -64,17 +54,6 @@ public class AuthenticationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> Login([FromBody] LoginRequest request)
     {
-        // Honeypot validation - reject if the Website field is filled. Filed under
-        // a field the request actually declares, the way the registration and the
-        // ticket honeypots next door are: a key naming nothing is a sentence no
-        // form can put anywhere.
-        if (!string.IsNullOrWhiteSpace(request.Website))
-        {
-            throw new HttpBadRequestException(
-                new Dictionary<string, string> { ["email"] = "Не удалось войти" },
-                RefusalMessage.InvalidData);
-        }
-
         var result = await _authenticationApiService.Login(request, HttpContext);
         return Ok(result);
     }
@@ -105,9 +84,7 @@ public class AuthenticationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CompleteTwoFactorLogin([FromBody] TwoFactorLoginRequest request) =>
-        // Enveloped, although the first step of the same flow answers with a bare
-        // body. The bare one is inherited and counted as debt; a new operation
-        // does not add to it.
+        // Enveloped: the bare body of the first step is inherited debt.
         Ok(new Envelope<LoginResponse>(
             await _authenticationApiService.CompleteTwoFactor(request, HttpContext)));
 
@@ -145,11 +122,7 @@ public class AuthenticationController : ControllerBase
     [AuthenticationRequired]
     [ProducesResponseType(typeof(ListEnvelope<Session>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    // The caller's own devices, addresses and sign-in times. Nothing may keep a
-    // copy: this API sets no validator anywhere, so a stored response is reused
-    // without the origin ever being asked again, and after a sign-out on a
-    // shared machine the browser's disk cache is where it would be read from.
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [PrivateResponse]
     public async Task<IActionResult> GetSessions()
     {
         var sessions = await _authenticationApiService.GetSessions();

@@ -1,3 +1,4 @@
+using DM.Domain.Core.Chats;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,26 +19,14 @@ internal sealed partial class DataSeeder
     /// Bot channels connected on the stand, the way a real link connects them.
     /// </summary>
     /// <remarks>
-    /// A channel counts as connected when two things are written together: the
-    /// external id on the account and the delivery preferences in the settings
-    /// document. BotLinkService reads the second one as the answer to "is this
-    /// connected", so writing one without the other produces an account that
-    /// shows a connected channel and refuses to configure it.
-    ///
-    /// Nothing is delivered anywhere by this: NotificationBotSender sends only
-    /// when a bot token is configured, and the stand has none. What it buys is a
-    /// settings page that can be opened, read and changed on a seeded site
-    /// instead of one that answers 409 to every account.
-    ///
-    /// Two accounts and one channel each, so both states are on the stand at
-    /// once: the primary account has Discord and no Telegram, the moderator has
-    /// Telegram and no Discord.
+    /// The external id and the settings preferences are written together: BotLinkService reads the second.
+    /// Nothing is delivered, the stand has no bot token. The primary account has Discord, the moderator Telegram.
     /// </remarks>
     private async Task ConnectBotChannels(List<DbUser> users, ComprehensiveSeedResult result)
     {
         var connections = new[]
         {
-            (Username: "SolohinLex", Channel: "discord", ExternalId: "310000000000000001"),
+            (Username: PrimaryLogin, Channel: "discord", ExternalId: "310000000000000001"),
             (Username: "TestModerator", Channel: "telegram", ExternalId: "710000001"),
         };
 
@@ -62,9 +51,7 @@ internal sealed partial class DataSeeder
                 user.TelegramId = externalId;
             }
 
-            // The defaults a link writes: on, and the three categories a person
-            // gets by default. Mirrored from BotLinkRepository rather than
-            // invented, so a seeded account and a linked one read the same.
+            // The defaults a link writes, as BotLinkRepository does.
             var preferences = new NotificationChannelPreference
             {
                 Enabled = true,
@@ -98,7 +85,6 @@ internal sealed partial class DataSeeder
 
         if (connected == 0)
         {
-            result.Skipped++;
             return;
         }
 
@@ -107,23 +93,38 @@ internal sealed partial class DataSeeder
     }
 
     /// <summary>
+    /// What the primary account and each companion write to each other, one
+    /// script per conversation, taken in turn.
+    /// </summary>
+    private static readonly string[][] DirectChatScripts =
+    [
+        new[]
+        {
+            "Привет! Видел твою заявку в игру, беру.",
+            "Спасибо! Когда стартуем?",
+            "На выходных, я напишу в комнате.",
+        },
+        new[]
+        {
+            "Подскажи, где смотреть правила по броскам?",
+            "В заметках игры, раздел про механику.",
+        },
+        new[]
+        {
+            "Отличный пост вышел, поздравляю с наградой.",
+            "Спасибо, старался!",
+        },
+    ];
+
+    /// <summary>
     /// Private correspondence for the development accounts.
     /// </summary>
     /// <remarks>
-    /// The seeded site had a messenger with nothing in it: only the global chat
-    /// was written, so every account opened "Нет переписок" and the whole
-    /// surface - the list, the previews, opening a conversation, editing a
-    /// message - could only be looked at by writing to somebody first.
-    ///
-    /// Every chat gets messages and a last-message pointer, because a chat
-    /// without one is not shown: the list reads only conversations somebody has
-    /// written in. The pointer itself is set after the batch save, the way the
-    /// game rooms do it, since Chat.LastMessageId and Message.ChatId reference
-    /// each other and EF refuses to order the inserts otherwise.
+    /// A chat without a last-message pointer is not listed. The pointer is set after the save, as for the rooms.
     /// </remarks>
-    private async Task CreateDirectChats(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task CreateDirectChats(List<DbUser> users, ComprehensiveSeedResult result)
     {
-        var primary = users.FirstOrDefault(u => u.Username == "SolohinLex");
+        var primary = users.FirstOrDefault(u => u.Username == PrimaryLogin);
         if (primary == null)
         {
             return;
@@ -132,95 +133,43 @@ internal sealed partial class DataSeeder
         var existing = await _dbContext.Set<Chat>().AnyAsync(c => c.Type == ChatType.Direct);
         if (existing)
         {
-            result.Skipped++;
             result.Details.Add("Direct chats already exist, skipping");
             return;
         }
 
-        // Named accounts rather than a random draw: the e2e suite signs in as
-        // the first two and asserts on what they can see.
+        // Named accounts: the e2e suite signs in as the first two.
         var companions = new[] { "TestUser", "TestModerator" }
             .Select(name => users.FirstOrDefault(u => u.Username == name))
-            .Where(u => u != null)
+            .OfType<DbUser>()
             .Concat(users.Where(u => u.UserId != primary.UserId).Take(2))
             .Distinct()
-            .Where(u => u!.UserId != primary.UserId)
+            .Where(u => u.UserId != primary.UserId)
             .Take(3)
             .ToList();
-
-        var conversations = new[]
-        {
-            new[]
-            {
-                "Привет! Видел твою заявку в игру, беру.",
-                "Спасибо! Когда стартуем?",
-                "На выходных, я напишу в комнате.",
-            },
-            new[]
-            {
-                "Подскажи, где смотреть правила по броскам?",
-                "В заметках игры, раздел про механику.",
-            },
-            new[]
-            {
-                "Отличный пост вышел, поздравляю с наградой.",
-                "Спасибо, старался!",
-            },
-        };
 
         var pending = new List<(Chat Chat, Guid LastMessageId)>();
 
         for (var index = 0; index < companions.Count; index++)
         {
-            var companion = companions[index]!;
-            // The readable address is taken from the sequence before the insert, the way the
-            // repository takes it. Without it the seeded chat carries no PublicId, and the
-            // address GET /v1/chats/{publicId} resolves by does not exist for it at all.
-            var chatSerialNumber = await SerialNumberAllocator.NextAsync<Chat>(_dbContext);
-            var chat = new Chat
-            {
-                ChatId = _guidFactory.Create(),
-                Type = ChatType.Direct,
-                SerialNumber = chatSerialNumber,
-                PublicId = _publicIdService.Encode(chatSerialNumber)
-            };
-            _dbContext.Set<Chat>().Add(chat);
-
-            foreach (var participant in new[] { primary, companion })
-            {
-                _dbContext.Set<UserChatLink>().Add(new UserChatLink
-                {
-                    UserChatLinkId = _guidFactory.Create(),
-                    UserId = participant.UserId,
-                    ChatId = chat.ChatId,
-                    IsRemoved = false
-                });
-            }
-
-            var script = conversations[index % conversations.Length];
-            Guid lastMessageId = default;
-
-            for (var line = 0; line < script.Length; line++)
-            {
-                var author = line % 2 == 0 ? primary : companion;
-                var message = new Message
-                {
-                    MessageId = _guidFactory.Create(),
-                    UserId = author.UserId,
-                    ChatId = chat.ChatId,
-                    CreatedUtc = now.AddHours(-(companions.Count - index) * 6 + line),
-                    Text = script[line],
-                    IsRemoved = false
-                };
-
-                _dbContext.Set<Message>().Add(message);
-                lastMessageId = message.MessageId;
-                result.MessagesCreated++;
-            }
-
-            pending.Add((chat, lastMessageId));
+            var companion = companions[index];
+            pending.Add(await SeedDirectChat(
+                primary,
+                companion,
+                DirectChatScripts[index % DirectChatScripts.Length],
+                (companions.Count - index) * 6,
+                result));
         }
 
+        await SaveLinkingLastMessages(pending);
+
+        result.Details.Add($"Created {pending.Count} direct chats for {primary.Username}");
+    }
+
+    /// <summary>
+    /// Saves, then points each chat at its last message: EF refuses to order the Chat and Message cycle.
+    /// </summary>
+    private async Task SaveLinkingLastMessages(IEnumerable<(Chat Chat, Guid LastMessageId)> pending)
+    {
         await _dbContext.SaveChangesAsync();
 
         foreach (var (chat, lastMessageId) in pending)
@@ -229,15 +178,64 @@ internal sealed partial class DataSeeder
         }
 
         await _dbContext.SaveChangesAsync();
-
-        result.Details.Add($"Created {pending.Count} direct chats for {primary.Username}");
     }
 
-    private async Task CreateGlobalChatMessages(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    /// <summary>
+    /// One conversation of the primary account with a companion: the chat, its
+    /// two participants and the script, the primary account writing first.
+    /// </summary>
+    /// <returns>The chat and its last message, which is linked after the save.</returns>
+    private async Task<(Chat Chat, Guid LastMessageId)> SeedDirectChat(
+        DbUser primary, DbUser companion, string[] script, int hoursAgo,
+        ComprehensiveSeedResult result)
     {
-        var globalChatId = Chat.GlobalChatId;
+        // The readable address comes from the sequence before the insert: GET /v1/chats/{publicId} resolves by it.
+        var chatSerialNumber = await SerialNumberAllocator.NextAsync<Chat>(_dbContext);
+        var chat = new Chat
+        {
+            ChatId = _guidFactory.Create(),
+            Type = ChatType.Direct,
+            SerialNumber = chatSerialNumber,
+            PublicId = _publicIdService.Encode(chatSerialNumber)
+        };
+        _dbContext.Set<Chat>().Add(chat);
 
-        // Check if global chat exists
+        foreach (var participant in new[] { primary, companion })
+        {
+            _dbContext.Set<UserChatLink>().Add(new UserChatLink
+            {
+                UserChatLinkId = _guidFactory.Create(),
+                UserId = participant.UserId,
+                ChatId = chat.ChatId,
+            });
+        }
+
+        Guid lastMessageId = default;
+
+        for (var line = 0; line < script.Length; line++)
+        {
+            var author = line % 2 == 0 ? primary : companion;
+            var message = new Message
+            {
+                MessageId = _guidFactory.Create(),
+                UserId = author.UserId,
+                ChatId = chat.ChatId,
+                CreatedUtc = _now.AddHours(-hoursAgo + line),
+                Text = script[line],
+            };
+
+            _dbContext.Set<Message>().Add(message);
+            lastMessageId = message.MessageId;
+            result.MessagesCreated++;
+        }
+
+        return (chat, lastMessageId);
+    }
+
+    private async Task CreateGlobalChatMessages(List<DbUser> users, ComprehensiveSeedResult result)
+    {
+        var globalChatId = WellKnownChats.GlobalChatId;
+
         var globalChat = await _dbContext.Set<Chat>().FirstOrDefaultAsync(c => c.ChatId == globalChatId);
         if (globalChat == null)
         {
@@ -250,11 +248,9 @@ internal sealed partial class DataSeeder
             _dbContext.Set<Chat>().Add(globalChat);
         }
 
-        // Check if messages already exist
         var existingMessagesCount = await _dbContext.Set<Message>().Where(m => m.ChatId == globalChatId).CountAsync();
         if (existingMessagesCount > 0)
         {
-            result.Skipped++;
             result.Details.Add($"Global chat messages already exist ({existingMessagesCount}), skipping");
             return;
         }
@@ -275,7 +271,6 @@ internal sealed partial class DataSeeder
             "Поздравляю победителей!",
         };
 
-        Message? lastMessage = null;
         foreach (var text in messageTemplates)
         {
             var author = users[_random.Next(users.Count)];
@@ -284,22 +279,62 @@ internal sealed partial class DataSeeder
                 MessageId = _guidFactory.Create(),
                 UserId = author.UserId,
                 ChatId = globalChatId,
-                CreatedUtc = now.AddHours(-_random.Next(1, 168)),
+                CreatedUtc = _now.AddHours(-_random.Next(1, 168)),
                 Text = text,
-                IsRemoved = false
             };
 
             _dbContext.Set<Message>().Add(message);
-            lastMessage = message;
             result.MessagesCreated++;
         }
 
-        // Note: LastMessageId will be updated after SaveChangesAsync to avoid circular dependency
-
+        // LastMessageId is set after the save (UpdateGlobalChatLastMessage): EF refuses the foreign key cycle.
         result.Details.Add($"Created {result.MessagesCreated} global chat messages");
     }
 
-    private async Task CreateGlobalChatEvents(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    /// <summary>A global chat event the seed converges on, by its title.</summary>
+    private sealed record GlobalChatEventTemplate(
+        string Title, string Description, DateTimeOffset StartsUtc, TimeSpan? Duration, bool IsOpen,
+        GlobalChatEventStatus Status);
+
+    /// <summary>
+    /// After every reseed: one open Live event running now and two Scheduled ones, one open and one
+    /// closed with invited participants. Descriptions are BBCode.
+    /// </summary>
+    private static GlobalChatEventTemplate[] GlobalChatEventTemplates(DateTimeOffset now) =>
+    [
+        new(
+            "Вечер быстрых зарисовок",
+            "[b]Свободная импровизация — прямо сейчас в чате.[/b]\n" +
+            "Как это устроено:\n" +
+            "[ul][li]ведущий задает сцену одним сообщением[/li]" +
+            "[li]каждый желающий добавляет реплику или действие своего персонажа[/li]" +
+            "[li]каждые полчаса сцена меняется — успевайте вписаться[/li][/ul]\n" +
+            "Присоединяйтесь в любой момент — вечер открыт для всех.",
+            now.AddHours(-1), TimeSpan.FromHours(3), true, GlobalChatEventStatus.Live
+        ),
+        new(
+            "Турнир коротких историй",
+            "[b]Соревнование рассказчиков: одна история — сто слов.[/b]\n" +
+            "Правила турнира:\n" +
+            "[ul][li]тема объявляется в момент старта[/li]" +
+            "[li]на написание дается 30 минут[/li]" +
+            "[li]победителя выбирают сами участники открытым голосованием[/li][/ul]\n" +
+            "Победитель получает почетное упоминание в блоге модераторов.",
+            now.AddDays(2), TimeSpan.FromHours(3), true, GlobalChatEventStatus.Scheduled
+        ),
+        new(
+            "Закрытый совет мастеров",
+            "[b]Закрытая встреча ведущих игр.[/b]\n" +
+            "Повестка:\n" +
+            "[ul][li]обмен опытом по ведению долгих кампаний[/li]" +
+            "[li]разбор сложных ситуаций с игроками[/li]" +
+            "[li]планирование совместных межигровых событий[/li][/ul]\n" +
+            "Писать в чате во время встречи могут только приглашенные участники.",
+            now.AddDays(5), TimeSpan.FromMinutes(90), false, GlobalChatEventStatus.Scheduled
+        ),
+    ];
+
+    private async Task CreateGlobalChatEvents(List<DbUser> users, ComprehensiveSeedResult result)
     {
         if (users.Count == 0)
         {
@@ -308,82 +343,21 @@ internal sealed partial class DataSeeder
 
         // Events are created by a SeniorModerator (matches the Create intention)
         var organizer = users.FirstOrDefault(u => u.Role == UserRole.SeniorModerator) ?? users[0];
-        // Invited participants for closed events (regular test accounts). The
-        // organiser is excluded: with no SeniorModerator in the set the line above
-        // falls back to the first user, and one person on one event's list twice is
-        // a unique violation that fails the whole seed.
+        // Invited participants of closed events, the organizer excluded: one person twice on one list
+        // violates the unique index.
         var invitees = users
             .Where(u => u.Role == UserRole.RegularUser && u.UserId != organizer.UserId)
             .Take(2)
             .ToList();
 
-        // Desired state after every reseed: ONE OPEN Live event running right
-        // now (exercises the in-frame live banner without locking the chat
-        // for non-participants) and TWO Scheduled events — one open, one
-        // closed with invited participants (exercises the participants-only
-        // message restriction and the "закрытый" mark in the upcoming list).
-        // Descriptions are BBCode — rendered to HTML server-side on display.
-        var eventTemplates = new (string Title, string Description, DateTimeOffset StartsUtc, TimeSpan? Duration, bool IsOpen, GlobalChatEventStatus Status)[]
-        {
-            (
-                "Вечер быстрых зарисовок",
-                "[b]Свободная импровизация — прямо сейчас в чате.[/b]\n" +
-                "Как это устроено:\n" +
-                "[ul][li]ведущий задает сцену одним сообщением[/li]" +
-                "[li]каждый желающий добавляет реплику или действие своего персонажа[/li]" +
-                "[li]каждые полчаса сцена меняется — успевайте вписаться[/li][/ul]\n" +
-                "Присоединяйтесь в любой момент — вечер открыт для всех.",
-                now.AddHours(-1), TimeSpan.FromHours(3), true, GlobalChatEventStatus.Live
-            ),
-            (
-                "Турнир коротких историй",
-                "[b]Соревнование рассказчиков: одна история — сто слов.[/b]\n" +
-                "Правила турнира:\n" +
-                "[ul][li]тема объявляется в момент старта[/li]" +
-                "[li]на написание дается 30 минут[/li]" +
-                "[li]победителя выбирают сами участники открытым голосованием[/li][/ul]\n" +
-                "Победитель получает почетное упоминание в блоге модераторов.",
-                now.AddDays(2), TimeSpan.FromHours(3), true, GlobalChatEventStatus.Scheduled
-            ),
-            (
-                "Закрытый совет мастеров",
-                "[b]Закрытая встреча ведущих игр.[/b]\n" +
-                "Повестка:\n" +
-                "[ul][li]обмен опытом по ведению долгих кампаний[/li]" +
-                "[li]разбор сложных ситуаций с игроками[/li]" +
-                "[li]планирование совместных межигровых событий[/li][/ul]\n" +
-                "Писать в чате во время встречи могут только приглашенные участники.",
-                now.AddDays(5), TimeSpan.FromMinutes(90), false, GlobalChatEventStatus.Scheduled
-            ),
-        };
-
-        // Previous revisions of this step seeded a different event set —
-        // remove those leftovers so a reseed converges on the state above
-        // instead of piling up stale Scheduled rows (they were never Live,
-        // so no messages reference them).
-        var legacyTitles = new[] { "Литературный вечер", "Вечер вопросов и ответов" };
-        var legacyEvents = await _dbContext.Set<GlobalChatEvent>()
-            .Where(e => legacyTitles.Contains(e.Title))
-            .ToListAsync();
-        if (legacyEvents.Count > 0)
-        {
-            var legacyIds = legacyEvents.Select(e => e.GlobalChatEventId).ToList();
-            var legacyParticipants = await _dbContext.Set<GlobalChatEventParticipant>()
-                .Where(p => legacyIds.Contains(p.GlobalChatEventId))
-                .ToListAsync();
-            _dbContext.Set<GlobalChatEventParticipant>().RemoveRange(legacyParticipants);
-            _dbContext.Set<GlobalChatEvent>().RemoveRange(legacyEvents);
-            result.Details.Add($"Removed {legacyEvents.Count} legacy global chat events");
-        }
+        var eventTemplates = GlobalChatEventTemplates(_now);
 
         var templateTitles = eventTemplates.Select(t => t.Title).ToList();
         var existingEvents = await _dbContext.Set<GlobalChatEvent>()
             .Where(e => templateTitles.Contains(e.Title))
             .ToListAsync();
 
-        // Only one event may be Live at a time (domain invariant, mirrored
-        // from GlobalChatEventService.StartAsync) — if an unrelated event is
-        // already running, do not seed a second Live one.
+        // One Live event at a time, as GlobalChatEventService.StartAsync keeps it.
         var hasForeignLiveEvent = await _dbContext.Set<GlobalChatEvent>()
             .AnyAsync(e => e.Status == GlobalChatEventStatus.Live && !templateTitles.Contains(e.Title));
 
@@ -397,10 +371,7 @@ internal sealed partial class DataSeeder
                 continue;
             }
 
-            // Idempotency by title, like the neighboring seed steps — but the
-            // schedule fields are refreshed so a reseed always yields
-            // "running now" / "upcoming" instead of dates frozen at the
-            // previous run (participants are kept as-is).
+            // Idempotent by title, but the schedule is refreshed, so a reseed is "running now" and "upcoming".
             var existing = existingEvents.FirstOrDefault(e => e.Title == template.Title);
             if (existing != null)
             {
@@ -414,62 +385,67 @@ internal sealed partial class DataSeeder
                 continue;
             }
 
-            var chatEvent = new GlobalChatEvent
-            {
-                GlobalChatEventId = _guidFactory.Create(),
-                Title = template.Title,
-                Description = template.Description,
-                StartsUtc = template.StartsUtc,
-                Duration = template.Duration,
-                IsOpen = template.IsOpen,
-                Status = template.Status,
-                // The Live event is seeded directly in the started state
-                // (mirrors StartAsync: Status=Live + StartedUtc set) — it
-                // "started" right at its scheduled time an hour ago.
-                StartedUtc = template.Status == GlobalChatEventStatus.Live ? template.StartsUtc : null,
-                CreatedByUserId = organizer.UserId,
-                CreatedUtc = now,
-            };
-            _dbContext.Set<GlobalChatEvent>().Add(chatEvent);
-
-            // Mirror the domain CreateAsync behavior: the creator becomes an
-            // organizer participant
-            _dbContext.Set<GlobalChatEventParticipant>().Add(new GlobalChatEventParticipant
-            {
-                GlobalChatEventParticipantId = _guidFactory.Create(),
-                GlobalChatEventId = chatEvent.GlobalChatEventId,
-                UserId = organizer.UserId,
-                IsOrganizer = true,
-                JoinedUtc = now,
-            });
-
-            // Closed events get invited participants so the participants-only
-            // restriction can be exercised from test accounts
-            if (!template.IsOpen)
-            {
-                foreach (var invitee in invitees)
-                {
-                    _dbContext.Set<GlobalChatEventParticipant>().Add(new GlobalChatEventParticipant
-                    {
-                        GlobalChatEventParticipantId = _guidFactory.Create(),
-                        GlobalChatEventId = chatEvent.GlobalChatEventId,
-                        UserId = invitee.UserId,
-                        IsOrganizer = false,
-                        JoinedUtc = now,
-                    });
-                }
-            }
-
+            AddGlobalChatEvent(template, organizer, invitees);
             created++;
         }
 
         if (created == 0 && refreshed == 0)
         {
-            result.Skipped++;
             result.Details.Add("Global chat events already in the desired state, skipping");
             return;
         }
 
         result.Details.Add($"Created {created} and refreshed {refreshed} global chat events");
+    }
+
+
+    /// <summary>
+    /// One event as the domain creates it: the event, its organizer as a
+    /// participant, and on a closed event the invited participants.
+    /// </summary>
+    private void AddGlobalChatEvent(
+        GlobalChatEventTemplate template, DbUser organizer, IReadOnlyList<DbUser> invitees)
+    {
+        var chatEvent = new GlobalChatEvent
+        {
+            GlobalChatEventId = _guidFactory.Create(),
+            Title = template.Title,
+            Description = template.Description,
+            StartsUtc = template.StartsUtc,
+            Duration = template.Duration,
+            IsOpen = template.IsOpen,
+            Status = template.Status,
+            // Seeded Live, as StartAsync leaves it, an hour after its scheduled start.
+            StartedUtc = template.Status == GlobalChatEventStatus.Live ? template.StartsUtc : null,
+            CreatedByUserId = organizer.UserId,
+            CreatedUtc = _now,
+        };
+        _dbContext.Set<GlobalChatEvent>().Add(chatEvent);
+
+        // As CreateAsync: the creator is an organizer participant
+        _dbContext.Set<GlobalChatEventParticipant>().Add(new GlobalChatEventParticipant
+        {
+            GlobalChatEventParticipantId = _guidFactory.Create(),
+            GlobalChatEventId = chatEvent.GlobalChatEventId,
+            UserId = organizer.UserId,
+            IsOrganizer = true,
+            JoinedUtc = _now,
+        });
+
+        // For the participants-only restriction
+        if (!template.IsOpen)
+        {
+            foreach (var invitee in invitees)
+            {
+                _dbContext.Set<GlobalChatEventParticipant>().Add(new GlobalChatEventParticipant
+                {
+                    GlobalChatEventParticipantId = _guidFactory.Create(),
+                    GlobalChatEventId = chatEvent.GlobalChatEventId,
+                    UserId = invitee.UserId,
+                    IsOrganizer = false,
+                    JoinedUtc = _now,
+                });
+            }
+        }
     }
 }

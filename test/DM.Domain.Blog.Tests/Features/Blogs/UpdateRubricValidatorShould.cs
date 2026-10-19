@@ -1,20 +1,14 @@
 using System;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
 
-public class UpdateRubricValidatorShould : UnitTestBase
+public class UpdateRubricValidatorShould
 {
-    private readonly UpdateRubricValidator _validator;
-
-    public UpdateRubricValidatorShould()
-    {
-        _validator = new UpdateRubricValidator();
-    }
+    private readonly UpdateRubricValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -24,7 +18,7 @@ public class UpdateRubricValidatorShould : UnitTestBase
             RubricId = Guid.NewGuid(),
             Title = "Updated Rubric"
         };
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
     }
 
@@ -36,7 +30,7 @@ public class UpdateRubricValidatorShould : UnitTestBase
             RubricId = Guid.NewGuid(),
             Title = null
         };
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
     }
 
@@ -44,7 +38,7 @@ public class UpdateRubricValidatorShould : UnitTestBase
     public void FailWhenRubricIdIsEmpty()
     {
         var input = new UpdateRubric { RubricId = Guid.Empty };
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.RubricId)
             .WithErrorMessage(ValidationError.Empty);
     }
@@ -55,9 +49,9 @@ public class UpdateRubricValidatorShould : UnitTestBase
         var input = new UpdateRubric
         {
             RubricId = Guid.NewGuid(),
-            Title = new string('a', 101)
+            Title = new string('a', BlogFieldLimits.RubricTitleMaxLength + 1)
         };
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
             .WithErrorMessage(ValidationError.Long);
     }
@@ -68,9 +62,9 @@ public class UpdateRubricValidatorShould : UnitTestBase
         var input = new UpdateRubric
         {
             RubricId = Guid.NewGuid(),
-            Title = new string('a', 100)
+            Title = new string('a', BlogFieldLimits.RubricTitleMaxLength)
         };
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
     }
 }

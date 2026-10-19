@@ -28,28 +28,26 @@ namespace DM.Web.API.Features.Personal.Webhooks;
 /// <remarks>
 /// Handles incoming webhooks from Telegram and Discord bots.
 ///
-/// Credentials travel in headers, never in the path: a path is written
-/// verbatim into every reverse-proxy access log, request log and trace, so a
-/// secret placed there is disclosed by design and rotating it means purging
-/// logs rather than changing a variable.
+/// Credentials travel in headers, never in the path, which every proxy log and
+/// trace writes verbatim.
 ///
-/// ## Telegram Setup
-/// POST /v1/webhooks/telegram, secret in `X-Telegram-Bot-Api-Secret-Token`.
-/// That is Telegram's own mechanism: register with
-/// `setWebhook?url=…&amp;secret_token=&lt;TelegramWebhookSecret&gt;` and it sends the
-/// header on every call.
+/// ## Telegram
+/// POST /v1/webhooks/telegram, secret in `X-Telegram-Bot-Api-Secret-Token`:
+/// Telegram's own mechanism, it sends the header on every call.
 ///
-/// ## Discord Setup
-/// POST /v1/webhooks/discord is the Interactions Endpoint URL of the Discord
-/// application. There is no shared secret: Discord signs every request with
-/// the application's Ed25519 key — `X-Signature-Ed25519` over the UTF-8 bytes
-/// of `X-Signature-Timestamp` + raw body — and the signature is verified
-/// against BotConfiguration.DiscordPublicKey. A missing or invalid signature
-/// answers 401: Discord validates the endpoint by deliberately sending broken
-/// signatures and expects exactly that code.
+/// ## Discord
+/// POST /v1/webhooks/discord. There is no shared secret: Discord signs every
+/// request with the application's Ed25519 key — `X-Signature-Ed25519` over the
+/// UTF-8 bytes of `X-Signature-Timestamp` + raw body — and the signature is
+/// verified against BotConfiguration.DiscordPublicKey. A missing or invalid
+/// signature answers 401: Discord validates the endpoint by deliberately
+/// sending broken signatures and expects exactly that code.
 ///
 /// The /connect slash command links user accounts; the interaction response
 /// returned in the 200 is the reply the invoking user sees.
+///
+/// Registering the webhooks with the bots: docs/references/CONFIGURATION.md,
+/// "Боты уведомлений".
 /// </remarks>
 [ApiController]
 [Route("v1/webhooks")]
@@ -69,7 +67,6 @@ public class WebhookController : ControllerBase
     private readonly BotConfiguration _botConfig;
     private readonly ILogger<WebhookController> _logger;
 
-    /// <inheritdoc />
     public WebhookController(
         IEnumerable<IWebhookHandler> handlers,
         IOptions<BotConfiguration> botConfig,
@@ -112,10 +109,7 @@ public class WebhookController : ControllerBase
         {
             case "telegram":
                 {
-                    // Fail closed. An unconfigured secret used to mean "accept anything",
-                    // and an unconfigured secret is the shipped default — so the endpoint
-                    // was open to anyone who could guess the path. Without a secret the
-                    // webhook simply does not exist.
+                    // Fail closed: without a secret the webhook does not exist.
                     if (string.IsNullOrEmpty(_botConfig.TelegramWebhookSecret))
                     {
                         _logger.LogWarning(
@@ -130,10 +124,7 @@ public class WebhookController : ControllerBase
                     if (!CryptographicOperations.FixedTimeEquals(provided, expected))
                     {
                         _logger.LogWarning("Invalid webhook secret for {Type}", type);
-                        // Thrown, not assembled here: ErrorHandlingMiddleware owns the body of
-                        // every refusal in this host. A hand-built {"error": "..."} is a shape
-                        // no other endpoint answers with, so a client parsing errors centrally
-                        // has to special-case this one.
+                        // Thrown: ErrorHandlingMiddleware owns the body of every refusal.
                         throw new HttpException(HttpStatusCode.Forbidden, "Неверный секрет вебхука");
                     }
 
@@ -141,8 +132,7 @@ public class WebhookController : ControllerBase
                 }
             case "discord":
                 {
-                    // The same fail-closed rule as above: without a public key the
-                    // webhook simply does not exist.
+                    // Fail closed, as above.
                     if (string.IsNullOrEmpty(_botConfig.DiscordPublicKey))
                     {
                         _logger.LogWarning(
@@ -170,14 +160,10 @@ public class WebhookController : ControllerBase
                 return NotFound();
         }
 
-        // Find handler
-        if (!_handlers.TryGetValue(normalizedType, out var handler))
-        {
-            throw new HttpException(HttpStatusCode.BadRequest, $"Неизвестный тип вебхука: {type}");
-        }
+        // The switch above lets through only the types a handler is registered for.
+        var handler = _handlers[normalizedType];
 
-        // Parsed only behind the checks above: a caller who failed them gets a
-        // refusal, never a JSON complaint about a body nobody was going to read.
+        // Parsed only behind the checks: a caller who failed them gets a refusal.
         using var document = ParseBody(rawBody);
 
         try
@@ -187,9 +173,7 @@ public class WebhookController : ControllerBase
         }
         catch (Exception ex)
         {
-            // 200 keeps the provider from retrying a payload we already failed
-            // on, but the failure itself is an error: swallowed at Warning it
-            // was indistinguishable from routine noise.
+            // 200 keeps the provider from retrying a payload we already failed on.
             _logger.LogError(ex, "Error processing {Type} webhook", type);
             return Ok();
         }
@@ -203,8 +187,7 @@ public class WebhookController : ControllerBase
         }
         catch (JsonException)
         {
-            // The refusal [FromBody] used to produce, thrown so that
-            // ErrorHandlingMiddleware keeps owning the body of it.
+            // Thrown: ErrorHandlingMiddleware owns the body of the refusal.
             throw new HttpException(HttpStatusCode.BadRequest, "Тело запроса не является корректным JSON");
         }
     }

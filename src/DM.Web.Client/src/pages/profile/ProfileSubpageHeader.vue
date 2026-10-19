@@ -1,15 +1,5 @@
 <script setup lang="ts">
-/**
- * ProfileSubpageHeader — the heading of a profile subpage (received
- * reviews / given reviews / received endorsements / given
- * endorsements).
- *
- * Unifies the visual unit: a PageTitle with the "{label}: {username}" format
- * (like the profile H1 "Личный кабинет: {username}") + a short description with
- * a link back to the profile. The description is provided via a slot and rendered through
- * LeadText so the profile router-link can be embedded inside the phrase itself
- * as a bold link (a unified look with games/blogs and other intros).
- */
+/** The heading of a profile subpage, "{label}: {username}", and a lead phrase with a link to the profile. */
 import { PageTitle, LeadText } from "@/shared/ui/Layout";
 
 defineProps<{

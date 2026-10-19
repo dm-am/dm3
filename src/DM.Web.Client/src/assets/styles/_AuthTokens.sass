@@ -1,0 +1,50 @@
+// The measures of the guest card (AuthSurface.sass). Emits nothing.
+
+// One step under the site's 16: at 16 the bold labels outgrew the card's 432px.
+$auth-font-size: 15px
+
+// Taller than $control-height: a card holds three or four controls and is the
+// whole page.
+$auth-control-height: 52px
+
+// How far into a control its text starts; the strip under a field starts on
+// the same axis.
+$auth-field-inset: 14px
+
+// The strip under a field: a message starts 3px under the field inside a
+// strip of fixed height, so the card does not move when one appears.
+$auth-strip: 2rem
+$auth-strip-gap: 3px
+
+// The rhythm is the 8px grid: the label 8 over its field, 24 of gutter on
+// every side, the strip four steps, the gap between blocks two.
+
+// The card and the dialog around it are measured from one pair, so a click
+// beside the card closes the dialog.
+$auth-card-width: 432px
+$auth-card-width-compact: 352px
+
+// A screen chooses the narrow card with --compact on its card and on the
+// dialog around it: a wrapper cannot ask :has about its card inside another
+// :has.
+
+/// The cross of the guest surface, from two bars on the pseudo-elements of a
+/// positioned icon: a typographic cross is thinner than the tick beside it.
+=auth-bar-cross
+  &::before,
+  &::after
+    content: ""
+    position: absolute
+    left: 50%
+    top: 50%
+    width: 14px
+    height: 2px
+    margin: -1px 0 0 -7px
+    border-radius: 1px
+    background-color: currentColor
+
+  &::before
+    transform: rotate(45deg)
+
+  &::after
+    transform: rotate(-45deg)

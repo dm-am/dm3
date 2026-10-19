@@ -2,7 +2,6 @@ using System;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.PostPendencies;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
@@ -12,7 +11,7 @@ namespace DM.Domain.Game.Tests.Features.PostPendencies;
 /// A pendency names a room and a character, and nothing else: the one who
 /// waits and the one waited for are not the caller's to say.
 /// </summary>
-public class CreatePostPendencyValidatorShould : UnitTestBase
+public class CreatePostPendencyValidatorShould
 {
     private readonly CreatePostPendencyValidator validator = new();
 

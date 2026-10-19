@@ -3,9 +3,6 @@ using FluentValidation;
 
 namespace DM.Domain.Moderation.Features.Tags;
 
-/// <summary>
-/// Validator for tag group creation
-/// </summary>
 internal class CreateTagGroupValidator : AbstractValidator<CreateTagGroup>
 {
     public CreateTagGroupValidator()
@@ -20,10 +17,8 @@ internal class CreateTagGroupValidator : AbstractValidator<CreateTagGroup>
         RuleFor(g => g.SortOrder)
             .GreaterThanOrEqualTo(0).WithMessage(ValidationError.Invalid);
 
-        // Zero is not "no limit" - null is. A group nobody can pick a tag from
-        // would be a group that may as well be deleted.
+        // No limit is null, not zero: nobody could pick a tag from such a group.
         RuleFor(g => g.MaxTagsPerGame)
-            .GreaterThanOrEqualTo(1).WithMessage(ValidationError.Invalid)
-            .When(g => g.MaxTagsPerGame.HasValue);
+            .GreaterThanOrEqualTo(1).WithMessage(ValidationError.Invalid);
     }
 }

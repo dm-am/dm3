@@ -7,9 +7,6 @@ using DM.Domain.Forum.Features.Boards;
 
 namespace DM.Domain.Forum.Features.Topics;
 
-/// <summary>
-/// Topic DTO model
-/// </summary>
 public class Topic : ILikable
 {
     /// <inheritdoc />
@@ -23,54 +20,24 @@ public class Topic : ILikable
     /// <inheritdoc />
     public LikeEntityType LikeEntityType => LikeEntityType.Topic;
 
-    /// <summary>
-    /// Board
-    /// </summary>
     public Board Board { get; set; } = null!;
 
-    /// <summary>
-    /// Title
-    /// </summary>
     public string Title { get; set; } = null!;
 
-    /// <summary>
-    /// Text
-    /// </summary>
     public string Text { get; set; } = null!;
 
-    /// <summary>
-    /// Creation moment (UTC)
-    /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// Last modification moment (UTC)
-    /// </summary>
     public DateTimeOffset? ModifiedUtc { get; set; }
 
-    /// <summary>
-    /// Author
-    /// </summary>
     public GeneralUser Author { get; set; } = null!;
 
-    /// <summary>
-    /// Total comments count
-    /// </summary>
     public int TotalCommentsCount { get; set; }
 
-    /// <summary>
-    /// Unread comments count
-    /// </summary>
     public int UnreadCommentsCount { get; set; }
 
-    /// <summary>
-    /// Last comment
-    /// </summary>
     public LastComment LastComment { get; set; } = null!;
 
-    /// <summary>
-    /// Attached
-    /// </summary>
     public bool IsAttached { get; set; }
 
     /// <summary>
@@ -78,9 +45,6 @@ public class Topic : ILikable
     /// </summary>
     public int? AttachOrder { get; set; }
 
-    /// <summary>
-    /// Closed
-    /// </summary>
     public bool IsClosed { get; set; }
 
     /// <summary>
@@ -98,30 +62,16 @@ public class Topic : ILikable
     public IEnumerable<GeneralUser> Likes { get; set; } = [];
 
     /// <summary>
-    /// Number of likes (denormalized aggregate, populated in list path
-    /// via a single batched GROUP BY — never an inline correlated count).
-    /// Used by the "sort by likes" path and by the topics table column.
+    /// Filled in the list path by one batched GROUP BY, never an inline correlated count
     /// </summary>
     public int LikesCount { get; set; }
 }
 
-/// <summary>
-/// Last comment DTO model
-/// </summary>
 public class LastComment
 {
-    /// <summary>
-    /// Comment identifier
-    /// </summary>
     public Guid Id { get; set; }
 
-    /// <summary>
-    /// Author
-    /// </summary>
     public GeneralUser Author { get; set; } = null!;
 
-    /// <summary>
-    /// Creation moment (UTC)
-    /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 }

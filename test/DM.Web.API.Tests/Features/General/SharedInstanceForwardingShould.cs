@@ -23,19 +23,8 @@ namespace DM.Web.API.Tests.Features.General;
 /// modules declare: several interfaces, one object per scope.
 /// </summary>
 /// <remarks>
-/// Autofac's AsSelf+AsImplementedInterfaces gave one instance per scope; two
-/// naive AddScoped registrations give two. The scan-side half of the port is
-/// already pinned (ForwardInterfacesToTheSelfRegistration); this pins the
-/// module-side half, where every group breaks silently. The identity pair is
-/// the loud one - authentication writes through the setter and every consumer
-/// reads null through the provider - but the correlation pair loses nothing
-/// visible at all: the token quietly vanishes from the logs, and the paired
-/// repository faces stop seeing each other's writes within a request.
-///
-/// Built out of the real module extensions rather than restated registrations,
-/// because the registrations are the thing under test: replace a forwarding
-/// factory in AddDmAccount, AddDmCore or AddDmPersistence with a plain
-/// AddScoped and the corresponding pair here resolves two objects and fails.
+/// Two plain AddScoped registrations give two objects per scope. Built out of the real module extensions:
+/// the registrations are the thing under test.
 /// </remarks>
 public class SharedInstanceForwardingShould : UnitTestBase, IDisposable
 {

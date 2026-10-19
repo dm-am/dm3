@@ -1,7 +1,5 @@
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using System.Collections.Generic;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using System;
@@ -11,7 +9,6 @@ using DM.Domain.Account.Features.TwoFactor;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
-using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 
 namespace DM.Domain.Account.Features.Authentication;
@@ -24,9 +21,8 @@ internal class AuthenticationService : IAuthenticationService
     private readonly IAuthenticationRepository _repository;
     private readonly ISessionFactory _sessionFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IIdentityProvider _identityProvider;
     private readonly ILoginAttemptTracker _loginAttemptTracker;
-    private readonly ISecurityAuditRepository _auditService;
+    private readonly ISecurityAuditRepository _auditRepository;
     private readonly IEventProducer _eventProducer;
     private readonly ITwoFactorRepository _twoFactorRepository;
     private readonly ITwoFactorVerifier _twoFactorVerifier;
@@ -35,16 +31,14 @@ internal class AuthenticationService : IAuthenticationService
     private readonly AuthenticationConfiguration _config;
     private readonly TwoFactorConfiguration _twoFactorConfig;
 
-    /// <inheritdoc />
     public AuthenticationService(
         ISecurityManager securityManager,
         ISymmetricCryptoService cryptoService,
         IAuthenticationRepository repository,
         ISessionFactory sessionFactory,
         IDateTimeProvider dateTimeProvider,
-        IIdentityProvider identityProvider,
         ILoginAttemptTracker loginAttemptTracker,
-        ISecurityAuditRepository auditService,
+        ISecurityAuditRepository auditRepository,
         IEventProducer eventProducer,
         ITwoFactorRepository twoFactorRepository,
         ITwoFactorVerifier twoFactorVerifier,
@@ -58,9 +52,8 @@ internal class AuthenticationService : IAuthenticationService
         _repository = repository;
         _sessionFactory = sessionFactory;
         _dateTimeProvider = dateTimeProvider;
-        _identityProvider = identityProvider;
         _loginAttemptTracker = loginAttemptTracker;
-        _auditService = auditService;
+        _auditRepository = auditRepository;
         _eventProducer = eventProducer;
         _twoFactorRepository = twoFactorRepository;
         _twoFactorVerifier = twoFactorVerifier;
@@ -74,65 +67,33 @@ internal class AuthenticationService : IAuthenticationService
     public async Task<IIdentity> Authenticate(string email, string password, bool rememberMe = true,
         SessionContext? context = null, CancellationToken cancellationToken = default)
     {
-        // 1. PENDING CHECK - fast path, no throttling needed
-        // Pending registrations have no password to brute-force
+        // Before throttling: a pending registration has no password to brute-force.
         if (await _repository.IsPendingRegistration(email))
         {
             _logger.LogInformation("Login failed: pending registration");
             return Identity.Fail(AuthenticationError.PendingRegistration);
         }
 
-        // 2. THROTTLING - only for actual login attempts.
-        // Counted per account and address, not per account: see LoginAttemptOrigin.
+        // Counted per account and address: see LoginAttemptOrigin.
         var origin = new LoginAttemptOrigin(email, context?.IpAddress);
         if (await _loginAttemptTracker.IsAccountLocked(origin))
         {
-            var remainingSeconds = await _loginAttemptTracker.GetRemainingLockoutSeconds(origin);
-            _logger.LogWarning("Login failed: account locked due to too many failed attempts. RemainingSeconds={RemainingSeconds}",
-                remainingSeconds);
-
-            // Try to find user to log the event (may not exist)
-            var (found, lockedUser) = await _repository.TryFindUserByEmail(email);
-            if (found && lockedUser != null)
-            {
-                await _auditService.LogAsync(lockedUser.UserId, SecurityEventType.AccountLocked,
-                    context?.IpAddress, context?.UserAgent, "Account locked due to failed attempts");
-            }
-
-            return Identity.Fail(AuthenticationError.AccountLocked, remainingSeconds);
+            return await RefuseWhileLocked(origin, email, context);
         }
 
-        // Progressive delay for bot protection.
-        //
-        // Cancellable, and it is the one wait in this method long enough to matter:
-        // sleeping through a request the caller has already dropped holds the
-        // database connection and the scope of that request for the whole delay. A
-        // caller who cancels wins nothing by it - the wait happens before the
-        // password is looked at, so a cancelled attempt is not an attempt and is
-        // never counted as one.
+        // Progressive delay for bot protection. Cancellable: a dropped request would
+        // hold its connection for the whole delay, and the wait precedes the count.
         var delaySeconds = await _loginAttemptTracker.GetDelayForUser(origin);
         if (delaySeconds > 0)
         {
             await Task.Delay(TimeSpan.FromSeconds(delaySeconds), cancellationToken);
         }
 
-        // 3. FIND USER BY EMAIL
         var (userFound, user) = await _repository.TryFindUserByEmail(email);
         ApplyActiveBans(user);
 
-        // One Argon2id, before anything branches on what was found.
-        //
-        // Every refusal below is required to cost the same, and in text they
-        // already read the same; in time they did not. A missing account and the
-        // system actor both reached their answer without hashing anything - the
-        // actor because its branch short-circuited on the role - and came back
-        // some hundred and fifty milliseconds sooner than a wrong password. That
-        // difference names which addresses exist and which one belongs to the
-        // robot, without a password having been tried at all.
-        //
-        // The actor is hashed against the decoy rather than against its own
-        // columns because the seed leaves them empty: it has no password, and the
-        // point here is to spend the time, not to ask a question with an answer.
+        // One Argon2id before anything branches, so every refusal below costs the
+        // same; the system actor, which has no password, is hashed against the decoy.
         var (salt, hash) = userFound && user!.Role != UserRole.System
             ? (user.Salt, user.PasswordHash)
             : (DecoyCredentials.Salt, DecoyCredentials.Hash);
@@ -144,110 +105,36 @@ internal class AuthenticationService : IAuthenticationService
                 await _loginAttemptTracker.RecordFailedAttempt(origin);
                 _logger.LogWarning("Login failed: user not found");
                 return Identity.Fail(AuthenticationError.WrongLogin);
-            // The system actor is refused by its role and not by its credentials,
-            // and the check is written out rather than left to its empty columns:
-            // an invariant living in two strings of a seed is one row away from
-            // being no invariant at all. It stands after the hash above and not
-            // instead of it - refused before paying, the robot's address answered
-            // sooner than every other and was identifiable by that alone.
-            //
-            // Folded into this branch rather than answered separately so that the
-            // attempt is counted, audited and reported exactly like a wrong password,
-            // leaving the account indistinguishable from outside.
+            // The system actor is refused by its role, exactly like a wrong password.
             case true when user!.Role == UserRole.System || !passwordMatches:
                 await _loginAttemptTracker.RecordFailedAttempt(origin);
 
                 // Only the attempt that crosses the threshold reaches this while
-                // locked: every later one is refused above, before the counter is
-                // touched. So the owner of the account hears about the lockout
-                // once per lockout, through a channel the person guessing the
-                // password does not see.
+                // locked, so the owner hears about each lockout once.
                 if (await _loginAttemptTracker.IsAccountLocked(origin))
                 {
                     await _eventProducer.SendAsync(EventType.AccountLocked, user.UserId);
                 }
 
-                await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
+                await _auditRepository.LogAsync(user.UserId, SecurityEventType.LoginFailure,
                     context?.IpAddress, context?.UserAgent, "Wrong password");
-                _logger.LogWarning("Login failed: wrong password. UserId={UserId}", user.UserId);
                 return Identity.Fail(AuthenticationError.WrongPassword);
 
-            // Past this branch the password is proven, and only past it may the
-            // answer say anything about the account itself. Asked before it,
-            // "removed" and "banned" told whoever typed an address what had been
-            // done to the person behind it, without a password and without the
-            // try being counted. That an address is registered is disclosed here
-            // by a recorded decision (see SECURITY.md); what moderation did with
-            // the account is not, and the owner still gets the real reason.
-            // The owner's journal gets the entry the wrong-password branch
-            // writes: a refusal after a proven password is the one line in it
-            // that says the password itself is known to somebody. Both refusals
-            // below come after that proof.
-            case true when user.IsRemoved:
-                await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
-                    context?.IpAddress, context?.UserAgent, "Account removed");
-                _logger.LogWarning("Login failed: account removed. UserId={UserId}", user.UserId);
-                return Identity.Fail(AuthenticationError.Removed);
-            case true when user.AccessPolicy.HasFlag(AccessPolicy.FullBan):
-                await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
-                    context?.IpAddress, context?.UserAgent, "Account banned");
-                _logger.LogWarning("Login failed: account banned. UserId={UserId}", user.UserId);
-                return Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now));
+            // Only past the proven password may the answer say what moderation did
+            // with the account (SECURITY.md), and the journal records the refusal.
+            case true when RefuseClosed(user) is { } closed:
+                await _auditRepository.LogAsync(user.UserId, SecurityEventType.LoginFailure,
+                    context?.IpAddress, context?.UserAgent, closed.Reason);
+                return closed.Refusal;
 
             default:
-                // The password is proven. Whether that is enough is the next
-                // question, and while it is unanswered nothing about this login
-                // is recorded: no attempt counter reset, no activity stamp, no
-                // entry in the journal and no session. A login that got halfway
-                // is not a login.
+                // Nothing about a login waiting for its second factor is recorded yet.
                 if (await _twoFactorRepository.IsConfirmed(user.UserId, cancellationToken))
                 {
-                    var challenge = new TwoFactorChallengeState
-                    {
-                        ChallengeId = _guidFactory.Create(),
-                        UserId = user.UserId,
-                        // The identifier the password step counted under, so a
-                        // wrong code lands in the same counter as a wrong
-                        // password instead of one of its own.
-                        Account = email,
-                        CreatedUtc = _dateTimeProvider.Now,
-                        ExpiresUtc = _dateTimeProvider.Now +
-                                     TimeSpan.FromMinutes(_twoFactorConfig.ChallengeLifetimeMinutes),
-                        Persistent = rememberMe,
-                        IpAddress = context?.IpAddress,
-                        UserAgent = context?.UserAgent
-                    };
-                    await _twoFactorRepository.AddChallenge(challenge, cancellationToken);
-
-                    _logger.LogInformation(
-                        "Password accepted, second factor owed. UserId={UserId}", user.UserId);
-                    return Identity.SecondFactorRequired(challenge.ChallengeId);
+                    return await OweSecondFactor(user, email, rememberMe, context, cancellationToken);
                 }
 
-                // Successful login - reset attempt counter
-                await _loginAttemptTracker.ResetAttempts(email);
-
-                // Update activity on login
-                await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
-
-                // Session persistence based on "remember me" checkbox
-                var session = _sessionFactory.Create(persistent: rememberMe, context: context);
-                var settings = await _repository.FindUserSettings(user.UserId);
-
-                // Awaited, and it has to be. The suspicious-login check runs
-                // immediately after this method returns: it reads the trail newest
-                // first and drops the top entry as "this login". Left unawaited,
-                // the write races that read, and the check either meets a trail
-                // without its own entry or throws away a genuine earlier login
-                // instead. Waiting buys away no availability either - the journal,
-                // the session written below and the attempt counter read at the
-                // top of this method share one database, so a login that got this
-                // far never had it down.
-                await _auditService.LogAsync(user.UserId, SecurityEventType.LoginSuccess,
-                    context?.IpAddress, context?.UserAgent);
-
-                _logger.LogInformation("User authenticated successfully. UserId={UserId}", user.UserId);
-                return await CreateAuthenticationResult(user, session, settings);
+                return await SignIn(user, email, persistent: rememberMe, context);
         }
     }
 
@@ -263,9 +150,7 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.TwoFactorRejected);
         }
 
-        // The counter of the password step, keyed on the same pair. The account
-        // identifier travels on the challenge for exactly this: two counters
-        // over one login would mean the lower threshold is the only real one.
+        // The counter of the password step, keyed on the same pair.
         var origin = new LoginAttemptOrigin(challenge.Account, context?.IpAddress);
 
         if (challenge.ExpiresUtc <= _dateTimeProvider.Now)
@@ -292,27 +177,13 @@ internal class AuthenticationService : IAuthenticationService
 
         if (!await _twoFactorVerifier.Accept(state, code, context?.IpAddress, cancellationToken))
         {
-            await _loginAttemptTracker.RecordFailedAttempt(origin);
-            var attempts = await _twoFactorRepository.CountChallengeAttempt(challengeId, cancellationToken);
-            if (attempts >= _twoFactorConfig.ChallengeAttemptLimit)
-            {
-                // The challenge is destroyed rather than left counting: carrying
-                // on costs the password again, which is the price of guessing.
-                await _twoFactorRepository.RemoveChallenge(challengeId, cancellationToken);
-            }
-
-            await _auditService.LogAsync(challenge.UserId, SecurityEventType.LoginFailure,
-                context?.IpAddress, context?.UserAgent, "Двухфакторная аутентификация");
-            _logger.LogWarning("Second factor failed: wrong code. UserId={UserId}", challenge.UserId);
-            return Identity.Fail(AuthenticationError.TwoFactorRejected);
+            return await RefuseWrongCode(challenge, origin, context, cancellationToken);
         }
 
         // Spent whichever way it ends, and spent before anything is handed out.
         await _twoFactorRepository.RemoveChallenge(challengeId, cancellationToken);
 
-        // The state of the account is asked again rather than carried over from
-        // the password step: a ban issued in the five minutes somebody spent
-        // finding their phone has to take effect.
+        // Asked again: a ban issued between the two steps has to take effect.
         var user = await _repository.FindUser(challenge.UserId);
         ApplyActiveBans(user);
 
@@ -321,20 +192,11 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
-        if (user.IsRemoved)
+        if (RefuseClosed(user) is { } closed)
         {
-            await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
-                context?.IpAddress, context?.UserAgent, "Account removed");
-            _logger.LogWarning("Second factor refused: account removed. UserId={UserId}", user.UserId);
-            return Identity.Fail(AuthenticationError.Removed);
-        }
-
-        if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
-        {
-            await _auditService.LogAsync(user.UserId, SecurityEventType.LoginFailure,
-                context?.IpAddress, context?.UserAgent, "Account banned");
-            _logger.LogWarning("Second factor refused: account banned. UserId={UserId}", user.UserId);
-            return Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now));
+            await _auditRepository.LogAsync(user.UserId, SecurityEventType.LoginFailure,
+                context?.IpAddress, context?.UserAgent, closed.Reason);
+            return closed.Refusal;
         }
 
         // A sign-in that passed the factor is the owner saying "the device is
@@ -342,23 +204,13 @@ internal class AuthenticationService : IAuthenticationService
         // called off without touching a mailbox.
         if (await _twoFactorRepository.CancelScheduledRemoval(user.UserId, cancellationToken))
         {
-            await _auditService.LogAsync(user.UserId, SecurityEventType.TwoFactorRemovalCancelled,
+            await _auditRepository.LogAsync(user.UserId, SecurityEventType.TwoFactorRemovalCancelled,
                 context?.IpAddress, context?.UserAgent);
         }
 
-        await _loginAttemptTracker.ResetAttempts(challenge.Account);
-        await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
-
         // "Remember me" as it was ticked on the first step: the second step has
         // no checkbox and must not quietly answer for the person.
-        var session = _sessionFactory.Create(persistent: challenge.Persistent, context: context);
-        var settings = await _repository.FindUserSettings(user.UserId);
-
-        await _auditService.LogAsync(user.UserId, SecurityEventType.LoginSuccess,
-            context?.IpAddress, context?.UserAgent);
-
-        _logger.LogInformation("Second factor accepted. UserId={UserId}", user.UserId);
-        return await CreateAuthenticationResult(user, session, settings);
+        return await SignIn(user, challenge.Account, persistent: challenge.Persistent, context);
     }
 
     /// <inheritdoc />
@@ -373,55 +225,37 @@ internal class AuthenticationService : IAuthenticationService
 
         var (userId, sessionId) = token;
 
-        // Sequential on purpose: all three reads go to one DmDbContext now, and
-        // a context refuses parallel queries inside one scope. Each is a
-        // primary-key lookup on the local database — units of milliseconds —
-        // and the price bought the disappearance of a class of cross-store
-        // inconsistencies. A single joined round trip stays a cheap local
-        // option if a profile ever shows the need.
+        // Sequential: one DbContext refuses parallel queries inside one scope.
         var user = await _repository.FindUser(userId);
         var session = await _repository.FindUserSession(userId, sessionId);
         var settings = await _repository.FindUserSettings(userId);
         ApplyActiveBans(user);
 
-        // Validate user state (could have changed since token was issued)
         if (user == null)
         {
             _logger.LogWarning("Token authentication failed: user not found. UserId={UserId}", userId);
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
-        if (user.IsRemoved)
+        if (RefuseClosed(user) is { } closed)
         {
-            _logger.LogWarning("Token authentication failed: user removed. UserId={UserId}", userId);
-            return Identity.Fail(AuthenticationError.Removed);
-        }
-
-        if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
-        {
-            _logger.LogWarning("Token authentication failed: user banned. UserId={UserId}", userId);
-            return Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now));
+            _logger.LogWarning("Token authentication failed: {Reason}. UserId={UserId}", closed.Reason, userId);
+            return closed.Refusal;
         }
 
         if (session == null)
         {
-            _logger.LogDebug("Token authentication failed: session not found. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
         if (session.ExpirationUtc < _dateTimeProvider.Now)
         {
             await _repository.RemoveSession(userId, sessionId);
-            _logger.LogDebug("Token authentication failed: session expired. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
             return Identity.Fail(AuthenticationError.SessionExpired);
         }
 
-        // Sliding window with a ceiling, and the ceiling is the point. Extended from
-        // its own expiry on every visit, a session had no last day at all: a token
-        // taken once and used once a week outlives the account it belongs to, and
-        // nothing in the model says when it should have stopped. The two settings
-        // already name the lifetime a session was issued with, so the ceiling is
-        // that lifetime counted from issue rather than a third number.
+        // Sliding window with a ceiling: the lifetime the session was issued with,
+        // counted from issue, so a session has a last day.
         var lifetime = session.Persistent
             ? TimeSpan.FromDays(_config.PersistentSessionExpirationDays)
             : TimeSpan.FromHours(_config.SessionExpirationHours);
@@ -461,31 +295,16 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Guest();
         }
 
-        // This overload mints a real session without a password, so it needs the
-        // same account-state gates as the other two: it is authentication, not a
-        // lookup. Today only the activation auto-login reaches it, but nothing
-        // about the signature says so.
+        // A session without a password still passes the account-state gates.
         ApplyActiveBans(user);
 
-        if (user.IsRemoved)
+        if (RefuseClosed(user) is { } closed)
         {
-            _logger.LogWarning("Direct authentication failed: user removed. UserId={UserId}", userId);
-            return Identity.Fail(AuthenticationError.Removed);
+            _logger.LogWarning("Direct authentication failed: {Reason}. UserId={UserId}", closed.Reason, userId);
+            return closed.Refusal;
         }
 
-        if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
-        {
-            _logger.LogWarning("Direct authentication failed: user banned. UserId={UserId}", userId);
-            return Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now));
-        }
-
-        // A session minted without a password is exactly what a second factor
-        // exists to prevent, so this path refuses an account that has one. Today
-        // the only caller is the auto-login that follows activation, and a
-        // freshly created account cannot have a factor - which makes this rule
-        // safe by circumstance rather than by construction. The next caller will
-        // arrive without a word, and the rule has to be in the path rather than
-        // in the habits of its callers.
+        // A session minted without a password is what a second factor prevents.
         if (await _twoFactorRepository.IsConfirmed(userId))
         {
             _logger.LogWarning(
@@ -493,94 +312,114 @@ internal class AuthenticationService : IAuthenticationService
             return Identity.Fail(AuthenticationError.Forbidden);
         }
 
-        // An ordinary session, with the address and agent it was opened from.
-        // Minted invisible and contextless, it was a login the account owner had
-        // no way to see: no entry in the security journal, a device list row with
-        // no address in it, and no activity stamp. It also left the account with
-        // no successful login on record, so the first real login from anywhere
-        // had nothing to be compared against.
+        // An ordinary session, with its address, agent, activity stamp and journal entry.
         await _repository.UpdateActivity(userId, _dateTimeProvider.Now);
         var session = _sessionFactory.Create(persistent: false, context: context);
         var settings = await _repository.FindUserSettings(userId);
 
-        await _auditService.LogAsync(userId, SecurityEventType.LoginSuccess,
+        await _auditRepository.LogAsync(userId, SecurityEventType.LoginSuccess,
             context?.IpAddress, context?.UserAgent);
 
         return await CreateAuthenticationResult(user, session, settings);
     }
 
-    /// <inheritdoc />
-    public async Task<IIdentity> Logout()
+    /// <summary>
+    /// The refusal a locked account answers with, and the owner's journal entry
+    /// for it when the address belongs to somebody.
+    /// </summary>
+    private async Task<IIdentity> RefuseWhileLocked(
+        LoginAttemptOrigin origin, string email, SessionContext? context)
     {
-        var identity = _identityProvider.Current;
+        var remainingSeconds = await _loginAttemptTracker.GetRemainingLockoutSeconds(origin);
+        _logger.LogWarning("Login failed: account locked due to too many failed attempts. RemainingSeconds={RemainingSeconds}",
+            remainingSeconds);
 
-        // Update activity on logout - this marks the last moment user was active
-        await _repository.UpdateActivity(identity.User.UserId, _dateTimeProvider.Now);
-
-        await _repository.RemoveSession(identity.User.UserId, identity.Session!.Id);
-
-        // Audit log
-        await _auditService.LogAsync(identity.User.UserId, SecurityEventType.Logout);
-
-        _logger.LogInformation("User logged out. UserId={UserId}", identity.User.UserId);
-        return Identity.Guest();
-    }
-
-    /// <inheritdoc />
-    public async Task<IIdentity> LogoutElsewhere()
-    {
-        var identity = _identityProvider.Current;
-        await _repository.RemoveSessionsExcept(identity.User.UserId, identity.Session!.Id);
-
-        // Audit log
-        await _auditService.LogAsync(identity.User.UserId, SecurityEventType.LogoutElsewhere);
-
-        return identity;
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyCollection<Session>> GetCurrentUserSessions()
-    {
-        var identity = _identityProvider.Current;
-        return await _repository.GetUserSessions(identity.User.UserId, identity.Session?.Id);
-    }
-
-    /// <inheritdoc />
-    public async Task TerminateSession(Guid userId, Guid sessionId)
-    {
-        var identity = _identityProvider.Current;
-
-        // Security check: can only terminate own sessions
-        if (identity.User.UserId != userId)
+        var (_, lockedUser) = await _repository.TryFindUserByEmail(email);
+        if (lockedUser != null)
         {
-            throw new HttpException(HttpStatusCode.Forbidden,
-                "Завершить чужую сессию нельзя");
+            await _auditRepository.LogAsync(lockedUser.UserId, SecurityEventType.AccountLocked,
+                context?.IpAddress, context?.UserAgent, "Account locked due to failed attempts");
         }
 
-        // Cannot terminate current session - use Logout instead
-        if (identity.Session?.Id == sessionId)
-        {
-            // A plain InvalidOperationException reaches the client as 500: the error
-            // middleware maps only HttpException and its kin. Terminating one's own
-            // session is a caller mistake, not a server fault.
-            throw new HttpException(HttpStatusCode.BadRequest,
-                "Нельзя завершить текущую сессию. Для этого есть кнопка Выйти");
-        }
-
-        await _repository.RemoveSession(userId, sessionId);
-
-        // Audit log
-        await _auditService.LogAsync(userId, SecurityEventType.SessionTerminated,
-            details: $"SessionId: {sessionId}");
-
-        _logger.LogInformation("Session terminated. UserId={UserId}, SessionId={SessionId}", userId, sessionId);
+        return Identity.Fail(AuthenticationError.AccountLocked, remainingSeconds);
     }
 
-    /// <inheritdoc />
-    public async Task LogoutAll(Guid userId)
+    /// <summary>
+    /// The password is proven and a second factor is owed: a challenge for the
+    /// second step instead of a session.
+    /// </summary>
+    private async Task<IIdentity> OweSecondFactor(
+        AuthenticatedUser user, string email, bool rememberMe, SessionContext? context,
+        CancellationToken cancellationToken)
     {
-        await _repository.RemoveAllSessions(userId);
-        _logger.LogInformation("All sessions terminated for user. UserId={UserId}", userId);
+        var challenge = new TwoFactorChallengeState
+        {
+            ChallengeId = _guidFactory.Create(),
+            UserId = user.UserId,
+            // The identifier the password step counted under, so a
+            // wrong code lands in the same counter as a wrong
+            // password instead of one of its own.
+            Account = email,
+            CreatedUtc = _dateTimeProvider.Now,
+            ExpiresUtc = _dateTimeProvider.Now +
+                         TimeSpan.FromMinutes(_twoFactorConfig.ChallengeLifetimeMinutes),
+            Persistent = rememberMe,
+            IpAddress = context?.IpAddress,
+            UserAgent = context?.UserAgent
+        };
+        await _twoFactorRepository.AddChallenge(challenge, cancellationToken);
+
+        _logger.LogInformation(
+            "Password accepted, second factor owed. UserId={UserId}", user.UserId);
+        return Identity.SecondFactorRequired(challenge.ChallengeId);
+    }
+
+    /// <summary>
+    /// The refusal a wrong code answers with: counted under the counter of the
+    /// password step, and the challenge destroyed once it is out of attempts.
+    /// </summary>
+    private async Task<IIdentity> RefuseWrongCode(
+        TwoFactorChallengeState challenge, LoginAttemptOrigin origin, SessionContext? context,
+        CancellationToken cancellationToken)
+    {
+        await _loginAttemptTracker.RecordFailedAttempt(origin);
+        var attempts = await _twoFactorRepository.CountChallengeAttempt(challenge.ChallengeId, cancellationToken);
+        if (attempts >= _twoFactorConfig.ChallengeAttemptLimit)
+        {
+            // The challenge is destroyed rather than left counting: carrying
+            // on costs the password again, which is the price of guessing.
+            await _twoFactorRepository.RemoveChallenge(challenge.ChallengeId, cancellationToken);
+        }
+
+        await _auditRepository.LogAsync(challenge.UserId, SecurityEventType.LoginFailure,
+            context?.IpAddress, context?.UserAgent, "Двухфакторная аутентификация");
+        return Identity.Fail(AuthenticationError.TwoFactorRejected);
+    }
+
+    /// <summary>
+    /// The tail every proven login shares, the password step and the second
+    /// factor alike: the attempt counter reset, the activity stamp, the session,
+    /// the settings and the journal entry, in that order.
+    /// </summary>
+    /// <param name="user">The account the login is for</param>
+    /// <param name="account">The identifier the attempts were counted under</param>
+    /// <param name="persistent">"Remember me" as it was ticked on the password step</param>
+    /// <param name="context">Address and agent the login came from</param>
+    private async Task<IIdentity> SignIn(
+        AuthenticatedUser user, string account, bool persistent, SessionContext? context)
+    {
+        await _loginAttemptTracker.ResetAttempts(account);
+        await _repository.UpdateActivity(user.UserId, _dateTimeProvider.Now);
+
+        var session = _sessionFactory.Create(persistent: persistent, context: context);
+        var settings = await _repository.FindUserSettings(user.UserId);
+
+        // Awaited: the suspicious-login check that follows drops the newest entry
+        // of the trail as "this login".
+        await _auditRepository.LogAsync(user.UserId, SecurityEventType.LoginSuccess,
+            context?.IpAddress, context?.UserAgent);
+
+        return await CreateAuthenticationResult(user, session, settings);
     }
 
     private async Task<IIdentity> CreateAuthenticationResult(
@@ -596,13 +435,8 @@ internal class AuthenticationService : IAuthenticationService
     /// authorization check reads.
     /// </summary>
     /// <remarks>
-    /// Bans live in their own table and nothing writes the user's own
-    /// AccessPolicy column, so without this fold no ban restricts anything: not
-    /// the ordinary ban at the content surfaces, not even the full ban at login.
-    /// Doing it here, at the single point where an identity is built, is also
-    /// what makes a ban start and stop by itself — an expired ban stops being in
-    /// force on the next request with no job to run, and a ban issued mid-session
-    /// takes effect on the next request rather than at session expiry.
+    /// Nothing writes the user's own AccessPolicy column, and folded where the
+    /// identity is built a ban starts and stops on the next request by itself.
     /// </remarks>
     private void ApplyActiveBans(AuthenticatedUser? user)
     {
@@ -612,5 +446,24 @@ internal class AuthenticationService : IAuthenticationService
         }
 
         user.AccessPolicy = user.EffectiveAccessPolicyAt(_dateTimeProvider.Now);
+    }
+
+    /// <summary>
+    /// The refusal of an account moderation has removed or fully banned, with the
+    /// reason the journal records it under, or null for an open account.
+    /// </summary>
+    private (IIdentity Refusal, string Reason)? RefuseClosed(AuthenticatedUser user)
+    {
+        if (user.IsRemoved)
+        {
+            return (Identity.Fail(AuthenticationError.Removed), "Account removed");
+        }
+
+        if (user.AccessPolicy.HasFlag(AccessPolicy.FullBan))
+        {
+            return (Identity.Banned(user.BanEndsAt(_dateTimeProvider.Now)), "Account banned");
+        }
+
+        return null;
     }
 }

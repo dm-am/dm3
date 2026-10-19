@@ -1,29 +1,22 @@
-/* Global Theme CSS Custom Properties - this file must be imported directly in main.ts */
+/* The palettes of the two themes, switched at run time; imported by main.ts. */
 
 :root,
 html.theme_Light {
   --text: #333;
-  /* AA на белой странице и на карточке: #999 давал 2.85 при пороге 4.5.
-     #737373 — минимальный шаг, проходящий оба фона (4.74 / 4.50). */
+  /* The lightest grey that passes AA on the page and on a card (4.74 / 4.50). */
   --text-muted: #737373;
   --text-meta: #7b532b;
-  /* Green text of DM2 (.greenText of its default theme): the hidden text of
-     [private] is set in it and in nothing else, no fill, no frame. Kept as DM2
-     has it, so the text reads as the same thing it was there; it measures 3.33
-     on the page, under the 4.5 of AA, as it does on DM2. */
+  /* DM2's green text, for [private] and nothing else: 3.33 on the page, under
+     AA, as on DM2. */
   --text-green: #696;
-  /* AA как цвет текста: #393 давал 3.66 на странице. #267326 — тот же
-     зеленый, минимально темнее (5.89 / 5.60 / 4.55 на собственном тинте). */
+  /* AA as text: 5.89 / 5.60, and 4.55 on its own tint. */
   --accent-green: #267326;
   --accent-red: #b22222;
   --accent-yellow: #d4a000;
   --text-on-green: #363;
   --text-on-red: #633;
-  /* Ink for a SOLID accent fill: filled buttons, counter pills, active tabs.
-     The page background itself, so it flips with the theme. Not a new colour,
-     an alias with a name, because `color: var(--bg-page)` reads as a bug at
-     the call site. The two tokens above are inks for a TINT of the accent (see
-     the tint mixin); against the solid accent they measure 1.00-1.15. */
+  /* Ink for a solid accent fill: the page background, under a name so the
+     call site does not read as a bug. */
   --text-on-fill: var(--bg-page);
   --heading: #630;
   --heading-alt: #666;
@@ -45,88 +38,56 @@ html.theme_Light {
   --selection-bg: #3266d0;
   --selection-text: #fff;
   --button-bg: #eaeaea;
-  --button-text: #333;
-  --button-border: #ccc;
   --border: #ccc;
   --border-focus: #999;
   --border-accent-blue: #b0c4de;
   --border-accent-green: #696;
   --border-accent-red: #b33;
-  /* Рамка предупреждения в светлой теме - тот же тон, что и раньше: 2.38 к
-     фону страницы, между синей рамкой (1.78) и зеленой (3.33). */
+  /* 2.38 against the page, between the blue frame (1.78) and the green one
+     (3.33). */
   --border-accent-yellow: #d4a000;
   --input-bg: #f9f9f9;
-  /* Relative input fill. Over the page it composes to exactly --bg-element,
-     the solid ground the search of the filter bar stood on, which every field
-     is drawn after (owner's standard, 28 September 2026); and being an overlay
-     it still parts from a --bg-element card or dropdown panel it stands on,
-     where a solid --bg-element would vanish into the surface.
-     Light: #fff + 0.024 = #f9f9f9 (= --bg-element); on #f9f9f9 = #f3f3f3 */
+  /* Over the page it composes to --bg-element, and as an overlay it still
+     parts from a --bg-element surface under it. */
   --input-bg-overlay: rgba(0, 0, 0, 0.024);
-  /* Solid twin of --input-bg-overlay composed over --bg-page. Chrome paints
-     autofilled fields with its own opaque background that ignores the theme;
-     the only override that works is an inset shadow, and a shadow cannot
-     carry an alpha overlay - it needs the flattened color. */
+  /* The flat twin of --input-bg-overlay: Chrome's autofill fill is covered by
+     an inset shadow, which takes no alpha overlay. */
   --input-bg-autofill: #f9f9f9;
   --shade-bg: rgba(0, 0, 0, 0.6);
   --shade-text: #fff;
   --tooltip-bg: #333;
   --tooltip-text: #fff;
   --tooltip-border: transparent;
-  /* Links on the tooltip surface — the surface is dark in BOTH themes,
-     so regular --link (dark navy in light theme) is unreadable here */
+  /* The tooltip is dark in both themes, where --link is unreadable. */
   --tooltip-link: #7cb0e0;
   --tooltip-link-hover: #9cc8f0;
+  /* What parts the tooltip's own surface, dark in both themes, so a white
+     wash in both: the shade of a count, and a divider. */
+  --tooltip-chip-bg: rgba(255, 255, 255, 0.12);
+  --tooltip-divider: rgba(255, 255, 255, 0.08);
   --overlay-bg: rgba(0, 0, 0, 0.25);
   --overlay-subtle: rgba(0, 0, 0, 0.05);
-  /* The faintest wash the palette owns: a surface that has to be told apart
-     from the one under it and nothing more. The alpha is the light theme's
-     --bg-element-overlay, and it is the same number in both palettes on
-     purpose — the two themes must give the wash the same weight, which the
-     0.024 / 0.07 pair of --bg-element-overlay does not. */
+  /* The faintest wash, the same alpha in both themes so it weighs the same. */
   --overlay-faint: rgba(0, 0, 0, 0.024);
   --selected-overlay: rgba(0, 0, 0, 0.02);
   --hover-overlay: rgba(0, 0, 0, 0.05);
   --active-overlay: rgba(0, 0, 0, 0.08);
-  /* Control overlays — relative fills for buttons that must read on ANY
-     sanctioned surface: --bg-page (#fff), --bg-element cards/dropdown panels
-     (#f9f9f9), --bg-element-accent modal form footers (#eaeaea).
-     Calibrated for a minimum rest-vs-backdrop delta of ~9-10 RGB points on
-     every surface (the old page-only calibration of 0.024 composed to a
-     6-point delta on tinted surfaces — visually indistinguishable):
-     #fff    + rgba(0,0,0,0.04) = #f5f5f5 (delta 10.2)
-     #f9f9f9 + rgba(0,0,0,0.04) = #efefef (delta 10.0)
-     #eaeaea + rgba(0,0,0,0.04) = #e1e1e1 (delta 9.4)
-     Hover/active stack --hover-overlay on top: another ~11-12 points down. */
+  /* A control fill that reads on every sanctioned surface: about 10 RGB
+     points down on #fff, #f9f9f9 and #eaeaea. */
   --control-bg-overlay: rgba(0, 0, 0, 0.04);
-  /* Composed over --bg-page equals the legacy solid --bg-element-accent:
-     #fff + rgba(0,0,0,0.082) = #eaeaea */
-  --control-bg-hover-overlay: rgba(0, 0, 0, 0.082);
-  /* The button scale. One step of the palette — black in the light theme,
-     white in the dark one — at four alphas, so a button reads the same way on
-     every surface the site sanctions and carries no colour of its own.
-     The frame is constant and the fill carries the state, which is the model
-     the site's checkbox already uses.
-     The four numbers are the same in both themes: the step flips with the
-     palette, the weights do not. Measured on the eight surfaces a button
-     stands on, in both themes. */
+  /* The button scale: one step of the palette at four alphas, the same in
+     both themes, so a button carries no colour of its own. */
   --control-border-overlay: rgba(0, 0, 0, 0.25);
   --control-fill-overlay: rgba(0, 0, 0, 0.05);
   --control-fill-hover-overlay: rgba(0, 0, 0, 0.1);
   --control-fill-press-overlay: rgba(0, 0, 0, 0.16);
-  /* The states of a FILLED button (the primary action) lighten its fill with
-     white instead of stepping the scale above: --link is the fill, and a
-     darkening step drops the caption to 4.44 in the dark theme, under the 4.5
-     of WCAG 1.4.3.
-     Unlike the scale above, these two alphas differ by theme, because --link
-     does: #304060 is dark enough that a ninth of white is already a visible
-     step, #7cb0e0 is not. */
+  /* The filled button lightens with white: a darkening step drops its caption
+     under 4.5 in the dark theme. The alphas differ by theme, as --link does. */
   --primary-hover-overlay: rgba(255, 255, 255, 0.09);
   --primary-press-overlay: rgba(255, 255, 255, 0.17);
   --shadow-color: rgba(0, 0, 0, 0.12);
   --nsfw-overlay: rgba(230, 98, 126, 0.2);
   --highlight-overlay-green: rgba(122, 108, 8, 0.15);
-  --highlight-overlay-red: rgba(178, 34, 34, 0.12);
   --highlight-overlay-blue: rgba(48, 64, 96, 0.1);
   --progress-bg-overlay: rgba(0, 0, 0, 0.024);
   --progress-fill-overlay: rgba(35, 105, 195, 0.1);
@@ -135,42 +96,35 @@ html.theme_Light {
   --partner-glow: transparent;
   --partner-brightness: 1.05;
 
-  /* Search highlight - marker pen effect (preserves text color) */
+  /* A marker pen over the letters: the text keeps its colour. */
   --search-highlight-bg: rgba(255, 176, 32, 0.38);
 
-  /* The four metals of awards and achievements, the only colours their tiles
-     carry besides neutral text (entities/achievement/lib/tierMetal.ts maps a
-     tier to one of them). Not theme-dependent, same in both themes. */
+  /* The metals of awards and achievements (tierMetal.ts), the same in both
+     themes. */
   --award-gold: #d4af37;
   --award-silver: #c0c0c0;
   --award-bronze: #cd7f32;
   --achievement-platinum: #7fcfd4;
-  /* The numeral on a tier badge. The badge is filled with its metal, like the
-     icon it sits on, so the tile stays in that metal: a dark fill under a metal
-     numeral was a dark patch on the light page, and a dark numeral on the metal
-     read as black. Light ink on the metals measures 1.78 (platinum) to 3.14
-     (bronze), under the 4.5 of AA; the badge only repeats the tier the popover
-     states in text, and the halo keeps the strokes apart from the fill. Same in
-     both themes, like the metals under it. */
+  /* The numeral on a tier badge filled with its metal; the halo keeps its
+     strokes apart from the fill. Light ink on the metals is 1.78-3.14, under
+     AA: the badge repeats the tier the popover states in text. */
   --tier-badge-text: #fff;
   --tier-badge-halo: rgba(0, 0, 0, 0.4);
 }
 
+/* What differs from the light theme; the rest is inherited from :root. */
 html.theme_Dark {
   --text: #e0e0e0;
   --text-muted: #a0a0a0;
   --text-meta: #d4a574;
-  /* Green text of DM2's dark theme (.greenText there). */
+  /* DM2's green text of its dark theme. */
   --text-green: #7dd17d;
   --accent-green: #8fbc8f;
-  /* AA как цвет текста в темной теме: #cd5c5c давал 4.00 на странице.
-     #de9292 — тот же красный, минимально светлее (6.54 / 5.90). */
+  /* AA as text in the dark theme: 6.54 / 5.90. */
   --accent-red: #de9292;
   --accent-yellow: #e0b040;
   --text-on-green: #8fbc8f;
   --text-on-red: #d49a9a;
-  /* Ink for a solid accent fill, rationale in the light theme block. */
-  --text-on-fill: var(--bg-page);
   --heading: #d4956a;
   --heading-alt: #a0a0a0;
   --link: #7cb0e0;
@@ -188,68 +142,45 @@ html.theme_Dark {
   --bg-highlight-green: #2a332a;
   --bg-highlight-red: #4a3538;
   --bg-highlight-blue: #3a4550;
-  --selection-bg: #3266d0;
-  --selection-text: #fff;
   --button-bg: #333;
-  --button-text: #e0e0e0;
-  --button-border: #666;
   --border: #555;
   --border-focus: #888;
   --border-accent-blue: #5a7a9a;
   --border-accent-green: #5a8a5a;
   --border-accent-red: #a44;
-  /* Приглушен относительно --accent-yellow (#e0b040): тот давал 7.92 к фону
-     страницы и звучал громче рамки ошибки (2.74). Этот дает 3.46 и встает в
-     один ряд с зеленой (3.95) и синей (3.55). */
+  /* Toned down from --accent-yellow: 3.46 against the page, level with the
+     green (3.95) and blue (3.55) frames. */
   --border-accent-yellow: #946f2a;
   --input-bg: #222;
-  /* #222 + 0.035 = #2a2a2a, --bg-element of this theme; rationale in the
-     light theme block. */
+  /* Composes over the page to --bg-element. */
   --input-bg-overlay: rgba(255, 255, 255, 0.035);
   --input-bg-autofill: #2a2a2a;
   --shade-bg: rgba(0, 0, 0, 0.7);
-  --shade-text: #fff;
   --tooltip-bg: #444;
   --tooltip-text: #e8e8e8;
   --tooltip-border: #555;
-  /* Links on the tooltip surface — the surface is dark in BOTH themes,
-     so regular --link (dark navy in light theme) is unreadable here */
-  --tooltip-link: #7cb0e0;
-  --tooltip-link-hover: #9cc8f0;
   --overlay-bg: rgba(0, 0, 0, 0.4);
   --overlay-subtle: rgba(255, 255, 255, 0.05);
-  /* Same alpha as the light theme, rationale in the light theme block. */
+  /* The light theme's alpha. */
   --overlay-faint: rgba(255, 255, 255, 0.024);
   --selected-overlay: rgba(255, 255, 255, 0.03);
   --hover-overlay: rgba(255, 255, 255, 0.08);
   --active-overlay: rgba(255, 255, 255, 0.12);
-  /* Control overlays — relative fills for buttons that must read on ANY
-     sanctioned surface: --bg-page (#222), --bg-element (#2a2a2a),
-     --bg-element-accent (#333). Composed over --bg-page this equals the
-     legacy solid --bg-element exactly:
-     #222    + rgba(255,255,255,0.036) = #2a2a2a (delta 8.0)
-     #2a2a2a + rgba(255,255,255,0.036) = #323232 (delta 7.7)
-     #333    + rgba(255,255,255,0.036) = #3a3a3a (delta 7.3)
-     Unlike the light theme (see its 0.04 calibration note), 7-8 points at
-     this low luminance is a 1.15-1.24x relative step — clearly visible, so
-     the dark alpha keeps the original page-calibrated value. */
+  /* Composes over the page to --bg-element: 7-8 points at this luminance is a
+     clearly visible step. */
   --control-bg-overlay: rgba(255, 255, 255, 0.036);
-  --control-bg-hover-overlay: rgba(255, 255, 255, 0.077);
-  /* The button scale, rationale in the light theme block. Same weights, the
-     step flipped to white. */
+  /* The light theme's button scale, the step flipped to white. */
   --control-border-overlay: rgba(255, 255, 255, 0.25);
   --control-fill-overlay: rgba(255, 255, 255, 0.05);
   --control-fill-hover-overlay: rgba(255, 255, 255, 0.1);
   --control-fill-press-overlay: rgba(255, 255, 255, 0.16);
-  /* Lightening steps for the filled button, rationale in the light theme
-     block. Bigger here because --link is #7cb0e0: a ninth of white over it is
-     not a step anyone sees. */
+  /* Bigger than the light theme's: a ninth of white over #7cb0e0 is not a
+     visible step. */
   --primary-hover-overlay: rgba(255, 255, 255, 0.24);
   --primary-press-overlay: rgba(255, 255, 255, 0.46);
   --shadow-color: rgba(0, 0, 0, 0.3);
   --nsfw-overlay: rgba(230, 98, 126, 0.25);
   --highlight-overlay-green: rgba(115, 165, 115, 0.18);
-  --highlight-overlay-red: rgba(205, 92, 92, 0.15);
   --highlight-overlay-blue: rgba(106, 159, 212, 0.15);
   --progress-bg-overlay: rgba(255, 255, 255, 0.07);
   --progress-fill-overlay: rgba(106, 134, 161, 0.4);
@@ -258,28 +189,11 @@ html.theme_Dark {
   --partner-glow: rgba(255, 255, 255, 0.25);
   --partner-brightness: 1;
 
-  /* Search highlight - marker pen effect (brighter for dark backgrounds) */
+  /* Brighter, for the dark page. */
   --search-highlight-bg: rgba(255, 193, 7, 0.32);
-
-  /* The four metals of awards and achievements, the only colours their tiles
-     carry besides neutral text (entities/achievement/lib/tierMetal.ts maps a
-     tier to one of them). Not theme-dependent, same in both themes. */
-  --award-gold: #d4af37;
-  --award-silver: #c0c0c0;
-  --award-bronze: #cd7f32;
-  --achievement-platinum: #7fcfd4;
-  /* The numeral on a tier badge. The badge is filled with its metal, like the
-     icon it sits on, so the tile stays in that metal: a dark fill under a metal
-     numeral was a dark patch on the light page, and a dark numeral on the metal
-     read as black. Light ink on the metals measures 1.78 (platinum) to 3.14
-     (bronze), under the 4.5 of AA; the badge only repeats the tier the popover
-     states in text, and the halo keeps the strokes apart from the fill. Same in
-     both themes, like the metals under it. */
-  --tier-badge-text: #fff;
-  --tier-badge-halo: rgba(0, 0, 0, 0.4);
 }
 
-/* Suppress all transitions during theme switch — toggled synchronously in App.vue */
+/* Set by App.vue for the moment of a theme switch. */
 html.no-transitions,
 html.no-transitions *,
 html.no-transitions *::before,
@@ -287,7 +201,7 @@ html.no-transitions *::after {
   transition: none !important;
 }
 
-/* vue-final-modal overlay override - loaded after vfm styles */
+/* After the stylesheet of vue-final-modal, which it overrides. */
 .vfm__overlay.dialog-overlay {
   background-color: var(--overlay-bg);
 }

@@ -1,10 +1,5 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Characters;
-using DM.Domain.Game.Features.Games;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -21,21 +16,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// A game never announces fewer seats than it has players sitting in them.
 /// </summary>
 /// <remarks>
-/// The stated limit is a number the master typed in, and the one state it must
-/// never be in is below the count of active characters: nothing recomputes it
-/// afterwards, so a game left claiming one seat beside six players stays that
-/// way until the master notices and retypes the number.
-///
-/// Keeping it out of that state is decided by counting the active roster, and a
-/// count cannot see the character another transaction has written but not
-/// committed. Two characters activated at the same moment each counted only
-/// itself, each found the stated limit large enough, and both committed.
-///
-/// Each path is checked twice: the concurrent pair states the outcome, and the
-/// pair holding one activation open by hand pins the ordering the outcome rests
-/// on - that the call waits for the activation in flight instead of counting
-/// around it. Only a live database can be asked whether one write waits for
-/// another, which is why this is here and not in the domain tests.
+/// Nothing recomputes the stated limit, and a count cannot see an uncommitted character. Each path is checked by a
+/// concurrent pair and by a pair holding one activation open by hand; only a live database shows a write waiting.
 /// </remarks>
 public class CharacterPcLimitRacesShould : IntegrationTestBase
 {
@@ -113,12 +95,7 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
     /// An acceptance waits for the acceptance in flight beside it rather than
     /// deciding the limit on a roster that does not yet include it.
     /// </summary>
-    /// <remarks>
-    /// The winner is held open by hand in the shape the repository writes it in -
-    /// the game row taken, the character already switched to active - because a
-    /// row committed a moment earlier is not the interesting ordering: what left
-    /// the game short of seats is a roster the loser's count could not see.
-    /// </remarks>
+    /// <remarks>The winner is held open in the repository's shape: game row taken, character already active.</remarks>
     [Fact]
     public async Task WaitForTheAcceptanceInFlightBeforeDecidingTheLimit()
     {
@@ -157,12 +134,7 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
     /// The same ordering for creation: a character added while another is still
     /// uncommitted is counted with it, not instead of it.
     /// </summary>
-    /// <remarks>
-    /// The character in flight is inserted plainly here, without taking the game
-    /// row: an insert is all it takes to put somebody on the roster the count has
-    /// to see, and the promise cannot depend on what locks the other caller
-    /// happens to hold.
-    /// </remarks>
+    /// <remarks>The character in flight is inserted plainly: an insert alone puts somebody on the roster.</remarks>
     [Fact]
     public async Task WaitForTheCharacterInFlightBeforeDecidingTheLimit()
     {
@@ -195,16 +167,7 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
     /// <summary>
     /// An edit that cannot reach the active roster waits for nobody.
     /// </summary>
-    /// <remarks>
-    /// The game row is what serializes the decision about the stated limit, and
-    /// the limit is only ever moved by a character joining the active roster. Taken
-    /// for every write instead, it serializes a game's whole cast against itself:
-    /// a master correcting an NPC's attribute sat behind an acceptance he has
-    /// nothing to do with, for as long as that acceptance took. Stated as the
-    /// mirror of the two tests above, because "takes the row when it must" and
-    /// "leaves it alone when it need not" are two claims and only the first of
-    /// them fails loudly.
-    /// </remarks>
+    /// <remarks>The game row serializes only what can move the limit; the mirror of the two tests above.</remarks>
     [Fact]
     public async Task EditAnNpcWithoutWaitingForTheAcceptanceInFlight()
     {
@@ -302,11 +265,7 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
     /// <summary>
     /// A non-player character of the game, with one attribute already stored.
     /// </summary>
-    /// <remarks>
-    /// The attribute identifier names a specification, and no foreign key stands
-    /// behind that column: what is under test is the edit path of the value, not
-    /// the schema it belongs to.
-    /// </remarks>
+    /// <remarks>No foreign key stands behind the attribute identifier.</remarks>
     private static async Task<Guid> AddNpcAsync(DmDbContext dbContext, Guid gameId)
     {
         var authorId = await AddUserAsync(dbContext);

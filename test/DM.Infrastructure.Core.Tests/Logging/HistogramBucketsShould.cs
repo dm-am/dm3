@@ -18,15 +18,8 @@ namespace DM.Infrastructure.Core.Tests.Logging;
 /// Every histogram is exported over the boundaries chosen for it.
 /// </summary>
 /// <remarks>
-/// The boundaries are where a quantile on the dashboard comes from: a latency
-/// read off a ladder meant for something else is still a number, only a wrong
-/// one, and sizes measured against a ladder meant for seconds fall into one
-/// bucket and answer nothing. That every histogram has a view is held as text
-/// (ConsumerMetricsShould); this holds the values.
-///
-/// Read off the provider the host builds, through the instruments the code
-/// records into, so the values are the ones the exporter publishes whether they
-/// are declared in a view or on the instrument itself.
+/// That every histogram has a view is MetricSeriesShould's; this holds the values, read off the provider
+/// the host builds.
 /// </remarks>
 [Collection(StaticLoggerCollection.Name)]
 public class HistogramBucketsShould

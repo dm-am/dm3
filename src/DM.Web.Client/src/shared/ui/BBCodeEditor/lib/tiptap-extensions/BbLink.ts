@@ -10,39 +10,33 @@
 
 import { Mark, mergeAttributes } from "@tiptap/core";
 import { DEFAULT_LINK_TEXT } from "@/shared/lib/utils/bbcodeConstants";
-import { sanitizeUrl } from "@/shared/lib/utils/bbcode";
-
-export interface BbLinkOptions {
-  HTMLAttributes: Record<string, unknown>;
-}
+import { sanitizeUrl } from "@/shared/lib/utils/bbcodeAddresses";
+import { kept } from "./kept";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     bbLink: {
       setBbLink: (attributes: { href: string; text?: string }) => ReturnType;
-      unsetBbLink: () => ReturnType;
     };
   }
 }
 
-export const BbLink = Mark.create<BbLinkOptions>({
+export const BbLink = Mark.create({
   name: "bbLink",
 
   priority: 1000,
 
   keepOnSplit: false,
 
-  addOptions() {
-    return {
-      HTMLAttributes: {
-        target: "_blank",
-        rel: "noopener",
-      },
-    };
-  },
-
   addAttributes() {
     return {
+      // First: the drawn <a> keeps target and rel ahead of href.
+      target: {
+        default: "_blank",
+      },
+      rel: {
+        default: "noopener",
+      },
       href: {
         default: null,
       },
@@ -56,20 +50,7 @@ export const BbLink = Mark.create<BbLinkOptions>({
             ? { "data-bb-selfref": "true" }
             : { "data-bb-text": attributes.text },
       },
-      source: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-bb-source"),
-        renderHTML: (attributes) =>
-          attributes.source === null
-            ? {}
-            : { "data-bb-source": attributes.source },
-      },
-      target: {
-        default: "_blank",
-      },
-      rel: {
-        default: "noopener",
-      },
+      source: kept("data-bb-source"),
     };
   },
 
@@ -113,7 +94,7 @@ export const BbLink = Mark.create<BbLinkOptions>({
   renderHTML({ HTMLAttributes }) {
     return [
       "a",
-      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+      mergeAttributes(HTMLAttributes, {
         "data-bb-tag": "link",
       }),
       0,
@@ -137,26 +118,13 @@ export const BbLink = Mark.create<BbLinkOptions>({
           const hasSelection = from !== to;
 
           if (hasSelection) {
-            // If there's selected text, apply mark to it
             return commands.setMark(this.name, { href: safeHref, text });
-          } else {
-            // No selection - insert the text the link shows, with the mark
-            return commands.insertContent({
-              type: "text",
-              text: text ?? DEFAULT_LINK_TEXT,
-              marks: [
-                {
-                  type: this.name,
-                  attrs: { href: safeHref, text },
-                },
-              ],
-            });
           }
-        },
-      unsetBbLink:
-        () =>
-        ({ chain }) => {
-          return chain().unsetMark(this.name).run();
+          return commands.insertContent({
+            type: "text",
+            text: text ?? DEFAULT_LINK_TEXT,
+            marks: [{ type: this.name, attrs: { href: safeHref, text } }],
+          });
         },
     };
   },

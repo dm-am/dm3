@@ -1,11 +1,10 @@
 using DM.Infrastructure.Persistence.Repositories.Account;
-using DM.Testing;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Account;
 
-public class AccountMapperShould : UnitTestBase
+public class AccountMapperShould
 {
     [Fact]
     public void MapSessionRowToSession()

@@ -7,6 +7,9 @@ namespace DM.Domain.Personal.Features.Notifications;
 /// </summary>
 public class BotLinkCode
 {
+    /// <summary>How long a code is accepted: the service stamps it, the repository finds by it.</summary>
+    public static readonly TimeSpan Lifetime = TimeSpan.FromMinutes(10);
+
     /// <summary>
     /// The verification code to send to the bot
     /// </summary>

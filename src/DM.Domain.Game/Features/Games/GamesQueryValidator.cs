@@ -1,11 +1,11 @@
+using System;
+using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// Validator for games query parameters
-/// </summary>
 internal class GamesQueryValidator : AbstractValidator<GamesQuery>
 {
     private static readonly string[] AllowedSortFields =
@@ -22,14 +22,24 @@ internal class GamesQueryValidator : AbstractValidator<GamesQuery>
 
     private static readonly string[] AllowedSortOrders = ["asc", "desc"];
 
+    /// <summary>
+    /// The three lists of tags a query filters by, each held to the same rule.
+    /// </summary>
+    /// <remarks>An absent list has nothing to check.</remarks>
+    private static readonly Expression<Func<GamesQuery, IEnumerable<int>>>[] TagFilters =
+    [
+        q => q.RequiredTags!,
+        q => q.OptionalTags!,
+        q => q.ExcludedTags!
+    ];
+
     public GamesQueryValidator()
     {
         RuleFor(q => q.Search)
             .MaximumLength(200)
             .WithMessage("Поисковый запрос не длиннее 200 символов");
 
-        // Username policy: 2-20 characters (see docs/conventions/USERNAME_POLICY.md)
-        // Format validation not needed here - invalid usernames simply won't match any user
+        // No format check: an invalid name matches nobody.
         RuleForEach(q => q.OwnerUsernames)
             .NotEmpty()
             .WithMessage("Введите имя пользователя")
@@ -51,25 +61,17 @@ internal class GamesQueryValidator : AbstractValidator<GamesQuery>
             .When(q => !string.IsNullOrEmpty(q.SortOrder))
             .WithMessage("Порядок сортировки: asc или desc");
 
-        RuleForEach(q => q.RequiredTags)
-            .GreaterThan(0)
-            .When(q => q.RequiredTags != null)
-            .WithMessage("Метка указана неверно");
-
-        RuleForEach(q => q.OptionalTags)
-            .GreaterThan(0)
-            .When(q => q.OptionalTags != null)
-            .WithMessage("Метка указана неверно");
-
-        RuleForEach(q => q.ExcludedTags)
-            .GreaterThan(0)
-            .When(q => q.ExcludedTags != null)
-            .WithMessage("Метка указана неверно");
+        foreach (var tags in TagFilters)
+        {
+            RuleForEach(tags)
+                .GreaterThan(0)
+                .WithMessage("Тег указан неверно");
+        }
     }
 
     private static bool BeValidSortField(string? sortBy) =>
-        sortBy != null && AllowedSortFields.Contains(sortBy.ToLowerInvariant());
+        AllowedSortFields.Contains(sortBy, StringComparer.OrdinalIgnoreCase);
 
     private static bool BeValidSortOrder(string? sortOrder) =>
-        sortOrder != null && AllowedSortOrders.Contains(sortOrder.ToLowerInvariant());
+        AllowedSortOrders.Contains(sortOrder, StringComparer.OrdinalIgnoreCase);
 }

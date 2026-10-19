@@ -13,7 +13,6 @@ internal class ModeratedProfileNoteRepository : IModeratedProfileNoteRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public ModeratedProfileNoteRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;

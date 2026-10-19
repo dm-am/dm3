@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Statuses;
-using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 
@@ -12,17 +11,8 @@ namespace DM.Web.API.Features.Blog.Blogs;
 /// <summary>
 /// Blog information (for lists and cards)
 /// </summary>
-/// <remarks>
-/// Extends BlogRef with additional fields.
-/// Inherits: Id, Title, Author, Assistants, Status, CreatedUtc, ActivatedUtc, ClosedUtc,
-///           SubscribersCount, ActiveSubscribersCount, UnreadPublicationsCount, UnreadCommentsCount
-/// </remarks>
 public class Blog : BlogRef
 {
-    // Inherited from BlogRef:
-    // Id, Title, Author, Assistants, Status, CreatedUtc, ActivatedUtc, ClosedUtc,
-    // SubscribersCount, ActiveSubscribersCount, UnreadPublicationsCount, UnreadCommentsCount
-
     /// <summary>
     /// Blog description (BBCode, server-rendered to HTML)
     /// </summary>
@@ -144,7 +134,7 @@ public class CreateBlogRequest
     /// Blog title (1-200 characters)
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(200, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 до 200 символов")]
+    [StringLength(200, ErrorMessage = "Заголовок должен быть от 1 до 200 символов")]
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
@@ -178,10 +168,10 @@ public class UpdateBlogRequest
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
-    /// Blog description (BBCode, optional)
+    /// Blog description (BBCode): absent keeps it, an empty one clears it
     /// </summary>
     [StringLength(5000, ErrorMessage = "Описание не должно превышать 5000 символов")]
-    public string Description { get; set; } = string.Empty;
+    public string? Description { get; set; }
 
     /// <summary>
     /// Draft visibility (optional)
@@ -221,7 +211,7 @@ public class CreateRubricRequest
     /// Rubric title (1-100 characters)
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(100, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 до 100 символов")]
+    [StringLength(100, ErrorMessage = "Заголовок должен быть от 1 до 100 символов")]
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
@@ -239,7 +229,7 @@ public class UpdateRubricRequest
     /// New rubric title (1-100 characters)
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(100, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 до 100 символов")]
+    [StringLength(100, ErrorMessage = "Заголовок должен быть от 1 до 100 символов")]
     public string Title { get; set; } = string.Empty;
 }
 

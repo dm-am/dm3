@@ -9,14 +9,7 @@ namespace DM.Domain.Core.Tests.Configuration;
 /// The origins a browser may call from are the addresses the site answers on.
 /// </summary>
 /// <remarks>
-/// They used to be a second list beside the first, and no path of any deployment
-/// ever wrote the public address of a stand into it: not the installer, not the
-/// environment file, not the guide. The first request to the first stand would
-/// have been refused at the door by the origin check — against a list sitting two
-/// lines away from the address it refused.
-///
-/// Derived, the question does not arise: declaring an address is the only thing
-/// anybody has to do, and it is the thing a deployment cannot avoid doing.
+/// Derived, so declaring an address is the only thing a deployment has to do.
 /// </remarks>
 public class SiteAddressConfigurationShould
 {
@@ -52,10 +45,7 @@ public class SiteAddressConfigurationShould
     /// Both sides of the comparison go through one normaliser.
     /// </summary>
     /// <remarks>
-    /// A browser sends the origin in its canonical form. An address written down by
-    /// hand has a trailing slash, a spelt-out default port or a capital in the host
-    /// as often as not, and each of those made the derived list disagree with the
-    /// header while looking identical to a reader.
+    /// A browser sends the canonical origin, an address written by hand often is not.
     /// </remarks>
     [Theory]
     [InlineData("https://DM.am/", "https://dm.am")]

@@ -14,31 +14,13 @@ internal class PublicationIntentionResolver : IIntentionResolver<PublicationInte
 
         return intention switch
         {
-            // Author or admin can view drafts
-            PublicationIntention.ViewDraft =>
-                isAuthor || user.Role >= UserRole.Admin,
-
-            // Author or admin can edit
-            PublicationIntention.Edit =>
-                isAuthor || user.Role >= UserRole.Admin,
-
-            // Author or admin can publish
-            PublicationIntention.Publish =>
-                isAuthor || user.Role >= UserRole.Admin,
-
-            // Author or admin can delete
+            PublicationIntention.Edit or
             PublicationIntention.Delete =>
                 isAuthor || user.Role >= UserRole.Admin,
 
-            // Any authenticated user can comment on a published publication: the
-            // discussion has no switch that closes it
-            PublicationIntention.CreateComment =>
-                target.IsPublished &&
-                user.IsAuthenticated,
-
-            // Any authenticated user can like published publications
+            // The discussion has no switch that closes it
+            PublicationIntention.CreateComment or
             PublicationIntention.Like =>
-                target.IsPublished &&
                 user.IsAuthenticated,
 
             _ => false

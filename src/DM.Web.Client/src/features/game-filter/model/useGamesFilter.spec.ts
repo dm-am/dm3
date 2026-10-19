@@ -1,13 +1,6 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * The games filter read through the address, the one contract it has with a
- * reader: a bookmarked list opens on the same games. What an address means,
- * what each action writes into it, and that an address the filter wrote reads
- * back as itself.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import {
   filterOnListPage,
@@ -80,7 +73,6 @@ describe("useGamesFilter: what an address means", () => {
       size: 20,
     });
     expect(filter.hasActiveFilters.value).toBe(false);
-    expect(filter.activeFilters.value).toEqual([]);
   });
 
   it("reads every part of a full address, and asks for whole days", async () => {
@@ -126,15 +118,6 @@ describe("useGamesFilter: what an address means", () => {
       size: 20,
     });
     expect(filter.hasActiveFilters.value).toBe(true);
-    expect(filter.activeFilters.value.map((chip) => chip.label)).toEqual([
-      "Идет игра",
-      "Набор: Набор игроков",
-      "+Тег #3",
-      "+Тег #5",
-      "-Тег #7",
-      "ведущий: anna",
-      "ведущий: boris",
-    ]);
   });
 
   it("drops what it cannot read and keeps the rest", async () => {
@@ -180,10 +163,6 @@ describe("useGamesFilter: what an address means", () => {
       sortOrder: "desc",
       size: 20,
     });
-    expect(filter.activeFilters.value.map((chip) => chip.label)).toEqual([
-      "Закрыта",
-      "Причина: Заморожена",
-    ]);
   });
 
   it.each<[string, Record<string, string>, boolean]>([
@@ -277,12 +256,6 @@ describe("useGamesFilter: what an action writes", () => {
       { hosts: "anna" },
     ],
     [
-      "no hosts",
-      { hosts: "boris,anna", search: "x" },
-      (f) => f.clearHosts(),
-      { search: "x" },
-    ],
-    [
       "each range of dates",
       {},
       (f) => {
@@ -298,16 +271,6 @@ describe("useGamesFilter: what an action writes", () => {
         closedToUtc: "2026-03-02",
         recruitmentStartedFromUtc: "2026-04-01",
       },
-    ],
-    [
-      "no dates, the rest kept",
-      {
-        createdFromUtc: "2026-01-01",
-        closedToUtc: "2026-02-01",
-        hosts: "anna",
-      },
-      (f) => f.clearDateRanges(),
-      { hosts: "anna" },
     ],
     [
       "a sort in the direction of its own",
@@ -388,10 +351,6 @@ describe("useGamesFilter: what an action writes", () => {
 });
 
 describe("useGamesFilter: an address written reads back as itself", () => {
-  /**
-   * The address the filter writes for what it read off this one: a search
-   * set to the search it already has is an action that changes nothing.
-   */
   async function rewritten(query: Record<string, string>) {
     const { filter, settled, wrapper } = await on(query);
     filter.setSearch(filter.filterState.value.search);

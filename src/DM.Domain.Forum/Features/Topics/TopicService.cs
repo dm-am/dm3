@@ -33,10 +33,9 @@ internal class TopicService : ITopicService
     private readonly ITopicRepository _repository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IUserLookupService _userLookupService;
-    private readonly IEventProducer _invokedEventProducer;
+    private readonly IEventProducer _eventProducer;
     private readonly IGuidFactory _guidFactory;
     private readonly ICache _cache;
-    private readonly IBbTagNameCase _tagNames;
 
     public TopicService(
         IValidator<CreateTopic> createValidator,
@@ -48,10 +47,9 @@ internal class TopicService : ITopicService
         ITopicRepository repository,
         IUnreadCountersRepository unreadCountersRepository,
         IUserLookupService userLookupService,
-        IEventProducer invokedEventProducer,
+        IEventProducer eventProducer,
         IGuidFactory guidFactory,
-        ICache cache,
-        IBbTagNameCase tagNames)
+        ICache cache)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -62,18 +60,14 @@ internal class TopicService : ITopicService
         _repository = repository;
         _unreadCountersRepository = unreadCountersRepository;
         _userLookupService = userLookupService;
-        _invokedEventProducer = invokedEventProducer;
+        _eventProducer = eventProducer;
         _guidFactory = guidFactory;
         _cache = cache;
-        _tagNames = tagNames;
     }
 
-    // Aliases of boards whose listings are cheap to cache at the service
-    // layer: they are hit from the home page on every cold load, the
-    // content changes at most a few times a day, and a 30–60 second
-    // staleness window is acceptable. Keep this set tiny — the cache is
-    // per-board-alias per-query-shape, so adding boards blindly inflates
-    // the cache surface.
+    // Boards whose listings the home page reads on every cold load. A new topic
+    // shows once the short TTL runs out, with no invalidation; keep the set tiny,
+    // the cache is per board per query shape.
     private static readonly HashSet<string> CacheableListBoards = new(
         StringComparer.OrdinalIgnoreCase) { "news" };
 
@@ -85,7 +79,7 @@ internal class TopicService : ITopicService
         var board = await _boardService.GetBoard(createTopic.BoardTitle);
         // MayCreate's question, so the button the page offers and this refusal
         // cannot part.
-        _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
+        _intentionManager.ThrowIfForbidden(BoardIntention.CreateTopic, board);
 
         var author = _identityProvider.Current.User;
         var topicId = _guidFactory.Create();
@@ -93,9 +87,8 @@ internal class TopicService : ITopicService
         {
             TopicId = topicId,
             Title = createTopic.Title,
-            // Topic bodies render on the Comment surface where [mod] is a green
-            // mod block; strip it when authored by a non-moderator.
-            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createTopic.Text, author.Role), BbTagSet.WithModBlock)
+            // Bodies render on the Comment surface, where [mod] is a mod block.
+            Text = ModBlockSanitizer.SanitizeForAuthor(createTopic.Text, author.Role)
         };
 
         // Markers first, row second, commit on the line after it returns.
@@ -109,14 +102,7 @@ internal class TopicService : ITopicService
             ct);
         counters.Commit();
 
-        await _invokedEventProducer.SendAsync(EventType.NewTopic, topic.Id);
-
-        // The cacheable-boards listing fast path uses a short TTL
-        // (CachePolicy.Medium = 1 min) so a fresh topic becomes visible
-        // within 60 seconds with no explicit invalidation. This is
-        // acceptable for the news board — topics are rare, staleness
-        // bounded, and explicit invalidation would require iterating
-        // every (take, accessPolicy) cache key combination.
+        await _eventProducer.SendAsync(EventType.NewTopic, topic.Id);
         return topic;
     }
 
@@ -127,7 +113,7 @@ internal class TopicService : ITopicService
     /// (BoardIntentionResolver.CreateTopic).
     /// </remarks>
     public bool MayCreate(Board board) =>
-        _intentionManager.IsAllowed(ForumIntention.CreateTopic, board);
+        _intentionManager.IsAllowed(BoardIntention.CreateTopic, board);
 
     /// <inheritdoc />
     /// <remarks>
@@ -144,17 +130,10 @@ internal class TopicService : ITopicService
     public async Task<Topic> GetAsync(Guid topicId, CancellationToken ct = default)
     {
         var identity = _identityProvider.Current;
-        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
-        var topic = await _repository.Get(topicId, accessPolicy, ct);
+        var topic = await _repository.Get(topicId, ct);
         if (topic == null)
         {
-            // 410 only for a topic that genuinely existed and was removed;
-            // an id that never existed is an honest 404.
-            throw new HttpException(
-                await _repository.Exists(topicId, ct)
-                    ? HttpStatusCode.Gone
-                    : HttpStatusCode.NotFound,
-                "Топик не найден");
+            throw TopicNotFound(await _repository.Exists(topicId, ct), "Топик не найден");
         }
 
         await FillUnreadCounter(topic, identity);
@@ -167,17 +146,11 @@ internal class TopicService : ITopicService
     {
         var board = await _boardService.GetBoardByAlias(boardAlias);
         var identity = _identityProvider.Current;
-        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
 
-        var topic = await _repository.GetByBoardAndNumber(board.Id, topicNumber, accessPolicy, ct);
+        var topic = await _repository.GetByBoardAndNumber(board.Id, topicNumber, ct);
         if (topic == null)
         {
-            // 410 only for a topic that genuinely existed and was removed;
-            // a number that never existed is an honest 404.
-            throw new HttpException(
-                await _repository.ExistsByBoardAndNumber(board.Id, topicNumber, ct)
-                    ? HttpStatusCode.Gone
-                    : HttpStatusCode.NotFound,
+            throw TopicNotFound(await _repository.ExistsByBoardAndNumber(board.Id, topicNumber, ct),
                 $"Топик #{topicNumber} не найден в разделе {boardAlias}");
         }
 
@@ -193,11 +166,7 @@ internal class TopicService : ITopicService
         var board = await _boardService.GetBoard(boardTitle);
         var identity = _identityProvider.Current;
 
-        // Fast path for cacheable boards (home page widgets). When the
-        // query has no filters / search / author / date filters and uses
-        // default paging, we can cache the raw board-wide result for a
-        // short window and still give the caller correct per-user unread
-        // counts by filling them after the cache read.
+        // The raw board-wide result is cached, and the unread counts are filled per viewer after the read.
         var isCacheableShape =
             CacheableListBoards.Contains(boardTitle) &&
             IsCacheableListingQuery(query);
@@ -207,30 +176,24 @@ internal class TopicService : ITopicService
 
         if (isCacheableShape)
         {
-            // Cache key includes board alias + take to keep per-widget
-            // variants (e.g. take=5 for the home page, take=20 for the
-            // news board page) on separate entries, and access policy so
-            // guests and mentors never share a cache entry with more
-            // privileged viewers.
-            var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
-            var cacheKey = $"topics:list:{board.Id:N}:take={query.Take}:ap={(int)accessPolicy}";
+            // Take keeps the widgets apart.
+            var cacheKey = $"topics:list:{board.Id:N}:take={query.Take}";
+            // No count: cached listings are small, and the widgets have no paging.
             topics = await _cache.GetOrCreateAsync(
                 cacheKey,
-                async () => await LoadListingAsync(board.Id, accessPolicy, query, ct),
+                async () => (await _repository.Get(board.Id, pagingData: null, query, ct)).ToArray(),
                 CachePolicy.Medium);
         }
         else
         {
-            // Regular path: count + fetch with full paging data. For
-            // attached-only queries we skip the count (there is no paging UI).
-            var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
+            // Attached-only queries have no paging, so no count.
             if (query.IsAttached != true)
             {
-                var totalCount = await _repository.Count(board.Id, accessPolicy, query, ct);
-                pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
+                var totalCount = await _repository.Count(board.Id, query, ct);
+                pagingData = new PagingData(query, identity.Settings.PageSize, totalCount);
             }
 
-            topics = (await _repository.Get(board.Id, accessPolicy, pagingData, query, ct)).ToArray();
+            topics = (await _repository.Get(board.Id, pagingData, query, ct)).ToArray();
         }
 
         await FillUnreadCounters(topics, identity);
@@ -238,29 +201,16 @@ internal class TopicService : ITopicService
         return (topics, pagingData?.Result);
     }
 
-    /// <summary>
-    /// Deterministic loader for the cacheable-listing fast path. Skips
-    /// the <c>SELECT COUNT(*)</c> round-trip entirely — cached listings
-    /// are small (take &lt;= 20), and the home-page widgets do not need
-    /// pagination metadata. Access policy is plumbed through the cache key
-    /// at the caller, so this helper just forwards it to the repository.
-    /// </summary>
-    private async Task<Topic[]> LoadListingAsync(Guid boardId, BoardAccessPolicy accessPolicy, TopicsQuery query, CancellationToken ct) =>
-        (await _repository.Get(boardId, accessPolicy, pagingData: null, query, ct)).ToArray();
-
     /// <inheritdoc />
     public async Task<(IEnumerable<Topic> topics, PagingResult? paging)> GetListAcrossBoardsAsync(
         TopicsQuery query, CancellationToken ct = default)
     {
         var identity = _identityProvider.Current;
-        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
 
-        // Count over the access-policy-scoped result set so the paging
-        // total matches the rows the user actually sees.
-        var totalCount = await _repository.Count(boardId: null, accessPolicy, query, ct);
-        var pagingData = new PagingData(query, identity.Settings.Paging.TopicsPerPage, totalCount);
+        var totalCount = await _repository.Count(boardId: null, query, ct);
+        var pagingData = new PagingData(query, identity.Settings.PageSize, totalCount);
 
-        var topics = (await _repository.Get(boardId: null, accessPolicy, pagingData, query, ct)).ToArray();
+        var topics = (await _repository.Get(boardId: null, pagingData, query, ct)).ToArray();
 
         await FillUnreadCounters(topics, identity);
 
@@ -270,17 +220,10 @@ internal class TopicService : ITopicService
     /// <inheritdoc />
     public async Task<Topic?> GetBestUserTopicAsync(string username, CancellationToken ct = default)
     {
-        // Resolve username → UserId via the cross-module lookup so the
-        // repository stays typed on Guid. Throws HttpException(404) on an
-        // unknown user, which reaches the API caller unchanged.
         var user = await _userLookupService.GetAsync(username);
 
-        // Scope to boards the current viewer can see — the same access-policy
-        // mask the cross-board listing uses, so the widget never surfaces a
-        // topic on a board the viewer lacks access to.
         var identity = _identityProvider.Current;
-        var accessPolicy = _accessPolicyConverter.Convert(identity.User.Role);
-        var topic = await _repository.GetBestUserTopic(user.UserId, accessPolicy, ct);
+        var topic = await _repository.GetBestUserTopic(user.UserId, ct);
 
         if (topic != null)
         {
@@ -294,14 +237,8 @@ internal class TopicService : ITopicService
     /// How many comments of a topic this viewer has not read.
     /// </summary>
     /// <remarks>
-    /// Unread counts are always filled per request and never cached: they depend
-    /// on the specific viewer's read state. An anonymous viewer has no read state
-    /// at all, so the total stands in for it - that is what an unread badge means
-    /// to somebody who has read nothing.
-    ///
-    /// Written once for a single topic and once for a page of them, because five
-    /// copies of one if/else is five chances to answer an anonymous reader with a
-    /// zero.
+    /// Filled per request and never cached. An anonymous viewer has no read state
+    /// at all, so the total stands in for it.
     /// </remarks>
     private async Task FillUnreadCounter(Topic topic, IIdentity identity)
     {
@@ -334,10 +271,8 @@ internal class TopicService : ITopicService
     }
 
     /// <summary>
-    /// A listing query is cache-friendly when it has no dynamic filters
-    /// and uses the default page size (or smaller). Search, author filters,
-    /// and date ranges would blow up the cache key space; attached-only
-    /// queries skip the normal paging path anyway.
+    /// A listing query is cache-friendly when it has no dynamic filters and uses
+    /// the default page size or smaller: filters would blow up the cache key space.
     /// </summary>
     private static bool IsCacheableListingQuery(TopicsQuery query) =>
         query.IsAttached != true &&
@@ -364,12 +299,8 @@ internal class TopicService : ITopicService
         await _updateValidator.ValidateAndThrowAsync(updateTopic, ct);
         var oldTopic = await GetAsync(updateTopic.TopicId, ct);
 
-        // Closing and reopening belong to the author as well as to the board's
-        // moderators. A topic the board's moderators closed is shut to its author's
-        // edits (one the author closed stays theirs), and reopening it is what opens
-        // them again, so a request that reopens the topic is not refused for the
-        // topic being closed: whoever may reopen a topic may edit it once it is open
-        // (TopicIntentionResolverShould holds that).
+        // A request that reopens the topic is not refused for the topic being
+        // closed: whoever may reopen a topic may edit it once it is open.
         var changesClosed = updateTopic.IsClosed.HasValue && updateTopic.IsClosed != oldTopic.IsClosed;
         if (changesClosed)
         {
@@ -381,41 +312,15 @@ internal class TopicService : ITopicService
             _intentionManager.ThrowIfForbidden(TopicIntention.Edit, oldTopic);
         }
 
-        Guid? newBoardId = null;
-
-        if (_intentionManager.IsAllowed(ForumIntention.AdministrateTopics, oldTopic.Board))
-        {
-            if (updateTopic.BoardTitle != default &&
-                oldTopic.Board.Title != updateTopic.BoardTitle)
-            {
-                var board = await _boardService.GetBoard(updateTopic.BoardTitle, false);
-                _intentionManager.ThrowIfForbidden(ForumIntention.CreateTopic, board);
-                newBoardId = board.Id;
-                await _unreadCountersRepository.ChangeParentAsync(oldTopic.Id, UnreadEntryType.Message, board.Id);
-            }
-        }
-        else
-        {
-            // Asking for one of these is refused; round-tripping the value the topic
-            // already has is not. Both used to be dropped in silence, so a user
-            // pinning somebody else's topic got 200 and an unpinned topic back, and a
-            // user moving their own topic to another board got 200 and the topic
-            // still in the old one -- the move is reachable from HTTP through
-            // UpdateTopicRequest.Board. The closed state was checked above.
-            if ((updateTopic.IsAttached.HasValue && updateTopic.IsAttached != oldTopic.IsAttached) ||
-                (updateTopic.BoardTitle != default && oldTopic.Board.Title != updateTopic.BoardTitle))
-            {
-                _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, oldTopic.Board);
-            }
-
-            updateTopic.IsAttached = null;
-        }
+        var newBoardId = await ResolveAdministration(oldTopic, updateTopic);
+        var currentUser = _identityProvider.Current.User;
 
         var bodyText = updateTopic.Text;
-        // Topic bodies render on the Comment surface where [mod] is a green mod
-        // block; strip it when the editor is a non-moderator.
+        // Bodies render on the Comment surface, where [mod] is a mod block.
         if (!string.IsNullOrEmpty(bodyText))
-            bodyText = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(bodyText, _identityProvider.Current.User.Role), BbTagSet.WithModBlock);
+        {
+            bodyText = ModBlockSanitizer.SanitizeForAuthor(bodyText, currentUser.Role);
+        }
 
         var updateEntity = new UpdateTopicEntity
         {
@@ -427,52 +332,82 @@ internal class TopicService : ITopicService
             // (TopicIntention.Close), so it is written with every change of the
             // closed state and left alone otherwise.
             ClosedByAuthor = changesClosed
-                ? updateTopic.IsClosed == true && oldTopic.Author?.UserId == _identityProvider.Current.User.UserId
+                ? updateTopic.IsClosed == true && oldTopic.Author?.UserId == currentUser.UserId
                 : null,
             IsAttached = updateTopic.IsAttached,
-            // The editor is not necessarily the author: TopicIntention.Edit is
-            // open to moderators and administrators too. The ChangedTopic
-            // notification takes its actor from this history, so a topic changed
-            // by somebody a subscriber has blocked stops being delivered.
-            EditorUserId = _identityProvider.Current.User.UserId
+            // Not necessarily the author, and the actor the ChangedTopic notification is filtered by.
+            EditorUserId = currentUser.UserId
         };
         var updated = await _repository.Update(updateEntity, newBoardId);
 
-        // Announced only when the row moved. A PATCH that hands back the values the
-        // topic already holds is answered, but there is nothing to tell subscribers
-        // about — and the notification's actor is read from the edit history, which
-        // such a request leaves untouched, so the announcement would have named
-        // whoever edited the topic last and been filtered against his blacklist.
+        // Announced only when the row moved: the actor is read from the edit history,
+        // which a request handing back the same values leaves untouched.
         if (updated.Changed)
         {
-            await _invokedEventProducer.SendAsync(EventType.ChangedTopic, updated.Topic.Id);
+            await _eventProducer.SendAsync(EventType.ChangedTopic, updated.Topic.Id);
         }
 
         return updated.Topic;
+    }
+
+    /// <summary>
+    /// The part of an update only the board's administrators may ask for: moving
+    /// the topic to another board and pinning it.
+    /// </summary>
+    /// <remarks>
+    /// Asked by anybody else, either one is refused, and the pin the request
+    /// round-trips is taken out of it.
+    /// </remarks>
+    /// <returns>The board the topic moves to, or null when it stays.</returns>
+    private async Task<Guid?> ResolveAdministration(Topic oldTopic, UpdateTopic updateTopic)
+    {
+        Guid? newBoardId = null;
+
+        if (_intentionManager.IsAllowed(BoardIntention.AdministrateTopics, oldTopic.Board))
+        {
+            if (updateTopic.BoardTitle != null &&
+                oldTopic.Board.Title != updateTopic.BoardTitle)
+            {
+                var board = await _boardService.GetBoard(updateTopic.BoardTitle);
+                _intentionManager.ThrowIfForbidden(BoardIntention.CreateTopic, board);
+                newBoardId = board.Id;
+                await _unreadCountersRepository.ChangeParentAsync(oldTopic.Id, UnreadEntryType.Message, board.Id);
+            }
+        }
+        else
+        {
+            // Asking for one of these is refused; round-tripping the value the topic already has is not.
+            if ((updateTopic.IsAttached.HasValue && updateTopic.IsAttached != oldTopic.IsAttached) ||
+                (updateTopic.BoardTitle != null && oldTopic.Board.Title != updateTopic.BoardTitle))
+            {
+                _intentionManager.ThrowIfForbidden(BoardIntention.AdministrateTopics, oldTopic.Board);
+            }
+
+            updateTopic.IsAttached = null;
+        }
+
+        return newBoardId;
     }
 
     /// <inheritdoc />
     public async Task DeleteAsync(Guid topicId, CancellationToken ct = default)
     {
         var topic = await GetAsync(topicId, ct);
-        _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, topic.Board);
+        _intentionManager.ThrowIfForbidden(BoardIntention.AdministrateTopics, topic.Board);
 
         await _repository.Delete(topicId, _identityProvider.Current.User.UserId);
         await _unreadCountersRepository.DeleteAsync(topicId, UnreadEntryType.Message);
-        await _invokedEventProducer.SendAsync(EventType.DeletedTopic, topicId);
+        await _eventProducer.SendAsync(EventType.DeletedTopic, topicId);
     }
 
     /// <inheritdoc />
     public async Task ReorderPinnedAsync(string boardTitle, IReadOnlyList<Guid> topicIds, CancellationToken ct = default)
     {
         var board = await _boardService.GetBoard(boardTitle);
-        _intentionManager.ThrowIfForbidden(ForumIntention.AdministrateTopics, board);
+        _intentionManager.ThrowIfForbidden(BoardIntention.AdministrateTopics, board);
 
-        // What this call replaces is the order of the board as a whole, so the
-        // body has to name every pinned topic of that board and name each of them
-        // once. A body naming a subset would leave the topics it skipped on the
-        // positions this request has just handed to others: two topics on one
-        // place, one of them moved by a request that never mentioned it.
+        // The order of the board as a whole: a subset would leave the topics it
+        // skipped on the positions this request has just handed to others.
         var pinned = await _repository.GetAttachedTopicIds(board.Id, ct);
         var named = new HashSet<Guid>(topicIds);
         if (named.Count != topicIds.Count || !named.SetEquals(pinned))
@@ -485,4 +420,10 @@ internal class TopicService : ITopicService
 
         await _repository.ReplaceAttachOrder(board.Id, topicIds, ct);
     }
+
+    /// <summary>
+    /// 410 only for a topic that existed and was removed; one that never existed is an honest 404.
+    /// </summary>
+    private static HttpException TopicNotFound(bool existed, string refusal) =>
+        new(existed ? HttpStatusCode.Gone : HttpStatusCode.NotFound, refusal);
 }

@@ -4,9 +4,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers;
 
-/// <summary>
-/// Integration tests for health endpoints
-/// </summary>
 public class HealthCheckShould : IntegrationTestBase
 {
     public HealthCheckShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -16,17 +13,9 @@ public class HealthCheckShould : IntegrationTestBase
     /// <summary>
     /// Liveness answers whether the process is up, and nothing else.
     /// </summary>
-    /// <remarks>
-    /// It is mapped with a predicate that selects no check at all, so it answers
-    /// 200 whatever the state of the stores behind it. The test that used to
-    /// stand here was called "returns healthy" and asserted that 200 - which is
-    /// what the endpoint returns when every dependency is gone, and therefore a
-    /// claim about nothing. What is worth pinning is the shape: no check runs
-    /// here, because a liveness probe that fails on a database restarts a
-    /// container that was fine.
-    /// </remarks>
+    /// <remarks>A liveness probe that fails on a database restarts a container that was fine, so no check runs.</remarks>
     [Fact]
-    public async Task Liveness_AnswersWithoutRunningAnyCheck()
+    public async Task LivenessAnswersWithoutRunningAnyCheck()
     {
         var response = await Client.GetAsync("/_health");
 
@@ -43,20 +32,11 @@ public class HealthCheckShould : IntegrationTestBase
     /// it has to run the checks liveness deliberately skips.
     /// </summary>
     /// <remarks>
-    /// The status is not asserted: whether the stores this instance is pointed at
-    /// answer depends on the machine the suite runs on, and that is exactly the
-    /// difference from liveness. What is asserted is that the report names them,
-    /// because an endpoint that names no check cannot report one down - the
-    /// failure mode /_health has by design and /_ready must not acquire.
-    ///
-    /// The broker is deliberately absent, and the realtime subscription with it: a
-    /// request is served without either, and tagging them ready pulled the whole
-    /// site out of rotation over a delayed notification. The subscription check
-    /// answers Degraded for as long as it has not opened, which is a state an
-    /// instance can serve every page from.
+    /// The status depends on the machine; the report names the checks. The broker and the realtime subscription
+    /// are not readiness: a request is served without them.
     /// </remarks>
     [Fact]
-    public async Task Readiness_ReportsTheStoresARequestNeeds()
+    public async Task ReadinessReportsTheStoresARequestNeeds()
     {
         var response = await Client.GetAsync("/_ready");
 
@@ -70,14 +50,9 @@ public class HealthCheckShould : IntegrationTestBase
     /// The detail endpoint is the one that hides nothing: broker and realtime
     /// subscription included.
     /// </summary>
-    /// <remarks>
-    /// The subscription check is named here and nowhere else, and being named is
-    /// the whole of what it is for: an instance that never opened its subscription
-    /// serves every request and answers every other probe, so this report is the
-    /// only place inside the host that says push is not reaching it.
-    /// </remarks>
+    /// <remarks>This report is the only place inside the host that says push is not reaching the instance.</remarks>
     [Fact]
-    public async Task Detail_ReportsEveryCheckTheHostRegisters()
+    public async Task DetailReportsEveryCheckTheHostRegisters()
     {
         var response = await Client.GetAsync("/_health/detail");
 
@@ -85,20 +60,5 @@ public class HealthCheckShould : IntegrationTestBase
         body.Should().Contain("postgresql");
         body.Should().Contain("rabbitmq");
         body.Should().Contain("realtime-push");
-    }
-
-    /// <summary>
-    /// Swagger endpoint should be available (using Forum group as example)
-    /// </summary>
-    [Fact]
-    public async Task Swagger_ReturnsOk()
-    {
-        // Act - Swagger docs are generated per API group (Forum, Game, etc.)
-        var response = await Client.GetAsync("/swagger/Forum/swagger.json");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-        var content = await response.Content.ReadAsStringAsync();
-        content.Should().Contain("openapi");
     }
 }

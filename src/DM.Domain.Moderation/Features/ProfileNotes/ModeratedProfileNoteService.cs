@@ -25,7 +25,6 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     private readonly IValidator<CreateModeratedProfileNote> _createValidator;
     private readonly IValidator<UpdateModeratedProfileNote> _updateValidator;
 
-    /// <inheritdoc />
     public ModeratedProfileNoteService(
         IIdentityProvider identityProvider,
         IIntentionManager intentionManager,
@@ -53,22 +52,13 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.ViewModNotes);
 
-        var notes = await _noteRepository.GetNotes(user.UserId);
-        return notes;
+        return await _noteRepository.GetNotes(user.UserId);
     }
 
     /// <inheritdoc />
     public async Task<ModeratedProfileNote> GetNote(Guid noteId)
     {
-        var note = await _noteRepository.GetNote(noteId)
-            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(noteId));
-
-        // Not a lookup: the value is unused and the call is the check. GetAsync
-        // answers 404 for a user who is no longer there, so a note whose subject
-        // has departed is refused rather than served. Written as a bound
-        // variable it read as a leftover, and removing it as one would have
-        // changed what the endpoint answers.
-        await _userLookupService.GetAsync(note.User.UserId);
+        var note = await GetExistingNote(noteId);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.ViewModNotes);
 
@@ -100,24 +90,10 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     public async Task<ModeratedProfileNote> Update(UpdateModeratedProfileNote updateNote)
     {
         await _updateValidator.ValidateAndThrowAsync(updateNote);
-        var note = await _noteRepository.GetNote(updateNote.Id)
-            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(updateNote.Id));
-
-        // Not a lookup: the value is unused and the call is the check. GetAsync
-        // answers 404 for a user who is no longer there, so a note whose subject
-        // has departed is refused rather than served. Written as a bound
-        // variable it read as a leftover, and removing it as one would have
-        // changed what the endpoint answers.
-        await _userLookupService.GetAsync(note.User.UserId);
+        var note = await GetExistingNote(updateNote.Id);
 
         _intentionManager.ThrowIfForbidden(ModerationIntention.EditModNote);
-
-        // Check if user can edit this specific note
-        var identity = _identityProvider.Current;
-        if (note.Author.UserId != identity.User.UserId && identity.User.Role < UserRole.SeniorModerator)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Редактировать можно только свои заметки");
-        }
+        ThrowIfNotOwn(note, "Редактировать можно только свои заметки");
 
         var entity = new UpdateModeratedProfileNoteEntity
         {
@@ -134,25 +110,37 @@ internal class ModeratedProfileNoteService : IModeratedProfileNoteService
     /// <inheritdoc />
     public async Task Delete(Guid noteId)
     {
+        var note = await GetExistingNote(noteId);
+
+        _intentionManager.ThrowIfForbidden(ModerationIntention.DeleteModNote);
+        ThrowIfNotOwn(note, "Удалять можно только свои заметки");
+
+        await _noteRepository.Delete(noteId);
+    }
+
+    /// <summary>
+    /// The note, refused as not found when it or the user it is about is gone.
+    /// </summary>
+    private async Task<ModeratedProfileNote> GetExistingNote(Guid noteId)
+    {
         var note = await _noteRepository.GetNote(noteId)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ModerationNoteNotFound(noteId));
 
-        // Not a lookup: the value is unused and the call is the check. GetAsync
-        // answers 404 for a user who is no longer there, so a note whose subject
-        // has departed is refused rather than served. Written as a bound
-        // variable it read as a leftover, and removing it as one would have
-        // changed what the endpoint answers.
+        // The call is the check: GetAsync answers 404 for a user who is no longer there.
         await _userLookupService.GetAsync(note.User.UserId);
 
-        _intentionManager.ThrowIfForbidden(ModerationIntention.DeleteModNote);
+        return note;
+    }
 
-        // Check if user can delete this specific note
-        var identity = _identityProvider.Current;
-        if (note.Author.UserId != identity.User.UserId && identity.User.Role < UserRole.SeniorModerator)
+    /// <summary>
+    /// A note is changed by its author, or by a senior moderator.
+    /// </summary>
+    private void ThrowIfNotOwn(ModeratedProfileNote note, string refusal)
+    {
+        var user = _identityProvider.Current.User;
+        if (note.Author.UserId != user.UserId && user.Role < UserRole.SeniorModerator)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, "Удалять можно только свои заметки");
+            throw new HttpException(HttpStatusCode.Forbidden, refusal);
         }
-
-        await _noteRepository.Delete(noteId);
     }
 }

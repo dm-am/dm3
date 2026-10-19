@@ -27,7 +27,7 @@ public enum ModuleStatus
 public enum PremoderationStatus
 {
     /// <summary>
-    /// Module does not require premoderation
+    /// Module is approved or never needed premoderation
     /// </summary>
     Approved = 0,
 

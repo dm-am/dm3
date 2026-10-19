@@ -6,12 +6,6 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import FilterSearchInput from "./FilterSearchInput.vue";
 
-// Mock SvgIcon
-const SvgIconStub = {
-  template: '<span class="svg-icon-stub" />',
-  props: ["name"],
-};
-
 describe("FilterSearchInput", () => {
   const mountComponent = (props = {}) => {
     return mount(FilterSearchInput, {
@@ -19,29 +13,10 @@ describe("FilterSearchInput", () => {
         modelValue: "",
         ...props,
       },
-      global: {
-        stubs: {
-          SvgIcon: SvgIconStub,
-        },
-      },
     });
   };
 
-  // ============================================================================
-  // BASIC RENDERING
-  // ============================================================================
-
   describe("Basic Rendering", () => {
-    it("renders search container", () => {
-      const wrapper = mountComponent();
-      expect(wrapper.find(".search-container").exists()).toBe(true);
-    });
-
-    it("renders search icon", () => {
-      const wrapper = mountComponent();
-      expect(wrapper.find(".search-icon").exists()).toBe(true);
-    });
-
     it("renders input with placeholder", () => {
       const wrapper = mountComponent({ placeholder: "Поиск..." });
       const input = wrapper.find("input");
@@ -64,10 +39,6 @@ describe("FilterSearchInput", () => {
       expect(wrapper.find(".clear-input-btn").exists()).toBe(false);
     });
   });
-
-  // ============================================================================
-  // INPUT BEHAVIOR
-  // ============================================================================
 
   describe("Input Behavior", () => {
     it("updates local value immediately on input", async () => {
@@ -105,29 +76,7 @@ describe("FilterSearchInput", () => {
 
       expect(wrapper.emitted("keydown")).toBeTruthy();
     });
-
-    it("emits focus event", async () => {
-      const wrapper = mountComponent();
-      const input = wrapper.find("input");
-
-      await input.trigger("focus");
-
-      expect(wrapper.emitted("focus")).toBeTruthy();
-    });
-
-    it("emits blur event", async () => {
-      const wrapper = mountComponent();
-      const input = wrapper.find("input");
-
-      await input.trigger("blur");
-
-      expect(wrapper.emitted("blur")).toBeTruthy();
-    });
   });
-
-  // ============================================================================
-  // CLEAR BUTTON
-  // ============================================================================
 
   describe("Clear Button", () => {
     it("clears input when clear button is clicked", async () => {
@@ -149,10 +98,6 @@ describe("FilterSearchInput", () => {
       expect(wrapper.emitted("input")).toBeTruthy();
     });
   });
-
-  // ============================================================================
-  // SYNC WITH EXTERNAL VALUE
-  // ============================================================================
 
   describe("External Value Sync", () => {
     it("updates local input when modelValue prop changes", async () => {

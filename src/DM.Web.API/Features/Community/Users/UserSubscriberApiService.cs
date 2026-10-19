@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Subscriptions;
@@ -10,8 +9,7 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Community.Users;
 
-/// <inheritdoc />
-internal class UserSubscriberApiService : IUserSubscriberApiService
+public class UserSubscriberApiService
 {
     private readonly IUserService _userService;
     private readonly ISubscriptionService _subscriptionService;
@@ -30,21 +28,12 @@ internal class UserSubscriberApiService : IUserSubscriberApiService
         _subscriptionMapper = subscriptionMapper;
     }
 
-    /// <inheritdoc />
     /// <remarks>
-    /// Paged, and the page is what leaves the process. The endpoint is public
-    /// and used to answer with every subscriber of the addressed account, each
-    /// one a full User, so the size and the cost of the answer grew with
-    /// somebody else's popularity and no caller could ask for less.
-    ///
-    /// The identifiers still come back in one query - they are indexed and
-    /// cheap - and the slice is taken before the users are hydrated, which is
-    /// the expensive half: a page of twenty costs twenty lookups whatever the
-    /// account's following looks like.
+    /// The page is sliced before the users are hydrated, so its cost does not grow
+    /// with the account's following.
     /// </remarks>
     public async Task<ListEnvelope<User>> GetSubscribersAsync(string username, PagingQuery query)
     {
-        // Get throws HttpException if user not found
         var user = await _userService.GetAsync(username);
         var subscribers = (await _subscriptionService
             .GetTargetSubscribersAsync(SubscriptionTargetType.User, user.UserId, query))
@@ -56,7 +45,6 @@ internal class UserSubscriberApiService : IUserSubscriberApiService
             new PagingInfo(query.Skip, query.Take, total));
     }
 
-    /// <inheritdoc />
     public async Task<Subscription> SubscribeAsync(string username)
     {
         var user = await _userService.GetAsync(username);
@@ -64,14 +52,19 @@ internal class UserSubscriberApiService : IUserSubscriberApiService
         return _subscriptionMapper.ToSubscription(subscription);
     }
 
-    /// <inheritdoc />
     public async Task UnsubscribeAsync(string username)
     {
         var user = await _userService.GetAsync(username);
         await _subscriptionService.UnsubscribeByTargetAsync(SubscriptionTargetType.User, user.UserId);
     }
 
-    /// <inheritdoc />
+    public ListEnvelope<UserSubscriptionCategory> GetSubscriptionCategories() => new(
+        UserSubscriptionCategories.All.Select(category => new UserSubscriptionCategory
+        {
+            Category = (int)category.Category,
+            Events = category.Events,
+        }));
+
     public async Task<Subscription?> GetSubscriptionStatusAsync(string username)
     {
         var user = await _userService.GetAsync(username);

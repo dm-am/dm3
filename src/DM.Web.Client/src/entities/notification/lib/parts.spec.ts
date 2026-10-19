@@ -15,7 +15,13 @@ const detail = (
   label: string,
   value: string,
   isMoment = false,
-): NotificationDetail => ({ label, value, isMoment }) as NotificationDetail;
+  isDestination = false,
+): NotificationDetail =>
+  ({ label, value, isMoment, isDestination }) as NotificationDetail;
+
+/** The detail the server marks as the place the notification leads to. */
+const destination = (label: string, value: string) =>
+  detail(label, value, false, true);
 
 /** The row as the list hands it over, its details left unbranded here. */
 const partsOf = (row: { details: NotificationDetail[]; payload: unknown }) =>
@@ -23,6 +29,17 @@ const partsOf = (row: { details: NotificationDetail[]; payload: unknown }) =>
 
 const labels = (details: NotificationDetail[]) =>
   details.map(({ label }) => label);
+
+/**
+ * A bag in the order jsonb keeps its keys: the shorter first, and keys of one
+ * length by their bytes (lengthCompareJsonbString in PostgreSQL).
+ */
+const storedOrder = (payload: Record<string, unknown>) =>
+  Object.fromEntries(
+    Object.entries(payload).sort(
+      ([a], [b]) => a.length - b.length || (a < b ? -1 : a > b ? 1 : 0),
+    ),
+  );
 
 describe("notificationParts", () => {
   it("sorts a post owed in a room into the game and the room, the character, and who asked", () => {
@@ -105,6 +122,72 @@ describe("notificationParts", () => {
 
     expect(labels(parts.people)).toEqual(["Модератор"]);
     expect(labels(parts.rest)).toEqual(["Окончание", "Баллы"]);
+  });
+
+  // Two places in one bag, the one the notification leads to and the larger
+  // one it stands in. The store hands the bag back as jsonb, which orders keys
+  // by length and then by their bytes, and the server reads the details out
+  // of that same bag in that same order: the blog comes back ahead of its
+  // publication, the board ahead of its topic. The order says nothing, and
+  // the place first in the column is the one the server marks.
+  describe.each<{
+    about: string;
+    written: Record<string, unknown>;
+    wording: Record<string, NotificationDetail>;
+    places: string[];
+  }>([
+    {
+      about: "a comment under a publication",
+      written: {
+        commentId: "c1",
+        publicationId: "pervaja~mNoP",
+        publicationTitle: "Первая партия",
+        blogId: "zapiski~iJkL",
+        blogTitle: "Записки мастера",
+        authorUsername: "TestHonorary",
+      },
+      wording: {
+        publicationTitle: destination("Публикация", "Первая партия"),
+        blogTitle: detail("Блог", "Записки мастера"),
+        authorUsername: detail("Автор", "TestHonorary"),
+      },
+      places: ["Публикация", "Блог"],
+    },
+    {
+      about: "a changed topic",
+      written: {
+        topicId: "faq~eFgH",
+        topicTitle: "FAQ",
+        boardId: "obshchee~aBcD",
+        boardTitle: "Общее",
+        authorUsername: "TestModerator",
+      },
+      wording: {
+        topicTitle: destination("Топик", "FAQ"),
+        boardTitle: detail("Раздел", "Общее"),
+        authorUsername: detail("Автор", "TestModerator"),
+      },
+      places: ["Топик", "Раздел"],
+    },
+  ])("$about", ({ written, wording, places }) => {
+    /** The details the server reads out of a bag, in the order of the bag. */
+    const rowOf = (payload: Record<string, unknown>) => ({
+      payload,
+      details: Object.keys(payload).flatMap((field) =>
+        field in wording ? [wording[field]] : [],
+      ),
+    });
+
+    it.each([
+      ["in the order the generator wrote", written],
+      ["in the order the store hands back", storedOrder(written)],
+    ])("puts first the place it leads to, %s", (_order, payload) => {
+      const parts = partsOf(rowOf(payload));
+
+      expect(labels(parts.places)).toEqual(places);
+      expect(labels(parts.people)).toEqual(["Автор"]);
+      expect(parts.rest).toEqual([]);
+    });
   });
 
   // A detail with no field behind it (a payload the client cannot read) is

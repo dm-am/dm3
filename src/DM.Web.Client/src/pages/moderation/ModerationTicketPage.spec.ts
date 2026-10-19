@@ -2,27 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * A moderator's page of one ticket.
- *
- * The ticket works as a topic with answers and looks like one: its block with
- * the author in the caption, under a link back to the queue "Обращения", the
- * conversation under the block and the form at its foot. Nobody takes a
- * ticket in hand: any moderator to whom its reason is shown answers and closes
- * it, so there is no "Взять в работу".
- *
- * The moderator chooses in the form, over the field of the answer, the status
- * the answer moves the ticket to: "Ожидает ответа пользователя" unless he
- * closes it or marks it as spam, and closing needs no word. The text and the
- * status go in one request, and the page shows the ticket the server answers
- * with. The choice stands only where the server says the reader answers as
- * moderation (canResolve): never on a closed ticket, never for its author,
- * whose answer hands the ticket to moderation. The ticket punishes nobody: no
- * warning, no ban, no block "Решение" under the form.
- *
- * A ticket the moderator may not read (its reason is not shown to his role,
- * or it names him) is "not found", the same as one that never existed.
- */
+// A moderator's page of one ticket: block, conversation, form. Nobody takes a
+// ticket in hand. The status choice stands where the server says the reader
+// answers as moderation (canResolve). A ticket he may not read is "not found".
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   enableAutoUnmount,
@@ -47,25 +29,10 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
-vi.mock("./lib/useRoleGate", async () => {
-  const { ref } = await import("vue");
-  return {
-    useRoleGate: () => ({ hasAccess: ref(true), deniedText: "" }),
-  };
-});
-
-// A heavy tiptap component, as a plain field: what it is for here is its
-// value, and that the page holds one editor, the form's.
-vi.mock("@/shared/ui/BBCodeEditor", () => ({
-  BBCodeEditor: {
-    name: "BBCodeEditor",
-    props: ["modelValue", "maxLength", "draftKey", "disabled"],
-    emits: ["update:modelValue", "submit"],
-    methods: { clear() {} },
-    template:
-      "<textarea class='editor-stub' :value='modelValue' @input='$emit(\"update:modelValue\", $event.target.value)' />",
-  },
-}));
+// A heavy tiptap component, as a plain field: the page holds one editor, the form's.
+vi.mock("@/shared/ui/BBCodeEditor", async () =>
+  (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeAnswer(),
+);
 
 const person = (id: string, username: string, role: string) =>
   ({ id, username, role, lastActivityUtc: null }) as never;
@@ -93,8 +60,7 @@ const complaint = (over: Partial<TicketDetails> = {}): TicketDetails => ({
   status: "WaitingForModeration",
   subtype: "UserComplaint",
   createdUtc: "2026-10-03T17:38:00Z",
-  description: "Оскорбляет участников\n\nНарушитель: LongestLoginPossible",
-  descriptionHtml:
+  description:
     "Оскорбляет участников<br /><br />Нарушитель: LongestLoginPossible",
   comment: "",
   commentsCount: 1,
@@ -246,8 +212,7 @@ describe("a moderator's page of one ticket", () => {
     serve(complaint({ canResolve: false }));
     const wrapper = await render();
 
-    // The conversation stays: the author of a ticket who is a moderator
-    // writes in it as its author.
+    // A moderator who is the author writes in the conversation as its author.
     expect(wrapper.find(".ticket-answer-form").exists()).toBe(true);
     expect(wrapper.find(".ticket-answer-form select").exists()).toBe(false);
   });
@@ -360,8 +325,7 @@ describe("a moderator's page of one ticket", () => {
     expect(caption(wrapper)).toContain("Ожидает ответа модерации");
   });
 
-  // The ticket waits for moderation, and the reader answers as moderation: the
-  // star is his. Once it waits for the author, it is not.
+  // The ticket waits for moderation and the reader answers as moderation: the star is his.
   it.each([
     ["WaitingForModeration", true, true],
     ["WaitingForUser", true, false],

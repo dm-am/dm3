@@ -12,7 +12,6 @@ namespace DM.Domain.Account.Features.PasswordChange;
 /// <inheritdoc />
 internal class UserPasswordChangeValidator : AbstractValidator<UserPasswordChange>
 {
-    /// <inheritdoc />
     public UserPasswordChangeValidator(
         IPasswordChangeRepository passwordChangeRepository,
         IDateTimeProvider dateTimeProvider,
@@ -45,34 +44,6 @@ internal class UserPasswordChangeValidator : AbstractValidator<UserPasswordChang
                     .WithMessage(ValidationError.Invalid);
             });
 
-        // Apply same password policy as registration
-        RuleFor(r => r.NewPassword)
-            .NotEmpty().WithMessage(ValidationError.Empty)
-            .MinimumLength(passwordPolicy.MinimumLength).WithMessage(ValidationError.Short)
-            .MaximumLength(passwordPolicy.MaximumLength).WithMessage(ValidationError.Long);
-
-        if (passwordPolicy.RequireUppercase)
-        {
-            RuleFor(r => r.NewPassword)
-                .Matches("[A-Z]").WithMessage(ValidationError.RequiresUppercase);
-        }
-
-        if (passwordPolicy.RequireLowercase)
-        {
-            RuleFor(r => r.NewPassword)
-                .Matches("[a-z]").WithMessage(ValidationError.RequiresLowercase);
-        }
-
-        if (passwordPolicy.RequireDigit)
-        {
-            RuleFor(r => r.NewPassword)
-                .Matches("[0-9]").WithMessage(ValidationError.RequiresDigit);
-        }
-
-        if (passwordPolicy.RequireSpecialCharacter)
-        {
-            RuleFor(r => r.NewPassword)
-                .Matches("[^a-zA-Z0-9]").WithMessage(ValidationError.RequiresSpecialCharacter);
-        }
+        RuleFor(r => r.NewPassword).MeetsPasswordPolicy(passwordPolicy);
     }
 }

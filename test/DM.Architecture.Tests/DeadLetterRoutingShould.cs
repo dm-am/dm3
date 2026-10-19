@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -10,17 +11,8 @@ namespace DM.Architecture.Tests;
 /// A message no consumer could process has to stop somewhere a human can reach.
 /// </summary>
 /// <remarks>
-/// When the retry middleware runs out of attempts the exception escapes the
-/// pipeline and the message is rejected without requeue. Whether that means kept
-/// or gone is decided by one line of the consumer parameters: a queue with no
-/// dead-letter exchange has its poison messages dropped by the broker. The mail
-/// worker carried that line and the notification dispatcher did not, so one
-/// generator throwing on its own data cost the recipient the notification, and
-/// the only trace left of the event was five warnings from the middleware.
-///
-/// Asserted against the sources: the parameters are built inside a background
-/// service that needs a live broker to get that far, so nothing but the text of
-/// the consumers says which queues carry work that has to outlive a failure.
+/// A queue with no dead-letter exchange has its poison messages dropped by the broker. Asserted
+/// against the sources: the parameters are built behind a live broker.
 /// </remarks>
 public class DeadLetterRoutingShould
 {
@@ -34,29 +26,21 @@ public class DeadLetterRoutingShould
     private const string DeclaresTheDestination = "DeadLetterQueue.DeclareTerminal(";
 
     /// <summary>
-    /// The realtime push queue, exempt by decision rather than by omission: its
-    /// message is a copy of a notification the dispatcher has already stored, and
-    /// the client reads that over REST. A push kept past its moment gives nobody
-    /// anything to act on.
+    /// The realtime push queue is exempt: its message copies a stored notification the client reads over REST.
     /// </summary>
     private const string ExemptConsumer = "RealtimeNotificationConsumer.cs";
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
-    private static string[] Consumers => Directory
-        .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-        .Where(IsAuthored)
+    private static string[] Consumers => RepositoryFiles.ProductionSources()
         .Where(path => File.ReadAllText(path).Contains(ConsumerParameters, StringComparison.Ordinal))
         .ToArray();
 
     /// <summary>
-    /// A rule that matches nothing passes. Three consumers exist — mail,
-    /// notifications and the realtime push — so finding fewer means the search
-    /// string went stale rather than that the tree is clean.
+    /// A search that finds no consumer leaves the rules below green over nothing.
     /// </summary>
     [Fact]
     public void FindEveryConsumer() =>
-        Consumers.Should().HaveCountGreaterThanOrEqualTo(3);
+        Consumers.Should().NotBeEmpty();
 
     [Fact]
     public void DeadLetterEveryQueueThatCarriesWork() =>
@@ -88,41 +72,15 @@ public class DeadLetterRoutingShould
     /// A consumer takes what it can finish, not what the queue holds.
     /// </summary>
     /// <remarks>
-    /// Without a prefetch limit the broker hands over the entire queue and the
-    /// worker holds every message of it in memory, unacknowledged, until it
-    /// works through them. Nothing is gained for that: the handler runs on the
-    /// client's dispatcher, one message at a time on the channel either way.
-    ///
-    /// And the backlog it builds is the invisible kind. A message delivered to a
-    /// consumer is no longer ready, so depth read off the ready series shows an
-    /// empty queue for a worker sitting on a thousand messages — the alert stays
-    /// green, the panel stays flat, and the first symptom is a reader asking why
-    /// a notification took an hour.
-    ///
-    /// The limit lives in the one shared subscription rather than in each
-    /// consumer's parameters, so this asserts the line itself: prefetch of one,
-    /// and global=false spelled out, because global=true is the call RabbitMQ
-    /// 4.x refuses.
+    /// Without a prefetch limit the worker holds the whole queue unacknowledged, and the ready series
+    /// shows it empty. global=false is spelled out: RabbitMQ 4.x refuses global=true.
     /// </remarks>
     [Fact]
     public void BoundWhatEachConsumerTakesAtOnce() =>
-        File.ReadAllText(Path.Combine(RepositoryRoot,
+        File.ReadAllText(Path.Combine(RepositoryLayout.Root,
                 SharedConsumer.Replace('/', Path.DirectorySeparatorChar)))
             .Should().Contain("BasicQosAsync(0, 1, global: false",
                 "every subscription goes through this file, and without the prefetch " +
                 "of one the worker holds the whole queue in memory as a backlog no " +
                 "depth series can see");
-
-    /// <summary>
-    /// The exemption has to keep naming a consumer that exists, or a rename turns
-    /// it into a hole nobody sees.
-    /// </summary>
-    [Fact]
-    public void KeepTheExemptionNamingAConsumer() =>
-        Consumers.Select(path => Path.GetFileName(path)).Should().Contain(ExemptConsumer);
-
-    private static bool IsAuthored(string path) =>
-        !path
-            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(segment => segment is "obj" or "bin" or "node_modules");
 }

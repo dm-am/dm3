@@ -11,7 +11,6 @@ const route = useRoute();
 const { fetchPolls } = usePollsStore();
 const { searchParams } = usePollsFilter();
 
-// Fetch on initial load and when filters/page change
 watch(
   () => [searchParams.value, route.query.number],
   () => {
@@ -25,12 +24,10 @@ watch(
   <page-title>Опросы</page-title>
   <LeadText>Запланированные, текущие и завершенные опросы сообщества</LeadText>
 
-  <!-- Create poll form (moderators only) -->
+  <!-- Draws itself for moderators only -->
   <CreatePollForm />
 
-  <!-- Filter -->
   <PollsFilter />
 
-  <!-- List + paging -->
   <PollsList />
 </template>

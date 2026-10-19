@@ -20,11 +20,10 @@ namespace DM.Web.API.Features.Community.Fundraising;
 [Tags("Fundraising")]
 public class FundraisingController : ControllerBase
 {
-    private readonly IFundraisingApiService _apiService;
+    private readonly FundraisingApiService _apiService;
 
-    /// <inheritdoc />
     public FundraisingController(
-        IFundraisingApiService apiService)
+        FundraisingApiService apiService)
     {
         _apiService = apiService;
     }

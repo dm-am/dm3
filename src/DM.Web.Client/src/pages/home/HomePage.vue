@@ -1,7 +1,5 @@
 <template>
-  <!-- Visually hidden page heading: the landing has no visible h1 by
-       design, but screen readers and SEO need the document outline to
-       start at h1 before the h2 block titles below. -->
+  <!-- The landing has no visible h1; the outline must still start at one. -->
   <h1 class="visually-hidden">Dungeon Master — текстовые ролевые игры</h1>
   <BlockTitle v-once>Наши пользователи о нас</BlockTitle>
   <RandomTestimonials />
@@ -53,10 +51,6 @@ const bestPostsLink = computed(() => {
   margin: $small 0 $medium
   color: $text
   line-height: 1.6
-  a
-    color: $link
-    &:hover
-      color: $link-hover
 
 .discovery
   margin: 0

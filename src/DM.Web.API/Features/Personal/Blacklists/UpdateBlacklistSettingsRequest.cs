@@ -6,10 +6,8 @@ namespace DM.Web.API.Features.Personal.Blacklists;
 /// Partial update of blacklist behavior settings
 /// </summary>
 /// <remarks>
-/// Every flag is optional: an omitted one keeps its current value. The read
-/// model cannot be reused here — its flags are plain booleans, so an omitted
-/// one is indistinguishable from an explicit false and a request carrying one
-/// flag would silently clear the other five.
+/// Every flag is optional: an omitted one keeps its current value, which the
+/// plain booleans of the read model cannot say.
 /// </remarks>
 public class UpdateBlacklistSettingsRequest
 {

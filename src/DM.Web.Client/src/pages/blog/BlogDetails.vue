@@ -1,9 +1,5 @@
 <script setup lang="ts">
-// Blog info sub-page (mirrors GameDetails): a compact key-value info table,
-// the rubric table, and the blog description — the old site's module-info
-// layout, rendered with our components (dev doc 4.2.3.6.1 "Информация блога").
-// The discussion block lives on its own page (BlogComments), linked from the
-// BlogPanel.
+// The blog's facts, its rubrics and its description, the old site's module-info layout.
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import {
@@ -21,8 +17,7 @@ import { formatDate } from "@/shared/lib/utils/datetime";
 const blogStore = useBlogDetailsStore();
 const { blog, rubrics } = storeToRefs(blogStore);
 
-// Feed/rubric links use the short public id (fall back to the GUID); the
-// blog route is publicId-tolerant on the backend.
+// The short public id, else the GUID; the blog route takes either.
 const blogId = computed(() => blog.value?.publicId ?? blog.value?.id ?? "");
 const assistants = computed(() => blog.value?.assistants ?? []);
 
@@ -42,7 +37,6 @@ function rubricTo(r: Rubric) {
 
 <template>
   <div v-if="blog" class="blog-details">
-    <!-- Key-value info table -->
     <table class="info-table">
       <tbody>
         <tr>
@@ -89,7 +83,6 @@ function rubricTo(r: Rubric) {
       </tbody>
     </table>
 
-    <!-- Rubrics -->
     <section v-if="rubrics.length" class="rubrics">
       <BlockTitle>Рубрики</BlockTitle>
       <DataTable
@@ -99,9 +92,7 @@ function rubricTo(r: Rubric) {
         empty-text="Рубрик пока нет"
       >
         <template #cell-title="{ row }">
-          <router-link class="rubric-link" :to="rubricTo(row)">{{
-            row.title
-          }}</router-link>
+          <router-link :to="rubricTo(row)">{{ row.title }}</router-link>
         </template>
         <template #cell-publications="{ row }">{{
           row.publicationCount
@@ -109,7 +100,6 @@ function rubricTo(r: Rubric) {
       </DataTable>
     </section>
 
-    <!-- Description (BBCode, server-rendered) -->
     <section v-if="blog.description" class="description">
       <DashSeparator />
       <ContentText :html="blog.description" />
@@ -132,12 +122,4 @@ function rubricTo(r: Rubric) {
   display: flex
   flex-direction: column
   gap: $small
-
-.muted
-  color: $text-muted
-
-.rubric-link
-  color: $link
-  &:hover
-    color: $link-hover
 </style>

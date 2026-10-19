@@ -147,10 +147,13 @@ public class NotificationLinkShould
     }
 
     [Fact]
-    public void PutTheLinkIntoTheLetter() =>
-        NotificationEmailSender.BuildEmailBody(EventType.StatusGameFrozen, GameMetadata, Addresses)
-            .Should().Contain($"<a href=\"{GameUrl}\">Перейти</a>",
-                "the reader of a letter is the one reader with no notification list open");
+    public void PutTheLinkIntoTheLetter()
+    {
+        var letter = NotificationEmailSender.Letter(EventType.StatusGameFrozen, GameMetadata, Addresses);
+
+        letter.LinkUrl.Should().Be(GameUrl, "the reader of a letter is the one reader with no notification list open");
+        letter.LinkCaption.Should().Be("Перейти");
+    }
 
     [Fact]
     public void PutTheLinkIntoTheTelegramMessage() =>
@@ -171,15 +174,14 @@ public class NotificationLinkShould
     [Fact]
     public void LeaveTheThreeChannelsWithoutALinkWhenThereIsNothingToPointAt()
     {
-        var letter = NotificationEmailSender.BuildEmailBody(
+        var letter = NotificationEmailSender.Letter(
             EventType.PasswordChanged, GameMetadata, Addresses);
         var telegram = NotificationBotSender.BuildTelegramMessage(
             EventType.PasswordChanged, GameMetadata, Addresses);
         var discord = NotificationBotSender.BuildDiscordMessage(
             EventType.PasswordChanged, GameMetadata, Addresses);
 
-        letter.Should().NotContain("Перейти",
-            "an offer to go somewhere is worth nothing when there is nowhere to go");
+        letter.LinkUrl.Should().BeNull("an offer to go somewhere is worth nothing when there is nowhere to go");
         telegram.Should().NotContain("<a ");
         discord.Should().NotContain(GameUrl);
     }

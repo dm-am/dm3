@@ -1,29 +1,8 @@
 <script setup lang="ts">
 /**
- * ProfileAchievementsSection — the "Достижения" block.
- *
- * Architecture:
- *  - The tier catalog (`AchievementType`) already carries its category
- *    (`AchievementType.category` — SSOT for iconName/metric/description/
- *    sortOrder). Grouping tiers by `category.id` yields a chain.
- *  - Progress is not stored: it is computed from user metrics via
- *    `getMetricValue` (SSOT with backend `AchievementMetricResolver`).
- *  - A tile shows the SENIOR EARNED tier of the chain: its title and the
- *    tier color on the icon. Chains without a single earned tier are
- *    rendered too, in a locked style: the whole tile is ghosted with
- *    opacity (near-transparent icon, faded title and progress digits),
- *    no tier tint, no roman badge, and the TIER I TITLE (the first level
- *    to reach) as the tile caption — the ghost opacity keeps it from
- *    reading as earned.
- *  - Under the title: a progress bar + "X / Y" numbers toward the next
- *    unearned tier. A completed chain shows a full bar and the total
- *    metric value.
- *  - Rich popover (via `<Tooltip #content>`): category title with a
- *    "X / Y" badge of the tiers taken, the metric description, a progress
- *    line toward the next tier and the full table of tiers with their
- *    thresholds and earned/locked state.
- *  - The parent (ProfileAchievements) listens to the `state` emit and
- *    coordinates the tab-level empty state with the awards block.
+ * The "Достижения" block: tiers grouped by category into chains, progress
+ * computed from the user's metrics (entities/achievement). A tile shows the
+ * senior earned tier; a chain with none is drawn ghosted under its first tier.
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { achievementApi } from "@/entities/achievement";
@@ -36,12 +15,18 @@ import { GameIcon } from "@/shared/ui/Icon";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
+import ProfileAchievementPopover from "./ProfileAchievementPopover.vue";
 import {
-  getMetricValue,
-  formatThreshold,
-  metricDisplayNumber,
-  achievementMetal,
+  achievementChains,
+  chainTitle,
+  tierNumeral,
+  chainCurrent,
+  chainGoal,
+  chainTotal,
+  chainPercent,
+  awardMetal,
   metalStyle,
+  type AchievementChain,
 } from "@/entities/achievement";
 import {
   shownOnPage,
@@ -50,16 +35,11 @@ import {
 
 const props = defineProps<{
   username: string;
-  /** Profile owner — provides the metric values for progress. */
+  /** The profile owner, whose metrics give the progress. */
   user: User;
 }>();
 
-/** Load/content status for the tab-level empty-state coordination in
- * ProfileAchievements: the shared "Пока нет наград и достижений" text
- * shows only when BOTH sections settle empty. Since every catalog chain
- * is rendered (locked chains included), "empty" here means the catalog
- * itself is empty — with a seeded catalog the section always settles
- * as "content". */
+/** Whether the section settled empty, for the tab's shared empty text; with a catalog it never is. */
 const emit = defineEmits<{
   state: [value: "loading" | "error" | "empty" | "content"];
 }>();
@@ -68,9 +48,7 @@ const earned = ref<UserAchievement[]>([]);
 const catalog = ref<AchievementType[]>([]);
 const loaded = ref(false);
 
-// The section refetches when the profile changes under it, so two pairs of
-// answers can be on the wire at once; the guard drops the older pair instead of
-// letting it decide what the tab reports to its parent.
+// The profile can change under the section: the guard drops the older pair of answers.
 const { loading, error, run } = useGuardedRequest({
   message: "Не удалось загрузить достижения",
   clearErrorOnStart: true,
@@ -81,15 +59,12 @@ function load(username: string) {
   emit("state", "loading");
   return run(
     async () => {
-      // Each answer is taken over as it lands: the section says the failure
-      // in its own box, and the plate for the first would be up before the
-      // second arrived (shownOnPage).
+      // Each answer is taken over as it lands; the section says a failure in its own box.
       const [earnedRes, catalogRes] = await Promise.all([
         achievementApi.getUserAchievements(username).then(shownOnPage),
         achievementApi.getAchievementTypes().then(shownOnPage),
       ]);
-      // The chains are drawn from both halves together, so either failure is the
-      // section's failure and neither half is applied on its own.
+      // The chains need both halves, so either failure is the section's.
       return {
         data: {
           earned: earnedRes.data?.resources ?? [],
@@ -117,159 +92,15 @@ watch(
   (next) => load(next),
 );
 
-const earnedByTypeId = computed(() => {
-  const map = new Map<string, UserAchievement>();
-  for (const a of earned.value) map.set(a.type.id, a);
-  return map;
-});
-
-interface ChainTier {
-  type: AchievementType;
-  earnedUtc: string | null;
-  progress: number;
-}
-
-interface Chain {
-  categoryId: string;
-  sortOrder: number;
-  iconName: string;
-  /** Category title — the popover header. */
-  title: string;
-  /** Category metric description (what exactly is counted). */
-  description: string;
-  /** Every tier of the chain, threshold-sorted — the popover table. */
-  tiers: ChainTier[];
-  earnedCount: number;
-  /** Senior earned tier — the face of the tile (title + tier color);
-   * null — the chain is fully locked (nothing earned yet). */
-  earned: ChainTier | null;
-  /** First unearned tier (the progress goal); null — all earned. */
-  next: ChainTier | null;
-  /** True when every tier of the chain is earned. */
-  completed: boolean;
-  /** True when no tier is earned — the tile renders in locked style. */
-  locked: boolean;
-  /** Number of the senior earned tier (1..4, 0 — locked chain) —
-   * drives the tier color. */
-  maxEarnedTier: number;
-}
-
-const chains = computed<Chain[]>(() => {
-  const grouped = new Map<string, AchievementType[]>();
-  for (const t of catalog.value) {
-    const list = grouped.get(t.category.id) ?? [];
-    list.push(t);
-    grouped.set(t.category.id, list);
-  }
-
-  const result: Chain[] = [];
-  for (const types of grouped.values()) {
-    types.sort((a, b) => a.threshold - b.threshold);
-
-    const category = types[0].category;
-    const tiers: ChainTier[] = types.map((type) => {
-      const got = earnedByTypeId.value.get(type.id);
-      const progress = getMetricValue(category.metric, props.user);
-      return { type, earnedUtc: got?.earnedUtc ?? null, progress };
-    });
-
-    // Every catalog chain is rendered — chains without a single earned
-    // tier show up locked (muted icon, tier I title, progress to I).
-    const earnedTiers = tiers.filter((t) => t.earnedUtc);
-
-    // Tiers are threshold-sorted, so the last earned one is the senior.
-    const earnedTop =
-      earnedTiers.length > 0 ? earnedTiers[earnedTiers.length - 1] : null;
-
-    result.push({
-      categoryId: category.id,
-      sortOrder: category.sortOrder,
-      iconName: category.iconName,
-      title: category.title,
-      description: category.description,
-      tiers,
-      earnedCount: earnedTiers.length,
-      earned: earnedTop,
-      next: tiers.find((t) => !t.earnedUtc) ?? null,
-      completed: earnedTiers.length === tiers.length,
-      locked: earnedTiers.length === 0,
-      maxEarnedTier: earnedTop?.type.tier ?? 0,
-    });
-  }
-  result.sort((a, b) => a.sortOrder - b.sortOrder);
-  return result;
-});
+const chains = computed<AchievementChain[]>(() =>
+  achievementChains(catalog.value, earned.value, props.user),
+);
 
 const hasAnyChain = computed(() => chains.value.length > 0);
-
-// Tile caption: the senior earned tier's thematic title; for a fully
-// locked chain — the TIER I title (the first level to reach). Tiers are
-// threshold-sorted, so tiers[0] is tier I. The ghost opacity of the
-// locked style keeps it from reading as earned.
-function tileTitle(chain: Chain): string {
-  return chain.earned ? chain.earned.type.title : chain.tiers[0].type.title;
-}
-
-const ROMAN = ["", "I", "II", "III", "IV"];
-function roman(n: number): string {
-  return ROMAN[n] ?? "";
-}
-
-// Display-unit current / goal numbers toward the next tier (days→years for
-// registration, raw count otherwise). One SSOT keeps the tile, the popover
-// and the aria-label in the same unit — never "4054 из 15 лет".
-function displayCurrent(chain: Chain): number {
-  const next = chain.next;
-  if (!next) return 0;
-  return metricDisplayNumber(
-    next.type.category.metric,
-    Math.min(Math.max(next.progress, 0), next.type.threshold),
-  );
-}
-function displayGoal(chain: Chain): number {
-  const next = chain.next;
-  if (!next) return 0;
-  return metricDisplayNumber(next.type.category.metric, next.type.threshold);
-}
-function displayTotal(chain: Chain): number {
-  // Only reachable for completed chains (chain.earned is set there).
-  if (!chain.earned) return 0;
-  return metricDisplayNumber(
-    chain.earned.type.category.metric,
-    chain.earned.progress,
-  );
-}
-
-// Progress toward the next tier as a percent (0-100); a completed chain
-// reads as a full bar.
-function nextPct(chain: Chain): number {
-  const next = chain.next;
-  if (!next || next.type.threshold <= 0) return 100;
-  const clamped = Math.min(Math.max(next.progress, 0), next.type.threshold);
-  return Math.round((clamped / next.type.threshold) * 100);
-}
-
-// Progress toward the next tier as a single string ("197 из 500 лайков").
-// Built in script (not interpolated across template text nodes) so a copied
-// selection always has clean spaces — no whitespace-condense glue, no stray
-// newlines. Unit label SSOT is formatThreshold.
-function progressLabel(chain: Chain): string {
-  // Drawn only for a chain that is not completed, and such a chain always has
-  // a next tier — the "Максимальный уровень" this used to answer with could
-  // not be reached from anywhere.
-  const next = chain.next;
-  if (!next) return "";
-  return `${displayCurrent(chain)} из ${formatThreshold(
-    next.type.category.metric,
-    next.type.threshold,
-  )}`;
-}
 </script>
 
 <template>
-  <!-- Loading deliberately has no BlockTitle: an empty catalog hides the
-       whole section, and flashing a "Достижения" heading that then
-       disappears would be worse than a bare inline loading hint. -->
+  <!-- No heading while loading: an empty catalog hides the whole section. -->
   <section v-if="loading && !loaded" class="achievements-section">
     <SecondaryText>Загрузка...</SecondaryText>
   </section>
@@ -291,93 +122,47 @@ function progressLabel(chain: Chain): string {
         <div
           class="chain"
           :class="{ 'chain--locked': chain.locked }"
-          :style="metalStyle(achievementMetal(chain.maxEarnedTier))"
+          :style="metalStyle(awardMetal(chain.earnedTier))"
         >
           <div class="chain-icon-wrap">
             <GameIcon :name="chain.iconName" class="chain-icon" />
             <span
-              v-if="chain.maxEarnedTier > 0"
+              v-if="chain.earnedPosition > 0"
               class="chain-degree"
               aria-hidden="true"
-              >{{ roman(chain.maxEarnedTier) }}</span
+              >{{ tierNumeral(chain.earnedPosition) }}</span
             >
           </div>
 
-          <span class="chain-title">{{ tileTitle(chain) }}</span>
+          <span class="chain-title">{{ chainTitle(chain) }}</span>
 
           <div
             class="chain-bar"
             role="progressbar"
-            :aria-valuenow="chain.completed ? 100 : nextPct(chain)"
+            :aria-valuenow="chain.completed ? 100 : chainPercent(chain)"
             :aria-valuemin="0"
             :aria-valuemax="100"
-            :aria-label="`${chain.title}: ${chain.completed ? 'завершено' : `${displayCurrent(chain)}/${displayGoal(chain)}`}`"
+            :aria-label="`${chain.title}: ${chain.completed ? 'завершено' : `${chainCurrent(chain)}/${chainGoal(chain)}`}`"
           >
             <div
               class="chain-bar-fill"
               :style="{
-                width: (chain.completed ? 100 : nextPct(chain)) + '%',
+                width: (chain.completed ? 100 : chainPercent(chain)) + '%',
               }"
             />
           </div>
 
-          <!-- Numbers under the bar: digits only, no units (units read from
-               the icon/title). Display-unit (years for registration) — the
-               same numbers as the popover. Real " / " text node so a copied
-               selection reads "2200 / 5000", not glued "2200/5000". -->
+          <!-- Digits only, the same as the popover; a real " / " so a copy reads "2200 / 5000". -->
           <div class="chain-progress" aria-hidden="true">
-            <template v-if="chain.completed">{{
-              displayTotal(chain)
-            }}</template>
+            <template v-if="chain.completed">{{ chainTotal(chain) }}</template>
             <template v-else
-              >{{ displayCurrent(chain) }} / {{ displayGoal(chain) }}</template
+              >{{ chainCurrent(chain) }} / {{ chainGoal(chain) }}</template
             >
           </div>
         </div>
 
         <template #content>
-          <div class="chain-popover">
-            <div class="chain-popover__header">
-              <strong class="chain-popover__title">{{ chain.title }}</strong>
-              <span class="chain-popover__badge">
-                {{ chain.earnedCount }} / {{ chain.tiers.length }}
-              </span>
-            </div>
-
-            <p class="chain-popover__desc">{{ chain.description }}</p>
-
-            <!-- Single text node from one computed string: copies exactly as
-                 "197 из 500 лайков" — guaranteed spaces, uniform color. -->
-            <p v-if="!chain.completed" class="chain-popover__progress">
-              {{ progressLabel(chain) }}
-            </p>
-
-            <ul class="chain-popover__tiers">
-              <li
-                v-for="t in chain.tiers"
-                :key="t.type.id"
-                class="chain-popover__tier"
-                :class="
-                  t.earnedUtc
-                    ? 'chain-popover__tier--earned'
-                    : 'chain-popover__tier--locked'
-                "
-                :style="metalStyle(achievementMetal(t.type.tier))"
-              >
-                <span class="chain-popover__tier-degree">{{
-                  roman(t.type.tier ?? 0)
-                }}</span>
-                <span class="chain-popover__tier-title">{{
-                  t.type.title
-                }}</span>
-                <span class="chain-popover__tier-threshold">
-                  {{
-                    formatThreshold(t.type.category.metric, t.type.threshold)
-                  }}
-                </span>
-              </li>
-            </ul>
-          </div>
+          <ProfileAchievementPopover :chain="chain" />
         </template>
       </Tooltip>
     </div>
@@ -385,30 +170,23 @@ function progressLabel(chain: Chain): string {
 </template>
 
 <style scoped lang="sass">
-// The grid below is measured against the column the section stands in, not
-// against the window: the sidebars take a fixed share of it.
+// The grid is measured against the column, not the window.
 .achievements-section
   container: achievements / inline-size
   display: flex
   flex-direction: column
-  // Unified with .awards-section: explicit gap between the BlockTitle and
-  // the grid + zeroed intrinsic margins on the BlockTitle.
+  // As .awards-section: the gap, the heading's own margins off.
   gap: $small
 
   :deep(h2)
     margin: 0
 
-// King's Bounty awards-style: a clean grid of icons + a roman degree in the
-// icon corner. Achievements are the smaller, denser section — 8 per row with
-// a 52px icon (vs the awards' 5 columns / 72px) — so they read lighter than
-// the curated awards. A tight COLUMN gap keeps the eight cells wide enough
-// for the icon and a 2-line caption; a larger ROW gap gives the rows (which
-// carry a progress bar) vertical breathing room. The Tooltip trigger gets
-// `display: flex` (`display: contents` broke getBoundingClientRect and the
-// tooltip drifted to the top-left corner).
+// Lighter than the awards; a tight column gap and a larger row gap for the
+// bars. The Tooltip trigger is display: flex, as display: contents broke its
+// positioning.
 .chains
   display: grid
-  grid-template-columns: repeat(8, minmax(0, 1fr))
+  grid-template-columns: repeat($achievement-columns, minmax(0, 1fr))
   row-gap: $small
   column-gap: $tiny
   align-items: start
@@ -416,117 +194,81 @@ function progressLabel(chain: Chain): string {
   :deep(.tooltip-trigger)
     display: flex
 
-// Eight cells hold the longest word of a caption ("Приключение", 70px) from a
-// column of 600px up. The column is 556px at 1280, where the eighth part broke
-// that word in the middle; below 600px the grid takes six.
-@container achievements (max-width: 599px)
+@container achievements (max-width: #{$achievements-narrow-width})
   .chains
-    grid-template-columns: repeat(6, minmax(0, 1fr))
+    grid-template-columns: repeat($achievement-columns-narrow, minmax(0, 1fr))
 
 .chain
   position: relative
   display: flex
   flex-direction: column
   align-items: center
-  // Fill the grid cell (the Tooltip trigger is display:flex, so the tile is
-  // a flex item and must be told to take the full width) — this makes the
-  // centered icon/caption align exactly like the award tiles.
+  // The full width of the cell, as the award tiles.
   width: 100%
-  // Same icon-to-caption rhythm as .award (gap $minor); the degree pill
-  // hangs -4px below the icon exactly like the award badge, so its
-  // proximity to the caption is identical across sections.
+  // The rhythm of .award: the pill hangs below the icon the same way.
   gap: $minor
   cursor: default
 
-// The wrapper is the anchor for the absolutely-positioned roman degree —
-// without it the badge would attach to the tile (not the icon) and drift
-// right. Wrapper size = icon size (1em = 52px from the font-size below).
+// The anchor of the roman pill, as large as the icon.
 .chain-icon-wrap
   position: relative
   display: inline-block
   line-height: 0
 
-// The icon is tinted with the metal of the senior earned tier (the tile
-// hands it down as --tier-metal, see entities/achievement tierMetal) — the
-// level reads at a glance, the roman badge doubles it with a number. At
-// 52px vs the awards' 72px — awards are deliberately the larger section.
+// The metal of the senior earned tier (--tier-metal).
 .chain-icon
-  font-size: 52px
+  font-size: $achievement-icon-size
   color: var(--tier-metal, $text-muted)
 
-// Thematic title of the earned tier, centered under the icon. Smaller than
-// the award caption ($tertiary vs $secondary) — achievements are the lighter
-// section, and the smaller type also fits the longest word inside the narrow
-// 8-column cell without a mid-word break. A reserved 2-line min-height keeps
-// 1- and 2-line captions the same height (no ragged bottoms); a longer title
-// wraps in full rather than being clipped to one line.
-//
-// Declared before .chain--locked, which overrides it: the base rule of a class
-// is where its weight, size and colour are read from, and a reader (or a check)
-// that meets the modifier first sees a caption with no type set at all.
+// The earned tier's title, smaller than an award caption to fit the narrow
+// cell; two lines reserved so captions stand even. Declared before
+// .chain--locked, which overrides it.
 .chain-title
   width: 100%
   box-sizing: border-box
   font-size: $tertiary-font-size
-  // 600 and not bold: the same "this is a name" weight as the award caption,
-  // but 12px in a cell of an eight-column grid, where full bold adds width and
-  // pushes the longest titles onto a third line the reserve does not hold.
-  font-weight: 600
-  // Same as the award caption beside it: the name of a thing, not a heading.
+  // 600, not bold: full bold pushes the longest titles onto a third line.
+  font-weight: 700
+  // As the award caption: the name of a thing, not a heading.
   color: $text
   letter-spacing: 0.1px
   text-align: center
   line-height: 1.2
   overflow-wrap: break-word
   min-height: 2.4em
-  // A one-line caption used to sit at the top of that reserve, which put all
-  // 14.4px of its slack between the caption and the bar: 18.4px down to the
-  // bar against 4px up to the icon, and a different distance again on the
-  // neighbouring tile. Centring the caption in the reserve splits the slack
-  // in two and makes both distances the same. A column box centres it without
-  // touching how the text wraps: the caption still fills the cell width and
-  // breaks the same way.
+  // Centred in the reserve, so the caption stands as far from the icon as from the bar.
   display: flex
   flex-direction: column
   justify-content: center
 
-// Fully locked chain (no earned tiers yet): ghost muting via OPACITY, not
-// just a color swap — next to tier-tinted earned icons a merely gray icon
-// still reads as "some dark metal", not as "unearned". Same approach as
-// the original design: the icon goes nearly transparent (0.22), the title
-// and the progress digits drop to 0.45 (the same locked opacity as the
-// popover tier rows). No tier tint; the roman badge is absent by template
-// condition (maxEarnedTier = 0).
+// A chain with no earned tier is ghosted by opacity: a grey icon beside the
+// metals still reads as some dark metal.
 .chain--locked
   .chain-icon
     color: $text-muted
-    opacity: 0.22
+    opacity: $locked-icon-opacity
   .chain-title
     color: $text-muted
-    opacity: 0.45
+    opacity: $locked-text-opacity
   .chain-progress
-    opacity: 0.45
+    opacity: $locked-text-opacity
 
-// Roman degree of the earned tier — a pill badge in the bottom-right
-// corner of the icon, drawn exactly as the award badge beside it: filled with
-// the tier metal under a light numeral, and a border in the page colour that
-// lifts it off the icon it overlaps. The fill is the metal and not a dark
-// shade under a metal numeral: that shade was the one dark patch on a light
-// page, outside the four metals every tile is drawn in.
+// The roman pill of the earned tier, drawn as the award badge: the metal under
+// a light numeral, a border in the page colour.
 .chain-degree
   position: absolute
-  right: -4px
-  bottom: -4px
-  min-width: 16px
-  height: 16px
-  padding: 0 4px
+  right: -$minor
+  bottom: -$minor
+  min-width: $tier-pill-size
+  height: $tier-pill-size
+  padding: 0 $minor
   display: inline-flex
   align-items: center
   justify-content: center
   box-sizing: border-box
   font-size: 9px
   font-weight: 700
-  letter-spacing: 0.5px
+  letter-spacing: $tier-pill-letter-spacing
   line-height: 1
   color: var(--tier-badge-text)
   background-color: var(--tier-metal, $text-muted)
@@ -535,10 +277,7 @@ function progressLabel(chain: Chain): string {
   font-variant-numeric: tabular-nums
   text-shadow: 0 0 1px var(--tier-badge-halo)
 
-// Bar colors are unified with the poll bar (`ProgressBar.vue`):
-// background — $progress-bg-overlay, fill — $progress-fill-overlay.
-// The tier color stays on the icon and the roman degree to mark the
-// level, while the bar itself reads like any progress scale site-wide.
+// The colours of ProgressBar: the tier stays on the icon.
 .chain-bar
   width: 70%
   height: 6px
@@ -552,117 +291,11 @@ function progressLabel(chain: Chain): string {
     border-radius: 3px
     transition: width $transition-normal
 
-// Progress digits under the bar: "2200 / 5000" — a short quantitative
-// read on top of the percent scale. Digits only (no units), tabular-nums
-// so the column does not wobble. Low-priority tile meta color/size.
+// Digits only, tabular, so the column does not wobble.
 .chain-progress
   font-size: $tertiary-font-size
   color: $text-muted
   font-variant-numeric: tabular-nums
   line-height: 1
   text-align: center
-
-// --- Rich popover ---
-// The `#content` slot in `<Tooltip>` takes HTML; the tooltip provides
-// padding and max-width, the rest is styled here. The tooltip's
-// white-space: pre-line does not interfere — we render explicit blocks.
-// The tooltip is teleported to body, so the tile's --tier-metal does not
-// cascade into it: each tier row carries the metal of its own tier.
-
-.chain-popover
-  display: flex
-  flex-direction: column
-  gap: 8px
-  // Wide enough for the longest catalog tier title ("Всегда есть что
-  // сказать") + its threshold to sit on ONE line in the tiers table —
-  // tier titles are never ellipsized (see &__tier-title).
-  min-width: 300px
-  white-space: normal
-
-  &__header
-    display: flex
-    align-items: center
-    gap: $small
-
-  &__title
-    flex: 1 1 auto
-    font-size: $secondary-font-size
-    color: $tooltip-text
-
-  // Tiers taken out of tiers there are — a count, not a tier, so nothing here
-  // is tinted by the metal. It used to be two badges: a closed chain said
-  // "Завершено" on a tier fill in upper case, an open one said "X / Y" on this
-  // overlay, so the two differed in wording, fill, colour and case at once.
-  // The one that is gone said nothing new either: the tier table below lights
-  // all four of its rows, and the tile carries the roman numeral.
-  &__badge
-    flex: 0 0 auto
-    padding: 2px 6px
-    font-size: 10px
-    font-weight: 600
-    line-height: 1
-    color: $tooltip-text
-    // The tooltip surface is dark in BOTH themes (see $tooltip-bg), so the
-    // shade over it is a white overlay rather than a theme token, exactly as
-    // in the tier list's divider below.
-    background-color: rgba(255, 255, 255, 0.12)
-    border-radius: $border-radius
-    letter-spacing: 0.5px
-
-  &__desc
-    margin: 0
-    font-size: $secondary-font-size
-    line-height: 1.4
-    color: $tooltip-text
-    opacity: 0.8
-
-  &__progress
-    margin: 0
-    font-size: $secondary-font-size
-    color: $tooltip-text
-
-  &__tiers
-    margin: 4px 0 0
-    padding: 0
-    list-style: none
-    display: flex
-    flex-direction: column
-    gap: 2px
-    border-top: 1px solid rgba(255, 255, 255, 0.08)
-    padding-top: 6px
-
-  &__tier
-    display: grid
-    grid-template-columns: 22px 1fr auto
-    align-items: center
-    gap: $small
-    padding: 2px 0
-    font-size: $secondary-font-size
-    color: $tooltip-text
-
-    &--locked
-      opacity: 0.45
-
-  // The same badge as on the tile: metal fill, light numeral.
-  &__tier-degree
-    text-align: center
-    font-size: 10px
-    font-weight: 700
-    color: var(--tier-badge-text)
-    background-color: var(--tier-metal, $text-muted)
-    border-radius: $minor
-    padding: 2px 0
-    line-height: 1
-    text-shadow: 0 0 1px var(--tier-badge-halo)
-
-  // Never truncated: every catalog title fits the popover width in one
-  // line (see min-width above); anything longer wraps whole instead of
-  // ellipsizing — a clipped tier title is unreadable.
-  &__tier-title
-    overflow-wrap: break-word
-
-  &__tier-threshold
-    font-variant-numeric: tabular-nums
-    opacity: 0.75
-    font-size: 11px
 </style>

@@ -9,7 +9,7 @@ namespace DM.Web.API.Features.Moderation.Profiles;
 /// author render through the shared <see cref="UserMapper"/>.
 /// </summary>
 [Mapper]
-internal partial class ModeratedProfileNoteMapper
+public partial class ModeratedProfileNoteMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;

@@ -18,7 +18,6 @@ internal class GameInactivityWarningNotificationGenerator : BaseNotificationGene
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public GameInactivityWarningNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -30,7 +29,7 @@ internal class GameInactivityWarningNotificationGenerator : BaseNotificationGene
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var data = await _dbContext.Games
+        var gameData = await _dbContext.Games
             .Where(g => g.GameId == entityId)
             .Select(g => new
             {
@@ -48,27 +47,24 @@ internal class GameInactivityWarningNotificationGenerator : BaseNotificationGene
             })
             .FirstOrDefaultAsync();
 
-        if (data == null)
+        if (gameData == null)
         {
             yield break;
         }
 
-        // Notify Master, Assistants, and Active Players
-        var usersInterested = new HashSet<Guid> { data.MasterId };
-        usersInterested.UnionWith(data.AssistantIds);
-        usersInterested.UnionWith(data.ActivePlayerIds);
+        var usersInterested = new HashSet<Guid> { gameData.MasterId };
+        usersInterested.UnionWith(gameData.AssistantIds);
+        usersInterested.UnionWith(gameData.ActivePlayerIds);
 
-        // No ActorId: nobody performed this. The warning comes from the schedule
-        // that watches a game go a month without posts, and MasterUsername below
-        // names the game's master for the text, not an actor to filter on.
+        // No ActorId: the warning comes from a schedule.
         yield return new CreateNotification
         {
-            UsersInterested = usersInterested.ToArray(),
+            UsersInterested = usersInterested,
             Metadata = new
             {
-                GameId = data.GameId.EncodeToReadable(data.Title),
-                GameTitle = data.Title,
-                MasterUsername = data.MasterUsername
+                GameId = gameData.GameId.EncodeToReadable(gameData.Title),
+                GameTitle = gameData.Title,
+                gameData.MasterUsername
             }
         };
     }

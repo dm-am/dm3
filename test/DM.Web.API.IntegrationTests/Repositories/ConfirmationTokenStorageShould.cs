@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Account.Features.PasswordChange;
 using DM.Domain.Account.Features.Tokens;
@@ -13,7 +10,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbToken = DM.Infrastructure.Persistence.Entities.Account.Token;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
@@ -21,15 +18,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// The value a confirmation letter carries is not in the database.
 /// </summary>
 /// <remarks>
-/// A password reset, an activation and an email change are redeemed by knowing a
-/// value, which makes that value a credential and not an identifier. It used to be
-/// stored as itself: Tokens.TokenId held exactly what the letter carried, so a
-/// single read of that table — a dump, a backup, a copy restored for debugging, an
-/// open console — handed over every account with an unspent token, without a
-/// password and without access to the mailbox.
-///
-/// Runs against the container Postgres, because what is asserted is the content of
-/// a row and the behaviour of a lookup by hash, not the shape of a call.
+/// The value a letter carries is a credential, so the row keeps its hash. Against the container Postgres: the row's
+/// content and a lookup by hash are asserted.
 /// </remarks>
 public class ConfirmationTokenStorageShould : IntegrationTestBase
 {
@@ -93,11 +83,7 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
     /// <summary>
     /// An expired secret is refused by the lookup itself.
     /// </summary>
-    /// <remarks>
-    /// The type, the removal flag and the age used to be checked by whoever
-    /// happened to call first, and one path — reading token info for the form —
-    /// called the lookup with no check at all.
-    /// </remarks>
+    /// <remarks>The type, the removal flag and the age are checked in the lookup, for every caller.</remarks>
     [Fact]
     public async Task RefuseASecretOlderThanTheWindow()
     {
@@ -129,13 +115,7 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
     /// <summary>
     /// A confirmed change of address spends the link it came in through.
     /// </summary>
-    /// <remarks>
-    /// The spending was written as a search by row identifier while the value in
-    /// hand is the secret, so it matched no row whatever it was handed: nothing
-    /// was written, nothing failed, and the link stayed live. A substitute cannot
-    /// show that - it answers the call it was told to expect - so the second
-    /// lookup here is made against the row the first one left behind.
-    /// </remarks>
+    /// <remarks>The second lookup runs against the row the first one left behind.</remarks>
     [Fact]
     public async Task SpendTheLinkTheSecretCameFrom()
     {
@@ -171,11 +151,7 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A change of address is confirmed from the new mailbox by whoever asked
-    /// for it. The owner's answer to a request that is not theirs is a new
-    /// password, and that answer has to reach the request too: otherwise the
-    /// address moves to the intruder after the owner has already locked them
-    /// out, from a mailbox no password change can touch.
+    /// The owner's new password spends a change of address somebody else asked for.
     /// </summary>
     [Fact]
     public async Task DropThePendingAddressAndItsLinkWithThePassword()
@@ -211,12 +187,10 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// An invitation carries no secret, and that is the deliberate other half of
-    /// the rule: it is redeemed by the addressee while signed in, so its identifier
-    /// is an identifier.
+    /// Every token sent by mail keeps the hash of its secret, across the whole shared database.
     /// </summary>
     [Fact]
-    public async Task LeaveInvitationsWithoutASecret()
+    public async Task KeepTheHashOfEveryMailedToken()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
@@ -231,20 +205,5 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
             "a token that is redeemed by knowing its value keeps the hash of that value");
     }
 
-    private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
-    {
-        var userId = Guid.NewGuid();
-        dbContext.Users.Add(new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id is truncated
-            // rather than used whole.
-            Username = $"tok{userId:N}"[..20],
-            Email = $"{userId:N}@example.com",
-            PasswordHash = "hash",
-            Salt = "salt",
-        });
-        await dbContext.SaveChangesAsync();
-        return userId;
-    }
+    private static Task<Guid> AddUserAsync(DmDbContext dbContext) => UserRows.AddAsync(dbContext, "tok");
 }

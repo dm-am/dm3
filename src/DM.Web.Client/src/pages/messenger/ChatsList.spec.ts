@@ -2,36 +2,32 @@
  * @vitest-environment jsdom
  */
 
-/**
- * A list still loading and a list that failed to load are not an empty list,
- * and the messenger said "Нет переписок" — with a hint to go find someone — to
- * all three. The store had the facts the whole time: it sets an error and nulls
- * the page. The forum's comment list carries the rule in a comment of its own:
- * a failed load must not be presented as fake emptiness.
- *
- * One gate for the class. GameCharacters.spec.ts holds the same two cases for
- * the roster, the other page of this slice that answered the same way.
- */
-import { describe, expect, it, vi } from "vitest";
-import { defineComponent, h, ref, type Component } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+// A list loading and a list that failed are not an empty list: the store sets
+// an error and nulls the page (GameCharacters.spec.ts holds the same for the roster).
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { useMessagingStore } from "@/entities/message";
+import { messagingApi, useMessagingStore } from "@/entities/message";
+import { useAuthStore, userApi } from "@/entities/user";
 import ChatsList from "./ChatsList.vue";
+
+enableAutoUnmount(afterEach);
+afterEach(() => {
+  vi.restoreAllMocks();
+  vi.useRealTimers();
+});
+
+const push = vi.hoisted(() => vi.fn());
 
 vi.mock("vue-router", () => ({
   useRoute: () => ({ query: {} }),
-  useRouter: () => ({ push: vi.fn() }),
+  useRouter: () => ({ push }),
   RouterLink: { template: "<a><slot /></a>" },
 }));
 
 const EMPTY = "Нет переписок";
 
-function render(
-  state: { loading?: boolean; error?: string | null } = {},
-  props: { narrow?: boolean } = {},
-  component: Component = ChatsList,
-) {
+function render(state: { loading?: boolean; error?: string | null } = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useMessagingStore();
@@ -41,8 +37,7 @@ function render(
   store.loadingChats = state.loading ?? false;
   store.error = state.error ?? null;
 
-  const wrapper = mount(component, {
-    props,
+  const wrapper = mount(ChatsList, {
     attachTo: document.body,
     global: {
       plugins: [pinia],
@@ -86,39 +81,110 @@ describe("ChatsList", () => {
     expect(wrapper.text()).toContain(EMPTY);
   });
 
-  /**
-   * Narrow, the list keeps the pictures and the counts; its search is a
-   * magnifier that asks for the words back, and the caret goes in the field.
-   */
-  it("searches from its magnifier when narrow, and asks to be widened", async () => {
-    // The page that holds the list, as MessengerPage does: narrow until the
-    // list asks for its words.
-    const narrow = ref(true);
-    const widen = vi.fn(() => {
-      narrow.value = false;
-    });
-    const Host = defineComponent(
-      () => () => h(ChatsList, { narrow: narrow.value, onWiden: widen }),
-    );
-    const { wrapper } = render({}, {}, Host);
-
-    expect(wrapper.find("input").exists()).toBe(false);
-    const magnifier = wrapper.get('button[aria-label="Поиск собеседника"]');
-    await magnifier.trigger("click");
-    await flushPromises();
-
-    expect(widen).toHaveBeenCalledTimes(1);
-    expect(document.activeElement).toBe(wrapper.get("input").element);
-    wrapper.unmount();
-  });
-
-  it("has the field of the search when it has its words", () => {
+  // The list stands whole at one width: no magnifier stands in for the field.
+  it("always has the field of the search", () => {
     const { wrapper } = render();
 
     expect(wrapper.get("input").attributes("placeholder")).toBe(
       "Поиск собеседника",
     );
-    expect(wrapper.find(".search-open").exists()).toBe(false);
-    wrapper.unmount();
+    expect(
+      wrapper.find('button[aria-label="Поиск собеседника"]').exists(),
+    ).toBe(false);
+  });
+});
+
+// The field over the list: the reader's people and groups before a name, anyone by name after.
+describe("ChatsList, the search of a person", () => {
+  const ME = "Ланселот";
+  const person = (username: string) => ({ username, picture: null });
+  const chat = (id: string, over: Record<string, unknown>) => ({
+    id,
+    unreadMessagesCount: 0,
+    ...over,
+  });
+
+  function renderSearch() {
+    const conversations = vi.spyOn(messagingApi, "getChats").mockResolvedValue({
+      data: {
+        resources: [
+          chat("d-1", {
+            type: "Direct",
+            participants: [person(ME), person("Мордред")],
+          }),
+          chat("g-1", {
+            type: "Group",
+            title: "Круглый стол",
+            participants: [person(ME)],
+          }),
+          chat("d-2", {
+            type: "Direct",
+            participants: [person(ME), person("Артур")],
+          }),
+          chat("g-2", {
+            type: "Group",
+            title: null,
+            participants: [person(ME)],
+          }),
+        ],
+      },
+      error: null,
+    } as never);
+    const { wrapper } = render();
+    useAuthStore().user = { username: ME } as never;
+    push.mockClear();
+    return { wrapper, conversations };
+  }
+
+  const offered = (wrapper: ReturnType<typeof renderSearch>["wrapper"]) =>
+    wrapper.findAll(".autocomplete-item").map((row) => row.text());
+
+  it("offers the people and groups of the reader's conversations by name before a name is typed, and opens the one picked", async () => {
+    const { wrapper, conversations } = renderSearch();
+
+    const field = wrapper.get("input");
+    await field.trigger("focusin");
+    await field.trigger("focus");
+    await flushPromises();
+
+    expect(conversations).toHaveBeenCalledWith({ take: 200 });
+    expect(offered(wrapper)).toEqual([
+      "Артур",
+      "Групповая переписка",
+      "Круглый стол",
+      "Мордред",
+    ]);
+    await wrapper.findAll(".autocomplete-item")[2].trigger("mousedown");
+
+    expect(push).toHaveBeenCalledWith({
+      name: "chat",
+      params: { id: "g-1" },
+      query: {},
+    });
+  });
+
+  it("writes to a person found by name, and never offers the reader to themselves", async () => {
+    vi.useFakeTimers();
+    vi.spyOn(userApi, "searchUsers").mockResolvedValue({
+      data: { resources: [person(ME), person("Моргана")] },
+      error: null,
+    } as never);
+    const { wrapper } = renderSearch();
+
+    const field = wrapper.get("input");
+    await field.trigger("focus");
+    await field.setValue("Мо");
+    await vi.advanceTimersByTimeAsync(200);
+    await flushPromises();
+
+    expect(offered(wrapper)).toEqual(["Моргана"]);
+    await wrapper.get(".autocomplete-item").trigger("mousedown");
+
+    expect(push).toHaveBeenCalledWith({
+      name: "direct-message",
+      params: { username: "Моргана" },
+      query: {},
+    });
+    expect((field.element as HTMLInputElement).value).toBe("");
   });
 });

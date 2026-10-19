@@ -9,13 +9,9 @@ import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 
 /**
- * Only `shared` primitives may be registered globally. A global component is
- * usable in any template without an import, so `boundaries/dependencies` has no
- * edge to refuse and `vue/no-undef-components` skips the name outright — its
- * whitelist is read out of this very file. A component of a sliced layer
- * registered here would therefore let any slice reach another one past its `@x`
- * door with both gates green; `shared` sits below every layer, so a hidden edge
- * to it breaks no rule. Asserted by fsdBoundaries.spec.ts.
+ * Only shared primitives: a global component has no import for the layer rules
+ * to check, and shared sits below every layer (fsdBoundaries.spec.ts). The
+ * vue/no-undef-components whitelist is read out of this file.
  */
 export function registerGlobalComponents(app: App) {
   app
@@ -26,4 +22,19 @@ export function registerGlobalComponents(app: App) {
     .component("FormField", FormField)
     .component("Button", Button)
     .component("Dialog", Dialog);
+}
+
+// What vue-tsc checks a template's use of each of them against, as if the
+// template had imported it; fsdBoundaries.spec.ts holds this list to the one
+// above.
+declare module "vue" {
+  export interface GlobalComponents {
+    PageTitle: typeof PageTitle;
+    BlockTitle: typeof BlockTitle;
+    SecondaryText: typeof SecondaryText;
+    Form: typeof Form;
+    FormField: typeof FormField;
+    Button: typeof Button;
+    Dialog: typeof Dialog;
+  }
 }

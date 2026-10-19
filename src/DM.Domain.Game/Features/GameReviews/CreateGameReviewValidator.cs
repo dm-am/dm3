@@ -3,9 +3,6 @@ using FluentValidation;
 
 namespace DM.Domain.Game.Features.GameReviews;
 
-/// <summary>
-/// Validator for CreateGameReview
-/// </summary>
 internal class CreateGameReviewValidator : AbstractValidator<CreateGameReview>
 {
     public CreateGameReviewValidator()
@@ -18,7 +15,7 @@ internal class CreateGameReviewValidator : AbstractValidator<CreateGameReview>
             .NotEmpty()
             .WithMessage("Введите текст рецензии")
             .MaximumLength(GameReviewFieldLimits.TextMaxLength)
-            .WithMessage("Рецензия не длиннее 5000 символов");
+            .WithMessage($"Рецензия не длиннее {GameReviewFieldLimits.TextMaxLength} символов");
 
         // A review renders on the Comment surface, which does not declare
         // [private]: the tag is not markup there and hides nothing.

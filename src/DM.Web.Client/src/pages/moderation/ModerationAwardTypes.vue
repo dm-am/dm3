@@ -1,9 +1,4 @@
 <script setup lang="ts">
-/**
- * ModerationAwardTypes — the award-type catalog (timeless).
- * Edit title / description / icon / tier / sortOrder. Deactivate (soft).
- * Admin only — the route is gated in the router meta.
- */
 import { onMounted, ref, reactive, type Ref } from "vue";
 import { useModal } from "vue-final-modal";
 import {
@@ -15,23 +10,22 @@ import {
 import type { AwardType } from "@/shared/api/models/achievements";
 import { SecondaryText } from "@/shared/ui/Layout";
 import { GameIcon } from "@/shared/ui/Icon";
+import { ActionResult } from "@/shared/ui/ActionResult";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { refusalHere } from "@/shared/lib/errors";
 import AwardTypeEditDialog from "./dialogs/AwardTypeEditDialog.vue";
-import { useRoleGate } from "./lib/useRoleGate";
-import { sectionRole } from "./lib/sections";
 
 // A sub-page of the awards tab, so it wears that tab's row.
-const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-awards"));
 const {
   adminAwardTypes: awardTypes,
+  adminFailed: failed,
   loadAdmin: load,
   reload,
 } = useContestSeries();
 
 onMounted(() => load());
 
-// --- Edit dialog (shared Dialog idiom) ---
-// Null until the first openEdit sets it; the dialog only mounts after that,
-// so the non-null cast below is safe.
+// Set before the dialog first mounts, so the non-null cast below is safe.
 const editing = ref<AwardType | null>(null);
 
 const { open: openEditDialog, close: closeEditDialog } = useModal({
@@ -51,8 +45,24 @@ function openEdit(t: AwardType) {
   openEditDialog();
 }
 
+/** A refused "Скрыть" or "Вернуть", on a line under the row it was pressed in. */
+const toggleRefusal = ref<{ id: string; text: string } | null>(null);
+
 async function toggleActive(t: AwardType) {
-  await achievementApi.updateAwardType(t.id, { isActive: !t.isActive });
+  toggleRefusal.value = null;
+  const { error } = await achievementApi.updateAwardType(t.id, {
+    isActive: !t.isActive,
+  });
+  if (error) {
+    const text = refusalHere(
+      error,
+      t.isActive
+        ? "Не удалось скрыть тип награды"
+        : "Не удалось вернуть тип награды",
+    );
+    if (text) toggleRefusal.value = { id: t.id, text };
+    return;
+  }
   await reload();
 }
 </script>
@@ -60,15 +70,19 @@ async function toggleActive(t: AwardType) {
 <template>
   <page-title>Каталог типов наград</page-title>
 
-  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
-
-  <section v-else class="award-types-admin">
+  <section class="award-types-admin">
     <SecondaryText>
       Типы наград общие для всех серий конкурсов. Скрытый тип не предлагается
       при выдаче награды, а уже выданные награды этого типа остаются.
     </SecondaryText>
 
-    <ul class="types-list">
+    <ErrorState
+      v-if="failed"
+      message="Не удалось загрузить типы наград"
+      :retry="() => load(true)"
+    />
+
+    <ul v-else class="types-list">
       <li
         v-for="t in awardTypes ?? []"
         :key="t.id"
@@ -100,13 +114,19 @@ async function toggleActive(t: AwardType) {
             {{ t.isActive ? "Скрыть" : "Вернуть" }}
           </button>
         </div>
+        <ActionResult
+          v-if="toggleRefusal?.id === t.id"
+          :text="toggleRefusal.text"
+          class="type-refusal"
+        />
       </li>
     </ul>
   </section>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
+@use "@/pages/moderation/lib/catalogCode" as *
 
 .award-types-admin
   display: flex
@@ -131,21 +151,24 @@ async function toggleActive(t: AwardType) {
   border: 1px solid $border
 
   &.is-inactive
-    opacity: 0.55
+    opacity: $muted-opacity
 
-// The codes break where the words do, at the comma, and inside a code only
-// where a column is narrower than one of them.
+// A line of its own under the row it answers, inside the row's frame.
+.type-refusal
+  grid-column: 1 / -1
+  --action-result-margin: 0
+
+// Codes break at the comma, and inside a code only where a column is narrower.
 .type-info
   overflow-wrap: anywhere
 
-// The metal the profile draws this award in (see entities/achievement
-// tierMetal); a tier without one stays neutral, as it does there.
+// The metal the profile draws this award in (tierMetal); without one it stays neutral.
 .type-icon
   font-size: 40px
   color: var(--tier-metal, $text-muted)
 
 .type-title
-  font-weight: 500
+  font-weight: 400
   margin-bottom: $tiny
 
 // A number stays with its word: "тир 1", "порядок 3".
@@ -163,9 +186,7 @@ async function toggleActive(t: AwardType) {
   color: $text-muted
 
   code
-    background: $bg-element-accent
-    padding: 0 4px
-    border-radius: 3px
+    +catalog-code
 
 .type-desc
   margin: $tiny 0 0

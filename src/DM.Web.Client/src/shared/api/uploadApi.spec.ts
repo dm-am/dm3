@@ -3,24 +3,17 @@
  */
 
 /**
- * The uploads list pages with skip/take, like every other list.
- *
- * /v1/uploads used to be the one endpoint that paged with number/size, and when
- * it was brought onto the shared vocabulary this caller was left behind. Nothing
- * caught it: the server ignores a parameter it does not know rather than
- * refusing it, `vue-tsc` was happy because the signature declared number/size
- * itself, and the architecture check that reads the retired names reads them off
- * the API assembly, which cannot see a client. So GET /v1/uploads answered 200
- * with skip=0&take=20 forever — page two of "Мои файлы" was page one, and the
- * paging line under it said "1" on every page.
- *
- * Asserted on the wire rather than on the signature: the page number is the
- * caller's own idea and the conversion is the only thing that matters.
+ * The uploads list pages with skip/take on the wire: the server ignores an
+ * unknown parameter, so number/size answered page one forever.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("./client", () => ({
-  default: { get: vi.fn().mockResolvedValue({ data: null, error: null }) },
+  default: {
+    get: vi.fn().mockResolvedValue({ data: null, error: null }),
+    postFile: vi.fn().mockResolvedValue({ data: null, error: null }),
+    patch: vi.fn().mockResolvedValue({ data: null, error: null }),
+  },
 }));
 
 import Api from "./client";
@@ -55,5 +48,48 @@ describe("uploadApi.getUploads", () => {
     const [, params] = vi.mocked(Api.get).mock.calls[0];
     expect(Object.keys(params as object)).not.toContain("number");
     expect(Object.keys(params as object)).not.toContain("size");
+  });
+});
+
+/** Who sees a file of a post: chosen with the file, changed by its own request. */
+describe("uploadApi audience", () => {
+  beforeEach(() => {
+    vi.mocked(Api.postFile).mockClear();
+    vi.mocked(Api.patch).mockClear();
+  });
+
+  const formOf = () => vi.mocked(Api.postFile).mock.calls[0][1] as FormData;
+
+  it("sends the mark in the form of the upload, a field per character", async () => {
+    await uploadApi.directUpload(new File(["x"], "map.png"), "PostAttachment", {
+      targetId: "p-1",
+      audience: { visibleTo: "Selected", characterIds: ["c-1", "c-2"] },
+    });
+
+    expect(formOf().get("visibleTo")).toBe("Selected");
+    expect(formOf().getAll("characterIds")).toEqual(["c-1", "c-2"]);
+  });
+
+  it("sends no mark for an upload that names none", async () => {
+    await uploadApi.directUpload(new File(["x"], "me.png"), "UserAvatar");
+
+    expect(formOf().has("visibleTo")).toBe(false);
+    expect(formOf().has("characterIds")).toBe(false);
+  });
+
+  it("changes the mark by the file's address, with no characters for every reader", async () => {
+    await uploadApi.updateAudience("u-1", {
+      visibleTo: "All",
+      characterIds: ["c-1"],
+    });
+    await uploadApi.updateAudience("u-1", {
+      visibleTo: "Selected",
+      characterIds: ["c-1"],
+    });
+
+    expect(vi.mocked(Api.patch).mock.calls).toEqual([
+      ["uploads/u-1", { visibleTo: "All" }],
+      ["uploads/u-1", { visibleTo: "Selected", characterIds: ["c-1"] }],
+    ]);
   });
 });

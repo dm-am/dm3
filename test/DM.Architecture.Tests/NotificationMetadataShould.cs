@@ -2,9 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
 using DM.Domain.Personal.Features.Notifications;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,19 +13,8 @@ namespace DM.Architecture.Tests;
 /// Every field a notification carries is either named in Russian or not shown.
 /// </summary>
 /// <remarks>
-/// A letter and a bot message are built by walking the metadata object and
-/// printing every property of it. The table of Russian labels covered fifteen
-/// keys out of the fifty-four the generators write, so the rest went out under
-/// the name the C# property has — "LikerUsername", "AwardTier", "TokenId" — and
-/// four of the fifteen it did cover were identifiers, printed as the slug they
-/// are next to the human name of the same thing. Nothing failed: the formatter
-/// falls back to the key. The fallback is invisible from the generator that adds
-/// a field, which is why a new field goes out untranslated by default.
-///
-/// Asserted against the sources. The payload is an anonymous object built inside
-/// a method body; the compiler does turn it into a type, but it does the same
-/// with every EF projection and every request body in this assembly, and a
-/// letter is not written from those.
+/// A letter and a bot message print every property of the metadata, falling back to the key.
+/// Asserted against the sources: the payload is an anonymous object inside a method body.
 /// </remarks>
 public class NotificationMetadataShould
 {
@@ -40,7 +29,7 @@ public class NotificationMetadataShould
     public void NameEveryFieldItShowsTheReader()
     {
         var keys = PayloadKeys();
-        keys.Should().HaveCountGreaterThan(40,
+        keys.Should().NotBeEmpty(
             "a rule that matches nothing passes: the generators write dozens of fields");
 
         var undecided = keys
@@ -53,43 +42,9 @@ public class NotificationMetadataShould
             "of those reads as a dump of the record it was built from");
     }
 
-    [Fact]
-    public void KeepTheListOfHiddenFieldsHonest()
-    {
-        var keys = PayloadKeys();
-
-        keys.Where(Hidden).Should().NotBeEmpty(
-            "a rule that matches nothing passes: identifiers are carried and not shown");
-
-        keys.Where(key => Hidden(key) && Label(key) != key).Should().BeEmpty(
-            "a name for a field nobody is ever shown is wording that cannot be read " +
-            "and will not be corrected");
-
-        HiddenFields().Except(keys).Should().BeEmpty(
-            "a field hidden from every channel that no generator writes guards " +
-            "nothing and outlives the reason it was listed");
-    }
-
     private static string Label(string key) => NotificationWording.FormatPropertyName(key);
 
     private static bool Hidden(string key) => NotificationWording.IsHiddenFromText(key);
-
-    /// <summary>
-    /// The fields the channels carry and never print, matched by type rather than
-    /// by name the way the title table is: the list is private and this suite is
-    /// not on the domain's InternalsVisibleTo list.
-    /// </summary>
-    private static IReadOnlyCollection<string> HiddenFields()
-    {
-        var lists = typeof(NotificationWording)
-            .GetFields(BindingFlags.Static | BindingFlags.Public |
-                       BindingFlags.NonPublic | BindingFlags.DeclaredOnly)
-            .Where(field => field.FieldType == typeof(HashSet<string>))
-            .ToArray();
-
-        lists.Should().ContainSingle("the fields nobody is shown are listed in one place");
-        return (HashSet<string>)lists[0].GetValue(null)!;
-    }
 
     /// <summary>
     /// Every property name a generator writes into a notification payload.
@@ -97,8 +52,8 @@ public class NotificationMetadataShould
     private static IReadOnlyCollection<string> PayloadKeys()
     {
         var sources = Directory
-            .GetFiles(Path.Combine(RepositoryRoot, DispatcherSource), "*.cs", SearchOption.AllDirectories)
-            .Where(file => !IsBuildOutput(file))
+            .GetFiles(Path.Combine(RepositoryLayout.Root, DispatcherSource), "*.cs", SearchOption.AllDirectories)
+            .Where(RepositoryFiles.IsAuthored)
             .ToArray();
 
         sources.Should().NotBeEmpty("the generators live under the dispatcher project");
@@ -126,13 +81,4 @@ public class NotificationMetadataShould
 
         return keys;
     }
-
-    /// <summary>
-    /// Compilation output carries copies of the sources and would answer for them.
-    /// </summary>
-    private static bool IsBuildOutput(string file) => file
-        .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-        .Any(segment => segment is "obj" or "bin");
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

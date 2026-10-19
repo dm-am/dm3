@@ -6,7 +6,7 @@ namespace DM.Domain.Core.Enums;
 public enum UserActivityFilter
 {
     /// <summary>
-    /// Users active within the last month (default)
+    /// Users active within <see cref="Configuration.ActivityPolicy.ActivePeriod" /> (default)
     /// </summary>
     Active = 0,
 
@@ -16,12 +16,7 @@ public enum UserActivityFilter
     All = 1,
 
     /// <summary>
-    /// Only users pending activation (requires SeniorModerator+)
-    /// </summary>
-    Pending = 2,
-
-    /// <summary>
-    /// Users inactive (no activity in last month)
+    /// Users not active within <see cref="Configuration.ActivityPolicy.ActivePeriod" />
     /// </summary>
     Inactive = 3
 }

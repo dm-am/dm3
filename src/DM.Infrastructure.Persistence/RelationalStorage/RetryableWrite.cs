@@ -21,8 +21,6 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 /// in the soft-delete cases it takes the side effects while writing no deletion.
 /// That is the general rule; what exactly would have stayed tracked is a fact
 /// about each caller and stays at the call site.
-///
-/// Nineteen writes carried this preamble word for word before it lived here.
 /// </remarks>
 internal static class RetryableWrite
 {

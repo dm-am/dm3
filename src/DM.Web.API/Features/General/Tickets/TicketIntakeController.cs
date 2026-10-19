@@ -1,4 +1,3 @@
-using System.Collections.Generic;
 using System.Net;
 using System.Threading.Tasks;
 using DM.Web.API.Features.Moderation.Tickets;
@@ -28,10 +27,9 @@ namespace DM.Web.API.Features.General.Tickets;
 [Tags("Tickets")]
 public class TicketIntakeController : ControllerBase
 {
-    private readonly ITicketIntakeApiService _ticketIntakeApiService;
+    private readonly TicketIntakeApiService _ticketIntakeApiService;
 
-    /// <inheritdoc />
-    public TicketIntakeController(ITicketIntakeApiService ticketIntakeApiService)
+    public TicketIntakeController(TicketIntakeApiService ticketIntakeApiService)
     {
         _ticketIntakeApiService = ticketIntakeApiService;
     }
@@ -58,15 +56,6 @@ public class TicketIntakeController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> CreateTicketIntake([FromBody] CreateTicketIntakeRequest request)
     {
-        // Honeypot check for bot protection
-        if (!string.IsNullOrWhiteSpace(request.Website))
-        {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                ["subject"] = "Не удалось отправить обращение",
-            }, RefusalMessage.InvalidData);
-        }
-
         var response = await _ticketIntakeApiService.CreateTicket(request);
         return StatusCode(StatusCodes.Status201Created, response);
     }

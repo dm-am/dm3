@@ -1,22 +1,24 @@
 using System;
 using DM.Domain.Community.Features.UserEndorsements;
-using DM.Testing;
+using DM.Domain.Core.Exceptions;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.UserEndorsements;
 
-public class UpdateUserEndorsementValidatorShould : UnitTestBase
+public class UpdateUserEndorsementValidatorShould
 {
     private readonly UpdateUserEndorsementValidator validator = new();
 
-    [Fact]
-    public void PassForValidInput()
+    [Theory]
+    [InlineData("Updated endorsement text")]
+    [InlineData("Я")]
+    public void PassForValidInput(string text)
     {
         var input = new UpdateUserEndorsement
         {
             EndorsementId = Guid.NewGuid(),
-            Text = "Updated endorsement text"
+            Text = text
         };
 
         var result = validator.TestValidate(input);
@@ -33,7 +35,7 @@ public class UpdateUserEndorsementValidatorShould : UnitTestBase
         };
 
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(x => x.EndorsementId);
+        result.ShouldHaveValidationErrorFor(x => x.EndorsementId).WithErrorMessage(ValidationError.Empty);
     }
 
     [Fact]
@@ -55,11 +57,11 @@ public class UpdateUserEndorsementValidatorShould : UnitTestBase
         var input = new UpdateUserEndorsement
         {
             EndorsementId = Guid.NewGuid(),
-            Text = new string('a', 5001)
+            Text = new string('a', UserEndorsementFieldLimits.TextMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(x => x.Text);
+        result.ShouldHaveValidationErrorFor(x => x.Text).WithErrorMessage(ValidationError.Long);
     }
 
     [Fact]
@@ -68,10 +70,21 @@ public class UpdateUserEndorsementValidatorShould : UnitTestBase
         var input = new UpdateUserEndorsement
         {
             EndorsementId = Guid.NewGuid(),
-            Text = new string('a', 5000)
+            Text = new string('a', UserEndorsementFieldLimits.TextMaxLength)
         };
 
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
     }
+
+    /// <summary>
+    /// Present and blank is not "keep what is stored": the service trims the text
+    /// before storing it, so a text of spaces would store an empty recommendation.
+    /// </summary>
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void FailWhenTextIsBlank(string text) =>
+        validator.TestValidate(new UpdateUserEndorsement { EndorsementId = Guid.NewGuid(), Text = text })
+            .ShouldHaveValidationErrorFor(x => x.Text).WithErrorMessage(ValidationError.Empty);
 }

@@ -14,15 +14,9 @@ namespace DM.Web.API.HostedServices;
 /// What counts as expired and what the purge touches belongs to
 /// <see cref="ISessionCleanupProcessor" />; this only decides how often to ask.
 /// </remarks>
-internal class SessionCleanupService : PeriodicHostedService
+internal class SessionCleanupService(IServiceProvider serviceProvider, ILogger<SessionCleanupService> logger)
+    : PeriodicHostedService(serviceProvider, logger)
 {
-    private readonly ILogger<SessionCleanupService> _logger;
-
-    public SessionCleanupService(
-        IServiceProvider serviceProvider,
-        ILogger<SessionCleanupService> logger)
-        : base(serviceProvider, logger) => _logger = logger;
-
     /// <inheritdoc />
     protected override string Tag => "[Session Cleanup]";
 
@@ -32,20 +26,13 @@ internal class SessionCleanupService : PeriodicHostedService
     /// <inheritdoc />
     protected override async Task RunOnce(IServiceProvider scope, CancellationToken cancellationToken)
     {
-        _logger.LogDebug("[Session Cleanup] Starting session cleanup");
-
         var purged = await scope
             .GetRequiredService<ISessionCleanupProcessor>()
             .PurgeExpiredAsync(cancellationToken);
 
         if (purged.SessionsRemoved > 0)
         {
-            _logger.LogInformation("[Session Cleanup] Removed {Count} expired session(s)",
-                purged.SessionsRemoved);
-        }
-        else
-        {
-            _logger.LogDebug("[Session Cleanup] No sessions to clean up");
+            Logger.LogInformation("{Tag} Removed {Count} expired session(s)", Tag, purged.SessionsRemoved);
         }
     }
 }

@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -7,7 +8,6 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Features.Comments;
-using DM.Domain.Game.Features.Games;
 using Microsoft.Extensions.Logging;
 
 namespace DM.Domain.Game.Features.Inactivity;
@@ -23,31 +23,16 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
     private readonly IGuidFactory _guidFactory;
     private readonly ILogger<GameInactivityProcessor> _logger;
 
-    /// <summary>
-    /// Warning message for inactive games (1 month without posts)
-    /// </summary>
     private const string InactivityWarningMessage =
-        "Месяц без постов. Неделя на активацию. По прошествии срока модуль будет переведен в замороженное состояние. Мастер в любой момент может снова начать эту игру.";
+        "Месяц без постов. Неделя на активацию. По прошествии срока игра будет переведена в замороженное состояние. Мастер в любой момент может снова начать эту игру.";
 
-    /// <summary>
-    /// Warning message for frozen games (3 months frozen)
-    /// </summary>
     private const string ClosureWarningMessage =
-        "Три месяца в замороженном состоянии. Неделя на активацию. По прошествии срока модуль будет переведен в закрытое состояние. Мастер в любой момент может снова начать эту игру.";
+        "Три месяца в замороженном состоянии. Неделя на активацию. По прошествии срока игра будет переведена в закрытое состояние. Мастер в любой момент может снова начать эту игру.";
 
-    /// <summary>
-    /// Inactivity threshold before warning (1 month)
-    /// </summary>
     private static readonly TimeSpan InactivityThreshold = TimeSpan.FromDays(30);
 
-    /// <summary>
-    /// Grace period after warning before action (1 week)
-    /// </summary>
     private static readonly TimeSpan WarningGracePeriod = TimeSpan.FromDays(7);
 
-    /// <summary>
-    /// Time frozen before closure warning (3 months)
-    /// </summary>
     private static readonly TimeSpan FrozenThreshold = TimeSpan.FromDays(90);
 
     public GameInactivityProcessor(
@@ -71,155 +56,81 @@ internal class GameInactivityProcessor : IGameInactivityProcessor
     /// <inheritdoc />
     public async Task WarnInactiveGamesAsync(CancellationToken ct)
     {
-        // One reading of the clock per pass: the cutoff that picks a game as silent
-        // and the timestamp written on it must be the same moment, and a test that
-        // moves the clock has to move the selection with it.
+        // One reading of the clock: the cutoff and the stamp written on the game are the same moment.
         var now = _dateTimeProvider.Now;
-        var gameIds = await _inactivityRepository.GetInactiveGamesToWarn(InactivityThreshold, now, ct);
-
-        foreach (var gameId in gameIds)
-        {
-            try
+        await ProcessAsync(
+            await _inactivityRepository.GetInactiveGamesToWarn(InactivityThreshold, now, ct),
+            async gameId =>
             {
-                // The comment first and the stamp second, which is the reverse of what
-                // the pendency reminder beside this does — a deliberate choice, decided
-                // 2026-08-12, not an oversight.
-                //
-                // The two orders fail differently and the selection for the next pass
-                // runs off the stamp. Stamping first means a failed comment leaves the
-                // game marked as warned: it freezes a week later having never said a
-                // word to anybody. Commenting first means a failed stamp repeats the
-                // same warning next pass. A master who sees the warning twice complains
-                // and it gets fixed; a master whose game freezes in silence has nothing
-                // to complain about and loses the game. The louder failure is the safer
-                // one here, and GameInactivityProcessorShould pins this order.
-                await CreateSystemComment(gameId, InactivityWarningMessage, ct);
-                if (!await _inactivityRepository.SetInactivityWarning(
-                        gameId, InactivityThreshold, now, ct))
-                {
-                    // The game stopped being an unwarned, silent, active one between
-                    // the selection and this write: another instance warned it, the
-                    // master restarted it, or somebody posted. Nothing was written,
-                    // so nothing is announced.
-                    _logger.LogInformation(
-                        "Game {GameId} was no longer silent and unwarned when the pass reached it",
-                        gameId);
-                    continue;
-                }
-
-                await _eventProducer.SendAsync(EventType.GameInactivityWarning, gameId);
-
-                _logger.LogInformation("Sent inactivity warning for game {GameId}", gameId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to warn inactive game {GameId}", gameId);
-            }
-        }
+                // Comment first, stamp second: a failed stamp repeats the warning, while a failed comment
+                // after the stamp would freeze the game in silence.
+                await CreateSystemComment(gameId, InactivityWarningMessage, now);
+                return await _inactivityRepository.SetInactivityWarning(gameId, InactivityThreshold, now, ct);
+            },
+            gameId => _eventProducer.SendAsync(EventType.GameInactivityWarning, gameId));
     }
 
     /// <inheritdoc />
     public async Task FreezeWarnedGamesAsync(CancellationToken ct)
     {
         var now = _dateTimeProvider.Now;
-        var gameIds = await _inactivityRepository.GetWarnedGamesToFreeze(WarningGracePeriod, now, ct);
-
-        foreach (var gameId in gameIds)
-        {
-            try
-            {
-                if (!await _inactivityRepository.FreezeGame(gameId, now, ct))
-                {
-                    // A post or a restart landed between the selection and this
-                    // write, and the game is no longer silent. Freezing it anyway
-                    // would take a running game away from its table.
-                    _logger.LogInformation(
-                        "Game {GameId} came back to life before the freeze reached it", gameId);
-                    continue;
-                }
-
-                await _eventProducer.SendAsync(EventType.StatusGameFrozen, gameId);
-
-                _logger.LogInformation("Froze inactive game {GameId}", gameId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to freeze game {GameId}", gameId);
-            }
-        }
+        await ProcessAsync(
+            await _inactivityRepository.GetWarnedGamesToFreeze(WarningGracePeriod, now, ct),
+            gameId => _inactivityRepository.FreezeGame(gameId, now, ct),
+            gameId => _eventProducer.SendAsync(EventType.StatusGameFrozen, gameId));
     }
 
     /// <inheritdoc />
     public async Task WarnFrozenGamesAsync(CancellationToken ct)
     {
         var now = _dateTimeProvider.Now;
-        var gameIds = await _inactivityRepository.GetFrozenGamesToWarn(FrozenThreshold, now, ct);
-
-        foreach (var gameId in gameIds)
-        {
-            try
+        await ProcessAsync(
+            await _inactivityRepository.GetFrozenGamesToWarn(FrozenThreshold, now, ct),
+            async gameId =>
             {
-                // Comment before stamp, for the reason spelled out in the inactivity
-                // pass above: a silent closure is worse than a repeated warning.
-                await CreateSystemComment(gameId, ClosureWarningMessage, ct);
-                if (!await _inactivityRepository.SetClosureWarning(gameId, now, ct))
-                {
-                    // Warned by another instance, or restarted by the master, since
-                    // the selection. Nothing was written, so nothing is announced.
-                    _logger.LogInformation(
-                        "Frozen game {GameId} was already warned when the pass reached it", gameId);
-                    continue;
-                }
-
-                await _eventProducer.SendAsync(EventType.GameClosureWarning, gameId);
-
-                _logger.LogInformation("Sent closure warning for frozen game {GameId}", gameId);
-            }
-            catch (Exception ex)
-            {
-                _logger.LogError(ex, "Failed to warn frozen game {GameId}", gameId);
-            }
-        }
+                // Comment before stamp, as above.
+                await CreateSystemComment(gameId, ClosureWarningMessage, now);
+                return await _inactivityRepository.SetClosureWarning(gameId, now, ct);
+            },
+            gameId => _eventProducer.SendAsync(EventType.GameClosureWarning, gameId));
     }
 
     /// <inheritdoc />
     public async Task CloseFrozenGamesAsync(CancellationToken ct)
     {
         var now = _dateTimeProvider.Now;
-        var gameIds = await _inactivityRepository.GetWarnedFrozenGamesToClose(WarningGracePeriod, now, ct);
+        await ProcessAsync(
+            await _inactivityRepository.GetWarnedFrozenGamesToClose(WarningGracePeriod, now, ct),
+            gameId => _inactivityRepository.CloseGame(gameId, ct),
+            gameId => _eventProducer.SendAsync(EventType.StatusGameClosed, gameId));
+    }
 
+    /// <summary>
+    /// One game failing does not stop the pass, and a write that did not land is not announced:
+    /// it changed since the selection, and nothing was written.
+    /// </summary>
+    private async Task ProcessAsync(
+        IEnumerable<Guid> gameIds, Func<Guid, Task<bool>> write, Func<Guid, Task> announce)
+    {
         foreach (var gameId in gameIds)
         {
             try
             {
-                if (!await _inactivityRepository.CloseGame(gameId, ct))
+                if (await write(gameId))
                 {
-                    // The game is no longer a warned frozen one - restarted, or
-                    // closed by another instance running the same pass. Announcing
-                    // a closure here would say a running game had been closed.
-                    _logger.LogInformation(
-                        "Game {GameId} was no longer frozen when the closure reached it", gameId);
-                    continue;
+                    await announce(gameId);
                 }
-
-                await _eventProducer.SendAsync(EventType.StatusGameClosed, gameId);
-
-                _logger.LogInformation("Closed frozen game {GameId}", gameId);
             }
             catch (Exception ex)
             {
-                _logger.LogError(ex, "Failed to close frozen game {GameId}", gameId);
+                _logger.LogError(ex, "Inactivity pass failed for game {GameId}", gameId);
             }
         }
     }
 
-    /// <summary>
-    /// Creates a system comment from Robot Administrator
-    /// </summary>
-    private async Task CreateSystemComment(Guid gameId, string text, CancellationToken ct)
+    private async Task CreateSystemComment(Guid gameId, string text, DateTimeOffset now)
     {
         var commentId = _guidFactory.Create();
-        var now = _dateTimeProvider.Now;
 
         var entity = new CreateGameCommentEntity
         {

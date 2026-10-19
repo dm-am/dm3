@@ -15,11 +15,6 @@ namespace DM.Web.API.Features.Personal.ProfileNotes;
 /// <remarks>
 /// User profile notes are personal notes about other users.
 /// These notes are private and visible only to the note owner.
-///
-/// ## Use Cases
-/// - Remember information about other users
-/// - Track interactions with other players
-/// - Personal annotations for moderation purposes
 /// </remarks>
 [ApiController]
 [Route("v1/users/me/notes")]
@@ -29,10 +24,9 @@ namespace DM.Web.API.Features.Personal.ProfileNotes;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class UserProfileNoteController : ControllerBase
 {
-    private readonly IUserProfileNoteApiService _userProfileNoteApiService;
+    private readonly UserProfileNoteApiService _userProfileNoteApiService;
 
-    /// <inheritdoc />
-    public UserProfileNoteController(IUserProfileNoteApiService userProfileNoteApiService)
+    public UserProfileNoteController(UserProfileNoteApiService userProfileNoteApiService)
     {
         _userProfileNoteApiService = userProfileNoteApiService;
     }
@@ -57,7 +51,7 @@ public class UserProfileNoteController : ControllerBase
         var note = await _userProfileNoteApiService.GetNote(username);
         if (note == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Заметка не найдена");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ProfileNoteNotFound);
         }
         return Ok(note);
     }

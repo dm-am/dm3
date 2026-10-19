@@ -6,9 +6,9 @@ using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Riok.Mapperly.Abstractions;
 using AttributeType = DM.Domain.Core.Enums.AttributeSpecificationType;
-using DtoCharacter = DM.Domain.Game.Features.Games.Character;
-using DtoCharacterShort = DM.Domain.Game.Features.Games.CharacterShort;
-using DtoCharacterAttribute = DM.Domain.Game.Features.Games.CharacterAttribute;
+using DtoCharacter = DM.Domain.Game.Features.Characters.Character;
+using DtoCharacterShort = DM.Domain.Game.Features.Characters.CharacterShort;
+using DtoCharacterAttribute = DM.Domain.Game.Features.Characters.CharacterAttribute;
 using DtoCreateCharacter = DM.Domain.Game.Features.Characters.CreateCharacter;
 using DtoUpdateCharacter = DM.Domain.Game.Features.Characters.UpdateCharacter;
 using Policy = DM.Domain.Core.Enums.CharacterAccessPolicy;
@@ -16,16 +16,13 @@ using Policy = DM.Domain.Core.Enums.CharacterAccessPolicy;
 namespace DM.Web.API.Features.Game.Characters;
 
 /// <summary>
-/// Compile-time mapper for game character models. The Mapperly counterpart of
-/// the character profile: the avatar goes through
-/// <see cref="UserMapper.ToUserPicture"/> instead of the converter
-/// indirection, the AccessPolicy flags fold to and from the privacy block in
-/// plain methods, and other mappers (rooms, posts) compose this one via
-/// <c>[UseMapper]</c>.
+/// Compile-time mapper for game character models. The AccessPolicy flags fold to
+/// and from the privacy block in plain methods; rooms and posts compose this one
+/// via <c>[UseMapper]</c>.
 /// </summary>
 [Mapper]
 [UseStaticMapper(typeof(UserRefMappers))]
-internal partial class CharacterMapper
+public partial class CharacterMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -36,10 +33,8 @@ internal partial class CharacterMapper
     }
 
     /// <summary>
-    /// Domain character to the list-level character DTO. An NPC has no
-    /// author, and both sides of the mapping say so - the domain member is
-    /// nullable and so is the DTO one, which is what lets Mapperly carry the
-    /// absence through instead of throwing on it.
+    /// Domain character to the list-level character DTO. An NPC has no author,
+    /// nullable on both sides.
     /// </summary>
     public Character ToCharacter(DtoCharacter character)
     {
@@ -54,11 +49,15 @@ internal partial class CharacterMapper
     }
 
     /// <summary>
-    /// Domain character to the full details DTO. The explicit envelope step
-    /// replaces the AutoMapper AfterMap - it must run on every details
-    /// response, or the owner's BBCode attribute round-trip silently breaks.
+    /// Domain character to the full details DTO, with the owner bound to the
+    /// BBCode attribute values.
     /// </summary>
-    public CharacterDetails ToCharacterDetails(DtoCharacter character)
+    /// <param name="character">The character as the viewer reads it</param>
+    /// <param name="viewerMayEdit">
+    /// Whether the viewer may edit it (the leads of an NPC, or of a sheet that
+    /// allows it): such a viewer gets its BBCode values as written, as the player does.
+    /// </param>
+    public CharacterDetails ToCharacterDetails(DtoCharacter character, bool viewerMayEdit = false)
     {
         if (character == null)
         {
@@ -66,9 +65,7 @@ internal partial class CharacterMapper
         }
 
         var result = ToCharacterDetailsCore(character);
-        // Materialised on purpose: a deferred Select would rebuild the
-        // attribute objects on every enumeration and the envelope below
-        // would be stamped onto instances nobody sees again.
+        // Materialised: a deferred Select would rebuild the attributes the envelope is stamped on.
         result.Attributes = [.. character.Attributes.Select(ToCharacterAttribute)];
         result.AuthorRating = AuthorRatingOf(character.Author);
         result.Privacy = new CharacterPrivacySettings
@@ -77,59 +74,44 @@ internal partial class CharacterMapper
             EditByMaster = (character.AccessPolicy & Policy.EditAllowed) != Policy.NoAccess,
             EditPostByMaster = (character.AccessPolicy & Policy.PostEditAllowed) != Policy.NoAccess
         };
-        EnvelopeAttributeValues(result, character.Author?.UserId);
+        EnvelopeAttributeValues(result, character.Author?.UserId, viewerMayEdit);
         return result;
     }
 
     /// <summary>
-    /// Populates the render-context envelope on every BBCode attribute value.
-    /// Owner of the values is the character's player: the JSON converter then
-    /// honors the owner's AuthorEdit round-trip and downgrades any other
-    /// viewer's author_edit request to permission-filtered Display.
-    /// (getCharacterForEdit sends X-Dm-Audience: author_edit.)
+    /// Binds the character's player to every BBCode attribute value, who gets
+    /// its AuthorEdit source, and so does a viewer who may edit the character.
     /// </summary>
-    public static void EnvelopeAttributeValues(CharacterDetails details, Guid? ownerUserId)
+    public static void EnvelopeAttributeValues(CharacterDetails details, Guid? ownerUserId, bool viewerMayEdit)
     {
         foreach (var attribute in details.Attributes)
         {
-            if (attribute.ValueBbText is null)
-            {
-                continue;
-            }
-
-            attribute.ValueBbText.Context = new RenderContextEnvelope
-            {
-                Surface = attribute.ValueBbText.Surface,
-                PostAuthorUserId = ownerUserId
-            };
+            attribute.ValueBbText?.BindAuthor(ownerUserId, viewerMayEdit ? _ => true : null);
         }
     }
 
     /// <summary>
-    /// Create body to the write model. GameId comes from the route and
-    /// InitialStatus from the caller's game role - the service sets both.
+    /// Create body to the write model. GameId comes from the route, the service sets it.
     /// </summary>
-    public DtoCreateCharacter ToCreateCharacter(CharacterDetails character) => new()
+    public static DtoCreateCharacter ToCreateCharacter(CharacterDetails character) => new()
     {
         Name = character.Name,
         IsNpc = character.Privacy != null && character.Privacy.IsNpc,
         AccessPolicy = character.Privacy == null ? Policy.NoAccess : ResolveAccessPolicy(character.Privacy),
-        Attributes = [.. character.Attributes.Select(ToDtoCharacterAttribute)]
+        Attributes = [.. character.Attributes.Select(a => ToDtoCharacterAttribute(a.Id, a.Value))]
     };
 
     /// <summary>
     /// Update request to the write model. CharacterId comes from the route,
-    /// the service sets it. An omitted privacy block must stay absent: the
-    /// destination flags are nullable on purpose, because a plain false here
-    /// is the bug that demoted an NPC to a player character on every PATCH
-    /// without a privacy block.
+    /// the service sets it. An omitted privacy block stays absent: a plain false
+    /// would turn an NPC into a player character.
     /// </summary>
-    public DtoUpdateCharacter ToUpdateCharacter(UpdateCharacterRequest request) => new()
+    public static DtoUpdateCharacter ToUpdateCharacter(UpdateCharacterRequest request) => new()
     {
-        Name = request.Name!,
+        Name = request.Name,
         IsNpc = request.Privacy?.IsNpc,
         AccessPolicy = request.Privacy == null ? null : ResolveAccessPolicy(request.Privacy),
-        Attributes = [.. request.Attributes.Select(ToDtoCharacterAttribute)]
+        Attributes = [.. request.Attributes.Select(a => ToDtoCharacterAttribute(a.Id, a.Value))]
     };
 
     /// <summary>
@@ -148,8 +130,6 @@ internal partial class CharacterMapper
         return ToCharacterShortCore(character);
     }
 
-    // A narrowing projection: the full domain character also carries
-    // attributes and game/audit fields the list-level DTO does not answer.
     [MapperIgnoreTarget(nameof(Character.AuthorRating))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial Character ToCharacterCore(DtoCharacter character);
@@ -165,10 +145,8 @@ internal partial class CharacterMapper
     private partial Character ToCharacterShortCore(DtoCharacterShort character);
 
     [MapperIgnoreTarget(nameof(Character.AuthorRating))]
-    // Folded from IsNpc + AccessPolicy in the wrapper - the flags are one
-    // source member, not two, and Mapperly maps a member exactly once.
+    // Folded from IsNpc + AccessPolicy in the wrapper.
     [MapperIgnoreTarget(nameof(CharacterDetails.Privacy))]
-    // Materialised in the wrapper so the envelope survives enumeration.
     [MapperIgnoreTarget(nameof(CharacterDetails.Attributes))]
     [MapperIgnoreSource(nameof(DtoCharacter.Attributes))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
@@ -187,19 +165,11 @@ internal partial class CharacterMapper
         Inconsistent = attribute.Inconsistent
     };
 
-    // Input: the client always submits the raw value in Value (ValueBbText is
-    // output-only). Only the specification id and the raw value reach the
-    // domain update path.
-    private static DtoCharacterAttribute ToDtoCharacterAttribute(CharacterAttribute attribute) => new()
+    // Input: only the specification id and the raw value reach the domain (ValueBbText is output-only).
+    private static DtoCharacterAttribute ToDtoCharacterAttribute(Guid id, string? value) => new()
     {
-        Id = attribute.Id,
-        Value = attribute.Value!
-    };
-
-    private static DtoCharacterAttribute ToDtoCharacterAttribute(UpdateCharacterAttribute attribute) => new()
-    {
-        Id = attribute.Id,
-        Value = attribute.Value!
+        Id = id,
+        Value = value!
     };
 
     private static Policy ResolveAccessPolicy(CharacterPrivacySettings privacy)
@@ -218,11 +188,7 @@ internal partial class CharacterMapper
         return result;
     }
 
-    // Author rating for the "Рейтинг" roster column. Null for NPCs (no
-    // author) and for authors who disabled rating display - same rule as
-    // the GeneralUser -> User mapping in UserMapper.
+    // Null for an NPC and for an author who switched the rating off, as in UserMapper.
     private static Rating? AuthorRatingOf(GeneralUser? author) =>
-        author != null && !author.RatingDisabled
-            ? new Rating { TotalPosts = author.QuantityRating, PostReviewScoreSum = author.QualityRating }
-            : null;
+        author != null && !author.RatingDisabled ? UserMapper.RatingOf(author) : null;
 }

@@ -8,22 +8,17 @@ using Microsoft.Extensions.Options;
 namespace DM.Domain.Account.Features.PasswordChange;
 
 /// <inheritdoc cref="IPasswordChangeMailSender" />
-internal class PasswordChangeMailSender : AccountMailSender, IPasswordChangeMailSender
+internal class PasswordChangeMailSender(
+    ITemplateRenderer renderer,
+    IMailSender mailSender,
+    IEmailAssetsProvider emailAssetsProvider,
+    IOptions<SiteAddressConfiguration> siteAddresses)
+    : AccountMailSender(renderer, mailSender, emailAssetsProvider, siteAddresses), IPasswordChangeMailSender
 {
-    public PasswordChangeMailSender(
-        ITemplateRenderer renderer,
-        IMailSender mailSender,
-        IEmailAssetsProvider emailAssetsProvider,
-        IOptions<SiteAddressConfiguration> siteAddresses)
-        : base(renderer, mailSender, emailAssetsProvider, siteAddresses)
-    {
-    }
-
     /// <inheritdoc />
     public Task Send(string email)
     {
-        const string subject = "Dungeon Master: пароль изменен";
-        return Send(email, subject, new PasswordChangeNotificationViewModel(
+        return Deliver(email, "пароль изменен", new PasswordChangeNotificationViewModel(
             SupportUrl: SiteLink("support?reason=access")));
     }
 }

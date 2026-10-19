@@ -1,18 +1,7 @@
 /**
- * The reading the address block draws is only worth what it measures.
- *
- * Two things here are easy to break silently and impossible to see in a
- * rendered page: which of the two round trips becomes the figure, and what
- * makes the composable measure again. The first trip to a host pays for the
- * DNS lookup and the TLS handshake and reads about twice the working figure;
- * a refactor that reports it instead of the second one changes every number on
- * the board and no test of the block notices. A network change is the one
- * event the three-minute focus rule exists to approximate; drop the listener
- * and the board keeps describing a network the device has left.
- *
- * Time is faked as a whole: `fetch` answers after a scripted delay on the
- * fake clock, and `performance.now` runs on the same clock, so a trip measures
- * exactly its scripted duration however the trips of the two hosts interleave.
+ * Which round trip becomes the figure (the second: the first pays DNS and TLS)
+ * and what measures again (a network change). Time is faked as a whole: fetch
+ * answers on the fake clock, and performance.now runs on it.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent } from "vue";
@@ -35,11 +24,7 @@ let fetchMock: ReturnType<typeof vi.fn>;
 /** Every wrapper a test mounts, so its listeners leave with the test. */
 let mounted: VueWrapper[] = [];
 
-/**
- * Scripts `fetch`: the n-th call answers after `durations[n]` ms of fake
- * time, or rejects when the entry is `null`. Calls past the script answer in
- * one millisecond.
- */
+/** Scripts fetch: the n-th call answers after durations[n] ms, null rejects. */
 function scriptFetch(durations: (number | null)[]) {
   let call = 0;
   fetchMock.mockImplementation(

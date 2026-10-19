@@ -21,10 +21,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- The Development overlay holds the localhost credentials, and it stays out
-             of the image. A deployed host runs as Production and would not read the
-             file anyway; not shipping it is what makes that a fact rather than a
-             property of one environment variable. -->
+        <!-- The localhost credentials stay out of the image. -->
         <Content Update="appsettings.Development.json">
             <CopyToPublishDirectory>Never</CopyToPublishDirectory>
             <CopyToOutputDirectory>Always</CopyToOutputDirectory>
@@ -32,11 +29,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- The routing and processor tests live next to the broker they exercise,
-             in DM.Infrastructure.Messaging.Tests, and the processor together with its
-             collaborators is internal. The blanket grant in Directory.Build.props
-             covers only DM.Workers.NotificationDispatcher.Tests, which is the tier
-             that runs the generators against a database. -->
+        <!-- The processor tests live in DM.Infrastructure.Messaging.Tests. -->
         <InternalsVisibleTo Include="DM.Infrastructure.Messaging.Tests" />
     </ItemGroup>
 

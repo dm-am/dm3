@@ -1,19 +1,8 @@
 <script setup lang="ts">
 /**
- * ComplaintPage - the complaint form: a person who breaks the rules, or a
- * moderator's decision the reader disputes. Hosts the one ticket form
- * (SupportTicketForm) with the complaint wording.
- *
- * Over the form, what a complaint is for, in two paragraphs: what the rules
- * count as a violation, with the table of violations one link away, and what
- * they do not, in the words of the rules on authors' decisions: "Мастер ведет
- * как считает нужным, а игроки, подаваясь в игру, принимают его условия". The
- * complaints that reached moderation most often, against a master's decision
- * in his own game, are answered there before they are written.
- *
- * A complaint about a person is filed from an account, as on DM2; the page
- * draws the site's "Войдите, чтобы" for it, and the form says where a reader
- * whose account is banned goes instead.
+ * The complaint form. The master's decisions in his own game, the complaints
+ * moderation got most often, are answered over the form before they are
+ * written. A complaint about a person is filed from an account, as on DM2.
  */
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import LeadText from "@/shared/ui/Layout/LeadText.vue";
@@ -52,11 +41,7 @@ import { SupportTicketForm } from "@/features/support-ticket";
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Variables" as *
-@use "@/assets/styles/Themes" as *
-
-// The second paragraph of the lead: what is not a violation, in the grey of a
-// remark under the first, a small step below it.
+// What is not a violation, in the grey of a remark under the first paragraph.
 .complaint-lead
   margin-bottom: $small
 
@@ -66,8 +51,7 @@ import { SupportTicketForm } from "@/features/support-ticket";
   font-size: $secondary-font-size
   line-height: 1.45
 
-// The site's sign-in line stands among the lines of the note, flush with them:
-// its own padding is for a line that stands alone under a block.
+// Flush with the lines of the note: its own padding is for a line that stands alone.
 .login-prompt.ticket-login
   padding: 0
 
@@ -75,10 +59,4 @@ import { SupportTicketForm } from "@/features/support-ticket";
   margin-top: $medium
   color: $text-muted
   font-size: $secondary-font-size
-
-  a
-    color: $link
-
-    &:hover
-      color: $link-hover
 </style>

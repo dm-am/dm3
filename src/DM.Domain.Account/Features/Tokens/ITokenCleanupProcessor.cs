@@ -17,7 +17,6 @@ public interface ITokenCleanupProcessor
     /// <summary>
     /// Runs one pass.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Number of tokens deleted.</returns>
     Task<int> DeleteStaleAsync(CancellationToken cancellationToken = default);
 }

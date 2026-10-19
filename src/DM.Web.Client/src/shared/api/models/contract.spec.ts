@@ -3,67 +3,37 @@
  */
 
 /**
- * The TypeScript models in this folder are hand-written mirrors of C# DTOs,
- * and nothing held the two sides together. They drifted, twice in ways that
- * reached users: five list endpoints promised a bare array and put an envelope
- * on the wire, and the notepad entry declared a `notepadType` union whose
- * members the server has never sent.
- *
- * The server side of the handshake is
- * DM.Web.API.IntegrationTests OpenApiContractShould, which reduces the
- * published schemas to name-to-properties and commits the result as
- * artifacts/openapi-contract.json. This test reads that file and holds the
- * hand-written interfaces to it.
- *
- * Only property NAMES are compared. Types are not: the client legitimately
- * declares its own (string for a uuid, a string union for an enum), and a
- * name-level check already catches the drift that actually happened.
- *
- * Which types are mirrors is decided by their name, not by a list. A schema id
- * is a fully qualified .NET type name, and a client type whose name equals its
- * last segment mirrors it and is held to it. That is what the codebase already
- * does, and it is the only rule under which a mirror written today is checked
- * today: the pairing table this replaces named thirteen types, nothing said
- * which ones were missing, and the other hundred and forty-odd were held to
- * nothing at all.
- *
- * The rule costs one thing — a view model may not borrow the name of a
- * published DTO — and that is the answer worth having, because two shapes
- * under one name is how a DTO comes to be read as a view model in the first
- * place.
+ * The hand-written mirrors of C# DTOs against the published schemas
+ * (artifacts/openapi-contract.json, by OpenApiContractShould), by property
+ * name only. A client type whose name is the last segment of a schema id
+ * mirrors it, so a mirror written today is checked today; a view model may
+ * not borrow a DTO's name.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync, readdirSync, statSync } from "fs";
-import { dirname, join, relative, resolve } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync, existsSync } from "fs";
+import { join, relative, resolve } from "path";
 import ts from "typescript";
+import {
+  CLIENT_SRC as SOURCE_ROOT,
+  collect,
+} from "@/shared/lib/testing/sourceTree";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-// models -> api -> shared -> src
-const SOURCE_ROOT = resolve(HERE, "..", "..", "..");
 // src -> DM.Web.Client -> src -> repository root
 const REPO_ROOT = resolve(SOURCE_ROOT, "..", "..", "..");
 const SNAPSHOT = join(REPO_ROOT, "artifacts", "openapi-contract.json");
 
 /**
- * Mirrors whose name does not name their schema.
- *
- * Two kinds, and no third. A rename, where the API publishes a list DTO and a
- * detail DTO and the client keeps a single interface for the richer one; and a
- * union, where one client interface stands for several server shapes and is
- * held to all of them at once. Anything else needs no entry — name the type
- * after the DTO and the pairing follows — and an entry that only repeats what
- * the name already says is a test failure, not a harmless extra line.
+ * Mirrors whose name does not name their schema: a rename (one interface for
+ * list and detail DTOs) or a union (one interface for several shapes). An
+ * entry the name already implies fails.
  */
 const MIRRORS: Record<string, string[]> = {
   Game: ["DM.Web.API.Features.Game.Games.GameDetails"],
   Character: ["DM.Web.API.Features.Game.Characters.CharacterDetails"],
   NotepadEntry: ["DM.Web.API.Features.Personal.Notepads.NotepadEntryResponse"],
 
-  // The account's own view of its username change. The client named the type
-  // after the request it sends, the server after the response it returns, and
-  // the moderation slice has a different type under the same name — which the
-  // name rule handles on its own, because that one does match its schema.
+  // The account's view of its username change, named after its request; the
+  // moderation type of that name matches its schema by name.
   UsernameChangeRequest: [
     "DM.Web.API.Features.Account.Credentials.UsernameChangeResponse",
   ],
@@ -82,15 +52,7 @@ const MIRRORS: Record<string, string[]> = {
   ],
 };
 
-/**
- * Properties a client model owns outright, per interface.
- *
- * The point of this test is that a field the client reads is a field the
- * server sends. A few are genuinely local — optimistic state the store writes
- * after a mutation — and those have to be named here rather than left to be
- * inferred, so that adding one is a decision somebody made and not a typo that
- * quietly widened the exception.
- */
+/** Properties a client model owns: optimistic state a store writes, named on purpose. */
 const CLIENT_ONLY: Record<string, string[]> = {
   // Set after a successful delete so the entry becomes a placeholder instead
   // of vanishing under the reader. No endpoint returns a removed comment, and
@@ -99,41 +61,23 @@ const CLIENT_ONLY: Record<string, string[]> = {
 };
 
 /**
- * Fields a mirror declares that no schema of its own sends.
- *
- * Not the same thing as CLIENT_ONLY. These are not owned by the client, they
- * are wrong: each one reads undefined at runtime, and each one was invisible
- * for as long as the pairing was a hand-kept list of thirteen. They are
- * recorded instead of deleted because deleting them is a product decision this
- * file cannot make — the server grows the field, the screen stops asking for
- * it, or the mirror is renamed to the DTO it actually describes — and a suite
- * left red in the meantime is a suite that gets switched off.
- *
- * Checked from both ends, so the list cannot rot into a licence: an entry for
- * a field the model no longer declares fails, and so does an entry for a field
- * the server has started sending.
+ * Fields a mirror declares that no schema sends, each undefined at runtime;
+ * recorded, since removing one is a product decision. Checked both ways: an
+ * entry for a field gone from the model or now sent fails.
  */
 const UNSERVED: Record<string, string[]> = {
-  // `settings` is published by no user schema at all — preferences are their
-  // own endpoint — so theme and page size fall back to their defaults for
-  // everyone. `birthdayDate` is `birthday` on the wire and an object there,
-  // and `registrationUtc` is the dead half of every
-  // `registeredUtc ?? registrationUtc`.
-  User: ["settings", "birthdayDate", "registrationUtc"],
+  // `settings` is published by no user schema (preferences have their own
+  // endpoint); the session fills it in on the client.
+  User: ["settings"],
 
-  // Rating visibility is a profile setting (VisibilitySettings.ShowRating) and
-  // the server answers it by sending a null rating, not a flag; the profile
-  // reads `rating?.isEnabled` and therefore never shows one.
+  // Taking part in the rating is a visibility setting of the profile
+  // (users/me/profile, `visibility.showRating`), and the server answers one
+  // who left it with a null rating, not a flag.
   Rating: ["isEnabled", "totalRating"],
 
   // The wire sends the old name and the date. The profile keys its list on
   // `entry.id`, which is undefined for every entry.
   UsernameHistoryEntry: ["id", "newUsername", "approvedByUsername"],
-
-  // BbText serialises to a plain string through BbConverter, exactly as
-  // PostBbText on this side already documents; the object with `source` and
-  // `html` describes nothing that is ever sent.
-  InfoBbText: ["source", "html"],
 };
 
 /** A named object type declared somewhere in the client. */
@@ -145,30 +89,16 @@ type Declaration = {
 };
 
 /** Every TypeScript source under src/, specs and ambient declarations aside. */
-function collectFiles(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      collectFiles(full, out);
-    } else if (
-      full.endsWith(".ts") &&
-      !full.endsWith(".spec.ts") &&
-      !full.endsWith(".d.ts")
-    ) {
-      out.push(full);
-    }
-  }
-  return out;
-}
+const collectFiles = (dir: string): string[] =>
+  collect(
+    dir,
+    (name) =>
+      name.endsWith(".ts") &&
+      !name.endsWith(".spec.ts") &&
+      !name.endsWith(".d.ts"),
+  );
 
-/**
- * Every declaration site, not the first one under a given name.
- *
- * Slices re-declare shared names — `export type Comment = BaseComment` — and
- * two slices can hold genuinely different types under one name. Taking the
- * first and dropping the rest would leave whichever the walk reached second
- * unchecked, which is the failure this file exists to prevent.
- */
+/** Every declaration site: two slices can hold different types under one name. */
 function readDeclarations(): Declaration[] {
   const found: Declaration[] = [];
 
@@ -267,10 +197,8 @@ const snapshot: Record<string, string[]> = existsSync(SNAPSHOT)
   : {};
 
 /**
- * Schema ids by their last segment, with generic arity and arguments dropped.
- * A generic schema is published under a name that carries its argument list
- * after a backtick, and everything from that backtick on is cut: the envelope
- * of a blog and the envelope of a topic both index under Envelope.
+ * Schema ids by their last segment without generic arity: the envelope of a
+ * blog and of a topic both index under Envelope.
  */
 const schemasByName = new Map<string, string[]>();
 for (const id of Object.keys(snapshot)) {
@@ -280,12 +208,7 @@ for (const id of Object.keys(snapshot)) {
   else schemasByName.set(name, [id]);
 }
 
-/**
- * What a name may legitimately mirror: every schema published under it, each
- * on its own, plus the MIRRORS entry as one set. Several schemas can share a
- * last segment (two BlockUserRequest, two Tag), and agreeing with any one of
- * them is agreement.
- */
+/** What a name may mirror: each schema under it, or the MIRRORS entry as one set. */
 function candidatesFor(
   name: string,
 ): { schemas: string[]; served: Set<string> }[] {

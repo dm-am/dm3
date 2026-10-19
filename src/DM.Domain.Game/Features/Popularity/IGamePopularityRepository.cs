@@ -5,18 +5,13 @@ using System.Threading.Tasks;
 
 namespace DM.Domain.Game.Features.Popularity;
 
-/// <summary>
-/// Storage side of the game popularity score.
-/// </summary>
 /// <remarks>
-/// Counting and writing only. What "active" means and how the parts add up is
-/// the product rule, and it lives in <see cref="IGamePopularityProcessor" />.
+/// Counting and writing only: the rule lives in <see cref="IGamePopularityProcessor" />.
 /// </remarks>
 public interface IGamePopularityRepository
 {
     /// <summary>
-    /// Identifiers of the games a score is kept for: everything published and
-    /// not deleted, drafts excluded.
+    /// Everything published and not deleted
     /// </summary>
     Task<IReadOnlyCollection<Guid>> GetScorableGameIds(CancellationToken cancellationToken = default);
 
@@ -25,8 +20,7 @@ public interface IGamePopularityRepository
     /// visited the site since <paramref name="activeSince" />.
     /// </summary>
     /// <remarks>
-    /// NPCs are excluded: a master's cast is not a measure of how many people
-    /// the game holds.
+    /// NPCs are excluded: a master's cast does not measure how many people the game holds.
     /// </remarks>
     Task<IReadOnlyDictionary<Guid, int>> CountActivePlayers(
         IReadOnlyCollection<Guid> gameIds, DateTimeOffset activeSince, CancellationToken cancellationToken = default);
@@ -41,9 +35,9 @@ public interface IGamePopularityRepository
     /// <summary>
     /// Writes the scores, touching only the games whose value actually moved.
     /// </summary>
-    /// <param name="scores">Score per game; a game absent from the map scores zero.</param>
-    /// <param name="calculatedUtc">Moment stamped on the games that changed.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <remarks>
+    /// A game absent from <paramref name="scores"/> scores zero; <paramref name="calculatedUtc"/> is stamped on the games that changed.
+    /// </remarks>
     /// <returns>Number of games whose score changed.</returns>
     Task<int> ApplyScores(
         IReadOnlyDictionary<Guid, int> scores,

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
@@ -37,21 +35,13 @@ public class GeneralUser : IUser
     public DateTimeOffset? LastActivityUtc { get; set; }
 
     /// <summary>
-    /// Avatar variants (original/medium/small). SSOT — a nested object instead of
-    /// three flat properties. Populated by the AvatarProjections formula:
-    /// spliced as an expression inside EF Selects, compiled (<c>From</c>) over
-    /// rows already in memory.
+    /// Avatar variants (original/medium/small), filled by the AvatarProjections
+    /// formula inside EF Selects and over rows already in memory alike.
     /// </summary>
     public AvatarPicture Picture { get; set; } = new();
 
-    /// <summary>
-    /// Status
-    /// </summary>
     public string? Status { get; set; }
 
-    /// <summary>
-    /// Name
-    /// </summary>
     public string? Name { get; set; }
 
     /// <summary>
@@ -83,16 +73,8 @@ public class GeneralUser : IUser
     /// <inheritdoc />
     public int QuantityRating { get; set; }
 
-    // ---- Aggregates, and null is one of their values ----
-    //
-    // Everything from here down is filled by a batch of COUNTs the user
-    // repository runs after the projection, and by nothing else. A user that
-    // arrived nested in another resource — the author of a comment, the people
-    // who liked it — has been through no such batch, so the honest answer for
-    // these members is "not computed". Hence nullable: as plain ints they
-    // defaulted to zero, the API layer copied the zero onto the wire, and a
-    // counted zero became indistinguishable from an uncounted one. Read them
-    // with an explicit fallback; do not assume the caller hydrated.
+    // Aggregates from here down are filled only by the user repository's batch of
+    // COUNTs: null means not counted, which a nested user always is.
 
     /// <summary>
     /// Number of post reviews given by this user
@@ -251,11 +233,8 @@ public class GeneralUser : IUser
 
     /// <summary>
     /// Whether the user is still a newbie: fewer game posts than
-    /// <see cref="ProbationPolicy.NewbiePostThreshold" />. The predicate every
-    /// caller asks, over the counter every other reader uses. The rule used to be
-    /// written out seven times over two sources - this counter and a COUNT over
-    /// posts - so removing a post was enough to make the badge on the profile and
-    /// the right to write a review disagree about one person.
+    /// <see cref="ProbationPolicy.NewbiePostThreshold" />, over the counter every
+    /// other reader uses.
     /// </summary>
     public bool IsNewbie => ProbationPolicy.IsNewbie(QuantityRating);
 }

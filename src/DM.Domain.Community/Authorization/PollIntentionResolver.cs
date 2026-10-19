@@ -15,7 +15,6 @@ internal class PollIntentionResolver :
 {
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public PollIntentionResolver(
         IDateTimeProvider dateTimeProvider)
     {
@@ -47,8 +46,7 @@ internal class PollIntentionResolver :
             // Can unvote only while the poll is open, by the poll's own window
             PollIntention.Unvote when user.IsAuthenticated =>
                 poll.StatusAt(_dateTimeProvider.Now) == PollStatus.Active,
-            PollIntention.Edit => user.Role >= UserRole.SeniorModerator,
-            PollIntention.Delete => user.Role >= UserRole.SeniorModerator,
+            PollIntention.Edit or PollIntention.Delete => user.Role >= UserRole.SeniorModerator,
             _ => false
         };
 }

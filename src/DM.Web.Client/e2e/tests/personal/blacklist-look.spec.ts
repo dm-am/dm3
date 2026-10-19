@@ -1,25 +1,24 @@
 import { test, expect, SECONDARY_STORAGE_STATE } from "../../fixtures/auth";
-import type { Browser, Locator, Page, Route } from "@playwright/test";
+import type { Browser, Locator, Page } from "@playwright/test";
+import { close, json } from "../../fixtures/tickets";
+import { settle } from "../../fixtures/window";
+import { SECONDARY_GAME, SECONDARY_BLOG } from "../../fixtures/seed";
 
 /**
- * The three blacklists of the site, as the owner asked for them on 13 October
- * 2026: "верни как было и добавить сделай нижней строкой", after the editor of
- * a character sheet, "где показано как делать добавление/удаление из таблицы".
+ * The three blacklists of the site.
  *
  * Each is the site's table "Пользователь" (the account's with "Внесен" too),
  * the bin at the end of each row, and the field and "Добавить" as the last
  * line of the table. The game and the blog say over it in a grey line what
  * the list does. No window anywhere, and every column stands.
  *
- * Read as TestUser, the master of the game "aaaam" in the seed. Nothing is
+ * Read as TestUser, the master of SECONDARY_GAME in the seed. Nothing is
  * written to the stand: the lists are answered here, the press of "Добавить"
  * is answered here, and any other request that would write is refused on its
  * way out.
  */
 
-// The stand is shared and answers 429 past 300 requests a minute; a read is
-// asked again after a wait (fetchPastLimit), which a page of settings with its
-// dozens of reads can take most of a minute through.
+// A page of settings makes dozens of reads.
 test.describe.configure({ timeout: 120_000 });
 
 const LONG = "Повелитель_Драконов1";
@@ -45,8 +44,8 @@ const PERSONAL: Entry[] = [
 /** The name the field suggests and "Добавить" puts on. */
 const NEWCOMER = "Mordred_Moon";
 
-/** The full version, and the tablet, whose layout stays as it is. */
-const WIDTHS = [768, 1366];
+/** The widths the page is read at. */
+const WIDTHS = [1366];
 
 type Stand = {
   page: Page;
@@ -55,43 +54,6 @@ type Stand = {
   /** The searches the field sent, as their query strings. */
   searches: string[];
 };
-
-const json = (route: Route, body: unknown, status = 200) =>
-  route
-    .fulfill({
-      status,
-      contentType: "application/json",
-      body: JSON.stringify(body),
-    })
-    .catch(() => {});
-
-/**
- * A read sent on to the stand and asked again past its rate limit; null once
- * the page it was for is gone, which a test that is over leaves behind.
- */
-async function fetchPastLimit(route: Route) {
-  try {
-    let response = await route.fetch();
-    for (let i = 0; i < 10 && response.status() === 429; i += 1) {
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      response = await route.fetch();
-    }
-    return response;
-  } catch {
-    return null;
-  }
-}
-
-async function passOn(route: Route) {
-  const response = await fetchPastLimit(route);
-  if (response) await route.fulfill({ response }).catch(() => {});
-}
-
-/** Shuts the page with its reads still on the wire left unanswered. */
-async function close(page: Page) {
-  await page.unrouteAll({ behavior: "ignoreErrors" });
-  await page.context().close();
-}
 
 /**
  * Opens a path as TestUser at a width, the lists answered here: the game's
@@ -168,7 +130,7 @@ async function open(
           paging: { pages: 1, current: 1, skip: 0, take: 12, total: 1 },
         });
       }
-      return passOn(route);
+      return route.fallback().catch(() => {});
     },
   );
 
@@ -178,7 +140,7 @@ async function open(
   // account) push the list down, and a field scrolled to before they come
   // stands off the screen with its suggestions by the time they are read.
   await page.waitForLoadState("networkidle");
-  await page.evaluate(() => document.fonts.ready);
+  await settle(page);
   return { page, writes, searches };
 }
 
@@ -195,12 +157,8 @@ const accountBlacklist = (page: Page) =>
     has: page.locator("h2.section-title", { hasText: /^Черный список$/ }),
   });
 
-/**
- * The windows open on the page. The side columns of a narrow window are
- * dialogs too, always in the page and shut, and are not counted.
- */
-const windows = (page: Page) =>
-  page.locator('[role="dialog"]:not(.drawer-panel)');
+/** The windows open on the page. */
+const windows = (page: Page) => page.locator('[role="dialog"]');
 
 /** The document is no wider than the window. */
 async function noSidewaysPage(page: Page) {
@@ -274,10 +232,14 @@ function binsOf(names: string[]) {
 for (const [where, path, hint] of [
   [
     "игры",
-    "/game/aaaam/settings",
+    `/game/${SECONDARY_GAME}/settings`,
     "Внесенные не пишут в обсуждении игры и не подают заявки.",
   ],
-  ["блога", "/blogs/aaaar/settings", "Внесенные не пишут комментарии в блоге."],
+  [
+    "блога",
+    `/blogs/${SECONDARY_BLOG}/settings`,
+    "Внесенные не пишут комментарии в блоге.",
+  ],
 ] as const) {
   test.describe(`Черный список ${where}`, () => {
     for (const width of WIDTHS) {

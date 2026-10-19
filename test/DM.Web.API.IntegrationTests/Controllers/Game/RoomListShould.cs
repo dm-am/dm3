@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -29,11 +25,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// each, and a closed room named to those who may not open it with the
 /// characters let in to write in it.
 /// </summary>
-/// <remarks>
-/// Through HTTP, because each of the three is a promise of the payload: the
-/// order is written by one request and read by another, and the two fields
-/// travel through the service, which clears a closed room, and the mapper.
-/// </remarks>
+/// <remarks>Through HTTP: the order is written by one request and read by another, through the service and the mapper.</remarks>
 public class RoomListShould : IntegrationTestBase
 {
     public RoomListShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -41,9 +33,7 @@ public class RoomListShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A room moved to the head of the list is first in it. The move used to
-    /// rewrite links nobody read while the list sorted by a number nobody
-    /// wrote, so the answer was 200 and the order stayed as it was.
+    /// A room moved to the head of the list is first in it.
     /// </summary>
     [Fact]
     public async Task PutARoomMovedToTheHeadFirst()
@@ -126,12 +116,9 @@ public class RoomListShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// "[Лес] - Густав, Эодор": a guest and a stranger see the closed room with
-    /// the characters let in to write in it, in the order they joined the game,
-    /// and nothing else of it. A dead character is named as the old site names
-    /// him, a removed one is nobody. The character let in to read and the
-    /// person let in by name are not named, and the master, who opens the room,
-    /// reads its accesses instead.
+    /// "[Лес] - Густав, Эодор": a guest and a stranger see the closed room with the characters let in to write,
+    /// in joining order; a dead one named as the old site does, a removed one as nobody. The master reads its
+    /// accesses instead.
     /// </summary>
     [Fact]
     public async Task NameTheWritersOfAClosedRoomToWhoeverMayNotOpenIt()
@@ -162,8 +149,6 @@ public class RoomListShould : IntegrationTestBase
         }
     }
 
-    // ═══ REQUESTS ═══
-
     private async Task<HttpStatusCode> Move(World world, Guid roomId, Guid? previousRoomId)
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Patch, $"/v1/rooms/{roomId}", world.Master);
@@ -193,8 +178,6 @@ public class RoomListShould : IntegrationTestBase
     private static JsonElement Room(JsonElement[] rooms, Guid id) =>
         rooms.Should().ContainSingle(r => r.GetProperty("id").GetGuid() == id).Subject;
 
-    // ═══ SEEDING ═══
-
     private sealed record World(
         Guid GameId,
         Guid OtherGameId,
@@ -211,94 +194,118 @@ public class RoomListShould : IntegrationTestBase
         string DeadWriter);
 
     /// <summary>
-    /// An open game with three rooms in the order hall, closed room, chat, and a
-    /// second game of the same master with a room of its own. Two posts in the
-    /// hall and one removed, one post in the closed room, three messages in the
-    /// chat and one removed. In the closed room two characters write, a dead
-    /// and a removed one were let in to write, one character reads, and one
-    /// person is let in by name.
+    /// An open game with three rooms (hall, closed room, chat) and a second game of the same master, with posts,
+    /// messages and removed rows in each, and every kind of grant in the closed room.
     /// </summary>
     private async Task<World> Seed()
     {
         var now = DateTimeOffset.UtcNow;
         var gameId = Guid.NewGuid();
-        var otherGameId = Guid.NewGuid();
-        var hall = Guid.NewGuid();
-        var closed = Guid.NewGuid();
-        var chat = Guid.NewGuid();
-        var foreign = Guid.NewGuid();
-        var chatId = Guid.NewGuid();
         var suffix = gameId.ToString("N")[..6];
 
         var master = NewUser("rlm");
         var stranger = NewUser("rls");
         var players = Enumerable.Range(0, 5).Select(_ => NewUser("rlp")).ToArray();
         var reader = NewUser("rlr");
-        var firstWriter = $"Густав {suffix}";
-        var secondWriter = $"Эодор {suffix}";
-        var deadWriter = $"Николай {suffix}";
+        var world = new World(
+            GameId: gameId,
+            OtherGameId: Guid.NewGuid(),
+            Hall: Guid.NewGuid(),
+            Closed: Guid.NewGuid(),
+            Chat: Guid.NewGuid(),
+            Foreign: Guid.NewGuid(),
+            ChatId: Guid.NewGuid(),
+            Master: Caller(master),
+            Stranger: Caller(stranger),
+            UserIds: [master.UserId, stranger.UserId, reader.UserId, .. players.Select(p => p.UserId)],
+            FirstWriter: $"Густав {suffix}",
+            SecondWriter: $"Эодор {suffix}",
+            DeadWriter: $"Николай {suffix}");
 
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var db = scope.ServiceProvider.GetRequiredService<DmDbContext>();
         db.Users.AddRange(master, stranger, reader);
         db.Users.AddRange(players);
-        db.Set<DbGame>().AddRange(NewGame(gameId, master.UserId, now), NewGame(otherGameId, master.UserId, now));
+        db.Set<DbGame>().AddRange(NewGame(world.GameId, master.UserId, now), NewGame(world.OtherGameId, master.UserId, now));
 
+        AddRooms(db, world);
+        var first = AddWriters(db, world, players, reader, suffix, now);
+        AddMessages(db, world, first, players[0], now);
+
+        await db.SaveChangesAsync();
+
+        return world;
+    }
+
+    /// <summary>
+    /// The three rooms of the game in the order hall, closed room, chat, the chat
+    /// of the last one, and the room of the second game.
+    /// </summary>
+    private static void AddRooms(DmDbContext db, World world)
+    {
         db.Set<DbRoom>().AddRange(
-            NewRoom(hall, gameId, 1, "Зала", RoomAccessType.Open, RoomType.Default, null),
-            NewRoom(closed, gameId, 2, "Лес", RoomAccessType.Private, RoomType.Default, null),
-            NewRoom(chat, gameId, 3, "Шепот", RoomAccessType.Open, RoomType.Chat, chatId),
-            NewRoom(foreign, otherGameId, 1, "Чужая", RoomAccessType.Open, RoomType.Default, null));
+            NewRoom(world.Hall, world.GameId, 1, "Зала", RoomAccessType.Open, RoomType.Default, null),
+            NewRoom(world.Closed, world.GameId, 2, "Лес", RoomAccessType.Private, RoomType.Default, null),
+            NewRoom(world.Chat, world.GameId, 3, "Шепот", RoomAccessType.Open, RoomType.Chat, world.ChatId),
+            NewRoom(world.Foreign, world.OtherGameId, 1, "Чужая", RoomAccessType.Open, RoomType.Default, null));
         db.Chats.Add(new DbChat
         {
-            ChatId = chatId,
+            ChatId = world.ChatId,
             Type = ChatType.GameRoom,
             Title = "Шепот",
-            RoomId = chat,
-            PublicId = $"l{chatId:N}"[..10]
+            RoomId = world.Chat,
+            PublicId = $"l{world.ChatId:N}"[..10]
         });
+    }
 
+    /// <summary>
+    /// The characters of the game and the grants of the closed room; answers the first writer.
+    /// </summary>
+    private static DbCharacter AddWriters(
+        DmDbContext db, World world, DbUser[] players, DbUser reader, string suffix, DateTimeOffset now)
+    {
         // Joined in the order the names are expected in, the second writer
         // added to the room first: the names follow the game, not the grants.
-        var second = NewCharacter(gameId, players[1].UserId, secondWriter, now.AddDays(-2));
-        var first = NewCharacter(gameId, players[0].UserId, firstWriter, now.AddDays(-3));
-        var onlyReads = NewCharacter(gameId, players[2].UserId, $"Читающий {suffix}", now.AddDays(-4));
-        var dead = NewCharacter(gameId, players[3].UserId, deadWriter, now.AddDays(-1));
+        var second = NewCharacter(world.GameId, players[1].UserId, world.SecondWriter, now.AddDays(-2));
+        var first = NewCharacter(world.GameId, players[0].UserId, world.FirstWriter, now.AddDays(-3));
+        var onlyReads = NewCharacter(world.GameId, players[2].UserId, $"Читающий {suffix}", now.AddDays(-4));
+        var dead = NewCharacter(world.GameId, players[3].UserId, world.DeadWriter, now.AddDays(-1));
         dead.Status = CharacterStatus.Retired;
         dead.IsDead = true;
         // Joined first: named at all, he would head the line.
-        var removed = NewCharacter(gameId, players[4].UserId, $"Удаленный {suffix}", now.AddDays(-5));
+        var removed = NewCharacter(world.GameId, players[4].UserId, $"Удаленный {suffix}", now.AddDays(-5));
         removed.IsRemoved = true;
         db.Set<DbCharacter>().AddRange(second, first, onlyReads, dead, removed);
         db.Set<DbRoomAccess>().AddRange(
-            Grant(closed, removed.CharacterId, null, RoomAccessPolicy.Full),
-            Grant(closed, dead.CharacterId, null, RoomAccessPolicy.Full),
-            Grant(closed, second.CharacterId, null, RoomAccessPolicy.Full),
-            Grant(closed, first.CharacterId, null, RoomAccessPolicy.Full),
-            Grant(closed, onlyReads.CharacterId, null, RoomAccessPolicy.ReadOnly),
-            Grant(closed, null, reader.UserId, RoomAccessPolicy.ReadOnly));
+            Grant(world.Closed, removed.CharacterId, null, RoomAccessPolicy.Full),
+            Grant(world.Closed, dead.CharacterId, null, RoomAccessPolicy.Full),
+            Grant(world.Closed, second.CharacterId, null, RoomAccessPolicy.Full),
+            Grant(world.Closed, first.CharacterId, null, RoomAccessPolicy.Full),
+            Grant(world.Closed, onlyReads.CharacterId, null, RoomAccessPolicy.ReadOnly),
+            Grant(world.Closed, null, reader.UserId, RoomAccessPolicy.ReadOnly));
+        return first;
+    }
 
+    /// <summary>
+    /// Two posts in the hall and one removed, one post in the closed room, three
+    /// messages in the chat and one removed.
+    /// </summary>
+    private static void AddMessages(DmDbContext db, World world, DbCharacter first, DbUser player, DateTimeOffset now)
+    {
         db.Set<DbPost>().AddRange(
-            NewPost(hall, first, now.AddHours(-3), removed: false),
-            NewPost(hall, first, now.AddHours(-2), removed: false),
-            NewPost(hall, first, now.AddHours(-1), removed: true),
-            NewPost(closed, first, now.AddHours(-1), removed: false));
+            NewPost(world.Hall, first, now.AddHours(-3), removed: false),
+            NewPost(world.Hall, first, now.AddHours(-2), removed: false),
+            NewPost(world.Hall, first, now.AddHours(-1), removed: true),
+            NewPost(world.Closed, first, now.AddHours(-1), removed: false));
         db.Messages.AddRange(Enumerable.Range(0, 4).Select(i => new DbMessage
         {
             MessageId = Guid.NewGuid(),
-            ChatId = chatId,
-            UserId = players[0].UserId,
+            ChatId = world.ChatId,
+            UserId = player.UserId,
             CreatedUtc = now.AddMinutes(-10 + i),
             Text = $"Сообщение {i}",
             IsRemoved = i == 3
         }));
-
-        await db.SaveChangesAsync();
-
-        return new World(gameId, otherGameId, hall, closed, chat, foreign, chatId,
-            Caller(master), Caller(stranger),
-            [master.UserId, stranger.UserId, reader.UserId, .. players.Select(p => p.UserId)],
-            firstWriter, secondWriter, deadWriter);
     }
 
     private static DbUser NewUser(string prefix)

@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Core.Users;
@@ -10,9 +6,6 @@ namespace DM.Domain.Core.Users;
 /// Minimal user lookup service for cross-module operations.
 /// Used by Blog, Game, Moderation modules to resolve users without importing Domain.Personal.
 /// </summary>
-/// <remarks>
-/// Full implementation: Domain.Personal/Features/Profiles/IUserService
-/// </remarks>
 public interface IUserLookupService
 {
     /// <summary>
@@ -52,10 +45,8 @@ public interface IUserLookupService
     /// </summary>
     /// <remarks>
     /// One projection and no counter hydration, see <see cref="UserReference"/>.
-    /// Declared here rather than left to the read repository because assembling a
-    /// response out of several domain calls is the API layer's job, and reaching
-    /// for a repository to do it is how the layer below stops being the only place
-    /// that answers.
+    /// Here rather than on the read repository: the API layer assembles answers from
+    /// domain calls, not from repositories.
     /// </remarks>
     /// <param name="userIds">User identifiers</param>
     /// <returns>References of the users that exist</returns>

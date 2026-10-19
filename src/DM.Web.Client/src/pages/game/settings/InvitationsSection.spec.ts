@@ -3,26 +3,9 @@
  */
 
 /**
- * What the reader sees after inviting somebody to the game.
- *
- * The section used to answer with a line in the corner, and the line was the
- * only dependable part of the answer. The list under it is read again over the
- * network and the endpoint serves it in no order at all — the token read has
- * no ORDER BY, so the rows arrive however the database kept them; the read was
- * also emptying the list whenever it failed; and the invitation the server
- * hands back is a REPLACEMENT, since inviting the same person to the same seat
- * invalidates the previous invitation. The row is now the answer, and it
- * carries the moment it was sent.
- *
- * What each test here catches:
- *  - the order left to the endpoint: the fresh row lands wherever it likes,
- *    and in a list of any length that is nowhere near the controls;
- *  - the failed reload emptying the list: an invitation that went out reads as
- *    "Активных приглашений нет";
- *  - the row taken from the reload alone: nothing to show when that read does
- *    not come back;
- *  - the toast put back beside the row: one event announced twice, once for
- *    the player and once for the reader.
+ * A sent invitation is answered by its row: the endpoint serves no order, a
+ * second invitation to the same seat replaces the first, and the reload after
+ * it may fail.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
@@ -40,6 +23,7 @@ import { fileURLToPath } from "node:url";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import type { GeneralError } from "@/shared/api/models/common";
 import InvitationsSection from "./InvitationsSection.vue";
+import { expectFirstReadStates } from "@/shared/lib/testing/firstRead";
 
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
@@ -60,9 +44,7 @@ const invitation = (
     createdUtc,
   }) as unknown as Invitation;
 
-/** Out since the beginning of the month. */
 const OLD = invitation("i-1", "Старожил", "2026-09-01T10:00:00Z");
-/** The one the test sends. */
 const FRESH = invitation("i-2", "Новичок", "2026-09-20T09:05:00Z");
 const FRESH_READER = invitation(
   "i-3",
@@ -98,8 +80,11 @@ let list: ReturnType<typeof vi.fn>;
 let invitePlayer: ReturnType<typeof vi.fn>;
 let inviteReader: ReturnType<typeof vi.fn>;
 
-/** The section over a game whose master is looking at it. */
-async function mountSection(initial: Invitation[] = [OLD]) {
+/** `first`, when given, answers the read the section opens with. */
+async function mountSection(
+  initial: Invitation[] = [OLD],
+  first?: Promise<unknown>,
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useGameDetailsStore();
@@ -110,6 +95,7 @@ async function mountSection(initial: Invitation[] = [OLD]) {
   } as unknown as Game;
 
   list = vi.fn().mockResolvedValue(served(initial));
+  if (first) list.mockReturnValueOnce(first);
   invitePlayer = vi.fn().mockResolvedValue({ data: FRESH, error: null });
   inviteReader = vi.fn().mockResolvedValue({ data: FRESH_READER, error: null });
   vi.spyOn(gameApi, "getGameInvitations").mockImplementation(
@@ -130,10 +116,7 @@ async function mountSection(initial: Invitation[] = [OLD]) {
   return wrapper;
 }
 
-/**
- * The invitation rows, top to bottom, as one line of text each.
- * The no-break space a date keeps after "в" stays.
- */
+// The no-break space a date keeps after "в" stays.
 const rows = (wrapper: VueWrapper) =>
   wrapper.findAll(".inv-item").map((r) =>
     r
@@ -142,7 +125,6 @@ const rows = (wrapper: VueWrapper) =>
       .trim(),
   );
 
-/** Name somebody and press "Пригласить". */
 async function invite(wrapper: VueWrapper, username: string) {
   await wrapper.find("input.invitee").setValue(username);
   await wrapper.find(".invite-row button").trigger("click");
@@ -160,8 +142,7 @@ describe("Game InvitationsSection", () => {
 
   it("shows the invitation just sent as the last row, next to the controls", async () => {
     const wrapper = await mountSection();
-    // Served in the order the database happened to hold the tokens in, which
-    // here puts the new one first.
+    // The order the database happened to keep, the new one first.
     list.mockResolvedValue(served([FRESH, OLD]));
 
     await invite(wrapper, "Новичок");
@@ -230,8 +211,7 @@ describe("Game InvitationsSection", () => {
     await invite(wrapper, "Новичок");
 
     expect(rows(wrapper)).toHaveLength(1);
-    // Where the press was, and in no plate (the owner's rule of 26 September
-    // 2026, UI_STANDARDS "Всплывающие сообщения").
+    // Where the press was, in no plate (UI_STANDARDS "Всплывающие сообщения").
     expect(wrapper.get(".invite-row + .action-result").text()).toBe(
       "Не удалось отправить приглашение",
     );
@@ -239,12 +219,6 @@ describe("Game InvitationsSection", () => {
   });
 });
 
-/**
- * The line that invites is one line at every width: the field, the list and
- * the button, the field taking what the other two leave. A phone shows the
- * page as it stands at full width, so the line does not lay itself out again
- * by the width of the section, and it does not wrap.
- */
 describe("Game InvitationsSection line that invites", () => {
   const css = componentCss(
     join(dirname(fileURLToPath(import.meta.url)), "InvitationsSection.vue"),
@@ -263,4 +237,16 @@ describe("Game InvitationsSection line that invites", () => {
     ).toEqual(["minmax(0, 1fr) auto auto"]);
     expect(css).not.toContain("@container");
   });
+});
+
+// The list waits in its shape, a failed first read says so, and emptiness is
+// said only once the answer came.
+// The last block of the file: the spies it leaves are nobody else's.
+describe("Game InvitationsSection before the list is read", () => {
+  it("waits in its shape and says a failed first read, not an empty list", () =>
+    expectFirstReadStates((first) => mountSection([], first), refused, {
+      placeholder: ".inv-waiting",
+      failed: "Не удалось загрузить приглашения",
+      empty: "Активных приглашений нет",
+    }));
 });

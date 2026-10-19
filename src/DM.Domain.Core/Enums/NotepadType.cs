@@ -1,16 +1,7 @@
 namespace DM.Domain.Core.Enums;
 
-/// <summary>
-/// Type of notepad
-/// </summary>
 /// <remarks>
-/// Three of the five hang off a game and differ by who may open them, which is
-/// the whole reason they are separate types rather than one notepad with a
-/// role check bolted on: <see cref="Master" /> belongs to the game and is read
-/// by its leads, <see cref="Player" /> belongs to a character and is read by
-/// its owner alone, <see cref="CharacterMaster" /> belongs to the same
-/// character and is read by the leads alone. On screen they are "Заметки
-/// игры", "Заметки игрока" and "Заметки мастера".
+/// The three game notepads are separate types because they differ by who may open them.
 /// </remarks>
 public enum NotepadType
 {

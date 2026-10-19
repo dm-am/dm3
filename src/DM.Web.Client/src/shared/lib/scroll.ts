@@ -1,11 +1,5 @@
-// Scroll container registry — the app content scrolls inside App.vue's
-// ".main" element (not the window), so window.scrollTo doesn't work.
-// App.vue registers the element on mount; paging and the router call
-// scrollContentToTop() to reset scroll position on navigation.
-//
-// Everything that needs the element takes it from here. A direct
-// document.querySelector(".main") works until the container is renamed, and
-// then it silently returns null instead of failing.
+// The page scrolls inside App.vue's ".main", not the window: every caller
+// takes the element from here rather than querying a class name.
 
 let scrollContainer: HTMLElement | null = null;
 
@@ -24,15 +18,8 @@ export function scrollContentToTop(behavior: ScrollBehavior = "auto"): void {
 }
 
 /**
- * Brings a block's TOP edge into view inside the registered container.
- *
- * Pagination helper: when the user pages a list from a control at its
- * bottom, the interesting content (the top of the repaginated block) is
- * usually scrolled out of view. If the block's top is NOT visible (above
- * the container's viewport or below its bottom edge), the container is
- * scrolled so the top lands `offsetPx` below the container's top edge.
- * If the top is already visible, nothing happens — the reading position
- * is left alone. No-op when no container is registered.
+ * Brings a block's top into view, offsetPx below the container's top, when it
+ * is out of view; a visible top keeps the reading position.
  */
 export function scrollBlockIntoView(el: HTMLElement, offsetPx = 16): void {
   if (!scrollContainer) return;
@@ -44,4 +31,36 @@ export function scrollBlockIntoView(el: HTMLElement, offsetPx = 16): void {
   scrollContainer.scrollTo({
     top: scrollContainer.scrollTop + (blockTop - containerRect.top) - offsetPx,
   });
+}
+
+/** What the reader does to take the scroll over from a held anchor. */
+const READER_INPUT = ["wheel", "touchstart", "keydown", "pointerdown"] as const;
+
+/**
+ * Keeps an anchor's top at the top of the content while the blocks around it
+ * change height (a skeleton giving way to what it waited for), until the reader
+ * scrolls, presses or types. The router scrolls to an anchor once, a frame
+ * after the page is drawn, and the blocks above it settle later.
+ *
+ * @param target The element the address names
+ * @param settling The element whose size moves the target: the page around it
+ * @returns The release, for the target's unmount
+ */
+export function holdAnchor(
+  target: HTMLElement,
+  settling: HTMLElement,
+): () => void {
+  if (typeof ResizeObserver === "undefined") return () => {};
+  const observer = new ResizeObserver(() =>
+    target.scrollIntoView({ block: "start" }),
+  );
+  const release = () => {
+    observer.disconnect();
+    for (const type of READER_INPUT)
+      window.removeEventListener(type, release, true);
+  };
+  observer.observe(settling);
+  for (const type of READER_INPUT)
+    window.addEventListener(type, release, { capture: true, passive: true });
+  return release;
 }

@@ -5,7 +5,6 @@ using System.Threading.Tasks;
 using DM.Domain.Account.Features.Registration;
 using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
-using DbPendingRegistration = DM.Infrastructure.Persistence.Entities.Account.PendingRegistration;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
@@ -37,22 +36,9 @@ internal class RegistrationRepository : IRegistrationRepository
         !await _dbContext.UsernameHistories.AnyAsync(h => h.OldUsername.ToLower() == username.ToLower(), cancellationToken);
 
     /// <inheritdoc />
-    public async Task<bool> PendingExists(string email, CancellationToken cancellationToken) =>
-        await _dbContext.PendingRegistrations
-            .AnyAsync(p => p.Email.ToLower() == email.ToLower(), cancellationToken);
-
-    /// <inheritdoc />
     public Task AddPending(PendingRegistration pending) =>
-        // One statement, because the caller's check that no row exists stops being
-        // true the moment it returns: two submissions of the form arriving
-        // together both found nothing and both inserted the same address, and the
-        // one that lost the unique index answered the person with a failure of the
-        // storage engine instead of a letter.
-        //
-        // CreatedUtc is left alone on the update. It dates the registration rather
-        // than this letter, and the sweep that returns an abandoned address counts
-        // from it: refreshed on every resend, an address could be held forever by
-        // pressing the button once a week.
+        // One statement: two submissions arriving together would both pass a check-then-insert.
+        // CreatedUtc stays on update: the sweep of abandoned addresses counts from it.
         _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
             INSERT INTO "PendingRegistrations" (
                 "PendingRegistrationId", "SecretHash", "Email", "PasswordHash", "Salt",
@@ -71,68 +57,11 @@ internal class RegistrationRepository : IRegistrationRepository
             """);
 
     /// <inheritdoc />
-    public async Task ReplacePending(PendingRegistration pending)
-    {
-        // Equality over lower(), not ILIKE. The row found here is overwritten with
-        // a new token and a new password hash and keeps its own address, while the
-        // confirmation letter goes to the address the caller typed: a pattern match
-        // would hand the caller a link that activates somebody else's registration.
-        var existing = await _dbContext.PendingRegistrations
-            .FirstOrDefaultAsync(p => p.Email.ToLower() == pending.Email.ToLower());
-
-        if (existing != null)
-        {
-            // Update existing pending with new data
-            existing.SecretHash = pending.SecretHash;
-            existing.PasswordHash = pending.PasswordHash;
-            existing.Salt = pending.Salt;
-            existing.PasswordHashVersion = pending.PasswordHashVersion;
-            existing.TokenCreatedUtc = pending.TokenCreatedUtc;
-            existing.AcceptedRules = pending.AcceptedRules;
-            // Keep original CreatedUtc for cleanup logic
-        }
-        else
-        {
-            // Should not happen, but add if somehow missing
-            var entity = new DbPendingRegistration
-            {
-                PendingRegistrationId = pending.PendingRegistrationId,
-                SecretHash = pending.SecretHash,
-                Email = pending.Email,
-                PasswordHash = pending.PasswordHash,
-                Salt = pending.Salt,
-                PasswordHashVersion = pending.PasswordHashVersion,
-                CreatedUtc = pending.CreatedUtc,
-                TokenCreatedUtc = pending.TokenCreatedUtc,
-                AcceptedRules = pending.AcceptedRules
-            };
-            _dbContext.PendingRegistrations.Add(entity);
-        }
-
-        await _dbContext.SaveChangesAsync();
-    }
-
-    /// <inheritdoc />
     public async Task<PendingRegistration?> FindPendingByEmail(string email, CancellationToken cancellationToken)
     {
         var entity = await _dbContext.PendingRegistrations
             .FirstOrDefaultAsync(p => p.Email.ToLower() == email.ToLower(), cancellationToken);
-
-        if (entity == null)
-            return null;
-
-        return new PendingRegistration
-        {
-            PendingRegistrationId = entity.PendingRegistrationId,
-            SecretHash = entity.SecretHash,
-            Email = entity.Email,
-            PasswordHash = entity.PasswordHash,
-            Salt = entity.Salt,
-            PasswordHashVersion = entity.PasswordHashVersion,
-            CreatedUtc = entity.CreatedUtc,
-            TokenCreatedUtc = entity.TokenCreatedUtc,
-            AcceptedRules = entity.AcceptedRules
-        };
+        return entity?.ToPendingRegistration();
     }
 
     /// <inheritdoc />

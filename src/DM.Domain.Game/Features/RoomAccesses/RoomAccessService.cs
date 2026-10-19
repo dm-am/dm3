@@ -1,4 +1,3 @@
-using DM.Domain.Game.Features.Games;
 using System;
 using System.Net;
 using System.Threading.Tasks;
@@ -14,9 +13,6 @@ using FluentValidation;
 
 namespace DM.Domain.Game.Features.RoomAccesses;
 
-/// <summary>
-/// Unified service for room access CRUD operations
-/// </summary>
 internal class RoomAccessService : IRoomAccessService
 {
     private readonly IValidator<CreateRoomAccess> _createValidator;
@@ -54,8 +50,6 @@ internal class RoomAccessService : IRoomAccessService
         _identityProvider = identityProvider;
     }
 
-    #region Create
-
     public async Task<RoomAccess> CreateAsync(CreateRoomAccess createRoomAccess)
     {
         await _createValidator.ValidateAndThrowAsync(createRoomAccess);
@@ -86,10 +80,6 @@ internal class RoomAccessService : IRoomAccessService
         return result;
     }
 
-    #endregion
-
-    #region Read
-
     public async Task<RoomAccess> GetAsync(Guid accessId)
     {
         var access = await _repository.GetAccess(accessId, _identityProvider.Current.User.UserId);
@@ -100,16 +90,12 @@ internal class RoomAccessService : IRoomAccessService
         return access;
     }
 
-    #endregion
-
-    #region Update
-
     public async Task<RoomAccess> UpdateAsync(UpdateRoomAccess updateRoomAccess)
     {
         await _updateValidator.ValidateAndThrowAsync(updateRoomAccess);
 
         var currentUserId = _identityProvider.Current.User.UserId;
-        var (oldAccess, room) = await EditableAccess(updateRoomAccess.AccessId, currentUserId);
+        var (oldAccess, _) = await EditableAccess(updateRoomAccess.AccessId, currentUserId);
 
         var updateEntity = new UpdateRoomAccessEntity
         {
@@ -123,14 +109,8 @@ internal class RoomAccessService : IRoomAccessService
         return result;
     }
 
-    /// <summary>
-    /// The grant and the room it opens, with the caller's right to change both
-    /// already checked.
-    /// </summary>
     /// <remarks>
-    /// Two reads and one gate, in this order: a grant nobody can see is a 404
-    /// before the room behind it is ever fetched, and the right to edit belongs
-    /// to the game rather than to the room or the grant.
+    /// A grant nobody can see is a 404 before the room is fetched; the right to edit belongs to the game.
     /// </remarks>
     private async Task<(RoomAccess Access, RoomToUpdate Room)> EditableAccess(
         Guid accessId, Guid currentUserId)
@@ -151,10 +131,6 @@ internal class RoomAccessService : IRoomAccessService
         return (access, room);
     }
 
-    #endregion
-
-    #region Delete
-
     public async Task DeleteAsync(Guid accessId)
     {
         var currentUserId = _identityProvider.Current.User.UserId;
@@ -163,6 +139,4 @@ internal class RoomAccessService : IRoomAccessService
         await _repository.Delete(accessId);
         await _producer.SendAsync(EventType.ChangedRoom, room.Id);
     }
-
-    #endregion
 }

@@ -14,18 +14,8 @@ namespace DM.Architecture.Tests;
 /// The object store is deployed with the boundaries the code relies on.
 /// </summary>
 /// <remarks>
-/// SeaweedFS runs as one process, and only its S3 port asks for a key: the
-/// admin server, the filer, the volume server and their gRPC ports answer
-/// anybody who reaches them and cannot be switched off. So the boundaries live
-/// in three files rather than in the store, and each of them is a line somebody
-/// can delete without anything failing on the stand: the internal network in
-/// docker-compose.yml, the flags and the identity file in storage-start.sh, the
-/// pinned client in the scripts that run it.
-///
-/// What answers on a stand that is up is checked by check-storage.sh, which reads
-/// the deployment rather than a copy of it. What is asserted here is the half a
-/// running store cannot show: that the lines holding the boundaries are still
-/// written, before anything is started.
+/// Only the S3 port of SeaweedFS asks for a key, so the boundaries live in compose, storage-start.sh and
+/// the scripts. check-storage.sh checks a running stand; this, that the lines are still written.
 /// </remarks>
 public class StorageConfigurationShould
 {
@@ -43,12 +33,7 @@ public class StorageConfigurationShould
     /// <summary>
     /// The store sits in a network of its own, which nothing but its proxy joins.
     /// </summary>
-    /// <remarks>
-    /// On the stand network, imgproxy - the container that parses untrusted image
-    /// data - could erase the bucket through the filer past every account. A port
-    /// published or a second network attached reopens exactly that, and so does an
-    /// overlay that declares the service again: compose merges its keys into these.
-    /// </remarks>
+    /// <remarks>On a shared network any container could erase the bucket through the filer; an overlay merges its keys in.</remarks>
     [Fact]
     public void KeepTheStoreInAnInternalNetworkOnlyItsProxyJoins()
     {
@@ -81,11 +66,7 @@ public class StorageConfigurationShould
     /// <summary>
     /// Every service the store can run without is off, and nothing reports home.
     /// </summary>
-    /// <remarks>
-    /// The IAM API would mint accounts beside the identity file. WebDAV, Iceberg
-    /// and Lance are further doors on the same process, the admin UI is one more
-    /// page nobody asked for, and telemetry is on unless it is turned off.
-    /// </remarks>
+    /// <remarks>Each is another door on the same process, and telemetry is on unless turned off.</remarks>
     [Theory]
     [InlineData("-s3.iam=false")]
     [InlineData("-webdav=false")]
@@ -103,12 +84,8 @@ public class StorageConfigurationShould
     /// The command line is the whole configuration of the store.
     /// </summary>
     /// <remarks>
-    /// The server writes the flags it was given into the volume and prefers the
-    /// stored value whenever the command line holds the default. Without the file
-    /// removed before each start, a flag taken out of the script keeps working for
-    /// one more start and a default written out explicitly loses to the volume for
-    /// good, so this file and the store would disagree. The volume size is one of
-    /// those flags: left out, it is derived from the size of the disk.
+    /// The server stores its flags in the volume and prefers them over a default on the command line, so the
+    /// file is removed before each start. Without a volume size it is derived from the disk.
     /// </remarks>
     [Fact]
     public void StartTheStoreFromItsCommandLineAlone()
@@ -129,12 +106,7 @@ public class StorageConfigurationShould
     /// <summary>
     /// The collector is held under the limit of the container.
     /// </summary>
-    /// <remarks>
-    /// The filer allocates large long-lived buffers up front, and without a limit
-    /// the collector lets the heap reach 233 MiB under load against 256M. The price
-    /// of the limit is CPU at rest, which check-storage.sh measures; the limit
-    /// itself is held here, together with the ceiling it was chosen against.
-    /// </remarks>
+    /// <remarks>The filer allocates large buffers up front; check-storage.sh measures the CPU price.</remarks>
     [Fact]
     public void HoldTheHeapOfTheStoreUnderTheLimitOfItsContainer()
     {
@@ -151,11 +123,8 @@ public class StorageConfigurationShould
     /// The store has no administrator, and every account is scoped to the bucket.
     /// </summary>
     /// <remarks>
-    /// SeaweedFS turns an environment key into a global administrator that no
-    /// bucket can scope, so the container holds none - neither written in nor
-    /// carried over from docker/.env, where the offsite replication keys live under
-    /// exactly those names. In the identity file an action without the bucket
-    /// suffix applies to every bucket, and Admin creates and drops them.
+    /// An environment key becomes a global administrator no bucket can scope; an action without the bucket
+    /// suffix applies to every bucket.
     /// </remarks>
     [Fact]
     public void GiveTheStoreNoAdministrator()
@@ -183,20 +152,8 @@ public class StorageConfigurationShould
     /// others.
     /// </summary>
     /// <remarks>
-    /// One invariant, one owner. The prefixes are a product decision and live in
-    /// UploadFolder; the grant is written into the identity file the store starts
-    /// with, because the account the application runs as is deliberately not
-    /// allowed to make one. A type added to the domain without the file following
-    /// is a prefix nobody can read; a bucket-wide grant makes every later type
-    /// public by default; and a List makes the random part of every key a lookup.
-    ///
-    /// Compared as sets of prefixes rather than by matching the text: the file
-    /// spells them as patterns and the domain as folder names, and the point is
-    /// that they name the same things.
-    ///
-    /// check-storage.sh proves the same split on a stand that is up, and it
-    /// probes the prefixes it lists: a public type it does not list is one that
-    /// nobody checks for reading or for listing, so its list is held here too.
+    /// The prefixes live in UploadFolder and the grant in the identity file, compared as sets. The list
+    /// check-storage.sh probes is held here too.
     /// </remarks>
     [Fact]
     public void GrantAnonymousReadsOnlyToThePrefixesTheProductDeclaredPublic()
@@ -242,14 +199,7 @@ public class StorageConfigurationShould
     /// The images of the store and its client name a digest, and the client is
     /// written once.
     /// </summary>
-    /// <remarks>
-    /// A tag on Docker Hub can be rewritten, and the one-process mode of the store
-    /// is young enough for its defaults to move between releases, so a new build
-    /// under the same tag would change the store with no line of this repository
-    /// changing. The client runs the backup, the boundary check and the restore
-    /// line of the deployment guide, and two spellings of it would let one of
-    /// them move while another stays behind.
-    /// </remarks>
+    /// <remarks>A Docker Hub tag can be rewritten, and the client runs backup, check and restore from one spelling.</remarks>
     [Fact]
     public void PinTheStoreAndItsClientByDigest()
     {
@@ -263,10 +213,9 @@ public class StorageConfigurationShould
             image.Should().MatchRegex(digested, $"the image of {service} can be rewritten under its tag");
         }
 
-        var restore = Path.Combine(DM.Testing.RepositoryLayout.Root, "docs", "guides", "DEPLOYMENT.md");
+        var restore = Path.Combine(DockerDirectory, "scripts", "restore-storage.sh");
         var clients = Directory
             .EnumerateFiles(DockerDirectory, "*.sh", SearchOption.AllDirectories)
-            .Append(restore)
             .SelectMany(path => Regex.Matches(File.ReadAllText(path), $@"{Regex.Escape(ClientImage)}[^\s'""`\\)]*"))
             .Select(match => match.Value)
             .ToList();
@@ -287,11 +236,7 @@ public class StorageConfigurationShould
     /// <summary>
     /// The identities of the file the server is started with, parsed as JSON.
     /// </summary>
-    /// <remarks>
-    /// The heredoc puts every shell variable inside a JSON string, so the text is
-    /// a valid document as written, and reading it as one leaves no room for a
-    /// pattern to match something the server would read differently.
-    /// </remarks>
+    /// <remarks>The heredoc keeps every variable inside a JSON string, so the text is a valid document.</remarks>
     private static List<Identity> Identities()
     {
         var config = Regex.Match(string.Join(' ', StartCommand()), @"-s3\.config=(\S+)");

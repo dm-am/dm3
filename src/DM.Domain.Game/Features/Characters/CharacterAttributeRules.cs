@@ -1,21 +1,26 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
-using DM.Domain.Game.Features.Games;
+using System.Threading.Tasks;
+using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.GameAttributeSchemas;
+using FluentValidation;
 
 namespace DM.Domain.Game.Features.Characters;
 
 /// <summary>
-/// Shared rules for the attribute values submitted with a character.
-/// Reused by both create and update character validators so every persistence
-/// path enforces the same invariants.
+/// Rules for submitted attribute values, shared by the create and update validators.
 /// </summary>
 internal static class CharacterAttributeRules
 {
     /// <summary>
-    /// Collect all rule violations for the submitted attribute values.
+    /// The message argument the value rules write their refusal into.
     /// </summary>
-    /// <param name="attributes">Attribute values being persisted (may be null on update)</param>
-    /// <returns>Human-readable error messages, empty when valid</returns>
+    public const string ErrorMessage = nameof(ErrorMessage);
+
+    private const string SchemaCacheKey = nameof(SchemaCacheKey);
+
+    /// <param name="attributes">Null on an update that leaves the values alone</param>
     public static IEnumerable<string> Collect(IEnumerable<CharacterAttribute>? attributes)
     {
         if (attributes == null)
@@ -23,11 +28,7 @@ internal static class CharacterAttributeRules
             yield break;
         }
 
-        // One value per specification: the stored rows are unique on
-        // (CharacterId, AttributeId) and the update path indexes them by
-        // AttributeId. A repeated identifier is a request that cannot be
-        // stored — one of the two values would be lost, and before the unique
-        // index existed both were written and left the character uneditable.
+        // Stored rows are unique on (CharacterId, AttributeId): one of two values would be lost.
         var duplicated = attributes
             .GroupBy(a => a.Id)
             .Where(g => g.Skip(1).Any())
@@ -38,5 +39,48 @@ internal static class CharacterAttributeRules
         {
             yield return AttributeValidationError.ManyDuplicated(duplicated);
         }
+    }
+
+    public static void AddFailures<T>(IEnumerable<CharacterAttribute>? attributes, ValidationContext<T> context)
+    {
+        foreach (var error in Collect(attributes))
+        {
+            context.AddFailure(error);
+        }
+    }
+
+    /// <summary>
+    /// The sheet of the game, read once per validated request.
+    /// </summary>
+    public static async Task<Dictionary<Guid, AttributeSpecification>> Specifications(
+        IValidationContext context, Func<Task<GameAttributeSchema>> readSchema)
+    {
+        if (context.RootContextData.TryGetValue(SchemaCacheKey, out var cached) &&
+            cached is Dictionary<Guid, AttributeSpecification> specifications)
+        {
+            return specifications;
+        }
+
+        specifications = (await readSchema()).Specifications.ToDictionary(s => s.Id);
+        context.RootContextData[SchemaCacheKey] = specifications;
+        return specifications;
+    }
+
+    /// <summary>
+    /// The sheet holds a specification for the value and the value fits it.
+    /// </summary>
+    public static async Task<bool> FitsSheet<T>(CharacterAttribute attribute, ValidationContext<T> context,
+        Func<Task<GameAttributeSchema>> readSchema, IAttributeValueValidator attributeValueValidator)
+    {
+        var specifications = await Specifications(context, readSchema);
+        if (!specifications.TryGetValue(attribute.Id, out var specification))
+        {
+            context.MessageFormatter.AppendArgument(ErrorMessage, AttributeValidationError.InvalidSpecification);
+            return false;
+        }
+
+        var (valid, error) = attributeValueValidator.Validate(attribute.Value, specification);
+        context.MessageFormatter.AppendArgument(ErrorMessage, error);
+        return valid;
     }
 }

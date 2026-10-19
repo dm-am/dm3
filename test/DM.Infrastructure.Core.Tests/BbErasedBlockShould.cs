@@ -1,9 +1,7 @@
 using System;
 using AwesomeAssertions;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
-using DM.Testing.Dsl;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
@@ -13,18 +11,11 @@ namespace DM.Infrastructure.Core.Tests;
 /// been written, and its author and readers get what they always got.
 /// </summary>
 /// <remarks>
-/// The erasure left marks of its own. A bold tag around the block stayed on the
-/// page as an empty element, a link with the block inside it was printed as the
-/// tags that were typed, "[link]", its address and "[/link]", and either told
-/// the reader that something stood there. The rule is BBCODE_RENDERING.md,
-/// section "Zero-information erase"; BbMarkupPropertiesShould holds the tags
-/// around a block and the content of a block on generated texts, and these hold
-/// the cases a generated text reaches too rarely: a block inside the one value
-/// of a content tag, and the texts the owner looked at.
+/// BBCODE_RENDERING.md, section "Zero-information erase". The generated texts are BbMarkupPropertiesShould's;
+/// these are the cases they reach too rarely.
 /// </remarks>
 public class BbErasedBlockShould
 {
-    private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid LeadId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid StrangerId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
@@ -34,23 +25,17 @@ public class BbErasedBlockShould
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 
     private string Post(string bbCode, Guid viewer) =>
-        ((BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost)).RenderHtml(bbCode, new RenderContext
+        _parserProvider.GetForSurface(BbSurface.GamePost).RenderHtml(bbCode, new RenderContext
         {
             Audience = RenderAudience.Display,
             Surface = BbSurface.GamePost,
-            Viewer = new TestSubject
-            {
-                UserId = viewer,
-                Role = UserRole.RegularUser,
-                IsAuthenticated = true,
-                AccessPolicy = AccessPolicy.NotSpecified
-            },
-            PostAuthorUserId = AuthorId,
+            Viewer = BbVisibilityRender.Viewer(UserRole.RegularUser, viewer),
+            PostAuthorUserId = BbVisibilityRender.AuthorId,
             GameLeadUserIds = [LeadId]
         });
 
     private string PlainText(string bbCode) =>
-        ((BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost))
+        _parserProvider.GetForSurface(BbSurface.GamePost)
         .RenderText(bbCode, RenderContext.ForPlainText() with { Surface = BbSurface.GamePost });
 
     /// <summary>
@@ -102,7 +87,7 @@ public class BbErasedBlockShould
         const string bbCode = "[link]https://example.com/[private]x[/private][/link]";
         const string asTyped = "[link]https://example.com/" + Opening + "x</span>[/link]";
 
-        Post(bbCode, AuthorId).Should().Be(asTyped);
+        Post(bbCode, BbVisibilityRender.AuthorId).Should().Be(asTyped);
         Post(bbCode, LeadId).Should().Be(asTyped);
     }
 
@@ -111,16 +96,11 @@ public class BbErasedBlockShould
         PlainText("[link]https://example.com/[private]x[/private][/link]").Should().Be("https://example.com/");
 
     /// <summary>
-    /// The post the owner looked at, line by line: a bold tag around the block,
-    /// a link around it, and a dash on either side of it.
+    /// A post line by line: a bold tag around the block, a link around it, and a dash on either side.
     /// </summary>
-    /// <remarks>
-    /// The hyphens on either side of the block are drawn as they were typed: the
-    /// erased block does not join them into a dash, as a dash is what the author
-    /// typed on neither side.
-    /// </remarks>
+    /// <remarks>The hyphens stay as typed: the erased block does not join them into a dash.</remarks>
     [Fact]
-    public void ShowTheOwnersPost_AsIfTheBlocksWereNotThere()
+    public void ShowTheOwnersPostAsIfTheBlocksWereNotThere()
     {
         const string bbCode = "Раз [b][private]x[/private][/b] два\n" +
                               "[link]https://example.com/[private]x[/private][/link]\n" +
@@ -131,15 +111,14 @@ public class BbErasedBlockShould
             "<a href=\"https://example.com/\" target=\"_blank\" rel=\"noopener\">ссылка</a><br />" +
             "а--б");
 
-        Post(bbCode, AuthorId).Should().Be(
+        Post(bbCode, BbVisibilityRender.AuthorId).Should().Be(
             "Раз <strong>" + Opening + "x</span></strong> два<br />" +
             "[link]https://example.com/" + Opening + "x</span>[/link]<br />" +
             "а-" + Opening + "x</span>-б");
     }
 
     /// <summary>
-    /// The example the owner gave for the look of hidden text: green words in
-    /// the line, and who reads them after them, in the same line.
+    /// Hidden text in the line, and who reads it after it, in the same line.
     /// </summary>
     [Fact]
     public void ShowTheHiddenTextInTheLine()
@@ -148,7 +127,7 @@ public class BbErasedBlockShould
                               "[private]Она прячет найденный ключ под подушкой и никому о нем не говорит.[/private]\n" +
                               "Потом она выходит на палубу.";
 
-        Post(bbCode, AuthorId).Should().Be(
+        Post(bbCode, BbVisibilityRender.AuthorId).Should().Be(
             "Эльвира обходит каюту и садится за стол капитана.<br />" +
             Opening + "Она прячет найденный ключ под подушкой и никому о нем не говорит.</span><br />" +
             "Потом она выходит на палубу.");
@@ -164,11 +143,8 @@ public class BbErasedBlockShould
     /// never typed that line.
     /// </summary>
     /// <remarks>
-    /// The whole text begins and ends lines, so a block at its very start or end next to
-    /// a break is on a line of its own too. Inside a tag only a line between two breaks
-    /// is known to be one: the tag itself may stand in the middle of a line of text. A
-    /// line with anything else on it stays as the author typed it, a space included,
-    /// because the space is on that line without the block as well.
+    /// The whole text begins and ends lines; inside a tag only a line between two breaks is one. A space on
+    /// the line keeps it.
     /// </remarks>
     [Theory]
     [InlineData("раз\n[private]x[/private]\nдва", "раз<br />два")]

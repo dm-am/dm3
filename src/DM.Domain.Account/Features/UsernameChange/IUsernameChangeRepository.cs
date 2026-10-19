@@ -33,9 +33,6 @@ public interface IUsernameChangeRepository
     /// </summary>
     Task<UsernameChangeRequest?> GetById(Guid requestId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get all pending requests
-    /// </summary>
     Task<IReadOnlyCollection<UsernameChangeRequestEntry>> GetPendingRequests(CancellationToken ct = default);
 
     /// <summary>

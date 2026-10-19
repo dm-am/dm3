@@ -1,58 +1,19 @@
 <script setup lang="ts">
-/**
- * One entry of the ban list, written as DM2's bot wrote its ban log (DM2's
- * topic "Бан-лог"), so a reader of that log reads this one the same way.
- *
- * The bot wrote every issue and every lift as a comment of one pattern, the
- * same in 1886 entries, and the sentence here is its sentence: the moderator,
- * "выдал(а)" or "снял(а)", the scope of the ban, "пользователю" or "с
- * пользователя", the login, "до" and the end date in bold, a full stop. The end
- * of a lifted ban is the end it had, not the day of the lift. A permanent ban
- * is said in a word, "бессрочный", with no "до": DM2 printed a date five
- * hundred years away, and ours would be a hundred, a number nobody knows.
- *
- * Where the entry says more than DM2's did, it says it for the reader. The
- * moderator is a bold link to his profile, as the login is: whose decision it
- * was is the first thing a reader of the log looks up. The reason stands under
- * "Примечание от модератора:" on a line of its own, drawn as the [quote] of
- * the site's text, so the moderator's words stand apart from the sentence the
- * site writes; an entry without a reason keeps the heading over nothing, as
- * DM2 kept its "Комментарий:". The caption says "Выдан:" or "Снят:" before the
- * moment, so the moment says what it is the moment of. The sentence is the
- * text of a record, set as a comment's text is (RecordBlock): justified, its
- * words broken while "Перенос слов" is on.
- *
- * In the corner of the caption line stands the number of the entry in the
- * whole list, a grey link to the entry, as the number of a comment is
- * (CommentItem): DM2 numbered the comments of its ban log the same way. The
- * page says where the link leads (`numberTo`); the number is the server's, the
- * same on every page and in the list of one person.
- *
- * Nothing in the entry is red or green: a ban is the record of a decision, and
- * DM2 coloured nothing in its log but the logins. The lift is offered where the
- * server says this reader may lift this ban (`canLift`, worked out by the rule
- * that refuses the lift itself), and only on the entry of the issue; the card
- * asks no server, the caller opens the window. The reason of a ban arrives
- * rendered, written in the BBCode editor; the reason of a lift is a plain
- * field and stays text.
- */
+// The sentence of DM2's ban log bot, so a reader of that log reads this one the same way.
 import { computed } from "vue";
 import type { RouteLocationRaw } from "vue-router";
 import { RemovedAccountLink } from "@/entities/user/@x/moderation";
 import { CaptionAction, CaptionLine } from "@/shared/ui/CaptionLine";
 import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
-import type { BanLogEntry } from "../api/moderationApi";
+import type { BanLogEntry } from "../api/banApi";
 import { banScopeLabel, isPermanent } from "../lib/warningLabels";
 import RecordBlock from "./RecordBlock.vue";
 
-// The attributes the list gives the entry, its anchor first, go to the record:
-// the record carries the ground, and the mark of an entry the link arrived at
-// is drawn on the ground, as on a comment.
+// The anchor goes to the record, which carries the ground the arrival mark is drawn on.
 defineOptions({ inheritAttrs: false });
 
 const props = defineProps<{
   entry: BanLogEntry;
-  /** Where the number of the entry leads: the entry, on its page of the list. */
   numberTo?: RouteLocationRaw;
 }>();
 
@@ -60,30 +21,24 @@ const props = defineProps<{
 const NBSP = "\u00a0";
 
 const emit = defineEmits<{
-  /** The lift was asked for, on the ban of this entry. */
   (e: "lift"): void;
 }>();
 
 const ban = computed(() => props.entry.ban);
 const isLift = computed(() => props.entry.kind === "Lifted");
 
-/** Who did it: the moderator of the ban, or the one who lifted it. */
 const actor = computed(() =>
   isLift.value ? ban.value.liftedBy : ban.value.moderator,
 );
 
 const scope = computed(() => banScopeLabel(ban.value));
 
-/** The end the ban had; none for a permanent one, which says so in a word. */
+/** The end the ban had, also for a lifted one. */
 const end = computed(() =>
   isPermanent(ban.value) ? null : formatDate(ban.value.expiresUtc),
 );
 
-/**
- * The reason, rendered for a ban and typed for a lift. An entry without one,
- * which DM2's log has, keeps the heading of the note and draws no quote under
- * it: an empty quote would say there is something to read.
- */
+// Rendered for a ban, typed for a lift; without one the heading stays over no quote.
 const reason = computed(() =>
   isLift.value ? ban.value.liftReason?.trim() : ban.value.comment?.trim(),
 );
@@ -94,9 +49,7 @@ const canLift = computed(() => !isLift.value && ban.value.canLift);
 <template>
   <article class="ban-log-card">
     <RecordBlock v-bind="$attrs">
-      <!-- The sentence, a blank line and the note, one run of text as DM2
-           wrote it. The spaces are written out, so the copied text reads as
-           the shown one. -->
+      <!-- The spaces are written out, so the copied text reads as the shown one. -->
       <span class="ban-log-card__phrase"
         ><b class="ban-log-card__user"
           ><router-link
@@ -125,9 +78,6 @@ const canLift = computed(() => !isLift.value && ban.value.canLift);
         <div v-else class="quote" v-html="ban.comment" />
       </div>
 
-      <!-- The caption line and the number in its corner, as the footer of a
-           comment stands (CommentItem): the line wraps inside itself and the
-           number keeps the corner, on the baseline of the line's last row. -->
       <div class="ban-log-card__footer">
         <CaptionLine class="ban-log-card__caption">
           <span
@@ -138,9 +88,7 @@ const canLift = computed(() => !isLift.value && ban.value.canLift);
             >Снять бан</CaptionAction
           >
         </CaptionLine>
-        <!-- A number alone does not say what it is to a screen reader, hence
-             the name; the router marks every link to this page as the current
-             one, and none of these is. -->
+        <!-- The router marks every link to this page as current, and none of these is. -->
         <router-link
           v-if="numberTo"
           :to="numberTo"
@@ -155,10 +103,8 @@ const canLift = computed(() => !isLift.value && ban.value.canLift);
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
-// DM2's bold: the moderator, the login and the end date, in the colour of the
-// text; the two names keep the colour of a link, the one colour of the entry.
 .ban-log-card__phrase b
   font-weight: bold
   color: $text
@@ -166,14 +112,11 @@ const canLift = computed(() => !isLift.value && ban.value.canLift);
 .ban-log-card__user :deep(a)
   color: $link
 
-// The reason of a lift is typed in a field of several lines, and its lines stay
-// as the moderator broke them; the rendered reason of a ban carries its own.
+// The typed reason keeps the lines the moderator broke it into.
 .ban-log-card__lift-reason
   white-space: pre-line
 
-// The footer is a caption, not a part of the text it stands in: the caption's
-// size, colour and line (RecordBlock, .record-block__caption), flush left, its
-// words whole. A small step under the text, as the caption of every record.
+// A caption, not a part of the justified text it stands in.
 .ban-log-card__footer
   display: flex
   flex-wrap: nowrap
@@ -186,13 +129,11 @@ const canLift = computed(() => !isLift.value && ban.value.canLift);
   hyphens: manual
   -webkit-hyphens: manual
 
-// The line takes the row and wraps inside itself.
 .ban-log-card__caption
   flex: 1 1 0%
   min-width: 0
 
-// The number of a comment (CommentItem, .comment-number): a grey link of the
-// caption's size, pinned to the right edge by its auto margin.
+// As the number of a comment, CommentItem.
 .ban-log-card__number
   flex: none
   margin-left: auto

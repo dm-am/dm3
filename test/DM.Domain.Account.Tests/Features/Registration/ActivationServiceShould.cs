@@ -16,47 +16,46 @@ using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Registration;
 
 public class ActivationServiceShould : UnitTestBase
 {
-    private readonly IValidator<ActivationRequest> _validator;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IActivationRepository _repository;
-    private readonly IRegistrationRepository _registrationRepository;
-    private readonly IUserFactory _userFactory;
-    private readonly IEventProducer _producer;
-    private readonly ActivationService _service;
+    private readonly IValidator<ActivationRequest> validator;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IActivationRepository repository;
+    private readonly IRegistrationRepository registrationRepository;
+    private readonly IUserFactory userFactory;
+    private readonly IEventProducer producer;
+    private readonly ActivationService service;
 
     public ActivationServiceShould()
     {
-        _validator = Mock<IValidator<ActivationRequest>>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _repository = Mock<IActivationRepository>();
-        _registrationRepository = Mock<IRegistrationRepository>();
-        _userFactory = Mock<IUserFactory>();
-        _producer = Mock<IEventProducer>();
+        validator = Mock<IValidator<ActivationRequest>>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
+        repository = Mock<IActivationRepository>();
+        registrationRepository = Mock<IRegistrationRepository>();
+        userFactory = Mock<IUserFactory>();
+        producer = Mock<IEventProducer>();
         var config = Options.Create(new TokenConfiguration
         {
             ActivationTokenLifetimeHours = 48
         });
 
-        _validator.ValidateAsync(
+        validator.ValidateAsync(
                 Arg.Any<ValidationContext<ActivationRequest>>(),
                 Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _service = new ActivationService(
-            _validator,
-            _dateTimeProvider,
-            _repository,
-            _registrationRepository,
-            _userFactory,
-            _producer,
+        service = new ActivationService(
+            validator,
+            dateTimeProvider,
+            repository,
+            registrationRepository,
+            userFactory,
+            producer,
             config);
     }
 
@@ -69,11 +68,11 @@ public class ActivationServiceShould : UnitTestBase
             Username = "newuser"
         };
 
-        _repository.FindPendingByToken(request.Token, Arg.Any<CancellationToken>()).Returns((PendingRegistration?)null);
-        _repository.FindUserByEmail(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((AuthenticatedUser?)null);
+        repository.FindPendingByToken(request.Token, Arg.Any<CancellationToken>()).Returns((PendingRegistration?)null);
+        repository.FindUserByEmail(Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns((AuthenticatedUser?)null);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.Activate(request));
+            () => service.Activate(request));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Gone);
     }
@@ -93,11 +92,11 @@ public class ActivationServiceShould : UnitTestBase
             TokenCreatedUtc = now.AddDays(-3)
         };
 
-        _repository.FindPendingByToken(request.Token, Arg.Any<CancellationToken>()).Returns(pending);
-        _dateTimeProvider.Now.Returns(now);
+        repository.FindPendingByToken(request.Token, Arg.Any<CancellationToken>()).Returns(pending);
+        dateTimeProvider.Now.Returns(now);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.Activate(request));
+            () => service.Activate(request));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Gone);
     }
@@ -105,38 +104,15 @@ public class ActivationServiceShould : UnitTestBase
     [Fact]
     public async Task CreateUserAndCompleteActivation()
     {
-        var tokenId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var request = new ActivationRequest
-        {
-            Token = tokenId,
-            Username = "newuser"
-        };
-        var now = DateTimeOffset.UtcNow;
-        var pending = new PendingRegistration
-        {
-            PendingRegistrationId = Guid.NewGuid(),
-            Email = "test@example.com",
-            SecretHash = ConfirmationSecret.Hash(tokenId),
-            TokenCreatedUtc = now.AddHours(-1)
-        };
-        var user = new CreateUser
-        {
-            UserId = userId,
-            Username = "newuser",
-            Email = pending.Email
-        };
+        var (request, pending, user) = ArrangeReadyActivation();
 
-        _repository.FindPendingByToken(tokenId, Arg.Any<CancellationToken>()).Returns(pending);
-        _userFactory.CreateFromPending(pending, request.Username).Returns(user);
-        _dateTimeProvider.Now.Returns(now);
+        var result = await service.Activate(request);
 
-        var result = await _service.Activate(request);
-
-        result.Should().Be(userId);
-        await _repository.Received(1).CompleteActivation(user, pending.PendingRegistrationId);
-        await _producer.Received(1).SendAsync(EventType.ActivatedUser, userId);
+        result.Should().Be(user.UserId);
+        await repository.Received(1).CompleteActivation(user, pending.PendingRegistrationId);
+        await producer.Received(1).SendAsync(EventType.ActivatedUser, user.UserId);
     }
+
     /// <summary>
     /// The same click landing twice is a success, not a failure of the storage
     /// engine.
@@ -152,9 +128,9 @@ public class ActivationServiceShould : UnitTestBase
     public async Task ReturnTheAccountWhenTheSameActivationLandedTwice()
     {
         var (request, pending, user) = ArrangeReadyActivation();
-        _repository.CompleteActivation(user, pending.PendingRegistrationId)
+        repository.CompleteActivation(user, pending.PendingRegistrationId)
             .Returns(_ => throw new DuplicateEntityException("Duplicate account"));
-        _repository.FindUserByEmail(pending.Email, Arg.Any<CancellationToken>()).Returns(
+        repository.FindUserByEmail(pending.Email, Arg.Any<CancellationToken>()).Returns(
             new AuthenticatedUser
             {
                 UserId = user.UserId,
@@ -162,7 +138,7 @@ public class ActivationServiceShould : UnitTestBase
                 Email = pending.Email
             });
 
-        (await _service.Activate(request)).Should().Be(user.UserId);
+        (await service.Activate(request)).Should().Be(user.UserId);
     }
 
     /// <summary>
@@ -173,15 +149,15 @@ public class ActivationServiceShould : UnitTestBase
     public async Task RefuseANameTakenSinceItWasChecked()
     {
         var (request, pending, user) = ArrangeReadyActivation();
-        _repository.CompleteActivation(user, pending.PendingRegistrationId)
+        repository.CompleteActivation(user, pending.PendingRegistrationId)
             .Returns(_ => throw new DuplicateEntityException("Duplicate account"));
-        _repository.FindUserByEmail(pending.Email, Arg.Any<CancellationToken>())
+        repository.FindUserByEmail(pending.Email, Arg.Any<CancellationToken>())
             .Returns((AuthenticatedUser?)null);
-        _registrationRepository.UsernameFree(request.Username, Arg.Any<CancellationToken>())
+        registrationRepository.UsernameFree(request.Username, Arg.Any<CancellationToken>())
             .Returns(false);
 
         var thrown = await Assert.ThrowsAsync<HttpBadRequestException>(
-            () => _service.Activate(request));
+            () => service.Activate(request));
 
         thrown.ValidationErrors.Should().ContainKey(nameof(ActivationRequest.Username))
             .WhoseValue.Should().Be(ValidationError.Taken);
@@ -195,9 +171,9 @@ public class ActivationServiceShould : UnitTestBase
     public async Task RefuseAnActivationWhoseAddressWentToSomebodyElse()
     {
         var (request, pending, user) = ArrangeReadyActivation();
-        _repository.CompleteActivation(user, pending.PendingRegistrationId)
+        repository.CompleteActivation(user, pending.PendingRegistrationId)
             .Returns(_ => throw new DuplicateEntityException("Duplicate account"));
-        _repository.FindUserByEmail(pending.Email, Arg.Any<CancellationToken>()).Returns(
+        repository.FindUserByEmail(pending.Email, Arg.Any<CancellationToken>()).Returns(
             new AuthenticatedUser
             {
                 UserId = Guid.NewGuid(),
@@ -205,10 +181,10 @@ public class ActivationServiceShould : UnitTestBase
                 Email = pending.Email
             });
 
-        var thrown = await Assert.ThrowsAsync<HttpException>(() => _service.Activate(request));
+        var thrown = await Assert.ThrowsAsync<HttpException>(() => service.Activate(request));
 
         thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
-        await _producer.DidNotReceive().SendAsync(EventType.ActivatedUser, Arg.Any<Guid>());
+        await producer.DidNotReceive().SendAsync(EventType.ActivatedUser, Arg.Any<Guid>());
     }
 
     /// <summary>A link that is live, unspent and a name that is free.</summary>
@@ -232,11 +208,11 @@ public class ActivationServiceShould : UnitTestBase
             Email = pending.Email
         };
 
-        _repository.FindPendingByToken(tokenId, Arg.Any<CancellationToken>()).Returns(pending);
-        _userFactory.CreateFromPending(pending, request.Username).Returns(user);
-        _registrationRepository.UsernameFree(request.Username, Arg.Any<CancellationToken>())
+        repository.FindPendingByToken(tokenId, Arg.Any<CancellationToken>()).Returns(pending);
+        userFactory.CreateFromPending(pending, request.Username).Returns(user);
+        registrationRepository.UsernameFree(request.Username, Arg.Any<CancellationToken>())
             .Returns(true);
-        _dateTimeProvider.Now.Returns(now);
+        dateTimeProvider.Now.Returns(now);
         return (request, pending, user);
     }
 
@@ -252,10 +228,10 @@ public class ActivationServiceShould : UnitTestBase
             TokenCreatedUtc = now.AddHours(-1)
         };
 
-        _repository.FindPendingByToken(tokenId, Arg.Any<CancellationToken>()).Returns(pending);
-        _dateTimeProvider.Now.Returns(now);
+        repository.FindPendingByToken(tokenId, Arg.Any<CancellationToken>()).Returns(pending);
+        dateTimeProvider.Now.Returns(now);
 
-        var result = await _service.GetPendingInfo(tokenId);
+        var result = await service.GetPendingInfo(tokenId);
 
         result.Should().NotBeNull();
         result!.Email.Should().Be(pending.Email);

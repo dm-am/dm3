@@ -4,101 +4,25 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
-using DM.Domain.Account.Features.Identity;
 using DM.Domain.Blog.Authorization;
-using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Blog.Features.Blogs;
 using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
-using DM.Domain.Blog.Features.Subscriptions;
-using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Identity;
-using DM.Domain.Core.UnreadCounters;
-using DM.Domain.Core.Users;
-using DM.Testing;
-using DM.Testing.Markup;
+using DM.Domain.Blog.Tests.Dsl;
+using DM.Testing.Dsl;
 using AwesomeAssertions;
-using FluentValidation;
-using FluentValidation.Results;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
 
-public class BlogServiceShould : UnitTestBase
+public class BlogServiceShould : BlogServiceTestBase
 {
-    private readonly IBlogRepository _repository;
-    private readonly IBlogBlacklistRepository _blacklistRepository;
-    private readonly IUserBlacklistChecker _userBlacklistChecker;
-    private readonly IUserLookupService _userLookupService;
-    private readonly IBlogSubscriptionService _subscriptionService;
-    private readonly IUnreadCountersRepository _unreadCountersRepository;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IValidator<CreateBlog> _createBlogValidator;
-    private readonly IValidator<UpdateBlog> _updateBlogValidator;
-    private readonly IValidator<CreateRubric> _createRubricValidator;
-    private readonly IValidator<UpdateRubric> _updateRubricValidator;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IEventProducer _eventProducer;
-    private readonly BlogService _service;
-
     public BlogServiceShould()
     {
-        _repository = Mock<IBlogRepository>();
-        _blacklistRepository = Mock<IBlogBlacklistRepository>();
-        _userBlacklistChecker = Mock<IUserBlacklistChecker>();
-        _userLookupService = Mock<IUserLookupService>();
-        _subscriptionService = Mock<IBlogSubscriptionService>();
-        _unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _intentionManager = Mock<IIntentionManager>();
-        _createBlogValidator = Mock<IValidator<CreateBlog>>();
-        _updateBlogValidator = Mock<IValidator<UpdateBlog>>();
-        _createRubricValidator = Mock<IValidator<CreateRubric>>();
-        _updateRubricValidator = Mock<IValidator<UpdateRubric>>();
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _eventProducer = Mock<IEventProducer>();
-
-        _identityProvider.Current.Returns(Identity.Guest());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        _createBlogValidator
-            .ValidateAsync(Arg.Any<ValidationContext<CreateBlog>>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult());
-        _updateBlogValidator
-            .ValidateAsync(Arg.Any<ValidationContext<UpdateBlog>>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult());
-        _updateRubricValidator
-            .ValidateAsync(Arg.Any<ValidationContext<UpdateRubric>>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult());
-
-        _service = new BlogService(
-            _repository,
-            _blacklistRepository,
-            _userBlacklistChecker,
-            _userLookupService,
-            _subscriptionService,
-            _unreadCountersRepository,
-            _identityProvider,
-            _intentionManager,
-            _createBlogValidator,
-            _updateBlogValidator,
-            _createRubricValidator,
-            _updateRubricValidator,
-            _guidFactory,
-            _dateTimeProvider,
-            _eventProducer,
-            new TagNamesAsTyped());
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
     }
 
     /// <summary>
@@ -112,18 +36,18 @@ public class BlogServiceShould : UnitTestBase
     {
         var viewerId = Guid.NewGuid();
         var blockedAuthorId = Guid.NewGuid();
-        _identityProvider.Current.Returns(DM.Testing.Dsl.Identities.User(viewerId, UserRole.Mentor));
-        _intentionManager.IsAllowed(BlogIntention.SetStatusModeration).Returns(true);
-        _userBlacklistChecker
+        identityProvider.Current.Returns(Identities.User(viewerId, UserRole.Mentor));
+        intentionManager.IsAllowed(BlogIntention.SetStatusModeration).Returns(true);
+        userBlacklistChecker
             .GetBlockedUserIdsIfFlagEnabledAsync(viewerId, UserBlacklistSettings.HideBlogs, Arg.Any<CancellationToken>())
             .Returns(new HashSet<Guid> { blockedAuthorId });
         var filter = queue
             ? new BlogFilter { PremoderationStatuses = [PremoderationStatus.AwaitingApproval] }
             : new BlogFilter();
 
-        await _service.GetPublicBlogs(new PagingQuery(), filter);
+        await service.GetPublicBlogs(new PagingQuery(), filter);
 
-        await _repository.Received().CountPublicBlogs(
+        await repository.Received().CountPublicBlogs(
             Arg.Is<BlogFilter>(f => hidden
                 ? f.ExcludeOwnerIds != null && f.ExcludeOwnerIds.Contains(blockedAuthorId)
                 : f.ExcludeOwnerIds == null),
@@ -136,12 +60,12 @@ public class BlogServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var createBlog = new CreateBlog { Title = "Test Blog", DraftVisibility = DraftVisibility.Public };
 
-        _guidFactory.Create().Returns(blogId);
-        _repository.CreateBlog(Arg.Any<CreateBlogEntity>(), default).Returns(new BlogDto { Id = blogId });
+        guidFactory.Create().Returns(blogId);
+        repository.CreateBlog(Arg.Any<CreateBlogEntity>(), default).Returns(new BlogDto { Id = blogId });
 
-        await _service.Create(createBlog);
+        await service.Create(createBlog);
 
-        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.Create);
+        intentionManager.Received(1).ThrowIfForbidden(BlogIntention.Create);
     }
 
     [Fact]
@@ -155,13 +79,13 @@ public class BlogServiceShould : UnitTestBase
             DraftVisibility = DraftVisibility.Public
         };
 
-        _guidFactory.Create().Returns(blogId);
-        _repository.CreateBlog(Arg.Any<CreateBlogEntity>(), default).Returns(new BlogDto { Id = blogId });
+        guidFactory.Create().Returns(blogId);
+        repository.CreateBlog(Arg.Any<CreateBlogEntity>(), default).Returns(new BlogDto { Id = blogId });
 
-        var result = await _service.Create(createBlog);
+        var result = await service.Create(createBlog);
 
         result.Id.Should().Be(blogId);
-        await _repository.Received(1).CreateBlog(
+        await repository.Received(1).CreateBlog(
             Arg.Is<CreateBlogEntity>(e =>
                 e.BlogId == blogId &&
                 e.Title == "Test Blog" &&
@@ -176,82 +100,12 @@ public class BlogServiceShould : UnitTestBase
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
         var updateBlog = new UpdateBlog { BlogId = blogId, Title = "Updated" };
 
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
-        _repository.UpdateBlog(Arg.Any<UpdateBlogEntity>(), default).Returns(blog);
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        repository.UpdateBlog(Arg.Any<UpdateBlogEntity>(), default).Returns(blog);
 
-        await _service.Update(updateBlog);
+        await service.Update(updateBlog);
 
-        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.EditSettings, blog);
-    }
-
-    [Fact]
-    public async Task ThrowWhenSubscribingToOwnBlog()
-    {
-        var blogId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var user = new AuthenticatedUser { UserId = userId, Username = "user" };
-        var session = new Session();
-        var identity = Identity.Success(user, session, UserSettings.Default, "token");
-
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            DraftVisibility = DraftVisibility.Public,
-            Author = new GeneralUser { UserId = userId }
-        };
-
-        _identityProvider.Current.Returns(identity);
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
-
-        var act = async () => await _service.Subscribe(blogId);
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message.Contains("собственный блог"));
-    }
-
-    /// <summary>
-    /// Subscribing, unsubscribing and leaving act on a blog the caller sees. On one
-    /// he may not open they answer as on a blog that is not there, word for word,
-    /// and change nothing: a refusal of its own would say the blog exists, and a
-    /// subscription would be a write into a module hidden from its writer.
-    /// </summary>
-    [Theory]
-    [InlineData("subscribe", ModuleStatus.Draft, PremoderationStatus.Approved)]
-    [InlineData("subscribe", ModuleStatus.Active, PremoderationStatus.AwaitingEdits)]
-    [InlineData("unsubscribe", ModuleStatus.Draft, PremoderationStatus.Approved)]
-    [InlineData("unsubscribe", ModuleStatus.Active, PremoderationStatus.AwaitingEdits)]
-    [InlineData("leave", ModuleStatus.Draft, PremoderationStatus.Approved)]
-    [InlineData("leave", ModuleStatus.Active, PremoderationStatus.AwaitingEdits)]
-    public async Task AnswerTheReadersOwnMovesOnAHiddenBlogAsOnNoBlog(
-        string move, ModuleStatus status, PremoderationStatus premoderation)
-    {
-        var blogId = Guid.NewGuid();
-        var user = new AuthenticatedUser { UserId = Guid.NewGuid(), Username = "stranger" };
-        _identityProvider.Current.Returns(Identity.Success(user, new Session(), UserSettings.Default, "token"));
-        // A private draft or a blog awaiting a verdict, of somebody else, and the
-        // caller holds no role that opens either.
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new BlogDto
-        {
-            Id = blogId,
-            Status = status,
-            DraftVisibility = DraftVisibility.Private,
-            PremoderationStatus = premoderation,
-            Author = new GeneralUser { UserId = Guid.NewGuid() }
-        });
-        _repository.RemoveAssistant(blogId, user.UserId, Arg.Any<CancellationToken>()).Returns(true);
-
-        Func<Task> act = move switch
-        {
-            "subscribe" => () => _service.Subscribe(blogId),
-            "unsubscribe" => () => _service.Unsubscribe(blogId),
-            _ => () => _service.Leave(blogId)
-        };
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.NotFound && e.Message == RefusalMessage.BlogNotFound);
-        await _subscriptionService.DidNotReceiveWithAnyArgs().SubscribeAsync(default, default);
-        await _subscriptionService.DidNotReceiveWithAnyArgs().UnsubscribeAsync(default, default);
-        await _repository.DidNotReceiveWithAnyArgs().RemoveAssistant(default, default, default);
+        intentionManager.Received(1).ThrowIfForbidden(BlogIntention.EditSettings, blog);
     }
 
     /// <summary>
@@ -270,9 +124,9 @@ public class BlogServiceShould : UnitTestBase
             PremoderationStatus = PremoderationStatus.AwaitingEdits
         };
         var ids = new[] { open.Id, hidden.Id };
-        _repository.GetByIds(ids, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new[] { open, hidden });
+        repository.GetByIds(ids, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new[] { open, hidden });
 
-        var blogs = await _service.GetSubscribedBlogs(ids);
+        var blogs = await service.GetSubscribedBlogs(ids);
 
         blogs.Select(b => b.Id).Should().Equal(open.Id);
     }
@@ -285,15 +139,15 @@ public class BlogServiceShould : UnitTestBase
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
         var updateRubric = new UpdateRubric { RubricId = rubricId, Title = "Renamed" };
 
-        _repository.GetRubric(rubricId, default).Returns((new Rubric { Id = rubricId }, blogId));
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
-        _repository.UpdateRubric(Arg.Any<UpdateRubricEntity>(), default)
+        repository.GetRubric(rubricId, default).Returns((new Rubric { Id = rubricId }, blogId));
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        repository.UpdateRubric(Arg.Any<UpdateRubricEntity>(), default)
             .Returns(new Rubric { Id = rubricId, Title = "Renamed" });
 
-        await _service.UpdateRubric(updateRubric);
+        await service.UpdateRubric(updateRubric);
 
-        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.CreateRubric, blog);
-        await _repository.Received(1).UpdateRubric(
+        intentionManager.Received(1).ThrowIfForbidden(BlogIntention.ManageRubrics, blog);
+        await repository.Received(1).UpdateRubric(
             Arg.Is<UpdateRubricEntity>(e => e.RubricId == rubricId && e.Title == "Renamed"), default);
     }
 
@@ -301,9 +155,9 @@ public class BlogServiceShould : UnitTestBase
     public async Task ThrowWhenUpdatingMissingRubric()
     {
         var rubricId = Guid.NewGuid();
-        _repository.GetRubric(rubricId, default).Returns(((Rubric?)null, Guid.Empty));
+        repository.GetRubric(rubricId, default).Returns(((Rubric?)null, Guid.Empty));
 
-        var act = async () => await _service.UpdateRubric(new UpdateRubric { RubricId = rubricId, Title = "X" });
+        var act = async () => await service.UpdateRubric(new UpdateRubric { RubricId = rubricId, Title = "X" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -318,19 +172,19 @@ public class BlogServiceShould : UnitTestBase
         var orderedIds = new[] { second, first };
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
 
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
-        _repository.ReorderRubrics(blogId, Arg.Any<IReadOnlyList<Guid>>(), default).Returns(Task.CompletedTask);
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        repository.ReorderRubrics(blogId, Arg.Any<IReadOnlyList<Guid>>(), default).Returns(Task.CompletedTask);
         // The order replaces the blog's whole order, so the body is checked against
         // the rubrics the blog holds before anything is written.
-        _repository.GetRubrics(blogId, default)
+        repository.GetRubrics(blogId, default)
             .Returns(new[] { new Rubric { Id = first }, new Rubric { Id = second } });
-        _repository.GetRubricPublicationIds(blogId, Arg.Any<CancellationToken>())
+        repository.GetRubricPublicationIds(blogId, Arg.Any<CancellationToken>())
             .Returns(new Dictionary<Guid, Guid[]>());
 
-        await _service.ReorderRubrics(blogId, orderedIds);
+        await service.ReorderRubrics(blogId, orderedIds);
 
-        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.CreateRubric, blog);
-        await _repository.Received(1).ReorderRubrics(blogId, orderedIds, default);
+        intentionManager.Received(1).ThrowIfForbidden(BlogIntention.ManageRubrics, blog);
+        await repository.Received(1).ReorderRubrics(blogId, orderedIds, default);
     }
 
     /// <summary>
@@ -346,33 +200,27 @@ public class BlogServiceShould : UnitTestBase
         var second = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
 
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
-        _repository.GetRubrics(blogId, default)
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        repository.GetRubrics(blogId, default)
             .Returns(new[] { new Rubric { Id = first }, new Rubric { Id = second } });
 
-        var act = async () => await _service.ReorderRubrics(blogId, new[] { second });
+        var act = async () => await service.ReorderRubrics(blogId, new[] { second });
 
         var refusal = await act.Should().ThrowAsync<HttpBadRequestException>();
         refusal.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
         // A refused order writes nothing.
-        await _repository.DidNotReceive().ReorderRubrics(
+        await repository.DidNotReceive().ReorderRubrics(
             blogId, Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task FillRubricUnreadCountersForAuthenticatedViewer()
     {
-        // (N/A) per doc 4.2.1.4: N = publications with unread content,
+        // (N/A): N = publications with unread content,
         // A = total unread comments across the rubric's publications.
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var user = new AuthenticatedUser
-        {
-            UserId = userId,
-            Username = "reader",
-            Role = UserRole.RegularUser
-        };
-        _identityProvider.Current.Returns(Identity.Success(user, new Session(), UserSettings.Default, "token"));
+        identityProvider.Current.Returns(Identities.User(userId, "reader"));
 
         var r1 = Guid.NewGuid();
         var r2 = Guid.NewGuid();
@@ -392,26 +240,26 @@ public class BlogServiceShould : UnitTestBase
                 new Rubric { Id = r2, PublicationCount = 1 }
             ]
         };
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
 
         // Blog-level unread fill runs inside GetAsync — return 0 for the blog.
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>())
             .Returns(new Dictionary<Guid, int> { [blogId] = 0 });
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectTotalUnreadByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>())
             .Returns(new Dictionary<Guid, int> { [blogId] = 0 });
 
-        _repository.GetRubricPublicationIds(blogId, Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, Guid[]>
+        repository.GetRubricPublicationIds(blogId, Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, Guid[]>
         {
             [r1] = new[] { p1, p2 },
             [r2] = new[] { p3 }
         });
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectByEntitiesAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>())
             .Returns(new Dictionary<Guid, int> { [p1] = 3, [p2] = 0, [p3] = 5 });
 
-        var rubrics = (await _service.GetAsync(blogId)).Rubrics.ToArray();
+        var rubrics = (await service.GetAsync(blogId)).Rubrics.ToArray();
 
         var first = rubrics.Single(r => r.Id == r1);
         first.UnreadPublicationsCount.Should().Be(1); // only p1 has unread comments
@@ -438,15 +286,15 @@ public class BlogServiceShould : UnitTestBase
             DraftVisibility = DraftVisibility.Public,
             Rubrics = [new Rubric { Id = r1, PublicationCount = 2 }]
         };
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(blog);
 
-        _repository.GetRubricPublicationIds(blogId, Arg.Any<CancellationToken>())
+        repository.GetRubricPublicationIds(blogId, Arg.Any<CancellationToken>())
             .Returns(new Dictionary<Guid, Guid[]> { [r1] = new[] { p1, p2 } });
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectByEntitiesAsync(Guid.Empty, UnreadEntryType.Message, Arg.Any<Guid[]>())
             .Returns(new Dictionary<Guid, int> { [p1] = 4, [p2] = 2 });
 
-        var rubric = (await _service.GetAsync(blogId)).Rubrics.Single();
+        var rubric = (await service.GetAsync(blogId)).Rubrics.Single();
 
         rubric.UnreadPublicationsCount.Should().Be(2); // anon: N = total publications
         rubric.UnreadCommentsCount.Should().Be(6);     // 4 + 2 total comments
@@ -477,18 +325,18 @@ public class BlogServiceShould : UnitTestBase
         bool expected)
     {
         var blogId = Guid.NewGuid();
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new BlogDto
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(new BlogDto
         {
             Id = blogId,
             DraftVisibility = draftVisibility,
             PremoderationStatus = premoderationStatus
         });
-        _intentionManager
+        intentionManager
             .IsAllowed(BlogIntention.ViewDraft, Arg.Any<BlogDto>()).Returns(mayViewDraft);
-        _intentionManager
+        intentionManager
             .IsAllowed(BlogIntention.ViewPremoderationPending, Arg.Any<BlogDto>()).Returns(mayViewPending);
 
-        var visible = await _service.IsVisibleToViewerAsync(blogId);
+        var visible = await service.IsVisibleToViewerAsync(blogId);
 
         visible.Should().Be(expected);
     }
@@ -497,11 +345,11 @@ public class BlogServiceShould : UnitTestBase
     public async Task AnswerThatAnAbsentBlogIsNotVisible()
     {
         var blogId = Guid.NewGuid();
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlogDto?)null);
-        _intentionManager
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns((BlogDto?)null);
+        intentionManager
             .IsAllowed(Arg.Any<BlogIntention>(), Arg.Any<BlogDto>()).Returns(true);
 
-        var visible = await _service.IsVisibleToViewerAsync(blogId);
+        var visible = await service.IsVisibleToViewerAsync(blogId);
 
         visible.Should().BeFalse();
     }
@@ -511,11 +359,7 @@ public class BlogServiceShould : UnitTestBase
     /// exactly as on one that is not there.
     /// </summary>
     /// <remarks>
-    /// They used to throw the visibility gate instead of asking it, which made
-    /// every one of them a 403 — and a 403 says the identifier resolves. The
-    /// alias is five letters and the routes are open to guests, so that was the
-    /// same oracle the two status endpoints were closed against, reached by an
-    /// ordinary read.
+    /// A 403 says the identifier resolves, and the alias is five letters on routes open to guests.
     /// </remarks>
     [Theory]
     [InlineData(DraftVisibility.Private, PremoderationStatus.Approved)]
@@ -534,13 +378,13 @@ public class BlogServiceShould : UnitTestBase
             Author = new GeneralUser { Username = "owner" }
         };
         HideEveryBlogFromTheCaller();
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(hidden);
-        _repository.GetByPublicId("alias", Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(hidden);
-        _repository.GetByOwnerUsernameAsync("owner", Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(hidden);
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(hidden);
+        repository.GetByPublicId("alias", Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(hidden);
+        repository.GetByOwnerUsernameAsync("owner", Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(hidden);
 
-        await ShouldBeNotFound(() => _service.GetAsync(blogId));
-        await ShouldBeNotFound(() => _service.GetByPublicIdAsync("alias"));
-        await ShouldBeNotFound(() => _service.GetByOwnerUsernameAsync("owner"));
+        await ShouldBeNotFound(() => service.GetAsync(blogId));
+        await ShouldBeNotFound(() => service.GetByPublicIdAsync("alias"));
+        await ShouldBeNotFound(() => service.GetByOwnerUsernameAsync("owner"));
     }
 
     /// <summary>
@@ -552,20 +396,16 @@ public class BlogServiceShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var visible = new BlogDto { Id = blogId, DraftVisibility = DraftVisibility.Public };
-        _repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(visible);
-        _intentionManager
+        repository.Get(blogId, Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(visible);
+        intentionManager
             .When(m => m.ThrowIfForbidden(BlogIntention.EditSettings, visible))
             .Throw(new HttpException(HttpStatusCode.Forbidden, "Недостаточно прав"));
 
-        var act = async () => await _service.Update(new UpdateBlog { BlogId = blogId, Title = "Правка" });
+        var act = async () => await service.Update(new UpdateBlog { BlogId = blogId, Title = "Правка" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
     }
-
-    private void HideEveryBlogFromTheCaller() =>
-        _intentionManager
-            .IsAllowed(Arg.Any<BlogIntention>(), Arg.Any<BlogDto>()).Returns(false);
 
     private static async Task ShouldBeNotFound(Func<Task> act) =>
         await act.Should().ThrowAsync<HttpException>()

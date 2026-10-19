@@ -8,22 +8,12 @@ namespace DM.Domain.Core.Content;
 /// projection when the parser refused a body.
 /// </summary>
 /// <remarks>
-/// The parser does not read a body as it is stored. It first removes the C0 and
-/// C1 control characters other than tab, line feed and carriage return, and the
-/// characters that reverse the order text is drawn in (U+202A..U+202E,
-/// U+2066..U+2069), and replaces a surrogate with no partner with U+FFFD
-/// (BbParser, "what a character cannot be"). A check that reads the stored text
-/// reads a different text, and the difference is not harmless: removing a
-/// character joins what stood on either side of it, and the join can be a tag
-/// the check never saw. "[m" U+0001 "od]" was no marker to the sanitizer and a
-/// moderator block on the page; "[code" U+0001 "]" was no code block to the
-/// balance check and a code block that printed the hidden block under it to the
-/// whole room.
-///
-/// So the save path reads what the parser reads. The rule is written twice, here
-/// and in the parser, because a domain assembly references no parser;
-/// ControlCharacterMarkupShould holds the two to the same answer for every
-/// control, whitespace, format and surrogate character in every place of a tag.
+/// The parser removes C0 and C1 controls other than tab, line feed and carriage
+/// return and the bidi overrides (U+202A..U+202E, U+2066..U+2069), and replaces a
+/// lone surrogate with U+FFFD. A removal joins its neighbours into a tag a check of
+/// the stored text never sees, so the save path reads what the parser reads.
+/// The rule is written twice because a domain assembly references no parser;
+/// ControlCharacterMarkupShould holds the two copies equal.
 /// </remarks>
 public static class ParserInput
 {

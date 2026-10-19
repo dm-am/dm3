@@ -9,16 +9,15 @@ using DM.Domain.Core.Uploads;
 namespace DM.Domain.Personal.Features.Profiles;
 
 /// <inheritdoc />
-internal class UserAvatarUploadAuthorizer : IUploadTargetAuthorizer
+internal class UserAvatarUploadAuthorizer : PublicUploadTargetAuthorizer
 {
     private readonly IIdentityProvider _identityProvider;
 
-    /// <inheritdoc />
     public UserAvatarUploadAuthorizer(IIdentityProvider identityProvider) =>
         _identityProvider = identityProvider;
 
     /// <inheritdoc />
-    public UploadType Type => UploadType.UserAvatar;
+    public override UploadType Type => UploadType.UserAvatar;
 
     /// <summary>
     /// An avatar belongs to whoever uploads it.
@@ -34,7 +33,7 @@ internal class UserAvatarUploadAuthorizer : IUploadTargetAuthorizer
     /// moderation action anywhere in the product; removing one is, and that goes
     /// through the delete endpoint, which does carry the Moderator branch.
     /// </remarks>
-    public Task EnsureAllowedAsync(Guid targetId)
+    public override Task EnsureAllowedAsync(Guid targetId)
     {
         if (targetId != _identityProvider.Current.User.UserId)
         {
@@ -43,19 +42,4 @@ internal class UserAvatarUploadAuthorizer : IUploadTargetAuthorizer
 
         return Task.CompletedTask;
     }
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// An avatar is shown wherever its owner is named, so it is served from a
-    /// prefix the bucket answers to anybody. Nothing is withheld here that the
-    /// public address does not already give away.
-    /// </remarks>
-    public Task EnsureReadAllowedAsync(Guid targetId) => Task.CompletedTask;
-
-    /// <inheritdoc />
-    /// <remarks>
-    /// Nobody but the owner and Moderator+, which is what the upload's own
-    /// intention already says. A user is not an entity with editors.
-    /// </remarks>
-    public Task<bool> MayDetachAsync(Guid targetId) => Task.FromResult(false);
 }

@@ -1,33 +1,10 @@
 <script setup lang="ts">
-/**
- * DateTimeInput — a date and a time of day side by side: the site's date
- * field (DateInput) and time field (TimeInput) in one row.
- *
- * It stands where <input type="datetime-local"> stood, and keeps its value:
- * the model is the same "YYYY-MM-DDTHH:mm" the browser's field gave, so
- * toSiteInput and fromSiteInput read and write it as before. The browser's
- * field drew the date and the time in its own look and language ("06-Oct-2026
- * 05:30 AM") with a calendar of its own; this one is the site's, and the date
- * is a date that must be given, so it has no cross.
- *
- * Bounds are moments of the same spelling. The date field takes the days of
- * the bounds and greys the rest in its calendar; the time is judged here
- * against them, on the day of a bound. A value out of them is not taken: the
- * model keeps what it had, and the reason says the moment that is the limit
- * ("Не раньше 06.10.2026 05:30"). So does a value that the bounds moved out
- * from under (the end of a poll whose start moved past it).
- *
- * One reason for the row, for the consumer to show under it: the date's,
- * else the time's, else the bounds'. An emptied part empties the model, so a
- * form reads a date without a time as no moment at all, and not as the moment
- * it held before.
- *
- * The widths are the ones that hold the text of either part, 148 and 72 with
- * 8 between: in a form on a phone and in the card of a poll alike.
- */
+// The model is datetime-local's "YYYY-MM-DDTHH:mm". An emptied part empties the model: a date without a
+// time is no moment, not the moment held before. One reason for the row: the date's, else the time's, else the bounds'.
 import { computed, ref, watch } from "vue";
 import DateInput from "./DateInput.vue";
 import TimeInput from "./TimeInput.vue";
+import { boundReason } from "./typedField";
 
 const props = withDefaults(
   defineProps<{
@@ -63,8 +40,7 @@ const spell = (value: string) =>
 const date = ref<string | null>(split(props.modelValue)?.date ?? null);
 const time = ref<string | null>(split(props.modelValue)?.time ?? null);
 
-// A moment set from outside (a form reset, the poll the editor opened on)
-// is shown; the model the row emitted itself already is what it shows.
+// A moment set from outside is shown; one the row emitted itself already is.
 watch(
   () => props.modelValue,
   (value) => {
@@ -84,25 +60,23 @@ const moment = computed(() =>
   date.value && time.value ? `${date.value}T${time.value}` : "",
 );
 
-const boundReason = computed(() => {
+const outOfBounds = computed(() => {
   const value = moment.value;
   if (!value) return null;
-  if (props.min && value < props.min) return `Не раньше ${spell(props.min)}`;
-  if (props.max && value > props.max) return `Не позже ${spell(props.max)}`;
-  return null;
+  return boundReason(value, props.min, props.max, spell);
 });
 
 const dateReason = ref<string | null>(null);
 const timeReason = ref<string | null>(null);
 
 const reason = computed(
-  () => dateReason.value ?? timeReason.value ?? boundReason.value,
+  () => dateReason.value ?? timeReason.value ?? outOfBounds.value,
 );
 
 watch(reason, (next) => emit("reason", next), { immediate: true });
 
 watch(moment, (value) => {
-  if (value && boundReason.value) return;
+  if (value && outOfBounds.value) return;
   if (value !== props.modelValue) emit("update:modelValue", value);
 });
 </script>
@@ -136,12 +110,8 @@ watch(moment, (value) => {
   gap: $small
   max-width: 100%
 
-// Ten characters and the calendar icon, and five characters: each part as
-// wide as its text asks and no wider, so the row of two reads as one moment.
-// The date gives first where the row is narrower than 228 (the card of a poll
-// in a column of 225): it still holds its ten characters at 121.
-// The second selector outweighs FormField's rule that stretches every input
-// of its row across it.
+// Each part as wide as its text; the date gives first in a narrow row. The second selector outweighs
+// FormField's rule that stretches every input of its row.
 .date-time-input .dti-date
   flex: 0 1 148px
   min-width: 0

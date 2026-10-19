@@ -12,5 +12,5 @@
 h2
   +dialog-title
   margin-bottom: $dialog-field-step
-  padding-right: $dialog-close-reserve
+  padding-right: $dialog-gutter
 </style>

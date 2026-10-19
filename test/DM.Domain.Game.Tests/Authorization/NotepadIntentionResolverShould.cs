@@ -1,7 +1,6 @@
 using System;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Authorization;
-using DM.Testing;
 using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Xunit;
@@ -16,7 +15,7 @@ namespace DM.Domain.Game.Tests.Authorization;
 /// The third runs the other way — a player's own notes are closed to the
 /// master, and a wrong allow there breaks the promise the notepad is made of.
 /// </summary>
-public class NotepadIntentionResolverShould : UnitTestBase
+public class NotepadIntentionResolverShould
 {
     private readonly NotepadIntentionResolver resolver = new();
 
@@ -31,7 +30,6 @@ public class NotepadIntentionResolverShould : UnitTestBase
         new()
         {
             NotepadType = type,
-            ContainerId = Guid.NewGuid(),
             CharacterOwnerId = characterOwnerId,
             GameRoles = roles
         };
@@ -48,8 +46,6 @@ public class NotepadIntentionResolverShould : UnitTestBase
         return context;
     }
 
-    #region Master notepad
-
     [Theory]
     [InlineData(GameRole.Master)]
     [InlineData(GameRole.Assistant)]
@@ -64,7 +60,6 @@ public class NotepadIntentionResolverShould : UnitTestBase
     [Theory]
     [InlineData(GameRole.Player)]
     [InlineData(GameRole.Reader)]
-    [InlineData(GameRole.Applicant)]
     [InlineData(GameRole.Mentor)]
     [InlineData(GameRole.None)]
     public void KeepTheMasterNotepadShutToEveryoneElseInTheGame(GameRole role)
@@ -86,10 +81,6 @@ public class NotepadIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(user, NotepadIntention.Read, Notepad(NotepadType.Master, null))
             .Should().BeFalse();
     }
-
-    #endregion
-
-    #region Player notepad
 
     [Fact]
     public void LetACharacterOwnerIntoTheirOwnPlayerNotepad()
@@ -144,10 +135,6 @@ public class NotepadIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(user, NotepadIntention.Read, notepad).Should().BeFalse();
     }
 
-    #endregion
-
-    #region Character master notepad
-
     [Theory]
     [InlineData(GameRole.Master)]
     [InlineData(GameRole.Assistant)]
@@ -177,7 +164,6 @@ public class NotepadIntentionResolverShould : UnitTestBase
     [Theory]
     [InlineData(GameRole.Player)]
     [InlineData(GameRole.Reader)]
-    [InlineData(GameRole.Applicant)]
     [InlineData(GameRole.Mentor)]
     [InlineData(GameRole.None)]
     public void KeepTheNotesKeptAboutACharacterShutToEveryoneElseInTheGame(GameRole role)
@@ -219,10 +205,6 @@ public class NotepadIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(user, NotepadIntention.Edit, entry).Should().BeFalse();
     }
 
-    #endregion
-
-    #region Notepad types this resolver does not serve
-
     [Theory]
     [InlineData(NotepadType.Blog)]
     [InlineData(NotepadType.User)]
@@ -235,10 +217,6 @@ public class NotepadIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(user, NotepadIntention.Read, Notepad(type, null, GameRole.Master))
             .Should().BeFalse();
     }
-
-    #endregion
-
-    #region Editing and deleting a single entry
 
     [Theory]
     [InlineData(NotepadIntention.Read)]
@@ -329,6 +307,4 @@ public class NotepadIntentionResolverShould : UnitTestBase
         // notepad keeps no key to it.
         resolver.IsAllowed(user, intention, entry).Should().BeFalse();
     }
-
-    #endregion
 }

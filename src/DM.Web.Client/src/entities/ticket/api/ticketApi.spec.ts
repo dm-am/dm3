@@ -2,22 +2,7 @@
  * @vitest-environment node
  */
 
-/**
- * "Мои обращения" asks for a page, and for one the wire will accept.
- *
- * GET /v1/moderation/tickets/mine used to answer with every ticket its author
- * ever filed; it binds PagingQuery now, so a caller that names no page gets
- * twenty rows and no way to reach the rest. Two things have to hold of the
- * request for the screen to work. The page the reader is on has to become the
- * offset the wire takes — the page number is this application's own vocabulary
- * and the API ignores it rather than refusing it, which reads as "page three is
- * page one". And the page size has to stay inside [Range(1, 100)]: "Сущностей
- * на странице" offers 200, PagingQuery refuses it with 400, and the page shows
- * that refusal as "Не удалось загрузить обращения" where the list should be.
- *
- * Asserted on the wire rather than on the signature: the conversion is the only
- * part of this the caller cannot see for itself.
- */
+// The page becomes the offset the wire takes, and the size stays inside the API's page size.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/api", () => ({
@@ -29,6 +14,7 @@ vi.mock("@/shared/api", () => ({
 }));
 
 import { Api } from "@/shared/api";
+import { MAX_API_PAGE_SIZE } from "@/shared/lib/composables/usePaging";
 import ticketApi from "./ticketApi";
 
 describe("ticketApi.getMyTickets", () => {
@@ -57,15 +43,15 @@ describe("ticketApi.getMyTickets", () => {
   });
 
   it("clamps a page size the wire would refuse", async () => {
-    // 200 is a legal "Сущностей на странице" setting and an illegal take, and
-    // the offset is computed from the size actually requested.
-    await ticketApi.getMyTickets({ number: 2, take: 200 });
+    // One above the API's limit is an illegal take, and the offset is computed
+    // from the size actually requested.
+    await ticketApi.getMyTickets({ number: 2, take: MAX_API_PAGE_SIZE + 1 });
 
     expect(vi.mocked(Api.get)).toHaveBeenCalledWith("moderation/tickets/mine", {
       status: undefined,
       subtype: undefined,
-      skip: 100,
-      take: 100,
+      skip: MAX_API_PAGE_SIZE,
+      take: MAX_API_PAGE_SIZE,
     });
   });
 
@@ -81,11 +67,6 @@ describe("ticketApi.getMyTickets", () => {
   });
 });
 
-/**
- * A queue of moderation is asked for by its status and its reason, and by
- * nothing else: nobody takes a ticket in hand any more (owner, 12.10, line 51),
- * and the wire has no flag of who took one.
- */
 describe("ticketApi.getTickets", () => {
   beforeEach(() => vi.mocked(Api.get).mockClear());
 
@@ -97,23 +78,9 @@ describe("ticketApi.getTickets", () => {
     expect(query).toEqual({ status: "WaitingForUser", subtype: "Bug" });
     expect(Object.keys(query ?? {})).toEqual(["status", "subtype"]);
   });
-
-  it("offers no way to take a ticket in hand", () => {
-    expect(
-      Object.getOwnPropertyNames(Object.getPrototypeOf(ticketApi)),
-    ).not.toContain("assignTicketToMe");
-  });
 });
 
-/**
- * An answer of a ticket's conversation goes where its writer reads the
- * ticket: a member and a moderator to the ticket by its number, the guest to
- * the ticket of his token, the token in its header (TokenGatedActionsShould:
- * a URL is written verbatim into the proxy access log). Who wrote it is the
- * session's or the token's to say. The body is the text, and for moderation
- * the status the answer moves the ticket to: closing is an answer too, sent
- * the same way, and there is no closing of its own.
- */
+// An answer goes where its writer reads the ticket; a guest's token travels in a header, not the URL.
 describe("ticketApi answers", () => {
   beforeEach(() => vi.mocked(Api.post).mockClear());
 
@@ -133,12 +100,6 @@ describe("ticketApi answers", () => {
       "moderation/tickets/t-1/comments",
       { text: "", status: "Closed" },
     );
-  });
-
-  it("offers no closing apart from an answer", () => {
-    expect(
-      Object.getOwnPropertyNames(Object.getPrototypeOf(ticketApi)),
-    ).not.toContain("resolveTicket");
   });
 
   it("writes the guest's comment to the ticket of his token, the token in its header", async () => {

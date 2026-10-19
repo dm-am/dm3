@@ -2,31 +2,30 @@
  * @vitest-environment jsdom
  */
 
-/**
- * A character's name pointed at the roster of the whole game, carrying a
- * `scrollTo` query that no roster has ever read — so the link that promised one
- * character delivered the cast, scrolled nowhere. The sheet was served per
- * character all along (GET /v1/characters/{id}) and was fetched only by the
- * edit form.
- *
- * What this holds: the page asks for the character named in the address, draws
- * the sheet through the shared view mode rather than a second layout of its
- * own, and answers a failed load with something the reader can repeat.
- */
+// The sheet of the character named in the address, drawn by the shared view
+// mode, and a failed load the reader can repeat.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { defineComponent, h, watchEffect } from "vue";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import {
-  gameApi,
+  characterApi,
+  gameNotepadApi,
   GameParticipation,
+  useGameDetailsStore,
   type Character,
   type Game,
 } from "@/entities/game";
-import { useGameDetailsStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
-import GameCharacter from "./GameCharacter.vue";
 import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
+import { announceWorded } from "@/shared/lib/errors";
+import { problem } from "@/shared/lib/testing/problem";
+import { deferred, endOfTask } from "@/shared/lib/testing/tasks";
+import {
+  CharacterCardSkeleton,
+  CharacterSheetSkeleton,
+} from "@/shared/ui/Skeleton";
+import GameCharacter from "./GameCharacter.vue";
 
 vi.mock("vue-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue-router")>()),
@@ -85,9 +84,7 @@ function render({
     },
   } as unknown as Game;
 
-  // The zone shell is what renders the heading, so the section this page
-  // announces is what the test can see of it. Provided here the way the shell
-  // provides it, and read back through `announced`.
+  // Provided the way the zone shell provides it, which renders the heading.
   const announced = { value: undefined as string | undefined };
   const host = defineComponent({
     setup() {
@@ -115,29 +112,22 @@ describe("GameCharacter", () => {
 
   it("reads the character named in the address and draws its sheet", async () => {
     const get = vi
-      .spyOn(gameApi, "getCharacter")
+      .spyOn(characterApi, "getCharacter")
       .mockResolvedValue({ data: { resource: SHEET } } as never);
 
     const { wrapper, announced } = render();
     await flushPromises();
 
-    expect(get).toHaveBeenCalledWith("char-1", {
-      ownsRefusal: true,
-      ownsRateLimit: true,
-    });
-    // The name reaches the reader through the heading of the zone, which reads
-    // "{game} | {character}" — the page announces the second half.
+    expect(get).toHaveBeenCalledWith("char-1");
     expect(announced.value).toBe("Ронин");
-    // The lifecycle caption, in the wording the entity owns.
     expect(wrapper.text()).toContain("Персонаж мертв");
     expect(wrapper.text()).toContain("Постов: 17");
-    // The sheet itself comes from the shared view mode, in schema order.
     expect(wrapper.text()).toContain("Раса");
     expect(wrapper.text()).toContain("Полурослик");
   });
 
   it("names a failed load and offers to repeat it", async () => {
-    vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+    vi.spyOn(characterApi, "getCharacter").mockResolvedValue({
       error: { status: 500 },
     } as never);
 
@@ -148,39 +138,64 @@ describe("GameCharacter", () => {
     expect(wrapper.text()).toContain("Повторить");
   });
 
-  /**
-   * The card above is the one carrier of a failed read, and the response
-   * interceptor used to raise a plate over it saying the same thing — on a 500
-   * the identical sentence, since both read it out of the same problem
-   * document. The read says on the way out that this page answers for it, which
-   * is the only way the interceptor can know; a page without the card would
-   * have been left blank, with a plate in the corner explaining nothing.
-   *
-   * Asserted on the request rather than on the toast, because that is where the
-   * decision is: the interceptor lives below the mock this suite installs.
-   */
-  it("takes the refusal of the read over from the interceptor", async () => {
-    const get = vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
-      error: { status: 403, title: "Персонаж скрыт мастером" },
+  // The page says the server's refusal and takes its plate down; a session
+  // that ran out is the plate's to say.
+  it.each([
+    ["the server's refusal", problem(404, "Персонаж не найден"), 0],
+    ["a session that ran out", problem(401), 1],
+  ])("answers %s where it belongs", async (_, failure, plates) => {
+    const raise = vi.fn();
+    announceWorded(failure, raise);
+    vi.spyOn(characterApi, "getCharacter").mockResolvedValue({
+      error: failure,
+    } as never);
+
+    const { wrapper } = render();
+    await flushPromises();
+    await endOfTask();
+
+    expect(wrapper.text()).toContain(
+      failure.title || "Не удалось загрузить персонажа",
+    );
+    expect(raise).toHaveBeenCalledTimes(plates);
+  });
+
+  it("stands the shared skeletons of a card and of a sheet in while it is on the wire", async () => {
+    const read = deferred<unknown>();
+    vi.spyOn(characterApi, "getCharacter").mockReturnValue(
+      read.promise as never,
+    );
+
+    const { wrapper } = render();
+    await flushPromises();
+
+    expect(wrapper.findComponent(CharacterCardSkeleton).exists()).toBe(true);
+    expect(wrapper.findComponent(CharacterSheetSkeleton).exists()).toBe(true);
+
+    read.resolve({ data: { resource: SHEET } });
+    await flushPromises();
+
+    expect(wrapper.findComponent(CharacterCardSkeleton).exists()).toBe(false);
+    expect(wrapper.findComponent(CharacterSheetSkeleton).exists()).toBe(false);
+    expect(wrapper.text()).toContain("Постов: 17");
+  });
+
+  it("names a character with no player a non-player one", async () => {
+    vi.spyOn(characterApi, "getCharacter").mockResolvedValue({
+      data: { resource: { ...SHEET, author: undefined, isNpc: true } },
     } as never);
 
     const { wrapper } = render();
     await flushPromises();
 
-    expect(get).toHaveBeenCalledWith("char-1", {
-      ownsRefusal: true,
-      ownsRateLimit: true,
-    });
-    // And the reason the server named is what the card reads, not a sentence
-    // of the page's own.
-    expect(wrapper.text()).toContain("Персонаж скрыт мастером");
+    expect(wrapper.findAll(".meta-line").map((line) => line.text())).toContain(
+      "Неигровой персонаж",
+    );
   });
 
-  // The wait comes over with the refusal, so the card has to say what the plate
-  // would have: the seconds the server asked for. The title the API sends with
-  // a rate limit carries no number.
+  // The title the API sends with a rate limit carries no number.
   it("names the wait on the card when the read is rate limited", async () => {
-    vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+    vi.spyOn(characterApi, "getCharacter").mockResolvedValue({
       error: {
         status: 429,
         title: "Слишком много запросов",
@@ -197,7 +212,7 @@ describe("GameCharacter", () => {
   });
 
   it("leads back to the roster of the game", async () => {
-    vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+    vi.spyOn(characterApi, "getCharacter").mockResolvedValue({
       data: { resource: SHEET },
     } as never);
 
@@ -213,33 +228,34 @@ describe("GameCharacter", () => {
       name: "game-characters",
       params: { id: "the-game" },
     });
+    expect(back[0].text()).toBe("Назад к персонажам");
   });
 
-  /**
-   * The two notepads under the sheet. They are the same widget with opposite
-   * audiences, so the only thing worth pinning is who gets to see which — and
-   * the section has to be absent rather than refused: a heading reading "the
-   * notes the master keeps about you", greyed out, tells the player what it
-   * was meant to hide.
-   *
-   * Every case asserts both ways round. A gate that shows the right section is
-   * half a gate if it shows the other one too, and both mistakes are one
-   * mistyped `||` away from each other.
-   */
+  // Every case asserts both ways round: a gate that shows the other notepad
+  // too is half a gate.
   describe("notepads", () => {
     const PLAYER_NOTES = "Заметки игрока";
     const MASTER_NOTES = "Заметки мастера";
 
+    /** Both notepads of the character, empty; the lists are the calls the page makes. */
+    function emptyNotepads() {
+      const list = () => vi.fn().mockResolvedValue({ data: { resources: [] } });
+      const playerNotes = list();
+      const masterNotes = list();
+      vi.spyOn(gameNotepadApi, "ofCharacter").mockReturnValue({
+        list: playerNotes,
+      } as never);
+      vi.spyOn(gameNotepadApi, "ofCharacterMaster").mockReturnValue({
+        list: masterNotes,
+      } as never);
+      return { playerNotes, masterNotes };
+    }
+
     async function sections(options?: Parameters<typeof render>[0]) {
-      vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+      vi.spyOn(characterApi, "getCharacter").mockResolvedValue({
         data: { resource: SHEET },
       } as never);
-      vi.spyOn(gameApi, "getCharacterNotepad").mockResolvedValue({
-        data: { resources: [] },
-      } as never);
-      vi.spyOn(gameApi, "getCharacterMasterNotepad").mockResolvedValue({
-        data: { resources: [] },
-      } as never);
+      emptyNotepads();
 
       const { wrapper } = render(options);
       await flushPromises();
@@ -262,7 +278,6 @@ describe("GameCharacter", () => {
         viewerId: "master-1",
       });
 
-      // The one notepad of a game its master cannot open.
       expect(text).toContain(MASTER_NOTES);
       expect(text).not.toContain(PLAYER_NOTES);
     });
@@ -278,8 +293,6 @@ describe("GameCharacter", () => {
     });
 
     it("gives the curating mentor neither", async () => {
-      // HasEditAccess is master and assistant; curating a game is not leading
-      // it, and the API refuses a mentor both notepads.
       const text = await sections({
         participation: [GameParticipation.Moderator],
         viewerId: "mentor-1",
@@ -307,15 +320,10 @@ describe("GameCharacter", () => {
     });
 
     it("asks for neither notepad it does not show", async () => {
-      vi.spyOn(gameApi, "getCharacter").mockResolvedValue({
+      vi.spyOn(characterApi, "getCharacter").mockResolvedValue({
         data: { resource: SHEET },
       } as never);
-      const playerNotes = vi
-        .spyOn(gameApi, "getCharacterNotepad")
-        .mockResolvedValue({ data: { resources: [] } } as never);
-      const masterNotes = vi
-        .spyOn(gameApi, "getCharacterMasterNotepad")
-        .mockResolvedValue({ data: { resources: [] } } as never);
+      const { playerNotes, masterNotes } = emptyNotepads();
 
       render({
         participation: [GameParticipation.Player],
@@ -323,8 +331,6 @@ describe("GameCharacter", () => {
       });
       await flushPromises();
 
-      // A hidden section that still fetches would earn a pair of 403s per
-      // visit and put the answer into the network tab regardless.
       expect(playerNotes).not.toHaveBeenCalled();
       expect(masterNotes).not.toHaveBeenCalled();
     });

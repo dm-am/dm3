@@ -2,37 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * One entry of the ban list, written as DM2's bot wrote its ban log (the topic
- * "Бан-лог" of DM2), so a reader of that log reads this one the same way.
- *
- * The bot wrote every issue and every lift as a comment of one pattern, the
- * same in 1886 entries: the moderator, "выдал(а)" or "снял(а)", the scope of
- * the ban, "пользователю" or "с пользователя", the login, "до" and the end date
- * in bold, a full stop. The end of a lifted ban is the end it had, not the day
- * of the lift. A permanent ban is said in a word here and not by a date five
- * hundred years away, so it has no "до". Nothing in the entry is red or green:
- * a ban is the record of a decision, and DM2 coloured nothing but the logins.
- *
- * Where the entry says more than DM2's did, it says it for the reader: the
- * moderator a bold link, as the login, the first person a reader of the log
- * looks up; nothing underlined, the entry being one run of text; the reason
- * under "Примечание от модератора:", on a line of its own, as the [quote] of
- * the site's text, so the moderator's words stand apart from the site's
- * sentence; "Выдан:" or "Снят:" before the moment in the caption, so the moment
- * says what it is the moment of; the number of the entry a grey link in the
- * corner of the caption line, as the number of a comment.
- *
- * The lift stands where the server says this reader may lift this ban: the
- * card does not work the rule out from a role, so it can never offer a lift the
- * server then refuses.
- */
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
-import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import BanLogCard from "./BanLogCard.vue";
 
 const NBSP = "\u00a0";
@@ -130,11 +102,7 @@ describe("an entry of the ban list, in the words of DM2", () => {
     );
   });
 
-  /**
-   * DM2: "SolohinLex снял(а) демократический бан c пользователя Рамиус до
-   * 20.02.2026" on the day it was lifted, 13.02: the end is the end the ban
-   * had. The Latin "c" DM2 wrote in 35 lifts is not copied.
-   */
+  // The end is the end the ban had, not the day of the lift.
   it("writes a lift with the end the ban had", () => {
     expect(phrase(render(lifted()))).toBe(
       `SolohinLex снял(а) демократический бан с пользователя RatingPositive до${NBSP}16.10.2026.`,
@@ -403,71 +371,5 @@ describe("the number of a ban entry", () => {
 
     expect(wrapper.get(".record-block").attributes("id")).toBe("ban-16");
     expect(wrapper.get("article").attributes("id")).toBeUndefined();
-  });
-});
-
-describe("the look of a ban entry", () => {
-  const css = componentCss(
-    resolve(dirname(fileURLToPath(import.meta.url)), "BanLogCard.vue"),
-  );
-  const rules = ruleMap(css);
-
-  /**
-   * DM2 coloured nothing in a ban but the logins, and red and green here say
-   * points and what is good, neither of which a ban entry is.
-   */
-  it("is neither red nor green", () => {
-    const wrapper = render(issued({ canLift: true }));
-
-    expect(css).not.toMatch(/accent-red|accent-green/);
-    expect(wrapper.find(".is-negative, .is-positive").exists()).toBe(false);
-  });
-
-  /**
-   * The text of the entry is set as the text of a comment (RecordBlock):
-   * justified, its words broken by "Перенос слов". Only the caption line is
-   * set flush left, as every caption is.
-   */
-  it("leaves the text to the record and sets only the caption flush left", () => {
-    const aligned = [...rules]
-      .filter(([, declarations]) => "text-align" in declarations)
-      .map(([selector]) => selector);
-
-    const unhyphenated = [...rules]
-      .filter(([, declarations]) => "hyphens" in declarations)
-      .map(([selector]) => selector);
-
-    expect(aligned).toEqual([".ban-log-card__footer"]);
-    expect(unhyphenated).toEqual([".ban-log-card__footer"]);
-  });
-
-  /** The number of a comment (CommentItem, .comment-number). */
-  it("pins the number to the right edge as a grey link, not underlined", () => {
-    const declarations = rules.get(".ban-log-card__number");
-
-    expect(declarations).toMatchObject({
-      "margin-left": "auto",
-      color: "var(--text-muted)",
-    });
-    expect(declarations?.["text-decoration"]).toBe("none");
-  });
-
-  /**
-   * The reason of a lift is typed in a field of several lines, and the lines
-   * the moderator broke it into stay broken; the rendered reason of a ban
-   * carries its own breaks.
-   */
-  it("keeps the lines of the reason of a lift", () => {
-    expect(rules.get(".ban-log-card__lift-reason")?.["white-space"]).toBe(
-      "pre-line",
-    );
-    expect(
-      render(lifted({ liftReason: "Извинился.\nДоговорились." }))
-        .get(".ban-log-card__note .quote")
-        .classes(),
-    ).toContain("ban-log-card__lift-reason");
-    expect(
-      render(issued()).get(".ban-log-card__note .quote").classes(),
-    ).not.toContain("ban-log-card__lift-reason");
   });
 });

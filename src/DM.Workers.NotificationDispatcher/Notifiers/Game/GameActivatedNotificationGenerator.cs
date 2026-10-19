@@ -19,7 +19,6 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public GameActivatedNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -51,13 +50,7 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        // Readers of this game are deliberately absent. They are subscribed to the
-        // game itself, so GameStatusChangedNotificationGenerator answers the same
-        // event and already tells them it went active under the event type of the
-        // activation. This notification renames the event to
-        // NewGameFromSubscribedAuthor, which is only true for the audience that
-        // could not see the game while it was a draft; delivered to a reader it was
-        // a second copy of one activation calling a game they already follow new.
+        // No readers: GameStatusChangedNotificationGenerator already tells them about the activation.
         var usersInterested = await SubscribedAudience.OfTeamAsync(
             _subscriptionRepository,
             gameData.MasterId,
@@ -72,7 +65,7 @@ internal class GameActivatedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             EventType = EventType.NewGameFromSubscribedAuthor,
-            UsersInterested = usersInterested.ToArray(),
+            UsersInterested = usersInterested,
             ActorId = gameData.MasterId,
             Metadata = new
             {

@@ -18,42 +18,39 @@ namespace DM.Domain.Game.Tests.Features.PostPendencies;
 /// When a player is prodded about a post the room is waiting for.
 /// </summary>
 /// <remarks>
-/// The two thresholds and the order of the two side effects lived inside a
-/// background job of the HTTP host, where nothing but a running host could reach
-/// them. The order is the part that cost something: the loop stamped every stale
-/// pendency in memory, published a reminder for each and saved afterwards, so a
-/// failure past the publish sent letters the database held no trace of and sent
-/// them again twelve hours later.
+/// The order matters: a reminder sent before its stamp is saved goes out again on the next pass.
 /// </remarks>
 public class PendencyReminderProcessorShould : UnitTestBase
 {
     private static readonly DateTimeOffset Now = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly IPostPendencyRepository _repository;
-    private readonly IEventProducer _producer;
-    private readonly PendencyReminderProcessor _processor;
+    private readonly IPostPendencyRepository repository;
+    private readonly IEventProducer producer;
+    private readonly PendencyReminderProcessor processor;
 
-    private readonly List<string> _calls = [];
+    private readonly List<string> calls = [];
 
     public PendencyReminderProcessorShould()
     {
-        _repository = Mock<IPostPendencyRepository>();
-        _producer = Mock<IEventProducer>();
+        repository = Mock<IPostPendencyRepository>();
+        producer = Mock<IEventProducer>();
 
         var clock = Mock<IDateTimeProvider>();
         clock.Now.Returns(Now);
 
-        _repository
+        repository
             .ClaimPendingReminders(
                 Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(),
-                Arg.Any<CancellationToken>()).Returns(new[] { Guid.NewGuid(), Guid.NewGuid() }).AndDoes(_ => _calls.Add("claim"));
+                Arg.Any<CancellationToken>())
+            .Returns(new[] { Guid.NewGuid(), Guid.NewGuid() })
+            .AndDoes(_ => calls.Add("claim"));
 
-        _producer
+        producer
             .SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>())
             .Returns(Task.CompletedTask)
-            .AndDoes(_ => _calls.Add("publish"));
+            .AndDoes(_ => calls.Add("publish"));
 
-        _processor = new PendencyReminderProcessor(_repository, _producer, clock);
+        processor = new PendencyReminderProcessor(repository, producer, clock);
     }
 
     /// <summary>
@@ -63,39 +60,27 @@ public class PendencyReminderProcessorShould : UnitTestBase
     [Fact]
     public async Task ClaimEveryPendencyBeforeAnnouncingAnyOfThem()
     {
-        await _processor.SendDueRemindersAsync();
+        await processor.SendDueRemindersAsync();
 
-        _calls.Should().Equal("claim", "publish", "publish");
+        calls.Should().Equal("claim", "publish", "publish");
     }
 
     [Fact]
     public async Task AnnounceOneReminderPerClaimedPendency()
     {
-        var sent = await _processor.SendDueRemindersAsync();
+        var sent = await processor.SendDueRemindersAsync();
 
         sent.Should().Be(2);
-        await _producer.Received(2).SendAsync(EventType.RoomPendencyReminder, Arg.Any<Guid>());
+        await producer.Received(2).SendAsync(EventType.RoomPendencyReminder, Arg.Any<Guid>());
     }
 
     [Fact]
-    public async Task WaitTheFirstReminderWindowBeforeProddingAnybody()
+    public async Task WaitTheFirstWindowAndTheIntervalBeforeProddingAnybody()
     {
-        await _processor.SendDueRemindersAsync();
+        await processor.SendDueRemindersAsync();
 
-        await _repository.Received(1).ClaimPendingReminders(
+        await repository.Received(1).ClaimPendingReminders(
             Now - PendencyPolicy.FirstReminderAfter,
-            Arg.Any<DateTimeOffset>(),
-            Arg.Any<DateTimeOffset>(),
-            Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task LeaveTheReminderIntervalBetweenTwoRemindersOfTheSamePendency()
-    {
-        await _processor.SendDueRemindersAsync();
-
-        await _repository.Received(1).ClaimPendingReminders(
-            Arg.Any<DateTimeOffset>(),
             Now - PendencyPolicy.ReminderInterval,
             Arg.Any<DateTimeOffset>(),
             Arg.Any<CancellationToken>());
@@ -109,21 +94,21 @@ public class PendencyReminderProcessorShould : UnitTestBase
     [Fact]
     public async Task StampTheClaimWithTheMomentItMeasuredFrom()
     {
-        await _processor.SendDueRemindersAsync();
+        await processor.SendDueRemindersAsync();
 
-        await _repository.Received(1).ClaimPendingReminders(
+        await repository.Received(1).ClaimPendingReminders(
             Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Now, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AnnounceNothingWhenNothingIsDue()
     {
-        _repository
+        repository
             .ClaimPendingReminders(
                 Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(),
                 Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
 
-        (await _processor.SendDueRemindersAsync()).Should().Be(0);
-        await _producer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
+        (await processor.SendDueRemindersAsync()).Should().Be(0);
+        await producer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 }

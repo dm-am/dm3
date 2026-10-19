@@ -14,11 +14,7 @@ namespace DM.Web.API.Features.Game.Reviews;
 /// </summary>
 /// <remarks>
 /// The game segment takes the same identifier as every other subroute of a game:
-/// the five-letter public id or a GUID. It used to be declared {id:guid}, alone
-/// among the 33 published paths under /v1/games, so a client holding the public
-/// id off the page URL got 200 from /characters and a bodiless routing 404 from
-/// /reviews, and had to spend a round trip on GET /v1/games/{publicId} to learn
-/// a GUID the rest of the API never asks for.
+/// the five-letter public id or a GUID.
 /// </remarks>
 [ApiController]
 [Route("v1/games/{id}/reviews")]
@@ -26,13 +22,12 @@ namespace DM.Web.API.Features.Game.Reviews;
 [Tags("Games")]
 public class GameReviewController : ControllerBase
 {
-    private readonly IGameReviewApiService _gameReviewApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly GameReviewApiService _gameReviewApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <inheritdoc />
     public GameReviewController(
-        IGameReviewApiService gameReviewApiService,
-        IGameApiService gameApiService)
+        GameReviewApiService gameReviewApiService,
+        GameApiService gameApiService)
     {
         _gameReviewApiService = gameReviewApiService;
         _gameApiService = gameApiService;

@@ -4,7 +4,6 @@
     <meta charset="UTF-8">
     <link rel="icon" href="/favicon.ico">
     <link rel="apple-touch-icon" href="/apple-touch-icon.png">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <!-- The two faces every address needs: Reset.sass sets the root elements in
          PT Sans, so the roman and the bold are on the critical path of the first
          paint. Without these the request for them leaves only after the bundle's
@@ -13,7 +12,7 @@
          crossorigin is not decoration: a font is fetched in anonymous CORS mode,
          and a preload without it warms a different cache entry than the one
          @font-face later asks for. Kept in step with assets/styles/Fonts.sass by
-         src/fontDelivery.spec.ts. -->
+         src/gates/fontDelivery.spec.ts. -->
     <link
       rel="preload"
       href="/src/assets/fonts/PTSans-Regular.ttf"
@@ -79,37 +78,6 @@
         }
       })();
     </script>
-    <!-- A phone shows the page of a narrow window whole, drawn smaller, and
-         the reader zooms in, as the old site always showed itself: there is no
-         layout of the phone's own. A device whose shorter side is narrower
-         than a tablet's ($bp-tablet) lays the page out 706 wide, the
-         narrowest layout of the shell (app/App.vue), whose middle column is
-         as wide as the middle column of a desktop of 1366; the screen fits
-         that width. A tablet and a desktop keep the width of the device.
-         Decided by the screen and not by the window, so turning a phone does
-         not change its layout. Kept in step with the scale and the shell by
-         src/phoneLayout.spec.ts. -->
-    <script>
-      (function () {
-        var LAYOUT_WIDTH = 706;
-        var TABLET_WIDTH = 768;
-        var screenSide = Math.min(window.screen.width, window.screen.height);
-        if (screenSide > 0 && screenSide < TABLET_WIDTH) {
-          document
-            .querySelector('meta[name="viewport"]')
-            .setAttribute("content", "width=" + LAYOUT_WIDTH);
-        }
-      })();
-    </script>
-    <!-- The text of a page drawn smaller stays the size its page sets: left to
-         itself a phone enlarges the type of the paragraphs it thinks too small
-         to read, and the page breaks its lines where the layout did not. -->
-    <style>
-      html {
-        -webkit-text-size-adjust: 100%;
-        text-size-adjust: 100%;
-      }
-    </style>
   </head>
   <body>
     <noscript>

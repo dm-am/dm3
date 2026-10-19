@@ -1,7 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Swagger;
@@ -9,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using DM.Web.API.Shared.RateLimiting;
+using DM.Web.API.Shared.Http;
 
 namespace DM.Web.API.Features.Blog.Blogs;
 
@@ -21,10 +20,9 @@ namespace DM.Web.API.Features.Blog.Blogs;
 [Tags("Blogs")]
 public class BlogController : ControllerBase
 {
-    private readonly IBlogApiService _apiService;
+    private readonly BlogApiService _apiService;
 
-    /// <inheritdoc />
-    public BlogController(IBlogApiService apiService)
+    public BlogController(BlogApiService apiService)
     {
         _apiService = apiService;
     }
@@ -48,12 +46,9 @@ public class BlogController : ControllerBase
     /// below — and it is the wider of the two, since Blog derives from BlogRef.</response>
     [HttpGet(Name = nameof(GetBlogs))]
     [ProducesResponseType(typeof(ListEnvelope<Blog>), StatusCodes.Status200OK)]
-    // Response carries per-caller unread counts, so it must not be cached
-    // anywhere. Declared, not assigned by hand: one mechanism for cache policy.
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [PrivateResponse]
     public async Task<IActionResult> GetBlogs([FromQuery] BlogsQuery q)
     {
-        // Return lightweight refs for sidebars, full blogs for detail views
         if (string.Equals(q.Projection, "ref", StringComparison.OrdinalIgnoreCase))
         {
             return Ok(await _apiService.GetBlogRefs(q));
@@ -79,16 +74,16 @@ public class BlogController : ControllerBase
     }
 
     /// <summary>
-    /// Get blog by owner login (personal blog)
+    /// Get blog by owner username (personal blog)
     /// </summary>
-    /// <param name="login">Owner login</param>
+    /// <param name="username">Owner username</param>
     /// <response code="200">Blog details</response>
     /// <response code="404">Blog not found</response>
-    [HttpGet("owner/{login}", Name = nameof(GetBlogByOwner))]
+    [HttpGet("owner/{username}", Name = nameof(GetBlogByOwner))]
     [ProducesResponseType(typeof(Envelope<Blog>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetBlogByOwner(string login) =>
-        Ok(await _apiService.GetByOwnerLogin(login));
+    public async Task<IActionResult> GetBlogByOwner(string username) =>
+        Ok(await _apiService.GetByOwnerLogin(username));
 
     /// <summary>
     /// Create a new blog
@@ -182,10 +177,8 @@ public class BlogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostBlogStatus(string id, [FromBody] BlogStatusChangeRequest request)
     {
-        // Pass the raw id through: the domain resolves the public id via the
-        // repository (ungated) after the authentication gate. Resolving here
-        // through the read-gated GetByPublicId would hide a premoderation-
-        // pending blog from its own leads on this lead-only endpoint.
+        // The raw id: the read-gated GetByPublicId would hide a premoderation-pending
+        // blog from its own leads; the domain resolves it ungated.
         return Ok(await _apiService.ChangeStatus(id, request));
     }
 
@@ -223,10 +216,7 @@ public class BlogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PostBlogPremoderation(string id, [FromBody] BlogPremoderationChangeRequest request)
     {
-        // Pass the raw id through: the domain resolves the public id via the
-        // repository (ungated). Resolving here through the read-gated
-        // GetByPublicId would hide a premoderation-pending blog from the
-        // non-curator mentor this endpoint exists for.
+        // The raw id, as in PostBlogStatus: here for the non-curator mentor.
         return Ok(await _apiService.ChangePremoderation(id, request));
     }
 
@@ -243,12 +233,6 @@ public class BlogController : ControllerBase
     [HttpPost("{id}/rubrics", Name = nameof(PostRubric))]
     [EnableRateLimiting(RateLimitPolicies.Default)]
     [AuthenticationRequired]
-    // 201 without Location. A rubric has no address of its own, and
-    // API_DESIGN.md answers exactly that case: the header is left off rather
-    // than pointed at the collection, which a consumer resolving it against
-    // the request would read as the address of the created record. The status
-    // still says what happened, and dropping it to 200 said "here is a
-    // representation" about a request that created something.
     [CreatedWithoutLocation]
     [ProducesResponseType(typeof(Envelope<Rubric>), StatusCodes.Status201Created)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
@@ -282,9 +266,8 @@ public class BlogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> PatchRubric(string id, Guid rubricId, [FromBody] UpdateRubricRequest request)
     {
-        // The rubric id alone identifies the rubric; the blog {id} is kept in
-        // the route for a consistent nested contract. The domain resolves and
-        // authorizes via the rubric's own blog.
+        // The rubric id alone identifies the rubric, the blog {id} keeps the
+        // address nested; the domain authorizes via the rubric's own blog.
         return Ok(await _apiService.UpdateRubric(rubricId, request));
     }
 
@@ -337,10 +320,7 @@ public class BlogController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> DeleteRubric(string id, Guid rubricId)
     {
-        // Same shape as PatchRubric: the rubric id alone identifies the rubric,
-        // and the blog {id} stays in the route so that all four rubric
-        // addresses are nested under their blog. The domain resolves and
-        // authorizes via the rubric's own blog.
+        // As in PatchRubric.
         await _apiService.DeleteRubric(rubricId);
         return NoContent();
     }

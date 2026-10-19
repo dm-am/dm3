@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -14,72 +15,61 @@ namespace DM.Architecture.Tests;
 /// prefix is the only place the site is named.
 /// </summary>
 /// <remarks>
-/// Nine subjects were written in five shapes: four appended the site name after a
-/// dash, four buried it inside the phrase, one prepended it, and one of the four
-/// opened with a warning sign, the only emoji in the product. A mailbox filter is
-/// written against the beginning of a subject, so a reader who filtered on the
-/// site name kept all forty-eight notifications and lost every security letter,
-/// including the warning that the address on the account is being changed.
-///
-/// The subject is a literal inside the sender, so this rule reads sources rather
-/// than assemblies: nothing builds these letters at test time and no test sends
-/// mail. Only files that construct an EmailLetter are read, which keeps the
-/// moderation ticket subject and the queue message property out of the match, and
-/// comment lines are skipped so that quoting a bad subject in prose does not fail
-/// the build.
+/// A mailbox filter matches the beginning of a subject. The prefix is written once, in MailSubject, and
+/// AccountLetterShould sends every account letter to see it arrive. Sources only here: what a run does not
+/// reach is a subject written past MailSubject, and the topics the prefix is put in front of. Only files
+/// that construct a letter are read, comment lines skipped.
 /// </remarks>
 public class MailSubjectShould
 {
-    private const string Prefix = "Dungeon Master: ";
     private const string SiteName = "Dungeon Master";
 
     /// <summary>
     /// What marks a source as one that sends a letter.
     /// </summary>
-    /// <remarks>
-    /// Constructing the letter is one way; deriving from the account base that
-    /// constructs it for you is the other. The five account senders stopped naming
-    /// EmailLetter when the shared half of them moved into
-    /// <c>AccountMailSender</c>, and this rule went quiet over six of the nine
-    /// subjects it exists to read - caught only because it counts what it matched
-    /// before it judges it. Both spellings are read now.
-    /// </remarks>
+    /// <remarks>Constructing the letter, or deriving from <c>AccountMailSender</c>, which constructs it.</remarks>
     private static readonly string[] LetterTypes = ["EmailLetter", "AccountMailSender"];
 
     /// <summary>
-    /// A subject written as a literal: assigned to the Subject property of a
-    /// letter, or prepared in a local named subject. A subject computed elsewhere
-    /// is out of reach of a source scan and is not matched.
+    /// A subject that does not go through MailSubject: anything assigned to the Subject of a letter but
+    /// MailSubject.Of, or the subject of another message carried over as it is.
     /// </summary>
-    private static readonly Regex SubjectLiteral = new(
-        @"(?:^|[^\w.])[Ss]ubject\s*=\s*\$?""((?:[^""\\]|\\.)*)""",
+    private static readonly Regex SubjectPastThePrefix = new(
+        @"(?:^|[^\w.])[Ss]ubject\s*=(?>\s*)(?!MailSubject\.Of\(|\w+\.Subject\b)",
+        RegexOptions.Compiled);
+
+    /// <summary>
+    /// A topic written as a literal: handed to MailSubject.Of, or to Deliver after the address. A topic
+    /// computed elsewhere is out of reach of a source scan and is not matched.
+    /// </summary>
+    private static readonly Regex TopicLiteral = new(
+        @"(?:MailSubject\.Of\(|\bDeliver\(\s*\w+,\s*)\$?""((?:[^""\\]|\\.)*)""",
         RegexOptions.Compiled);
 
     private static readonly string[] SkippedDirectories = ["obj", "bin", "node_modules", "coverage", "dist"];
 
     [Fact]
-    public void OpenWithTheSiteName()
+    public void PutThePrefixInFrontOfEverySubject()
     {
-        var subjects = Subjects();
-
-        subjects.Should().HaveCountGreaterThanOrEqualTo(5,
-            "a rule that matches nothing passes: the account senders alone write more subjects than that");
-
-        var offenders = subjects
-            .Where(subject => !subject.Text.StartsWith(Prefix, StringComparison.Ordinal))
-            .Select(Describe)
+        var offenders = Lines()
+            .Where(line => SubjectPastThePrefix.IsMatch(line.Text))
+            .Select(line => line.Source + ":" + line.Number + " -> " + line.Text.Trim())
             .ToList();
 
         offenders.Should().BeEmpty(
-            "a mailbox filter is written against the start of the subject, so the site name goes there and nowhere else");
+            "a mailbox filter is written against the start of the subject, and MailSubject.Of is what puts the site name there");
     }
+
+    [Fact]
+    public void FindTheTopicsOfTheLetters() =>
+        Topics().Should().HaveCountGreaterThanOrEqualTo(5,
+            "a rule that matches nothing passes: the account senders alone write more topics than that");
 
     [Fact]
     public void NameTheSiteOnce()
     {
-        var offenders = Subjects()
-            .Where(subject => subject.Text.StartsWith(Prefix, StringComparison.Ordinal))
-            .Where(subject => subject.Text[Prefix.Length..].Contains(SiteName, StringComparison.Ordinal))
+        var offenders = Topics()
+            .Where(topic => topic.Text.Contains(SiteName, StringComparison.Ordinal))
             .Select(Describe)
             .ToList();
 
@@ -90,8 +80,8 @@ public class MailSubjectShould
     [Fact]
     public void CarryNoEmoji()
     {
-        var offenders = Subjects()
-            .Where(subject => subject.Text.Any(IsPictorial))
+        var offenders = Topics()
+            .Where(topic => topic.Text.Any(IsPictorial))
             .Select(Describe)
             .ToList();
 
@@ -102,8 +92,8 @@ public class MailSubjectShould
     [Fact]
     public void CallTheChannelInRussian()
     {
-        var offenders = Subjects()
-            .Where(subject => subject.Text.Contains("email", StringComparison.OrdinalIgnoreCase))
+        var offenders = Topics()
+            .Where(topic => topic.Text.Contains("email", StringComparison.OrdinalIgnoreCase))
             .Select(Describe)
             .ToList();
 
@@ -115,15 +105,21 @@ public class MailSubjectShould
         char.IsSurrogate(symbol)
         || CharUnicodeInfo.GetUnicodeCategory(symbol) == UnicodeCategory.OtherSymbol;
 
-    private static string Describe(MailSubject subject) =>
-        subject.Source + ":" + subject.Line + " -> " + subject.Text;
+    private static string Describe(SourceLine topic) =>
+        topic.Source + ":" + topic.Number + " -> " + topic.Text;
 
-    private static IReadOnlyList<MailSubject> Subjects()
+    private static IReadOnlyList<SourceLine> Topics() => Lines()
+        .SelectMany(line => TopicLiteral.Matches(line.Text)
+            .Select(match => line with { Text = match.Groups[1].Value }))
+        .ToList();
+
+    /// <summary>The code lines of every source that constructs a letter.</summary>
+    private static IReadOnlyList<SourceLine> Lines()
     {
-        var root = RepositoryRoot;
-        var subjects = new List<MailSubject>();
+        var root = RepositoryLayout.Root;
+        var found = new List<SourceLine>();
 
-        foreach (var source in RepositoryFiles.CsharpFiles(Path.Combine(root, "src"), SkippedDirectories))
+        foreach (var source in RepositoryFiles.Files(Path.Combine(root, "src"), "*.cs", SkippedDirectories))
         {
             var lines = File.ReadAllLines(source);
             if (!lines.Any(line => LetterTypes.Any(type =>
@@ -132,24 +128,13 @@ public class MailSubjectShould
                 continue;
             }
 
-            for (var index = 0; index < lines.Length; index++)
-            {
-                if (IsComment(lines[index]))
-                {
-                    continue;
-                }
-
-                foreach (Match match in SubjectLiteral.Matches(lines[index]))
-                {
-                    subjects.Add(new MailSubject(
-                        Path.GetRelativePath(root, source).Replace('\\', '/'),
-                        index + 1,
-                        match.Groups[1].Value));
-                }
-            }
+            var relative = Path.GetRelativePath(root, source).Replace('\\', '/');
+            found.AddRange(lines
+                .Select((text, index) => new SourceLine(relative, index + 1, text))
+                .Where(line => !IsComment(line.Text)));
         }
 
-        return subjects;
+        return found;
     }
 
     private static bool IsComment(string line)
@@ -160,12 +145,5 @@ public class MailSubjectShould
             || code.StartsWith("/*", StringComparison.Ordinal);
     }
 
-    /// <summary>
-    /// Enumerates the C# sources under a directory, skipping build output and the
-    /// client package tree: they hold no senders and are large enough to matter.
-    /// </summary>
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    private sealed record MailSubject(string Source, int Line, string Text);
+    private sealed record SourceLine(string Source, int Number, string Text);
 }

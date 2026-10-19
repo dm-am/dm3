@@ -1,8 +1,5 @@
-using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Web.API.Swagger;
 using AwesomeAssertions;
 using Xunit;
@@ -13,26 +10,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// Every success body is an envelope, and the ones that are not are counted.
 /// </summary>
 /// <remarks>
-/// API_DESIGN calls Envelope the standard for a single resource and the bare DTO
-/// legacy. Nothing held the code to it: the test next door pins four endpoints
-/// out of 363, and 69 operations answer with a bare DTO. The cost is not
-/// aesthetic — a consumer cannot have one unwrapping function, so apiClient.get
-/// returns {resource: X} on one call and X on the next, and which is which lives
-/// scattered through the call sites. That ambiguity has already rendered two
-/// screens permanently empty.
-///
-/// Wrapping the remaining 69 in one pass is a migration, not a fix: the client is
-/// hand-written and every one of them is a breaking change. What is fixed here is
-/// the absence of a mechanism. The list below is the debt, named operation by
-/// operation, and it is asserted in both directions: a new bare response turns
-/// the first test red, an entry that no longer describes anything turns the
-/// second red. It may only shrink.
-///
-/// Bare means "not an envelope", and a body the document writes out in place
-/// instead of naming - an array, a primitive - is bare as well. Reading that as
-/// "no body" is what used to let such an operation out of the walk altogether:
-/// counted among no violations and exempted by no list. ResponseBodySchema is
-/// where the two are told apart, for this test and for the two beside it.
+/// A consumer cannot have one unwrapping function while some answers are bare. The list below is the debt by
+/// operation, asserted both ways, and only shrinks; ResponseBodySchema tells an inline body from no body.
 /// </remarks>
 public class EnvelopeCoverageShould : IntegrationTestBase
 {
@@ -56,7 +35,6 @@ public class EnvelopeCoverageShould : IntegrationTestBase
         "GET /v1/moderation/tags/{tagId}",
         "GET /v1/moderation/tickets/stats",
         "GET /v1/moderation/users/{username}/profile",
-        "GET /v1/topics/{id}/discussion",
         "GET /v1/uploads/{id}",
         "GET /v1/users/me/blacklist/settings",
         "GET /v1/users/me/notes/{username}",
@@ -78,7 +56,6 @@ public class EnvelopeCoverageShould : IntegrationTestBase
         "PATCH /v1/users/me/preferences",
         "PATCH /v1/users/me/profile",
         "PATCH /v1/users/me/subscriptions/{id}",
-        "POST /v1/account/email-change",
         "POST /v1/account/login",
         "POST /v1/account/password",
         "POST /v1/account/password-reset",

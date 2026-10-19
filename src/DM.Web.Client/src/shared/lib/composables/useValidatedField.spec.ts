@@ -13,6 +13,10 @@ function heldCheck() {
 
 const TAKEN = "Имя занято";
 
+/** A rule of a form: at least three characters. */
+const atLeastThree = (value: string) =>
+  value.length >= 3 ? null : "Минимум 3 символа";
+
 /** A name field the server checks, with a name typed in. */
 const checkedName = (
   check: (value: string) => Promise<string | null>,
@@ -28,9 +32,7 @@ describe("useValidatedField: the check of the form", () => {
   });
 
   it("says the reason once the field is left, and drops it at the next key", async () => {
-    const field = useValidatedField({
-      validate: validators.minLength(3),
-    });
+    const field = useValidatedField({ validate: atLeastThree });
     field.value.value = "ab";
 
     await field.onBlur();
@@ -42,7 +44,7 @@ describe("useValidatedField: the check of the form", () => {
   });
 
   it("reads the value without the spaces around it", async () => {
-    const validate = vi.fn(validators.minLength(3));
+    const validate = vi.fn(atLeastThree);
     const field = useValidatedField({ validate, initialValue: "  ab  " });
 
     await field.onBlur();
@@ -75,7 +77,7 @@ describe("useValidatedField: the server check", () => {
   it("asks the server only once the field is left valid, and waits for it", async () => {
     const { check, answer } = heldCheck();
     const field = useValidatedField({
-      validate: validators.minLength(3),
+      validate: atLeastThree,
       asyncValidate: check,
       initialValue: "ab",
     });
@@ -244,26 +246,12 @@ describe("validators", () => {
     ["", null],
     ["reader@dm.am", null],
     ["Reader.Name+tag@mail.example.RU", null],
-    ["reader@dm", "Неверный формат почты"],
+    // An <input type="email"> takes a domain without a dot; the server decides on it.
+    ["reader@dm", null],
     ["reader dm.am", "Неверный формат почты"],
+    ["reader@", "Неверный формат почты"],
   ])("email reads %j as %j", (value, result) => {
     expect(validators.email()(value)).toBe(result);
-  });
-
-  it.each([
-    [1, "a", null],
-    [1, "", null],
-    [2, "a", "Минимум 2 символа"],
-    [5, "abcd", "Минимум 5 символов"],
-    [21, "a", "Минимум 21 символ"],
-  ])("minLength %i reads %j as %j", (min, value, result) => {
-    expect(validators.minLength(min)(value)).toBe(result);
-  });
-
-  it("minLength says the reason it is given", () => {
-    expect(validators.minLength(8, "Короткий пароль")("abc")).toBe(
-      "Короткий пароль",
-    );
   });
 
   it("combine says the first reason, an empty one included", () => {
@@ -273,7 +261,7 @@ describe("validators", () => {
     );
 
     expect(both("")).toBe("");
-    expect(both("reader@dm")).toBe("Почта");
+    expect(both("reader dm.am")).toBe("Почта");
     expect(both("reader@dm.am")).toBeNull();
   });
 });

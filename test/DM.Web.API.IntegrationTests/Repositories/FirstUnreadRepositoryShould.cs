@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Unread;
 using DM.Infrastructure.Persistence;
@@ -19,15 +15,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// Where "go to first unread" puts the reader down, and how much it says is left.
 /// </summary>
 /// <remarks>
-/// Runs against the container Postgres because the reads under test are a union
-/// of per-room aggregates: each room is counted from its own last-read moment,
-/// which is not a shape the InMemory provider answers the same way.
-///
-/// The three methods used to walk the rooms one query at a time and then total
-/// them up with a second pass — 2N+1 round trips on every jump — and nothing
-/// exercised them, so the walk could be replaced only by rewriting the assertions
-/// that did not exist. These are those assertions: what the reader sees, stated
-/// independently of how the rooms are asked.
+/// Against the container Postgres: the reads are a union of per-room aggregates from each room's last-read moment.
+/// The assertions state what the reader sees, independent of how the rooms are asked.
 /// </remarks>
 public class FirstUnreadRepositoryShould : IntegrationTestBase
 {
@@ -113,7 +102,7 @@ public class FirstUnreadRepositoryShould : IntegrationTestBase
         result.TotalUnreadCount.Should().Be(5);
         result.HasUnread.Should().BeTrue();
 
-        var earliest = await FindPostAsync(dbContext, game.Rooms[1], second.First());
+        var earliest = FindPost(dbContext, game.Rooms[1], second.First());
         result.PostId.Should().Be(earliest);
     }
 
@@ -139,7 +128,7 @@ public class FirstUnreadRepositoryShould : IntegrationTestBase
         result.TotalUnreadCount.Should().Be(0);
         result.HasUnread.Should().BeFalse();
 
-        var latest = await FindPostAsync(dbContext, game.Rooms[1], second.Last());
+        var latest = FindPost(dbContext, game.Rooms[1], second.Last());
         result.PostId.Should().Be(latest);
     }
 
@@ -157,10 +146,7 @@ public class FirstUnreadRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The rooms are walked in the order the menu lists them: by their place,
-    /// and of two rooms that share one, the room created first. Sorted by the
-    /// place alone, the tie fell to the order the rows lie in, and the jump
-    /// could skip unread posts in the room the menu shows above.
+    /// The rooms are walked in the menu's order: by place, and of two sharing one, the room created first.
     /// </summary>
     [Fact]
     public async Task WalkTheRoomsInTheOrderTheMenuListsThem()
@@ -272,9 +258,6 @@ public class FirstUnreadRepositoryShould : IntegrationTestBase
         return moments;
     }
 
-    private static async Task<Guid> FindPostAsync(DmDbContext dbContext, Guid roomId, DateTimeOffset createdUtc)
-    {
-        await Task.CompletedTask;
-        return dbContext.Posts.Single(p => p.RoomId == roomId && p.CreatedUtc == createdUtc).PostId;
-    }
+    private static Guid FindPost(DmDbContext dbContext, Guid roomId, DateTimeOffset createdUtc) =>
+        dbContext.Posts.Single(p => p.RoomId == roomId && p.CreatedUtc == createdUtc).PostId;
 }

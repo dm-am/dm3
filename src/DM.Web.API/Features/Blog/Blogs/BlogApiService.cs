@@ -19,8 +19,7 @@ using DomainPublication = DM.Domain.Blog.Features.Publications.Publication;
 
 namespace DM.Web.API.Features.Blog.Blogs;
 
-/// <inheritdoc />
-internal class BlogApiService : IBlogApiService
+public class BlogApiService
 {
     private readonly IBlogService _blogService;
     private readonly IPublicationService _publicationService;
@@ -29,7 +28,6 @@ internal class BlogApiService : IBlogApiService
     private readonly IPublicationCommentService _publicationCommentService;
     private readonly BlogMapper _mapper;
 
-    /// <inheritdoc />
     public BlogApiService(
         IBlogService blogService,
         IPublicationService publicationService,
@@ -46,14 +44,12 @@ internal class BlogApiService : IBlogApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Blog>> GetBlogs(BlogsQuery query)
     {
         var (blogs, paging) = await QueryBlogs(query);
         return new ListEnvelope<Blog>(blogs.Select(_mapper.ToBlog), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<BlogRef>> GetBlogRefs(BlogsQuery query)
     {
         var (blogs, paging) = await QueryBlogs(query);
@@ -61,12 +57,10 @@ internal class BlogApiService : IBlogApiService
     }
 
     /// <summary>
-    /// One page of blogs for a query. The full and the lightweight endpoints
-    /// differ only in the final projection; keeping the selection here means a
-    /// filter added to one cannot go missing from the other, which is what the
-    /// two verbatim copies of this block invited.
+    /// One page of blogs for a query, shared by the full and the lightweight
+    /// projection so a filter cannot reach one of them only.
     /// </summary>
-    private async Task<(IEnumerable<DM.Domain.Blog.Features.Blogs.Blog> Blogs, PagingResult Paging)>
+    private async Task<(IEnumerable<DomainBlog> Blogs, PagingResult Paging)>
         QueryBlogs(BlogsQuery query)
     {
         if (query.Participating == true)
@@ -78,7 +72,7 @@ internal class BlogApiService : IBlogApiService
 
             var subscribedBlogs = subscribedBlogIds.Count > 0
                 ? await _blogService.GetSubscribedBlogs(subscribedBlogIds.ToList())
-                : Enumerable.Empty<DM.Domain.Blog.Features.Blogs.Blog>();
+                : Enumerable.Empty<DomainBlog>();
 
             var allBlogs = ownedBlogs
                 .Concat(subscribedBlogs.Where(b => !ownedBlogs.Any(o => o.Id == b.Id)))
@@ -95,34 +89,30 @@ internal class BlogApiService : IBlogApiService
         return await _blogService.GetPublicBlogs(query, _mapper.ToBlogFilter(query));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Blog>> Get(Guid id)
     {
         var blog = await _blogService.GetAsync(id);
         return new Envelope<Blog>(BlogForViewer(blog));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Blog>> GetByPublicId(string publicId)
     {
         var blog = await _blogService.GetByPublicIdAsync(publicId);
         return new Envelope<Blog>(BlogForViewer(blog));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Blog>> GetByOwnerLogin(string login)
     {
         var blog = await _blogService.GetByOwnerUsernameAsync(login);
         return new Envelope<Blog>(BlogForViewer(blog));
     }
 
-    /// <inheritdoc />
+    /// <summary>Every blog-scoped route accepts either form, so the branch lives here once rather than in each controller.</summary>
     public async Task<Guid> ResolveId(string idOrPublicId) =>
         Guid.TryParse(idOrPublicId, out var guid)
             ? guid
             : (await GetByPublicId(idOrPublicId)).Resource.Id;
 
-    /// <inheritdoc />
     public async Task<Envelope<Blog>> Create(CreateBlogRequest request)
     {
         var createBlog = _mapper.ToCreateBlog(request);
@@ -130,7 +120,6 @@ internal class BlogApiService : IBlogApiService
         return new Envelope<Blog>(BlogForViewer(blog));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Blog>> Update(Guid id, UpdateBlogRequest request)
     {
         var updateBlog = _mapper.ToUpdateBlog(request);
@@ -139,24 +128,20 @@ internal class BlogApiService : IBlogApiService
         return new Envelope<Blog>(BlogForViewer(blog));
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid id) => _blogService.Delete(id);
 
-    /// <inheritdoc />
     public async Task<Envelope<Blog>> ChangePremoderation(string id, BlogPremoderationChangeRequest request)
     {
         var updatedBlog = await _blogService.ChangePremoderationAsync(id, request.Transition);
         return new Envelope<Blog>(BlogForViewer(updatedBlog));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Blog>> ChangeStatus(string id, BlogStatusChangeRequest request)
     {
         var updatedBlog = await _blogService.ChangeStatusAsync(id, request.Transition);
         return new Envelope<Blog>(BlogForViewer(updatedBlog));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Rubric>> CreateRubric(Guid blogId, CreateRubricRequest request)
     {
         var createRubric = _mapper.ToCreateRubric(request);
@@ -165,7 +150,6 @@ internal class BlogApiService : IBlogApiService
         return new Envelope<Rubric>(_mapper.ToRubric(rubric));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Rubric>> UpdateRubric(Guid rubricId, UpdateRubricRequest request)
     {
         var rubric = await _blogService.UpdateRubric(
@@ -173,31 +157,27 @@ internal class BlogApiService : IBlogApiService
         return new Envelope<Rubric>(_mapper.ToRubric(rubric));
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Rubric>> ReorderRubrics(Guid blogId, ReorderRubricsRequest request)
     {
         var rubrics = await _blogService.ReorderRubrics(blogId, request.RubricIds);
         return new ListEnvelope<Rubric>(rubrics.Select(_mapper.ToRubric));
     }
 
-    /// <inheritdoc />
     public Task DeleteRubric(Guid rubricId) => _blogService.DeleteRubric(rubricId);
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<ApiPublication>> GetPublications(Guid blogId, Guid? rubricId, PagingQuery query)
     {
         var (publications, paging) = await _publicationService.GetPublications(blogId, rubricId, query);
         return new ListEnvelope<ApiPublication>(publications.Select(_mapper.ToPublication), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<ApiPublication>> GetPublication(Guid publicationId)
     {
         var publication = await _publicationService.GetPublication(publicationId);
         return new Envelope<ApiPublication>(await PublicationForViewer(publication));
     }
 
-    /// <inheritdoc />
+    /// <summary>Null inside the envelope when the user has no published publication; the controller turns it into a 404.</summary>
     public async Task<Envelope<ApiPublication?>> GetUserBestPublication(string username)
     {
         var publication = await _publicationService.GetBestUserPublication(username);
@@ -205,7 +185,6 @@ internal class BlogApiService : IBlogApiService
             publication == null ? null : await PublicationForViewer(publication));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<ApiPublication>> CreatePublication(Guid blogId, ApiCreatePublicationRequest request)
     {
         var createPublication = _mapper.ToCreatePublication(request);
@@ -214,7 +193,6 @@ internal class BlogApiService : IBlogApiService
         return new Envelope<ApiPublication>(await PublicationForViewer(publication));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<ApiPublication>> UpdatePublication(Guid publicationId, ApiUpdatePublicationRequest request)
     {
         var updatePublication = _mapper.ToUpdatePublication(request);
@@ -223,7 +201,6 @@ internal class BlogApiService : IBlogApiService
         return new Envelope<ApiPublication>(await PublicationForViewer(publication));
     }
 
-    /// <inheritdoc />
     public Task DeletePublication(Guid publicationId) => _publicationService.DeletePublication(publicationId);
 
     /// <summary>
@@ -231,12 +208,6 @@ internal class BlogApiService : IBlogApiService
     /// list leaves the second half out, so the reads of one blog and the writes
     /// that return one come through here.
     /// </summary>
-    /// <remarks>
-    /// Not on the list: the list-shaped reads fill the viewer's subscription
-    /// and the single read does not (BlogIntentionResolver), so the same blog
-    /// could answer two ways, and only the single read is the one a comment is
-    /// refused by.
-    /// </remarks>
     private Blog BlogForViewer(DomainBlog blog)
     {
         var result = _mapper.ToBlog(blog);

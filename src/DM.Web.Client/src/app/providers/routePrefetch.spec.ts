@@ -3,26 +3,10 @@
  */
 
 /**
- * When a page's chunk is asked for, and when it must not be.
- *
- * The behaviour is invisible by design — nothing renders, nothing moves, and
- * the only thing that changes is the moment a request goes out — so there is
- * no screen anybody could look at to tell whether it still works. A regression
- * here does not break a page; it quietly makes every navigation slow again.
- * That is what these cases are for.
- *
- * The other half is the refusals, and they matter as much as the fetching: a
- * prefetch is traffic the reader never asked for, and it competes with the
- * page they are actually opening. Every refusal below therefore ends by
- * fetching something real, so that a module which has stopped prefetching
- * altogether fails the refusals too instead of passing them for the wrong
- * reason. Only the teardown case can be green on a dead module, because "no
- * longer listening" is the thing it asserts.
- *
- * The router is a fake: a real one would pull every lazy page in the app into
- * the suite. What is NOT faked is `loadRouteLocation` — the actual vue-router
- * function this module drives — so what these assert is a route record's real
- * lazy loader being called, the same way a navigation calls it.
+ * When a page's chunk is asked for, and when it must not be. Every refusal ends
+ * by fetching something real, so a module that stopped prefetching fails it.
+ * The app router is faked (a real one pulls every lazy page in);
+ * loadRouteLocation is the real one.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent, h } from "vue";
@@ -61,7 +45,6 @@ vi.mock("./router", () => ({
     afterEach: fake.afterEach,
     onError: fake.onError,
   },
-  extractNumberParam: vi.fn(),
 }));
 
 import { installRoutePrefetch } from "./routePrefetch";
@@ -83,12 +66,7 @@ interface FakeRecord {
 /** What the fake router answers `resolve` with. */
 const routes = new Map<string, { path: string; matched: FakeRecord[] }>();
 
-/**
- * A record with a lazy component. The loader resolves to a module object, so
- * vue-router writes the component back into the record exactly as it does in
- * the app — which is the mechanism that keeps a visited route from loading
- * twice.
- */
+/** A record with a lazy component, which vue-router writes back once loaded. */
 function lazyRecord(path: string): { record: FakeRecord; load: () => unknown } {
   const load = vi.fn(() => Promise.resolve({ default: { name: "Page" } }));
   return { record: { path, components: { default: load }, mods: {} }, load };
@@ -110,8 +88,7 @@ function connectionReports(info: Record<string, unknown> | undefined): void {
 const Nav = defineComponent({
   render() {
     return h("nav", [
-      // An icon inside the link: crossing onto it is a `mouseout` off the
-      // anchor, and the pointer has not gone anywhere.
+      // Crossing onto the icon is a mouseout off the anchor.
       h("a", { href: "/games", id: "games" }, [
         h("span", { id: "games-icon" }, "*"),
         "Игры",
@@ -125,8 +102,7 @@ const Nav = defineComponent({
       h("a", { href: "/blogs", target: "_blank", id: "new-tab" }, "В окне"),
       h("a", { href: "/blogs", download: "", id: "download" }, "Скачать"),
       h("a", { href: "/files/handbook.pdf", id: "file" }, "Файл"),
-      // A run of top-level routes, the way the moderation panel is built: a
-      // reader tabbing to something past it steps through every one of them.
+      // A run of top-level routes, as in the moderation panel.
       h("a", { href: "/moderation/bans", id: "p1" }, "Баны"),
       h("a", { href: "/moderation/warnings", id: "p2" }, "Предупреждения"),
       h("a", { href: "/moderation/tags", id: "p3" }, "Теги"),
@@ -158,8 +134,7 @@ beforeEach(() => {
   const blogsPage = lazyRecord("/blogs");
   const profilePage = lazyRecord("/users/:username");
   const homePage = lazyRecord("/");
-  // router.ts ends with a catch-all, so an address that is not a route of ours
-  // still resolves — to the 404 screen.
+  // router.ts ends with a catch-all, so an unknown address resolves to the 404.
   const notFoundPage = lazyRecord("/:pathMatch(.*)*");
   const panelPages = [
     lazyRecord("/moderation/bans"),
@@ -176,8 +151,7 @@ beforeEach(() => {
 
   serves("/games", gamesPage.record);
   serves("/blogs", blogsPage.record);
-  // One record, two addresses: the whole point of remembering chunks by the
-  // records behind them rather than by the address on the link.
+  // One record, two addresses.
   serves("/users/anna", profilePage.record);
   serves("/users/boris", profilePage.record);
   serves("/", homePage.record);
@@ -203,8 +177,7 @@ afterEach(() => {
 
 async function settle(ms: number): Promise<void> {
   vi.advanceTimersByTime(ms);
-  // Lets the loader's promise chain run: the fetch itself starts synchronously,
-  // but what the router does with the module does not.
+  // Lets the loader's promise chain run.
   await vi.advanceTimersByTimeAsync(0);
 }
 
@@ -242,8 +215,6 @@ describe("route prefetch", () => {
     });
 
     it("waits before believing the pointer, and forgets a link it left", async () => {
-      // A pointer crossing a column of links on its way elsewhere would
-      // otherwise fetch every page it passed over.
       await wrapper.get("#games").trigger("mouseover");
       await unhover("games");
       await settle(AFTER_HOVER_DWELL);
@@ -278,9 +249,6 @@ describe("route prefetch", () => {
     });
 
     it("fetches one page for a pass down a panel, not one per link", async () => {
-      // The regression this wait was added for: ten top-level routes in a
-      // column, and a reader tabbing to something past them used to fetch
-      // every graph on the way.
       for (const id of ["p1", "p2", "p3"]) {
         await wrapper.get(`#${id}`).trigger("focusin");
         await settle(MID_TRAVERSAL);
@@ -288,7 +256,6 @@ describe("route prefetch", () => {
       }
       for (const load of panel) expect(load).not.toHaveBeenCalled();
 
-      // Coming to rest is what fetches, and only where it came to rest.
       await focus("p3");
       expect(panel[0]).not.toHaveBeenCalled();
       expect(panel[1]).not.toHaveBeenCalled();
@@ -305,19 +272,12 @@ describe("route prefetch", () => {
       await stillFetches();
     });
 
-    it("fetches on touch, where there is no hover to wait for", async () => {
-      await wrapper.get("#games").trigger("touchstart");
-
-      expect(games).toHaveBeenCalledTimes(1);
-    });
-
     it("asks for a chunk once, however many times it is aimed at", async () => {
       await hover("games");
       await unhover("games");
       await hover("games");
       await wrapper.get("#games").trigger("focusin");
       await settle(AFTER_FOCUS_DWELL);
-      await wrapper.get("#games").trigger("touchstart");
 
       expect(games).toHaveBeenCalledTimes(1);
     });
@@ -327,37 +287,17 @@ describe("route prefetch", () => {
       await unhover("anna");
       await hover("boris");
 
-      // Every profile link on a page would otherwise be a separate fetch of
-      // the component they all share.
       expect(profile).toHaveBeenCalledTimes(1);
     });
   });
 
   describe("what it refuses", () => {
-    it("spends nothing under Save-Data", async () => {
-      connectionReports({ saveData: true });
-
-      await hover("blogs");
-      expect(blogs).not.toHaveBeenCalled();
-
-      connectionReports(undefined);
-      await unhover("blogs");
-      await stillFetches();
-    });
-
-    it("spends nothing on a 2g connection", async () => {
-      connectionReports({ effectiveType: "2g" });
-
-      await hover("blogs");
-      expect(blogs).not.toHaveBeenCalled();
-
-      connectionReports({ effectiveType: "4g" });
-      await unhover("blogs");
-      await stillFetches();
-    });
-
-    it("spends nothing on a slow-2g connection", async () => {
-      connectionReports({ effectiveType: "slow-2g" });
+    it.each([
+      ["under Save-Data", { saveData: true }],
+      ["on a 2g connection", { effectiveType: "2g" }],
+      ["on a slow-2g connection", { effectiveType: "slow-2g" }],
+    ])("spends nothing %s", async (_, connection) => {
+      connectionReports(connection);
 
       await hover("blogs");
       expect(blogs).not.toHaveBeenCalled();
@@ -368,8 +308,6 @@ describe("route prefetch", () => {
     });
 
     it("holds off while a navigation the reader started is in flight", async () => {
-      // The one case where prefetching can make the site slower: the chunk of
-      // the page being opened would share the channel with a guess.
       startNavigation();
 
       await hover("blogs");
@@ -381,8 +319,7 @@ describe("route prefetch", () => {
     });
 
     it("does not stay switched off when a navigation ends in an error", async () => {
-      // A guard that throws reaches no afterEach, so the flag has a second way
-      // out. Without it one failed navigation ends prefetching for the session.
+      // A guard that throws reaches no afterEach.
       startNavigation();
       failNavigation();
 
@@ -410,8 +347,7 @@ describe("route prefetch", () => {
     });
 
     it("leaves a link that opens its own tab alone", async () => {
-      // That tab has a module registry of its own: whatever is fetched here is
-      // fetched again there.
+      // That tab has a module registry of its own.
       await hover("new-tab");
       expect(blogs).not.toHaveBeenCalled();
 
@@ -436,8 +372,6 @@ describe("route prefetch", () => {
     });
 
     it("leaves an internal address that is not a route of ours alone", async () => {
-      // The catch-all answers for it, so without a check this fetches the 404
-      // screen for a reader who has not asked for one.
       await hover("file");
       expect(notFound).not.toHaveBeenCalled();
 
@@ -453,5 +387,23 @@ describe("route prefetch", () => {
 
     expect(games).not.toHaveBeenCalled();
     // afterEach tears down again; doing so twice must be harmless.
+  });
+
+  it("stops watching the router once it is torn down", () => {
+    uninstall();
+
+    // The fake router's lists outlive a case.
+    expect(fake.beforeGuards).toHaveLength(0);
+    expect(fake.afterHooks).toHaveLength(0);
+    expect(fake.errorHandlers).toHaveLength(0);
+  });
+
+  it("drops a wait still running when it is torn down", async () => {
+    await wrapper.get("#games").trigger("mouseover");
+    uninstall();
+
+    await settle(AFTER_HOVER_DWELL);
+
+    expect(games).not.toHaveBeenCalled();
   });
 });

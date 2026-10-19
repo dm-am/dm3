@@ -7,9 +7,8 @@ namespace DM.Domain.Moderation.Features.Warnings;
 /// Validator for a change of warning points
 /// </summary>
 /// <remarks>
-/// The explanation is required, unlike the reason of a lifted ban: this one is
-/// shown to everybody who reads the log, and a correction with no words under it
-/// leaves the original verdict standing beside points that contradict it.
+/// The explanation is required: everybody who reads the log sees it, and without it
+/// the original verdict stands beside points that contradict it.
 /// </remarks>
 internal class ChangeWarningPointsValidator : AbstractValidator<ChangeWarningPoints>
 {
@@ -17,10 +16,10 @@ internal class ChangeWarningPointsValidator : AbstractValidator<ChangeWarningPoi
     {
         RuleFor(c => c.Points)
             .NotNull().WithMessage(ValidationError.Empty)
-            .InclusiveBetween(0, 6).WithMessage(ValidationError.Invalid);
+            .InclusiveBetween(0, WarningPolicy.MaxPointsPerWarning).WithMessage(ValidationError.Invalid);
 
         RuleFor(c => c.Reason)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(2000).WithMessage(ValidationError.Long);
+            .MaximumLength(WarningPolicy.ReasonMaxLength).WithMessage(ValidationError.Long);
     }
 }

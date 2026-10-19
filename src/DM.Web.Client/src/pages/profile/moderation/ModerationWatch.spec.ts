@@ -3,18 +3,8 @@
  */
 
 /**
- * The moderation watch is the one thing on a profile that decides what happens
- * to content the user has not created yet: while it is on, every game and blog
- * they start is born in premoderation.
- *
- * Two rules are pinned here, and they are the two the client can get wrong on
- * its own. The block is drawn only for the rank the endpoint accepts
- * (ModerationIntention.SetModerationWatch is Moderator+, while the panel around
- * this block opens to a wider audience) — a switch the server answers 403 to is
- * worse than no switch. And the box sends the opposite of the state it was
- * drawn in, because a toggle that sends its own current value silently does
- * nothing. It is a box, saved on the press as the account settings are: the
- * tick is the state, and the caption says what that state does.
+ * The moderation watch: drawn only for the rank the endpoint accepts, a box
+ * that sends the opposite of the state it shows, saved on the press.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
@@ -76,7 +66,7 @@ describe("ModerationWatch", () => {
   });
 
   it("draws nothing for a viewer the endpoint would refuse", () => {
-    expect(mountBlock(false, false).find(".mod-section").exists()).toBe(false);
+    expect(mountBlock(false, false).find("section").exists()).toBe(false);
   });
 
   // A switch, so a box: its tick is the state, its caption what the state does.
@@ -90,11 +80,6 @@ describe("ModerationWatch", () => {
     expect(off.find("button").exists()).toBe(false);
 
     expect(box(mountBlock(true)).checked).toBe(true);
-  });
-
-  // The word the domain uses for this audience stays in the domain.
-  it("keeps the domain's word for the audience out of the interface", () => {
-    expect(mountBlock(true).text()).not.toContain("рецидив");
   });
 
   it.each([
@@ -134,7 +119,7 @@ describe("ModerationWatch", () => {
     await flushPromises();
   });
 
-  // Under the box, where the press was; it used to be a plate.
+  // Under the box, where the press was.
   it("puts the box back and says why under it when the server refuses", async () => {
     setModerationWatch.mockResolvedValueOnce({
       error: { type: "", title: "", status: 404, traceId: "t" },

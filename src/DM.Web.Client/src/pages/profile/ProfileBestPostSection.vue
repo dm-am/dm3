@@ -1,11 +1,5 @@
 <script setup lang="ts">
-/**
- * ProfileBestPostSection - displays a user's highest-rated post of all time.
- *
- * Uses the shared featured-mode GamePost component with its own
- * TruncatedContent, and fetches data via useRatedPostsStore (which wraps
- * the generic posts endpoint with author + rating-sort + take=1).
- */
+/** The user's highest-rated post, through useRatedPostsStore. */
 import { onMounted, watch } from "vue";
 import type { Username } from "@/shared/api/models/community";
 import { GamePost } from "@/widgets/game-post";

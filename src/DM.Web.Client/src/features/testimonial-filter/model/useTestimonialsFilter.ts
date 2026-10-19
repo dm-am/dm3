@@ -15,38 +15,22 @@ import type {
 } from "./types";
 import { DEFAULT_FILTER_STATE, SORT_OPTIONS } from "./types";
 
-// =============================================================================
-// RETURN TYPE
-// =============================================================================
-
 export interface TestimonialsFilterComposable {
-  /** Current filter state (computed from URL) */
   filterState: ComputedRef<TestimonialsFilterState>;
-  /** API search parameters (computed from filterState) */
   searchParams: ComputedRef<TestimonialsSearchParams>;
-  /** Whether any filters are active */
   hasActiveFilters: ComputedRef<boolean>;
 
-  // Actions
   setSearch: (search: string) => void;
   setSort: (sortBy: TestimonialSortBy, sortOrder?: "asc" | "desc") => void;
   toggleSortOrder: () => void;
   clearFilters: () => void;
 }
 
-// =============================================================================
-// ACTION TYPES (Discriminated Union)
-// =============================================================================
-
 type TestimonialsFilterAction =
   | { type: "SET_SEARCH"; search: string }
   | { type: "SET_SORT"; sortBy: TestimonialSortBy; sortOrder?: "asc" | "desc" }
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
-
-// =============================================================================
-// PURE REDUCER (Testable, no side effects)
-// =============================================================================
 
 function reducer(
   state: TestimonialsFilterState,
@@ -73,10 +57,6 @@ function reducer(
     }
   }
 }
-
-// =============================================================================
-// VALIDATION & PARSING
-// =============================================================================
 
 const validSortByValues = SORT_OPTIONS.map((o) => o.value);
 
@@ -118,10 +98,6 @@ function buildQueryFromState(
   return query;
 }
 
-// =============================================================================
-// MODULE-LEVEL DISPATCHER (created once per module)
-// =============================================================================
-
 const dispatcher = createFilterDispatcher<
   TestimonialsFilterState,
   TestimonialsFilterAction
@@ -130,39 +106,22 @@ const dispatcher = createFilterDispatcher<
   name: "useTestimonialsFilter",
 });
 
-// =============================================================================
-// COMPOSABLE
-// =============================================================================
-
-/**
- * Testimonials filter composable with action-based state management.
- *
- * Architecture:
- * - URL is the single source of truth (filterState is computed from route.query)
- * - All mutations go through dispatch() which applies actions via pure reducer
- * - Actions batch via module-level debounce - rapid clicks merge into single navigation
- * - Pure reducer is testable in isolation without router
- */
+// The URL is the single source of truth; actions batch through one module-level debounce.
 export function useTestimonialsFilter(): TestimonialsFilterComposable {
   const route = useRoute();
   const router = useRouter();
 
-  // Set router for dispatcher
   dispatcher.setRouter(router);
 
-  // Filter state derived from URL (single source of truth)
   const filterState = computed<TestimonialsFilterState>(() =>
     parseQueryToState(route.query),
   );
 
-  // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
 
-  // Dispatch helper
   const dispatch = (action: TestimonialsFilterAction) =>
     dispatcher.dispatch(action, reducer, getCurrentState);
 
-  // Convert to API params
   const searchParams = computed<TestimonialsSearchParams>(() => {
     const state = filterState.value;
     const params: TestimonialsSearchParams = {};
@@ -171,7 +130,6 @@ export function useTestimonialsFilter(): TestimonialsFilterComposable {
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
 
-    // Page number (from URL query directly)
     const pageNumber = parsePageNumber(route.query.number);
     if (pageNumber) params.number = pageNumber;
 
@@ -179,16 +137,11 @@ export function useTestimonialsFilter(): TestimonialsFilterComposable {
     return params;
   });
 
-  // Active filters check
   const hasActiveFilters = computed(() => {
     const state = filterState.value;
     const def = DEFAULT_FILTER_STATE;
     return state.search !== def.search;
   });
-
-  // ==========================================================================
-  // ACTION DISPATCHERS (thin wrappers around dispatch)
-  // ==========================================================================
 
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search });

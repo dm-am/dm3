@@ -5,6 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Popularity;
+using DM.Infrastructure.Persistence.Shared.Subscriptions;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
@@ -37,7 +38,6 @@ internal class GamePopularityRepository : IGamePopularityRepository
             .Where(c => gameIds.Contains(c.GameId) &&
                         c.Status == CharacterStatus.Active &&
                         !c.IsNpc &&
-                        c.AuthorId.HasValue &&
                         c.Author != null &&
                         c.Author.LastActivityUtc.HasValue &&
                         c.Author.LastActivityUtc.Value > activeSince)
@@ -54,15 +54,9 @@ internal class GamePopularityRepository : IGamePopularityRepository
         IReadOnlyCollection<Guid> gameIds,
         DateTimeOffset activeSince,
         CancellationToken cancellationToken = default) =>
-        await _dbContext.Subscriptions
-            .TagWith("DM.Game.ActiveReaderCounts")
-            .Where(s => s.TargetType == SubscriptionTargetType.Game &&
-                        gameIds.Contains(s.TargetId) &&
-                        s.Subscriber.LastActivityUtc.HasValue &&
-                        s.Subscriber.LastActivityUtc.Value > activeSince)
-            .GroupBy(s => s.TargetId)
-            .Select(g => new { GameId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.GameId, x => x.Count, cancellationToken);
+        await SubscriberSummaries.ActiveByTarget(
+            _dbContext.Subscriptions.TagWith("DM.Game.ActiveReaderCounts"),
+            SubscriptionTargetType.Game, gameIds, activeSince, cancellationToken);
 
     /// <inheritdoc />
     public async Task<int> ApplyScores(
@@ -88,7 +82,6 @@ internal class GamePopularityRepository : IGamePopularityRepository
                 }
 
                 game.PopularityScore = score;
-                game.PopularityScoreUpdatedUtc = calculatedUtc;
                 updated++;
             }
 

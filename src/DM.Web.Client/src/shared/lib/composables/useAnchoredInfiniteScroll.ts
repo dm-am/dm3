@@ -7,27 +7,12 @@ import {
 } from "vue";
 
 /**
- * Sentinel-driven paging for a chat's message list: the observers, one
- * in-flight load per direction, and the scroll anchoring that keeps the
- * viewport still while older messages are prepended above it.
- *
- * Both chat views grew their own copy, and the copies drifted the same way the
- * hover toolbar did. The global chat learned two guards the messenger never
- * got: it stops the observers while a jump-to-message animation is sweeping
- * the list, and it parks a direction whose last request failed instead of
- * asking the server again on every intersection. Extracting the mechanism
- * without those guards would have been the same divergence in a new place, so
- * both live here and both pages get them.
- *
- * What stays in the pages is the per-message domain work — like, edit, delete,
- * warn — one API call each, different per view.
+ * Sentinel-driven paging of a chat's message list, shared by both chats: one
+ * load per direction, the viewport anchored while older messages are prepended,
+ * observers stopped during a jump to a message, a failed direction parked.
  */
 export interface InfiniteScrollDirection {
-  /**
-   * The element the observer watches. Chats mount it only while more history
-   * exists, so it is null for most of a list's life and the observer attaches
-   * when setup runs with it present.
-   */
+  /** Mounted only while more history exists, so mostly null. */
   sentinel: Ref<HTMLElement | null>;
 
   /** Asked on every intersection rather than cached: paging state moves. */
@@ -37,10 +22,8 @@ export interface InfiniteScrollDirection {
   load: () => Promise<unknown>;
 
   /**
-   * Whether the last attempt failed. Without this an observer turns a single
-   * refused request into a loop: the sentinel is still on screen, so every
-   * intersection asks again. A failed direction parks until the reader asks
-   * for it explicitly through the sentinel's own retry.
+   * The last attempt failed: the direction parks until the sentinel's retry,
+   * or every intersection would ask again.
    */
   failed?: () => boolean;
 }
@@ -52,25 +35,14 @@ export interface AnchoredInfiniteScrollOptions {
   /** Older messages, above the viewport. Every chat list has this end. */
   older: InfiniteScrollDirection;
 
-  /**
-   * Newer messages, below the viewport. Omitted by lists that already end at
-   * the newest message — the messenger's does, so it has no bottom sentinel.
-   */
+  /** Newer messages, below the viewport; the messenger's list has none. */
   newer?: InfiniteScrollDirection;
 }
 
-/**
- * How far outside the container a sentinel counts as reached. The page loads
- * before the reader hits the actual edge, so the next screenful is usually
- * already there.
- */
+/** A sentinel counts as reached this far outside the container. */
 const SENTINEL_MARGIN_PX = 100;
 
-/**
- * How long a jump-to-message landing takes to settle: the virtualizer scrolls
- * to the row and then remeasures, so the viewport keeps moving after the call
- * returns. Both chats wait this out before resuming — see suspend().
- */
+/** How long a jump-to-message landing keeps moving the viewport (suspend()). */
 export const LANDING_SCROLL_MS = 600;
 
 export function useAnchoredInfiniteScroll(
@@ -84,13 +56,8 @@ export function useAnchoredInfiniteScroll(
   let suspended = false;
 
   /**
-   * Loads one page of older messages and puts the viewport back where the
-   * reader left it. Prepending grows the list above the visible area, which
-   * would otherwise carry whatever they were reading downwards out of sight.
-   *
-   * Also the path behind the sentinel's retry button, so a manual attempt
-   * anchors identically — hence no check on `failed` here: the reader asking
-   * again is exactly what clears that state.
+   * Loads one page of older messages and puts the viewport back. Also the
+   * sentinel's retry, which is what clears `failed`, so it is not checked here.
    */
   async function loadOlder(): Promise<void> {
     if (isLoadingOlder.value || !options.older.hasMore()) return;
@@ -105,13 +72,9 @@ export function useAnchoredInfiniteScroll(
       await options.older.load();
     } finally {
       nextTick(() => {
-        // The sentinel only intersects within SENTINEL_MARGIN_PX of the top,
-        // so the height the page just added is the offset that leaves the
-        // previously first visible message where it was.
+        // The height just added is the offset that keeps the first visible message.
         container.scrollTop = container.scrollHeight - scrollHeightBefore;
-        // Released here rather than right after the await: until the DOM has
-        // settled and scrollTop is corrected, the sentinel is still inside the
-        // root and a second intersection would queue another page.
+        // Released once scrollTop is corrected, or the sentinel queues another page.
         isLoadingOlder.value = false;
       });
     }
@@ -130,11 +93,7 @@ export function useAnchoredInfiniteScroll(
     }
   }
 
-  /**
-   * The callback keeps only the guards it alone owns — suspension and a parked
-   * failure. In-flight and hasMore belong to the loaders, which the retry
-   * buttons enter directly and would otherwise bypass.
-   */
+  /** Only suspension and a parked failure here: the loaders own the rest. */
   function observeDirection(
     root: HTMLElement,
     direction: InfiniteScrollDirection,
@@ -156,11 +115,7 @@ export function useAnchoredInfiniteScroll(
     return observer;
   }
 
-  /**
-   * Attaches the observers to the sentinels currently in the DOM. Safe to call
-   * again — the messenger re-runs it on every chat switch, and dropping the
-   * previous observers first is what keeps that from stacking them.
-   */
+  /** Safe to call again: the previous observers are dropped first. */
   function setupInfiniteScroll(): void {
     const root = options.container.value;
     if (!root) return;
@@ -191,12 +146,7 @@ export function useAnchoredInfiniteScroll(
     newerObserver = null;
   }
 
-  /**
-   * Stops the observers while something else drives the viewport. Landing on a
-   * linked message scrolls through the list, and every sentinel that flies
-   * past on the way would queue a page nobody asked for. Callers resume once
-   * their scroll has settled.
-   */
+  /** While something else drives the viewport; callers resume once it settles. */
   function suspend(): void {
     suspended = true;
   }

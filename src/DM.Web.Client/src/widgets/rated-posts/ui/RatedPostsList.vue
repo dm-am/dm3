@@ -1,27 +1,8 @@
 <script setup lang="ts">
-/**
- * RatedPostsList — the one list of posts that got reviews.
- *
- * Four pages show it: the two profile subpages ("Полученные оценки постов" and
- * "Поставленные оценки постов"), a game's "Оцененные посты" and the moderation
- * worklist. Two of them were built whole — the shared filter, server paging
- * above and below, a skeleton, an error banner that does not hide the posts
- * already on screen — and two fetched one fixed page and drew it bare, which on
- * the game page meant a room filter computed on the client over a truncated
- * hundred posts.
- *
- * A caller chooses the scope (whose posts, which game) and the copy around it.
- * Everything else lives here.
- *
- * Architecture:
- *  - `usePulseFilter` owns the URL state of the reader's filters, shared with
- *    /pulse; `buildRatedPostsParams` turns it and the scope into the request.
- *  - `useFetchData` re-runs that request on a route or scope change.
- *  - `GamePost` draws a post — the same component as on /pulse.
- */
+/** The one list of posts that got reviews; a caller chooses the scope and the words. */
 import { computed, ref, watch, type Ref } from "vue";
-import { useRoute, type RouteLocationRaw } from "vue-router";
-import { buildRatedPostsParams, gameApi } from "@/entities/game";
+import { useRoute, type RouteLocationNamedRaw } from "vue-router";
+import { buildRatedPostsParams, postApi } from "@/entities/game";
 import type { Post, PulseSearchParams, RatedPostsScope } from "@/entities/game";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { PulseFilter, usePulseFilter } from "@/features/pulse-filter";
@@ -38,7 +19,7 @@ const props = withDefaults(
     /** Whose posts the list is about — the route's word, not the reader's. */
     scope: RatedPostsScope;
     /** The page the list stands on, so its paging links point back at it. */
-    pagingTo: RouteLocationRaw;
+    pagingTo: RouteLocationNamedRaw;
     /** Empty state while nothing is filtered; a filtered miss is worded here. */
     emptyText: string;
     /** Hide the "Авторы" filter where the scope already fixes the author. */
@@ -54,9 +35,7 @@ const { filterState, searchParams, hasActiveFilters } = usePulseFilter();
 
 const envelope: Ref<ListEnvelope<Post> | null> = ref(null);
 
-// Keeps any already-shown posts on a failure (stale-while-revalidate); the
-// ErrorState banner renders independently above the list — see template —
-// matching /pulse's error-does-not-hide-content pattern.
+// A failure keeps the posts shown; its banner stands above the list, as on /pulse.
 const {
   loading,
   error: loadError,
@@ -66,51 +45,42 @@ const {
 
 const scopeKey = computed(() => JSON.stringify(props.scope));
 
-// A scope change (another profile, another game) drops the previous list at
-// once: an envelope from the old scope must never flash while the new one
-// loads.
+// A scope change drops the previous list at once, so the old one never flashes.
 watch(scopeKey, () => {
   envelope.value = null;
   clearError();
 });
 
-/**
- * A hidden filter is not applied. The author scope is imposed by the route on
- * the profile subpages and its button is hidden there, so an `?authors=` typed
- * into the address bar must not narrow the list invisibly either.
- */
+/** A hidden filter is not applied: an ?authors= typed in must not narrow the list unseen. */
 const requestFilters = computed<PulseSearchParams>(() =>
   props.hideAuthorFilter
     ? { ...searchParams.value, authorUsernames: undefined }
     : searchParams.value,
 );
 
-function fetch() {
+function loadPosts() {
   return run(
     () =>
-      gameApi.getRatedPosts(
+      postApi.getRatedPosts(
         buildRatedPostsParams(requestFilters.value, props.scope),
       ),
     (data) => {
-      envelope.value = (data as ListEnvelope<Post>) ?? null;
+      envelope.value = data;
     },
   );
 }
 
-useFetchData(
-  () => fetch(),
-  [
-    {
-      // URL + scope fully define the request. We use a JSON string so
-      // `useFetchData` compares by value.
-      param: () => JSON.stringify({ q: route.query, s: props.scope }),
-      callback: () => fetch(),
-    },
-  ],
-);
+useFetchData(loadPosts, [
+  {
+    // A string, so useFetchData compares the address and the scope by value.
+    param: () => JSON.stringify({ q: route.query, s: props.scope }),
+    callback: loadPosts,
+  },
+]);
 
 const items = computed(() => envelope.value?.resources ?? []);
 const paging = computed(() => envelope.value?.paging ?? null);
+const hasPages = computed(() => (paging.value?.pages ?? 0) > 1);
 const isEmpty = computed(
   () => envelope.value !== null && items.value.length === 0,
 );
@@ -121,7 +91,7 @@ const emptyMessage = computed(() =>
     : props.emptyText,
 );
 
-// Paging scrolls the posts list back into view (not the page top)
+// Paging scrolls the list back into view, not the page top.
 const listRef = ref<HTMLElement | null>(null);
 function pagingAnchor(): HTMLElement | null {
   return listRef.value;
@@ -132,13 +102,12 @@ function pagingAnchor(): HTMLElement | null {
   <div class="rated-posts-list">
     <PulseFilter class="filters" :hide-author-filter="hideAuthorFilter" />
 
-    <!-- Error banner — independent of the list, matches /pulse: never
-         hides already-loaded posts on a failed refetch. -->
+    <!-- A banner of its own: it does not hide the posts already shown -->
     <ErrorState
       v-if="loadError"
       class="error-banner"
       :message="loadError"
-      :retry="fetch"
+      :retry="loadPosts"
     />
 
     <GamePostSkeleton v-if="loading && !envelope" :count="5" />
@@ -149,7 +118,7 @@ function pagingAnchor(): HTMLElement | null {
 
     <template v-else-if="items.length">
       <PagingWithSeparators
-        v-if="paging && paging.pages && paging.pages > 1"
+        v-if="paging && hasPages"
         :paging="paging"
         :to="pagingTo"
         :use-query="true"
@@ -159,7 +128,7 @@ function pagingAnchor(): HTMLElement | null {
       <div
         ref="listRef"
         class="posts-list"
-        :class="{ 'with-paging': paging && paging.pages && paging.pages > 1 }"
+        :class="{ 'with-paging': hasPages }"
       >
         <GamePost
           v-for="post in items"
@@ -172,7 +141,7 @@ function pagingAnchor(): HTMLElement | null {
       </div>
 
       <PagingWithSeparators
-        v-if="paging && paging.pages && paging.pages > 1"
+        v-if="paging && hasPages"
         :paging="paging"
         :to="pagingTo"
         :use-query="true"
@@ -199,10 +168,7 @@ function pagingAnchor(): HTMLElement | null {
   flex-direction: column
   gap: $medium
 
-  // Container gap ($small) + this margin = $medium between the paging
-  // blocks and the posts — same rhythm as between the posts themselves.
-  // Only when paging is actually rendered (flex gaps don't collapse
-  // margins, so an unconditional margin would add dead space otherwise).
+  // The gap and this margin make $medium to the paging blocks; only when they are drawn.
   &.with-paging
     margin: $small 0
 </style>

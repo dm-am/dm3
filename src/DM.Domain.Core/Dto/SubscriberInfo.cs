@@ -1,13 +1,11 @@
-using System;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Dto;
 
 /// <summary>
 /// Minimal subscriber info for profile display.
-/// Distinct from GeneralUser to keep the per-subscriber payload small
-/// (a profile may list up to 20 subscribers — we don't need their full
-/// rating/picture/stats, just enough to render a styled link).
+/// Distinct from GeneralUser to keep the per-subscriber payload small: just
+/// enough to render a styled link.
 /// </summary>
 public class SubscriberInfo
 {

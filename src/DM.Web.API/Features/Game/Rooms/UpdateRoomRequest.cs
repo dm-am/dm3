@@ -8,12 +8,6 @@ namespace DM.Web.API.Features.Game.Rooms;
 /// API DTO for editing an existing room
 /// </summary>
 /// <remarks>
-/// The endpoint used to take the Room response DTO, so the contract asked for
-/// the room number, the game back-reference, the access list, the pendency list
-/// and an unread counter in order to rename a room — all server-owned, all held
-/// off by Ignore() in the mapping profile rather than by the shape of the
-/// request.
-///
 /// Every field is optional and an omitted one leaves the stored value alone.
 /// PreviousRoomId is three-valued on purpose: absent means "do not reorder",
 /// an explicit null means "move to the head of the chain".
@@ -57,8 +51,7 @@ public class UpdateRoomRequest
 /// </summary>
 /// <remarks>
 /// Only the policy is editable. Which character or reader the grant belongs to
-/// is fixed at creation; it used to travel in the PATCH body as a full Character
-/// and a full User, neither of which the update path reads.
+/// is fixed at creation.
 /// </remarks>
 public class UpdateRoomAccessRequest
 {

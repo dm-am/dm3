@@ -8,6 +8,7 @@ using DM.Domain.Moderation.Features.Warnings;
 using Microsoft.EntityFrameworkCore;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;
 
 namespace DM.Infrastructure.Persistence.Repositories.Moderation;
@@ -17,7 +18,6 @@ internal class WarningRepository : IWarningRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public WarningRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -215,14 +215,12 @@ internal class WarningRepository : IWarningRepository
         // predicate against the committed mark and changes nothing. The predicate
         // is the one the sweeper and the log read the pin by: no author, or the
         // owner, is the owner's own doing and does not count as moderation.
-        await _dbContext.Uploads
-            .IgnoreQueryFilters()
-            .Where(u => u.UploadId == uploadId &&
-                        (u.DeletedByUserId == null || u.DeletedByUserId == u.UserId))
-            .ExecuteUpdateAsync(setters => setters
-                .SetProperty(u => u.IsRemoved, true)
-                .SetProperty(u => u.DeletedByUserId, (Guid?)deletedByUserId)
-                .SetProperty(u => u.DeletedUtc, (DateTimeOffset?)deletedUtc), ct);
+        await SoftDelete.MarkWhere(
+            _dbContext.Uploads
+                .IgnoreQueryFilters()
+                .Where(u => u.UploadId == uploadId &&
+                            (u.DeletedByUserId == null || u.DeletedByUserId == u.UserId)),
+            deletedByUserId, deletedUtc, ct);
 
         return true;
     }

@@ -2,16 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The form's only job before a word is typed is deciding who is shown it, and
- * that decision belongs to the server: WebsiteTestimonialIntentionResolver
- * admits Create for SeniorModerator and above. An ordinary moderator used to be
- * offered the form here and answered 403 on submit — an offer the site had no
- * right to make.
- *
- * The rank ladder is walked whole rather than sampled, because the bug the
- * ladder guards against is exactly an off-by-one rank.
- */
+// The rank ladder is walked whole: the bug it guards against is an off-by-one rank.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
@@ -47,7 +38,6 @@ const render = () =>
     },
   });
 
-/** Is the "+ Добавить отзыв" affordance on the page at all? */
 const offered = () => render().find("button.toggle-link").exists();
 
 describe("CreateTestimonialForm access", () => {
@@ -75,20 +65,12 @@ describe("CreateTestimonialForm access", () => {
   );
 });
 
-/**
- * A testimonial about the site is posted ON BEHALF OF a participant: senior
- * moderation submits it, the named person signs it. The form carried no author
- * at all, so every entry added here was signed by the moderator who typed it —
- * a claim about the wrong person, on a page the whole site reads.
- */
 describe("CreateTestimonialForm author", () => {
-  /** The picker and the text field, driven through their v-model. */
   const renderOpen = () =>
     mount(CreateTestimonialForm, {
       global: {
         stubs: {
-          // The real field renders `errors` itself; the stub has to, or the
-          // refusal a test asserts on is on a prop nobody drew.
+          // The stub renders `errors`, or the refusal asserted on is drawn by nobody.
           "form-field": {
             props: ["errors"],
             template:
@@ -139,7 +121,6 @@ describe("CreateTestimonialForm author", () => {
     await wrapper.find("button.submit").trigger("click");
     await flushPromises();
 
-    // Not the viewer ("Reviewer") who submitted it.
     expect(mockCreateTestimonial).toHaveBeenCalledWith({
       authorUsername: "Solohin",
       text: "Лучший сайт для словесок",
@@ -148,8 +129,6 @@ describe("CreateTestimonialForm author", () => {
 
   it("names the author field when the server does not know the participant", async () => {
     useAuthStore().user = viewer(UserRole.Admin);
-    // The picker can be typed past, so the existence check is the server's and
-    // its refusal has to land on the field that caused it.
     mockCreateTestimonial.mockResolvedValue({
       data: null,
       error: { status: 404, title: "Пользователь Nobody не найден" },

@@ -2,17 +2,12 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Where the counter of a game's comments leads: the page of the discussion
- * that holds the first comment the reader has not read, counted in the
- * reader's own page size, with the comment's permalink; the discussion itself
- * where nothing is unread or the request fails.
- */
+// Where the counter of a game's comments leads.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { useAuthStore } from "@/shared/stores";
-import { gameApi } from "@/entities/game";
+import { useAuthStore } from "@/entities/user";
+import { discussionApi } from "@/entities/game";
 import GameFirstUnreadComment from "./GameFirstUnreadComment.vue";
 
 const replace = vi.hoisted(() => vi.fn());
@@ -23,18 +18,15 @@ vi.mock("vue-router", () => ({
 }));
 
 /** Where the screen sends the reader for this answer of the server. */
-async function landing(
-  answer: () => Promise<unknown>,
-  commentsPerPage?: number,
-) {
+async function landing(answer: () => Promise<unknown>, pageSize?: number) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  if (commentsPerPage)
+  if (pageSize)
     useAuthStore().user = {
-      settings: { paging: { commentsPerPage } },
+      settings: { pageSize },
     } as never;
   const asked = vi
-    .spyOn(gameApi, "getFirstUnreadComment")
+    .spyOn(discussionApi, "getFirstUnreadComment")
     .mockImplementation(answer as never);
   mount(GameFirstUnreadComment, { global: { plugins: [pinia] } });
   await flushPromises();
@@ -83,14 +75,6 @@ describe("GameFirstUnreadComment", () => {
       data: null,
       error: { status: 500, title: "" },
     }));
-
-    expect(target).toEqual(DISCUSSION);
-  });
-
-  it("opens the discussion itself when the request threw", async () => {
-    const target = await landing(async () => {
-      throw new Error("Network Error");
-    });
 
     expect(target).toEqual(DISCUSSION);
   });

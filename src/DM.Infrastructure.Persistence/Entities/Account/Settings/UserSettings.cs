@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations.Schema;
+using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Persistence.Entities.Account.Settings;
@@ -8,11 +9,8 @@ namespace DM.Infrastructure.Persistence.Entities.Account.Settings;
 /// DAL model for user settings: one row per user, keyed by the user.
 /// </summary>
 /// <remarks>
-/// The paging numbers are NOT NULL columns rather than a nested document on
-/// purpose: the store used to hold a settings document with <c>Paging: null</c>,
-/// and every request from that user answered 500 until the document was
-/// repaired. Columns make that state unrepresentable — a row either exists whole
-/// or does not exist at all, and absence means <c>UserSettings.Default</c>.
+/// The page size is a NOT NULL column so a row is never partial: it exists
+/// whole or not at all, and absence means <c>UserSettings.Default</c>.
 /// </remarks>
 [Table("UserSettings")]
 public class UserSettings
@@ -28,29 +26,9 @@ public class UserSettings
     public Theme Theme { get; set; }
 
     /// <summary>
-    /// Number of detached topics on a forum page
+    /// How many rows, posts, comments or messages a page of every paged list holds
     /// </summary>
-    public int TopicsPerPage { get; set; }
-
-    /// <summary>
-    /// Number of comments on a game or a topic page
-    /// </summary>
-    public int CommentsPerPage { get; set; }
-
-    /// <summary>
-    /// Number of posts on a game room page
-    /// </summary>
-    public int PostsPerPage { get; set; }
-
-    /// <summary>
-    /// Number of private messages and conversations on dialogue page
-    /// </summary>
-    public int MessagesPerPage { get; set; }
-
-    /// <summary>
-    /// Number of other entities on a single page
-    /// </summary>
-    public int EntitiesPerPage { get; set; }
+    public int PageSize { get; set; }
 
     /// <summary>
     /// IANA name of the reader's time zone. Null = UTC.
@@ -79,17 +57,13 @@ public class UserSettings
     /// </summary>
     /// <remarks>
     /// The one place that answers "what does a fresh settings row look like".
-    /// The numbers mirror <see cref="DM.Domain.Core.Identity.UserSettings.Default"/>,
+    /// The values mirror <see cref="DM.Domain.Core.Identity.UserSettings.Default"/>,
     /// the values a caller without a row already sees.
     /// </remarks>
     public static UserSettings CreateDefault(Guid userId) => new()
     {
         UserId = userId,
         Theme = Theme.Light,
-        TopicsPerPage = 10,
-        CommentsPerPage = 10,
-        PostsPerPage = 10,
-        MessagesPerPage = 10,
-        EntitiesPerPage = 10
+        PageSize = PagingPolicy.DefaultPageSize
     };
 }

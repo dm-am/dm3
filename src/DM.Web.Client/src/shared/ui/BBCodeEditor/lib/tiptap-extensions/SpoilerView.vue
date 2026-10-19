@@ -1,10 +1,5 @@
 <script setup lang="ts">
-/**
- * SpoilerView - Interactive Vue NodeView for BBCode Spoiler
- *
- * Matches the backend appearance: simple toggle link + content block.
- * Backend renders: <a class="spoiler-head">[toggle text]</a><div class="spoiler">...</div>
- */
+// The server's look: a toggle link and the content block.
 import { computed, onBeforeUnmount } from "vue";
 import { NodeViewWrapper, NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
 import {
@@ -18,19 +13,14 @@ import {
 
 const props = defineProps(nodeViewProps);
 
-const isCollapsed = computed(() => props.node?.attrs?.collapsed !== false);
+const isCollapsed = computed(() => props.node.attrs.collapsed !== false);
 
-// [spoiler text="..."] names the button, open or closed, as the server draws
-// it; with no caption, or an empty one, the button swaps between the old
-// site's words.
-const caption = computed(
-  () => (props.node?.attrs?.text as string | null) || "",
-);
+// The caption names the button open or closed, as the server draws it.
+const caption = computed(() => (props.node.attrs.text as string | null) || "");
 const showText = computed(() => caption.value || SPOILER_SHOW_TEXT);
 const hideText = computed(() => caption.value || SPOILER_HIDE_TEXT);
 
-// Manual user toggle: notify clears the registry's pending bulk action
-// (registry-driven expand/collapse below go through updateAttributes only).
+// A press of the reader's own clears the registry's pending bulk action.
 function toggleCollapsed() {
   notifyExpandableChanged();
   props.updateAttributes({ collapsed: !isCollapsed.value });
@@ -51,7 +41,6 @@ onBeforeUnmount(unregister);
 
 <template>
   <NodeViewWrapper class="spoiler-wrapper">
-    <!-- Toggle button - styled like a link to match backend .spoiler-head -->
     <span
       class="spoiler-head"
       @click="toggleCollapsed"
@@ -63,10 +52,7 @@ onBeforeUnmount(unregister);
       tabindex="0"
       >{{ isCollapsed ? showText : hideText }}</span
     >
-    <!-- Content block - matches backend .spoiler. Wrapped into the shared
-         .bb-collapse grid structure (same smooth expand/collapse animation
-         as the display path, see _BbcodeContent.sass). inert keeps the
-         collapsed content out of the tab order and accessibility tree. -->
+    <!-- The display path's .bb-collapse; inert keeps the collapsed content out of the tab order. -->
     <div
       class="bb-collapse"
       :class="{ open: !isCollapsed }"
@@ -86,6 +72,5 @@ onBeforeUnmount(unregister);
 
 .spoiler-wrapper
   display: block
-  // Apply bbcode-content styles to children (spoiler-head, spoiler)
   +bbcode-content
 </style>

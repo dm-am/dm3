@@ -1,5 +1,4 @@
 using System;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Domain.Messaging.Features.Messages;
 using DM.Domain.Messaging.Authorization;
@@ -8,6 +7,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Abstractions;
 using DM.Testing;
+using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -17,108 +17,92 @@ namespace DM.Domain.Messaging.Tests.Authorization;
 
 public class MessageIntentionResolverShould : UnitTestBase
 {
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly MessageIntentionResolver _resolver;
-    private readonly Guid _testUserId = Guid.NewGuid();
-    private readonly DateTime _now = DateTime.UtcNow;
+    private const int EditTimeoutMinutes = 60;
+
+    private readonly MessageIntentionResolver resolver;
+    private readonly Guid testUserId = Guid.NewGuid();
+    private readonly DateTime now = DateTime.UtcNow;
 
     public MessageIntentionResolverShould()
     {
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Now.Returns(_now);
+        var dateTimeProvider = Mock<IDateTimeProvider>();
+        dateTimeProvider.Now.Returns(now);
 
-        var options = Options.Create(new MessagingConfiguration
-        {
-            EditTimeoutMinutes = 60
-        });
+        var options = Options.Create(new MessagingConfiguration { EditTimeoutMinutes = EditTimeoutMinutes });
 
-        _resolver = new MessageIntentionResolver(options, _dateTimeProvider);
+        resolver = new MessageIntentionResolver(options, dateTimeProvider);
     }
 
-    private AuthenticatedUser CreateUser(Guid userId, UserRole role = UserRole.RegularUser)
-    {
-        return new AuthenticatedUser
-        {
-            UserId = userId,
-            Role = role
-        };
-    }
+    private static AuthenticatedUser CreateUser(Guid userId, UserRole role = UserRole.RegularUser) =>
+        Create.User(userId).WithRole(role).Please();
 
-    private Message CreateMessage(Guid authorId, DateTime createdUtc)
+    private static Message CreateMessage(Guid authorId, DateTime createdUtc, ChatType chatType = ChatType.Direct)
     {
         return new Message
         {
             Author = new GeneralUser { UserId = authorId },
-            CreatedUtc = createdUtc
+            CreatedUtc = createdUtc,
+            ChatType = chatType
         };
     }
 
-    [Fact]
-    public void AllowAuthorToEditWithinTimeLimit()
+    /// <summary>
+    /// The window closes after its last minute: the minute itself still belongs to it.
+    /// </summary>
+    [Theory]
+    [InlineData(MessageIntention.Edit, EditTimeoutMinutes / 2, true)]
+    [InlineData(MessageIntention.Edit, EditTimeoutMinutes, true)]
+    [InlineData(MessageIntention.Edit, EditTimeoutMinutes + 1, false)]
+    [InlineData(MessageIntention.Delete, EditTimeoutMinutes / 2, true)]
+    [InlineData(MessageIntention.Delete, EditTimeoutMinutes, true)]
+    [InlineData(MessageIntention.Delete, EditTimeoutMinutes + 1, false)]
+    public void LetTheAuthorEditAndDeleteWithinTheWindow(MessageIntention intention, int minutesAgo, bool allowed)
     {
-        var user = CreateUser(_testUserId);
-        var message = CreateMessage(_testUserId, _now.AddMinutes(-30));
+        var user = CreateUser(testUserId);
+        var message = CreateMessage(testUserId, now.AddMinutes(-minutesAgo));
 
-        var result = _resolver.IsAllowed(user, MessageIntention.Edit, message);
-
-        result.Should().BeTrue();
+        resolver.IsAllowed(user, intention, message).Should().Be(allowed);
     }
 
     [Fact]
-    public void DenyAuthorToEditAfterTimeLimit()
-    {
-        var user = CreateUser(_testUserId);
-        var message = CreateMessage(_testUserId, _now.AddMinutes(-61));
-
-        var result = _resolver.IsAllowed(user, MessageIntention.Edit, message);
-
-        result.Should().BeFalse();
-    }
-
-    [Fact]
-    public void AllowAuthorToDeleteWithinTimeLimit()
-    {
-        var user = CreateUser(_testUserId);
-        var message = CreateMessage(_testUserId, _now.AddMinutes(-30));
-
-        var result = _resolver.IsAllowed(user, MessageIntention.Delete, message);
-
-        result.Should().BeTrue();
-    }
-
-    [Fact]
-    public void DenyAuthorToDeleteAfterTimeLimit()
-    {
-        var user = CreateUser(_testUserId);
-        var message = CreateMessage(_testUserId, _now.AddMinutes(-61));
-
-        var result = _resolver.IsAllowed(user, MessageIntention.Delete, message);
-
-        result.Should().BeFalse();
-    }
-
-    [Fact]
-    public void AllowModeratorToEditAnyMessage()
+    public void AllowModeratorToEditAnyMessageOfTheGlobalChat()
     {
         var moderatorId = Guid.NewGuid();
         var user = CreateUser(moderatorId, UserRole.Moderator);
-        var message = CreateMessage(_testUserId, _now.AddDays(-10));
+        var message = CreateMessage(testUserId, now.AddDays(-10), ChatType.Global);
 
-        var result = _resolver.IsAllowed(user, MessageIntention.Edit, message);
+        var result = resolver.IsAllowed(user, MessageIntention.Edit, message);
 
         result.Should().BeTrue();
     }
 
     [Fact]
-    public void AllowAdminToDeleteAnyMessage()
+    public void AllowAdminToDeleteAnyMessageOfTheGlobalChat()
     {
         var adminId = Guid.NewGuid();
         var user = CreateUser(adminId, UserRole.Admin);
-        var message = CreateMessage(_testUserId, _now.AddDays(-10));
+        var message = CreateMessage(testUserId, now.AddDays(-10), ChatType.Global);
 
-        var result = _resolver.IsAllowed(user, MessageIntention.Delete, message);
+        var result = resolver.IsAllowed(user, MessageIntention.Delete, message);
 
         result.Should().BeTrue();
+    }
+
+    /// <summary>
+    /// The global chat is the one chat moderated: a direct message, a group chat and the chat of a game room
+    /// are edited and deleted by their authors alone, whatever the rank of the reader.
+    /// </summary>
+    [Theory]
+    [InlineData(ChatType.Direct, UserRole.Moderator, MessageIntention.Edit)]
+    [InlineData(ChatType.Group, UserRole.SeniorModerator, MessageIntention.Delete)]
+    [InlineData(ChatType.GameRoom, UserRole.Admin, MessageIntention.Delete)]
+    [InlineData(ChatType.GameRoom, UserRole.Moderator, MessageIntention.Edit)]
+    public void DenyModerationAMessageOutsideTheGlobalChat(ChatType chatType, UserRole role, MessageIntention intention)
+    {
+        var user = CreateUser(Guid.NewGuid(), role);
+        var message = CreateMessage(testUserId, now.AddDays(-10), chatType);
+
+        resolver.IsAllowed(user, intention, message).Should().BeFalse();
     }
 
     [Fact]
@@ -126,9 +110,9 @@ public class MessageIntentionResolverShould : UnitTestBase
     {
         var otherUserId = Guid.NewGuid();
         var user = CreateUser(otherUserId);
-        var message = CreateMessage(_testUserId, _now.AddMinutes(-5));
+        var message = CreateMessage(testUserId, now.AddMinutes(-5));
 
-        var result = _resolver.IsAllowed(user, MessageIntention.Edit, message);
+        var result = resolver.IsAllowed(user, MessageIntention.Edit, message);
 
         result.Should().BeFalse();
     }
@@ -137,9 +121,9 @@ public class MessageIntentionResolverShould : UnitTestBase
     public void DenyGuestToEditMessage()
     {
         var user = CreateUser(Guid.Empty, UserRole.Guest);
-        var message = CreateMessage(_testUserId, _now);
+        var message = CreateMessage(testUserId, now);
 
-        var result = _resolver.IsAllowed(user, MessageIntention.Edit, message);
+        var result = resolver.IsAllowed(user, MessageIntention.Edit, message);
 
         result.Should().BeFalse();
     }
@@ -147,11 +131,11 @@ public class MessageIntentionResolverShould : UnitTestBase
     [Fact]
     public void AllowLikeOthersMessage()
     {
-        var user = CreateUser(_testUserId);
+        var user = CreateUser(testUserId);
         var otherId = Guid.NewGuid();
-        var message = CreateMessage(otherId, _now);
+        var message = CreateMessage(otherId, now);
 
-        var result = _resolver.IsAllowed(user, MessageIntention.Like, message);
+        var result = resolver.IsAllowed(user, MessageIntention.Like, message);
 
         result.Should().BeTrue();
     }
@@ -159,10 +143,10 @@ public class MessageIntentionResolverShould : UnitTestBase
     [Fact]
     public void DenyLikeOwnMessage()
     {
-        var user = CreateUser(_testUserId);
-        var message = CreateMessage(_testUserId, _now);
+        var user = CreateUser(testUserId);
+        var message = CreateMessage(testUserId, now);
 
-        var result = _resolver.IsAllowed(user, MessageIntention.Like, message);
+        var result = resolver.IsAllowed(user, MessageIntention.Like, message);
 
         result.Should().BeFalse();
     }
@@ -171,9 +155,9 @@ public class MessageIntentionResolverShould : UnitTestBase
     public void DenyGuestToLikeMessage()
     {
         var user = CreateUser(Guid.Empty, UserRole.Guest);
-        var message = CreateMessage(_testUserId, _now);
+        var message = CreateMessage(testUserId, now);
 
-        var result = _resolver.IsAllowed(user, MessageIntention.Like, message);
+        var result = resolver.IsAllowed(user, MessageIntention.Like, message);
 
         result.Should().BeFalse();
     }

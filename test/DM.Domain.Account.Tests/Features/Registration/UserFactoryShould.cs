@@ -11,18 +11,18 @@ namespace DM.Domain.Account.Tests.Features.Registration;
 
 public class UserFactoryShould : UnitTestBase
 {
-    private readonly UserFactory _factory;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly UserFactory factory;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
 
     public UserFactoryShould()
     {
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _factory = new UserFactory(
-            _guidFactory,
-            _dateTimeProvider);
+        factory = new UserFactory(
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
@@ -38,12 +38,11 @@ public class UserFactoryShould : UnitTestBase
             PasswordHashVersion = 1
         };
 
-        _guidFactory.Create().Returns(userId);
-        _dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(userId);
+        dateTimeProvider.Now.Returns(now);
 
-        var result = _factory.CreateFromPending(pending, "TestUser");
+        var result = factory.CreateFromPending(pending, "TestUser");
 
-        result.Should().NotBeNull();
         result.UserId.Should().Be(userId);
         result.Username.Should().Be("TestUser");
         result.Email.Should().Be(pending.Email);
@@ -66,30 +65,11 @@ public class UserFactoryShould : UnitTestBase
             PasswordHashVersion = 1
         };
 
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        guidFactory.Create().Returns(Guid.NewGuid());
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        var result = _factory.CreateFromPending(pending, "  TestUser  ");
+        var result = factory.CreateFromPending(pending, "  TestUser  ");
 
         result.Username.Should().Be("TestUser");
-    }
-
-    [Fact]
-    public void PreserveEmailFromPendingRegistration()
-    {
-        var pending = new PendingRegistration
-        {
-            Email = "lowercase@example.com",
-            Salt = "salt",
-            PasswordHash = "hash",
-            PasswordHashVersion = 1
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.CreateFromPending(pending, "User");
-
-        result.Email.Should().Be(pending.Email);
     }
 }

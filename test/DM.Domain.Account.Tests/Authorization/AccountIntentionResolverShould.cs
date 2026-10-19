@@ -1,22 +1,15 @@
 using DM.Domain.Account.Authorization;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Testing.Dsl;
 using DM.Domain.Core.Enums;
-using DM.Testing;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Authorization;
 
-public class AccountIntentionResolverShould : UnitTestBase
+public class AccountIntentionResolverShould
 {
-    private readonly AccountIntentionResolver resolver;
-
-    public AccountIntentionResolverShould()
-    {
-        resolver = new AccountIntentionResolver();
-    }
+    private readonly AccountIntentionResolver resolver = new();
 
     [Theory]
     [InlineData(AccountIntention.ChangePassword)]
@@ -42,22 +35,21 @@ public class AccountIntentionResolverShould : UnitTestBase
     }
 
     [Theory]
-    [InlineData(UserRole.RegularUser)]
-    [InlineData(UserRole.Moderator)]
+    [InlineData(UserRole.SeniorModerator)]
     [InlineData(UserRole.Admin)]
-    public void AllowChangePasswordForAnyAuthenticatedRole(UserRole role)
+    public void AllowUsernameChangeRollbackForSeniorModeration(UserRole role)
     {
         var user = Create.User().WithRole(role).Please();
-        resolver.IsAllowed(user, AccountIntention.ChangePassword).Should().BeTrue();
+        resolver.IsAllowed(user, AccountIntention.RollbackUsernameChange).Should().BeTrue();
     }
 
     [Theory]
     [InlineData(UserRole.RegularUser)]
+    [InlineData(UserRole.Mentor)]
     [InlineData(UserRole.Moderator)]
-    [InlineData(UserRole.Admin)]
-    public void AllowViewSessionsForAnyAuthenticatedRole(UserRole role)
+    public void ForbidUsernameChangeRollbackBelowSeniorModeration(UserRole role)
     {
         var user = Create.User().WithRole(role).Please();
-        resolver.IsAllowed(user, AccountIntention.ViewSessions).Should().BeTrue();
+        resolver.IsAllowed(user, AccountIntention.RollbackUsernameChange).Should().BeFalse();
     }
 }

@@ -3,11 +3,9 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using AwesomeAssertions;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
-using DM.Testing.Dsl;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
@@ -17,24 +15,13 @@ namespace DM.Infrastructure.Core.Tests;
 /// save path and the page read two different texts.
 /// </summary>
 /// <remarks>
-/// The parser drops the control characters other than tab and the two line
-/// breaks before reading (BbParser), and removing a character joins what stood
-/// on either side of it. The save path used to read the text as stored, so
-/// "[m" U+0001 "od]" was no marker to the sanitizer and a moderator block on the
-/// page, and "[code" U+0001 "]" was no code block to the balance check and a
-/// code block that printed the hidden block under it to the whole room.
-///
-/// Each check puts one character into every place of a tag and asks the save
-/// path and the page together: what the sanitizer keeps renders no moderator
-/// block, and a post the balance check accepts shows a stranger nothing of a
-/// hidden block the save path read in it, on the page and in the plain text. The
-/// characters are every control, whitespace, format and surrogate character,
-/// which is where an invisible join can come from.
+/// The parser drops controls before reading, which joins what stood on either side, so the save path
+/// must read the same text. Each check puts one control, whitespace, format or surrogate character into
+/// every place of a tag and asks the save path and the page together.
 /// </remarks>
 public class ControlCharacterMarkupShould
 {
     private const string Secret = "SECRET";
-    private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid AddresseeId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid StrangerId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
@@ -52,9 +39,9 @@ public class ControlCharacterMarkupShould
         Enumerable.Range(1, tag.Length - 1).Select(at => tag.Insert(at, character.ToString()));
 
     [Fact]
-    public void LeaveNoModeratorBlock_InWhatAnUnauthorisedAuthorSaves()
+    public void LeaveNoModeratorBlockInWhatAnUnauthorisedAuthorSaves()
     {
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.Comment);
         var context = StrangerContext(BbSurface.Comment, PrivateAddresseeSnapshot.Read(PrivateAddresseeSnapshot.Empty));
         var leaks = new List<string>();
 
@@ -80,9 +67,9 @@ public class ControlCharacterMarkupShould
     }
 
     [Fact]
-    public void ShowAStrangerNothingOfAHiddenBlock_ThatTheSavePathAccepted()
+    public void ShowAStrangerNothingOfAHiddenBlockThatTheSavePathAccepted()
     {
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.GamePost);
         var leaks = new List<string>();
 
         foreach (var character in InvisibleCharacters())
@@ -134,14 +121,8 @@ public class ControlCharacterMarkupShould
     {
         Audience = RenderAudience.Display,
         Surface = surface,
-        Viewer = new TestSubject
-        {
-            UserId = StrangerId,
-            Role = UserRole.RegularUser,
-            IsAuthenticated = true,
-            AccessPolicy = AccessPolicy.NotSpecified
-        },
-        PostAuthorUserId = AuthorId,
+        Viewer = BbVisibilityRender.Viewer(UserRole.RegularUser, StrangerId),
+        PostAuthorUserId = BbVisibilityRender.AuthorId,
         GameLeadUserIds = [],
         PrivateAddresseeOwnerUserIdsByAttribute = snapshot.OwnerUserIdsByAttribute,
         PrivateAddresseeNamesByAttribute = snapshot.AddresseeNamesByAttribute

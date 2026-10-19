@@ -41,5 +41,5 @@ public interface IUserBlacklistRepository : IUserBlacklistChecker
     /// <summary>
     /// Update blacklist settings for a user
     /// </summary>
-    Task<UserBlacklistSettings> UpdateSettings(Guid userId, UserBlacklistSettings settings, CancellationToken ct = default);
+    Task UpdateSettings(Guid userId, UserBlacklistSettings settings, CancellationToken ct = default);
 }

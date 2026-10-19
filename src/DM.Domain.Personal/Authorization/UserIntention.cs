@@ -6,7 +6,7 @@ namespace DM.Domain.Personal.Authorization;
 public enum UserIntention
 {
     /// <summary>
-    /// Edit own user details (owner only)
+    /// Edit own user details
     /// </summary>
     Edit = 1,
 
@@ -16,45 +16,27 @@ public enum UserIntention
     WriteMessage = 2,
 
     /// <summary>
-    /// Moderate user profile (SeniorModerator+ can edit Info field)
+    /// Moderate user profile
     /// </summary>
     Moderate = 3,
 
     /// <summary>
-    /// Read moderator notes about users (Moderator+)
+    /// Read moderator notes about users
     /// </summary>
     ReadModNotes = 4,
 
     /// <summary>
-    /// Create moderator notes about users (Moderator+)
+    /// Create moderator notes about users
     /// </summary>
     CreateModNote = 5,
 
     /// <summary>
-    /// Edit or delete moderator notes (SeniorModerator+ for others' notes, own notes for all moderators)
-    /// </summary>
-    EditModNote = 6,
-
-    /// <summary>
-    /// Delete moderator notes (SeniorModerator+ for others' notes, own notes for all moderators)
-    /// </summary>
-    DeleteModNote = 7,
-
-    /// <summary>
-    /// View the aggregated moderated profile block (linked profiles, notes, violations).
-    /// Requires: Moderator+
+    /// View the aggregated moderated profile block (linked profiles, notes, violations)
     /// </summary>
     ViewModeratedProfile = 8,
 
     /// <summary>
-    /// View IP addresses and login history of a user.
-    /// Requires: Admin
+    /// View IP addresses and login history of a user
     /// </summary>
-    ViewUserIpData = 9,
-
-    /// <summary>
-    /// View list of users pending activation.
-    /// Requires: SeniorModerator+
-    /// </summary>
-    ViewPendingUsers = 10
+    ViewUserIpData = 9
 }

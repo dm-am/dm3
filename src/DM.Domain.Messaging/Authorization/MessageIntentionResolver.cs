@@ -14,9 +14,6 @@ internal class MessageIntentionResolver : IIntentionResolver<MessageIntention, M
     private readonly TimeSpan _editTimeLimit;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <summary>
-    /// Creates a new instance of <see cref="MessageIntentionResolver"/>
-    /// </summary>
     public MessageIntentionResolver(
         IOptions<MessagingConfiguration> options,
         IDateTimeProvider dateTimeProvider)
@@ -29,17 +26,12 @@ internal class MessageIntentionResolver : IIntentionResolver<MessageIntention, M
     public bool IsAllowed(IAuthorizationSubject user, MessageIntention intention, Message target) =>
         intention switch
         {
-            // Rewriting a message publishes text as sending one does, so the ban
-            // answers on the terms ChatIntention.CreateMessage sets: the global
-            // chat is public speech, while direct, group and game room chats are
-            // deliberately outside the ordinary ban. Only the author is asked, a
-            // moderator's edit is moderation and a ban takes no moderator tool
-            // away.
+            // Rewriting publishes text as sending does, so the author's edit in the global
+            // chat answers to the ban (ChatIntention.CreateMessage); a moderator's edit is moderation.
             MessageIntention.Edit when target.ChatType == ChatType.Global &&
                                        target.Author?.UserId == user.UserId =>
                 CanEditOrDelete(user, target) && user.MaySpeak(),
-            MessageIntention.Edit => CanEditOrDelete(user, target),
-            MessageIntention.Delete => CanEditOrDelete(user, target),
+            MessageIntention.Edit or MessageIntention.Delete => CanEditOrDelete(user, target),
             MessageIntention.Like => user.IsAuthenticated && target.Author?.UserId != user.UserId,
             _ => false
         };
@@ -48,11 +40,12 @@ internal class MessageIntentionResolver : IIntentionResolver<MessageIntention, M
     {
         if (!user.IsAuthenticated) return false;
 
-        // Moderators can always edit/delete
-        if (user.Role is UserRole.Admin or UserRole.SeniorModerator or UserRole.Moderator)
+        // Moderation reaches the global chat alone: a direct message, a group chat
+        // and the chat of a game room are not moderated.
+        if (message.ChatType == ChatType.Global &&
+            user.Role is UserRole.Admin or UserRole.SeniorModerator or UserRole.Moderator)
             return true;
 
-        // Author can edit/delete within configured time limit
         if (message.Author?.UserId != user.UserId) return false;
 
         var timeSinceCreation = _dateTimeProvider.Now - message.CreatedUtc;

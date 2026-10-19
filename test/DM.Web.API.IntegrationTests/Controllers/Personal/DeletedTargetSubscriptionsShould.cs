@@ -16,17 +16,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 /// <summary>
 /// A deleted blog, game or topic takes the subscriptions to it along.
 /// </summary>
-/// <remarks>
-/// The deletion hid the row and left the subscriptions pointing at it. The
-/// subscriptions page names a target by reading its row, found nothing, and
-/// listed the subscription as "Блог n/a" with an unsubscribe button: a row that
-/// could never deliver anything, left to the reader to clean up. Nothing brings
-/// a deleted blog, game or topic back, so the subscriptions go in the same
-/// transaction as the deletion.
-///
-/// Written against HTTP: the reader's list is where the defect was seen, and
-/// the deletion is the one the page performs.
-/// </remarks>
+/// <remarks>Nothing brings a deleted target back, so its subscriptions go in the deletion's transaction; over HTTP, as the page deletes.</remarks>
 public class DeletedTargetSubscriptionsShould : IntegrationTestBase
 {
     public DeletedTargetSubscriptionsShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -68,9 +58,7 @@ public class DeletedTargetSubscriptionsShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A live target of the type, and the address its deletion is asked at. The
-    /// topic number comes from this class's own range: the board is shared, and a
-    /// number is unique on it.
+    /// A live target of the type and the address its deletion is asked at; topic numbers from this class's range.
     /// </summary>
     private async Task<(Guid Id, string Address)> AddTargetAsync(SubscriptionTargetType type, int index)
     {

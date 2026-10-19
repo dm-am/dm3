@@ -1,14 +1,9 @@
 namespace DM.Domain.Messaging.Configuration;
 
-/// <summary>
-/// Messaging business rules configuration
-/// </summary>
 public class MessagingConfiguration
 {
     /// <summary>
-    /// Time limit in minutes for message authors to edit/delete their own messages.
-    /// After this time, only moderators can edit/delete.
-    /// Default: 15 minutes
+    /// How long the author may edit or delete his own message, in minutes; a moderator has no limit
     /// </summary>
     public int EditTimeoutMinutes { get; set; } = 15;
 }

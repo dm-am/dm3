@@ -11,21 +11,15 @@ namespace DM.Domain.Community.Tests.Features.Statistics;
 /// </summary>
 public class CommunityStatsPeriodBoundsShould
 {
-    [Fact]
-    public void ReturnWidestWindowForAllTimePeriod()
+    /// <summary>
+    /// Year 0 is the all-time period, with or without a month: no row is excluded by date.
+    /// </summary>
+    [Theory]
+    [InlineData(null)]
+    [InlineData(6)]
+    public void ReturnWidestWindowForAllTimePeriod(int? month)
     {
-        // year == 0 is the all-time period: no row should be excluded by date.
-        var (start, end) = CommunityStatsService.ResolvePeriodBounds(0, null);
-
-        start.Should().Be(DateTimeOffset.MinValue);
-        end.Should().Be(DateTimeOffset.MaxValue);
-    }
-
-    [Fact]
-    public void ReturnWidestWindowForAllTimeEvenWithMonth()
-    {
-        // A month alongside year 0 is still all-time (month is ignored).
-        var (start, end) = CommunityStatsService.ResolvePeriodBounds(0, 6);
+        var (start, end) = CommunityStatsService.ResolvePeriodBounds(0, month);
 
         start.Should().Be(DateTimeOffset.MinValue);
         end.Should().Be(DateTimeOffset.MaxValue);

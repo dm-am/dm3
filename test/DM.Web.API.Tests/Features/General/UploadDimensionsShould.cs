@@ -1,25 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Caching;
-using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Identity;
 using DM.Domain.Core.Uploads;
-using DM.Domain.Personal.Features.Profiles;
 using DM.Testing;
-using DM.Testing.Dsl;
 using DM.Web.API.Features.Community.Users;
-using DM.Web.API.Features.General.Upload;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Http;
-using Microsoft.Extensions.Options;
 using NSubstitute;
 using Xunit;
 
@@ -30,16 +20,8 @@ namespace DM.Web.API.Tests.Features.General;
 /// client.
 /// </summary>
 /// <remarks>
-/// The source file preserves the aspect ratio of whatever was uploaded, so the
-/// only variant whose shape nobody can predict is the original — and the profile
-/// page draws exactly that one. With no dimensions on the wire the page had to
-/// declare a square and hold it as a floor, which reserved 220 px for a picture
-/// 165 px tall and left the difference blank under every landscape avatar. The
-/// pair below is what lets the browser reserve the real box before it decodes.
-///
-/// Both ends are held here: the write, where the pipeline's measurement has to
-/// reach the row, and the read, where it has to reach the DTO and only for the
-/// variant it describes.
+/// The original keeps the aspect ratio of whatever was uploaded, and the page reserves its box from the
+/// pair. Held at the write and at the read.
 /// </remarks>
 public class UploadDimensionsShould : UnitTestBase
 {
@@ -52,9 +34,15 @@ public class UploadDimensionsShould : UnitTestBase
         var repository = Mock<IUploadRepository>();
         repository.AddAsync(Arg.Do<NewUpload>(written.Add)).Returns(new StoredUpload());
 
-        var service = Service(repository, ProcessedTo(width: 640, height: 480));
+        var service = Uploads.Service(
+            _userId,
+            repository,
+            ProcessedTo(width: 640, height: 480),
+            Mock<IObjectStorage>(),
+            Mock<IIntentionManager>(),
+            new AllowingUploadAuthorizer(UploadType.UserAvatar));
 
-        await service.DirectUpload(File(), UploadType.UserAvatar, _userId);
+        await service.DirectUpload(Uploads.File(), UploadType.UserAvatar, _userId, UploadAudience.All);
 
         written.Should().ContainSingle();
         written[0].Width.Should().Be(640);
@@ -77,10 +65,7 @@ public class UploadDimensionsShould : UnitTestBase
     }
 
     /// <summary>
-    /// An upload stored before the pipeline measured anything has no pair, and
-    /// the DTO says so instead of inventing one. A guessed ratio is worse than
-    /// an absent one: the client can fall back to its own reservation only while
-    /// it can tell that nobody measured.
+    /// An upload stored before the pipeline measured anything has no pair, and the DTO says so.
     /// </summary>
     [Fact]
     public void SayNothingAboutAPictureNobodyMeasured()
@@ -96,62 +81,14 @@ public class UploadDimensionsShould : UnitTestBase
         picture.OriginalHeight.Should().BeNull();
     }
 
-    /// <summary>
-    /// The mapper as the host builds it - imgproxy through the constructor,
-    /// the way the container constructs UserMapper.
-    /// </summary>
-    private UserMapper Mapper()
-    {
-        var imgproxy = Mock<IImgproxyUrlBuilder>();
-        imgproxy.BuildSquareThumbnail(Arg.Any<string>(), Arg.Any<int>()).Returns("https://cdn.example/thumb");
+    private static UserMapper Mapper() => new();
 
-        return new UserMapper(imgproxy);
-    }
-
-    private IImageProcessingService ProcessedTo(int width, int height)
+    private static IImageProcessingService ProcessedTo(int width, int height)
     {
         var imageProcessing = Mock<IImageProcessingService>();
         imageProcessing
             .ProcessAsync(Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<UploadType>(), Arg.Any<CancellationToken>())
             .Returns(new ProcessedImage(new byte[] { 1, 2, 3 }, "image/png", ".png", width, height));
         return imageProcessing;
-    }
-
-    private UploadApiService Service(
-        IUploadRepository repository,
-        IImageProcessingService imageProcessing)
-    {
-        var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Current.Returns(Identities.User(_userId));
-
-        var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        return new UploadApiService(
-            repository,
-            identityProvider,
-            Mock<IIntentionManager>(),
-            Mock<IUserService>(),
-            dateTimeProvider,
-            Mock<IObjectStorage>(),
-            imageProcessing,
-            Mock<ICache>(),
-            Mock<IHttpContextAccessor>(),
-            new IUploadTargetAuthorizer[] { new AllowingUploadAuthorizer(UploadType.UserAvatar) },
-            Options.Create(new CdnConfiguration
-            {
-                BucketName = "dm-test",
-                PublicUrl = "https://cdn.example",
-            }));
-    }
-
-    private static IFormFile File()
-    {
-        var bytes = Encoding.UTF8.GetBytes("not a real image; processing is mocked");
-        return new FormFile(new MemoryStream(bytes), 0, bytes.Length, "file", "avatar.png")
-        {
-            Headers = new HeaderDictionary(),
-            ContentType = "image/png",
-        };
     }
 }

@@ -1,33 +1,12 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * The "Схема атрибутов" list, and what it says when a read behind it fails.
- *
- * Two reads can fail: the catalogue of templates when the list is built, and
- * the details of a game when its entry is copied. Both used to raise a plate
- * in the corner - over a form that still works, about a control the reader is
- * looking at - and now both answer in one line under that control, which the
- * host hands to the editor (AttributeSchemaEditor.spec pins the printing).
- *
- * The catalogue read owns its refusal, because the api has the seam: the line
- * carries a 403 and a 5xx in the server's words and says a wait in the shared
- * wording, with the seconds. The game read has no seam, so it keeps quiet on
- * the statuses the interceptor announces. Either way the line answers the last
- * attempt: the next read of the catalogue and the next copy clear it.
- *
- * No plate is raised in any test here: the interceptor lives in the axios
- * instance and the api is doubled above it, so what is measured is that the
- * list itself says nothing in the corner.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { attributeSchemaTemplateApi } from "@/entities/attribute-schema-template";
-import { gameApi, GameParticipation } from "@/entities/game";
+import { gameApi, gameCatalogApi, GameParticipation } from "@/entities/game";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useSchemaSources, type SchemaSource } from "./schemaSources";
 
-/** A problem document with the fields the list reads. */
 const refused = (status: number, title = "", retryAfterSeconds?: number) =>
   ({
     data: null,
@@ -61,7 +40,7 @@ const refuseTemplates = (...args: Parameters<typeof refused>) =>
     .mockResolvedValue(refused(...args));
 
 const serveGames = () =>
-  vi.spyOn(gameApi, "getParticipatingGames").mockResolvedValue({
+  vi.spyOn(gameCatalogApi, "getParticipatingGames").mockResolvedValue({
     data: {
       resources: [
         {
@@ -79,11 +58,9 @@ const serveGames = () =>
 const refuseGame = (...args: Parameters<typeof refused>) =>
   vi.spyOn(gameApi, "getGame").mockResolvedValue(refused(...args));
 
-/** The list's entry for the game the reader leads. */
 const gameEntry = (sources: SchemaSource[]) =>
   sources.find((s) => s.value === "game:led-game")!;
 
-/** Every plate on screen, by its sentence. */
 const plates = () => useToast().toasts.value.map((t) => t.message);
 
 afterEach(() => {
@@ -144,8 +121,6 @@ describe("the catalogue read", () => {
     );
   });
 
-  // A dead connection and an expired session are announced whatever the
-  // request owns: they are about the reader, not about the catalogue.
   it.each([0, 401])(
     "stays quiet about a status %i, which the interceptor announces anyway",
     async (status) => {
@@ -202,8 +177,6 @@ describe("copying a game's sheet", () => {
     expect(refusal.value).toBe("Не удалось загрузить игру");
   });
 
-  // The game read has no seam for `ownsRefusal`: the line takes the plate
-  // the interceptor held down instead, and says the refusal itself.
   it.each([
     [403, "Ошибка сервера"],
     [429, "Слишком много попыток, попробуйте позже"],

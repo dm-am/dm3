@@ -1,14 +1,11 @@
 namespace DM.Domain.Account.Features.Availability;
 
-/// <summary>
-/// Result of email availability check
-/// </summary>
 public class EmailAvailabilityResult
 {
     /// <summary>
     /// Whether the email is available for registration
     /// </summary>
-    public bool IsAvailable { get; init; }
+    public bool IsAvailable => Reason == null;
 
     /// <summary>
     /// Reason why email is not available (if applicable)
@@ -18,13 +15,13 @@ public class EmailAvailabilityResult
     /// <summary>
     /// Create available result
     /// </summary>
-    public static EmailAvailabilityResult Available() => new() { IsAvailable = true };
+    public static EmailAvailabilityResult Available() => new();
 
     /// <summary>
     /// Create unavailable result
     /// </summary>
     public static EmailAvailabilityResult Unavailable(EmailUnavailableReason reason) =>
-        new() { IsAvailable = false, Reason = reason };
+        new() { Reason = reason };
 }
 
 /// <summary>

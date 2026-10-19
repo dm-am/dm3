@@ -15,14 +15,12 @@ public class PagingQuery
     /// Number of records to skip
     /// </summary>
     [Range(0, int.MaxValue, ErrorMessage = "Смещение не может быть отрицательным")]
-    public int Skip { get; set; } = 0;
+    public int Skip { get; set; }
 
     /// <summary>
     /// Number of records to take
     /// </summary>
-    // The ceiling is the largest size a reader may save as a preference: a
-    // preference the API then refuses to serve is a setting that does nothing.
-    [Range(1, 200, ErrorMessage = "Размер страницы от 1 до 200")]
+    [Range(1, PagingPolicy.MaxPageSize, ErrorMessage = "Размер страницы от 1 до 200")]
     public int Take { get; set; } = PagingPolicy.DefaultPageSize;
 
     /// <summary>

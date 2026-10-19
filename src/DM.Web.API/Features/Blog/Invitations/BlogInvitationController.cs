@@ -21,13 +21,12 @@ namespace DM.Web.API.Features.Blog.Invitations;
 [Tags("Invitations")]
 public class BlogInvitationController : ControllerBase
 {
-    private readonly IBlogInvitationApiService _apiService;
-    private readonly IBlogApiService _blogApiService;
+    private readonly BlogInvitationApiService _apiService;
+    private readonly BlogApiService _blogApiService;
 
-    /// <inheritdoc />
     public BlogInvitationController(
-        IBlogInvitationApiService apiService,
-        IBlogApiService blogApiService)
+        BlogInvitationApiService apiService,
+        BlogApiService blogApiService)
     {
         _apiService = apiService;
         _blogApiService = blogApiService;

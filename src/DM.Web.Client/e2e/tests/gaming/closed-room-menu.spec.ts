@@ -1,4 +1,5 @@
 import { test, expect, API_BASE_URL } from "../../fixtures/auth";
+import { PRIMARY_GAME } from "../../fixtures/seed";
 
 /**
  * A closed room in the menu of a game, in front of somebody who sees the game
@@ -15,9 +16,6 @@ import { test, expect, API_BASE_URL } from "../../fixtures/auth";
  * Read-only: a guest reads the seeded game and nothing is written.
  */
 
-/** The seeded game the menu is read against, with two closed rooms. */
-const GAME = "aaaaa";
-
 interface ListedRoom {
   title: string;
   canView?: boolean;
@@ -29,7 +27,9 @@ test("writes a closed room with the characters let in to write in it, wrapped un
   page,
   request,
 }) => {
-  const response = await request.get(`${API_BASE_URL}/v1/games/${GAME}/rooms`);
+  const response = await request.get(
+    `${API_BASE_URL}/v1/games/${PRIMARY_GAME}/rooms`,
+  );
   expect(response.ok()).toBe(true);
   const rooms = ((await response.json()) as { resources: ListedRoom[] })
     .resources;
@@ -45,7 +45,7 @@ test("writes a closed room with the characters let in to write in it, wrapped un
   ).toBeTruthy();
   const line = `${closed!.title} - ${closed!.characterNames!.join(", ")}`;
 
-  await page.goto(`/game/${GAME}`);
+  await page.goto(`/game/${PRIMARY_GAME}`);
   const row = page.locator(".room-list li", { hasText: closed!.title });
   await expect(row).toHaveText(line);
   await expect(row.locator("a")).toHaveCount(0);

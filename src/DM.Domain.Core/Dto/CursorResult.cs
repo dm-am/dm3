@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-
 namespace DM.Domain.Core.Dto;
 
 /// <summary>

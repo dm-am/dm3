@@ -1,10 +1,12 @@
 import type { User } from "../common";
 import type { Preferences } from "../personal";
 
-/**
- * Credentials for new user registration (Step 1)
- * Username is chosen after email verification
- */
+/** A letter with a link went out; the receipt says how long the link lives. */
+export type MailedLink = {
+  linkLifetimeHours: number;
+};
+
+/** The first step of a registration; the name is chosen after the address is confirmed. */
 export type RegisterCredentials = {
   email: string;
   password: string;
@@ -13,42 +15,30 @@ export type RegisterCredentials = {
 };
 
 /**
- * The second step of a registration: the name the account takes, and the time
- * zone of the device it is finished on. The account is created here, and it
- * starts in that zone: the site shows a signed-in reader's time in the zone of
- * the account, and an account without one is UTC, which is nobody's clock.
- * Absent where the browser will not say, and the account is then UTC.
+ * The second step of a registration. The account starts in the device's zone;
+ * absent where the browser will not say, and the account is then UTC.
  */
 export type ActivationRequest = {
   username: string;
   timeZoneId?: string;
 };
 
-/**
- * Response from activation token check
- */
 export type PendingInfo = {
   /** "ready" = token valid, "expired" = need resend */
   status: "ready" | "expired";
-  /** Email for display in UI */
   email: string;
 };
 
-/**
- * Result of username availability check
- */
 export type UsernameAvailability = {
   isAvailable: boolean;
   /**
-   * Reason if not available: "Taken" | "InvalidFormat". A name a former user
-   * left behind answers "Taken" as well: whether the holder is live or gone is
-   * not the reader's to know, and he does the same thing either way.
+   * "Taken" | "InvalidFormat". A name a former user left is "Taken" too: the
+   * reader does the same thing either way.
    */
   reason?: string;
 };
 
 export type LoginCredentials = {
-  /** User email address */
   email: string;
   password: string;
   website?: string; // Honeypot field for bot protection
@@ -57,18 +47,8 @@ export type LoginCredentials = {
 };
 
 /**
- * What POST /v1/account/login answers with.
- *
- * Mirrors DM.Web.API.Features.Account.Authentication.LoginResponse. The viewer
- * arrives wrapped, together with the preferences the interface needs to render
- * the first screen. Typed as a bare User here, the whole envelope went into the
- * store as though it were the viewer, and every field read off it was
- * undefined until the next boot reconciled the store against the server.
- *
- * The viewer is optional because one successful answer carries none:
- * `twoFactorRequired` means the password was accepted and the login is not
- * finished, so there is no session yet and nothing to describe. Typed as
- * required, that answer read as "signed in as nobody".
+ * Mirrors LoginResponse: the viewer arrives wrapped with the preferences of the
+ * first screen. Absent on twoFactorRequired, where no session exists yet.
  */
 export type LoginResponse = {
   user?: User;
@@ -83,55 +63,37 @@ export type TwoFactorLoginRequest = {
   code: string;
 };
 
-/**
- * Request to change email address
- * Note: user identity is taken from authenticated session
- */
+/** The identity is taken from the session. */
 export type ChangeEmailRequest = {
   password: string;
   email: string;
 };
 
-/**
- * Request for unified account recovery
- */
 export type RecoveryRequest = {
   email: string;
 };
 
-/**
- * Response from recovery endpoint
- */
 export type RecoveryResponse = {
   status: "PasswordResetSent" | "ActivationResent" | "NotFound";
   email: string;
+  /** Absent when no letter went out. */
+  linkLifetimeHours?: number;
 };
 
 /**
- * Response from email availability check.
- *
- * Two reasons, not three. A removed account's address answers "Taken", the
- * same as a live one's: "удален" is a decision about an account, and a guest
- * at the registration form is not owed it. The owner of a removed account is
- * shown the way to support after a correct password on the sign-in card, or by
- * the recovery letter.
+ * A removed account's address answers "Taken" like a live one: a guest at the
+ * registration form is not owed that decision.
  */
 export type EmailAvailability = {
   isAvailable: boolean;
   reason?: "Taken" | "PendingActivation";
 };
 
-/**
- * Response from password reset token check
- */
 export type PasswordResetTokenInfo = {
   /** "ready" = token valid, "expired" = need new reset request */
   status: "ready" | "expired";
 };
 
-/**
- * Information about an active session
- */
 export type SessionInfo = {
   id: string;
   isCurrent: boolean;
@@ -142,26 +104,17 @@ export type SessionInfo = {
   ipAddress?: string;
 };
 
-// === Username Change ===
-
-/**
- * Username change request (requires moderation)
- * Note: requestedUsername is only set after approval via POST /username-change/complete
- */
+/** requestedUsername is set only after approval (POST /username-change/complete). */
 export type UsernameChangeRequest = {
   id: string;
   currentUsername: string;
   requestedUsername?: string;
   reason: string;
-  // Completed and Expired are reached by the flow itself rather than by a
-  // moderator — one when the name is chosen, one when a deadline passes — and
-  // GET /account/username-change returns the latest request whatever state it
-  // is in, so both arrive here.
+  // Reached by the flow itself, not by a moderator; the latest request
+  // arrives whatever state it is in.
   status: "Pending" | "Approved" | "Rejected" | "Completed" | "Expired";
-  // Expiry has two roads into one status and they mean opposite things: nobody
-  // read the request, or an approval went unused. Set only when status is
-  // "Expired", and computed by the server so the client never reads it out of
-  // the resolution comment.
+  // An expiry means either nobody read the request or an approval went
+  // unused; set by the server for "Expired" only.
   expiryReason?: "Unreviewed" | "ApprovalLapsed";
   createdUtc: string;
   approvalTokenExpiresUtc?: string;
@@ -171,34 +124,22 @@ export type UsernameChangeRequest = {
 };
 
 /**
- * What the approval link a moderator issued is still good for.
- *
- * Four answers, because they call for four different things from the reader: a
- * live approval opens the form, a closed window sends them back for a new
- * request, a link already spent asks nothing of them, and a value no request
- * was issued for (a 404, so not a status here) is a broken link.
+ * What a moderator's approval link is still good for; a value no request was
+ * issued for is a 404, not a status here.
  */
 export type UsernameChangeApprovalInfo = {
   status: "ready" | "expired" | "used";
   /** The name being changed. Sent for "ready" only. */
   currentUsername?: string;
+  /** How long a link of this kind lives: the expired page says it. */
+  linkLifetimeHours: number;
 };
 
-/**
- * Request to create username change request.
- * Note: User does NOT specify desired username here.
- * This is a request for permission to change username.
- * The new username is chosen later via POST /username-change/complete.
- */
+/** A request for permission; the new name is chosen later (POST /username-change/complete). */
 export type CreateUsernameChangeRequest = {
   reason: string;
 };
 
-// === Notification Settings ===
-
-/**
- * Category of notifications
- */
 export type NotificationCategory =
   | "Messages"
   | "Forum"
@@ -208,58 +149,32 @@ export type NotificationCategory =
   | "Moderation"
   | "Blog";
 
-/**
- * Bot connection for a notification channel (Telegram/Discord)
- */
-export type BotConnection = {
+type BotConnection = {
   connected: boolean;
   enabled: boolean;
   enabledCategories: NotificationCategory[];
 };
 
-/**
- * All notification settings
- */
 export type NotificationSettings = {
   discord?: BotConnection;
   telegram?: BotConnection;
 };
 
-/**
- * Update for a single bot connection
- */
-export type UpdateBotConnection = {
+type UpdateBotConnection = {
   enabled?: boolean;
   enabledCategories?: NotificationCategory[];
 };
 
-/**
- * Request to update notification settings
- */
 export type UpdateNotificationSettingsRequest = {
   discord?: UpdateBotConnection;
   telegram?: UpdateBotConnection;
 };
 
-// Backwards compatibility aliases
-export type NotificationPreferences = NotificationSettings;
-export type UpdateNotificationPreferences = UpdateNotificationSettingsRequest;
-
-// === Bot Links ===
-
-/**
- * Result of generating bot link code
- */
 export type BotLinkResult = {
   code: string;
   expiresUtc: string;
 };
 
-// === Security History ===
-
-/**
- * Type of security event
- */
 export type SecurityEventType =
   | "LoginSuccess"
   | "LoginFailure"
@@ -272,9 +187,8 @@ export type SecurityEventType =
   | "PasswordResetComplete"
   | "AccountLocked"
   | "SuspiciousLogin"
-  // Everything that happens to the second factor. The server has written
-  // these nine since the factor shipped; unlisted here, all nine printed as
-  // the one fallback line the journal shows an unknown type.
+  // Everything that happens to the second factor; unlisted, each printed as
+  // the fallback line of an unknown type.
   | "TwoFactorEnabled"
   | "TwoFactorDisabled"
   | "TwoFactorRecoveryCodeUsed"
@@ -284,15 +198,9 @@ export type SecurityEventType =
   | "TwoFactorRemovedByAdmin"
   | "TwoFactorSetupFailure";
 
-/**
- * Which slice of the security journal to ask for. Mirrors SecurityLogType on
- * the server, which refuses anything else.
- */
+/** Mirrors SecurityLogType on the server, which refuses anything else. */
 export type SecurityLogType = "login" | "password" | "session" | "twofactor";
 
-/**
- * Security audit log event
- */
 export type SecurityEvent = {
   id: string;
   eventType: SecurityEventType;
@@ -302,15 +210,7 @@ export type SecurityEvent = {
   details?: string;
 };
 
-// === Two-factor authentication ===
-
-/**
- * State of the second factor, as GET /v1/account/two-factor reports it.
- *
- * Nothing here can be used to pass the factor: no secret, no code, no hash.
- * The dates and the count are what the owner needs in order to decide whether
- * to reissue the codes or to switch the factor off.
- */
+/** No secret, no code, no hash: only what the owner needs to decide. */
 export type TwoFactorStatus = {
   enabled: boolean;
   /** Since when it has been on. Absent while it is off. */
@@ -322,12 +222,7 @@ export type TwoFactorStatus = {
   removalDueUtc?: string;
 };
 
-/**
- * The secret, handed over once.
- *
- * It exists in this one answer and nowhere else: asking again before the
- * factor is confirmed replaces it rather than repeating it.
- */
+/** The secret, handed over once: asking again before confirming replaces it. */
 export type TwoFactorSetup = {
   /** Base32, for typing into the app by hand. */
   secret: string;
@@ -341,9 +236,8 @@ export type RecoveryCodes = {
 };
 
 /**
- * Switching the factor off and reissuing the recovery codes cost the same: the
- * current password and a passed second factor, where a recovery code counts as
- * the second factor.
+ * Switching the factor off and reissuing the codes both cost the password and a
+ * passed second factor, a recovery code included.
  */
 export type TwoFactorConfirmedAction = {
   password: string;

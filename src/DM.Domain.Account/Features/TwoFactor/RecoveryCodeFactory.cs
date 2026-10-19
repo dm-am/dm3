@@ -5,23 +5,14 @@ using System.Text;
 
 namespace DM.Domain.Account.Features.TwoFactor;
 
-/// <inheritdoc />
+/// <summary>
+/// The values that let a person in when the device is gone.
+/// </summary>
 /// <remarks>
-/// Sixteen symbols out of an alphabet of thirty-two: eighty bits per code, and
-/// the number is calculated rather than picked. The secret of the factor is shut
-/// behind the application key, so a recovery code is the one thing a reader of a
-/// database dump can attack without it, and the hash is a fast one. Forty bits,
-/// ten codes to a person, is hours of one graphics card; eighty is not.
-///
-/// A slow hash was the other way to close it and was rejected: up to ten Argon2
-/// runs per sign-in attempt is a denial-of-service lever sitting on the
-/// authentication path. Entropy costs nothing at verification time.
-///
-/// No salt, for the reason the confirmation links carry none: the input is our
-/// own randomness rather than a password a person chose, so there is nothing to
-/// slow a guess of and no table to build.
+/// Eighty bits per code, because a reader of a database dump can attack the fast,
+/// unsalted hash; a slow hash on the sign-in path would be a denial-of-service lever.
 /// </remarks>
-internal class RecoveryCodeFactory : IRecoveryCodeFactory
+internal static class RecoveryCodeFactory
 {
     /// <summary>
     /// Crockford's alphabet: no I, no L, no O, no U.
@@ -39,8 +30,15 @@ internal class RecoveryCodeFactory : IRecoveryCodeFactory
     /// <summary>How many symbols are shown between separators.</summary>
     internal const int GroupSize = 4;
 
-    /// <inheritdoc />
-    public IReadOnlyList<string> Create(int count)
+    /// <summary>
+    /// A fresh set of codes, in the clear.
+    /// </summary>
+    /// <remarks>
+    /// The only moment these exist as values: the caller shows them once and
+    /// stores nothing but their hashes.
+    /// </remarks>
+    /// <param name="count">How many codes the set holds</param>
+    public static IReadOnlyList<string> Create(int count)
     {
         var codes = new List<string>(count);
         for (var i = 0; i < count; i++)
@@ -51,35 +49,19 @@ internal class RecoveryCodeFactory : IRecoveryCodeFactory
         return codes;
     }
 
-    private static string CreateOne()
-    {
-        // Five bits per symbol, taken out of the buffer without any reduction
-        // modulo the alphabet: the alphabet is exactly thirty-two symbols wide,
-        // so every five-bit value names one of them and the distribution is flat
-        // by construction.
-        var bits = CodeLength * 5;
-        var buffer = RandomNumberGenerator.GetBytes((bits + 7) / 8);
-        var symbols = new char[CodeLength];
+    private static string CreateOne() => RandomNumberGenerator.GetString(Alphabet, CodeLength);
 
-        for (var i = 0; i < CodeLength; i++)
-        {
-            var offset = i * 5;
-            var index = 0;
-            for (var bit = 0; bit < 5; bit++)
-            {
-                var position = offset + bit;
-                var value = (buffer[position / 8] >> (7 - position % 8)) & 1;
-                index = (index << 1) | value;
-            }
-
-            symbols[i] = Alphabet[index];
-        }
-
-        return new string(symbols);
-    }
-
-    /// <inheritdoc />
-    public string Normalize(string code)
+    /// <summary>
+    /// The form a code is compared and stored in.
+    /// </summary>
+    /// <remarks>
+    /// Case and separators are dropped, and the letters the alphabet
+    /// leaves out are folded onto the digits they are mistaken for. A code
+    /// copied out by hand onto paper and typed back with dashes and a lowercase
+    /// l has to be the same code.
+    /// </remarks>
+    /// <param name="code">Value as the person typed it</param>
+    public static string Normalize(string code)
     {
         if (string.IsNullOrEmpty(code))
         {
@@ -106,7 +88,10 @@ internal class RecoveryCodeFactory : IRecoveryCodeFactory
         return normalized.ToString();
     }
 
-    /// <inheritdoc />
-    public byte[] Hash(string code) =>
+    /// <summary>
+    /// What the database keeps for a code.
+    /// </summary>
+    /// <param name="code">Value as the person typed it</param>
+    public static byte[] Hash(string code) =>
         SHA256.HashData(Encoding.UTF8.GetBytes(Normalize(code)));
 }

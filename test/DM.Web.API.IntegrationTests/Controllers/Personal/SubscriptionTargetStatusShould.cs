@@ -13,16 +13,9 @@ using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subs
 namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 
 /// <summary>
-/// The subscriptions page names a game and a blog in the colour of its status,
-/// as the site names them everywhere, so a subscription row carries the status
-/// of its game or blog and the day it opened.
+/// A subscription row carries the status and the opening day of its game or blog, for the status colour
+/// (UI_STANDARDS, "Цвет ссылок игр и блогов по статусу").
 /// </summary>
-/// <remarks>
-/// The row used to carry the name alone, and the page drew a closed game and a
-/// game opened yesterday as the same ordinary link (UI_STANDARDS, "Цвет ссылок
-/// игр и блогов по статусу"). Asked through HTTP: the reader's list is where the
-/// colour is read from.
-/// </remarks>
 public class SubscriptionTargetStatusShould : IntegrationTestBase
 {
     public SubscriptionTargetStatusShould(DatabaseFixture databaseFixture) : base(databaseFixture)

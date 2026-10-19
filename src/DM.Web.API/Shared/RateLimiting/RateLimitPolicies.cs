@@ -4,11 +4,8 @@ namespace DM.Web.API.Shared.RateLimiting;
 /// Names of the rate-limit policies the API registers.
 /// </summary>
 /// <remarks>
-/// Both sides of the handshake are string-matched by the framework: a policy is
-/// registered under a name and a controller asks for it by name through
-/// <c>[EnableRateLimiting]</c>. A name that matches nothing is not a startup
-/// error — it throws on the first request to that endpoint. Constants make the
-/// pairing a compile-time one.
+/// A name that matches no registered policy throws on the first request to that
+/// endpoint, not at startup; constants make the pairing a compile-time one.
 /// </remarks>
 internal static class RateLimitPolicies
 {
@@ -20,13 +17,9 @@ internal static class RateLimitPolicies
     /// recovery codes.
     /// </summary>
     /// <remarks>
-    /// Not <see cref="Auth" />, although the surface looks like one. That budget
-    /// is five requests an address may spend in a minute, and switching the
-    /// factor on costs four of them in one sitting - after the sign-in that got
-    /// the person to the screen has already spent one. A single mistyped
-    /// confirmation code then answered 429 instead of "that code did not match",
-    /// and behind carrier-grade NAT, where the address is a neighbourhood, it did
-    /// so without anybody mistyping anything.
+    /// Not <see cref="Auth" />: switching the factor on spends four of its five
+    /// requests in one sitting, and behind a shared address a neighbour's
+    /// sign-in spends the rest.
     /// </remarks>
     public const string TwoFactor = "two-factor";
 
@@ -42,6 +35,6 @@ internal static class RateLimitPolicies
     /// <summary>Expensive reads: chat availability, full-text search.</summary>
     public const string Sliding = "sliding";
 
-    /// <summary>Ordinary authenticated writes: preferences, subscriptions, invitations, notepads, game and blog management.</summary>
+    /// <summary>Ordinary authenticated writes.</summary>
     public const string Default = "default";
 }

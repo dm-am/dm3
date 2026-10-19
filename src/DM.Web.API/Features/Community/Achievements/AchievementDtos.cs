@@ -35,7 +35,7 @@ public class AchievementType
     public string Title { get; set; } = string.Empty;
     /// <summary>Unlock threshold.</summary>
     public int Threshold { get; set; }
-    /// <summary>Visual tier (1-4).</summary>
+    /// <summary>Tier: 1 gold, 2 silver, 3 bronze, 5 platinum (TierScale).</summary>
     public int? Tier { get; set; }
     /// <summary>Parent category (SSOT for the chain icon, metric, description).</summary>
     public AchievementCategory Category { get; set; } = null!;
@@ -76,7 +76,7 @@ public class CreateAchievementTypeRequest
     public string Title { get; set; } = string.Empty;
     /// <summary>Unlock threshold.</summary>
     public int Threshold { get; set; }
-    /// <summary>Visual tier (1-4).</summary>
+    /// <summary>Tier: 1 gold, 2 silver, 3 bronze, 5 platinum (TierScale).</summary>
     public int? Tier { get; set; }
     /// <summary>Parent category identifier.</summary>
     public Guid AchievementCategoryId { get; set; }

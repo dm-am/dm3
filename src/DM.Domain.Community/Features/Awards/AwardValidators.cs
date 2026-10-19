@@ -1,3 +1,5 @@
+using DM.Domain.Community.Features.Catalogs;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
@@ -6,22 +8,21 @@ namespace DM.Domain.Community.Features.Awards;
 /// <inheritdoc />
 internal class CreateAwardTypeValidator : AbstractValidator<CreateAwardType>
 {
-    /// <inheritdoc />
     public CreateAwardTypeValidator()
     {
         RuleFor(t => t.Code)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(64).WithMessage(ValidationError.Long);
+            .MaximumLength(CatalogFieldLimits.CodeMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(t => t.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(128).WithMessage(ValidationError.Long);
+            .MaximumLength(CatalogFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(t => t.Description)
-            .MaximumLength(1000).WithMessage(ValidationError.Long);
+            .MaximumLength(CatalogFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long);
 
         RuleFor(t => t.Tier)
-            .InclusiveBetween(AwardType.MinTier, AwardType.MaxTier).WithMessage(ValidationError.Invalid)
+            .InclusiveBetween(TierScale.MinTier, TierScale.MaxTier).WithMessage(ValidationError.Invalid)
             .When(t => t.Tier.HasValue);
 
         RuleFor(t => t.SortOrder)
@@ -32,7 +33,6 @@ internal class CreateAwardTypeValidator : AbstractValidator<CreateAwardType>
 /// <inheritdoc />
 internal class UpdateAwardTypeValidator : AbstractValidator<UpdateAwardType>
 {
-    /// <inheritdoc />
     public UpdateAwardTypeValidator()
     {
         RuleFor(t => t.Id)
@@ -40,15 +40,15 @@ internal class UpdateAwardTypeValidator : AbstractValidator<UpdateAwardType>
 
         RuleFor(t => t.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .MaximumLength(128).WithMessage(ValidationError.Long)
+            .MaximumLength(CatalogFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long)
             .When(t => t.Title != null);
 
         RuleFor(t => t.Description)
-            .MaximumLength(1000).WithMessage(ValidationError.Long)
+            .MaximumLength(CatalogFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long)
             .When(t => t.Description != null);
 
         RuleFor(t => t.Tier)
-            .InclusiveBetween(AwardType.MinTier, AwardType.MaxTier).WithMessage(ValidationError.Invalid)
+            .InclusiveBetween(TierScale.MinTier, TierScale.MaxTier).WithMessage(ValidationError.Invalid)
             .When(t => t.Tier.HasValue);
 
         RuleFor(t => t.SortOrder)
@@ -60,8 +60,7 @@ internal class UpdateAwardTypeValidator : AbstractValidator<UpdateAwardType>
 /// <inheritdoc />
 internal class CreateContestSeriesValidator : AbstractValidator<CreateContestSeries>
 {
-    /// <inheritdoc />
-    public CreateContestSeriesValidator()
+    public CreateContestSeriesValidator(IDateTimeProvider dateTimeProvider)
     {
         RuleFor(s => s.ContestType)
             .IsInEnum().WithMessage(ValidationError.Invalid);
@@ -69,10 +68,9 @@ internal class CreateContestSeriesValidator : AbstractValidator<CreateContestSer
         RuleFor(s => s.Number)
             .GreaterThan(0).WithMessage(ValidationError.Invalid);
 
-        // The site started in 2004; an upper bound keeps a mistyped year from
-        // creating a series nobody can find.
         RuleFor(s => s.Year)
-            .InclusiveBetween(2004, 2100).WithMessage(ValidationError.Invalid);
+            .GreaterThanOrEqualTo(ContestSeries.MinYear).WithMessage(ValidationError.Invalid)
+            .LessThanOrEqualTo(_ => ContestSeries.LatestYear(dateTimeProvider.Now)).WithMessage(ValidationError.Invalid);
 
         RuleFor(s => s.TopicUrl)
             .MaximumLength(500).WithMessage(ValidationError.Long)
@@ -83,8 +81,7 @@ internal class CreateContestSeriesValidator : AbstractValidator<CreateContestSer
 /// <inheritdoc />
 internal class UpdateContestSeriesValidator : AbstractValidator<UpdateContestSeries>
 {
-    /// <inheritdoc />
-    public UpdateContestSeriesValidator()
+    public UpdateContestSeriesValidator(IDateTimeProvider dateTimeProvider)
     {
         RuleFor(s => s.Id)
             .NotEmpty().WithMessage(ValidationError.Empty);
@@ -94,7 +91,9 @@ internal class UpdateContestSeriesValidator : AbstractValidator<UpdateContestSer
             .When(s => s.Number.HasValue);
 
         RuleFor(s => s.Year)
-            .InclusiveBetween(2004, 2100).WithMessage(ValidationError.Invalid)
+            .GreaterThanOrEqualTo(ContestSeries.MinYear).WithMessage(ValidationError.Invalid)
+            .LessThanOrEqualTo(_ => ContestSeries.LatestYear(dateTimeProvider.Now))
+            .WithMessage(ValidationError.Invalid)
             .When(s => s.Year.HasValue);
 
         RuleFor(s => s.TopicUrl)

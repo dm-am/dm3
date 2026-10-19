@@ -2,25 +2,6 @@
  * @vitest-environment node
  */
 
-/**
- * The status-to-page map, as a table.
- *
- * There were three copies of it and they had already diverged. The forum board
- * page turned everything but 404 into "ошибка сервера", and a missing board was
- * answered with 410 back then, so that is what a mistyped alias actually drew;
- * the topic page next to it read the same 410 as "Страница удалена"; the
- * profile page had a third spelling. Games and blogs had no map at all and drew
- * one paragraph for every failure.
- *
- * 410 now carries one meaning on the wire, a resource that was deleted, and only
- * the topic endpoint spends it. Both readings stay pinned here rather than left
- * to whoever writes the fourth copy: the default has to survive a 410 from an
- * endpoint that has no business sending one.
- *
- * The map used to send every other 4xx to "не найдено" as well, and the rate
- * limit of the API was one of them: a reader who asked too often was told the
- * address was wrong and sent to check a link that was right.
- */
 import { describe, it, expect } from "vitest";
 import { errorCodeForStatus, getErrorConfig } from "./errorConfig";
 
@@ -48,8 +29,7 @@ describe("errorCodeForStatus", () => {
   }
 
   it("reads Gone as not-found by default", () => {
-    // Boards, users and games answer 404 now, so a Gone from anywhere but the
-    // topic endpoint is a stray one and must not claim a deletion.
+    // Only the topic endpoint spends 410; a stray one must not claim a deletion.
     expect(errorCodeForStatus(410)).toBe(404);
   });
 
@@ -65,8 +45,6 @@ describe("errorCodeForStatus", () => {
   });
 
   it("never reads a status it has no page for as not found", () => {
-    // Nothing on the wire says the address is wrong; the general page says
-    // that something went wrong and no more.
     for (const status of [402, 405, 408, 413, 418, 422]) {
       const code = errorCodeForStatus(status);
       expect(code, `status ${status}`).not.toBe(404);

@@ -1,10 +1,9 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -22,12 +21,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// The character sheet of a game: written with the game, replaced under a
 /// version, and taking the values it drops with it.
 /// </summary>
-/// <remarks>
-/// Against a live Postgres, because every claim here is one the database
-/// settles: the sheet and the game land in one save or neither does, the
-/// conditional replacement is a predicate on the row, and the values it deletes
-/// belong to characters the ordinary reads cannot even see.
-/// </remarks>
+/// <remarks>The sheet and the game land in one save, the replacement is a predicate on the row, and its deletes reach hidden characters.</remarks>
 public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
 {
     public GameAttributeSchemaRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -93,12 +87,7 @@ public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
     /// A replacement aimed at a game with no sheet row fails the way a read of
     /// it does, rather than coming back empty-handed like a lost version.
     /// </summary>
-    /// <remarks>
-    /// The two are not the same answer. A lost version tells the caller to look
-    /// again and there is a row to look at; a missing sheet is a defect of
-    /// whoever wrote the game, and sending that caller off to reload would hide
-    /// it behind a conflict nobody can resolve.
-    /// </remarks>
+    /// <remarks>A lost version sends the caller to reload; a missing sheet is a defect of whoever wrote the game.</remarks>
     [Fact]
     public async Task FailLoudlyWhenReplacingTheSheetOfAGameThatHasNone()
     {
@@ -239,12 +228,7 @@ public class GameAttributeSchemaRepositoryShould : IntegrationTestBase
     /// A value written after a replacement deleted its row is stored, not
     /// refused: it becomes one orphan until the next replacement collects it.
     /// </summary>
-    /// <remarks>
-    /// This is the losing side of the race the write path is shaped around. The
-    /// player read a sheet, the sheet was replaced, and the save that follows
-    /// must not answer them with a failure over a value they were entitled to
-    /// write when they started.
-    /// </remarks>
+    /// <remarks>The player was entitled to write it when they read the sheet.</remarks>
     [Fact]
     public async Task StoreAValueWrittenAfterItsRowWasDeleted()
     {

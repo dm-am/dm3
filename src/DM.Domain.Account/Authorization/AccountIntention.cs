@@ -28,5 +28,10 @@ public enum AccountIntention
     /// <summary>
     /// Terminate own session (authenticated user)
     /// </summary>
-    TerminateSession
+    TerminateSession,
+
+    /// <summary>
+    /// Take back a completed username change of another user (senior moderator)
+    /// </summary>
+    RollbackUsernameChange
 }

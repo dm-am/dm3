@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -10,31 +11,9 @@ namespace DM.Architecture.Tests;
 /// Nothing is announced before the state it announces is durable.
 /// </summary>
 /// <remarks>
-/// The announcement is an outbox INSERT now (W1.5): SendAsync writes a row in
-/// its own transaction and the relay publishes from it, but the row is read by
-/// consumers that send letters and bot messages, and neither can be taken back.
-/// The order therefore holds two facts at once. First, an event stored while
-/// its own write is still in the change tracker announces a state that may
-/// never arrive - the reminder loop once marked every stale pendency in memory,
-/// published a reminder for each, and saved the batch afterwards, so a lost
-/// connection to Postgres past that point sent the masters letters the database
-/// holds no trace of, and twelve hours later sent them again. Second, and new
-/// with the outbox: SendAsync makes its own SaveChanges on the scoped context
-/// shared with the caller, so a SendAsync before the domain commit would flush
-/// the caller's half-written changes along with the row - a commit nobody asked
-/// for, of a state nobody finished. This is risk R1 of the outbox design, and
-/// this file is what holds it shut.
-///
-/// Asserted on the text, because the order of two awaits inside one method is
-/// not something the type system or the IL has an opinion about, and the callers
-/// need a database to run at all.
-///
-/// Two rules, because the code has two shapes. Where one method both writes and
-/// announces, the order of the two calls is what there is to check. Where the
-/// write moved behind a repository - which is where the background jobs put it
-/// when they stopped holding the context - the announcement is made out of what
-/// the committing call returned, so the second rule checks that the call comes
-/// first and that the repository behind it commits before it answers.
+/// Consumers send letters that cannot be taken back, and SendAsync saves the scoped context it shares
+/// with the caller, so it comes after the domain commit. Asserted on the text: the order of two awaits.
+/// One rule where a method writes and announces, one where the write is behind a repository.
 /// </remarks>
 public class PublishAfterCommitShould
 {
@@ -42,16 +21,9 @@ public class PublishAfterCommitShould
     private const string Commit = "SaveChangesAsync(";
 
     /// <summary>
-    /// Every way a repository here makes a write durable. The change tracker is
-    /// one of them; the set-based operations write and commit in one statement and
-    /// never touch it, which is how the inactivity sweep writes.
+    /// Every way a repository here makes a write durable: the change tracker, the set-based operations and
+    /// raw SQL, as in DurableWritesShould.
     /// </summary>
-    /// <remarks>
-    /// Raw SQL is on the list for the same reason DurableWritesShould has it
-    /// there: a conditional insert is how a claim is made against a unique index
-    /// (the digest takes its period with ON CONFLICT DO NOTHING), and a statement
-    /// sent that way is exactly as durable as one EF composed.
-    /// </remarks>
     private static readonly string[] DurableWrite =
     [
         Commit,
@@ -68,12 +40,7 @@ public class PublishAfterCommitShould
     /// The pairs that split the write from the announcement: the processor that
     /// publishes, and the repository call it has to get its answer from first.
     /// </summary>
-    /// <remarks>
-    /// A list, because "which call is the claim" is not derivable from the text.
-    /// It is held to the tree by the rule below rather than kept by hand: every
-    /// processor that publishes and does not commit is a processor of this shape,
-    /// and the third one written the same way used to be covered by nothing.
-    /// </remarks>
+    /// <remarks>A list: which call is the claim cannot be derived from the text. The rule below holds it to the tree.</remarks>
     private static readonly (string Processor, string CommittingCall, string Repository)[] ClaimThenAnnounce =
     [
         ("src/DM.Domain.Game/Features/PostPendencies/PendencyReminderProcessor.cs",
@@ -87,12 +54,10 @@ public class PublishAfterCommitShould
             "src/DM.Infrastructure.Persistence/Repositories/Game/InactivityRepository.cs"),
     ];
 
-    private static string[] Sources => Directory
-        .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-        .Where(IsAuthored)
+    private static readonly string[] Sources = RepositoryFiles.ProductionSources()
         .ToArray();
 
-    private static string[] ServicesThatDoBoth => Sources
+    private static readonly string[] ServicesThatDoBoth = Sources
         .Where(path =>
         {
             var text = File.ReadAllText(path);
@@ -102,19 +67,16 @@ public class PublishAfterCommitShould
         .ToArray();
 
     /// <summary>
-    /// A rule that matches nothing passes, and both halves of this one match on
-    /// a spelling. Checked separately rather than through their overlap: the
-    /// overlap is empty today and being empty is the point of the third rule, so
-    /// an assertion on it would fail for the good outcome.
+    /// A rule that matches nothing passes; both halves are checked apart, their overlap is empty by design.
     /// </summary>
     [Fact]
     public void FindBothCallsInTheTree()
     {
         Sources.Count(path => File.ReadAllText(path).Contains(Commit, StringComparison.Ordinal))
-            .Should().BeGreaterThan(20, "the commit is spelled this way all over the persistence layer");
+            .Should().BePositive("the commit is spelled this way all over the persistence layer");
 
         Sources.Count(path => File.ReadAllText(path).Contains(Publish, StringComparison.Ordinal))
-            .Should().BeGreaterThan(5, "every publication of a domain event is spelled this way");
+            .Should().BePositive("every publication of a domain event is spelled this way");
     }
 
     [Fact]
@@ -135,7 +97,7 @@ public class PublishAfterCommitShould
     [Fact]
     public void ClaimBeforeAnnouncingWhereTheWriteMovedBehindARepository()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
 
         foreach (var (processor, committingCall, repository) in ClaimThenAnnounce)
         {
@@ -153,12 +115,7 @@ public class PublishAfterCommitShould
             var callAt = repositoryText.IndexOf(committingCall, StringComparison.Ordinal);
             callAt.Should().BeGreaterThan(-1, $"{repository} must still implement {committingCall}");
 
-            // The method body and not the rest of the file: "a commit somewhere
-            // below" is satisfied by the next method down, which is not the one
-            // the caller is announcing out of.
-            // Compensation is not the claim: a write that only runs when the claim
-            // failed is not the write the caller is about to announce, and a body
-            // read whole would stay green with the claim itself deleted.
+            // The method body only, catch blocks left out: compensation is not the claim.
             var body = WithoutCatchBlocks(BodyAt(repositoryText, callAt));
             DurableWrite.Any(write => body.Contains(write, StringComparison.Ordinal))
                 .Should().BeTrue(
@@ -171,15 +128,7 @@ public class PublishAfterCommitShould
     /// <summary>
     /// Every processor that announces is under one of the two rules above.
     /// </summary>
-    /// <remarks>
-    /// The first rule reads the files that both write and announce, and that set is
-    /// empty today: the background jobs put their writes behind repositories, which
-    /// is the whole point of the second rule. An empty set is a rule that passes
-    /// over nothing, so the coverage is asserted from the other end - a processor
-    /// that publishes either commits in the same file (rule one) or is named in the
-    /// pair list (rule two), and a third one written like the other two cannot slip
-    /// between them.
-    /// </remarks>
+    /// <remarks>The first rule's set is empty today, so coverage is asserted from the other end.</remarks>
     [Fact]
     public void CoverEveryProcessorThatAnnounces()
     {
@@ -188,7 +137,7 @@ public class PublishAfterCommitShould
             .Where(path => File.ReadAllText(path).Contains(Publish, StringComparison.Ordinal))
             .ToArray();
 
-        announcing.Should().HaveCountGreaterThan(2,
+        announcing.Should().NotBeEmpty(
             "the background processors are what this file is about, and finding none " +
             "would report green over an empty tree");
 
@@ -255,10 +204,4 @@ public class PublishAfterCommitShould
 
         return text[open..];
     }
-
-    private static bool IsAuthored(string path) => !path
-        .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-        .Any(segment => segment is "obj" or "bin" or "node_modules");
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

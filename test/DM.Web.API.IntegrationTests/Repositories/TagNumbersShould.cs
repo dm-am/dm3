@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Moderation.Features.Tags;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -15,13 +13,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// The number a tag is addressed by is issued once and never issued again.
 /// </summary>
 /// <remarks>
-/// ShortId is what a /games link is written in, and it was handed out as MAX + 1 over the
-/// table. Two moderators creating a tag in the same moment read one maximum and both commit
-/// it; and because a tag is deleted physically, the maximum walks backwards, so the number
-/// of the tag just deleted is handed to the next one and the links written in it point
-/// somewhere else. Both are properties of a sequence of writes rather than of a unit, and
-/// what answers them — the sequence and the unique index — exists only in the schema, which
-/// is why this runs against the container Postgres.
+/// ShortId is what a /games link is written in, and a tag is deleted physically, so the number comes from a sequence
+/// under a unique index, which exists only in the schema.
 /// </remarks>
 public class TagNumbersShould : IntegrationTestBase
 {

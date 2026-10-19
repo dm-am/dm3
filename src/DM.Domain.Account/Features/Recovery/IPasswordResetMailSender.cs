@@ -3,9 +3,6 @@ using System.Threading.Tasks;
 
 namespace DM.Domain.Account.Features.Recovery;
 
-/// <summary>
-/// Password resetting mail sender
-/// </summary>
 internal interface IPasswordResetMailSender
 {
     /// <summary>

@@ -8,8 +8,6 @@ import { ref } from "vue";
 import { FilterDropdownHeader } from "../primitives";
 import { useKeepInWindow } from "./useKeepInWindow";
 
-defineOptions({ name: "FilterDropdown" });
-
 defineProps<{
   /** Navigation title (shown in header when navigating) */
   navTitle?: string;
@@ -25,27 +23,19 @@ const emit = defineEmits<{
 // Inside the window whatever edge its button stands at (useKeepInWindow).
 const panel = ref<HTMLElement | null>(null);
 useKeepInWindow(panel);
-
-function handleBack() {
-  emit("back");
-}
-
-function handleEscape() {
-  emit("close");
-}
 </script>
 
 <template>
   <div
     ref="panel"
     class="filter-dropdown-container"
-    @keydown.esc="handleEscape"
+    @keydown.esc="emit('close')"
   >
     <!-- Navigation header -->
     <FilterDropdownHeader
       v-if="showNavHeader && navTitle"
       :title="navTitle"
-      @back="handleBack"
+      @back="emit('back')"
     />
 
     <!-- Content -->

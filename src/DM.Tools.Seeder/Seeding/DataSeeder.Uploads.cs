@@ -4,20 +4,23 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
-using DM.Infrastructure.Persistence.Entities.Shared;
 using Microsoft.EntityFrameworkCore;
+using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 
 namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
+    private const string DiopsideImage = "DM.Tools.Seeder.Assets.Seed.diopside.jpg";
+    private const string ChuckImage = "DM.Tools.Seeder.Assets.Seed.Chuck.png";
+    private const string SolohinLexImage = "DM.Tools.Seeder.Assets.Seed.SolohinLex.jpg";
+    private const string SolohinLexInfo = "DM.Tools.Seeder.Assets.Seed.SolohinLex.bbcode";
+
     /// <summary>
-    /// Runs a seed image through the real image pipeline:
-    /// magic-byte → EXIF strip → resize → a single S3 PUT of the source object
-    /// with Cache-Control: immutable. Returns an Upload entity ready
-    /// for Add() into the DbContext.
+    /// Runs a seed image through the real image pipeline: magic bytes, EXIF strip, resize, thumbnails,
+    /// S3 PUTs with Cache-Control: immutable. Returns an Upload entity ready for Add().
     /// </summary>
-    private async Task<DM.Infrastructure.Persistence.Entities.Shared.Upload> SeedAvatarFromBytesAsync(
+    private async Task<DbUpload> SeedImageFromBytesAsync(
         byte[] imageBytes,
         string declaredContentType,
         string sourceFileName,
@@ -25,33 +28,30 @@ internal sealed partial class DataSeeder
         Guid uploadId,
         Guid userId,
         Guid? entityId,
-        DateTimeOffset now)
+        DateTimeOffset uploadedUtc)
     {
-        // The same pipeline as user uploads: magic-byte
-        // validation, EXIF strip, downscale to 1024 px. A single source file —
-        // imgproxy makes thumbnails on the fly at serving time.
         ProcessedImage processed;
         await using (var input = new MemoryStream(imageBytes, writable: false))
         {
             processed = await _imageProcessing.ProcessAsync(input, declaredContentType, type);
         }
 
-        // The third copy of the same list, and the one that disagreed: a type
-        // outside the two it named landed in "misc", a prefix nothing serves and
-        // no policy grants. UploadFolder is where the mapping is decided, and it
-        // throws on an unknown type rather than inventing a folder for it.
+        // UploadFolder decides the folder and throws on an unknown type.
         var folder = UploadFolder.For(type);
-        var objectKey = string.IsNullOrEmpty(_cdnConfig.Folder)
-            ? $"{folder}/{userId:N}_{uploadId:N}{processed.Extension}"
-            : $"{_cdnConfig.Folder}/{folder}/{userId:N}_{uploadId:N}{processed.Extension}";
+        var objectKey = $"{folder}/{userId:N}_{uploadId:N}{processed.Extension}";
 
         await PutSeedObjectAsync(objectKey, processed.Bytes, processed.ContentType);
+        foreach (var thumbnail in processed.Thumbnails)
+        {
+            await PutSeedObjectAsync(
+                AvatarThumbnail.AddressOf(objectKey, thumbnail.Size), thumbnail.Bytes, AvatarThumbnail.ContentType);
+        }
 
-        var upload = new DM.Infrastructure.Persistence.Entities.Shared.Upload
+        var upload = new DbUpload
         {
             UploadId = uploadId,
-            CreatedUtc = now,
-            ConfirmedUtc = now,
+            CreatedUtc = uploadedUtc,
+            ConfirmedUtc = uploadedUtc,
             UserId = userId,
             Type = type,
             Status = UploadStatus.Confirmed,
@@ -61,15 +61,11 @@ internal sealed partial class DataSeeder
             Width = processed.Width,
             Height = processed.Height,
             ObjectKey = objectKey,
-            // Only for the prefixes the bucket answers anonymously, the same rule
-            // the upload endpoint applies. A public address stored for a closed
-            // prefix is a link that returns 403 and a seed that disagrees with
-            // every row the site writes itself.
+            // Only for the prefixes the bucket answers anonymously, as the upload endpoint does.
             FilePath = UploadFolder.AnonymouslyReadable.Contains(type)
                 ? BuildPublicUrl(objectKey)
                 : null,
             FileName = sourceFileName,
-            IsRemoved = false,
         };
         switch (type)
         {
@@ -99,34 +95,28 @@ internal sealed partial class DataSeeder
         }.ToString();
 
     /// <summary>
-    /// Read UTF-8 text from an embedded assembly resource. Throws if
-    /// no resource with that name is registered — that is a setup bug (a missing
-    /// <c>&lt;EmbeddedResource&gt;</c> in the csproj); it must fail the seed
-    /// loudly rather than silently writing an empty string into Info.
+    /// Read UTF-8 text from an embedded assembly resource; a missing one fails the seed.
     /// </summary>
     private static async Task<string> LoadEmbeddedTextAsync(string resourceName)
     {
-        var assembly = typeof(DataSeeder).Assembly;
-        await using var stream = assembly.GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException(
-                $"Embedded resource '{resourceName}' not found — check DM.Tools.Seeder.csproj <EmbeddedResource> entry.");
+        await using var stream = OpenEmbedded(resourceName);
         using var reader = new StreamReader(stream, System.Text.Encoding.UTF8);
         return await reader.ReadToEndAsync();
     }
 
     /// <summary>
-    /// Read the bytes of an embedded seed avatar image resource. Throws
-    /// <see cref="InvalidOperationException"/> if the resource is not embedded
-    /// (deployment misconfig).
+    /// Read the bytes of an embedded seed image; a missing one fails the seed.
     /// </summary>
     private static byte[] ReadEmbeddedSeedBytes(string resourceName)
     {
-        var assembly = typeof(DataSeeder).Assembly;
-        using var resourceStream = assembly.GetManifestResourceStream(resourceName)
-            ?? throw new InvalidOperationException($"Embedded resource {resourceName} not found");
-
+        using var resourceStream = OpenEmbedded(resourceName);
         using var ms = new MemoryStream();
         resourceStream.CopyTo(ms);
         return ms.ToArray();
     }
+
+    private static Stream OpenEmbedded(string resourceName) =>
+        typeof(DataSeeder).Assembly.GetManifestResourceStream(resourceName)
+        ?? throw new InvalidOperationException(
+            $"Embedded resource '{resourceName}' not found — check DM.Tools.Seeder.csproj <EmbeddedResource> entry.");
 }

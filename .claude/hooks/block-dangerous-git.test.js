@@ -14,15 +14,15 @@ const { findViolation } = require('./block-dangerous-git');
 // [строка команды, ожидается ли блокировка, зачем этот случай]
 const CASES = [
   // Прямые вызовы: должны блокироваться.
-  ['git checkout main', true, 'имя из CLAUDE.md'],
+  ['git checkout main', true, 'имя из RULES'],
   ['git checkout -- src/file.cs', true, 'форма с путем'],
-  ['git reset --hard origin/dev', true, 'имя из CLAUDE.md'],
+  ['git reset --hard origin/dev', true, 'имя из RULES'],
   ['git reset --merge', true, 'эквивалент --hard по эффекту'],
-  ['git clean -fd', true, 'имя из CLAUDE.md'],
+  ['git clean -fd', true, 'имя из RULES'],
   ['git clean -f', true, 'один флаг вместо двух'],
   ['git clean -xdf', true, 'флаги в другом порядке'],
   ['git clean --force', true, 'длинная форма флага'],
-  ['git stash drop', true, 'имя из CLAUDE.md'],
+  ['git stash drop', true, 'имя из RULES'],
   ['git stash clear', true, 'хуже drop: снимает все'],
   ['git restore .', true, 'перезапись рабочего дерева целиком'],
   ['git restore src/file.cs', true, 'перезапись рабочего дерева'],

@@ -16,9 +16,6 @@ export const MESSAGE_LAYOUTS = ["compact", "full"] as const;
 
 export type MessageLayout = (typeof MESSAGE_LAYOUTS)[number];
 
-/** The two side columns of the shell, named by the edge they stand at. */
-export type SidePanel = "left" | "right";
-
 const THEME_STORAGE_KEY = "dm_theme";
 const MESSAGE_LAYOUT_KEY = "dm_message_layout";
 const HYPHENATE_WORDS_KEY = "dm_hyphenate_words";
@@ -108,24 +105,6 @@ export const useUiStore = defineStore("ui", () => {
    */
   const hyphenateWords = ref(readSwitch(HYPHENATE_WORDS_KEY));
 
-  /**
-   * Whether the sliding column of a narrow screen is out over the page, and
-   * which of its two views it shows: the left column or the right one. One
-   * field and not a flag for being out and another for the view: the two
-   * would be two truths to keep in step. Not stored: a reload starts with the
-   * column in.
-   */
-  const openedPanel = ref<SidePanel | null>(null);
-  const openPanel = (side: SidePanel) => {
-    openedPanel.value = side;
-  };
-  const closePanel = () => {
-    openedPanel.value = null;
-  };
-  const togglePanel = (side: SidePanel) => {
-    openedPanel.value = openedPanel.value === side ? null : side;
-  };
-
   // Persist to localStorage on change
   watch(theme, (newTheme) => {
     storeTheme(newTheme);
@@ -180,9 +159,5 @@ export const useUiStore = defineStore("ui", () => {
     setMessageLayout,
     hyphenateWords,
     setHyphenateWords,
-    openedPanel,
-    openPanel,
-    closePanel,
-    togglePanel,
   };
 });

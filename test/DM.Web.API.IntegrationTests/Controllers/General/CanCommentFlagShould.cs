@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence;
 using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -25,18 +26,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// comment it stands for is refused.
 /// </summary>
 /// <remarks>
-/// The owner, 05.10: what the user may not do is not offered, rather than
-/// refused after it was typed. The pages used to work the rule out on their own
-/// from the mode of the discussion and the blacklist, could not see a ban at
-/// all, and gave the banned reader a form and a refusal under it.
-///
-/// Every row reads the flag the way the page reads it and then sends the comment
-/// the form would send, as the same viewer, so the two answers are compared
-/// rather than each taken on trust. The expected value is asserted too: a flag
-/// and a write that both went wrong the same way would agree with each other.
-///
-/// Each case makes its own record and its own people and takes everything but
-/// the people back out.
+/// What the user may not do is not offered. Every row reads the flag as the page does and sends the comment
+/// the form would, as the same viewer, against an expected value.
 /// </remarks>
 public class CanCommentFlagShould : IntegrationTestBase
 {
@@ -74,7 +65,6 @@ public class CanCommentFlagShould : IntegrationTestBase
     {
         Open = 0,
         ReadOnly = 1,
-        Draft = 4,
         Closed = 8,
         Blacklisted = 16
     }
@@ -103,11 +93,9 @@ public class CanCommentFlagShould : IntegrationTestBase
         ["a banned stranger in a blog"] = new(Surface.Blog, Who.Stranger, State.Open, true, false),
         ["the banned owner in his blog"] = new(Surface.Blog, Who.Owner, State.Open, true, true),
 
-        // The publication: published, the blog's blacklist, the ban outside
-        // one's own blog - three refusals in three places.
+        // The publication: the blog's blacklist and the ban outside one's own blog.
         ["a stranger under a publication"] = new(Surface.Publication, Who.Stranger, State.Open, false, true),
         ["a guest under a publication"] = new(Surface.Publication, Who.Guest, State.Open, false, false),
-        ["the author under his draft"] = new(Surface.Publication, Who.Owner, State.Draft, false, false),
         ["a stranger blacklisted by the blog under its publication"] =
             new(Surface.Publication, Who.Stranger, State.Blacklisted, false, false),
         ["a banned stranger under a publication"] = new(Surface.Publication, Who.Stranger, State.Open, true, false),
@@ -162,9 +150,7 @@ public class CanCommentFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Closing a topic is a PATCH, and the page puts the topic the PATCH returns
-    /// in place of the one it holds: that answer has to carry the flag the
-    /// closing leaves, or the form stays under a topic just closed.
+    /// The PATCH that closes a topic answers with the flag the closing leaves.
     /// </summary>
     [Fact]
     public async Task AnswerTheClosingOfATopicWithTheFlagItLeaves()
@@ -191,25 +177,17 @@ public class CanCommentFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The topic's discussion endpoint answers whether the reader may add a
-    /// comment, and used to read it off the session alone: the reader of a
-    /// closed topic and a banned one were told they could.
+    /// The read of a topic answers whether the reader may add a comment, closed topic and ban included.
     /// </summary>
     [Theory]
     [InlineData(State.Open, false, true)]
     [InlineData(State.Closed, false, false)]
     [InlineData(State.Open, true, false)]
-    public async Task TellTheTruthInTheDiscussionOfATopic(State state, bool banned, bool expected)
+    public async Task TellTheTruthInTheReadOfATopic(State state, bool banned, bool expected)
     {
         var seed = await SeedAsync(new Case(Surface.Topic, Who.Stranger, state, banned, expected));
         try
         {
-            var response = await Send(seed.Stranger, banned, HttpMethod.Get, $"/v1/topics/{seed.TopicId}/discussion");
-            var body = await response.Content.ReadAsStringAsync();
-            response.StatusCode.Should().Be(HttpStatusCode.OK, body);
-
-            using var document = JsonDocument.Parse(body);
-            document.RootElement.GetProperty("canComment").GetBoolean().Should().Be(expected);
             (await FlagAsync(seed.Stranger, banned, ReadUrl(Surface.Topic, seed))).Should().Be(expected);
         }
         finally
@@ -219,9 +197,7 @@ public class CanCommentFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A list offers no comment form, and the list-shaped reads of a blog fill
-    /// the viewer's standing differently from the read the comment is refused by,
-    /// so a list carries no flag at all rather than one that could disagree.
+    /// A list offers no comment form, so it carries no flag at all.
     /// </summary>
     [Fact]
     public async Task LeaveTheFlagOffTheLists()
@@ -256,8 +232,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         }
     }
 
-    // ═══ SEEDING ═══
-
     /// <summary>
     /// The records of a case and the people around them. Everything is made
     /// whatever the surface, so one drop takes any case back out.
@@ -282,7 +256,21 @@ public class CanCommentFlagShould : IntegrationTestBase
         var state = @case.State;
 
         await using var db = DatabaseFixture.CreateDbContext();
+        AddGame(db, seed, state, now);
+        AddBlog(db, seed, now);
+        if (state.HasFlag(State.Blacklisted))
+        {
+            AddLists(db, seed, now);
+        }
 
+        AddTopic(db, seed, state, now);
+        await db.SaveChangesAsync();
+        return seed;
+    }
+
+    /// <summary>The owner's game with its sheet, and the reader's subscription to it.</summary>
+    private static void AddGame(DmDbContext db, Seed seed, State state, DateTimeOffset now)
+    {
         db.Set<DbGame>().Add(new DbGame
         {
             GameId = seed.GameId,
@@ -307,7 +295,11 @@ public class CanCommentFlagShould : IntegrationTestBase
             Settings = SubscriptionSettings.InApp,
             CreatedUtc = now
         });
+    }
 
+    /// <summary>The owner's blog and his publication in it.</summary>
+    private static void AddBlog(DmDbContext db, Seed seed, DateTimeOffset now)
+    {
         db.Set<DbBlog>().Add(new DbBlog
         {
             BlogId = seed.BlogId,
@@ -330,39 +322,41 @@ public class CanCommentFlagShould : IntegrationTestBase
             Title = "Публикация для формы комментария",
             Content = "Текст",
             Preview = "Текст",
-            IsPublished = !state.HasFlag(State.Draft),
-            PublishedUtc = state.HasFlag(State.Draft) ? null : now,
             CreatedUtc = now,
             IsRemoved = false
         });
+    }
 
-        if (state.HasFlag(State.Blacklisted))
+    /// <summary>The stranger on the game's list and on the blog's list.</summary>
+    private static void AddLists(DmDbContext db, Seed seed, DateTimeOffset now)
+    {
+        db.Set<DbGameBlacklist>().Add(new DbGameBlacklist
         {
-            db.Set<DbGameBlacklist>().Add(new DbGameBlacklist
-            {
-                EntryId = Guid.NewGuid(),
-                GameId = seed.GameId,
-                BlockedUserId = seed.Stranger.UserId,
-                BlockedByUserId = seed.Owner.UserId,
-                CreatedUtc = now
-            });
-            db.Set<DbBlogBlacklist>().Add(new DbBlogBlacklist
-            {
-                EntryId = Guid.NewGuid(),
-                BlogId = seed.BlogId,
-                BlockedUserId = seed.Stranger.UserId,
-                BlockedByUserId = seed.Owner.UserId,
-                CreatedUtc = now
-            });
-        }
+            EntryId = Guid.NewGuid(),
+            GameId = seed.GameId,
+            BlockedUserId = seed.Stranger.UserId,
+            BlockedByUserId = seed.Owner.UserId,
+            CreatedUtc = now
+        });
+        db.Set<DbBlogBlacklist>().Add(new DbBlogBlacklist
+        {
+            EntryId = Guid.NewGuid(),
+            BlogId = seed.BlogId,
+            BlockedUserId = seed.Stranger.UserId,
+            BlockedByUserId = seed.Owner.UserId,
+            CreatedUtc = now
+        });
+    }
 
+    /// <summary>A board of the case's own and the owner's topic in it.</summary>
+    private static void AddTopic(DmDbContext db, Seed seed, State state, DateTimeOffset now)
+    {
         db.Set<DbBoard>().Add(new DbBoard
         {
             BoardId = seed.BoardId,
             Title = $"Discussion flag board {seed.BoardId:N}",
             Alias = seed.BoardAlias,
             Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = BoardAccessPolicy.RegularUser
         });
         db.Set<DbTopic>().Add(new DbTopic
@@ -379,9 +373,6 @@ public class CanCommentFlagShould : IntegrationTestBase
             IsClosed = state.HasFlag(State.Closed),
             ClosedByAuthor = state.HasFlag(State.Closed)
         });
-
-        await db.SaveChangesAsync();
-        return seed;
     }
 
     private async Task<GeneralUser> SeedUserAsync(string prefix)
@@ -438,8 +429,6 @@ public class CanCommentFlagShould : IntegrationTestBase
         // The sheet goes with the game (cascade).
         await db.Set<DbGame>().IgnoreQueryFilters().Where(g => g.GameId == seed.GameId).ExecuteDeleteAsync();
     }
-
-    // ═══ REQUESTS ═══
 
     private static string ReadUrl(Surface surface, Seed seed) => surface switch
     {

@@ -1,40 +1,28 @@
 import type { PollSortBy, PollStatus } from "@/entities/poll";
 
-/**
- * Filter state for polls
- */
 export interface PollsFilterState {
-  /** Status filter: active, closed, or all (empty string) */
+  /** "" is all. */
   status: PollStatus | "";
 
-  /** Text search query (poll title) */
   search: string;
 
-  /** Filter by minimum start date (ISO string, date only) */
+  /** ISO date only, as are the three below. */
   startsFromUtc: string;
 
-  /** Filter by maximum start date (ISO string, date only) */
   startsToUtc: string;
 
-  /** Filter by minimum end date (ISO string, date only) */
   endsFromUtc: string;
 
-  /** Filter by maximum end date (ISO string, date only) */
   endsToUtc: string;
 
-  /** Poll type filter: true = anonymous, false = public, "" = all */
+  /** "" is all. */
   pollType: "anonymous" | "public" | "";
 
-  /** Sort field */
   sortBy: PollSortBy;
 
-  /** Sort direction */
   sortOrder: "asc" | "desc";
 }
 
-/**
- * Default filter state
- */
 export const DEFAULT_FILTER_STATE: PollsFilterState = {
   status: "",
   search: "",
@@ -47,28 +35,24 @@ export const DEFAULT_FILTER_STATE: PollsFilterState = {
   sortOrder: "asc",
 };
 
-/**
- * Status options (PascalCase to match C# API)
- */
+// PascalCase, as the API spells them.
 export const STATUS_OPTIONS = [
-  { value: "" as const, label: "Все" },
-  { value: "Pending" as const, label: "Ожидают начала" },
-  { value: "Active" as const, label: "Активные" },
-  { value: "Closed" as const, label: "Завершенные" },
+  { value: "" as const, label: "Все", hint: "Все опросы" },
+  {
+    value: "Pending" as const,
+    label: "Ожидают начала",
+    hint: "Еще не начались",
+  },
+  { value: "Active" as const, label: "Активные", hint: "Сейчас идут" },
+  { value: "Closed" as const, label: "Завершенные", hint: "Уже закончились" },
 ] as const;
 
-/**
- * Poll type filter options
- */
 export const POLL_TYPE_OPTIONS = [
-  { value: "" as const, label: "Все" },
-  { value: "anonymous" as const, label: "Анонимные" },
-  { value: "public" as const, label: "Публичные" },
+  { value: "" as const, label: "Все", hint: "Все опросы" },
+  { value: "anonymous" as const, label: "Анонимные", hint: "Голоса скрыты" },
+  { value: "public" as const, label: "Публичные", hint: "Видно кто голосовал" },
 ] as const;
 
-/**
- * Sort options
- */
 export const SORT_OPTIONS = [
   {
     value: "status" as const,

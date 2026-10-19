@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
@@ -18,19 +15,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// and reaches the projection every reader of an avatar goes through.
 /// </summary>
 /// <remarks>
-/// The profile page draws the source file, which keeps the aspect ratio of
-/// whatever was uploaded. Nothing on the wire said what that ratio was, so the
-/// page declared a square and held it as a floor: a landscape avatar was drawn
-/// 165 px tall inside a 220 px reservation and left the difference blank. The
-/// browser reserves the exact box on its own once the img element carries the
-/// real pair, and this is what says the pair exists as far down as the schema —
-/// against a real Postgres, because the columns and the SQL translation of the
-/// projection are the two things a mock cannot vouch for.
-///
-/// The rows are owned by the seeded test user rather than by users of this
-/// test's own: the fixture database is shared and the community listing is
-/// asserted over a capped page, so a suite that invents a user per check
-/// eventually changes the answer of a test that never mentions uploads.
+/// Against a real Postgres: the columns and the projection's SQL translation are what a mock cannot vouch for.
+/// The rows belong to the seeded test user, so the shared listing's capped page does not change.
 /// </remarks>
 public class AvatarDimensionsShould : IntegrationTestBase
 {
@@ -54,9 +40,7 @@ public class AvatarDimensionsShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A row written without the measurement projects nothing rather than a
-    /// default, which is what leaves a reader able to tell "nobody measured this"
-    /// from "this picture is zero pixels wide".
+    /// A row without the measurement projects nothing, so "nobody measured" differs from "zero pixels".
     /// </summary>
     [Fact]
     public async Task StayAbsentForAnUploadNobodyMeasured()

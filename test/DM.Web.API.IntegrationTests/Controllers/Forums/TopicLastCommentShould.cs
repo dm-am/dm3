@@ -11,16 +11,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 /// <summary>
 /// A listed topic names its last comment by the comment's own identifier.
 /// </summary>
-/// <remarks>
-/// The topic projection filled the date and the author of the last comment and
-/// left its identifier at the default, on the word that nobody read it. The
-/// topic lists read it: the date in the "last comment" column links to
-/// #comment-&lt;id&gt;, and with an empty identifier every such link opened the
-/// topic at its top instead of at the comment.
-///
-/// Written against HTTP: the omission lived in a query, which a test with a
-/// substituted repository steps straight over.
-/// </remarks>
+/// <remarks>The "last comment" date links to #comment-&lt;id&gt;. Over HTTP: the field is filled in a query.</remarks>
 public class TopicLastCommentShould : IntegrationTestBase
 {
     public TopicLastCommentShould(DatabaseFixture databaseFixture) : base(databaseFixture)

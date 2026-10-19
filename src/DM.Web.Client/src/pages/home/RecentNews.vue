@@ -12,12 +12,9 @@ const NEWS_AGE_DAYS = 7;
 const store = useBoardsStore();
 const { news: allNews, newsError } = storeToRefs(store);
 
-// Show news from last week, or just the latest one if none are recent.
-// The age window decides which news qualify, NEWS_WIDGET_LIMIT decides how many
-// are shown: without the cap the block grew a card for every fresh topic and
-// its height moved with the calendar. The cap is applied here as well as in the
-// request because the block's shape must not depend on the server honouring a
-// page size.
+// The last week's news, or the latest one if none is recent. The cap is
+// applied here too: the block's height must not depend on the server
+// honouring the page size.
 const news = computed(() => {
   if (!allNews.value?.length) return allNews.value;
 
@@ -26,7 +23,6 @@ const news = computed(() => {
     dayjs(n.createdUtc).isAfter(weekAgo),
   );
 
-  // If no recent news, show just the latest one
   if (recentNews.length === 0) {
     return [allNews.value[0]];
   }
@@ -57,13 +53,7 @@ onMounted(() => {
     message="Не удалось загрузить новости"
     :retry="() => store.fetchNews(true)"
   />
-  <!-- Loading placeholder. Mirrors the real <TopicView> shape pixel-for-pixel
-       so the home page below (Best post, Featured post, discovery link)
-       does not jump when the news array arrives. Structure matches
-       TopicView.vue: dashed card, title with underline, description
-       (TruncatedContent) + footer. `news === null` means "not loaded
-       yet" (fetch errors land in the branch above); empty array is the
-       genuine "no news". -->
+  <!-- Mirrors TopicView so the page below does not jump; null means not loaded yet. -->
   <div v-else-if="news === null" class="news-skeleton" aria-hidden="true">
     <div class="skeleton-topic">
       <div class="skeleton-title-row">
@@ -104,21 +94,8 @@ onMounted(() => {
 .all-news-link
   margin: $medium 0 0
   color: $text
-  a
-    color: $link
-    &:hover
-      color: $link-hover
 
-// Skeleton for one collapsed news Topic card. Pixel-matches the real
-// <TopicView> card in TopicView.vue:
-//   - outer dashed-bordered box with $medium padding
-//   - h3 title with $small padding-bottom + 1px dashed underline +
-//     $small bottom margin
-//   - description (clamped to the 150px `:max-height` prop passed by
-//     RecentNews) + footer margin-top $small
-// Total budgeted height: 16 padding + (~20 title + 8 + 1 + 8) + 175
-// description+footer + 16 padding ≈ 244px, matching the real card so
-// the "С остальными новостями..." discovery link below stays pinned.
+// One collapsed news card of TopicView, at the 150px clamp RecentNews passes.
 .news-skeleton
   display: flex
   flex-direction: column
@@ -135,14 +112,12 @@ onMounted(() => {
 
 .skeleton-title
   +skeleton-shimmer
-  // Matches h3.topic-title: $font-size (16px) × ~1.3 line-height = 21px
+  // h3.topic-title: 16px at line-height 1.3
   height: 21px
   width: 40%
 
 .skeleton-description
-  // Reserves the same budget as <TruncatedContent :max-height="150">
-  // in RecentNews: 5 shimmer lines × 14px + 4 × 6px gaps = 94px + the
-  // +56px of unused headroom the 150px clamp typically leaves visible.
+  // The budget of TruncatedContent at :max-height="150"
   display: flex
   flex-direction: column
   gap: 6px
@@ -160,9 +135,7 @@ onMounted(() => {
     width: 60%
 
 .skeleton-footer
-  // Matches .topic-footer { margin-top: $small } with a single author-info
-  // shimmer line to stand in for "Автор: X [role] [online], дата |
-  // Комментарии: N".
+  // Stands in for the author line of .topic-footer
   margin-top: $small
 
 .skeleton-meta

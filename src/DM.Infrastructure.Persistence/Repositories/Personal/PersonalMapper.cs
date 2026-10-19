@@ -27,22 +27,14 @@ internal static class PersonalMapper
         });
 
     /// <summary>
-    /// Settings row to the domain document. Paging is columns in the row and
-    /// an object in the domain: the mapping is where the two shapes meet.
+    /// Settings row to the domain document
     /// </summary>
     public static UserSettings ToUserSettings(this DbUserSettings settings) => new()
     {
         Id = settings.UserId,
         Theme = settings.Theme,
         TimeZoneId = settings.TimeZoneId,
-        Paging = new PagingSettings
-        {
-            TopicsPerPage = settings.TopicsPerPage,
-            CommentsPerPage = settings.CommentsPerPage,
-            PostsPerPage = settings.PostsPerPage,
-            MessagesPerPage = settings.MessagesPerPage,
-            EntitiesPerPage = settings.EntitiesPerPage
-        }
+        PageSize = settings.PageSize
     };
 
     /// <summary>

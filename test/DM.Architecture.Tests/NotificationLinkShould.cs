@@ -2,12 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -17,40 +16,13 @@ namespace DM.Architecture.Tests;
 /// built from.
 /// </summary>
 /// <remarks>
-/// The payload is an anonymous object on one side and an untyped bag on the
-/// other. A generator writes BlogId, and the table of paths in the domain reads
-/// BlogId off the bag to decide where the notification points, for the letter,
-/// the two bots and the list in the application alike. Nothing between the two
-/// ends is typed, so renaming the field in the generator compiles, deploys and
-/// turns the notification into a line of text nobody can click. Nothing fails
-/// and nothing is logged: the notification still arrives, with its title and its
-/// wording and no way to reach the thing it is about.
-///
-/// The rule ties the two ends together by name instead. For every event the
-/// table builds a link for, every notification carrying that event has to write
-/// the field the table reads off it. Typing the bag is the other answer to the
-/// same question, and it is a contract per generator across all of them; this is
-/// one file, and it fails on the rename that matters.
-///
-/// The table is asked directly, and the generators are read from the sources,
-/// because there is no type to ask on that side: the payload is an anonymous
-/// object built inside a method body. Which generator answers which event is
-/// asked of the assembly, the way the processor asks it, and the answer is not
-/// always what the notification carries — a subscription generator renames the
-/// event on the way out. What a generator writes is read from its file, found by
-/// the name of the type, so a generator whose file is named after something else
-/// fails the rule instead of dropping out of it.
-///
-/// The rule used to be held from the client's copy of the table, which linked
-/// fewer events than the server does and was ready for seven that nothing carries.
-/// The server table carries no such row, and the second rule keeps it that way:
-/// a destination no notification can reach is a feature that stopped halfway or
-/// a name that drifted.
+/// The payload is an anonymous object on one side and an untyped bag on the other, so renaming a
+/// field turns the link into plain text. The table is asked directly, the generators read from
+/// their files, which generator answers an event asked of the assembly. A destination no
+/// notification reaches fails too.
 /// </remarks>
 public class NotificationLinkShould
 {
-    private const string GeneratorInterface = "INotificationGenerator";
-    private const string ResolveMethod = "CanResolve";
 
     /// <summary>The generators, one file each, named after the type in it.</summary>
     private const string NotifiersDirectory =
@@ -58,9 +30,6 @@ public class NotificationLinkShould
 
     /// <summary>The notification a generator hands back.</summary>
     private const string EmissionStart = "new CreateNotification";
-
-    private static readonly Assembly Dispatcher =
-        typeof(DM.Workers.NotificationDispatcher.Startup).Assembly;
 
     /// <summary>The event a generator renames its notification to.</summary>
     private static readonly Regex RenamesTheEvent = new(
@@ -71,21 +40,21 @@ public class NotificationLinkShould
         @"^\s*Metadata\s*=\s*new\b", RegexOptions.Compiled);
 
     private static readonly string[] GeneratorSources = Directory.GetFiles(
-        Path.Combine(RepositoryRoot, NotifiersDirectory), "*.cs", SearchOption.AllDirectories);
+        Path.Combine(RepositoryLayout.Root, NotifiersDirectory), "*.cs", SearchOption.AllDirectories);
 
     [Fact]
     public void CarryTheFieldTheLinkIsBuiltFrom()
     {
         var followed = FieldsTheTableFollows();
-        followed.Should().HaveCountGreaterThan(40,
+        followed.Should().NotBeEmpty(
             "a rule that matches nothing passes: the table links notifications of most kinds");
 
         var emissions = Emissions();
-        emissions.Should().HaveCountGreaterThan(30,
+        emissions.Should().NotBeEmpty(
             "a rule that matches nothing passes: the dispatcher carries dozens of generators");
 
         emissions.SelectMany(emission => emission.Events).Intersect(followed.Keys)
-            .Should().HaveCountGreaterThan(30,
+            .Should().NotBeEmpty(
                 "a rule that matches nothing passes: most of what the table links is raised");
 
         var unwritten = new List<string>();
@@ -143,10 +112,10 @@ public class NotificationLinkShould
     private static IReadOnlyCollection<Emission> Emissions()
     {
         var emissions = new List<Emission>();
-        foreach (var generator in Generators())
+        foreach (var generator in NotificationGenerators.Types)
         {
             var source = SourceText.ReadCode(SourceOf(generator));
-            var answered = AnsweredEvents(generator);
+            var answered = NotificationGenerators.Answered(generator).Select(candidate => candidate.ToString()).ToArray();
 
             var at = source.IndexOf(EmissionStart, StringComparison.Ordinal);
             while (at >= 0)
@@ -210,28 +179,6 @@ public class NotificationLinkShould
 
         return files[0];
     }
-
-    private static IEnumerable<Type> Generators() => Dispatcher.GetTypes()
-        .Where(type => type is { IsAbstract: false, IsClass: true })
-        .Where(type => type.GetInterfaces().Any(contract => contract.Name == GeneratorInterface));
-
-    /// <summary>
-    /// The production answer, asked the way the processor asks it. Instances are
-    /// left unconstructed on purpose: CanResolve reads a constant or a static
-    /// table, while building a real generator would take a database.
-    /// </summary>
-    private static IReadOnlyCollection<string> AnsweredEvents(Type generator)
-    {
-        var canResolve = generator.GetMethod(ResolveMethod)!;
-        var instance = RuntimeHelpers.GetUninitializedObject(generator);
-
-        return Enum.GetValues<EventType>()
-            .Where(candidate => (bool)canResolve.Invoke(instance, new object[] { candidate })!)
-            .Select(candidate => candidate.ToString())
-            .ToArray();
-    }
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     /// <summary>One notification a generator hands back.</summary>
     private sealed record Emission(

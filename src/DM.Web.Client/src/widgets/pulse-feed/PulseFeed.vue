@@ -8,27 +8,21 @@ import { GamePost } from "@/widgets/game-post/@x/pulse-feed";
 import { usePulseStore } from "@/entities/game";
 import { PulseFilter, usePulseFilter } from "@/features/pulse-filter";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
+import { stableCacheKey } from "@/shared/lib/utils/keyedCache";
 
 const pulseStore = usePulseStore();
 const { posts, paging, loading, error } = storeToRefs(pulseStore);
 
 const { filterState, searchParams, hasActiveFilters } = usePulseFilter();
 
-// Empty state text
 const emptyText = computed(() =>
   hasActiveFilters.value
     ? "Постов по заданным фильтрам не найдено"
     : "Нет оцененных постов за эту неделю",
 );
 
-// Params key for deduplication
-function createParamsKey(): string {
-  return JSON.stringify(searchParams.value);
-}
+const paramsKey = computed(() => stableCacheKey(searchParams.value));
 
-const paramsKey = computed(() => createParamsKey());
-
-// Fetch on params change
 watch(
   paramsKey,
   () => {
@@ -36,11 +30,6 @@ watch(
   },
   { immediate: true },
 );
-
-// Prefetch next page when pagination becomes visible
-function handlePrefetch(page: number) {
-  pulseStore.prefetchPage(page);
-}
 
 function retryFetch() {
   return pulseStore.fetchPosts(searchParams.value);
@@ -55,10 +44,9 @@ function pagingAnchor(): HTMLElement | null {
 
 <template>
   <div class="pulse-posts">
-    <!-- Filters -->
     <PulseFilter class="filters" />
 
-    <!-- Error state — independent banner, does not replace stale posts -->
+    <!-- A banner of its own: it does not replace the posts already shown -->
     <ErrorState
       v-if="error"
       class="error-banner"
@@ -66,21 +54,14 @@ function pagingAnchor(): HTMLElement | null {
       :retry="retryFetch"
     />
 
-    <!-- Loading state — show skeleton only on the initial load, not on
-         refetches. Keeping rendered posts visible during a background
-         refetch avoids a jarring full-page blank flash when the user
-         changes sort/filter. This mirrors the stale-while-revalidate
-         pattern documented in PERFORMANCE.md. -->
+    <!-- The skeleton on the first load only: a refetch keeps the posts shown -->
     <GamePostSkeleton v-if="loading && posts.length === 0" :count="5" />
 
-    <!-- Empty state -->
     <SecondaryText v-else-if="!error && posts.length === 0">
       {{ emptyText }}
     </SecondaryText>
 
-    <!-- Posts list — kept visible under the error banner on a failed refetch -->
     <template v-else>
-      <!-- Top paging with separators -->
       <PagingWithSeparators
         v-if="paging"
         :paging="paging"
@@ -103,13 +84,12 @@ function pagingAnchor(): HTMLElement | null {
         />
       </div>
 
-      <!-- Bottom paging with separators -->
       <PagingWithSeparators
         v-if="paging"
         :paging="paging"
         :to="{ name: 'pulse' }"
         :use-query="true"
-        :on-prefetch="handlePrefetch"
+        :on-prefetch="pulseStore.prefetchPage"
         :scroll-anchor="pagingAnchor"
       />
     </template>
@@ -120,21 +100,19 @@ function pagingAnchor(): HTMLElement | null {
 .pulse-posts
   width: 100%
 
+// $medium + $small under the filter and the banner, as the shared list of rated posts (RatedPostsList) spaces them.
 .filters
-  margin-bottom: $medium
+  margin-bottom: $medium + $small
 
 .error-banner
-  margin-bottom: $medium
+  margin-bottom: $medium + $small
 
 .posts-list
   display: flex
   flex-direction: column
   gap: $medium
 
-  // $medium between the paging blocks and the posts — same rhythm as
-  // between the posts themselves (block flow, margins collapse to exactly
-  // it). Only when paging is actually rendered, so a single-page list
-  // doesn't grow dead space at the container edges.
+  // $medium to the paging blocks, as between the posts; only when they are drawn.
   &.with-paging
     margin: $medium 0
 </style>

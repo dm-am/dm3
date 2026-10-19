@@ -2,11 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.Moderation;
-using DM.Infrastructure.Persistence.Entities.Blog;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Forum;
-using DM.Infrastructure.Persistence.Entities.Game;
 using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Shared;
@@ -15,7 +12,7 @@ namespace DM.Infrastructure.Persistence.Entities.Shared;
 /// DAL model for comment
 /// </summary>
 [Table("Comments")]
-public class Comment : ISoftDeletable, IHasEditHistory<CommentEdit>
+public class Comment : ISoftDeletable
 {
     /// <summary>
     /// comment identifier
@@ -56,34 +53,11 @@ public class Comment : ISoftDeletable, IHasEditHistory<CommentEdit>
 
     /// <summary>
     /// Parent topic (for forum comments)
-    /// Note: Configured in DmDbContext, not via ForeignKey attribute
+    /// Note: Configured in ForumModel, not via ForeignKey attribute
     /// </summary>
     public virtual Topic? Topic { get; set; }
 
-    /// <summary>
-    /// Parent game (for game comments)
-    /// Note: EntityId is a polymorphic reference - no DB FK exists
-    /// </summary>
-    [NotMapped]
-    public virtual Game.Game? Game { get; set; }
 
-    /// <summary>
-    /// Parent blog (for blog discussion comments)
-    /// Note: EntityId is a polymorphic reference - no DB FK exists
-    /// </summary>
-    [NotMapped]
-    public virtual Blog.Blog? Blog { get; set; }
-
-    /// <summary>
-    /// Parent publication (for publication comments)
-    /// Note: EntityId is a polymorphic reference - no DB FK exists
-    /// </summary>
-    [NotMapped]
-    public virtual Publication? Publication { get; set; }
-
-    /// <summary>
-    /// Author
-    /// </summary>
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;
 

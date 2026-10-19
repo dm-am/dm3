@@ -1,5 +1,5 @@
 using System;
-using System.Collections.Generic;
+using System.Collections.ObjectModel;
 using System.Web;
 using BBCodeParser.Nodes;
 using BBCodeParser.Tags;
@@ -11,14 +11,14 @@ namespace DM.Infrastructure.Core.Parsing.Tags;
 /// "@Login".
 /// </summary>
 /// <remarks>
-/// It is in the tag set of every surface, and every audience renders it the
-/// same way: its markup carries <c>data-bb-tag</c> and <c>data-bb-user</c>, which
-/// is all the author's editor needs to write the tag back. Whether the user
-/// exists is not asked, and nobody is notified.
+/// The same for every audience, and the markup the editor's own preview draws
+/// (bbcodeGrammar.cases.ts): data-bb-tag and data-bb-user are what the editor
+/// reads back from that preview. Whether the user exists is not asked, and nobody
+/// is notified.
 /// </remarks>
 internal sealed class MentionTag : ContentTag
 {
-    internal MentionTag() : base("mention", new Dictionary<string, ParameterKind>())
+    internal MentionTag() : base("mention", ReadOnlyDictionary<string, ParameterKind>.Empty)
     {
     }
 

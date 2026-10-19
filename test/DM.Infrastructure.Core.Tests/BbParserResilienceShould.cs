@@ -8,7 +8,6 @@ using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
-using DM.Testing.Dsl;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
@@ -18,33 +17,19 @@ namespace DM.Infrastructure.Core.Tests;
 /// nesting deeper than a call stack, an attribute that never closes, a privacy
 /// tag spelled so the parser stops seeing it.
 /// </summary>
-/// <remarks>
-/// Every case here was reachable from the post form. Two of them were not
-/// failures the reader would notice - one killed the process outright, the
-/// other published the private line to the room - which is why they are asserted
-/// rather than described.
-/// </remarks>
+/// <remarks>Every case is reachable from the post form.</remarks>
 public class BbParserResilienceShould
 {
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 
-    private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid ReaderId = Guid.Parse("44444444-4444-4444-4444-444444444444");
-
-    // ════════════════════════════════════════════════════════════════
-    // Depth: the tree walk must not be the call stack
-    // ════════════════════════════════════════════════════════════════
 
     /// <summary>
     /// A tree nested deeper than the runtime stack can carry still renders.
     /// </summary>
     /// <remarks>
-    /// Built by hand rather than parsed, on purpose: the parser refuses this
-    /// depth (see RefuseTextNestedDeeperThanTheDepthGuard below), and the point
-    /// here is the walk itself, not the guard in front of it. With the recursive
-    /// renderer this test did not fail - it ended the test run, because a
-    /// StackOverflowException in .NET is not raised, it is a process kill, and
-    /// the depth below is five times what the default 1 MB stack carried.
+    /// Built by hand: the parser refuses this depth, and the walk is the point. A StackOverflowException in
+    /// .NET kills the process.
     /// </remarks>
     [Fact]
     public void RenderTreeDeeperThanTheCallStack()
@@ -69,15 +54,9 @@ public class BbParserResilienceShould
     }
 
     /// <summary>
-    /// The 18 KB of nested [b] that used to take the API process down is refused
-    /// by the parser, and the refusal is an exception a caller can catch.
+    /// 18 KB of nested [b] is refused by the parser with an exception a caller can catch.
     /// </summary>
-    /// <remarks>
-    /// Not a single closing tag is needed: opening tags alone build the tree.
-    /// The old depth guard stood at 6000 and this input reaches exactly 6000, so
-    /// it passed the guard and died in the renderer instead - the guard was set
-    /// to twice the depth the renderer survived and therefore never fired.
-    /// </remarks>
+    /// <remarks>Opening tags alone build the tree.</remarks>
     [Fact]
     public void RefuseTextNestedDeeperThanTheDepthGuard()
     {
@@ -94,27 +73,20 @@ public class BbParserResilienceShould
     /// <summary>
     /// The save path is told the same thing the render path would decide.
     /// </summary>
-    /// <remarks>
-    /// Without this the refusal was invisible from both ends: nothing on the way
-    /// in looked, so the post was stored, and from then on it showed as an empty
-    /// field to every reader but its author - no error, no marker - while the
-    /// author's own view renders the source and looked fine to them. The check
-    /// asks the renderer rather than counting brackets itself, which is why it
-    /// cannot drift from it.
-    /// </remarks>
+    /// <remarks>The check asks the renderer rather than counting brackets, so it cannot drift from it.</remarks>
     [Theory]
     [InlineData("[b]bold[/b] обычный текст", true)]
     [InlineData("", true)]
     [InlineData(null, true)]
     [InlineData("[b][b][b]x[/b][/b][/b]", true)]
-    public void AgreeWithTheRenderer_OnTheSavePath(string? source, bool expected)
+    public void AgreeWithTheRendererOnTheSavePath(string? source, bool expected)
     {
         new BbCodeNestingLimit(_parserProvider).IsWithinLimit(source).Should().Be(expected);
     }
 
-    /// <summary>The 18 KB that used to kill the process does not get saved.</summary>
+    /// <summary>18 KB of nested [b] does not get saved.</summary>
     [Fact]
-    public void RefuseTheDeepInput_OnTheSavePath()
+    public void RefuseTheDeepInputOnTheSavePath()
     {
         new BbCodeNestingLimit(_parserProvider).IsWithinLimit(BbTestText.Repeat("[b]", 6000))
             .Should().BeFalse();
@@ -124,16 +96,13 @@ public class BbParserResilienceShould
     /// Both render paths, not just the HTML one, survive the deepest tree the
     /// parser will build.
     /// </summary>
-    /// <remarks>
-    /// Closed tags, because a tag nobody closed renders as the text it is, and
-    /// the tree would then be printed rather than drawn.
-    /// </remarks>
+    /// <remarks>Closed tags: a tag nobody closed renders as text.</remarks>
     [Fact]
-    public void RenderBothOutputs_AtTheDeepestAcceptedNesting()
+    public void RenderBothOutputsAtTheDeepestAcceptedNesting()
     {
         const int depth = 512;
         var input = BbTestText.Repeat("[b]", depth) + "x" + BbTestText.Repeat("[/b]", depth);
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.Comment);
         var ctx = DisplayContext(BbSurface.Comment);
 
         wrapper.RenderHtml(input, ctx).Should().EndWith("x" + BbTestText.Repeat("</strong>", depth));
@@ -144,41 +113,28 @@ public class BbParserResilienceShould
     /// The same depth left unclosed is printed as it was typed, in both outputs.
     /// </summary>
     [Fact]
-    public void PrintTheDeepestAcceptedNesting_WhenNothingClosesIt()
+    public void PrintTheDeepestAcceptedNestingWhenNothingClosesIt()
     {
         const int depth = 512;
         var input = BbTestText.Repeat("[b]", depth) + "x";
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.Comment);
         var ctx = DisplayContext(BbSurface.Comment);
 
         wrapper.RenderHtml(input, ctx).Should().Be(input);
         wrapper.RenderText(input, ctx).Should().Be(input);
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // Privacy: a spelling the parser refuses must not become plain text
-    // ════════════════════════════════════════════════════════════════
-
     /// <summary>
     /// A private block whose addressee carries a line break is not shown to a
     /// reader it was not addressed to.
     /// </summary>
-    /// <remarks>
-    /// The whole chain, because every link of it said yes: the save-time balance
-    /// check accepted the post, the normaliser passed the spelling through, and
-    /// the parser's attribute pattern - a dot with no Singleline - refused to
-    /// cross the line break and stopped seeing a tag at all. No tag, no node, no
-    /// node for the visibility filter to remove, and the private line was
-    /// rendered as ordinary text to every reader of the room. Asserting the
-    /// pattern alone would have proved nothing: the pattern was doing what it
-    /// said.
-    /// </remarks>
+    /// <remarks>The whole chain: the balance check, the normaliser and the parser pattern each said yes on its own.</remarks>
     [Theory]
     [InlineData("[private=\"Гэн\nдальф\"]тайна[/private]")]
     [InlineData("[private=Гэн\nдальф]тайна[/private]")]
     [InlineData("[private=\"Гэн[дальф\"]тайна[/private]")]
     [InlineData("[private=Гэн\"дальф]тайна[/private]")]
-    public void HidePrivateText_WhateverTheAttributeIsSpelled(string input)
+    public void HidePrivateTextWhateverTheAttributeIsSpelled(string input)
     {
         var html = RenderForOutsider(input);
 
@@ -190,14 +146,8 @@ public class BbParserResilienceShould
     /// inside it: a [noparse] written with a value, and one nobody closed.
     /// </summary>
     /// <remarks>
-    /// [noparse="x"] is a broken tag, printed as typed, and what it holds is read
-    /// as markup like any other text: an example the page drew around a hidden
-    /// block would print it to the room, and the search text would carry it the
-    /// same way. [code="x"] is a broken tag as well, and holds the same way, though
-    /// even a well spelled [code] shows nothing as an example. Asserted on the
-    /// page, on the plain text the search is built from, and at the save path,
-    /// which accepts the closed hidden block because on the page it is an
-    /// ordinary one.
+    /// [noparse="x"] and [code="x"] are broken tags whose content is markup. Asserted on the page, on the
+    /// plain text search is built from, and at the save path.
     /// </remarks>
     [Theory]
     [InlineData("[code=\"x\"][private=\"Вася\"]тайна[/private][/code]", true)]
@@ -207,11 +157,11 @@ public class BbParserResilienceShould
     [InlineData("[noparse=\"x\"][private]тайна", false)]
     [InlineData("[noparse]пример [private=\"Вася\"]тайна", false)]
     [InlineData("[noparse]пример [private]тайна[/private] и хвост", false)]
-    public void HidePrivateText_UnderACodeBlockThatIsNotOne(string input, bool accepted)
+    public void HidePrivateTextUnderACodeBlockThatIsNotOne(string input, bool accepted)
     {
         RenderForOutsider(input).Should().NotContain("тайна");
 
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.GamePost);
         wrapper.RenderText(input, RenderContext.ForPlainText() with { Surface = BbSurface.GamePost })
             .Should().NotContain("тайна");
 
@@ -222,18 +172,12 @@ public class BbParserResilienceShould
     /// A [code] or a [noparse] nobody closed is the text it is, and what follows
     /// its opening is read like any other text.
     /// </summary>
-    /// <remarks>
-    /// Both used to be drawn to the end of the text unless a hidden block stood
-    /// in them, in which case they turned into text after all: two outcomes for
-    /// one mistake, decided by something further down the post. A [noparse] is
-    /// an example only when its own closing tag says where the example ends, and
-    /// a [code] is no example at all: it changes the font.
-    /// </remarks>
+    /// <remarks>A [noparse] is an example only when its own closing tag ends it; [code] only changes the font.</remarks>
     [Theory]
     [InlineData("[code]a -- b", "[code]a &ndash; b")]
     [InlineData("раз [noparse]a -- [b]b[/b]", "раз [noparse]a &ndash; <strong>b</strong>")]
     [InlineData("[code]a[noparse][b]b[/b][/noparse]", "[code]a[b]b[/b]")]
-    public void PrintAnUnclosedCodeBlockAsTyped_AndReadWhatFollowsIt(string input, string expected)
+    public void PrintAnUnclosedCodeBlockAsTypedAndReadWhatFollowsIt(string input, string expected)
     {
         RenderComment(input).Should().Be(expected);
     }
@@ -243,22 +187,17 @@ public class BbParserResilienceShould
     /// the block, and the render path still holds on its own for text that never
     /// went through it.
     /// </summary>
-    /// <remarks>
-    /// It used to accept the line-break spelling: the balance check read the
-    /// block with a pattern that crossed a line break, so from where it stood
-    /// the post was well formed, and nothing between it and the page disagreed
-    /// until the parser, which disagreed silently.
-    /// </remarks>
+    /// <remarks>The balance check reads the block with a pattern that does not cross a line break.</remarks>
     [Theory]
     [InlineData("[private=\"Гэн\nдальф\"]тайна[/private]")]
     [InlineData("[private=Гэн\nдальф]тайна[/private]")]
     [InlineData("[private=\"Гэн[дальф\"]тайна[/private]")]
     [InlineData("[private=Гэн\"дальф]тайна[/private]")]
-    public void RefuseTheMisspelledBlock_AtTheSavePath(string input)
+    public void RefuseTheMisspelledBlockAtTheSavePath(string input)
     {
         PrivateBlockMarkup.IsBalanced(input).Should().BeFalse();
         PrivateBlockMarkup.DescribeBalanceRefusal(input)
-            .Should().Contain("символ 1").And.Contain("[private=\"Имя\"]");
+            .Should().EndWith("записан неверно, скрытый блок пишется [private=\"Имя\"] или [private].");
     }
 
     /// <summary>
@@ -266,13 +205,13 @@ public class BbParserResilienceShould
     /// above is not simply hiding everything.
     /// </summary>
     [Fact]
-    public void ShowPrivateText_ToTheAddressee()
+    public void ShowPrivateTextToTheAddressee()
     {
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.GamePost);
         var ctx = DisplayContext(BbSurface.GamePost) with
         {
             Viewer = Viewer(ReaderId),
-            PostAuthorUserId = AuthorId,
+            PostAuthorUserId = BbVisibilityRender.AuthorId,
             PrivateAddresseeOwnerUserIdsByAttribute = new Dictionary<string, IReadOnlySet<Guid>>(
                 StringComparer.Ordinal)
             {
@@ -288,20 +227,11 @@ public class BbParserResilienceShould
     // Cost is asserted separately, in BbParserCostShould: those tests time the
     // renderer and have to run alone to mean anything.
 
-    // ════════════════════════════════════════════════════════════════
-    // Attribute values
-    // ════════════════════════════════════════════════════════════════
-
     /// <summary>
     /// The DM2 attribute is written in quotes, and an unquoted one makes the tag
     /// a broken tag: the opening and the closing tag show as they were typed.
     /// </summary>
-    /// <remarks>
-    /// The unquoted form used to be read, first by nobody — the opening tag
-    /// stayed on the page while the closing tag was consumed — and later by a
-    /// pattern of its own. Neither DM2 nor the grammar has it, and reading a
-    /// value without quotes means guessing where it ends.
-    /// </remarks>
+    /// <remarks>Neither DM2 nor the grammar has the unquoted form, and reading it means guessing where it ends.</remarks>
     [Fact]
     public void ShowTheUnquotedAttributeAsText()
     {
@@ -334,15 +264,7 @@ public class BbParserResilienceShould
     /// A value ends at an opening bracket, and a tag whose value reached one is
     /// a broken tag whose opening is only its name.
     /// </summary>
-    /// <remarks>
-    /// This used to be the lever for stored XSS. An encoding pass and the parser
-    /// both ended a value at a bracket, which read like agreement, and it was
-    /// agreement on two strings: extractions between them replaced a whole tag
-    /// with a placeholder carrying no bracket, and the parser read the value the
-    /// encoder had refused and put it into the markup as written. There is one
-    /// reading of the text now, so the question has one answer: the value is not
-    /// read, what follows the name is text, and the tag inside it is a tag.
-    /// </remarks>
+    /// <remarks>There is one reading of the text, so the value is not read and the tag inside it is a tag.</remarks>
     [Theory]
     [InlineData("[note=<img src=x onerror=alert(1)>[img]https://example.com/a.png[/img]]hi[/note]")]
     [InlineData("[note=\"<img src=x onerror=alert(1)>[img]https://example.com/a.png[/img]\"]hi[/note]")]
@@ -362,7 +284,7 @@ public class BbParserResilienceShould
     /// of it.
     /// </summary>
     [Fact]
-    public void RefuseTheAttribute_WhenACodeBlockStandsInIt()
+    public void RefuseTheAttributeWhenACodeBlockStandsInIt()
     {
         var html = RenderWithAttributeTag("[note=<img src=x onerror=alert(1)>[code]x[/code]]hi[/note]");
 
@@ -374,13 +296,7 @@ public class BbParserResilienceShould
     /// An image or link spelling the grammar does not accept is text, not an
     /// element.
     /// </summary>
-    /// <remarks>
-    /// Everything that makes an address safe to put on a page — the scheme white
-    /// list, the refusal of loopback and private ranges, the spoiler gate,
-    /// referrerpolicy — runs where an image or a link renders, and an attribute
-    /// form or an unclosed tag never renders as either: the spellings people
-    /// mistype show as they were typed.
-    /// </remarks>
+    /// <remarks>The address guards run where an image or a link renders, and these forms never render as either.</remarks>
     [Theory]
     [InlineData("[link=vbscript:msgbox(1)]click")]
     [InlineData("[link=\"vbscript:msgbox(1)\"]click")]
@@ -404,25 +320,16 @@ public class BbParserResilienceShould
     [Theory]
     [InlineData("[b=1]жирный[/b]")]
     [InlineData("[spoiler=Заголовок]текст[/spoiler]")]
-    public void LeaveTheUnquotedAttributeAlone_OnATagThatHasNone(string input)
+    public void LeaveTheUnquotedAttributeAloneOnATagThatHasNone(string input)
     {
         RenderComment(input).Should().Be(input);
     }
-
-    // ════════════════════════════════════════════════════════════════
-    // Input normalisation: what a character cannot be
-    // ════════════════════════════════════════════════════════════════
 
     /// <summary>
     /// Control characters do not survive the parse, so no consumer downstream
     /// has to decide what to do about them.
     /// </summary>
-    /// <remarks>
-    /// They used to come out byte for byte, and the search projection was
-    /// already stripping them on its own because the result preview marks a
-    /// match with two of them - one arriving inside a body would have been read
-    /// as a mark. That is one consumer of however many there will be.
-    /// </remarks>
+    /// <remarks>The search preview marks a match with two control characters.</remarks>
     [Theory]
     [InlineData(0x00)]
     [InlineData(0x08)]
@@ -476,11 +383,7 @@ public class BbParserResilienceShould
     /// The characters that reverse the order text is drawn in do not survive the
     /// parse either.
     /// </summary>
-    /// <remarks>
-    /// With one of them a word on the page reads differently from the word that
-    /// is stored. The marks that only nudge the direction of a neighbouring
-    /// character reorder nothing and stay.
-    /// </remarks>
+    /// <remarks>Marks that only nudge a neighbour's direction reorder nothing and stay.</remarks>
     [Theory]
     [InlineData(0x202A)]
     [InlineData(0x202B)]
@@ -503,16 +406,9 @@ public class BbParserResilienceShould
     /// <summary>
     /// A tag still renders when the same text carries a control character.
     /// </summary>
-    /// <remarks>
-    /// Kept from the time [img], [link] and [mention] were cut out of the text and
-    /// stood in for by a sentinel character until the output was put back
-    /// together: a sentinel taken from the range the parser strips would have
-    /// been eaten in between, and every picture on the site would have rendered
-    /// as its own placeholder. Nothing stands in for a tag any more; the case is
-    /// cheap and says so.
-    /// </remarks>
+    /// <remarks>Cheap, and it holds the tags next to a control character.</remarks>
     [Fact]
-    public void RenderATag_InTextCarryingAControlCharacter()
+    public void RenderATagInTextCarryingAControlCharacter()
     {
         var html = RenderComment("a" + Character(0x00) + "[img]https://example.com/a.png[/img]");
 
@@ -520,21 +416,15 @@ public class BbParserResilienceShould
         html.Should().Contain("https://example.com/a.png");
     }
 
-    // ════════════════════════════════════════════════════════════════
-    // Helpers
-    // ════════════════════════════════════════════════════════════════
-
     /// <summary>
-    /// The character with this code point, written by number because the ones
-    /// under test cannot be written any other way and read as nothing when they
-    /// can.
+    /// The character with this code point, written by number: the ones under test read as nothing.
     /// </summary>
     private static string Character(int code) => ((char)code).ToString();
 
 
     private string RenderComment(string input)
     {
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.Comment);
         return wrapper.RenderHtml(input, DisplayContext(BbSurface.Comment));
     }
 
@@ -543,11 +433,11 @@ public class BbParserResilienceShould
 
     private string RenderForOutsider(string input)
     {
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.GamePost);
         var ctx = DisplayContext(BbSurface.GamePost) with
         {
             Viewer = Viewer(ReaderId),
-            PostAuthorUserId = AuthorId
+            PostAuthorUserId = BbVisibilityRender.AuthorId
         };
         return wrapper.RenderHtml(input, ctx);
     }
@@ -559,12 +449,6 @@ public class BbParserResilienceShould
         Viewer = Viewer(ReaderId)
     };
 
-    private static IAuthorizationSubject Viewer(Guid userId) => new TestSubject
-    {
-        UserId = userId,
-        Role = UserRole.RegularUser,
-        IsAuthenticated = true,
-        AccessPolicy = AccessPolicy.NotSpecified
-    };
+    private static IAuthorizationSubject Viewer(Guid userId) => BbVisibilityRender.Viewer(UserRole.RegularUser, userId);
 
 }

@@ -9,7 +9,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Features.Comments;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Inactivity;
 using DM.Testing;
 using AwesomeAssertions;
@@ -37,90 +36,86 @@ public class GameInactivityProcessorShould : UnitTestBase
     /// </summary>
     private static readonly Guid SystemUserId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
-    private readonly IInactivityRepository _inactivityRepository;
-    private readonly IGameCommentRepository _commentRepository;
-    private readonly IUnreadCountersRepository _countersRepository;
-    private readonly IEventProducer _eventProducer;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly GameInactivityProcessor _processor;
-    private readonly DateTimeOffset _now;
+    private readonly IInactivityRepository inactivityRepository;
+    private readonly IGameCommentRepository commentRepository;
+    private readonly IUnreadCountersRepository countersRepository;
+    private readonly IEventProducer eventProducer;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory guidFactory;
+    private readonly GameInactivityProcessor processor;
+    private readonly DateTimeOffset now;
 
-    private readonly List<CreateGameCommentEntity> _createdComments = new();
-    private readonly List<(Guid GameId, DateTimeOffset At)> _inactivityWarnings = new();
-    private readonly List<(Guid GameId, DateTimeOffset At)> _closureWarnings = new();
-    private readonly List<(Guid GameId, DateTimeOffset At)> _frozenGames = new();
-    private readonly List<Guid> _closedGames = new();
-    private readonly List<(EventType Type, Guid GameId)> _sentEvents = new();
-    private readonly List<(Guid GameId, UnreadEntryType Type)> _unreadIncrements = new();
+    private readonly List<CreateGameCommentEntity> createdComments = new();
+    private readonly List<(Guid GameId, DateTimeOffset At)> inactivityWarnings = new();
+    private readonly List<(Guid GameId, DateTimeOffset At)> closureWarnings = new();
+    private readonly List<(Guid GameId, DateTimeOffset At)> frozenGames = new();
+    private readonly List<Guid> closedGames = new();
+    private readonly List<(EventType Type, Guid GameId)> sentEvents = new();
+    private readonly List<(Guid GameId, UnreadEntryType Type)> unreadIncrements = new();
 
     public GameInactivityProcessorShould()
     {
-        _inactivityRepository = Mock<IInactivityRepository>();
-        _commentRepository = Mock<IGameCommentRepository>();
-        _countersRepository = Mock<IUnreadCountersRepository>();
-        _eventProducer = Mock<IEventProducer>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _guidFactory = Mock<IGuidFactory>();
+        inactivityRepository = Mock<IInactivityRepository>();
+        commentRepository = Mock<IGameCommentRepository>();
+        countersRepository = Mock<IUnreadCountersRepository>();
+        eventProducer = Mock<IEventProducer>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
+        guidFactory = Mock<IGuidFactory>();
         var logger = Mock<ILogger<GameInactivityProcessor>>();
 
-        _now = DateTimeOffset.UtcNow;
-        _dateTimeProvider.Now.Returns(_now);
-        _guidFactory.Create().Returns(Guid.NewGuid());
+        now = DateTimeOffset.UtcNow;
+        dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(Guid.NewGuid());
 
         // Every write the processor can make is recorded, so a test asserts the
         // set of games acted on instead of one interaction at a time. The recording
         // sits in the answer rather than in an AndDoes callback: a test that
         // reconfigures one identifier to fail replaces the answer, while callbacks
         // accumulate and would file the write that threw as if it had landed.
-        _commentRepository.Create(Arg.Any<CreateGameCommentEntity>())
+        commentRepository.Create(Arg.Any<CreateGameCommentEntity>())
             .Returns(ci =>
             {
-                _createdComments.Add(ci.Arg<CreateGameCommentEntity>());
+                createdComments.Add(ci.Arg<CreateGameCommentEntity>());
                 return new Comment { Id = Guid.NewGuid() };
             });
-        _inactivityRepository
+        inactivityRepository
             .SetInactivityWarning(Arg.Any<Guid>(), Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
-            .Returns(ci => RecordStamped(_inactivityWarnings, ci, at: 2));
-        _inactivityRepository
+            .Returns(ci => RecordStamped(inactivityWarnings, ci, at: 2));
+        inactivityRepository
             .SetClosureWarning(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
-            .Returns(ci => RecordStamped(_closureWarnings, ci));
-        _inactivityRepository
+            .Returns(ci => RecordStamped(closureWarnings, ci));
+        inactivityRepository
             .FreezeGame(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
-            .Returns(ci => RecordStamped(_frozenGames, ci));
-        _inactivityRepository.CloseGame(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(ci => RecordStamped(frozenGames, ci));
+        inactivityRepository.CloseGame(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
-                _closedGames.Add(ci.ArgAt<Guid>(0));
+                closedGames.Add(ci.ArgAt<Guid>(0));
                 return true;
             });
-        _countersRepository.IncrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>())
+        countersRepository.IncrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>())
             .Returns(ci =>
             {
-                _unreadIncrements.Add((ci.ArgAt<Guid>(0), ci.ArgAt<UnreadEntryType>(1)));
+                unreadIncrements.Add((ci.ArgAt<Guid>(0), ci.ArgAt<UnreadEntryType>(1)));
                 return Task.CompletedTask;
             });
-        _eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>())
+        eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>())
             .Returns(ci =>
             {
-                _sentEvents.Add((ci.ArgAt<EventType>(0), ci.ArgAt<Guid>(1)));
+                sentEvents.Add((ci.ArgAt<EventType>(0), ci.ArgAt<Guid>(1)));
                 return Task.CompletedTask;
             });
 
-        _processor = new GameInactivityProcessor(
-            _inactivityRepository,
-            _commentRepository,
-            _countersRepository,
-            _eventProducer,
-            _dateTimeProvider,
-            _guidFactory,
+        processor = new GameInactivityProcessor(
+            inactivityRepository,
+            commentRepository,
+            countersRepository,
+            eventProducer,
+            dateTimeProvider,
+            guidFactory,
             logger);
     }
 
-    /// <summary>
-    /// Files the game and the moment a stamped write carried, and answers that the
-    /// row was still in the state the pass selected it in.
-    /// </summary>
     /// <summary>
     /// The game and the moment stamped on it. The moment sits at a different
     /// argument in the warning, which carries the threshold its cutoff is measured
@@ -133,406 +128,408 @@ public class GameInactivityProcessorShould : UnitTestBase
         return true;
     }
 
-    #region WarnInactiveGamesAsync
-
     [Fact]
-    public async Task WarnInactiveGames_AskForGamesSilentForAMonth()
+    public async Task AskForGamesSilentForAMonthToWarn()
     {
         var thresholds = new List<TimeSpan>();
-        _inactivityRepository.GetInactiveGamesToWarn(
-                Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>()).AndDoes(ci => { var threshold = ci.ArgAt<TimeSpan>(0); thresholds.Add(threshold); });
+        inactivityRepository.GetInactiveGamesToWarn(
+                Arg.Do<TimeSpan>(thresholds.Add), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Guid>());
 
-        await _processor.WarnInactiveGamesAsync(CancellationToken.None);
+        await processor.WarnInactiveGamesAsync(CancellationToken.None);
 
         thresholds.Should().Equal(TimeSpan.FromDays(30));
     }
 
     [Fact]
-    public async Task WarnInactiveGames_WhenNoGamesFound_TouchNothing()
+    public async Task TouchNothingWhenNoGameIsDueAWarning()
     {
-        _inactivityRepository.GetInactiveGamesToWarn(
+        inactivityRepository.GetInactiveGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
 
-        await _processor.WarnInactiveGamesAsync(CancellationToken.None);
+        await processor.WarnInactiveGamesAsync(CancellationToken.None);
 
         // The absence of collaborator calls IS the behaviour here, so it is
         // asserted whole rather than one DidNotReceive at a time.
-        await _inactivityRepository.Received(1).GetInactiveGamesToWarn(
+        await inactivityRepository.Received(1).GetInactiveGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
-        _inactivityRepository.ShouldHaveReceivedNothingElse(
+        inactivityRepository.ShouldHaveReceivedNothingElse(
             nameof(IInactivityRepository.GetInactiveGamesToWarn));
-        _commentRepository.ShouldHaveReceivedNoCalls();
-        _countersRepository.ShouldHaveReceivedNoCalls();
-        _eventProducer.ShouldHaveReceivedNoCalls();
+        commentRepository.ShouldHaveReceivedNoCalls();
+        countersRepository.ShouldHaveReceivedNoCalls();
+        eventProducer.ShouldHaveReceivedNoCalls();
     }
 
     [Fact]
-    public async Task WarnInactiveGames_WarnEveryGameInTheBatchOnce()
+    public async Task WarnEveryInactiveGameInTheBatchOnce()
     {
         var gameId1 = Guid.NewGuid();
         var gameId2 = Guid.NewGuid();
-        _inactivityRepository.GetInactiveGamesToWarn(
+        inactivityRepository.GetInactiveGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { gameId1, gameId2 });
 
-        await _processor.WarnInactiveGamesAsync(CancellationToken.None);
+        await processor.WarnInactiveGamesAsync(CancellationToken.None);
 
-        _createdComments.Select(c => c.GameId).Should().Equal(gameId1, gameId2);
-        _createdComments.Should().OnlyContain(c => c.AuthorId == SystemUserId);
-        _createdComments.Should().OnlyContain(c => c.Text.StartsWith("Месяц", StringComparison.Ordinal));
+        createdComments.Select(c => c.GameId).Should().Equal(gameId1, gameId2);
+        createdComments.Should().OnlyContain(c => c.AuthorId == SystemUserId);
+        createdComments.Should().OnlyContain(c => c.Text.StartsWith("Месяц", StringComparison.Ordinal));
         // The number the warning takes in the game's comment thread is the
         // database's answer, not a count read a query earlier and written back: a
         // comment posted between the read and the write took the same number.
-        await _commentRepository.DidNotReceive().Count(
+        await commentRepository.DidNotReceive().Count(
             Arg.Any<Guid>(), Arg.Any<CommentsQuery>(), Arg.Any<IReadOnlyCollection<Guid>?>());
-        _inactivityWarnings.Should().Equal((gameId1, _now), (gameId2, _now));
-        _sentEvents.Should().Equal(
+        inactivityWarnings.Should().Equal((gameId1, now), (gameId2, now));
+        sentEvents.Should().Equal(
             (EventType.GameInactivityWarning, gameId1),
             (EventType.GameInactivityWarning, gameId2));
-        _unreadIncrements.Should().Equal(
+        unreadIncrements.Should().Equal(
             (gameId1, UnreadEntryType.Message),
             (gameId2, UnreadEntryType.Message));
         // One step per pass: a warned game waits out the grace period, it is not
         // frozen or closed by the same run
-        _frozenGames.Should().BeEmpty();
-        _closedGames.Should().BeEmpty();
+        frozenGames.Should().BeEmpty();
+        closedGames.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task WarnInactiveGames_NotRecordAWarningItFailedToPost()
+    public async Task StampTheCommentWithTheMomentOfThePass()
+    {
+        var later = now.AddSeconds(5);
+        dateTimeProvider.Now.Returns(now, later);
+        inactivityRepository.GetInactiveGamesToWarn(
+                Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new[] { Guid.NewGuid() });
+
+        await processor.WarnInactiveGamesAsync(CancellationToken.None);
+
+        createdComments.Single().CreatedUtc.Should().Be(now);
+    }
+
+    [Fact]
+    public async Task NotRecordAnInactivityWarningItFailedToPost()
     {
         var gameId = Guid.NewGuid();
-        _inactivityRepository.GetInactiveGamesToWarn(
+        inactivityRepository.GetInactiveGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { gameId });
-        _commentRepository.Create(Arg.Any<CreateGameCommentEntity>()).ThrowsAsync(new Exception("DB error"));
+        commentRepository.Create(Arg.Any<CreateGameCommentEntity>()).ThrowsAsync(new Exception("DB error"));
 
-        await _processor.WarnInactiveGamesAsync(CancellationToken.None);
+        await processor.WarnInactiveGamesAsync(CancellationToken.None);
 
         // A recorded warning starts the week that ends in a freeze. Recording one
         // the players were never shown would freeze the game unannounced, so the
         // game must stay unwarned and be picked up by the next run.
-        _inactivityWarnings.Should().BeEmpty();
-        _sentEvents.Should().BeEmpty();
+        inactivityWarnings.Should().BeEmpty();
+        sentEvents.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task WarnInactiveGames_KeepProcessingAfterOneGameFails()
+    public async Task KeepWarningInactiveGamesAfterOneFails()
     {
         var failingGameId = Guid.NewGuid();
         var healthyGameId = Guid.NewGuid();
-        _inactivityRepository.GetInactiveGamesToWarn(
+        inactivityRepository.GetInactiveGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { failingGameId, healthyGameId });
-        _commentRepository.Create(Arg.Is<CreateGameCommentEntity>(c => c.GameId == failingGameId))
+        commentRepository.Create(Arg.Is<CreateGameCommentEntity>(c => c.GameId == failingGameId))
             .ThrowsAsync(new Exception("DB error"));
 
-        await _processor.WarnInactiveGamesAsync(CancellationToken.None);
+        await processor.WarnInactiveGamesAsync(CancellationToken.None);
 
-        _createdComments.Select(c => c.GameId).Should().Equal(healthyGameId);
-        _inactivityWarnings.Should().Equal((healthyGameId, _now));
-        _sentEvents.Should().Equal((EventType.GameInactivityWarning, healthyGameId));
+        createdComments.Select(c => c.GameId).Should().Equal(healthyGameId);
+        inactivityWarnings.Should().Equal((healthyGameId, now));
+        sentEvents.Should().Equal((EventType.GameInactivityWarning, healthyGameId));
     }
 
     [Fact]
-    public async Task WarnInactiveGames_NotAnnounceAWarningTheStampDidNotLand()
+    public async Task NotAnnounceAnInactivityWarningTheStampDidNotLand()
     {
         var takenGameId = Guid.NewGuid();
         var healthyGameId = Guid.NewGuid();
-        _inactivityRepository.GetInactiveGamesToWarn(
+        inactivityRepository.GetInactiveGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(new[] { takenGameId, healthyGameId });
         // The batch is read once and worked through game by game: this game stopped
         // being an unwarned active one in between, so its stamp writes no row.
-        _inactivityRepository
+        inactivityRepository
             .SetInactivityWarning(takenGameId, Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(false);
 
-        await _processor.WarnInactiveGamesAsync(CancellationToken.None);
+        await processor.WarnInactiveGamesAsync(CancellationToken.None);
 
-        _inactivityWarnings.Should().Equal((healthyGameId, _now));
-        _sentEvents.Should().Equal((EventType.GameInactivityWarning, healthyGameId));
+        inactivityWarnings.Should().Equal((healthyGameId, now));
+        sentEvents.Should().Equal((EventType.GameInactivityWarning, healthyGameId));
     }
 
-    #endregion
-
-    #region FreezeWarnedGamesAsync
-
     [Fact]
-    public async Task FreezeWarnedGames_AskForGamesWarnedAWeekAgo()
+    public async Task AskForGamesWarnedAWeekAgoToFreeze()
     {
         var thresholds = new List<TimeSpan>();
-        _inactivityRepository.GetWarnedGamesToFreeze(
-                Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>()).AndDoes(ci => { var threshold = ci.ArgAt<TimeSpan>(0); thresholds.Add(threshold); });
+        inactivityRepository.GetWarnedGamesToFreeze(
+                Arg.Do<TimeSpan>(thresholds.Add), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Guid>());
 
-        await _processor.FreezeWarnedGamesAsync(CancellationToken.None);
+        await processor.FreezeWarnedGamesAsync(CancellationToken.None);
 
         thresholds.Should().Equal(TimeSpan.FromDays(7));
     }
 
     [Fact]
-    public async Task FreezeWarnedGames_WhenNoGamesFound_TouchNothing()
+    public async Task TouchNothingWhenNoGameIsDueAFreeze()
     {
-        _inactivityRepository.GetWarnedGamesToFreeze(
+        inactivityRepository.GetWarnedGamesToFreeze(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
 
-        await _processor.FreezeWarnedGamesAsync(CancellationToken.None);
+        await processor.FreezeWarnedGamesAsync(CancellationToken.None);
 
-        await _inactivityRepository.Received(1).GetWarnedGamesToFreeze(
+        await inactivityRepository.Received(1).GetWarnedGamesToFreeze(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
-        _inactivityRepository.ShouldHaveReceivedNothingElse(
+        inactivityRepository.ShouldHaveReceivedNothingElse(
             nameof(IInactivityRepository.GetWarnedGamesToFreeze));
-        _commentRepository.ShouldHaveReceivedNoCalls();
-        _countersRepository.ShouldHaveReceivedNoCalls();
-        _eventProducer.ShouldHaveReceivedNoCalls();
+        commentRepository.ShouldHaveReceivedNoCalls();
+        countersRepository.ShouldHaveReceivedNoCalls();
+        eventProducer.ShouldHaveReceivedNoCalls();
     }
 
     [Fact]
-    public async Task FreezeWarnedGames_FreezeEveryGameInTheBatchAndAnnounceIt()
+    public async Task FreezeEveryWarnedGameInTheBatchAndAnnounceIt()
     {
         var gameId1 = Guid.NewGuid();
         var gameId2 = Guid.NewGuid();
-        _inactivityRepository.GetWarnedGamesToFreeze(
+        inactivityRepository.GetWarnedGamesToFreeze(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { gameId1, gameId2 });
 
-        await _processor.FreezeWarnedGamesAsync(CancellationToken.None);
+        await processor.FreezeWarnedGamesAsync(CancellationToken.None);
 
-        _frozenGames.Should().Equal((gameId1, _now), (gameId2, _now));
-        _sentEvents.Should().Equal(
+        frozenGames.Should().Equal((gameId1, now), (gameId2, now));
+        sentEvents.Should().Equal(
             (EventType.StatusGameFrozen, gameId1),
             (EventType.StatusGameFrozen, gameId2));
         // The freeze itself says nothing in the game: the warning a week ago did
-        _createdComments.Should().BeEmpty();
-        _closedGames.Should().BeEmpty();
+        createdComments.Should().BeEmpty();
+        closedGames.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task FreezeWarnedGames_NotAnnounceAGameItCouldNotFreeze()
+    public async Task NotAnnounceAGameItCouldNotFreeze()
     {
         var failingGameId = Guid.NewGuid();
         var healthyGameId = Guid.NewGuid();
-        _inactivityRepository.GetWarnedGamesToFreeze(
+        inactivityRepository.GetWarnedGamesToFreeze(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { failingGameId, healthyGameId });
-        _inactivityRepository
+        inactivityRepository
             .FreezeGame(failingGameId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("DB error"));
 
-        await _processor.FreezeWarnedGamesAsync(CancellationToken.None);
+        await processor.FreezeWarnedGamesAsync(CancellationToken.None);
 
         // Subscribers would otherwise be told a game is frozen while it still runs
-        _frozenGames.Should().Equal((healthyGameId, _now));
-        _sentEvents.Should().Equal((EventType.StatusGameFrozen, healthyGameId));
+        frozenGames.Should().Equal((healthyGameId, now));
+        sentEvents.Should().Equal((EventType.StatusGameFrozen, healthyGameId));
     }
 
     [Fact]
-    public async Task FreezeWarnedGames_NotAnnounceAGameThatCameBackToLife()
+    public async Task NotAnnounceAFreezeOfAGameThatCameBackToLife()
     {
         var revivedGameId = Guid.NewGuid();
         var healthyGameId = Guid.NewGuid();
-        _inactivityRepository.GetWarnedGamesToFreeze(
+        inactivityRepository.GetWarnedGamesToFreeze(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(new[] { revivedGameId, healthyGameId });
         // The master posted between the selection and the write, so the freeze
         // touched no row. The pass has to believe the write, not the list it read
         // a moment earlier.
-        _inactivityRepository
+        inactivityRepository
             .FreezeGame(revivedGameId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(false);
 
-        await _processor.FreezeWarnedGamesAsync(CancellationToken.None);
+        await processor.FreezeWarnedGamesAsync(CancellationToken.None);
 
-        _frozenGames.Should().Equal((healthyGameId, _now));
-        _sentEvents.Should().Equal((EventType.StatusGameFrozen, healthyGameId));
+        frozenGames.Should().Equal((healthyGameId, now));
+        sentEvents.Should().Equal((EventType.StatusGameFrozen, healthyGameId));
     }
 
-    #endregion
-
-    #region WarnFrozenGamesAsync
-
     [Fact]
-    public async Task WarnFrozenGames_AskForGamesFrozenForThreeMonths()
+    public async Task AskForGamesFrozenForThreeMonthsToWarn()
     {
         var thresholds = new List<TimeSpan>();
-        _inactivityRepository.GetFrozenGamesToWarn(
-                Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>()).AndDoes(ci => { var threshold = ci.ArgAt<TimeSpan>(0); thresholds.Add(threshold); });
+        inactivityRepository.GetFrozenGamesToWarn(
+                Arg.Do<TimeSpan>(thresholds.Add), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Guid>());
 
-        await _processor.WarnFrozenGamesAsync(CancellationToken.None);
+        await processor.WarnFrozenGamesAsync(CancellationToken.None);
 
         thresholds.Should().Equal(TimeSpan.FromDays(90));
     }
 
     [Fact]
-    public async Task WarnFrozenGames_WhenNoGamesFound_TouchNothing()
+    public async Task TouchNothingWhenNoGameIsDueAClosureWarning()
     {
-        _inactivityRepository.GetFrozenGamesToWarn(
+        inactivityRepository.GetFrozenGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
 
-        await _processor.WarnFrozenGamesAsync(CancellationToken.None);
+        await processor.WarnFrozenGamesAsync(CancellationToken.None);
 
-        await _inactivityRepository.Received(1).GetFrozenGamesToWarn(
+        await inactivityRepository.Received(1).GetFrozenGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
-        _inactivityRepository.ShouldHaveReceivedNothingElse(
+        inactivityRepository.ShouldHaveReceivedNothingElse(
             nameof(IInactivityRepository.GetFrozenGamesToWarn));
-        _commentRepository.ShouldHaveReceivedNoCalls();
-        _countersRepository.ShouldHaveReceivedNoCalls();
-        _eventProducer.ShouldHaveReceivedNoCalls();
+        commentRepository.ShouldHaveReceivedNoCalls();
+        countersRepository.ShouldHaveReceivedNoCalls();
+        eventProducer.ShouldHaveReceivedNoCalls();
     }
 
     [Fact]
-    public async Task WarnFrozenGames_WarnEveryGameInTheBatchOnce()
+    public async Task WarnEveryLongFrozenGameInTheBatchOnce()
     {
         var gameId1 = Guid.NewGuid();
         var gameId2 = Guid.NewGuid();
-        _inactivityRepository.GetFrozenGamesToWarn(
+        inactivityRepository.GetFrozenGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { gameId1, gameId2 });
 
-        await _processor.WarnFrozenGamesAsync(CancellationToken.None);
+        await processor.WarnFrozenGamesAsync(CancellationToken.None);
 
-        _createdComments.Select(c => c.GameId).Should().Equal(gameId1, gameId2);
-        _createdComments.Should().OnlyContain(c => c.AuthorId == SystemUserId);
+        createdComments.Select(c => c.GameId).Should().Equal(gameId1, gameId2);
+        createdComments.Should().OnlyContain(c => c.AuthorId == SystemUserId);
         // The closure warning, not the inactivity one - the two paths differ only
         // in their message and in which timestamp they stamp
-        _createdComments.Should().OnlyContain(c => c.Text.StartsWith("Три месяца", StringComparison.Ordinal));
+        createdComments.Should().OnlyContain(c => c.Text.StartsWith("Три месяца", StringComparison.Ordinal));
         // Same as the inactivity warning: the count belongs to the database.
-        await _commentRepository.DidNotReceive().Count(
+        await commentRepository.DidNotReceive().Count(
             Arg.Any<Guid>(), Arg.Any<CommentsQuery>(), Arg.Any<IReadOnlyCollection<Guid>?>());
-        _closureWarnings.Should().Equal((gameId1, _now), (gameId2, _now));
-        _inactivityWarnings.Should().BeEmpty();
-        _sentEvents.Should().Equal(
+        closureWarnings.Should().Equal((gameId1, now), (gameId2, now));
+        inactivityWarnings.Should().BeEmpty();
+        sentEvents.Should().Equal(
             (EventType.GameClosureWarning, gameId1),
             (EventType.GameClosureWarning, gameId2));
-        _unreadIncrements.Should().Equal(
+        unreadIncrements.Should().Equal(
             (gameId1, UnreadEntryType.Message),
             (gameId2, UnreadEntryType.Message));
         // A warned frozen game gets its week; closing it here would close it
         // seven days early
-        _closedGames.Should().BeEmpty();
+        closedGames.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task WarnFrozenGames_KeepProcessingAfterOneGameFails()
+    public async Task KeepWarningFrozenGamesAfterOneFails()
     {
         var failingGameId = Guid.NewGuid();
         var healthyGameId = Guid.NewGuid();
-        _inactivityRepository.GetFrozenGamesToWarn(
+        inactivityRepository.GetFrozenGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { failingGameId, healthyGameId });
-        _commentRepository.Create(Arg.Is<CreateGameCommentEntity>(c => c.GameId == failingGameId))
+        commentRepository.Create(Arg.Is<CreateGameCommentEntity>(c => c.GameId == failingGameId))
             .ThrowsAsync(new Exception("DB error"));
 
-        await _processor.WarnFrozenGamesAsync(CancellationToken.None);
+        await processor.WarnFrozenGamesAsync(CancellationToken.None);
 
-        _createdComments.Select(c => c.GameId).Should().Equal(healthyGameId);
-        _closureWarnings.Should().Equal((healthyGameId, _now));
-        _sentEvents.Should().Equal((EventType.GameClosureWarning, healthyGameId));
+        createdComments.Select(c => c.GameId).Should().Equal(healthyGameId);
+        closureWarnings.Should().Equal((healthyGameId, now));
+        sentEvents.Should().Equal((EventType.GameClosureWarning, healthyGameId));
     }
 
     [Fact]
-    public async Task WarnFrozenGames_NotAnnounceAWarningTheStampDidNotLand()
+    public async Task NotAnnounceAClosureWarningTheStampDidNotLand()
     {
         var takenGameId = Guid.NewGuid();
         var healthyGameId = Guid.NewGuid();
-        _inactivityRepository.GetFrozenGamesToWarn(
+        inactivityRepository.GetFrozenGamesToWarn(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(new[] { takenGameId, healthyGameId });
         // Restarted by the master, or warned by a second instance, since the
         // selection: the stamp wrote no row.
-        _inactivityRepository
+        inactivityRepository
             .SetClosureWarning(takenGameId, Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(false);
 
-        await _processor.WarnFrozenGamesAsync(CancellationToken.None);
+        await processor.WarnFrozenGamesAsync(CancellationToken.None);
 
-        _closureWarnings.Should().Equal((healthyGameId, _now));
-        _sentEvents.Should().Equal((EventType.GameClosureWarning, healthyGameId));
+        closureWarnings.Should().Equal((healthyGameId, now));
+        sentEvents.Should().Equal((EventType.GameClosureWarning, healthyGameId));
     }
 
-    #endregion
-
-    #region CloseFrozenGamesAsync
-
     [Fact]
-    public async Task CloseFrozenGames_AskForGamesWarnedAWeekAgo()
+    public async Task AskForFrozenGamesWarnedAWeekAgoToClose()
     {
         var thresholds = new List<TimeSpan>();
-        _inactivityRepository
+        inactivityRepository
             .GetWarnedFrozenGamesToClose(
-                Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>()).AndDoes(ci => { var threshold = ci.ArgAt<TimeSpan>(0); thresholds.Add(threshold); });
+                Arg.Do<TimeSpan>(thresholds.Add), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(Array.Empty<Guid>());
 
-        await _processor.CloseFrozenGamesAsync(CancellationToken.None);
+        await processor.CloseFrozenGamesAsync(CancellationToken.None);
 
         thresholds.Should().Equal(TimeSpan.FromDays(7));
     }
 
     [Fact]
-    public async Task CloseFrozenGames_WhenNoGamesFound_TouchNothing()
+    public async Task TouchNothingWhenNoGameIsDueAClosure()
     {
-        _inactivityRepository
+        inactivityRepository
             .GetWarnedFrozenGamesToClose(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
 
-        await _processor.CloseFrozenGamesAsync(CancellationToken.None);
+        await processor.CloseFrozenGamesAsync(CancellationToken.None);
 
-        await _inactivityRepository.Received(1).GetWarnedFrozenGamesToClose(
+        await inactivityRepository.Received(1).GetWarnedFrozenGamesToClose(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
-        _inactivityRepository.ShouldHaveReceivedNothingElse(
+        inactivityRepository.ShouldHaveReceivedNothingElse(
             nameof(IInactivityRepository.GetWarnedFrozenGamesToClose));
-        _commentRepository.ShouldHaveReceivedNoCalls();
-        _countersRepository.ShouldHaveReceivedNoCalls();
-        _eventProducer.ShouldHaveReceivedNoCalls();
+        commentRepository.ShouldHaveReceivedNoCalls();
+        countersRepository.ShouldHaveReceivedNoCalls();
+        eventProducer.ShouldHaveReceivedNoCalls();
     }
 
     [Fact]
-    public async Task CloseFrozenGames_CloseEveryGameInTheBatchAndAnnounceIt()
+    public async Task CloseEveryWarnedFrozenGameInTheBatchAndAnnounceIt()
     {
         var gameId1 = Guid.NewGuid();
         var gameId2 = Guid.NewGuid();
-        _inactivityRepository
+        inactivityRepository
             .GetWarnedFrozenGamesToClose(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { gameId1, gameId2 });
 
-        await _processor.CloseFrozenGamesAsync(CancellationToken.None);
+        await processor.CloseFrozenGamesAsync(CancellationToken.None);
 
-        _closedGames.Should().Equal(gameId1, gameId2);
-        _sentEvents.Should().Equal(
+        closedGames.Should().Equal(gameId1, gameId2);
+        sentEvents.Should().Equal(
             (EventType.StatusGameClosed, gameId1),
             (EventType.StatusGameClosed, gameId2));
-        _createdComments.Should().BeEmpty();
-        _frozenGames.Should().BeEmpty();
+        createdComments.Should().BeEmpty();
+        frozenGames.Should().BeEmpty();
     }
 
     [Fact]
-    public async Task CloseFrozenGames_NotAnnounceAGameItCouldNotClose()
+    public async Task NotAnnounceAGameItCouldNotClose()
     {
         var failingGameId = Guid.NewGuid();
         var healthyGameId = Guid.NewGuid();
-        _inactivityRepository
+        inactivityRepository
             .GetWarnedFrozenGamesToClose(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new[] { failingGameId, healthyGameId });
-        _inactivityRepository.CloseGame(failingGameId, Arg.Any<CancellationToken>())
+        inactivityRepository.CloseGame(failingGameId, Arg.Any<CancellationToken>())
             .ThrowsAsync(new Exception("DB error"));
 
-        await _processor.CloseFrozenGamesAsync(CancellationToken.None);
+        await processor.CloseFrozenGamesAsync(CancellationToken.None);
 
-        _closedGames.Should().Equal(healthyGameId);
-        _sentEvents.Should().Equal((EventType.StatusGameClosed, healthyGameId));
+        closedGames.Should().Equal(healthyGameId);
+        sentEvents.Should().Equal((EventType.StatusGameClosed, healthyGameId));
     }
 
     [Fact]
-    public async Task CloseFrozenGames_NotAnnounceAGameThatIsNoLongerFrozen()
+    public async Task NotAnnounceAClosureOfAGameThatIsNoLongerFrozen()
     {
         var restartedGameId = Guid.NewGuid();
         var healthyGameId = Guid.NewGuid();
-        _inactivityRepository
+        inactivityRepository
             .GetWarnedFrozenGamesToClose(
                 Arg.Any<TimeSpan>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(new[] { restartedGameId, healthyGameId });
         // Restarted between the selection and the write. The closure wrote no row,
         // and announcing one would tell subscribers a running game had been closed.
-        _inactivityRepository.CloseGame(restartedGameId, Arg.Any<CancellationToken>())
+        inactivityRepository.CloseGame(restartedGameId, Arg.Any<CancellationToken>())
             .Returns(false);
 
-        await _processor.CloseFrozenGamesAsync(CancellationToken.None);
+        await processor.CloseFrozenGamesAsync(CancellationToken.None);
 
-        _closedGames.Should().Equal(healthyGameId);
-        _sentEvents.Should().Equal((EventType.StatusGameClosed, healthyGameId));
+        closedGames.Should().Equal(healthyGameId);
+        sentEvents.Should().Equal((EventType.StatusGameClosed, healthyGameId));
     }
-
-    #endregion
 }

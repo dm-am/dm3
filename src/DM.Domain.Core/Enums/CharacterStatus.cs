@@ -1,12 +1,12 @@
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// Character status (simplified to 4 values)
+/// Character status
 /// </summary>
 public enum CharacterStatus
 {
     /// <summary>
-    /// The character requires GM review (was Registration)
+    /// The character requires GM review
     /// </summary>
     UnderReview = 0,
 

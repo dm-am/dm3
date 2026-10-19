@@ -2,125 +2,41 @@
  * @vitest-environment jsdom
  */
 
-/**
- * "Последние баны", the ban list written as DM2's ban log.
- *
- * The server answers with entries, an issue or a lift each, newest first, and
- * the page keeps that order: a lift made today stands on top, not at the date
- * of the ban it ended. How an entry reads is the card's own spec
- * (BanLogCard.spec.ts); the card is mounted here for real, because what this
- * page decides about it is whether the lift is offered, and that has to be the
- * server's flag on the row and not the role of the reader. A senior moderator
- * used to be offered the lift of his own ban and of a permanent one, and the
- * server refused it after the window was filled in.
- *
- * The list is narrowed by name in the search line of the warning list next
- * door, through the address, so the bans of one person are a link: the
- * profile's "Баны: N" leads here with the name in it. The checks follow the
- * name both ways, from the address to the request and the field, and from the
- * field to the address without the page number of the list being left.
- */
+// The server's entries in its order; the lift is offered by the server's flag
+// on the row, not by the reader's role. The name filter goes both ways through
+// the address. How an entry reads is BanLogCard.spec.ts's.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
-import type { Mock } from "vitest";
-import type { Ref } from "vue";
-import * as vueRouter from "vue-router";
+import {
+  enableAutoUnmount,
+  flushPromises,
+  type VueWrapper,
+} from "@vue/test-utils";
+import type { Router } from "vue-router";
+import { createPinia } from "pinia";
+import { useAuthStore } from "@/shared/stores";
+import { DEFAULT_PAGE_SIZE } from "@/shared/lib/composables/usePaging";
 import ModerationBans from "./ModerationBans.vue";
+import {
+  mountPage,
+  windows,
+  type MountOptions,
+} from "@/shared/lib/testing/mountPage";
 
-const getBanHistory = vi.hoisted(() => vi.fn());
-
-vi.mock("@/entities/moderation", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/entities/moderation")>()),
-  moderationApi: { getBanHistory },
+const { getBanHistory, liftBan } = vi.hoisted(() => ({
+  getBanHistory: vi.fn(),
+  liftBan: vi.fn(),
 }));
 
-vi.mock("@/features/moderation-actions", () => ({
-  LiftBanDialog: { template: "<div class='dialog-stub' />" },
+// The network only: the router, the lift window and the list are the real ones.
+vi.mock("@/entities/moderation/api/banApi", async (importOriginal) => ({
+  ...(await importOriginal<
+    typeof import("@/entities/moderation/api/banApi")
+  >()),
+  default: { getBanHistory, liftBan },
 }));
 
-/**
- * The lift window is opened by hand rather than mounted, so the seam this
- * page owns is what it hands over: which ban, whose, and what happens after.
- */
-const modalOpen = vi.hoisted(() => vi.fn());
-const modalClose = vi.hoisted(() => vi.fn());
-const modal = vi.hoisted(() => ({
-  attrs: null as Record<string, unknown> | null,
-}));
-
-vi.mock("vue-final-modal", () => ({
-  useModal: (options: { attrs: Record<string, unknown> }) => {
-    modal.attrs = options.attrs;
-    return { open: modalOpen, close: modalClose };
-  },
-}));
-
-/**
- * The address bar, moved by the push as a navigation would move it, and left
- * where it is when it is asked for the address already open (the warning
- * list's spec says why). The replace moves it the same way, anchor and all.
- */
-vi.mock("vue-router", async () => {
-  const { shallowRef } = await import("vue");
-  const query = shallowRef<Record<string, string>>({});
-  const hash = shallowRef("");
-  const isCurrent = (next: Record<string, string>) => {
-    const current = query.value;
-    const keys = Object.keys(next);
-    return (
-      keys.length === Object.keys(current).length &&
-      keys.every((key) => current[key] === next[key])
-    );
-  };
-  const push = vi.fn((to: { query?: Record<string, string> }) => {
-    const next = { ...(to.query ?? {}) };
-    if (isCurrent(next)) return;
-    query.value = next;
-  });
-  const replace = vi.fn(
-    (to: { query?: Record<string, string>; hash?: string }) => {
-      query.value = { ...(to.query ?? {}) };
-      hash.value = to.hash ?? "";
-    },
-  );
-  return {
-    useRoute: () => ({
-      get query() {
-        return query.value;
-      },
-      get hash() {
-        return hash.value;
-      },
-    }),
-    useRouter: () => ({ push, replace }),
-    routeQuery: query,
-    routeHash: hash,
-    routerPush: push,
-    routerReplace: replace,
-  };
-});
-
-const { routeQuery, routeHash, routerPush, routerReplace } =
-  vueRouter as unknown as {
-    routeQuery: Ref<Record<string, string>>;
-    routeHash: Ref<string>;
-    routerPush: Mock;
-    routerReplace: Mock;
-  };
-
-/**
- * The reader is a senior moderator: the one role the old page offered the
- * lift to, so a page that still reads the role offers it here.
- */
-vi.mock("./lib/useRoleGate", () => ({
-  useRoleGate: () => ({
-    hasAccess: true,
-    deniedText: "",
-    isSeniorModerator: true,
-  }),
-}));
-
-const PAGE_SIZE = 20;
+/** The page of a reader who chose no size. */
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 const person = (username: string) => ({
   id: `u-${username}`,
@@ -138,7 +54,7 @@ const ban = (over: Record<string, unknown> = {}) => ({
   accessPolicy: "DemocraticBan",
   startedUtc: "2026-10-12T12:00:00Z",
   expiresUtc: "2026-10-19T12:00:00Z",
-  comment: "Оскорбление участников в общем чате",
+  comment: "Оскорбление участников в глобальном чате",
   isActive: true,
   canLift: true,
   ...over,
@@ -156,14 +72,15 @@ const page = (
   total = resources.length,
   pages = 1,
   skip = 0,
+  take: number = PAGE_SIZE,
 ) => ({
   data: {
     resources,
     paging: {
       skip,
-      take: PAGE_SIZE,
+      take,
       total,
-      current: skip / PAGE_SIZE + 1,
+      current: skip / take + 1,
       pages,
     },
   },
@@ -171,90 +88,109 @@ const page = (
 });
 
 enableAutoUnmount(afterEach);
+afterEach(() => {
+  vi.useRealTimers();
+  delete (Element.prototype as Partial<Element>).scrollIntoView;
+});
 
-function render({ realPaging = false }: { realPaging?: boolean } = {}) {
-  return mount(ModerationBans, {
-    global: {
-      stubs: {
-        RouterLink: {
-          props: ["to"],
-          template:
-            "<a class='router-link' :data-to='JSON.stringify(to)'><slot /></a>",
-        },
-        "page-title": { template: "<h1><slot /></h1>" },
-        Button: { template: "<button><slot /></button>" },
-        ...(realPaging
-          ? {}
-          : {
-              Paging: {
-                props: ["paging"],
-                template: "<nav class='paging-stub' />",
-              },
-            }),
-        ErrorState: { template: "<div class='error-stub' />" },
-      },
-    },
+let router: Router;
+
+/** The options of a mount besides the addresses, which are the page's own. */
+type Extra = Omit<MountOptions, "routes">;
+
+async function rendered(address = "/moderation/bans", options: Extra = {}) {
+  const mounted = await mountPage(ModerationBans, address, {
+    routes: [
+      ["moderation-bans", "/moderation/bans"],
+      ["profile", "/users/:username"],
+    ],
+    ...options,
   });
-}
-
-async function rendered(options?: { realPaging?: boolean }) {
-  const wrapper = render(options);
+  router = mounted.router;
   await flushPromises();
-  return wrapper;
+  return mounted.wrapper;
 }
 
 /** The page in the document, where an entry can be found by its anchor. */
-function mountAttached() {
-  return mount(ModerationBans, {
-    attachTo: document.body,
-    global: {
-      stubs: {
-        "page-title": { template: "<h1><slot /></h1>" },
-        Button: { template: "<button><slot /></button>" },
-        Paging: { template: "<nav />" },
-        ErrorState: { template: "<div />" },
-      },
-    },
-  });
-}
+const renderedAttached = (address: string, options: Extra = {}) =>
+  rendered(address, { ...options, attachTo: document.body });
 
-const nameField = (wrapper: ReturnType<typeof render>) =>
+/** Where the reader is now. */
+const address = () => router.currentRoute.value.fullPath;
+
+const go = async (to: string) => {
+  await router.push(to);
+  await flushPromises();
+};
+
+const nameField = (wrapper: VueWrapper) =>
   wrapper.find<HTMLInputElement>("form input");
 
-/** The sentences of the entries, in the order they stand. */
-const sentences = (wrapper: ReturnType<typeof render>) =>
+const sentences = (wrapper: VueWrapper) =>
   wrapper
     .findAll(".ban-log-card__phrase")
     .map((phrase) => phrase.element.textContent ?? "");
 
+/** The lift window over the page, if it is open. */
+const liftWindow = () => windows().find(".dialog-frame .dialog");
+
+/** jsdom lays nothing out and has no scrollIntoView of its own. */
+function recordScrolls() {
+  const scrolled: { id: string; element: Element; options: unknown }[] = [];
+  Element.prototype.scrollIntoView = function (
+    this: Element,
+    options?: unknown,
+  ) {
+    scrolled.push({ id: this.id, element: this, options });
+  };
+  return scrolled;
+}
+
+beforeEach(() => {
+  getBanHistory.mockReset();
+  liftBan.mockReset();
+  liftBan.mockResolvedValue({ data: null, error: null });
+});
+
 describe("the ban list", () => {
-  beforeEach(() => {
-    getBanHistory.mockReset();
-    modalOpen.mockReset();
-    modalClose.mockReset();
-    routerPush.mockClear();
-    routerReplace.mockClear();
-    routeQuery.value = {};
-    routeHash.value = "";
-  });
-
   it("asks for the page named in the address, at the size of the list", async () => {
-    routeQuery.value = { number: "3" };
-    getBanHistory.mockResolvedValue(page([issued()]));
+    getBanHistory.mockResolvedValue(page([issued()], 45, 3, 40));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered("/moderation/bans?number=3");
 
     expect(getBanHistory).toHaveBeenCalledWith({
       skip: 2 * PAGE_SIZE,
       take: PAGE_SIZE,
     });
-    expect(wrapper.find(".paging-stub").exists()).toBe(true);
+    expect(wrapper.get(".paging a.active").text()).toBe("3");
   });
 
-  /**
-   * The lift of a ban stands on top as an entry of its own, over the issue
-   * of the ban it ended, in the order the server put them.
-   */
+  it("asks for pages as long as the reader's lists", async () => {
+    getBanHistory.mockResolvedValue(page([issued()], 45, 7, 14, 7));
+    const pinia = createPinia();
+    useAuthStore(pinia).user = {
+      settings: { pageSize: 7 },
+    } as never;
+
+    await rendered("/moderation/bans?number=3", { pinia });
+
+    expect(getBanHistory).toHaveBeenCalledWith({ skip: 14, take: 7 });
+  });
+
+  // The page an entry is on is counted in the pages the reader chose.
+  it("names the page of an entry in pages as long as the reader's lists", async () => {
+    getBanHistory.mockResolvedValue(page([issued({}, 16)], 45, 7, 14, 7));
+    const pinia = createPinia();
+    useAuthStore(pinia).user = {
+      settings: { pageSize: 7 },
+    } as never;
+
+    await rendered("/moderation/bans?entry=16#ban-16", { pinia });
+
+    expect(address()).toBe("/moderation/bans?number=3#ban-16");
+  });
+
+  // A lift stands on top as an entry of its own, in the server's order.
   it("draws every entry in the order the server sent", async () => {
     getBanHistory.mockResolvedValue(
       page([
@@ -286,12 +222,7 @@ describe("the ban list", () => {
     ]);
   });
 
-  /**
-   * The server says on each ban whether this reader may lift it. A senior
-   * moderator may not lift his own ban nor a permanent one, and the page
-   * offered him both by his role; the server refused after the reason was
-   * written.
-   */
+  // A senior moderator may not lift his own ban nor a permanent one.
   it("offers the lift by the server's flag, not by the reader's role", async () => {
     getBanHistory.mockResolvedValue(
       page([
@@ -314,23 +245,31 @@ describe("the ban list", () => {
 
     const wrapper = await rendered();
     await wrapper.get(".caption-action").trigger("click");
+    await flushPromises();
 
-    expect(modalOpen).toHaveBeenCalled();
-    expect(modal.attrs?.banId).toBe("b-7");
-    expect(modal.attrs?.username).toBe("Нарушитель");
+    expect(liftWindow().get("h2").text()).toBe("Снятие бана");
+    expect(liftWindow().get(".lift-context strong").text()).toBe("Нарушитель");
+    await windows().get("#lift-reason").setValue("Извинился");
+    await liftWindow().get("form").trigger("submit");
+    await flushPromises();
+    expect(liftBan).toHaveBeenCalledWith("b-7", "Извинился", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
   });
 
   /** The lift comes back as an entry on top of the page the moderator is on. */
   it("re-reads the page the moderator is on after a lift", async () => {
-    routeQuery.value = { number: "2" };
     getBanHistory.mockResolvedValue(page([issued()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered("/moderation/bans?number=2");
     await wrapper.get(".caption-action").trigger("click");
-    (modal.attrs?.onSuccess as () => void)();
+    await flushPromises();
+    await windows().get("#lift-reason").setValue("Извинился");
+    await liftWindow().get("form").trigger("submit");
     await flushPromises();
 
-    expect(modalClose).toHaveBeenCalled();
+    expect(liftWindow().exists()).toBe(false);
     expect(getBanHistory).toHaveBeenCalledTimes(2);
     expect(getBanHistory).toHaveBeenLastCalledWith({
       skip: PAGE_SIZE,
@@ -343,10 +282,11 @@ describe("the ban list", () => {
 
     const wrapper = await rendered();
     await wrapper.get(".caption-action").trigger("click");
-    (modal.attrs?.onCancel as () => void)();
+    await flushPromises();
+    await liftWindow().get(".dialog-close").trigger("click");
     await flushPromises();
 
-    expect(modalClose).toHaveBeenCalled();
+    expect(liftWindow().exists()).toBe(false);
     expect(getBanHistory).toHaveBeenCalledTimes(1);
   });
 
@@ -359,24 +299,21 @@ describe("the ban list", () => {
   });
 
   it("offers the first page when this one is past the end of a filled list", async () => {
-    routeQuery.value = { username: "SolohinLex", number: "4" };
     getBanHistory.mockResolvedValue(page([], 3));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(
+      "/moderation/bans?username=SolohinLex&number=4",
+    );
 
     expect(wrapper.text()).toContain("На этой странице банов нет.");
     const back = wrapper.get(".bans-empty a");
     expect(back.text()).toBe("Вернуться на первую страницу");
-    expect(JSON.parse(back.attributes("data-to") ?? "null")).toEqual({
-      name: "moderation-bans",
-      query: { username: "SolohinLex" },
-    });
+    expect(back.attributes("href")).toBe(
+      "/moderation/bans?username=SolohinLex",
+    );
   });
 
-  /**
-   * Two pages on the wire at once: what the moderator asked for last stays,
-   * however late the answer to the page he left arrives.
-   */
+  // What the moderator asked for last stays, however late the older answer arrives.
   it("keeps the page the address names when a later answer belongs to an older one", async () => {
     const answers = new Map<number, (value: unknown) => void>();
     getBanHistory.mockImplementation(
@@ -386,10 +323,8 @@ describe("the ban list", () => {
         }),
     );
 
-    const wrapper = render();
-    await flushPromises();
-    routeQuery.value = { number: "2" };
-    await flushPromises();
+    const wrapper = await rendered();
+    await go("/moderation/bans?number=2");
 
     answers.get(PAGE_SIZE)?.(
       page([issued({ user: person("Новая"), canLift: false })]),
@@ -406,15 +341,6 @@ describe("the ban list", () => {
 });
 
 describe("the name filter of the ban list", () => {
-  beforeEach(() => {
-    getBanHistory.mockReset();
-    routerPush.mockClear();
-    routerReplace.mockClear();
-    routeQuery.value = {};
-    routeHash.value = "";
-  });
-
-  /** The search line of "Последние предупреждения", the neighbouring item. */
   it("draws the search line the warning list draws", async () => {
     getBanHistory.mockResolvedValue(page([issued()]));
 
@@ -430,10 +356,9 @@ describe("the name filter of the ban list", () => {
 
   /** The profile's "Баны: N" leads here with the name in the address. */
   it("asks for the bans of the name the address names, and shows the name", async () => {
-    routeQuery.value = { username: "SolohinLex" };
     getBanHistory.mockResolvedValue(page([issued()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered("/moderation/bans?username=SolohinLex");
 
     expect(getBanHistory).toHaveBeenCalledWith({
       username: "SolohinLex",
@@ -444,18 +369,14 @@ describe("the name filter of the ban list", () => {
   });
 
   it("puts the name in the address without the page number of the previous list", async () => {
-    routeQuery.value = { number: "3" };
     getBanHistory.mockResolvedValue(page([issued()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered("/moderation/bans?number=3");
     await nameField(wrapper).setValue("  SolohinLex  ");
     await wrapper.get("form").trigger("submit");
     await flushPromises();
 
-    expect(routerPush).toHaveBeenCalledWith({
-      name: "moderation-bans",
-      query: { username: "SolohinLex" },
-    });
+    expect(address()).toBe("/moderation/bans?username=SolohinLex");
     expect(getBanHistory).toHaveBeenLastCalledWith({
       username: "SolohinLex",
       skip: 0,
@@ -472,23 +393,21 @@ describe("the name filter of the ban list", () => {
     await nameField(wrapper).setValue("Solo");
     await flushPromises();
 
-    expect(routerPush).not.toHaveBeenCalled();
+    expect(address()).toBe("/moderation/bans");
     expect(getBanHistory).toHaveBeenCalledTimes(1);
   });
 
   /** The cross of the field gives the whole list back at once. */
   it("drops the name at once when the field is emptied", async () => {
-    routeQuery.value = { username: "SolohinLex", number: "2" };
     getBanHistory.mockResolvedValue(page([issued()]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(
+      "/moderation/bans?username=SolohinLex&number=2",
+    );
     await wrapper.get("form .clear-input-btn").trigger("click");
     await flushPromises();
 
-    expect(routerPush).toHaveBeenCalledWith({
-      name: "moderation-bans",
-      query: {},
-    });
+    expect(address()).toBe("/moderation/bans");
     expect(getBanHistory).toHaveBeenLastCalledWith({
       username: undefined,
       skip: 0,
@@ -497,71 +416,52 @@ describe("the name filter of the ban list", () => {
   });
 
   it("says nothing was found when the name matches nobody", async () => {
-    routeQuery.value = { username: "Никто" };
     getBanHistory.mockResolvedValue(page([]));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered("/moderation/bans?username=Никто");
 
     expect(wrapper.text()).toContain("Банов по заданным фильтрам не найдено");
     expect(wrapper.text()).not.toContain("Банов пока нет");
   });
 
   it("keeps the name in the address the paging control links to", async () => {
-    routeQuery.value = { username: "SolohinLex" };
     getBanHistory.mockResolvedValue(page([issued()], 25, 2));
 
-    const wrapper = await rendered({ realPaging: true });
+    const wrapper = await rendered("/moderation/bans?username=SolohinLex");
 
     const second = wrapper
       .findAll(".paging a")
       .find((link) => link.text() === "2");
-    expect(JSON.parse(second?.attributes("data-to") ?? "null")).toEqual({
-      name: "moderation-bans",
-      query: { username: "SolohinLex", number: "2" },
-    });
+    expect(second?.attributes("href")).toBe(
+      "/moderation/bans?username=SolohinLex&number=2",
+    );
   });
 });
 
-/**
- * The number of an entry is a link to it, as the number of a comment is. The
- * list is newest first, so a page number goes stale as entries are written
- * over it: the link names the entry by its number, the server answers with the
- * page of the list that holds it, and the address then says that page, so the
- * paging goes on from it.
- */
+// The number of an entry names it, and the server answers with the page that
+// holds it: a page number goes stale as newer entries push it down.
 describe("the links to the entries of the ban list", () => {
-  beforeEach(() => {
-    getBanHistory.mockReset();
-    routerPush.mockClear();
-    routerReplace.mockClear();
-    routeQuery.value = {};
-    routeHash.value = "";
-  });
-
   it("links the number of an entry to it, in the list of the name, whatever its page", async () => {
-    routeQuery.value = { username: "Experienced", number: "2" };
     getBanHistory.mockResolvedValue(page([issued({}, 16)], 25, 2, 20));
 
-    const wrapper = await rendered();
+    const wrapper = await rendered(
+      "/moderation/bans?username=Experienced&number=2",
+    );
     const number = wrapper.get(".ban-log-card__number");
 
     expect(number.text()).toBe("16");
-    expect(JSON.parse(number.attributes("data-to") ?? "null")).toEqual({
-      name: "moderation-bans",
-      query: { username: "Experienced", entry: "16" },
-      hash: "#ban-16",
-    });
+    expect(number.attributes("href")).toBe(
+      "/moderation/bans?username=Experienced&entry=16#ban-16",
+    );
     expect(wrapper.get(".ban-log-card .record-block").attributes("id")).toBe(
       "ban-16",
     );
   });
 
   it("asks for the page of the entry the address names and then names that page", async () => {
-    routeQuery.value = { username: "Experienced", entry: "16" };
-    routeHash.value = "#ban-16";
     getBanHistory.mockResolvedValue(page([issued({}, 16)], 45, 3, 40));
 
-    await rendered();
+    await rendered("/moderation/bans?username=Experienced&entry=16#ban-16");
     await flushPromises();
 
     expect(getBanHistory).toHaveBeenCalledWith({
@@ -570,115 +470,112 @@ describe("the links to the entries of the ban list", () => {
       skip: 0,
       take: PAGE_SIZE,
     });
-    expect(routerReplace).toHaveBeenCalledWith({
-      name: "moderation-bans",
-      query: { username: "Experienced", number: "3" },
-      hash: "#ban-16",
-    });
+    expect(address()).toBe(
+      "/moderation/bans?username=Experienced&number=3#ban-16",
+    );
     expect(getBanHistory).toHaveBeenCalledTimes(1);
   });
 
   /** An entry on the first page, or one the list does not have: no number. */
   it("leaves the page number out of the address for the first page", async () => {
-    routeQuery.value = { entry: "999" };
-    routeHash.value = "#ban-999";
     getBanHistory.mockResolvedValue(page([issued({}, 16)]));
 
-    await rendered();
+    await rendered("/moderation/bans?entry=999#ban-999");
     await flushPromises();
 
-    expect(routerReplace).toHaveBeenCalledWith({
-      name: "moderation-bans",
-      query: {},
-      hash: "#ban-999",
-    });
+    expect(address()).toBe("/moderation/bans#ban-999");
     expect(getBanHistory).toHaveBeenCalledTimes(1);
   });
 
   it("brings the entry the address names into view and marks it", async () => {
-    routeHash.value = "#ban-15";
-    // jsdom lays nothing out and has no scrollIntoView of its own.
-    const scrolled: Element[] = [];
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this);
-    };
+    const scrolled = recordScrolls();
     getBanHistory.mockResolvedValue(
       page([issued({ id: "b-2" }, 16), issued({ id: "b-1" }, 15)]),
     );
 
-    const wrapper = mountAttached();
-    await flushPromises();
+    await renderedAttached("/moderation/bans#ban-15");
 
     await vi.waitFor(() =>
-      expect(scrolled.map((element) => element.id)).toEqual(["ban-15"]),
+      expect(scrolled.map((entry) => entry.id)).toEqual(["ban-15"]),
     );
-    expect(scrolled[0].classList.contains("highlight-unread")).toBe(true);
-    expect(scrolled[0].classList.contains("record-block")).toBe(true);
-    wrapper.unmount();
-    delete (Element.prototype as Partial<Element>).scrollIntoView;
+    const { element } = scrolled[0];
+    expect(element.classList.contains("highlight-unread")).toBe(true);
+    expect(element.classList.contains("record-block")).toBe(true);
   });
 
+  /** The one scroll an arrival at the entry asks for. */
+  const TO_THE_MIDDLE = {
+    id: "ban-15",
+    options: { behavior: "smooth", block: "center" },
+  };
+
   /**
-   * The router brings an anchor to the top of the window once the address
-   * changes, so an entry brought to the middle before the address names its
-   * page would be pulled back to the top edge. The entry comes into view after
-   * the address is settled, in the middle of the window, as a comment does.
+   * An arrival by the number of the entry, held at the page's own change of
+   * address until it is let through, then let through: the scrolls it made.
    */
-  it("brings the entry into the middle only after the address names its page", async () => {
-    routeQuery.value = { entry: "15" };
-    routeHash.value = "#ban-15";
-    const scrolled: { id: string; options: unknown }[] = [];
-    Element.prototype.scrollIntoView = function (
-      this: Element,
-      options?: unknown,
-    ) {
-      scrolled.push({ id: this.id, options });
-    };
-    const moveAddress = routerReplace.getMockImplementation()!;
+  async function arriveThroughHeldAddress() {
+    const scrolled = recordScrolls();
+    // The page's own change of address waits at a guard until it is let through.
+    let reached = false;
     let settle = () => {};
-    routerReplace.mockImplementationOnce((to) => {
-      moveAddress(to);
-      return new Promise<void>((resolve) => (settle = resolve));
-    });
+    const hold = (next: Router) =>
+      next.beforeEach(
+        () =>
+          new Promise<boolean>((resolve) => {
+            reached = true;
+            settle = () => resolve(true);
+          }),
+      );
     getBanHistory.mockResolvedValue(
       page([issued({ id: "b-2" }, 16), issued({ id: "b-1" }, 15)]),
     );
 
-    const wrapper = mountAttached();
-    await flushPromises();
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    await renderedAttached("/moderation/bans?entry=15#ban-15", {
+      beforeMount: hold,
+    });
+    await vi.advanceTimersByTimeAsync(300);
 
-    expect(routerReplace).toHaveBeenCalledTimes(1);
+    expect(reached).toBe(true);
+    expect(address()).toBe("/moderation/bans?entry=15#ban-15");
     expect(scrolled).toEqual([]);
 
     settle();
-    await vi.waitFor(() =>
-      expect(scrolled).toEqual([
-        { id: "ban-15", options: { behavior: "smooth", block: "center" } },
-      ]),
-    );
-    wrapper.unmount();
-    delete (Element.prototype as Partial<Element>).scrollIntoView;
+    await vi.waitFor(() => expect(scrolled.length).toBeGreaterThan(0));
+    // Past the pause of every scroll the arrival woke.
+    await vi.advanceTimersByTimeAsync(300);
+    return scrolled.map(({ id, options }) => ({ id, options }));
+  }
+
+  // The router pulls an anchor to the top once the address changes, so the
+  // entry comes to the middle only after the address names its page.
+  it("brings the entry into the middle only after the address names its page", async () => {
+    const scrolled = await arriveThroughHeldAddress();
+
+    for (const one of scrolled) expect(one).toEqual(TO_THE_MIDDLE);
+    expect(address()).toBe("/moderation/bans#ban-15");
+  });
+
+  // The page's own change of address, which drops the page number from the
+  // anchor, must not scroll and mark the entry a second time.
+  it("brings the entry into the middle once", async () => {
+    const scrolled = await arriveThroughHeldAddress();
+
+    expect(scrolled).toEqual([TO_THE_MIDDLE]);
   });
 
   it("leaves a reader who went elsewhere before the entry came into view", async () => {
-    routeHash.value = "#ban-15";
-    const scrolled: string[] = [];
-    Element.prototype.scrollIntoView = function (this: Element) {
-      scrolled.push(this.id);
-    };
+    const scrolled = recordScrolls();
     getBanHistory.mockResolvedValue(
       page([issued({ id: "b-2" }, 16), issued({ id: "b-1" }, 15)]),
     );
 
-    const wrapper = mountAttached();
-    await flushPromises();
-    routeHash.value = "";
-    await new Promise((resolve) => setTimeout(resolve, 300));
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
+    await renderedAttached("/moderation/bans#ban-15");
+    await go("/moderation/bans");
+    await vi.advanceTimersByTimeAsync(300);
 
     expect(scrolled).toEqual([]);
-    wrapper.unmount();
-    delete (Element.prototype as Partial<Element>).scrollIntoView;
   });
 
   /** A read that failed is read again when its address is opened again. */
@@ -687,11 +584,9 @@ describe("the links to the entries of the ban list", () => {
     const wrapper = await rendered();
 
     getBanHistory.mockResolvedValueOnce({ data: null, error: "Ошибка" });
-    routeQuery.value = { number: "2" };
-    await flushPromises();
+    await go("/moderation/bans?number=2");
     getBanHistory.mockResolvedValueOnce(page([issued()]));
-    routeQuery.value = {};
-    await flushPromises();
+    await go("/moderation/bans");
 
     expect(getBanHistory).toHaveBeenCalledTimes(3);
     expect(wrapper.find(".ban-log-card").exists()).toBe(true);

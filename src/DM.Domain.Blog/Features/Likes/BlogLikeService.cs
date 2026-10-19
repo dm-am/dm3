@@ -12,9 +12,7 @@ using DM.Domain.Core.Likes;
 
 namespace DM.Domain.Blog.Features.Likes;
 
-/// <summary>
-/// Unified blog like service implementation
-/// </summary>
+/// <inheritdoc />
 /// <remarks>
 /// The blog's blacklist is not asked: a like is feedback, and the list closes
 /// comments only (BlogRoleExtensions.IsBlacklisted).

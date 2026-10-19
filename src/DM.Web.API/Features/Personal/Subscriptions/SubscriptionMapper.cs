@@ -7,7 +7,7 @@ namespace DM.Web.API.Features.Personal.Subscriptions;
 /// Compile-time mapper for subscriptions
 /// </summary>
 [Mapper]
-internal partial class SubscriptionMapper
+public partial class SubscriptionMapper
 {
     /// <summary>
     /// Domain subscription to its response DTO. The subscriber id stays

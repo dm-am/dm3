@@ -1,13 +1,12 @@
-using Npgsql;
 using DM.Domain.Core.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.GameReviews;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Queries;
@@ -27,8 +26,6 @@ internal class GameReviewRepository : IGameReviewRepository
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
     }
-
-    // ═══ READ ═══
 
     /// <inheritdoc />
     public Task<int> CountAsync(Guid gameId) => _dbContext.GameReviews
@@ -50,15 +47,6 @@ internal class GameReviewRepository : IGameReviewRepository
     public Task<GameReview?> GetAsync(Guid id) => _dbContext.GameReviews
         .TagWith("DM.GameReview.GetById")
         .Where(r => !r.IsRemoved && r.GameReviewId == id)
-        .ProjectToGameReview()
-        .FirstOrDefaultAsync();
-
-    /// <inheritdoc />
-    public Task<GameReview?> GetByAuthorAsync(Guid gameId, Guid authorId) => _dbContext.GameReviews
-        .TagWith("DM.GameReview.GetByAuthor")
-        .Where(r => r.GameId == gameId &&
-                    r.AuthorId == authorId &&
-                    !r.IsRemoved)
         .ProjectToGameReview()
         .FirstOrDefaultAsync();
 
@@ -89,8 +77,6 @@ internal class GameReviewRepository : IGameReviewRepository
             .ToArrayAsync();
     }
 
-    // ═══ WRITE ═══
-
     /// <inheritdoc />
     public Task<bool> ExistsAsync(Guid authorId, Guid gameId) => _dbContext.GameReviews
         .TagWith("DM.GameReview.Exists")
@@ -116,7 +102,7 @@ internal class GameReviewRepository : IGameReviewRepository
         {
             await _dbContext.SaveChangesAsync();
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // The caller pre-checks for an existing game review; this is the race
             // where two concurrent requests both pass that check. Translated here
@@ -144,10 +130,7 @@ internal class GameReviewRepository : IGameReviewRepository
         if (entity.Text != null)
             dbReview.Text = entity.Text;
         if (entity.IsRemoved == true && !dbReview.IsRemoved)
-            // Through the one call that writes the flag and the audit together, as
-            // the post review removal does. Only while the row is still live: a
-            // second removal behind the first would record its own hand and clock
-            // over the removal that actually happened.
+            // Only while live: a second removal would overwrite the hand and clock of the first.
             SoftDelete.Mark(dbReview, entity.DeletedByUserId, entity.DeletedUtc ?? _dateTimeProvider.Now);
         else if (entity.IsRemoved == false)
             dbReview.IsRemoved = false;
@@ -158,9 +141,7 @@ internal class GameReviewRepository : IGameReviewRepository
 
         await _dbContext.SaveChangesAsync();
 
-        // IgnoreQueryFilters, because one of the updates this method serves is the
-        // removal: the global filter drops soft-deleted rows, so the read-back threw
-        // "Sequence contains no elements" and every delete answered 500.
+        // The update may be the removal, so the read-back lifts the soft-delete filter.
         return await _dbContext.GameReviews
             .IgnoreQueryFilters()
             .TagWith("DM.GameReview.Updated")
@@ -168,8 +149,6 @@ internal class GameReviewRepository : IGameReviewRepository
             .ProjectToGameReview()
             .FirstAsync();
     }
-
-    // ═══ ELIGIBILITY ═══
 
     /// <inheritdoc />
     public async Task<bool> CanReviewGameAsync(Guid userId, Guid gameId)
@@ -194,8 +173,6 @@ internal class GameReviewRepository : IGameReviewRepository
         .Where(u => u.UserId == userId)
         .Select(u => u.QuantityRating)
         .FirstOrDefaultAsync();
-
-    // ═══ PRIVATE ═══
 
     /// <summary>
     /// The reviews whose game the reader may open, by the same filter every read
@@ -226,10 +203,6 @@ internal class GameReviewRepository : IGameReviewRepository
 
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
-            // ILIKE over the text, the author's name and the game's title at
-            // once — three SQL conditions joined by OR, the shape the
-            // endorsement list already uses. This is "find where X is
-            // mentioned", not three separate search buckets.
             // The list lifts the account filter to keep the reviews of removed
             // accounts (RemovedAuthors), so a removed name is not searchable.
             var pattern = LikePatterns.Contains(filter.Search.Trim());
@@ -243,10 +216,8 @@ internal class GameReviewRepository : IGameReviewRepository
     }
 
     /// <summary>
-    /// List sorting. Supported fields are kept in step with the FE sort
-    /// options ("created", "author") — a new option on the client without a
-    /// matching case here silently falls into the default order, so the SSOT
-    /// is this switch. For reviews WRITTEN by a user (AuthorId is fixed by the
+    /// List sorting by the client's sort options ("created", "author"); an option
+    /// without a case here falls into the default order. For reviews WRITTEN by a user (AuthorId is fixed by the
     /// filter) "author" means the other side of the pair, and that is the
     /// game's title. Secondary keys make the order deterministic when primary
     /// values are equal.
@@ -260,23 +231,15 @@ internal class GameReviewRepository : IGameReviewRepository
 
         if (sortBy == "author")
         {
-            var byGame = filter?.AuthorId != null;
-            var ordered = (byGame, desc) switch
-            {
-                (true, true) => query.OrderByDescending(r => r.Game.Title),
-                (true, false) => query.OrderBy(r => r.Game.Title),
-                // A removed author sorts as an empty name: the order must not
-                // place him by the name the removal took away.
-                (false, true) => query.OrderByDescending(r => r.Author.IsRemoved ? "" : r.Author.Username),
-                (false, false) => query.OrderBy(r => r.Author.IsRemoved ? "" : r.Author.Username),
-            };
-            return desc
-                ? ordered.ThenByDescending(r => r.CreatedUtc).ThenByDescending(r => r.GameReviewId)
-                : ordered.ThenBy(r => r.CreatedUtc).ThenBy(r => r.GameReviewId);
+            // A removed author sorts as an empty name, not by the name the removal took away.
+            Expression<Func<DbGameReview, string>> name = filter?.AuthorId != null
+                ? r => r.Game.Title
+                : r => r.Author.IsRemoved ? "" : r.Author.Username;
+            return query.OrderByDirection(name, !desc)
+                .ThenByDirection(r => r.CreatedUtc, !desc)
+                .ThenByDirection(r => r.GameReviewId, !desc);
         }
 
-        return desc
-            ? query.OrderByDescending(r => r.CreatedUtc).ThenByDescending(r => r.GameReviewId)
-            : query.OrderBy(r => r.CreatedUtc).ThenBy(r => r.GameReviewId);
+        return query.OrderByDirection(r => r.CreatedUtc, !desc).ThenByDirection(r => r.GameReviewId, !desc);
     }
 }

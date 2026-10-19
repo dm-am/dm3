@@ -37,21 +37,17 @@ internal class GameSubscriptionService : IGameSubscriptionService
 
     /// <inheritdoc />
     /// <remarks>
-    /// Nobody is refused, the game's blacklist included. The list closes the
-    /// discussion and the application; a subscription delivers what its holder
-    /// may read anyway, and the role of reader it gives opens neither of the two -
-    /// both ask the list itself (GameRoleExtensions.IsBlacklisted).
+    /// Nobody is refused, the blacklisted included: a subscription delivers what its holder may read anyway.
     /// </remarks>
     public Task<Subscription> SubscribeAsync(Guid gameId, CancellationToken ct = default) =>
-        SubscribeInternal(gameId, _identityProvider.Current.User.UserId, ct);
+        SubscribeInternalAsync(gameId, _identityProvider.Current.User.UserId, ct);
 
     /// <inheritdoc />
-    public async Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default) =>
-        await SubscribeInternal(gameId, userId, ct);
+    public Task SubscribeUserAsync(Guid gameId, Guid userId, CancellationToken ct = default) =>
+        SubscribeInternalAsync(gameId, userId, ct);
 
-    private async Task<Subscription> SubscribeInternal(Guid gameId, Guid userId, CancellationToken ct)
+    private async Task<Subscription> SubscribeInternalAsync(Guid gameId, Guid userId, CancellationToken ct)
     {
-        // Check if already subscribed
         var existing = await _repository.FindAsync(userId, SubscriptionTargetType.Game, gameId, ct);
         if (existing != null)
         {
@@ -83,25 +79,12 @@ internal class GameSubscriptionService : IGameSubscriptionService
     {
         var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Game, gameId, ct);
         var subscriberIdList = subscriberIds.ToList();
-
-        if (!subscriberIdList.Any())
+        if (subscriberIdList.Count == 0)
         {
-            return Enumerable.Empty<UserReference>();
+            return [];
         }
 
-        // One read for the whole list. Asked one at a time, a hundred subscribers
-        // were a hundred round trips, and GetAsync throws on a user who is no
-        // longer there — a single removed subscriber answered the entire page
-        // with 404. The batch form returns the users that exist and says
-        // nothing about the ones that do not, which is what a list of readers
-        // needs.
+        // The batch read skips a user who is no longer there instead of throwing on him.
         return await _userLookupService.GetReferencesAsync(subscriberIdList);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> IsSubscribedAsync(Guid userId, Guid gameId, CancellationToken ct = default)
-    {
-        var subscription = await _repository.FindAsync(userId, SubscriptionTargetType.Game, gameId, ct);
-        return subscription != null;
     }
 }

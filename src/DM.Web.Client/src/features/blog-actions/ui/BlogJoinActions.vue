@@ -1,25 +1,9 @@
 <script setup lang="ts">
-/**
- * BlogJoinActions — the reader-facing "actions with the blog" group:
- * subscribe / unsubscribe (reader role, store.subscribe/unsubscribe).
- * Mirrors GameJoinActions; blogs have no "apply to join" — the only reader
- * action is the subscription toggle ("Добавить в читаемое" per the doc).
- *
- * Gating (only shown for an authenticated non-owner) is the caller's
- * responsibility. `variant` mirrors BlogStatusButtons ("strip" for the
- * sidebar, "button" for page surfaces).
- *
- * isSubscribed derives from the readers slice (blogs serve no participation
- * flags), so the readers list is loaded on mount if not present yet.
- */
-import { onMounted, ref } from "vue";
+// isSubscribed comes from the readers slice (blogs serve no participation flags).
+import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore } from "@/entities/blog";
 import { notifyFailure } from "@/shared/lib/errors";
-
-withDefaults(defineProps<{ variant?: "strip" | "button" }>(), {
-  variant: "strip",
-});
 
 const store = useBlogDetailsStore();
 const { blog, isSubscribed, readers, readersLoading } = storeToRefs(store);
@@ -32,6 +16,10 @@ onMounted(() => {
 
 const busy = ref(false);
 
+const label = computed(() =>
+  isSubscribed.value ? "Убрать из читаемого" : "Добавить в читаемое",
+);
+
 async function toggleSubscribe() {
   busy.value = true;
   const error = isSubscribed.value
@@ -43,54 +31,25 @@ async function toggleSubscribe() {
 </script>
 
 <template>
-  <!-- Sidebar strip variant -->
-  <template v-if="variant === 'strip'">
-    <li class="link">
-      <span class="muted" aria-hidden="true">- </span>
-      <button
-        type="button"
-        class="strip-action"
-        :disabled="busy"
-        @click="toggleSubscribe"
-      >
-        {{ isSubscribed ? "Убрать из читаемого" : "Добавить в читаемое" }}
-      </button>
-    </li>
-  </template>
-
-  <!-- Page button-group variant -->
-  <div v-else class="join-buttons">
+  <li class="link">
+    <span class="muted" aria-hidden="true">- </span>
     <button
       type="button"
-      class="join-btn"
+      class="strip-action"
       :disabled="busy"
       @click="toggleSubscribe"
     >
-      {{ isSubscribed ? "Убрать из читаемого" : "Добавить в читаемое" }}
+      {{ label }}
     </button>
-  </div>
+  </li>
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .link
   display: block
 
-.muted
-  color: $text-muted
-
-// A word of the sidebar menu, drawn as every other link of it, out of reach
-// included.
 .strip-action
   +inline-link-button
-
-.join-buttons
-  display: flex
-  flex-wrap: wrap
-  gap: $small
-
-.join-btn
-  font-size: $secondary-font-size
-  +button
 </style>

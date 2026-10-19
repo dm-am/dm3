@@ -13,133 +13,75 @@ internal class BlogIntentionResolver : IIntentionResolver<BlogIntention, BlogDto
     public bool IsAllowed(IAuthorizationSubject user, BlogIntention intention, BlogDto target)
     {
         var isOwner = user.UserId == target.Author?.UserId;
-        var isMentor = target.Mentor?.UserId == user.UserId;
         var isAssistant = target.Assistants.Any(a => a.UserId == user.UserId);
-        // Filled by the list-shaped reads only. Every intention below is decided
-        // on a blog that came from a single-blog read, where it is false — so the
-        // branches that mention it have never actually fired. Left as it was:
-        // making them fire is a change of who may read a private draft and who may
-        // comment, not a performance fix.
-        var isSubscriber = target.IsViewerSubscriber;
+        var isOwnBlog = target.IsOwnBlog(user.UserId);
         var hasPendingInvitation = target.PendingInvitedUserIds.Contains(user.UserId);
+        var seesPrivateDraft = target.DraftVisibility == DraftVisibility.Public ||
+                               isOwnBlog ||
+                               target.IsViewerSubscriber ||
+                               user.Role >= UserRole.Admin;
 
         return intention switch
         {
-            // Owner or admin can edit
             BlogIntention.Edit =>
                 isOwner || user.Role >= UserRole.Admin,
 
-            // Settings editing is broader than owner-level Edit: the settings
-            // page belongs to the blog leads (owner + assistants), mirroring
-            // GameIntention.EditSettings. The mentor is deliberately absent:
-            // unlike the game curator, who helps a newbie shape the game itself,
-            // the blog mentor only approves publications.
+            // The mentor is absent: unlike the game mentor, the blog mentor does not help shape the blog.
             BlogIntention.EditSettings =>
                 isOwner || isAssistant || user.Role >= UserRole.SeniorModerator,
 
-            // Owner or senior moderator+ can delete
             BlogIntention.Delete =>
                 isOwner || user.Role >= UserRole.SeniorModerator,
 
-            // Owner can create rubrics
-            BlogIntention.CreateRubric =>
+            BlogIntention.ManageRubrics =>
                 isOwner,
 
-            // Owner and assistants can create publications
             BlogIntention.CreatePublication =>
                 isOwner || isAssistant,
 
-            // Draft blogs with private visibility can be viewed by owner, assistants, readers, mentors, admins, or invited users
             BlogIntention.ViewDraft =>
-                target.DraftVisibility == DraftVisibility.Public ||
-                isOwner ||
-                isAssistant ||
-                isSubscriber ||
-                isMentor ||
-                hasPendingInvitation ||
-                user.Role >= UserRole.Admin,
+                seesPrivateDraft || hasPendingInvitation,
 
-            // Owner can invite assistants
             BlogIntention.InviteAssistant =>
                 isOwner,
 
-            // Owner or assistant can invite readers
             BlogIntention.InviteReader =>
                 isOwner || isAssistant,
 
-            // Owner can cancel invitations (creator check done in service)
+            // The creator check is the service's.
             BlogIntention.CancelInvitation =>
                 isOwner,
 
-            // The blog blacklist is not here on purpose. It answers to Edit —
-            // owner or administration, on the read as much as on the write —
-            // and a second intention describing the same surface differently
-            // (this one said "owner alone") is a gate nobody enforces and a
-            // reader's wrong answer about who may run the list.
-
-            // Mentors can approve/reject publications
-            BlogIntention.ApprovePublications =>
-                isMentor || user.Role >= UserRole.SeniorModerator,
-
-            // Senior moderators+ can assign mentors to blogs
             BlogIntention.AssignMentor =>
                 user.Role >= UserRole.SeniorModerator,
 
-            // Status transitions mirror the game lead bucket: only the blog
-            // leads (owner + assistants) may move the blog on the status state
-            // machine, and only from a compatible current state
-            // (Draft -> Active, Closed -> Active reopen)
+            // The guest's empty id is no identity (AnonymousIdentity), so the status moves ask for a signed-in user.
+            // Draft -> Active, and the Closed -> Active reopen
             BlogIntention.SetStatusActive when user.IsAuthenticated =>
                 (target.Status == ModuleStatus.Draft || target.Status == ModuleStatus.Closed) &&
                 (isOwner || isAssistant),
 
-            // Active -> Closed (close/freeze/finish), or Closed -> Closed
-            // (change reason, e.g. unfreeze a Frozen blog to a plain Close)
+            // Closed -> Closed changes the reason, e.g. a Frozen blog to a plain Close
             BlogIntention.SetStatusClosed when user.IsAuthenticated =>
                 (target.Status == ModuleStatus.Active || target.Status == ModuleStatus.Closed) &&
                 (isOwner || isAssistant),
 
-            // Premoderation, the author's half: the owner asks a mentor to look at
-            // the blog. Only the owner — an assistant writes in the blog, the
-            // mentor approves its publications, and neither of them decides that
-            // the blog itself is ready to be judged.
-            //
-            // Identity only. Which premoderation status the move is legal from is
-            // the machine's answer (ModulePremoderationPolicy), given before this
-            // gate is asked. The mentor's half is a rank and is answered by the
-            // targetless resolver below.
+            // Identity only: the status the move is legal from is ModulePremoderationPolicy's answer.
             BlogIntention.SubmitForApproval when user.IsAuthenticated =>
                 isOwner,
 
-            // Premoderation-pending blogs are hidden like games: only the owner,
-            // assistants, the assigned curator, invited users, and whoever may
-            // pass the verdict can see them until they are approved.
-            //
-            // The rank is PremoderationAccess and not a comparison of its own.
-            // It used to ask for a senior moderator while the verdict itself is a
-            // site-wide Mentor+ move, so a mentor and a moderator were shown a
-            // moderation queue every entry of which answered 403, and the blog
-            // panel drew them two buttons on a page they could not open. The game
-            // reads by the same rule, so the two modules cannot drift apart.
+            // The rank the verdict reads, so whoever may judge a blog may open it.
             BlogIntention.ViewPremoderationPending =>
-                isOwner ||
-                isAssistant ||
-                isMentor ||
+                isOwnBlog ||
                 hasPendingInvitation ||
                 user.MayJudgePremoderation(),
 
-            // Anyone who can view the blog can comment unless blacklisted: the
-            // discussion has no switch that closes it. An ordinary ban silences
-            // discussion of other people's blogs; the user's own blog stays open.
-            // Publications themselves are a different intention and are not
-            // affected. The services ask ThrowIfBlacklisted before this gate,
-            // for the words.
+            // The discussion has no switch that closes it; the services ask ThrowIfBlacklisted first, for the words.
             BlogIntention.CreateComment =>
                 user.IsAuthenticated &&
                 !target.IsBlacklisted(user.UserId) &&
-                (target.Status != ModuleStatus.Draft || target.DraftVisibility == DraftVisibility.Public ||
-                 isOwner || isAssistant || isSubscriber || isMentor || user.Role >= UserRole.Admin) &&
-                user.MaySpeak(inOwnSpace: target.IsOwnBlog(user.UserId)),
+                (target.Status != ModuleStatus.Draft || seesPrivateDraft) &&
+                user.MaySpeak(inOwnSpace: isOwnBlog),
 
             _ => false
         };
@@ -153,12 +95,9 @@ internal class BlogIntentionResolverWithoutTarget : IIntentionResolver<BlogInten
     public bool IsAllowed(IAuthorizationSubject user, BlogIntention intention) =>
         intention switch
         {
-            // Any authenticated user can create a blog
             BlogIntention.Create => user.IsAuthenticated,
 
-            // Site-wide gate for premoderation transitions (state checks live in
-            // the service). The same rank ViewPremoderationPending reads, so the
-            // right to judge a blog and the right to open it are one rule.
+            // The rank ViewPremoderationPending reads; the state checks live in the service.
             BlogIntention.SetStatusModeration =>
                 user.MayJudgePremoderation(),
 

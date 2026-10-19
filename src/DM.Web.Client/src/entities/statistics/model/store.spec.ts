@@ -3,13 +3,6 @@
  */
 
 /**
- * On a narrow screen the statistics are drawn by two blocks in turn, the one
- * of the header and the one of the right column of a phone, and while the
- * shell switches between them both are on screen for a moment. The store
- * polled for whoever called last: the block that went stopped the polling of
- * the one that stayed, and the numbers froze until the tab was hidden and
- * shown again.
- *
  * The store polls while any block that asked for it is still there. A block
  * asks once however many times it calls: one mounted in a hidden tab starts on
  * mount and again when the tab is shown, and hiding the tab must still stop it.

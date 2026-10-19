@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
@@ -16,11 +12,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Runs against the container Postgres because the subscriber summary is one
-/// relational statement: the count is a GROUP BY, the preview is a window
-/// function with a LIMIT inside a partition, and the viewer flag is an EXISTS.
-/// None of those three is exercised by an in-memory provider, and the ordering
-/// the preview depends on is a Postgres null-placement question.
+/// The subscriber summary is one statement: a GROUP BY count, a windowed preview with a LIMIT per partition and an
+/// EXISTS for the viewer, so this runs against the container Postgres.
 /// </summary>
 public class GameRepositoryShould : IntegrationTestBase
 {
@@ -31,10 +24,7 @@ public class GameRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The preview used to be an arbitrary twenty of however many subscribers a
-    /// game had, taken in memory after every row was loaded. It is now the twenty
-    /// most recently active, ordered, chosen by the database — and the total is
-    /// still the total, not the size of the preview.
+    /// The preview is the twenty most recently active subscribers, chosen by the database, and the total is the total.
     /// </summary>
     [Fact]
     public async Task ReportEverySubscriberInTheCountAndOnlyTheMostRecentInThePreview()
@@ -60,9 +50,7 @@ public class GameRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The Reader role is the only thing the subscriber id set was consulted for
-    /// in authorization. It now comes from a per-viewer flag, so it has to answer
-    /// for the subscriber and only for the subscriber.
+    /// The per-viewer flag behind the Reader role answers for the subscriber only.
     /// </summary>
     [Fact]
     public async Task ResolveTheReaderRoleForASubscriberAndNotForAStranger()
@@ -89,14 +77,8 @@ public class GameRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A fresh game and a fresh set of subscribers per test: the fixture's
-    /// database is shared, so seeding onto the seed's own game would make the
-    /// count depend on what other tests subscribed to it.
+    /// A fresh game and subscribers per test, the subscribers ordered as the preview should be.
     /// </summary>
-    /// <returns>
-    /// The game, its master, and its subscribers ordered the way the preview is
-    /// expected to be — most recently active first.
-    /// </returns>
     private static async Task<(Guid GameId, Guid MasterId, List<(Guid UserId, string Username)> Subscribers)>
         SeedGameWithSubscribersAsync(DmDbContext dbContext)
     {
@@ -144,11 +126,7 @@ public class GameRepositoryShould : IntegrationTestBase
         return (gameId, masterId, subscribers);
     }
 
-    /// <returns>
-    /// The id and the username as stored — truncated, so the caller compares
-    /// against what the repository will actually return rather than the prefix it
-    /// asked for.
-    /// </returns>
+    /// <returns>The id and the username as stored, truncated.</returns>
     private static async Task<(Guid UserId, string Username)> AddUserAsync(
         DmDbContext dbContext, string prefix, DateTimeOffset lastActivityUtc)
     {

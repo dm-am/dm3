@@ -44,9 +44,4 @@ public class ReceivedInvitation
     /// When the invitation was created
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
-
-    /// <summary>
-    /// When the invitation expires
-    /// </summary>
-    public DateTimeOffset? ExpiresUtc { get; set; }
 }

@@ -4,13 +4,11 @@
  *
  * Shows first N values, collapses rest into dropdown.
  */
-import { ref, computed } from "vue";
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
 import { useMenuKeyboard } from "@/shared/lib/composables/useMenuKeyboard";
 import type { ExpandableBubbleProps } from "../types";
-
-defineOptions({ name: "ExpandableBubble" });
 
 const props = withDefaults(defineProps<ExpandableBubbleProps>(), {
   maxVisible: 1,
@@ -20,12 +18,11 @@ const emit = defineEmits<{
   remove: [id: string];
 }>();
 
-// Dropdown state
 const showDropdown = ref(false);
+const rootRef = ref<HTMLElement | null>(null);
 const expandBtnRef = ref<HTMLButtonElement | null>(null);
 const dropdownRef = ref<HTMLElement | null>(null);
 
-// Computed values
 const sortedValues = computed(() =>
   [...props.values].sort((a, b) =>
     a.label.toLowerCase().localeCompare(b.label.toLowerCase(), "ru"),
@@ -38,13 +35,6 @@ const visibleValues = computed(() =>
 
 const hiddenValues = computed(() => sortedValues.value.slice(props.maxVisible));
 
-const remainingCount = computed(() =>
-  Math.max(0, sortedValues.value.length - props.maxVisible),
-);
-
-const isExpandable = computed(
-  () => sortedValues.value.length > props.maxVisible,
-);
 const isSingleValue = computed(() => props.values.length === 1);
 
 function toggleDropdown() {
@@ -55,10 +45,7 @@ function closeDropdown() {
   showDropdown.value = false;
 }
 
-// The role="menu" keyboard contract, shared with the other two menus on the
-// site. Escape sat on the trigger button alone, and the dropdown is its
-// sibling rather than its child, so a press from inside the open list never
-// reached the handler; the wrapper below hears both.
+// Escape is heard on the wrapper: the dropdown is the trigger's sibling, not its child.
 const { handleMenuKeydown } = useMenuKeyboard({
   isOpen: () => showDropdown.value,
   close: closeDropdown,
@@ -66,28 +53,15 @@ const { handleMenuKeydown } = useMenuKeyboard({
   menu: dropdownRef,
 });
 
-function removeValue(id: string) {
+/** Taking a value off closes the list, wherever the value stood. */
+function remove(id: string) {
   emit("remove", id);
+  closeDropdown();
 }
 
-function removeFromDropdown(id: string) {
-  emit("remove", id);
-  // Close dropdown if no more hidden values
-  if (hiddenValues.value.length <= 1) {
-    closeDropdown();
-  }
-}
-
-// Handle click outside
 function handleClickOutside(event: MouseEvent) {
-  const target = event.target as HTMLElement;
-  if (!target.closest(".bubble-expandable")) {
-    closeDropdown();
-  }
+  if (!rootRef.value?.contains(event.target as Node)) closeDropdown();
 }
-
-// Setup click outside listener
-import { onMounted, onUnmounted } from "vue";
 
 onMounted(() => {
   document.addEventListener("click", handleClickOutside);
@@ -99,9 +73,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- Single value - simple bubble. Explicit {{ " " }} space nodes: Vue's
-       whitespace condense eats literal spaces, and the copy must read
-       "Ведущий: Имя ×" on one line. -->
+  <!-- Explicit {{ " " }} nodes: Vue condenses literal spaces, and the copy must read "Ведущий: Имя ×". -->
   <div v-if="isSingleValue" class="bubble bubble-single-owner">
     <span class="bubble-prefix">{{ prefix }}{{ " " }}</span
     ><span class="bubble-owner-item">
@@ -111,22 +83,21 @@ onUnmounted(() => {
         type="button"
         class="bubble-owner-remove"
         :aria-label="`Убрать фильтр: ${values[0].label}`"
-        @click.stop="removeValue(values[0].id)"
+        @click.stop="emit('remove', values[0].id)"
       >
         {{ symbols.close }}
       </button>
     </span>
   </div>
 
-  <!-- Multiple values - expandable bubble -->
   <div
     v-else
+    ref="rootRef"
     class="bubble bubble-expandable"
-    :class="{ 'bubble-owners': isExpandable }"
+    :class="{ 'bubble-owners': hiddenValues.length > 0 }"
     @keydown="handleMenuKeydown"
   >
     <span class="bubble-prefix">{{ prefix }}{{ " " }}</span>
-    <!-- Visible values -->
     <template v-for="(item, idx) in visibleValues" :key="item.id">
       <span v-if="idx > 0" class="bubble-separator">,{{ " " }}</span>
       <span class="bubble-owner-item">
@@ -136,26 +107,24 @@ onUnmounted(() => {
           type="button"
           class="bubble-owner-remove"
           :aria-label="`Убрать фильтр: ${item.label}`"
-          @click.stop="removeValue(item.id)"
+          @click.stop="remove(item.id)"
         >
           {{ symbols.close }}
         </button>
       </span>
     </template>
 
-    <!-- Remaining count -->
-    <span v-if="remainingCount > 0" class="bubble-remaining">
-      и еще {{ remainingCount }}
+    <span v-if="hiddenValues.length > 0" class="bubble-remaining">
+      и еще {{ hiddenValues.length }}
     </span>
 
-    <!-- Expand button -->
     <button
-      v-if="isExpandable"
+      v-if="hiddenValues.length > 0"
       ref="expandBtnRef"
       type="button"
       class="bubble-expand-btn"
       :class="{ active: showDropdown }"
-      :aria-label="`Показать еще ${remainingCount}`"
+      :aria-label="`Показать еще ${hiddenValues.length}`"
       aria-haspopup="menu"
       :aria-expanded="showDropdown"
       @click.stop="toggleDropdown"
@@ -163,7 +132,6 @@ onUnmounted(() => {
       <SvgIcon name="chevronDown" />
     </button>
 
-    <!-- Dropdown for hidden values -->
     <div
       v-if="showDropdown"
       ref="dropdownRef"
@@ -177,7 +145,7 @@ onUnmounted(() => {
         class="owners-dropdown-item"
         role="menuitem"
         :aria-label="`Убрать фильтр: ${item.label}`"
-        @click.stop="removeFromDropdown(item.id)"
+        @click.stop="remove(item.id)"
       >
         <span class="owner-name">{{ item.label }}</span>
         <span class="owner-remove">{{ symbols.close }}</span>
@@ -187,7 +155,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Filters" as *
+@use "@/assets/styles/FilterBubbles" as *
 
 +filter-bubbles
 </style>

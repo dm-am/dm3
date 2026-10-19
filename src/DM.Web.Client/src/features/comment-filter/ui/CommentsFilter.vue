@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { vClickOutside } from "@/shared/directives";
-import { useCommentsFilter, SORT_OPTIONS } from "../";
+import { useCommentsFilter } from "../model/useCommentsFilter";
+import { SORT_OPTIONS } from "../model/types";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import { formatDateRangeForDisplay } from "@/shared/lib/filters";
@@ -30,32 +31,14 @@ const {
   clearFilters,
 } = useCommentsFilter();
 
-// =============================================================================
-// SEARCH INPUT (with debounce)
-// =============================================================================
-
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
   setSearch,
 );
 
-// =============================================================================
-// FILTER DROPDOWN (with navigation)
-// =============================================================================
+const { showDropdown, navPath, closeDropdown, toggleDropdown, navigateBack } =
+  useFilterDropdown();
 
-const {
-  showDropdown,
-  navPath,
-  closeDropdown: closeDropdownBase,
-  toggleDropdown,
-  navigateBack,
-} = useFilterDropdown();
-
-function closeDropdown() {
-  closeDropdownBase();
-}
-
-// Root level filter options
 const filterOptions = [
   { key: "author", label: "Автор", hint: "Фильтр по автору комментария" },
   {
@@ -76,18 +59,6 @@ function getDropdownTitle(): string | null {
   return null;
 }
 
-// =============================================================================
-// AUTHOR MULTI-SELECT
-// =============================================================================
-
-function handleAddAuthor(username: string) {
-  addAuthor(username);
-}
-
-// =============================================================================
-// DATE RANGE
-// =============================================================================
-
 function handleDateApply(from: string | null, to: string | null) {
   setDateRange(from, to);
   closeDropdown();
@@ -98,20 +69,12 @@ function handleDateClear() {
   closeDropdown();
 }
 
-// =============================================================================
-// SORT
-// =============================================================================
-
 const sortOptions = SORT_OPTIONS.map((o) => ({
   value: o.value,
   label: o.label,
   hint: o.hint,
   defaultDirection: o.defaultDirection,
 }));
-
-// =============================================================================
-// BUBBLES & DISPLAY
-// =============================================================================
 
 const hasDateFilter = computed(() => {
   return (
@@ -127,30 +90,23 @@ const dateFilterLabel = computed(() => {
   });
 });
 
-// Sort is driven by the SortButton, not the filter bubbles — it must NOT
-// trigger the "Сбросить" row (consistent with Games / Pulse / Polls).
+// The sort is the SortButton's: it does not raise the "Сбросить" row.
 const hasBubbles = computed(() => {
   const state = filterState.value;
   return state.authors.size > 0 || hasDateFilter.value;
 });
 
-// Authors bubble values
 const authorsBubbleValues = computed(() =>
   [...filterState.value.authors]
     .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), "ru"))
     .map((author) => ({ id: author, label: author })),
 );
 
-function handleRemoveAuthor(id: string) {
-  removeAuthor(id);
-}
-
 function clearAll() {
   localInput.value = "";
   clearFilters();
 }
 
-// Search input keyboard handler (for Backspace to remove filters)
 function handleSearchKeydown(event: KeyboardEvent) {
   if (event.key === "Backspace" && !localInput.value) {
     if (filterState.value.createdFromUtc || filterState.value.createdToUtc) {
@@ -170,9 +126,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
 <template>
   <div class="comments-filter">
-    <!-- Filter bar row -->
     <div class="filter-bar">
-      <!-- Search input -->
       <FilterSearchInput
         v-model="localInput"
         placeholder="Поиск по тексту"
@@ -181,7 +135,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
         <FilterButton
           :active="showDropdown"
@@ -190,14 +143,12 @@ function handleSearchKeydown(event: KeyboardEvent) {
         />
 
         <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"
             :title="getDropdownTitle() ?? ''"
             @back="navigateBack"
           />
 
-          <!-- Root level items -->
           <template v-if="!navPath">
             <FilterDropdownItem
               v-for="item in filterOptions"
@@ -209,18 +160,16 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Author multi-select: include-inactive, so the author of an old
-               comment who has not been here for 30 days stays findable -->
+          <!-- Include inactive: an author away for 30 days stays findable. -->
           <UserMultiSelect
             v-if="navPath?.filter === 'author'"
             :selected-users="filterState.authors"
             placeholder="Поиск автора"
             include-inactive
-            @add="handleAddAuthor"
-            @remove="handleRemoveAuthor"
+            @add="addAuthor"
+            @remove="removeAuthor"
           />
 
-          <!-- Date range picker -->
           <DateRangePicker
             v-if="navPath?.filter === 'dateRange'"
             :from-value="filterState.createdFromUtc"
@@ -232,7 +181,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         </FilterDropdown>
       </div>
 
-      <!-- Sort -->
       <SortButton
         :options="sortOptions"
         :sort-by="filterState.sortBy"
@@ -242,18 +190,15 @@ function handleSearchKeydown(event: KeyboardEvent) {
       />
     </div>
 
-    <!-- Active filters row (bubbles) -->
     <BubblesRow v-if="hasBubbles" @clear-all="clearAll">
-      <!-- Expandable authors bubble -->
       <ExpandableBubble
         v-if="filterState.authors.size > 0"
         :prefix="filterState.authors.size > 1 ? 'Авторы:' : 'Автор:'"
         :values="authorsBubbleValues"
         :max-visible="1"
-        @remove="handleRemoveAuthor"
+        @remove="removeAuthor"
       />
 
-      <!-- Date filter bubble -->
       <FilterBubble
         v-if="hasDateFilter"
         prefix="Дата:"
@@ -274,9 +219,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
   +filter-bar
   +filter-button
-  +filter-responsive
 
-// Search input inside dropdown
 +dropdown-search-input
 +filter-dropdown-base
 </style>

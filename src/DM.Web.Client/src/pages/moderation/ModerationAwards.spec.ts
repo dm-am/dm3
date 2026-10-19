@@ -2,15 +2,17 @@
  * @vitest-environment jsdom
  */
 
-/**
- * "Серии конкурсов": the heading with the way to the catalogue of the award
- * types under it, and the table of the series drawn as a table whose rows are
- * added in place is (AttributeSchemaEditor): "+ Новая серия" right under it.
- */
+// The series table, with "+ Новая серия" under it.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { enableAutoUnmount, mount, RouterLinkStub } from "@vue/test-utils";
+import {
+  enableAutoUnmount,
+  flushPromises,
+  mount,
+  RouterLinkStub,
+} from "@vue/test-utils";
 import type { Ref } from "vue";
 import type { Column } from "@/shared/ui/DataTable";
+import { achievementApi } from "@/entities/achievement";
 import ModerationAwards from "./ModerationAwards.vue";
 
 /** The series the page lists, set by a test before it mounts the page. */
@@ -35,12 +37,6 @@ vi.mock("@/entities/achievement", async () => {
 vi.mock("vue-final-modal", () => ({
   useModal: () => ({ open: vi.fn(), close: vi.fn() }),
 }));
-
-/** The gate has its own spec; here the viewer may open the page. */
-vi.mock("./lib/useRoleGate", async () => {
-  const { ref } = await import("vue");
-  return { useRoleGate: () => ({ hasAccess: ref(true), deniedText: "" }) };
-});
 
 enableAutoUnmount(afterEach);
 afterEach(() => {
@@ -72,11 +68,7 @@ describe("the head of the contest series", () => {
   });
 });
 
-/**
- * The list of the series is the site's table (DataTable), as every list of
- * moderation is, with every column at every width, and "+ Новая серия" right
- * under it.
- */
+// The site's table, every column at every width.
 describe("the list of the contest series", () => {
   const SERIES = [
     {
@@ -115,9 +107,6 @@ describe("the list of the contest series", () => {
       "Статус",
       "",
     ]);
-    for (const column of columns) {
-      expect(column).not.toHaveProperty("rank");
-    }
 
     const add = wrapper.get(".new-series");
     expect(add.text()).toBe("+ Новая серия");
@@ -146,5 +135,32 @@ describe("the list of the contest series", () => {
     expect(rows[0].get("td.col-actions").text()).toBe("Скрыть");
     expect(rows[1].get("td.col-status").text()).toBe("Скрыта");
     expect(rows[1].get("td.col-actions").text()).toBe("Вернуть");
+  });
+
+  it("prints a refused hide on a line under its row and keeps the row", async () => {
+    listed.series!.value = SERIES;
+    vi.mocked(achievementApi.updateContestSeries).mockResolvedValue({
+      data: null,
+      error: { type: "Conflict", title: "", status: 409, traceId: "t" },
+    } as never);
+    const wrapper = render();
+
+    await wrapper.get("tr.table-row td.col-actions button").trigger("click");
+    await flushPromises();
+
+    const line = wrapper.get("tr.table-details-row .series-refusal");
+    expect(line.text()).toBe("Не удалось скрыть серию");
+    expect(
+      line.element.closest("tr")?.previousElementSibling?.textContent,
+    ).toContain("Конкурс 23");
+    expect(wrapper.findAll("tr.table-row")).toHaveLength(2);
+  });
+
+  it("draws skeleton rows, not the empty line, until the series are read", () => {
+    listed.series!.value = null as unknown as unknown[];
+    const wrapper = render();
+
+    expect(wrapper.text()).not.toContain("Нет серий конкурсов");
+    expect(wrapper.find(".skeleton-row").exists()).toBe(true);
   });
 });

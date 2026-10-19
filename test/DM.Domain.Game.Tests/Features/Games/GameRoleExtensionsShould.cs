@@ -2,13 +2,12 @@ using System;
 using System.Linq;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
-using DM.Testing;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
-public class GameRoleExtensionsShould : UnitTestBase
+public class GameRoleExtensionsShould
 {
     /// <summary>
     /// The roles the ordinary ban's exemption is meant to cover: the two that
@@ -26,15 +25,13 @@ public class GameRoleExtensionsShould : UnitTestBase
 
     /// <summary>
     /// Written as "anything that is not a Reader", the predicate answered true
-    /// for every other member of the enum, including the ones nobody resolves
-    /// yet. The exemption then widens on its own: on the day Applicant starts
-    /// being resolved, and with every role added to the enum after it.
+    /// for None, and the exemption widened on its own with every role added to
+    /// the enum after it.
     /// </summary>
     [Theory]
     [InlineData(GameRole.None)]
     [InlineData(GameRole.Reader)]
-    [InlineData(GameRole.Applicant)]
-    public void NotCountReadingOrApplyingAsOwnGame(GameRole role)
+    public void NotCountReadingAsOwnGame(GameRole role)
     {
         new[] { role }.IsOwnGame().Should().BeFalse();
     }
@@ -51,23 +48,5 @@ public class GameRoleExtensionsShould : UnitTestBase
 
         names.Should().NotContain("unknown");
         names.Should().OnlyHaveUniqueItems("two roles under one name make the filter ambiguous");
-    }
-
-    /// <summary>
-    /// The filter reads the table the response is written with. It kept its own
-    /// literals, and "mentor" was not among the produced ones, so ?role=mentor
-    /// answered empty for a game that has one.
-    /// </summary>
-    [Fact]
-    public void ParseBackEveryNameItRenders()
-    {
-        foreach (var role in Enum.GetValues<GameRole>())
-        {
-            GameRoleExtensions.TryParseApiString(role.ToApiString(), out var parsed).Should().BeTrue();
-            parsed.Should().Be(role);
-        }
-
-        GameRoleExtensions.TryParseApiString("formerPlayer", out _).Should().BeFalse(
-            "the model has no such role, and a filter naming one answers empty forever");
     }
 }

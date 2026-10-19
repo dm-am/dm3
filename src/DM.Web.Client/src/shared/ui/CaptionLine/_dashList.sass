@@ -1,0 +1,19 @@
+// A list of rows led by "- ", the dash hanging: a row that wraps goes on under its text, not
+// under the dash. The dash and the text stay one inline run, so a copy reads one line.
+
+/// The advance of "- " in PT Sans as Chromium sets it, the pair kerned: 8.77px at 16, where
+/// the hyphen alone is 0.36em. Measured, as CaptionLine measures its "| ".
+$dash-advance: 0.548em
+
+/// The list: no markers, and the leading of a row of text with a caption line in it.
+=dash-list
+  list-style: none
+  margin: 0
+  padding: 0
+  line-height: 1.5
+
+/// The block of a row: indented by the dash, its first line taking the indent back. A part of
+/// a CaptionLine in it is a box of its own and would take the indent back too: reset it there.
+=dash-hang
+  padding-left: $dash-advance
+  text-indent: -$dash-advance

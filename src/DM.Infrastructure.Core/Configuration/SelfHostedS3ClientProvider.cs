@@ -7,19 +7,19 @@ namespace DM.Infrastructure.Core.Configuration;
 
 internal class SelfHostedS3ClientProvider(IOptions<CdnConfiguration> cdnConfiguration) : IAmazonS3ClientProvider
 {
-    private readonly CdnConfiguration cdnConfiguration = cdnConfiguration.Value;
+    private readonly CdnConfiguration _cdn = cdnConfiguration.Value;
 
     public IAmazonS3 GetClient()
     {
         return new AmazonS3Client(
-            new BasicAWSCredentials(cdnConfiguration.AccessKey, cdnConfiguration.SecretKey),
+            new BasicAWSCredentials(_cdn.AccessKey, _cdn.SecretKey),
             new AmazonS3Config
             {
-                ServiceURL = cdnConfiguration.Url,
-                AuthenticationRegion = cdnConfiguration.Region,
+                ServiceURL = _cdn.Url,
+                AuthenticationRegion = _cdn.Region,
                 ForcePathStyle = true
             });
     }
 
-    public bool CanBeUsed() => cdnConfiguration.Provider == S3Provider.SelfHosted;
+    public bool CanBeUsed() => _cdn.Provider == S3Provider.SelfHosted;
 }

@@ -4,6 +4,7 @@ using DM.Web.API.Shared.BbRendering;
 using Riok.Mapperly.Abstractions;
 using ServiceCreateGlobalChatEvent = DM.Domain.Messaging.Features.GlobalChatEvents.CreateGlobalChatEvent;
 using ServiceGlobalChatEvent = DM.Domain.Messaging.Features.GlobalChatEvents.GlobalChatEvent;
+using ServiceUpdateGlobalChatEvent = DM.Domain.Messaging.Features.GlobalChatEvents.UpdateGlobalChatEvent;
 
 namespace DM.Web.API.Features.Messaging.GlobalChatEvents;
 
@@ -12,7 +13,7 @@ namespace DM.Web.API.Features.Messaging.GlobalChatEvents;
 /// </summary>
 [Mapper]
 [UseStaticMapper(typeof(BbTextMappers))]
-internal partial class GlobalChatEventMapper
+public partial class GlobalChatEventMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -23,13 +24,8 @@ internal partial class GlobalChatEventMapper
     }
 
     /// <summary>
-    /// Domain chat event to the full DTO.
-    ///
-    /// No render-context envelope on Description - a decision, not an
-    /// omission. Events are edited through their own form from state the
-    /// client already holds; no author_edit request exists on the event
-    /// endpoints, and a stray author_edit header degrades to Display in the
-    /// converter - failing closed.
+    /// Domain chat event to the full DTO. No envelope on Description: nothing reads
+    /// AuthorEdit on the event endpoints, and a stray author_edit header falls back to Display.
     /// </summary>
     public partial GlobalChatEvent ToEvent(ServiceGlobalChatEvent chatEvent);
 
@@ -54,4 +50,10 @@ internal partial class GlobalChatEventMapper
     /// Create input to the domain create command
     /// </summary>
     public partial ServiceCreateGlobalChatEvent ToCreateEvent(CreateGlobalChatEventInput input);
+
+    /// <summary>
+    /// Update input to the domain update command. Id comes from the route.
+    /// </summary>
+    [MapperIgnoreTarget(nameof(ServiceUpdateGlobalChatEvent.Id))]
+    public partial ServiceUpdateGlobalChatEvent ToUpdateEvent(UpdateGlobalChatEventInput input);
 }

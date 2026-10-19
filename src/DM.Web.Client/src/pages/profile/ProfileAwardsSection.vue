@@ -1,26 +1,9 @@
 <script setup lang="ts">
 import { formatDate } from "@/shared/lib/utils/datetime";
 /**
- * ProfileAwardsSection — the "Награды" block inside the "Достижения" tab.
- *
- * Curated awards: granted by Admin/SeniorModerator via the admin pages.
- * The award catalog (`AwardType`) is timeless; a specific
- * contest is stored in `ContestSeries` and linked via an FK on UserAward.
- *
- * Tile:
- *   - Icon: for contest_* placements in an Art series — palette; otherwise type.iconName
- *   - Corner badge on the icon (series-linked awards only): a single pill
- *     in the bottom-right corner with the contest kind + series number
- *     ("Лит #22" / "Арт #2"). The series YEAR is not on the tile — it
- *     lives in the popover context line ("Литературный конкурс #23 (2024)").
- *   - Title under the icon:
- *       * For contest_first/second/third — the series title ("23-й литературный
- *         конкурс"); the placement is read from the tier color (gold/silver/bronze)
- *       * For special awards (popular_vote, best_critic, guesser) — type.title
- *         ("Народное признание, например" - the last two words are part of the
- *         name, "Лучший критик", "Угадайка")
- *
- * The rich popover shows type.description + a link to the results topic.
+ * The "Награды" block of the "Достижения" tab: curated awards. A contest
+ * placement is titled by its series and placed by the metal; a special award
+ * by its own title. A series award carries a "Лит #22" pill on its icon.
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { achievementApi } from "@/entities/achievement";
@@ -39,9 +22,7 @@ import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{ username: string }>();
 
-/** Load/content status for the tab-level empty-state coordination in
- * ProfileAchievements: the shared "Пока нет наград и достижений" text
- * shows only when BOTH sections settle empty. */
+/** Whether the section settled empty, for the tab's shared empty text. */
 const emit = defineEmits<{
   state: [value: "loading" | "error" | "empty" | "content"];
 }>();
@@ -49,10 +30,7 @@ const emit = defineEmits<{
 const awards = ref<UserAward[]>([]);
 const loaded = ref(false);
 
-// The section refetches when the profile changes under it, so two answers can be
-// on the wire at once. Without a guard the slower one wins and the tab reports a
-// state — which the parent uses to decide the shared empty text — for a profile
-// the reader has already left.
+// The profile can change under the section: the guard drops the older answer.
 const { loading, error, run } = useGuardedRequest({
   message: "Не удалось загрузить награды",
   clearErrorOnStart: true,
@@ -81,21 +59,12 @@ watch(
   (next) => fetchAwards(next),
 );
 
-/**
- * Place award: contest_first/second/third. Its title is the place label
- * from the catalog, while the actual "which contest" meaning lives in
- * the linked ContestSeries, so for display we substitute the title with
- * the series format. Special awards (popular_vote, best_critic, guesser)
- * are self-contained — their title is the full name already.
- */
+/** A contest placement, whose meaning is the linked series and not its title. */
 function isPlaceAward(code: string): boolean {
   return code.startsWith("contest_");
 }
 
-/**
- * Title for the tile and popover. For placements — the series title; for special awards —
- * type.title as is.
- */
+/** The title of a tile and its popover: the series for a placement, else the type's. */
 function awardDisplayTitle(a: UserAward): string {
   if (isPlaceAward(a.type.code) && a.contestSeries) {
     return formatContestSeriesTitle(
@@ -106,17 +75,7 @@ function awardDisplayTitle(a: UserAward): string {
   return a.type.title;
 }
 
-/**
- * Second line of the popover header with contest context ("Литературный конкурс
- * #23, 2024"). Shown only when the award is tied to a series —
- * for placements the title ALREADY contains the series via
- * `awardDisplayTitle`, so the number and year are enough here without
- * repeating the word "конкурс" twice.
- *
- * ContestSeries has no season/kind field at the moment (only
- * contestType/number/year) — when such a field is added on the backend,
- * "(зимний" / "(летний" will need to be inserted before the year here.
- */
+/** The contest of a series award ("Литературный конкурс #23, 2024"), under the popover title. */
 function contestContextLabel(a: UserAward): string | null {
   if (!a.contestSeries) return null;
   const kind =
@@ -126,11 +85,7 @@ function contestContextLabel(a: UserAward): string | null {
   return `${kind} #${a.contestSeries.number} (${a.contestSeries.year})`;
 }
 
-/**
- * Combined label for the single bottom-right icon badge: capitalized
- * contest kind + series number ("Лит #22", "Арт #2"). Rendered only for
- * series-linked awards (the template guards on `a.contestSeries`).
- */
+/** The pill on the icon of a series award: "Лит #22". */
 function contestBadgeLabel(a: UserAward): string {
   if (!a.contestSeries) return "";
   const kind =
@@ -138,10 +93,15 @@ function contestBadgeLabel(a: UserAward): string {
   return `${kind} #${a.contestSeries.number}`;
 }
 
-/**
- * Tile icon. Art contest placements show palette (as a thematic
- * trophy-cup analog). Everything else — type.iconName.
- */
+/** The topics an award's card links to: the work, then the contest's results. */
+function awardLinks(a: UserAward) {
+  return [
+    { url: a.workUrl, label: "Топик с работой" },
+    { url: a.contestSeries?.topicUrl, label: "Топик с итогами" },
+  ].filter((link): link is { url: string; label: string } => !!link.url);
+}
+
+/** The icon of a tile: a palette for an art placement, else the type's. */
 function awardIcon(a: UserAward): string {
   if (
     isPlaceAward(a.type.code) &&
@@ -170,8 +130,7 @@ const hasAwards = computed(() => awards.value.length > 0);
     <BlockTitle>Награды</BlockTitle>
     <div class="awards-grid">
       <Tooltip v-for="a in awards" :key="a.id" focusable>
-        <!-- The tier picks one of the four metals (1/2/3 the contest places,
-             5 the place-less honour in platinum); icon and badge read it. -->
+        <!-- The tier picks one of the four metals; icon and badge read it. -->
         <div class="award" :style="metalStyle(awardMetal(a.type.tier))">
           <div class="award-icon-wrap">
             <GameIcon :name="awardIcon(a)" class="award-icon" />
@@ -200,47 +159,28 @@ const hasAwards = computed(() => awards.value.length > 0);
 
             <p class="award-popover__desc">{{ a.type.description }}</p>
 
-            <!-- Three branches, not two. workUrl and topicUrl are free text a
-                 moderator typed and nothing checks them on the way in, so a
-                 value that is neither a path of this site nor an http(s)
-                 address (javascript:, data:) has no href it can be rendered
-                 with and stays a plain label. See lib/utils/internalUrl. -->
+            <!-- A link typed by a moderator that is neither a path of the site nor an http(s) address stays a label. -->
             <div
               v-if="a.workUrl || a.contestSeries?.topicUrl"
               class="award-popover__links"
             >
-              <span v-if="a.workUrl" class="award-popover__link-item"
-                ><span class="award-popover__bracket">[</span
-                ><router-link
-                  v-if="toInternalPath(a.workUrl)"
-                  :to="toInternalPath(a.workUrl)!"
-                  class="award-popover__link"
-                  >Топик с работой</router-link
-                ><a
-                  v-else-if="toExternalHref(a.workUrl)"
-                  :href="toExternalHref(a.workUrl)!"
-                  class="award-popover__link"
-                  rel="noopener"
-                  >Топик с работой</a
-                ><span v-else>Топик с работой</span
-                ><span class="award-popover__bracket">]</span></span
-              >
               <span
-                v-if="a.contestSeries?.topicUrl"
+                v-for="link in awardLinks(a)"
+                :key="link.label"
                 class="award-popover__link-item"
                 ><span class="award-popover__bracket">[</span
                 ><router-link
-                  v-if="toInternalPath(a.contestSeries.topicUrl)"
-                  :to="toInternalPath(a.contestSeries.topicUrl)!"
+                  v-if="toInternalPath(link.url)"
+                  :to="toInternalPath(link.url)!"
                   class="award-popover__link"
-                  >Топик с итогами</router-link
+                  >{{ link.label }}</router-link
                 ><a
-                  v-else-if="toExternalHref(a.contestSeries.topicUrl)"
-                  :href="toExternalHref(a.contestSeries.topicUrl)!"
+                  v-else-if="toExternalHref(link.url)"
+                  :href="toExternalHref(link.url)!"
                   class="award-popover__link"
                   rel="noopener"
-                  >Топик с итогами</a
-                ><span v-else>Топик с итогами</span
+                  >{{ link.label }}</a
+                ><span v-else>{{ link.label }}</span
                 ><span class="award-popover__bracket">]</span></span
               >
             </div>
@@ -259,21 +199,15 @@ const hasAwards = computed(() => awards.value.length > 0);
 .awards-section
   display: flex
   flex-direction: column
-  // Unified with .achievements-section: an explicit gap between BlockTitle
-  // and the grid + zeroing BlockTitle's intrinsic margins.
+  // As .achievements-section: the gap, the heading's own margins off.
   gap: $small
 
   :deep(h2)
     margin: 0
 
-// Awards are the larger, rarer, curated tiles: 5 per row with a 72px icon,
-// so an award reads with clearly more weight than an achievement (which is
-// 8-per-row / 52px — see .chains). Five columns keep the icon snug in its
-// cell (no wide empty gutter around it) and let each caption wrap onto two
-// lines instead of being stretched across one.
 .awards-grid
   display: grid
-  grid-template-columns: repeat(5, minmax(0, 1fr))
+  grid-template-columns: repeat($award-columns, minmax(0, 1fr))
   gap: $medium
   align-items: start
 
@@ -285,34 +219,25 @@ const hasAwards = computed(() => awards.value.length > 0);
   cursor: help
   color: $text
 
-  // The metal of the tier, handed down by the tile as --tier-metal (see
-  // entities/achievement tierMetal); a tier without one stays neutral.
+  // The tier's metal (--tier-metal); a tier without one stays neutral.
   .award-icon
-    font-size: 72px
+    font-size: $award-icon-size
     color: var(--tier-metal, $text-muted)
 
-// Icon wrapper — the relative anchor for the corner badges, so they
-// attach to the icon's bottom corners rather than to the tile.
-// Same pattern as .chain-icon-wrap in ProfileAchievementsSection.
+// The anchor of the corner pill, as .chain-icon-wrap.
 .award-icon-wrap
   position: relative
   display: inline-block
   line-height: 0
 
-// Contest badge ("Лит #22" / "Арт #2") — a single pill in the bottom-right
-// corner of the icon: capitalized contest kind + series number. Renders
-// only for awards linked to a contest series (the series YEAR shows in
-// the popover context line, not on the tile). Width hugs the content (no
-// fixed min-width — labels vary in length); geometry, font, fill and ink
-// match the achievements' degree pill: filled with the tier metal under
-// light lettering, and a border in the page colour that lifts it off the icon
-// it overlaps.
+// The series pill: the metal under light lettering and a border in the page
+// colour, as the achievements' pill; as wide as its words.
 .award-series
   position: absolute
-  right: -4px
-  bottom: -4px
-  height: 16px
-  padding: 0 4px
+  right: -$minor
+  bottom: -$minor
+  height: $tier-pill-size
+  padding: 0 $minor
   display: inline-flex
   align-items: center
   justify-content: center
@@ -329,17 +254,12 @@ const hasAwards = computed(() => awards.value.length > 0);
   font-variant-numeric: tabular-nums
   text-shadow: 0 0 1px var(--tier-badge-halo)
 
-// Caption, centered under the icon. A reserved 2-line min-height keeps the
-// common 1- and 2-line titles all the same height (no ragged bottoms); a
-// longer title wraps in full onto a third line rather than being clipped to
-// one. overflow-wrap breaks an over-long word instead of overflowing the tile.
+// Two lines reserved so captions stand even; a longer title wraps whole.
 .award-title
   width: 100%
   box-sizing: border-box
   font-size: $secondary-font-size
-  // The name of an entity, at the weight and the colour the site sets a name
-  // in. $heading is the brown of h1 and of block titles; on a caption under an
-  // icon it read as a heading of its own, and bold made that louder still.
+  // A name, not a heading: the text colour, not $heading.
   font-weight: bold
   color: $text
   letter-spacing: 0.1px
@@ -348,57 +268,52 @@ const hasAwards = computed(() => awards.value.length > 0);
   overflow-wrap: break-word
   min-height: 2.4em
 
-// --- Rich popover ---
 .award-popover
   display: flex
   flex-direction: column
-  gap: 6px
+  gap: $tile-hint-step
   min-width: 220px
   white-space: normal
 
   &__header
     display: flex
     flex-direction: column
-    gap: 2px
+    gap: $tiny
 
   &__title
     font-size: $secondary-font-size
     color: $tooltip-text
 
-  // Second header line — contest series context (D1): number + year of
-  // the series the award belongs to. Secondary size, muted.
+  // The contest of the series: number and year.
   &__context
     font-size: $tertiary-font-size
     color: $tooltip-text
-    opacity: 0.65
+    opacity: $opacity-soft
 
   &__desc
     margin: 0
     font-size: $secondary-font-size
     line-height: 1.4
     color: $tooltip-text
-    opacity: 0.8
+    opacity: $opacity-soft
 
   &__links
     display: flex
     flex-direction: column
-    gap: 2px
-    margin: 4px 0 0
-    padding: 6px 0 0
+    gap: $tiny
+    margin: $minor 0 0
+    padding: $tile-hint-step 0 0
     border-top: 1px solid rgba(255, 255, 255, 0.08)
     font-size: $secondary-font-size
     color: $tooltip-text
 
-  // Bracket motif ("[Топик с работой]"): muted brackets frame the link text,
-  // link itself in $tooltip-link (readable on the dark tooltip surface,
-  // unlike $link) with no underline at rest, underline on hover only —
-  // matches the site-wide bracket-counter identity (C1).
+  // "[Топик с работой]": muted brackets, the link in $tooltip-link, underlined on hover.
   &__link-item
     display: block
 
   &__bracket
     color: $tooltip-text
-    opacity: 0.5
+    opacity: $muted-opacity
 
   &__link
     color: $tooltip-link
@@ -412,6 +327,6 @@ const hasAwards = computed(() => awards.value.length > 0);
   &__footer
     font-size: $tertiary-font-size
     color: $tooltip-text
-    opacity: 0.55
-    margin-top: 4px
+    opacity: $opacity-half
+    margin-top: $minor
 </style>

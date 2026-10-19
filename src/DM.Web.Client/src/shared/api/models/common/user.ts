@@ -1,25 +1,8 @@
-/**
- * Base user types for shared usage across entities
- * @module shared/api/models/common/user
- *
- * These types are extracted from entities/user to allow other entities
- * to reference User without creating entities→entities imports.
- *
- * FSD Rule: entities should import from shared, not from each other.
- */
+// In shared so that entities reference User without importing each other.
+import type { UserSettings } from "../personal";
 
-// ============================================================================
-// Base Types
-// ============================================================================
-
-/**
- * Branded type for username (unique user identifier string)
- */
 export type Username = string & { readonly __brand: unique symbol };
 
-/**
- * User role enum (matches backend UserRole)
- */
 export enum UserRole {
   Guest = "Guest",
   RegularUser = "RegularUser",
@@ -31,71 +14,42 @@ export enum UserRole {
   System = "System",
 }
 
-/**
- * User gender enum
- */
 export enum Gender {
   Unknown = "Unknown",
   Male = "Male",
   Female = "Female",
 }
 
-/**
- * Access policy enum (for moderation restrictions)
- */
-export enum AccessPolicy {
-  NotSpecified = "NotSpecified",
-  DemocraticBan = "DemocraticBan",
-  FullBan = "FullBan",
-}
-
-// ============================================================================
-// User Sub-Types
-// ============================================================================
-
-/**
- * User profile picture
- * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
- */
+/** @see src/DM.Web.API/Features/Community/Users/UserDtos.cs */
 export type UserPicture = {
-  /** Picture identifier (for deletion, only in PersonalProfile context) */
+  /** Only in the PersonalProfile context, for deletion. */
   id?: string;
-  /** Small picture URL (100x100, used in lists) */
+  /** 100x100, in lists */
   smallUrl?: string;
-  /** Medium picture URL (200x200, used in profiles) */
+  /** 200x200, in profiles */
   mediumUrl?: string;
-  /** Original picture URL (full size, only in PersonalProfile context) */
+  /** Only in the PersonalProfile context. */
   originalUrl?: string;
   /**
-   * Intrinsic width of `originalUrl` in pixels. Only the original carries a
-   * pair: small and medium are square crops at the size they are asked for,
-   * while the original keeps the uploaded aspect ratio. Absent for an upload
-   * stored before the pipeline measured one.
+   * Only the original keeps the uploaded aspect ratio, so only it carries a
+   * size. Absent for an upload stored before the pipeline measured one.
    */
   originalWidth?: number;
-  /** Intrinsic height of `originalUrl` in pixels; travels with `originalWidth`. */
+  /** Travels with originalWidth. */
   originalHeight?: number;
 };
 
-/**
- * Rating information
- * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
- */
+/** @see src/DM.Web.API/Features/Community/Users/UserDtos.cs */
 export type Rating = {
-  /** Total posts count (quantity rating) */
+  /** The quantity rating. */
   totalPosts: number;
-  /** Sum of post review scores received (quality rating) */
+  /** The quality rating: the sum of post review scores received. */
   postReviewScoreSum: number;
-  /** Whether rating display is enabled */
   isEnabled?: boolean;
-  /** Total rating score (for display) */
   totalRating?: number;
 };
 
-/**
- * Username history entry
- */
-export type UsernameHistoryEntry = {
+type UsernameHistoryEntry = {
   id: string;
   oldUsername: string;
   newUsername: string;
@@ -103,178 +57,103 @@ export type UsernameHistoryEntry = {
   approvedByUsername?: string;
 };
 
-// ============================================================================
-// Module Status Counts (for status breakdowns)
-// ============================================================================
-
-/**
- * Count breakdown by module status (games/blogs)
- */
-export type ModuleStatusCounts = {
-  /** Number of items in Draft status */
+/** Count breakdown by module status (games/blogs) */
+type ModuleStatusCounts = {
   draft: number;
-  /** Number of items in Active status */
   active: number;
-  /** Number of items in Closed status */
   closed: number;
 };
 
-// ============================================================================
-// Lightweight User References
-// ============================================================================
-
-/**
- * Unified lightweight user reference for lists, tooltips, and participant info.
- * Replaces: User in lists, GameAssistantInfo, BlogAssistantInfo
- * Only 5 fields vs 12+ in full User.
- *
- * Use this DTO for:
- * - Game lists (master, mentor, assistants, players, readers)
- * - Blog lists (owner, assistants)
- * - Any context where only identity and online status are needed
- *
- * For full user information, use User DTO below.
- */
+/** The lightweight user of lists, tooltips and participants. */
 export type UserRef = {
-  /** User identifier */
   id: string;
-  /** User's display name */
   username: Username;
-  /** Last activity moment (UTC) - for online indicators */
+  /** For the online indicator. */
   lastActivityUtc: string | null;
-  /** User role (for displaying role badges "[А]", "[С]", "[М]", "[Н]") */
+  /** For the role badges, which shared/config/roles.ts defines. */
   role: UserRole;
-  /** Whether user is a newbie (less than 100 posts) - affects name color */
+  /** Fewer than 100 posts: colours the name. */
   isNewbie: boolean;
 };
 
-// ============================================================================
-// User DTO (full user information)
-// ============================================================================
-
 /**
- * Base user DTO for lists, author references, mentions, and cards.
- * Extends UserRef with additional profile information.
- *
+ * The user of lists, author references, mentions and cards.
  * @see src/DM.Web.API/Features/Community/Users/UserDtos.cs
- *
- * Used in:
- * - post.author, comment.author, game.master, etc.
- * - Lists and cards
- * - GET /v1/users (list)
- * - GET /v1/users/{username}
  */
 export interface User extends UserRef {
-  // Inherits: id, username, lastActivityUtc, role, isNewbie from UserRef
-
-  /** History of username changes */
   usernameHistory: UsernameHistoryEntry[];
-  /** User rating information (null if user has disabled rating display) */
+  /** Null if the user has disabled rating display. */
   rating: Rating | null;
-  /** User profile picture (SSOT — all URLs live only here). */
+  /** All URLs of the picture live only here. */
   picture: UserPicture;
-  /** User status message */
   status?: string;
-  /** User access policy (moderation restrictions) */
-  // accessPolicy is deliberately absent: the API does not send it for the
-  // current user, and the ban rule it would gate exempts your own game and your
-  // own blog, which a flat client-side flag cannot express. The server decides.
-  /** User settings (only for authenticated user) */
-  settings?: import("@/shared/api/models/personal").UserSettings;
+  // accessPolicy is absent: the ban rule it would gate exempts the reader's own
+  // game and blog, which a flat client-side flag cannot express.
+  /** Only for the authenticated user. */
+  settings?: UserSettings;
 
-  // Extended profile fields (present in UserProfile responses)
-  /** User-defined extended information (BB-code rendered) */
-  info?: InfoBbText;
-  /** User gender */
+  // Present in UserProfile responses.
+  /** Display HTML from the server's BbConverter, or the BBCode source in edit mode. */
+  info?: string;
   gender?: Gender;
-  /** User birthday date string */
-  birthdayDate?: string;
-  /** User real name */
   name?: string;
-  /** User location */
   location?: string;
-  /** User contact information */
   contacts?: Contact[];
-  /** User registration date (UTC) */
-  registrationUtc?: string;
-  /** User email (only for own account) */
+  /** Only for the reader's own account. */
   email?: string;
 
-  // ========== Statistics for community list ==========
-  /** Registration date (UTC) - for community list */
+  // The statistics of the community list.
   registeredUtc?: string;
-  /** Number of games where user is master or assistant */
+  /** Games where the user is master or assistant. */
   gamesHosting?: number;
-  /** Games hosting breakdown by status (for tooltips) */
   gamesHostingByStatus?: ModuleStatusCounts;
-  /** Number of games where user is a player */
   gamesPlaying?: number;
-  /** Games playing breakdown by status (for tooltips) */
   gamesPlayingByStatus?: ModuleStatusCounts;
-  /** Number of blogs where user is owner or assistant */
+  /** Blogs where the user is owner or assistant. */
   blogsHosting?: number;
-  /** Blogs hosting breakdown by status (for tooltips) */
   blogsHostingByStatus?: ModuleStatusCounts;
-  /** Number of post reviews given */
+  /** Post reviews. */
   reviewsGiven?: number;
-  /** Number of post reviews received */
   reviewsReceived?: number;
-  /** Number of endorsements written by this user (about others). */
   endorsementsGiven?: number;
-  /** Number of endorsements received by this user. */
   endorsementsReceived?: number;
-  /** Number of game reviews written by this user (whole games, not posts). */
+  /** Reviews of whole games, not posts. */
   gameReviewsGiven?: number;
-  /** Number of game reviews written about the games this user masters. */
+  /** Reviews of the games this user masters. */
   gameReviewsReceived?: number;
-  /** Forum topics authored by this user. */
   topicsAuthored?: number;
-  /** Comments authored by this user (polymorphic across all comment-host entities). */
+  /** Across every entity that hosts comments. */
   commentsAuthored?: number;
-  /** Messages this user has posted in the global chat. */
   globalChatMessages?: number;
-  /** Bans this user has received — drives the "резиновая уточка" achievement chain. */
+  /** Drives the "резиновая уточка" achievement chain. */
   bansReceived?: number;
-  /** Games voluntarily dropped (retired characters with IsPlayerLeft=true) — drives the "дропы" chain. */
+  /** Characters retired with IsPlayerLeft; drives the "дропы" chain. */
   gameDrops?: number;
-  /** Publications (blog articles) authored by this user — drives the "публикации" chain. */
+  /** Drives the "публикации" chain. */
   publicationsAuthored?: number;
-  /** Total likes received across topics+publications+comments+messages — drives the "лайки" chain. */
+  /** On topics, publications, comments and messages; drives the "Нравится" chain. */
   likesReceived?: number;
-  /** How many subscribers each of the three profile categories has. */
   subscribersByCategory?: SubscriberCounts;
   /**
-   * Subscriber refs for profile-page display: at most 20, most recently active
-   * first. A sample of the subscribers and not the members of any one category
-   * — the cap is taken before the categories are considered, so
-   * `subscribersByCategory` is what says how many there are.
+   * At most 20, most recently active first, capped before the categories:
+   * subscribersByCategory says how many there are.
    */
   subscribers?: SubscriberRef[];
   /**
-   * Whether this user is on the viewer's own blacklist (profile answers only).
-   * False for a guest and on the viewer's own profile. Only that direction is
-   * sent: whether this user blocked the viewer is not said here, and
-   * `viewer.canMessage` says no more of it than the refusal of a message does.
+   * Whether this user is on the viewer's blacklist (profile answers only).
+   * The other direction is not sent.
    */
   blockedByViewer?: boolean;
   /**
-   * What the viewer may do with this user, answered by the code that refuses
-   * the request (profile answers only). Absent on the profile of "Аккаунт
-   * удален" and in the answers of the moderation.
+   * What the viewer may do with this user (profile answers only). Absent on
+   * "Аккаунт удален" and in the answers of the moderation.
    */
   viewer?: ProfileViewer;
-  /**
-   * The viewer's own note about this user (profile answers only). Absent for a
-   * guest, on a profile the viewer has written nothing about, and in the
-   * answers of lists.
-   */
+  /** The viewer's note about this user (profile answers only). */
   personalNote?: PersonalNote | null;
 }
 
-/**
- * The viewer's own note about the user of a profile (mirrors PersonalNote),
- * read with the profile for whoever holds the session.
- */
+/** Mirrors PersonalNote. */
 export type PersonalNote = {
   id: string;
   text: string;
@@ -282,55 +161,30 @@ export type PersonalNote = {
   modifiedUtc?: string | null;
 };
 
-/**
- * What the viewer may do with the user of a profile (mirrors ProfileViewer).
- * The server asks each flag with the code that refuses the write it stands for.
- */
-export type ProfileViewer = {
-  /**
-   * May write to this user in private: signed in, not his own profile, and not
-   * on this user's blacklist with private messages blocked.
-   */
+/** Mirrors ProfileViewer: each flag asked of the code that refuses its write. */
+type ProfileViewer = {
+  /** Signed in, not his own profile, and not blacklisted with messages blocked. */
   canMessage: boolean;
 };
 
-/** Subscriber totals per profile category. */
-export type SubscriberCounts = {
+type SubscriberCounts = {
   games: number;
   blogs: number;
   topics: number;
 };
 
 /**
- * Lightweight subscriber reference: just enough to style + link, PLUS
- * the subscription settings bitmask so the profile UI can filter the
- * subscribers list per active tab ("subscribed to games / blogs / topics")
- * without a second round-trip. The bitmask matches the server-side
- * SubscriptionSettings [Flags] enum.
+ * Carries the SubscriptionSettings bitmask, so the profile filters subscribers
+ * per tab without a second request.
  */
 export type SubscriberRef = {
   username: Username;
   lastActivityUtc: string | null;
-  /** SubscriptionSettings flags (numeric bitmask). */
   settings: number;
 };
 
-/**
- * BB-code rendered text with source
- */
-export type InfoBbText = {
-  /** Original BB-code source */
-  source?: string;
-  /** Rendered HTML */
-  html?: string;
-};
-
-/**
- * User contact information
- */
 export type Contact = {
-  /** Contact type (e.g., "Telegram", "Discord", "Email") */
+  /** "Telegram", "Discord", "Email" */
   contactType: string;
-  /** Contact value (e.g., username, email address) */
   value: string;
 };

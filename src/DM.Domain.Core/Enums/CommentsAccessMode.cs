@@ -5,9 +5,7 @@ namespace DM.Domain.Core.Enums;
 /// discussion is read by everybody who may see the game, guests included.
 /// </summary>
 /// <remarks>
-/// Value 2 stays undefined: a client that still sends it is refused by the
-/// validators rather than handed a mode it did not ask for, and a discussion
-/// closed to readers is not a setting the site has.
+/// Value 2 stays undefined, so the validators refuse it.
 /// </remarks>
 public enum CommentsAccessMode
 {

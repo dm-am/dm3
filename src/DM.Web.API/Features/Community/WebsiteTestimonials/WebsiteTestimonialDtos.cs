@@ -1,5 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
+using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Web.API.Features.Community.Users;
 
 namespace DM.Web.API.Features.Community.WebsiteTestimonials;
@@ -8,10 +9,7 @@ namespace DM.Web.API.Features.Community.WebsiteTestimonials;
 /// Website testimonial information (positive review about the website)
 /// </summary>
 /// <remarks>
-/// Plain text only - NO BBCode support.
-/// Only positive testimonials are allowed.
-/// One testimonial per user.
-/// NO likes support.
+/// Only positive testimonials are allowed, one per user.
 /// </remarks>
 public class WebsiteTestimonialDto
 {
@@ -58,10 +56,11 @@ public class CreateWebsiteTestimonialRequest
     public string AuthorUsername { get; set; } = string.Empty;
 
     /// <summary>
-    /// Testimonial text content (10-1000 characters, plain text, positive only)
+    /// Testimonial text content (plain text, positive only)
     /// </summary>
     [Required(ErrorMessage = "Введите текст отзыва")]
-    [StringLength(1000, MinimumLength = 10, ErrorMessage = "Отзыв от 10 до 1000 символов")]
+    [StringLength(WebsiteTestimonialFieldLimits.TextMaxLength, MinimumLength = 1,
+        ErrorMessage = WebsiteTestimonialFieldLimits.LengthRefusal)]
     public string Text { get; set; } = string.Empty;
 }
 
@@ -71,8 +70,9 @@ public class CreateWebsiteTestimonialRequest
 public class UpdateWebsiteTestimonialRequest
 {
     /// <summary>
-    /// Updated testimonial text (10-1000 characters, plain text, positive only)
+    /// Updated testimonial text (plain text, positive only)
     /// </summary>
-    [StringLength(1000, MinimumLength = 10, ErrorMessage = "Отзыв от 10 до 1000 символов")]
+    [StringLength(WebsiteTestimonialFieldLimits.TextMaxLength, MinimumLength = 1,
+        ErrorMessage = WebsiteTestimonialFieldLimits.LengthRefusal)]
     public string? Text { get; set; }
 }

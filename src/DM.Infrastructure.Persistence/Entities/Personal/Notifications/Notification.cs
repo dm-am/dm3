@@ -22,13 +22,10 @@ public class Notification
     /// Unique together with <see cref="EventType"/> (partial, where not null):
     /// one event fans out to at most one notification per output type, which is
     /// the invariant the idempotent write of a redelivered event leans on. Null
-    /// for rows born from messages that predate the key.
+    /// for a row written outside the bus, as the seed writes them.
     /// </summary>
     public Guid? EventId { get; set; }
 
-    /// <summary>
-    /// Event type
-    /// </summary>
     public EventType EventType { get; set; }
 
     /// <summary>

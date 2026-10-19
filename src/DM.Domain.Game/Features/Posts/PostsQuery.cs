@@ -4,14 +4,8 @@ using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Game.Features.Posts;
 
-/// <summary>
-/// Query parameters for global post list filtering
-/// </summary>
 public class PostsQuery : PagingQuery
 {
-    /// <summary>
-    /// Filter by game ID
-    /// </summary>
     public Guid? GameId { get; set; }
 
     /// <summary>
@@ -22,10 +16,6 @@ public class PostsQuery : PagingQuery
     /// <summary>
     /// true: only posts with at least one review; false: only posts without reviews
     /// </summary>
-    /// <remarks>
-    /// false used to mean no filter at all, while the same name on a room's list
-    /// means "without reviews": one name, one meaning on both lists.
-    /// </remarks>
     public bool? HasReviews { get; set; }
 
     /// <summary>
@@ -42,8 +32,7 @@ public class PostsQuery : PagingQuery
     /// Search by post text (case-insensitive contains)
     /// </summary>
     /// <remarks>
-    /// The text a reader sees, not the body as written: the markup is not part of
-    /// what is matched, and neither is anything the reader is not shown.
+    /// The text a reader sees: neither the markup nor anything hidden from him is matched.
     /// </remarks>
     public string? Search { get; set; }
 
@@ -58,21 +47,12 @@ public class PostsQuery : PagingQuery
     public int? MaxRating { get; set; }
 
     /// <summary>
-    /// Filter by post author usernames (repeat the parameter for several)
+    /// Repeat the parameter for several
     /// </summary>
-    /// <remarks>
-    /// Plural because it is repeatable, per the query vocabulary in
-    /// API_DESIGN.md. It used to be one string holding a list under the same
-    /// plural name that /v1/games spells as a repeated parameter, so the same
-    /// name meant two different encodings on two neighbouring endpoints.
-    /// </remarks>
     public IReadOnlyCollection<string>? AuthorUsernames { get; set; }
 
     /// <summary>
-    /// Filter to posts that have at least one review by this username.
-    /// Mirror of <see cref="AuthorUsernames"/>, but looks at "who reviewed"
-    /// rather than "who wrote". Used by the profile page "Оценил чужих
-    /// постов: {username}" (route given-reviews).
+    /// Posts with at least one review by this user: who reviewed, not who wrote
     /// </summary>
     public string? ReviewerUsername { get; set; }
 

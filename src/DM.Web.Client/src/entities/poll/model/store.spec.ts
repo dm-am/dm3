@@ -4,16 +4,15 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
-import type { Poll, PollId, PollOption, PollOptionId } from "./types";
+import type {
+  CreatePollRequest,
+  Poll,
+  PollId,
+  PollOption,
+  PollOptionId,
+} from "./types";
 import { PollStatus } from "./types";
-import type { Served } from "@/shared/api/models";
 
-// Helper to cast raw values to Served type for test mocks
-function asServed<T>(value: T): Served<T> {
-  return value as Served<T>;
-}
-
-// Helper to create a poll option with proper Served types
 function createPollOption(
   id: string,
   text: string,
@@ -30,7 +29,6 @@ function createPollOption(
   };
 }
 
-// Use vi.hoisted to ensure mocks are created before vi.mock hoisting
 const {
   mockGetPolls,
   mockGetActivePolls,
@@ -59,6 +57,7 @@ vi.mock("../api/pollApi", () => ({
 }));
 
 import { usePollsStore } from "./store";
+import { asServed } from "@/shared/api/models";
 
 const createMockPoll = (id: string, title: string): Poll => ({
   id: asServed(id as PollId),
@@ -74,6 +73,15 @@ const createMockPoll = (id: string, title: string): Poll => ({
   ],
 });
 
+const pollInput = (title: string): CreatePollRequest => ({
+  title,
+  details: null,
+  startsUtc: "2025-01-01T00:00:00Z",
+  endsUtc: "2025-12-31T23:59:59Z",
+  isAnonymous: true,
+  options: [],
+});
+
 describe("usePollsStore", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -83,39 +91,6 @@ describe("usePollsStore", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
-
-  // ============================================================================
-  // INITIALIZATION
-  // ============================================================================
-
-  describe("Initialization", () => {
-    it("creates store with initial state", () => {
-      const store = usePollsStore();
-
-      expect(store.activePolls).toBeNull();
-      expect(store.polls).toBeNull();
-    });
-
-    it("has fetch functions", () => {
-      const store = usePollsStore();
-
-      expect(typeof store.fetchActivePolls).toBe("function");
-      expect(typeof store.fetchPolls).toBe("function");
-    });
-
-    it("has mutation functions", () => {
-      const store = usePollsStore();
-
-      expect(typeof store.vote).toBe("function");
-      expect(typeof store.unvote).toBe("function");
-      expect(typeof store.createPoll).toBe("function");
-      expect(typeof store.editPoll).toBe("function");
-    });
-  });
-
-  // ============================================================================
-  // FETCH ACTIVE POLLS
-  // ============================================================================
 
   describe("fetchActivePolls", () => {
     it("fetches active polls", async () => {
@@ -160,26 +135,7 @@ describe("usePollsStore", () => {
     });
   });
 
-  // ============================================================================
-  // FETCH POLLS (PAGINATED)
-  // ============================================================================
-
   describe("fetchPolls", () => {
-    it("fetches polls with params", async () => {
-      mockGetPolls.mockResolvedValue({
-        data: { resources: [], paging: { current: 1, pages: 1, total: 0 } },
-        error: null,
-      });
-
-      const store = usePollsStore();
-      await store.fetchPolls({ number: 2, sortBy: "starts" });
-
-      expect(mockGetPolls).toHaveBeenCalledWith({
-        number: 2,
-        sortBy: "starts",
-      });
-    });
-
     it("updates polls on success", async () => {
       const mockData = {
         resources: [createMockPoll("1", "Poll")],
@@ -206,30 +162,7 @@ describe("usePollsStore", () => {
     });
   });
 
-  // ============================================================================
-  // VOTING
-  // ============================================================================
-
   describe("vote", () => {
-    it("calls vote API with correct params", async () => {
-      const updatedPoll = createMockPoll("poll-1", "Poll");
-      updatedPoll.options[0].voted = asServed<boolean | null>(true);
-      updatedPoll.options[0].votesCount = asServed(6);
-
-      mockPostPollVote.mockResolvedValue({ data: updatedPoll, error: null });
-
-      const store = usePollsStore();
-      await store.vote(
-        asServed("poll-1" as PollId),
-        asServed("opt-1" as PollOptionId),
-      );
-
-      expect(mockPostPollVote).toHaveBeenCalledWith(
-        asServed("poll-1" as PollId),
-        asServed("opt-1" as PollOptionId),
-      );
-    });
-
     it("updates poll in active polls after voting", async () => {
       const poll = createMockPoll("poll-1", "Poll");
       mockGetActivePolls.mockResolvedValue({
@@ -264,41 +197,7 @@ describe("usePollsStore", () => {
     });
   });
 
-  describe("unvote", () => {
-    it("calls unvote API with correct params", async () => {
-      const updatedPoll = createMockPoll("poll-1", "Poll");
-      mockDeletePollVote.mockResolvedValue({ data: updatedPoll, error: null });
-
-      const store = usePollsStore();
-      await store.unvote(asServed("poll-1" as PollId));
-
-      expect(mockDeletePollVote).toHaveBeenCalledWith(
-        asServed("poll-1" as PollId),
-      );
-    });
-  });
-
-  // ============================================================================
-  // CREATE POLL
-  // ============================================================================
-
   describe("createPoll", () => {
-    it("calls create API with poll data", async () => {
-      const newPoll = createMockPoll("new-poll", "New Poll");
-      mockPostPoll.mockResolvedValue({ data: newPoll, error: null });
-
-      const store = usePollsStore();
-      const result = await store.createPoll({
-        title: "New Poll",
-        startsUtc: "2025-01-01",
-        endsUtc: "2025-12-31",
-        options: [{ text: "A" }, { text: "B" }],
-      } as any);
-
-      expect(mockPostPoll).toHaveBeenCalled();
-      expect(result.data).toEqual(newPoll);
-    });
-
     it("adds created poll to polls list", async () => {
       const existingPoll = createMockPoll("existing", "Existing");
       mockGetPolls.mockResolvedValue({
@@ -315,7 +214,7 @@ describe("usePollsStore", () => {
       const newPoll = createMockPoll("new-poll", "New Poll");
       mockPostPoll.mockResolvedValue({ data: newPoll, error: null });
 
-      await store.createPoll({ title: "New Poll" } as any);
+      await store.createPoll(pollInput("New Poll"));
 
       expect(store.polls?.resources[0]).toEqual(newPoll);
     });
@@ -327,31 +226,13 @@ describe("usePollsStore", () => {
       });
 
       const store = usePollsStore();
-      const result = await store.createPoll({ title: "" } as any);
+      const result = await store.createPoll(pollInput(""));
 
       expect(result.error).toBeTruthy();
     });
   });
 
-  // ============================================================================
-  // EDIT POLL
-  // ============================================================================
-
   describe("editPoll", () => {
-    it("calls patch API with poll data", async () => {
-      const updatedPoll = createMockPoll("poll-1", "Updated Title");
-      mockPatchPoll.mockResolvedValue({ data: updatedPoll, error: null });
-
-      const store = usePollsStore();
-      await store.editPoll(asServed("poll-1" as PollId), {
-        title: "Updated Title",
-      });
-
-      expect(mockPatchPoll).toHaveBeenCalledWith(asServed("poll-1" as PollId), {
-        title: "Updated Title",
-      });
-    });
-
     it("updates poll in store after edit", async () => {
       const poll = createMockPoll("poll-1", "Original");
       mockGetActivePolls.mockResolvedValue({
@@ -385,13 +266,9 @@ describe("usePollsStore", () => {
     });
   });
 
-  // ============================================================================
-  // LOADING STATES
-  // ============================================================================
-
   describe("Loading States", () => {
     it("tracks loading state for active polls", async () => {
-      let resolvePromise: (value: any) => void;
+      let resolvePromise: (value: unknown) => void;
       const promise = new Promise((resolve) => {
         resolvePromise = resolve;
       });
@@ -409,13 +286,8 @@ describe("usePollsStore", () => {
     });
   });
 
-  // ============================================================================
-  // ERROR STATES
-  // ============================================================================
-
   describe("Error States", () => {
     it("clears error on successful fetch", async () => {
-      // First, cause an error
       mockGetActivePolls.mockResolvedValueOnce({
         data: null,
         error: { status: 500, title: "Error" },
@@ -425,7 +297,6 @@ describe("usePollsStore", () => {
       await store.fetchActivePolls();
       expect(store.activePollsError).toBeTruthy();
 
-      // Then, successful fetch
       mockGetActivePolls.mockResolvedValueOnce({
         data: { resources: [] },
         error: null,

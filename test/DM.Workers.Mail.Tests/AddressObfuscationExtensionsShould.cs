@@ -8,13 +8,7 @@ namespace DM.Workers.Mail.Tests;
 /// The address in the log is enough to tell two letters apart and not enough to write
 /// to.
 /// </summary>
-/// <remarks>
-/// It runs on the way into the line the worker writes per letter, which is before
-/// anything has parsed the address - so whatever it is handed it has to answer rather
-/// than throw. What an address like "@host" hands it is an empty part, and it read the
-/// last character of one: the letter then failed on its own log line, was retried for
-/// a minute and dead lettered under an exception naming a Substring.
-/// </remarks>
+/// <remarks>It runs before anything has parsed the address, so it answers whatever it is handed rather than throw.</remarks>
 public class AddressObfuscationExtensionsShould
 {
     /// <summary>
@@ -25,14 +19,12 @@ public class AddressObfuscationExtensionsShould
     [Theory]
     [InlineData("reader@example.com", "re..r@ex..m")]
     [InlineData("abcd@example.com", "ab..d@ex..m")]
-    // A part with nothing left to hide is answered with itself: "a..a" was longer than
-    // what it was given and repeated the one character it was hiding.
+    // A part with nothing left to hide is answered with itself.
     [InlineData("a@example.com", "a@ex..m")]
-    // An address with no local part at all, which is the one that used to throw.
+    // An address with no local part at all.
     [InlineData("@example.com", "@ex..m")]
     [InlineData("", "")]
-    // Not an address, which this cannot rule out either: whatever is in the field is
-    // what gets logged.
+    // Not an address: whatever is in the field is what gets logged.
     [InlineData("reader", "re..r")]
     public void CropTheMiddleOutOfEveryPartOfWhateverItIsGiven(string address, string expected) =>
         address.Obfuscate().Should().Be(expected,

@@ -1,12 +1,7 @@
 <script setup lang="ts">
 /**
- * TagGroupDialog — create or edit a game tag group (title / description /
- * sortOrder). Dialog twin of the former hand-rolled modal in
- * ModerationTags.vue.
- *
- * The window runs the request (Dialog `action`): it waits for the answer,
- * prints a refusal in itself and closes on success alone. A typed description
- * is multi-line text, so the window asks before it is dropped.
+ * Creates or edits a tag group. The window runs the request; a typed
+ * description is asked about before it is dropped.
  */
 import { ref, computed } from "vue";
 import { gameTagApi, type ModerationTagGroup } from "@/entities/game";
@@ -14,6 +9,7 @@ import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{
   /** Group to edit; null creates a new group. */
@@ -30,9 +26,7 @@ const emit = defineEmits<{
 const title = ref(props.group?.title ?? "");
 const description = ref(props.group?.description ?? "");
 const sortOrder = ref(props.group?.sortOrder ?? props.defaultSortOrder);
-// Held as text, not as a number: the field is optional, and an empty number
-// input is not zero - it is "this group limits nothing", which the API spells
-// as null.
+// Text, not a number: an empty field is "limits nothing", which the API spells as null.
 const maxTagsPerGame = ref(
   props.group?.maxTagsPerGame != null ? String(props.group.maxTagsPerGame) : "",
 );
@@ -63,7 +57,7 @@ async function send() {
     sortOrder: sortOrder.value,
     maxTagsPerGame: maxTagsPerGameValue.value,
   };
-  const flags = { ownsRefusal: true, ownsRateLimit: true };
+  const flags = OWNS_REFUSAL;
   const result = props.group
     ? await gameTagApi.updateTagGroup(props.group.id, body, flags)
     : await gameTagApi.createTagGroup(body, flags);

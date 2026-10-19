@@ -2,21 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The help of the markup editor says what the grammar says, or it teaches the
- * author to type what the page will not show. It had: its example of an image
- * carried alt="кот на окне", a parameter the grammar has no more, so the one
- * line meant to show the right form printed as text on the page.
- *
- * So each half of every row is held to the grammar here. The typed half is
- * markup the check passes in silence and the preview reads as its tag. The
- * shown half is written by hand, as the server's reading markup, and it has to
- * say what the preview of the typed half says: the same words, the caption the
- * spoiler was given, the names the hidden block was written for, the size the
- * image was held to. And a chord the help names is one the editor binds in
- * both of its modes: named from the visual mode alone, it did nothing in the
- * BBCode one.
- */
+// Each half of every row is held to the grammar: the typed one passes the check, the shown one says what its preview says.
 import { afterEach, describe, expect, it } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { nextTick } from "vue";
@@ -24,12 +10,12 @@ import { existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import type { Editor } from "@tiptap/vue-3";
+import { bbcodeToHtml } from "@/shared/lib/utils/bbcodeToHtml";
 import {
-  bbcodeToHtml,
   CONTEXT_TAGS,
-  validateBBCode,
   type BBCodeContext,
-} from "@/shared/lib/utils/bbcode";
+} from "@/shared/lib/utils/bbcodeTagSet";
+import { validateBBCode } from "@/shared/lib/utils/bbcodeWarnings";
 import { compileSass, styleRules } from "@/shared/lib/testing/styles";
 import BBCodeEditor from "../BBCodeEditor.vue";
 import { HELP_ENTRIES, chordLabel, typedPieces } from "./markupHelp";
@@ -116,8 +102,7 @@ describe("the rows of the help", () => {
     ]);
   });
 
-  // The shown half may carry alt="": it is the server's image, and an empty
-  // alt tells a screen reader the picture is decoration.
+  // alt="" is allowed in the shown half: the server's empty alt marks decoration.
   it("carry nothing the grammar has dropped: no alt, no line of underscores", () => {
     for (const entry of HELP_ENTRIES) {
       const typed = entry.examples.map((example) => example.typed);
@@ -190,9 +175,6 @@ describe("what the help says a reader gets", () => {
     },
   );
 
-  // The leads read every hidden block of the game, so its recipients name them
-  // first, and the names the block was written for after them. They ride on
-  // the block for the tooltip and are no text of the line.
   it.each(examples.filter((one) => one.tag === "private"))(
     "$typed carries its readers on the block, the leads first",
     ({ typed, shown }) => {
@@ -212,9 +194,6 @@ describe("what the help says a reader gets", () => {
     },
   );
 
-  // The first picture was the favicon, and a page that names /favicon.ico as
-  // its icon did not load it as a picture: the cell stood empty. Each result
-  // is a picture the site serves from its own public folder.
   it.each(examples.filter((one) => one.tag === "img"))(
     "$typed shows a picture the site serves",
     ({ shown }) => {
@@ -249,9 +228,7 @@ describe("what the help says a reader gets", () => {
     },
   );
 
-  // The page holds a picture of the text to a height, DM2's, and opens a
-  // taller one whole on a click. The help says both, with the number the
-  // stylesheet draws to, so the two cannot drift apart.
+  // The help names the stylesheet's own number, so the two cannot drift apart.
   it("says how tall the page draws a picture, and that a click opens it whole", () => {
     const sheet = compileSass(
       [

@@ -56,7 +56,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         _htmlRenderer = EmailRendering.CreateHtmlRenderer(
             _services.GetRequiredService<ILoggerFactory>(),
             Deployment);
-        _renderer = new TemplateRenderer(NullLogger<TemplateRenderer>.Instance, _htmlRenderer);
+        _renderer = new TemplateRenderer(_htmlRenderer);
     }
 
     /// <summary>
@@ -75,6 +75,8 @@ public class EmailTemplatesShould : IAsyncDisposable
         {
             body.Should().NotContain(address.Name,
                 $"the footer of a letter has nothing to say about {address.Name}");
+            body.Should().NotContain(address.Title,
+                $"the footer of a letter has nothing to say about {address.Title}");
         }
     }
 
@@ -90,10 +92,11 @@ public class EmailTemplatesShould : IAsyncDisposable
         var templates = Directory
             .EnumerateFiles(TemplatesDirectory(), "*.razor")
             .Where(path => !Path.GetFileName(path).StartsWith('_'))
-            // The two shared components are not letters: one draws the frame,
-            // the other the button and the addresses under it.
+            // The shared components are not letters: one draws the frame, one
+            // the button and the addresses under it, one the lifetime of a link.
             .Where(path => Path.GetFileNameWithoutExtension(path) != "EmailLayout")
             .Where(path => Path.GetFileNameWithoutExtension(path) != "ActionButton")
+            .Where(path => Path.GetFileNameWithoutExtension(path) != "LinkLifetime")
             .ToList();
 
         templates.Should().HaveCountGreaterThanOrEqualTo(5,
@@ -194,7 +197,7 @@ public class EmailTemplatesShould : IAsyncDisposable
     {
         const string url = "https://dm.am/activate/2f1c";
 
-        var html = await _renderer.RenderAsync(new RegistrationConfirmationViewModel(url));
+        var html = await _renderer.RenderAsync(new RegistrationConfirmationViewModel(url, 48));
 
         html.Should().NotStartWith("{", "a JSON body is what this defect looked like");
         html.Should().Contain("<html");
@@ -212,11 +215,26 @@ public class EmailTemplatesShould : IAsyncDisposable
     public async Task OfferTheSameStepThroughTheOtherAddressesOfTheSite()
     {
         var html = await _renderer.RenderAsync(
-            new RegistrationConfirmationViewModel("https://dm.am/activate#token=2f1c"));
+            new RegistrationConfirmationViewModel("https://dm.am/activate#token=2f1c", 48));
 
         html.Should().Contain("Ссылка через RU-прокси");
         html.Should().Contain("https://ru.l.dm.am/activate#token=2f1c",
             "the other door has to open the same step, token and all");
+    }
+
+    /// <summary>
+    /// The link names the other address by its full name: the sentence has no
+    /// heading over it, and "Ссылка через Основной" says nothing of what that is.
+    /// </summary>
+    [Fact]
+    public async Task NameTheOtherAddressByItsFullName()
+    {
+        var html = await _renderer.RenderAsync(
+            new RegistrationConfirmationViewModel("https://ru.l.dm.am/activate#token=2f1c", 48));
+
+        html.Should().Contain("Ссылка через Основной сервер</a>");
+        html.Should().Contain("https://dm.am/activate#token=2f1c");
+        html.Should().NotContain("Ссылка через RU-прокси", "a letter does not offer the door it came through");
     }
 
     /// <summary>
@@ -227,7 +245,7 @@ public class EmailTemplatesShould : IAsyncDisposable
     public async Task OfferNothingWhenTheLetterComesFromAForeignAddress()
     {
         var html = await _renderer.RenderAsync(
-            new RegistrationConfirmationViewModel("http://localhost:5173/activate#token=2f1c"));
+            new RegistrationConfirmationViewModel("http://localhost:5173/activate#token=2f1c", 48));
 
         html.Should().NotContain("Ссылка через");
     }
@@ -267,10 +285,11 @@ public class EmailTemplatesShould : IAsyncDisposable
 
     public static TheoryData<object, string> LettersWithALink() => new()
     {
-        { new RegistrationConfirmationViewModel("https://dm.am/activate/a"), "https://dm.am/activate/a" },
-        { new PasswordResetConfirmationViewModel("https://dm.am/reset/b"), "https://dm.am/reset/b" },
+        { new RegistrationConfirmationViewModel("https://dm.am/activate/a", 48), "https://dm.am/activate/a" },
+        { new PasswordResetConfirmationViewModel("https://dm.am/reset/b", 48), "https://dm.am/reset/b" },
         { new EmailChangeConfirmationViewModel("https://dm.am/email/c"), "https://dm.am/email/c" },
-        { new UsernameChangeApprovalViewModel("https://dm.am/username/d"), "https://dm.am/username/d" },
+        { new UsernameChangeApprovalViewModel("https://dm.am/username/d", 48), "https://dm.am/username/d" },
+        { NotificationLetterShould.AboutAGame, NotificationLetterShould.AboutAGame.LinkUrl! },
     };
 
     /// <summary>
@@ -327,12 +346,12 @@ public class EmailTemplatesShould : IAsyncDisposable
 
     public static TheoryData<object> EveryLetter() => new()
     {
-        new RegistrationConfirmationViewModel("https://dm.am/activate/a"),
-        new PasswordResetConfirmationViewModel("https://dm.am/reset/b"),
+        new RegistrationConfirmationViewModel("https://dm.am/activate/a", 48),
+        new PasswordResetConfirmationViewModel("https://dm.am/reset/b", 48),
         new EmailChangeConfirmationViewModel("https://dm.am/email/c"),
         new PasswordChangeNotificationViewModel("https://example.test/support"),
         new SuspiciousLoginViewModel("203.0.113.9", "Firefox", "30.07.2026 15:00"),
-        new UsernameChangeApprovalViewModel("https://dm.am/username/d"),
+        new UsernameChangeApprovalViewModel("https://dm.am/username/d", 48),
         new UsernameChangeRejectionViewModel("имя занято"),
         new EmailChangeWarningViewModel("now@dm.am", "next@dm.am"),
         new EmailChangeCompletedViewModel("before@dm.am", "next@dm.am", "https://dm.am/support"),
@@ -340,6 +359,7 @@ public class EmailTemplatesShould : IAsyncDisposable
         // A letter of one button: the line it used to carry said the account is
         // back, which the title says already.
         new AccountRestoredViewModel("https://dm.am/login"),
+        NotificationLetterShould.AboutAGame,
     };
 
     /// <summary>

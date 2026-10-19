@@ -7,17 +7,8 @@ namespace DM.Domain.Account.Features.Security;
 /// compare the password with.
 /// </summary>
 /// <remarks>
-/// Two refusals required to be indistinguishable are indistinguishable in text
-/// on every surface that has one: both come back as "wrong email or password".
-/// In time they were not. A missing account skipped Argon2id entirely and
-/// answered tens of milliseconds sooner, which says the address carries no
-/// account without any password having been tried.
-///
-/// The salt has to be well formed because the hasher decodes it; neither value
-/// is ever stored or compared against anything real. They live here rather than
-/// inside the login because the password now stands in for a session on a second
-/// surface, the request to bring a removed account back, and a second copy of
-/// this pair is a second chance to get one of them wrong.
+/// A missing account still pays for Argon2id, so its refusal takes as long as a
+/// wrong password. The salt is well formed because the hasher decodes it.
 /// </remarks>
 internal static class DecoyCredentials
 {

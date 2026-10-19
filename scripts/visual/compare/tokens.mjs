@@ -83,7 +83,7 @@ const SCRIPT_KINDS = {
 };
 
 /** TypeScript, JavaScript or JSON(C): the syntax tree and its tokens. */
-export function scriptTokens(
+function scriptTokens(
   text,
   fileName,
   lang,
@@ -193,7 +193,7 @@ function sassCode(line) {
  * indented syntax reads it; blank lines carry nothing. A legal comment (/*!)
  * is shipped, so it stays, with the lines under it.
  */
-export function sassTokens(text, tokens = new Tokens(text), base = 0) {
+function sassTokens(text, tokens = new Tokens(text), base = 0) {
   let at = 0;
   let commentIndent = -1;
   let legal = false;
@@ -223,13 +223,13 @@ export function sassTokens(text, tokens = new Tokens(text), base = 0) {
 }
 
 /** Plain CSS, as the CSS gate reads a stylesheet, legal comments kept. */
-export function cssTokens(text, tokens = new Tokens(text), base = 0) {
+function cssTokens(text, tokens = new Tokens(text), base = 0) {
   for (const line of canonicalCss(text, true)) tokens.push(line, base);
   return tokens;
 }
 
 /** A single file component, block by block. */
-export function vueTokens(text, fileName) {
+function vueTokens(text, fileName) {
   const { parse, compileTemplate } = compilerSfc();
   const { descriptor, errors } = parse(text, {
     filename: fileName,

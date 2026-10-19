@@ -1,66 +1,42 @@
-/**
- * Personal API models
- */
+import type { InvitationType } from "../game/invitations";
 
-// Re-export blacklist types
 export * from "./blacklist";
 
-/**
- * Theme preference
- */
 export enum Theme {
   Light = "Light",
   Dark = "Dark",
 }
 
-/**
- * Paging preferences for different entity types
- */
-export type Paging = {
-  postsPerPage: number;
-  commentsPerPage: number;
-  topicsPerPage: number;
-  messagesPerPage: number;
-  entitiesPerPage: number;
-};
-
-/**
- * User display preferences (not part of profile)
- * Controls theme and pagination settings
- */
+/** Display preferences, not part of the profile. */
 export type Preferences = {
+  /** The theme a device takes the first time this account signs in on it. */
   theme: Theme;
-  paging: Paging;
+  /** How many rows, posts, comments or messages a page of every paged list holds. */
+  pageSize: number;
   /**
-   * IANA name of the zone the account keeps time in ("Europe/Moscow"). Null is
-   * UTC.
-   *
-   * The letters read it, having no browser to ask, and so does the site: a
-   * signed-in reader sees every time of the site in it (siteTime in
-   * shared/lib/utils/datetime.ts), a guest in the zone of the device.
+   * IANA zone of the account ("Europe/Moscow"); absent is UTC, since the API
+   * leaves a null out of the answer. The letters read it, and a signed-in
+   * reader sees every time of the site in it (siteTime).
    */
-  timeZoneId: string | null;
+  timeZoneId?: string;
 };
 
 /**
- * The settings blob carried on the user DTO: the preferences above plus the
- * fields only the owner of the account sees.
+ * What the viewer carries of the preferences, put there by the session, since
+ * the user DTO carries no settings: the theme a new device starts from and the
+ * page size the lists read.
  */
 export type UserSettings = {
-  mentorGreetingsMessage: string;
-  theme: Theme;
-  paging: Paging | null;
+  theme?: Theme;
+  pageSize: number | null;
 };
 
-/**
- * Invitation received by the current user
- */
 export type ReceivedInvitation = {
   id: string;
   entityId: string;
   entityType: "game" | "blog";
   entityTitle: string;
   inviterUsername: string;
-  type: "assistant" | "player" | "reader";
+  type: InvitationType;
   createdUtc: string;
 };

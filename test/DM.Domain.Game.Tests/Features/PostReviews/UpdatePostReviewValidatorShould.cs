@@ -1,13 +1,12 @@
 using System;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.PostReviews;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostReviews;
 
-public class UpdatePostReviewValidatorShould : UnitTestBase
+public class UpdatePostReviewValidatorShould
 {
     private readonly UpdatePostReviewValidator validator = new();
 
@@ -61,6 +60,20 @@ public class UpdatePostReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(r => r.ReviewId)
-            .WithErrorMessage("Укажите рецензию");
+            .WithErrorMessage("Укажите оценку");
+    }
+
+    [Fact]
+    public void FailWhenTextIsPresentButBlank()
+    {
+        var input = new UpdatePostReview
+        {
+            ReviewId = Guid.NewGuid(),
+            Text = " "
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(r => r.Text)
+            .WithErrorMessage("Введите текст оценки");
     }
 }

@@ -36,9 +36,6 @@ public class Poll : IRemovable
     /// </summary>
     public string? Details { get; set; }
 
-    /// <summary>
-    /// Options
-    /// </summary>
     public List<PollOption> Options { get; set; } = [];
 
     /// <summary>
@@ -74,8 +71,7 @@ public class PollOption
     public string Text { get; set; } = null!;
 
     /// <summary>
-    /// Order index within the poll. The order used to be held by the position in
-    /// the document's array; a table needs it spelled out.
+    /// Order index within the poll
     /// </summary>
     public int Order { get; set; }
 

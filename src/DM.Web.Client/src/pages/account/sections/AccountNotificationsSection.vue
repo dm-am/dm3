@@ -1,14 +1,22 @@
 <template>
   <section id="notifications" ref="root" class="section">
-    <!-- The notifications page links here: "/account#notifications". -->
+    <!-- The notifications page links here, "/account#notifications". -->
     <h2 class="section-title">Уведомления</h2>
 
-    <!-- One grey panel, as "Сессии" above it is, and in it a framed row a
-         channel: its name with its state under it on the left, the one press
-         it offers on the right, and under them what the channel brings or
-         the steps that link it. -->
+    <!-- A grey panel, as "Сессии" is, with a framed row a channel: the name and its state, the press beside them, and under them what it brings or the steps that link it. -->
     <div class="notifications-content">
-      <div v-if="loading" class="loading-state">Загрузка...</div>
+      <!-- A row per channel in its own shape: "Не подключен" is said only by an answer. -->
+      <AccountSectionSkeleton
+        v-if="loading"
+        shape="rows"
+        :count="CHANNELS.length"
+      />
+
+      <ErrorState
+        v-else-if="loadError"
+        :message="loadError"
+        :retry="loadPreferences"
+      />
 
       <div v-else class="channels">
         <div
@@ -52,9 +60,7 @@
             </Button>
           </div>
 
-          <!-- What a linked channel brings, under it: the switch of the whole
-               channel, and the column of what it sends under a caption of its
-               own, as "Что делать с внесенными" of the blacklist stands. -->
+          <!-- A linked channel's switch and the column of what it sends, under a caption of its own. -->
           <div v-if="connected(channel.id)" class="channel-settings">
             <label class="setting-item">
               <input
@@ -94,13 +100,9 @@
             </template>
           </div>
 
-          <!-- The steps of linking, under the row they link. Focus comes here
-               when they open in place of the button that opened them, so the
-               reader of the screen hears them. A bot that takes the code in
-               its start link is opened by that link, a plain one whose words
-               are the address; the other is sent the command, text of the
-               line, whole and selectable. Either is copied as any other words
-               of the page. -->
+          <!-- The steps of linking, under their row; focus comes here when they open. A
+               bot that takes the code in its start link is opened by that link, the other
+               is sent the command as words of the line. -->
           <div
             v-else-if="linking[channel.id]"
             class="link-process"
@@ -151,27 +153,24 @@
 import { nextTick, ref, reactive, onMounted, onUnmounted, useId } from "vue";
 import { accountApi } from "@/entities/user";
 import type {
-  NotificationPreferences,
+  NotificationSettings,
   NotificationCategory,
 } from "@/shared/api/models/account";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import Button from "@/shared/ui/Button/Button.vue";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import AccountSectionSkeleton from "./AccountSectionSkeleton.vue";
+import { OWNED_BY_CARD } from "./loadFailure";
+
+const LOAD_FAILED = "Не удалось загрузить настройки уведомлений";
 
 type ChannelId = "telegram" | "discord";
 
 /**
- * The two channels, in the order of the rows. Everything the rows do is the
- * same for both, so a row is drawn from one of these and the state below is
- * kept per channel rather than written out twice.
- *
- * The bots are named the way the server is configured (should match backend
- * config); the Discord address is a placeholder until the bot has an invite.
- *
- * `startsWithCode`: the bot takes the code in its start link,
- * t.me/<bot>?start=<code>, which Telegram hands it as "/start <code>" when the
- * reader presses Start in the chat it opens, so the steps give that link in
- * place of the command.
+ * The two channels, in the order of the rows; a row is drawn from one of
+ * these. The bots are named as the server is configured. `startsWithCode`: the
+ * bot takes the code in its start link, which Telegram hands it as "/start <code>".
  */
 const CHANNELS: readonly {
   id: ChannelId;
@@ -203,11 +202,12 @@ function startLabel(botHref: string, code: string | undefined): string {
 }
 
 const loading = ref(true);
+const loadError = ref<string | null>(null);
 const saving = ref(false);
 const disconnecting = ref<ChannelId | null>(null);
 const generating = ref<ChannelId | null>(null);
 
-const preferences = reactive<NotificationPreferences>({
+const preferences = reactive<NotificationSettings>({
   telegram: undefined,
   discord: undefined,
 });
@@ -222,7 +222,6 @@ const allCategories: { value: NotificationCategory; label: string }[] = [
   { value: "Blog", label: "Блоги" },
 ];
 
-// Local state of the boxes, per channel.
 const enabled = reactive<Record<ChannelId, boolean>>({
   telegram: false,
   discord: false,
@@ -234,7 +233,7 @@ const categories = reactive<Record<ChannelId, NotificationCategory[]>>({
 
 const connected = (id: ChannelId) => preferences[id]?.connected === true;
 
-// The caption that names the column of a channel's categories.
+// The ids of the captions over the channels' categories.
 const baseId = useId();
 const categoriesId = (id: ChannelId) => `${baseId}-${id}-categories`;
 
@@ -243,7 +242,7 @@ onMounted(async () => {
 });
 
 /** Takes one channel's preferences as the server holds them, boxes included. */
-function takeChannel(id: ChannelId, data: NotificationPreferences) {
+function takeChannel(id: ChannelId, data: NotificationSettings) {
   preferences[id] = data[id];
   enabled[id] = data[id]?.enabled ?? false;
   categories[id] = [...(data[id]?.enabledCategories ?? [])];
@@ -251,27 +250,23 @@ function takeChannel(id: ChannelId, data: NotificationPreferences) {
 
 async function loadPreferences() {
   loading.value = true;
-  const { data, error } = await accountApi.getNotificationPreferences();
+  const { data, error } =
+    await accountApi.getNotificationPreferences(OWNED_BY_CARD);
   loading.value = false;
 
+  loadError.value = !error && data ? null : LOAD_FAILED;
   if (!error && data) {
     for (const { id } of CHANNELS) takeChannel(id, data);
   }
 }
 
-// A setting stays drawn as it is while its save is in flight. Disabled, a
-// ticked box would show a tick on a control that cannot be ticked, and the
-// site's disabled state says "not on offer", which a setting being saved is
-// not. What the disabled attribute also did is kept: a press during the save
-// is refused before it toggles anything, so it never becomes a second request
-// racing the first.
+// A setting stays drawn as it is while it is saved, and a press meanwhile is
+// refused before it toggles: disabled, a ticked box would contradict itself.
 function holdWhileSaving(event: Event) {
   if (saving.value) event.preventDefault();
 }
 
-// A refused press, at the foot of the row it was made in: the box that was
-// ticked goes back, and the line says why. The two rows stand one under the
-// other and each answers for its own press.
+// A refused press, at the foot of its row: the box goes back and the line says why.
 const results: Record<ChannelId, ReturnType<typeof useActionResult>> = {
   telegram: useActionResult(),
   discord: useActionResult(),
@@ -309,7 +304,6 @@ async function toggleCategory(id: ChannelId, category: NotificationCategory) {
 
   if (error) {
     results[id].refuse(error, "Не удалось сохранить настройки уведомлений");
-    // Revert
     if (idx >= 0) {
       list.push(category);
     } else {
@@ -328,14 +322,11 @@ async function disconnect(id: ChannelId) {
     const name = CHANNELS.find((channel) => channel.id === id)?.name;
     results[id].refuse(error, `Не удалось отключить ${name}`);
   } else {
-    // No toast: the row redraws itself - "Не подключен" under the name, and
-    // the button that links it in place of the one that was pressed.
+    // No toast: the row redraws itself as not linked.
     preferences[id] = undefined;
     void focusIn(id, ".connect-btn");
   }
 }
-
-// ---- Linking
 
 /** A code handed out for one channel, and the time it has left. */
 interface Linking {
@@ -368,8 +359,7 @@ async function startLinking(id: ChannelId) {
   linking[id] = { code: data.code, secondsLeft };
   void focusIn(id, ".link-process");
 
-  // Running out says it itself: the code, the timer and "Отмена" go, and the
-  // row comes back with "Подключить" on it.
+  // Running out puts the row back with "Подключить".
   stopTimer(id);
   timers[id] = setInterval(() => {
     const open = linking[id];
@@ -385,12 +375,7 @@ function stopTimer(id: ChannelId) {
   delete timers[id];
 }
 
-/**
- * Where focus goes when a press takes away the control it was on: the steps
- * open under the row when "Подключить" gives way to "Отмена", and
- * "Подключить" comes back in place of "Отмена" and of "Отключить". Left
- * alone, it falls to the page and the next Tab starts from the top.
- */
+/** Where focus goes when a press takes away the control it was on. */
 const root = ref<HTMLElement | null>(null);
 
 async function focusIn(id: ChannelId, selector: string) {
@@ -420,12 +405,9 @@ function timeLeft(id: ChannelId): string {
 }
 
 /**
- * The command is sent from the bot, away from this page, and nothing tells the
- * page it went through. So while a row shows its steps, coming back to the
- * page reads the channels again, and a row whose channel is linked now trades
- * the steps for its settings. Without it the row went on offering the command
- * of a channel already linked, and then "Подключить" again once the code ran
- * out.
+ * The command is sent from the bot, away from this page: coming back to the
+ * page while a row shows its steps reads the channels again, and a linked
+ * channel trades the steps for its settings.
  */
 let checking = false;
 
@@ -435,7 +417,8 @@ async function checkLinked() {
   if (!open.length) return;
 
   checking = true;
-  const { data, error } = await accountApi.getNotificationPreferences();
+  const { data, error } =
+    await accountApi.getNotificationPreferences(OWNED_BY_CARD);
   checking = false;
   if (error || !data) return;
 
@@ -451,19 +434,13 @@ onMounted(() => {
   window.addEventListener("focus", checkLinked);
 });
 
-// ---- Arriving at #notifications
-
 /**
- * The notifications page links here, "/account#notifications", and the router
- * scrolls to the section as soon as the page is drawn, while the blocks above
- * it still say "Загрузка...". This is the last section of the page, so that
- * scroll stops at the foot of a page that is still short, and the blocks above
- * then grow and push the section down past the window: at 1366 the link
- * landed on "Смена имени пользователя". So while the address names it, the
- * section brings itself back into view each time the page it stands in grows,
- * until the reader takes the page himself or the page has had time to settle.
+ * The router scrolls to "#notifications" while the blocks above still load,
+ * and their growth pushes this section past the window; so while the
+ * address names it, the section brings itself back into view as the page
+ * grows, until the reader takes the page or it settles.
  */
-const READER_INPUTS = ["wheel", "touchstart", "keydown", "pointerdown"];
+const READER_INPUTS = ["wheel", "keydown", "pointerdown"];
 const SETTLE_MS = 5000;
 
 let letPageGo: (() => void) | null = null;
@@ -472,7 +449,6 @@ function keepInViewWhileThePageLoads() {
   const section = root.value;
   const page = section?.parentElement;
   if (window.location.hash !== "#notifications" || !section || !page) return;
-  if (typeof ResizeObserver === "undefined") return;
 
   const observer = new ResizeObserver(() =>
     section.scrollIntoView({ block: "start" }),
@@ -488,7 +464,7 @@ function keepInViewWhileThePageLoads() {
   for (const input of READER_INPUTS)
     window.addEventListener(input, letGo, { capture: true, passive: true });
   letPageGo = letGo;
-  // An observer reports the size it starts from, so this is the first scroll.
+  // An observer reports its starting size: the first scroll.
   observer.observe(page);
 }
 
@@ -506,21 +482,17 @@ onUnmounted(() => {
 @use "@/assets/styles/Inputs" as *
 @use "../AccountPage.styles" as *
 
-// The grey panel of the section, as "Сессии" has it.
+// The grey panel, as "Сессии" has it.
 .notifications-content
   padding: $medium
   background-color: $bg-element
-
-.loading-state
-  padding: $medium
 
 .channels
   display: flex
   flex-direction: column
   gap: $small
 
-// A framed row of the panel, as a row of "Сессии" is: the head of the row,
-// and under it what the channel brings or the steps that link it.
+// A framed row of the panel, as a row of "Сессии".
 .channel-item
   display: flex
   flex-direction: column
@@ -529,8 +501,7 @@ onUnmounted(() => {
   background-color: $bg-element
   border: 1px solid $border
 
-// The name and its state on the left, the one press level with them on the
-// right, at every width: a phone shows the row as the full version does.
+// The name and its state on the left, the press level with them on the right, at every width.
 .channel-head
   display: grid
   grid-template-columns: minmax(0, 1fr) auto
@@ -543,14 +514,14 @@ onUnmounted(() => {
   gap: $tiny
   min-width: 0
 
-// The main word of the row, as the device of a session is.
+// The main word of the row, as the device of a session.
 .channel-name
   margin: 0
   font-size: $font-size
-  font-weight: 500
+  font-weight: 400
   color: $text
 
-// The line under the name, as the line under the device of a session is.
+// The line under the name, as under the device of a session.
 .channel-state
   margin: 0
   font-size: $secondary-font-size
@@ -561,7 +532,7 @@ onUnmounted(() => {
   flex-direction: column
   gap: $small
 
-// A box and its words, as a setting of the blacklist above is.
+// A box and its words.
 .setting-item
   display: flex
   align-items: center
@@ -569,8 +540,7 @@ onUnmounted(() => {
   cursor: pointer
   color: $text
 
-// The caption of a group of boxes: 14, bold, as "Что делать с внесенными" of
-// the blacklist and the captions of the fields of the site are.
+// The caption of a group of boxes, as the blacklist's.
 .categories-caption
   margin: $small 0 0
   +field-caption
@@ -580,7 +550,6 @@ onUnmounted(() => {
   flex-direction: column
   gap: $small
 
-// Linking
 .link-process
   display: flex
   flex-direction: column
@@ -590,16 +559,14 @@ onUnmounted(() => {
   margin: 0
   color: $text
 
-// The command as words of the line, in the code font of the site. A tap
-// selects all of it, and it is never broken in two.
+// The command in the site's code font, selected whole by a tap, never broken.
 .command
   font-family: $code-font
   font-size: $font-size
   white-space: nowrap
   user-select: all
 
-// The start link stands in for the command, and like it is never broken in
-// two: an address split at its "?" reads as two.
+// The start link is never broken either: split at its "?" it reads as two.
 .start-link
   white-space: nowrap
 
@@ -610,10 +577,10 @@ onUnmounted(() => {
 
 .timer-value
   font-size: $font-size
-  font-weight: 500
+  font-weight: 400
   color: $text
 
-// Spaced by the gap of the row, at its left edge.
+// Spaced by the gap of the row.
 .channel-refusal
   --action-result-margin: 0
 </style>

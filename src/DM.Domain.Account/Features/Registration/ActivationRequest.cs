@@ -21,9 +21,7 @@ public class ActivationRequest
     /// IANA zone of the device the account is created on, or null
     /// </summary>
     /// <remarks>
-    /// The account keeps it for its letters, which have no browser to ask. One
-    /// this machine does not know, or none, is left out and the account keeps UTC:
-    /// a zone is no reason to refuse an account.
+    /// Kept for the letters; one this machine does not know is left out, not refused.
     /// </remarks>
     public string? TimeZoneId { get; set; }
 }

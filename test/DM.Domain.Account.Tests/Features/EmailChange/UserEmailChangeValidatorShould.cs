@@ -1,9 +1,9 @@
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.EmailChange;
-using DM.Domain.Core.Identity;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Exceptions;
 using DM.Testing;
+using DM.Testing.Dsl;
 using FluentValidation.TestHelper;
 using NSubstitute;
 using Xunit;
@@ -21,16 +21,9 @@ public class UserEmailChangeValidatorShould : UnitTestBase
         repository = Mock<IEmailChangeRepository>();
         securityManager = Mock<ISecurityManager>();
 
-        var authenticatedUser = new AuthenticatedUser
-        {
-            UserId = System.Guid.NewGuid(),
-            Username = "testuser",
-            Email = "old@example.com",
-            Salt = "salt",
-            PasswordHash = "hash"
-        };
-
-        repository.FindUser("testuser").Returns(authenticatedUser);
+        var user = Create.User().WithCredentials("salt", "hash").Please();
+        user.Email = "old@example.com";
+        repository.FindUser("testuser").Returns(user);
 
         repository.IsEmailFree(Arg.Any<string>(), default).Returns(true);
 
@@ -101,7 +94,7 @@ public class UserEmailChangeValidatorShould : UnitTestBase
         };
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Email)
-            .WithErrorMessage(ValidationError.Invalid);
+            .WithErrorMessage(RefusalMessage.EmailInvalid);
     }
 
     [Fact]

@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
 using DM.Testing;
 using DM.Web.API.Features.Personal.Webhooks;
-using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
@@ -34,122 +33,33 @@ public class TelegramWebhookHandlerShould : UnitTestBase
         return document.RootElement.Clone();
     }
 
-    [Fact]
-    public void HaveTelegramBotType()
-    {
-        _handler.BotType.Should().Be("telegram");
-    }
-
-    [Fact]
-    public async Task VerifyAndLinkOnConnectCommand()
-    {
-        var payload = Payload("""{"message": {"text": "/connect ABC123", "chat": {"id": 12345}}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.Received(1).VerifyAndLink("ABC123", "telegram", "12345", Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task TrimCodeFromConnectCommand()
-    {
-        var payload = Payload("""{"message": {"text": "/connect  abc123 ", "chat": {"id": 12345}}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.Received(1).VerifyAndLink("abc123", "telegram", "12345", Arg.Any<CancellationToken>());
-    }
-
     /// <summary>
     /// The account page hands the code out as a link, t.me/{bot}?start={code},
     /// and Telegram delivers the press of Start in that chat as "/start {code}".
     /// </summary>
-    [Fact]
-    public async Task VerifyAndLinkOnStartCommandWithCode()
+    [Theory]
+    [InlineData("""{"message": {"text": "/connect ABC123", "chat": {"id": 12345}}}""", "ABC123")]
+    [InlineData("""{"message": {"text": "/connect  abc123 ", "chat": {"id": 12345}}}""", "abc123")]
+    [InlineData("""{"message": {"text": "/start ABC123", "chat": {"id": 12345}}}""", "ABC123")]
+    [InlineData("""{"message": {"text": "/start  abc123 ", "chat": {"id": 12345}}}""", "abc123")]
+    public async Task VerifyAndLinkTheCodeOfTheCommand(string json, string code)
     {
-        var payload = Payload("""{"message": {"text": "/start ABC123", "chat": {"id": 12345}}}""");
+        await _handler.HandleAsync(Payload(json));
 
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.Received(1).VerifyAndLink("ABC123", "telegram", "12345", Arg.Any<CancellationToken>());
+        await _botLinkService.Received(1).VerifyAndLink(code, "telegram", "12345", Arg.Any<CancellationToken>());
     }
 
-    [Fact]
-    public async Task TrimCodeFromStartCommand()
+    [Theory]
+    [InlineData("""{"message": {"text": "/start   ", "chat": {"id": 12345}}}""")]
+    [InlineData("""{"message": {"text": "/startABC123", "chat": {"id": 12345}}}""")]
+    [InlineData("""{"callback_query": {"id": "1"}}""")]
+    [InlineData("""{"message": {"chat": {"id": 12345}}}""")]
+    [InlineData("""{"message": {"text": "/connect ABC123", "chat": {}}}""")]
+    [InlineData("""{"message": {"text": "/start", "chat": {"id": 12345}}}""")]
+    [InlineData("""{"message": {"text": "hello there", "chat": {"id": 12345}}}""")]
+    public async Task NotLinkAnUpdateWithoutACommandACodeAndAChat(string json)
     {
-        var payload = Payload("""{"message": {"text": "/start  abc123 ", "chat": {"id": 12345}}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.Received(1).VerifyAndLink("abc123", "telegram", "12345", Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task NotLinkOnStartCommandWithBlankCode()
-    {
-        var payload = Payload("""{"message": {"text": "/start   ", "chat": {"id": 12345}}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task NotTakeACommandThatOnlyStartsLikeStartForOne()
-    {
-        var payload = Payload("""{"message": {"text": "/startABC123", "chat": {"id": 12345}}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task IgnoreUpdateWithoutMessage()
-    {
-        var payload = Payload("""{"callback_query": {"id": "1"}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task IgnoreMessageWithoutText()
-    {
-        var payload = Payload("""{"message": {"chat": {"id": 12345}}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task IgnoreMessageWithoutChatId()
-    {
-        var payload = Payload("""{"message": {"text": "/connect ABC123", "chat": {}}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task NotLinkOnStartCommand()
-    {
-        var payload = Payload("""{"message": {"text": "/start", "chat": {"id": 12345}}}""");
-
-        await _handler.HandleAsync(payload);
-
-        await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
-    }
-
-    [Fact]
-    public async Task NotLinkOnUnrelatedText()
-    {
-        var payload = Payload("""{"message": {"text": "hello there", "chat": {"id": 12345}}}""");
-
-        await _handler.HandleAsync(payload);
+        await _handler.HandleAsync(Payload(json));
 
         await _botLinkService.DidNotReceive().VerifyAndLink(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<CancellationToken>());
     }

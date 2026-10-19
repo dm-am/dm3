@@ -20,19 +20,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// discussions.
 /// </summary>
 /// <remarks>
-/// The comment projection filled no likes, and nothing filled them after it: every
-/// read answered with an empty list however many likes the row had. Nobody saw the
-/// count, and the one who had liked saw an empty heart after a reload, so the click
-/// meant to take the like back asked for a second one and was refused.
-///
-/// Written against HTTP rather than the services, as the message half of the same
-/// proof is (<see cref="Messaging.PrivateMessageLikesShould" />): the omission lived
-/// in a query, which every test with a substituted repository steps straight over.
-/// The four discussions share that query, so each is asked through its own routes.
-///
-/// The comment is seeded with a marker in its text and listed by it: the forum topic
-/// and the game are shared with the tests around this one, and a page of somebody
-/// else's comments would not have this one on it.
+/// The likers are filled in a query, so over HTTP, as <see cref="Messaging.PrivateMessageLikesShould" /> is,
+/// through each discussion's routes. The comment carries a marker in its text: the topic and the game are shared.
 /// </remarks>
 public class CommentLikesShould : IntegrationTestBase
 {
@@ -139,9 +128,7 @@ public class CommentLikesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A like can only be taken back by the one who put it: anybody else has no like
-    /// of his own on the comment, which is the state conflict the like path answers
-    /// for, and the like stays.
+    /// A like is taken back only by the one who put it; anybody else is answered with a state conflict.
     /// </summary>
     [Theory]
     [MemberData(nameof(Surfaces))]
@@ -214,11 +201,7 @@ public class CommentLikesShould : IntegrationTestBase
     /// A comment by the test user on the given discussion, and a reader who has put
     /// no like on it.
     /// </summary>
-    /// <remarks>
-    /// The forum topic and the game are the seeded ones. The blog and the publication
-    /// are made here: a publication is not seeded, and a blog made alongside it keeps
-    /// the publication number out of the way of the seeded blogs.
-    /// </remarks>
+    /// <remarks>The topic and the game are seeded; the blog and the publication are made here.</remarks>
     private async Task<Seeded> SeedAsync(string surface)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -338,8 +321,6 @@ public class CommentLikesShould : IntegrationTestBase
             Title = "Comment likes entry",
             Content = "Seeded by CommentLikesShould",
             Preview = "Seeded",
-            IsPublished = true,
-            PublishedUtc = now,
             CreatedUtc = now
         };
         dbContext.Publications.Add(publication);

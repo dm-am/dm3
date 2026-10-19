@@ -6,8 +6,6 @@
  */
 import { SvgIcon } from "@/shared/ui/Icon";
 
-defineOptions({ name: "FilterDropdownHeader" });
-
 defineProps<{
   /** Title to display */
   title: string;
@@ -34,7 +32,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 @use "@/assets/styles/Filters" as *
 
 .dropdown-nav-header
@@ -58,7 +56,7 @@ const emit = defineEmits<{
 
 .nav-title
   font-size: $secondary-font-size
-  font-weight: 500
+  font-weight: 400
   color: $text
 
 .nav-spacer

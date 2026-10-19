@@ -1,15 +1,3 @@
-<template>
-  <Tooltip :text="label"
-    ><button
-      type="button"
-      class="bubble-action"
-      :aria-label="label"
-      @click="emit('click')"
-    >
-      <SvgIcon :name="icon" /></button
-  ></Tooltip>
-</template>
-
 <script setup lang="ts">
 /**
  * One icon control for a speech bubble's `actions` slot: the pencil or the
@@ -26,13 +14,30 @@ import type { IconName } from "@/shared/lib/utils/icons";
 
 defineProps<{
   /** Glyph from icons.ts: "pencil" to edit, "trash" to delete. */
-  icon: IconName;
+  icon?: IconName;
+  /** A character from symbols in icons.ts, where no drawn glyph exists: the toolbar's warning sign. */
+  glyph?: string;
   /** What the control does, read by a screen reader and shown on hover. */
   label: string;
 }>();
 
 const emit = defineEmits<{ click: [] }>();
 </script>
+
+<template>
+  <Tooltip :text="label"
+    ><button
+      type="button"
+      class="bubble-action"
+      :aria-label="label"
+      @click="emit('click')"
+    >
+      <SvgIcon v-if="icon" :name="icon" /><template v-else>{{
+        glyph
+      }}</template>
+    </button></Tooltip
+  >
+</template>
 
 <style scoped lang="sass">
 @use "@/assets/styles/MessageToolbar" as *

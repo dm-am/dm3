@@ -8,14 +8,6 @@ namespace DM.Web.API.Shared.Dto;
 /// Replaces: User in lists, GameAssistantInfo, BlogAssistantInfo
 /// Only 5 fields vs 12+ in full User
 /// </summary>
-/// <remarks>
-/// Use this DTO for:
-/// - Game lists (master, mentor, assistants, players, readers)
-/// - Blog lists (owner, assistants)
-/// - Any context where only identity and online status are needed
-///
-/// For full user information, use User DTO from Community/Users.
-/// </remarks>
 public class UserRef
 {
     /// <summary>

@@ -2,43 +2,22 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The conversation of a ticket, under its block: the answers of the author
- * and of moderation, and the form to answer in under them.
- *
- * An answer here is the comment of a topic in its compact look, the one look
- * a comment has on DM2, whatever the reader chose for the discussions; read
- * only: a ticket is the record of how it was settled, so nothing in it is
- * edited, deleted, liked or warned about, by anybody. The guest who filed a
- * ticket signs his answers "Гость". The form counts to the length the server
- * takes an answer of a ticket at, 10000, not to the 50000 of a topic's
- * comment. Moderation chooses in it, over the field, the status its answer
- * moves the ticket to, "Ожидает ответа пользователя" unless it closes the
- * ticket or marks it as spam, and closing needs no word. A closed ticket has
- * no form and says in one plate, the plate of every place the reader may not
- * write in, when it was closed and by whom. The block knows nothing of who
- * reads it: the page hands it the ticket, the sending and what to say while
- * nobody has answered.
- */
+/** The conversation of a ticket: read-only answers, the form with its status, the closed line. */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   enableAutoUnmount,
   flushPromises,
   mount,
+  RouterLinkStub,
   type VueWrapper,
 } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useUiStore } from "@/shared/stores/ui";
-import { componentCss, styleRules } from "@/shared/lib/testing/styles";
 import type { TicketComment } from "@/entities/ticket";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import TicketConversation from "./TicketConversation.vue";
 import type { ConversationTicket } from "./types";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
 
 const route = vi.hoisted(() => ({
   query: {} as Record<string, string>,
@@ -47,20 +26,11 @@ const route = vi.hoisted(() => ({
 
 vi.mock("vue-router", () => ({
   useRoute: () => route,
-  RouterLink: { template: "<a><slot /></a>" },
 }));
-
-/** Where every link of the block leads, kept on the anchor. */
-const RouterLinkStub = {
-  name: "RouterLink",
-  props: ["to"],
-  template: "<a><slot /></a>",
-};
 
 const editor = vi.hoisted(() => ({ cleared: 0 }));
 
-// A heavy tiptap component. What the form owes the reader is read off what it
-// hands the editor: the text, and the length its counter counts to.
+// A heavy tiptap component; the spec reads what the form hands it.
 vi.mock("@/shared/ui/BBCodeEditor", () => ({
   BBCodeEditor: {
     name: "BBCodeEditor",
@@ -208,8 +178,7 @@ describe("the answers of a ticket", () => {
     ]);
   });
 
-  // The number alone says nothing to a screen reader, so it is read out with
-  // the name of what it counts, and a ticket holds answers.
+  // The number is read out with the name of what it counts: answers.
   it("read their numbers out as answers", () => {
     const wrapper = render(open());
 
@@ -218,8 +187,7 @@ describe("the answers of a ticket", () => {
     ).toEqual(["Ответ 1", "Ответ 2"]);
   });
 
-  // A senior moderator is offered everything on a comment of a topic: the
-  // edit and the removal of anybody's, the warning about a user's, the heart.
+  // A senior moderator, offered everything on a comment of a topic.
   it("offer nothing to press, even to a senior moderator", () => {
     signInAs("Senior", "SeniorModerator");
     const wrapper = render(open());
@@ -247,8 +215,7 @@ describe("the answers of a ticket", () => {
     ).toBe("Автор: Аккаунт удален");
   });
 
-  // A comment of DM2 has one look, the compact one, and so has an answer of a
-  // ticket, whatever the reader chose for the discussions of the site.
+  // An answer has the one look of a DM2 comment, the compact one.
   it.each(["full", "compact"] as const)(
     "are compact comments with the reader's layout %s",
     (layout) => {
@@ -310,30 +277,44 @@ describe("the form of a ticket", () => {
     expect(wrapper.text()).toContain("Обращение закрыто");
   });
 
-  it("is there only while the reader may write", () => {
-    const wrapper = render(open({ canComment: false }));
+  it("is gone once the ticket is closed", () => {
+    const wrapper = render(closed());
 
     expect(wrapper.find(".editor-stub").exists()).toBe(false);
     expect(sendButton(wrapper)).toBeUndefined();
   });
 
-  // An open ticket takes no answer past the hundredth (TicketTextLimits).
-  it("says where the next word goes once the conversation is full", () => {
+  // An open ticket takes no answer past the limit (TicketTextLimits): neither a form nor a line.
+  it("shows nothing once the conversation is full", () => {
     const wrapper = render(open({ canComment: false }));
 
-    expect(plates(wrapper)).toEqual([
-      "В обращении 100 ответов, для продолжения подайте новое обращение",
-    ]);
-    expect(lines(wrapper)).toEqual([]);
+    expect(wrapper.find(".editor-stub").exists()).toBe(false);
+    expect(plates(wrapper)).toEqual([]);
+    expect(wrapper.text()).not.toContain("В обращении");
+  });
+
+  // The limit reached while the form was open: the text is the server's own.
+  it("shows the refusal of the server when the limit came while the form was open", async () => {
+    send.mockResolvedValue({
+      error: {
+        type: "",
+        title:
+          "В обращении уже 100 ответов, для продолжения подайте новое обращение",
+        status: 400,
+        traceId: "",
+      },
+    });
+    const wrapper = render(open());
+
+    await wrapper.get(".editor-stub").setValue("Еще слово");
+    await sendButton(wrapper)!.trigger("click");
+    await flushPromises();
+
+    expect(wrapper.text()).toContain("В обращении уже 100 ответов");
   });
 });
 
-/**
- * Moderation chooses the status with its answer, over the field: the list of
- * a form of the site, "Ожидает ответа пользователя" first and chosen, then
- * "Закрыто" and "Спам". The text and the status go together, and a closing
- * needs no text.
- */
+/** Moderation chooses the status with its answer; a closing needs no text. */
 describe("the answer of moderation", () => {
   const moderated = () => render(open({ canResolve: true }));
 
@@ -428,12 +409,7 @@ describe("a ticket nobody answered yet", () => {
   });
 });
 
-/**
- * "(а)" with no gender, as the records of a ban say "выдал(а)" and "снял(а)":
- * the next screen of moderation, and the same signature of what a moderator
- * did. The line stands in the plate of a place the reader may not write in,
- * DM2's "Тема закрыта. Добавление сообщений невозможно".
- */
+/** The closed line, "(а)" with no gender as in the records of a ban, in the plate. */
 describe("a closed ticket", () => {
   it("has no form and one plate under the answers: when, and by whom", () => {
     const wrapper = render(closed());
@@ -454,42 +430,5 @@ describe("a closed ticket", () => {
     expect(plates(render(closed({ resolvedByUsername: null })))).toEqual([
       `Обращение закрыто ${at(CLOSED)}, закрыл(а) Аккаунт удален.`,
     ]);
-  });
-});
-
-/**
- * The answers stand a $medium step under the block of the ticket and a $small
- * one apart, as in the discussion of a topic, and the lines take no inset of
- * their own (the rule of the discussion's closed line, line 31).
- */
-describe("the spacing of the conversation", () => {
-  const rules = () =>
-    styleRules(componentCss(resolve(HERE, "TicketConversation.vue")));
-  const ruleOf = (selector: string) =>
-    Object.assign(
-      {},
-      ...rules()
-        .filter((rule) => rule.selector === selector)
-        .map((rule) => rule.declarations),
-    ) as Record<string, string>;
-
-  it("keeps the topic's steps", () => {
-    expect(ruleOf(".ticket-conversation")).toMatchObject({
-      "margin-top": "16px",
-      gap: "16px",
-    });
-    expect(ruleOf(".ticket-conversation__list")).toMatchObject({ gap: "8px" });
-  });
-
-  // Nothing in the block is inset but the block itself, a step under the
-  // ticket: the lines stand where the form would, at the left of the column.
-  it("gives its lines no inset", () => {
-    const insets = rules().flatMap((rule) =>
-      Object.keys(rule.declarations)
-        .filter((property) => /^(padding|margin)/.test(property))
-        .map((property) => `${rule.selector} ${property}`),
-    );
-
-    expect(insets).toEqual([".ticket-conversation margin-top"]);
   });
 });

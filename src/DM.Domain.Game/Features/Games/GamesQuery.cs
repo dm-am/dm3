@@ -5,9 +5,6 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// Query parameters for game list filtering
-/// </summary>
 public class GamesQuery : PagingQuery
 {
     /// <summary>
@@ -105,7 +102,7 @@ public class GamesQuery : PagingQuery
     public DateTimeOffset? RecruitmentStartedToUtc { get; set; }
 
     /// <summary>
-    /// Sort field: created, activated, recruitmentstarted, title, popularity, status, availableslots, closed
+    /// One of the fields GamesQueryValidator allows
     /// </summary>
     public string? SortBy { get; set; }
 
@@ -121,18 +118,12 @@ public class GamesQuery : PagingQuery
     public bool? Participating { get; set; }
 
     /// <summary>
-    /// Premoderation statuses to show (OR between selected). Moderation-only
-    /// filter: honored for Mentor+ callers, forbidden otherwise. When set,
-    /// the per-user accessibility scope is replaced with the moderation scope
-    /// (all non-removed games), because the public scope hides exactly the
-    /// premoderated games this filter targets.
+    /// Mentor+ only. When set, the moderation scope replaces the reader's, which hides exactly these games.
     /// </summary>
     public IReadOnlyCollection<PremoderationStatus>? PremoderationStatuses { get; set; }
 
     /// <summary>
-    /// Masters whose games are left out of the list. Not a filter the caller
-    /// chooses: the service fills it from the viewer's personal blacklist when
-    /// the viewer switched on "Скрывать игры" (UserBlacklistSettings.HideGames).
+    /// Filled by the service from the viewer's blacklist under UserBlacklistSettings.HideGames
     /// </summary>
     public IReadOnlyCollection<Guid>? ExcludedMasterIds { get; set; }
 }

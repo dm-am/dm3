@@ -23,11 +23,7 @@ public class MigrationShould : IntegrationTestBase
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
 
-        // Without this, an entity change that nobody queries goes unnoticed: the
-        // migration keeps building the old schema, and every test passes until
-        // the first request touches the column that was never created. A new
-        // nullable column, a changed index and changed seed data all fall in
-        // that gap.
+        // An entity change nobody queries would leave the migration building the old schema.
         dbContext.Database.HasPendingModelChanges().Should().BeFalse(
             "InitialCreate is regenerated from the model, so a difference means " +
             "an entity was changed without `dotnet ef migrations remove` and `add`");

@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence;
@@ -15,10 +12,7 @@ using Topic = DM.Domain.Forum.Features.Topics.Topic;
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
 /// <summary>
-/// TopicNumber is the canonical topic URL key and it is allocated as MAX+1 with
-/// no lock, so two creates in the same board can read the same maximum. Before
-/// the unique index both inserts committed and one of the two topics became
-/// permanently unreachable by its own link, with nothing to even detect it.
+/// TopicNumber, the topic URL key, is MAX+1 with no lock, so the unique index keeps two creates from sharing one.
 /// </summary>
 public class TopicNumberAllocationShould : IntegrationTestBase
 {
@@ -125,7 +119,6 @@ public class TopicNumberAllocationShould : IntegrationTestBase
             Title = $"Allocation board {boardId:N}",
             Alias = $"allocation-{boardId:N}",
             Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = BoardAccessPolicy.Guest,
         });
         await dbContext.SaveChangesAsync();

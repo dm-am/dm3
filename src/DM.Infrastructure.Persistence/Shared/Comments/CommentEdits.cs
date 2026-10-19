@@ -8,16 +8,8 @@ namespace DM.Infrastructure.Persistence.Shared.Comments;
 /// The writing side of the comment edit history, for all four discussions at once.
 /// </summary>
 /// <remarks>
-/// A comment row keeps no modification stamp of its own: the mapping profile
-/// derives ModifiedUtc from the most recent entry here, and the client draws its
-/// "edited" mark from that. Nothing wrote an entry — all four repositories said
-/// tracking was "handled via Edit history" and then saved the new text alone — so
-/// the field was null for every comment ever edited, and an edit was invisible to
-/// the reader. The forum's topic history is the same shape and has always been
-/// written; this is the comment side of it.
-///
-/// Shared rather than copied, for the reason the reading side is shared: four
-/// copies of a rule are four chances to fix it in three places.
+/// A comment row keeps no modification stamp of its own: the projection derives
+/// ModifiedUtc from the most recent entry here.
 /// </remarks>
 internal static class CommentEdits
 {

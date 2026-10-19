@@ -9,25 +9,14 @@ using Xunit;
 namespace DM.Infrastructure.Persistence.Tests;
 
 /// <summary>
-/// Every entity that owns a unit of storage carries [Table]; a nested value that
-/// owns none — a jsonb payload, an owned column shape — carries nothing, and
-/// that absence is the second, deliberate state. Since W1.1 the one store is
-/// PostgreSQL: the Mongo collection marker does not exist any more, so
-/// carrying it is a compile error rather than a rule.
-/// See docs/conventions/DATA_STORAGE.md.
+/// Every entity that owns a unit of storage carries [Table]; a nested value that owns none, a jsonb payload
+/// or an owned column shape, carries nothing. See docs/conventions/DATA_STORAGE.md.
 /// </summary>
 public class EntityStorageMarkerShould
 {
     /// <summary>
-    /// Values embedded in a jsonb column: no storage identity of their own,
-    /// hence no marker. Adding to this list is a decision, which is why it is a
-    /// list and not a heuristic.
+    /// Values embedded in a jsonb column, by full type name: adding here is a decision.
     /// </summary>
-    /// <remarks>
-    /// Full type names, because a short one hands the exemption to whatever
-    /// future class happens to reuse it — the exemption has to name a type, not
-    /// a word.
-    /// </remarks>
     private static readonly HashSet<string> EmbeddedValues =
     [
         // Inside the UserSettings channel-preference columns

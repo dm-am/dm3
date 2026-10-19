@@ -9,14 +9,7 @@ namespace DM.Domain.Core.Tests;
 /// The identifier that carries a title in it and still decodes back to a Guid.
 /// </summary>
 /// <remarks>
-/// Two properties, and the whole point of the helper is that they hold together:
-/// the text is there for a person to read, and the Guid is what the address is
-/// resolved by. Base64 is not URL-safe, so the encoding swaps three characters
-/// and the decoder swaps them back — a change to one side alone leaves addresses
-/// that look right and resolve to nothing, or to something else.
-///
-/// The transliteration table is why the letter at U+0451 is allowed to appear in
-/// that one source file: a table missing it turns the letter into nothing.
+/// Base64 is not URL-safe, so the encoder swaps three characters and the decoder swaps them back.
 /// </remarks>
 public class ReadableGuidHelperShould
 {
@@ -75,10 +68,7 @@ public class ReadableGuidHelperShould
     /// onto one address.
     /// </summary>
     /// <remarks>
-    /// Written by number, because the convention keeps that character out of every
-    /// text a person reads and a rule of the suite scans the tree for it. The
-    /// transliteration table is the one file allowed to carry it; this one states
-    /// the same fact without becoming a second exception.
+    /// Written by number, because a rule of the suite scans the tree for that character.
     /// </remarks>
     [Fact]
     public void TransliterateTheLetterWithDots() =>

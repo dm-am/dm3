@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,29 +13,13 @@ namespace DM.Architecture.Tests;
 /// The seed holds one example of every kind of room the product can build.
 /// </summary>
 /// <remarks>
-/// A room is two independent choices: what is written in it (posts or messages)
-/// and who may open it (anyone, or the characters that were granted access). The
-/// seed used to write three of those four rooms and no closed chat room at all,
-/// and the closed post room it did write stayed empty, so the screen that shows
-/// the difference — the game menu, where a closed room carries a lock — could
-/// not be looked at in the state that matters. The lock on it was broken for
-/// exactly as long as nothing in the seed wore it.
-///
-/// The rule reads the seeder sources rather than a seeded database: seeding needs
-/// PostgreSQL and object storage, and a fixture whose whole purpose is
-/// to be looked at is defended by asserting that it is still written. The room
-/// and post initialisers hold no nested braces, which is what makes reading them
-/// out of the text sound rather than clever, and the reader is held to that by
-/// its own count check below.
-///
-/// An initialiser that names neither property counts as Default and Open: that is
-/// what the enum values and the column defaults give it.
+/// A room is what is written in it and who may open it. Read from the seeder sources: the initialisers
+/// hold no nested braces, held so by the count check below; one naming neither property is Default and Open.
 /// </remarks>
 public class SeededRoomExamplesShould
 {
     /// <summary>
-    /// The four rooms the game menu is read against. Posts and messages, open and
-    /// closed: dropping any one of them takes a state off the screen.
+    /// The four rooms the game menu is read against: posts and messages, open and closed.
     /// </summary>
     private static readonly (string Type, string Access)[] Required =
     [
@@ -45,10 +30,8 @@ public class SeededRoomExamplesShould
     ];
 
     /// <summary>
-    /// An entity initialiser together with the local it is assigned to, so that a
-    /// room can be matched with the posts written into it. A room the seeder builds
-    /// is always assigned to a local first, which is what makes the name a handle
-    /// on it.
+    /// An entity initialiser with the name it is assigned to; a post names its room by the variable, and
+    /// in another method by a parameter carrying the local's name.
     /// </summary>
     private static Regex Initialiser(string entity) => new(
         @"(?:(?:var\s+)?(?<name>\w+)\s*=\s*)?new\s+" + entity + @"\s*\{(?<body>[^{}]*)\}",
@@ -64,8 +47,7 @@ public class SeededRoomExamplesShould
         @"\bPolicy\s*=\s*RoomAccessPolicy\.\w+", RegexOptions.Compiled);
 
     /// <summary>
-    /// "Type" alone: the word inside "AccessType" is not preceded by a word
-    /// boundary, so the two assignments cannot be read for each other.
+    /// "Type" alone: inside "AccessType" it has no word boundary before it.
     /// </summary>
     private static readonly Regex TypeAssignment = new(
         @"\bType\s*=\s*RoomType\.(?<value>\w+)", RegexOptions.Compiled);
@@ -97,11 +79,8 @@ public class SeededRoomExamplesShould
     }
 
     /// <summary>
-    /// A closed room that nobody wrote into is a lock over an empty page, which
-    /// shows the lock and nothing else. The seeded rooms are locals, so the posts
-    /// that name one are the posts written into it. The seeder also fetches rooms
-    /// into locals of its own, so two files would have to agree on a name for this
-    /// to read one room for another.
+    /// A closed room nobody wrote into shows only the lock. SeedGameRooms builds privateRoom and
+    /// SeedClosedRoomScene writes through its parameter of the same name.
     /// </summary>
     [Fact]
     public void WriteIntoTheClosedPostRoom()
@@ -121,10 +100,7 @@ public class SeededRoomExamplesShould
     }
 
     /// <summary>
-    /// A reader that parses nothing passes everything. The count is taken from a
-    /// pattern that shares nothing with the reader beyond the entity name, so a
-    /// room written in a shape the reader cannot take apart fails here instead of
-    /// quietly leaving the rule above with less to check.
+    /// A reader that parses nothing passes everything, so rooms are counted by a pattern of their own.
     /// </summary>
     [Fact]
     public void ReadEveryRoomTheSeederWrites()
@@ -139,10 +115,7 @@ public class SeededRoomExamplesShould
     }
 
     /// <summary>
-    /// Every access row the seeder writes names the policy it grants. The enum
-    /// defaults to NoAccess and the policy is what admits writing, so a row written
-    /// without one puts a member behind the lock of a closed room and leaves them
-    /// unable to post in it - the one state of that screen the seed exists to show.
+    /// Every access row the seeder writes names its policy: the enum defaults to NoAccess.
     /// </summary>
     [Fact]
     public void GrantAPolicyOnEverySeededRoomAccess()
@@ -207,12 +180,11 @@ public class SeededRoomExamplesShould
 
     private static IReadOnlyList<string> SeederSources()
     {
-        var seeder = Path.Combine(RepositoryRoot.FullName, "src", "DM.Tools.Seeder");
+        var seeder = Path.Combine(RepositoryLayout.RootDirectory.FullName, "src", "DM.Tools.Seeder");
         Directory.Exists(seeder).Should().BeTrue("the seeder is the tool that builds the fixture");
-        return RepositoryFiles.CsharpFiles(seeder, BuildOutput).ToList();
+        return RepositoryFiles.Files(seeder, "*.cs", BuildOutput).ToList();
     }
 
-    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     private sealed record SeededRoom(string? Name, string Type, string Access);
 }

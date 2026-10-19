@@ -1,3 +1,4 @@
+using DM.Domain.Core.Chats;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
@@ -7,25 +8,7 @@ using DM.Domain.Core.Exceptions;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
-using DbBlogBlacklist = DM.Infrastructure.Persistence.Entities.Blog.BlogBlacklist;
-using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
-using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
-using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
-using DbRoomAccess = DM.Infrastructure.Persistence.Entities.Game.Links.RoomAccess;
-using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
-using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
-using DbGameBlacklist = DM.Infrastructure.Persistence.Entities.Game.Links.GameBlacklist;
-using DbGameReview = DM.Infrastructure.Persistence.Entities.Game.GameReview;
-using DbLike = DM.Infrastructure.Persistence.Entities.Shared.Like;
 using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
-using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
-using DbPublication = DM.Infrastructure.Persistence.Entities.Blog.Publication;
-using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
-using DbPostEdit = DM.Infrastructure.Persistence.Entities.Game.Posts.PostEdit;
-using DbPostPendency = DM.Infrastructure.Persistence.Entities.Game.Links.PostPendency;
-using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
-using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 using DbUserBlacklist = DM.Infrastructure.Persistence.Entities.Account.UserBlacklist;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
@@ -35,24 +18,11 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// routes.
 /// </summary>
 /// <remarks>
-/// The rule, in the owner's words of 05.10: a list closes the minimum and does
-/// not do the work of the tools that already exist. The game's list closes two
-/// things - the discussion and the application, each with the edit of one's
-/// own - and nothing else: who writes in the rooms is decided by the rooms and
-/// the roster, and a review, a rating or a like is feedback. The blog's list
-/// closes comments, in the blog and under its publications. A topic is a public
-/// place, where only a ban keeps somebody out, and a personal list closes one's
-/// private messages and hides what one asked it to hide.
-///
-/// The table is here rather than in the domain suites because the rule used to
-/// be kept in many places, and what kept it was the route each request took.
-/// Every row sends the request a page would send and reads the answer a page
-/// would show, so a closure that comes back in any service turns its row red.
-///
-/// Each case seeds its own blacklisted user and takes its rows back out; the
-/// fixture's game and blog stay as the fixture made them.
+/// A list closes the minimum: the game's the discussion and the application, the blog's comments; a topic is
+/// public, and a personal list closes private messages and hides what it was asked to. Every row sends the
+/// request a page would send; each case seeds its own blacklisted user.
 /// </remarks>
-public class BlacklistRuleShould : IntegrationTestBase
+public partial class BlacklistRuleShould : IntegrationTestBase
 {
     public BlacklistRuleShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
@@ -200,10 +170,7 @@ public class BlacklistRuleShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The flag stands where something it closes is offered - the game's details
-    /// and the blog - and nowhere else. A list of posts from many games, the
-    /// game list and a blog's feed offer nothing the lists close, and they used
-    /// to carry the flag for the rating form and the heart.
+    /// The flag stands where something it closes is offered, the game's details and the blog, and nowhere else.
     /// </summary>
     [Fact]
     public async Task KeepTheFlagOffTheShapesThatOfferNothingTheListsClose()
@@ -237,12 +204,7 @@ public class BlacklistRuleShould : IntegrationTestBase
     /// <summary>
     /// The owner blacklists a subscriber, and the subscription stays.
     /// </summary>
-    /// <remarks>
-    /// The game refused this outright ("remove the user from the game first",
-    /// and nothing removes a reader), so the player who had just left - the game
-    /// subscribes him by itself - could never be put on the list. The blog took
-    /// the subscription away, the one thing the list is not for.
-    /// </remarks>
+    /// <remarks>The game subscribes a player who leaves by itself, and the list is not for subscriptions.</remarks>
     [Fact]
     public async Task BlacklistASubscriberAndKeepTheSubscription()
     {
@@ -306,11 +268,10 @@ public class BlacklistRuleShould : IntegrationTestBase
         try
         {
             var games = await IdsAsync(viewer, "/v1/games?take=200");
-            var gamesByHost = await IdsAsync(viewer, $"/v1/games?take=200&hostUsernames={TestConstants.TestUserUsername}");
+            var gamesByHost = await IdsAsync(viewer, $"/v1/games?take=200&hostUsernames={TestConstants.TestUserLogin}");
             var blogs = await IdsAsync(viewer, "/v1/blogs?take=200");
             var chat = await GetAsync(viewer, "/v1/global-chat/messages?limit=100");
-            // The search reads the same general chat, and hides the same people:
-            // the chat left them out and the search used to hand them back.
+            // The search reads the same general chat and hides the same people.
             var blockedGreetings = await GlobalChatIdsAsync(TestConstants.TestUserId, "Привет");
             blockedGreetings.Should().NotBeEmpty("the fixture's blocked author greets the chat");
             var found = await IdsAsync(viewer, GreetingSearch);
@@ -321,7 +282,7 @@ public class BlacklistRuleShould : IntegrationTestBase
             chat.GetProperty("resources").EnumerateArray()
                 .Select(m => m.GetProperty("author").GetProperty("username").GetString())
                 .Should().NotBeEmpty("the general chat of the fixture has other authors")
-                .And.NotContain(TestConstants.TestUserUsername, "the viewer hides the messages of the people he blocked");
+                .And.NotContain(TestConstants.TestUserLogin, "the viewer hides the messages of the people he blocked");
             found.Should().NotBeEmpty("another author greets the chat too")
                 .And.NotContain(blockedGreetings, "the search of the general chat hides whom the chat hides");
 
@@ -336,7 +297,7 @@ public class BlacklistRuleShould : IntegrationTestBase
             (await IdsAsync(viewer, "/v1/blogs?take=200")).Should().Contain(TestConstants.TestBlogId);
             (await GetAsync(viewer, "/v1/global-chat/messages?limit=100")).GetProperty("resources").EnumerateArray()
                 .Select(m => m.GetProperty("author").GetProperty("username").GetString())
-                .Should().Contain(TestConstants.TestUserUsername, "the page the viewer checked shows that author at all");
+                .Should().Contain(TestConstants.TestUserLogin, "the page the viewer checked shows that author at all");
             (await IdsAsync(viewer, GreetingSearch)).Should().Contain(blockedGreetings,
                 "the search the viewer checked finds that author at all");
         }
@@ -346,356 +307,39 @@ public class BlacklistRuleShould : IntegrationTestBase
         }
     }
 
-    // ═══ SEEDING ═══
+    /// <summary>The request a page sends for one row, asked of the list the row is about.</summary>
+    private Task<HttpResponseMessage> SendAsync(string action, Seed seed) =>
+        GameRequest(action, seed) ?? BlogRequest(action, seed) ?? ForumRequest(action, seed)
+        ?? throw new ArgumentOutOfRangeException(nameof(action), action, "no request for this row");
 
     /// <summary>
-    /// A blacklisted user and what he holds in the game and the blog before the
-    /// entries.
+    /// A review is written on a closed game alone, so the shared game is closed for the one request and
+    /// opened again after it.
     /// </summary>
-    /// <remarks>
-    /// In the game: a comment, a like under somebody else's comment, a review, a
-    /// rating of a post, an application, a character in play and a retired one,
-    /// both seated in a room of the case's own where he has written a post, and a
-    /// chat room that lets him write as a reader. In the blog: a comment, a
-    /// publication of somebody else with a comment of his and one of somebody
-    /// else under it, and somebody else's comment in the discussion. The
-    /// fixture's master of the game and author of the blog also keeps him on a
-    /// personal list, and has a topic with a comment in a board of the case's
-    /// own. A review, a rating and the like are left out of the rows that put
-    /// the first one: one review per game, one rating per game in three days,
-    /// one like per comment.
-    /// </remarks>
-    private sealed record Seed(GeneralUser User)
+    private async Task<HttpResponseMessage> WhileTheGameIsClosed(Func<Task<HttpResponseMessage>> send)
     {
-        public Guid GameCommentId { get; } = Guid.NewGuid();
-        public Guid OtherGameCommentId { get; } = Guid.NewGuid();
-        public Guid LikeId { get; } = Guid.NewGuid();
-        public Guid ReviewId { get; } = Guid.NewGuid();
-        public Guid RatingId { get; } = Guid.NewGuid();
-        public Guid ApplicationId { get; } = Guid.NewGuid();
-        public Guid CharacterId { get; } = Guid.NewGuid();
-        public Guid RetiredCharacterId { get; } = Guid.NewGuid();
-        public Guid RoomId { get; } = Guid.NewGuid();
-        public Guid PostId { get; } = Guid.NewGuid();
-        public Guid ChatRoomId { get; } = Guid.NewGuid();
-        public Guid ChatId { get; } = Guid.NewGuid();
-        public Guid BlogCommentId { get; } = Guid.NewGuid();
-        public Guid OtherBlogCommentId { get; } = Guid.NewGuid();
-        public Guid PublicationId { get; } = Guid.NewGuid();
-        public Guid PublicationCommentId { get; } = Guid.NewGuid();
-        public Guid OtherPublicationCommentId { get; } = Guid.NewGuid();
-        public Guid BoardId { get; } = Guid.NewGuid();
-        public Guid TopicId { get; } = Guid.NewGuid();
-        public Guid TopicCommentId { get; } = Guid.NewGuid();
-
-        /// <summary>A user the case made and nothing else, for the drop.</summary>
-        public static Seed Only(GeneralUser user) => new(user);
-    }
-
-    private async Task<Seed> SeedBlacklistedAsync(string? action = null)
-    {
-        // Past the probation, so a review is the newcomer rule's to refuse.
-        var user = await SeedUserAsync("blr-x", quantityRating: 200);
-        var now = DateTimeOffset.UtcNow;
-        var seed = new Seed(user);
-        var game = TestConstants.TestGameId;
-        var blog = TestConstants.TestBlogId;
-        var other = TestConstants.SecondUserId;
-
         await using var db = DatabaseFixture.CreateDbContext();
-        db.GameBlacklists.Add(new DbGameBlacklist
+        var games = db.Games.Where(g => g.GameId == TestConstants.TestGameId);
+        var was = await games.Select(g => new { g.Status, g.ClosedReason }).SingleAsync();
+        await games.ExecuteUpdateAsync(g => g
+            .SetProperty(x => x.Status, ModuleStatus.Closed)
+            .SetProperty(x => x.ClosedReason, ClosedReason.Finished));
+        try
         {
-            EntryId = Guid.NewGuid(),
-            GameId = game,
-            BlockedUserId = user.UserId,
-            BlockedByUserId = TestConstants.TestUserId,
-            CreatedUtc = now
-        });
-        db.BlogBlacklists.Add(new DbBlogBlacklist
-        {
-            EntryId = Guid.NewGuid(),
-            BlogId = blog,
-            BlockedUserId = user.UserId,
-            BlockedByUserId = TestConstants.TestUserId,
-            CreatedUtc = now
-        });
-        db.UserBlacklists.Add(new DbUserBlacklist
-        {
-            EntryId = Guid.NewGuid(),
-            OwnerId = TestConstants.TestUserId,
-            BlockedUserId = user.UserId,
-            CreatedUtc = now
-        });
-
-        // The game.
-        db.Comments.AddRange(
-            Comment(seed.GameCommentId, game, user.UserId, now),
-            Comment(seed.OtherGameCommentId, game, other, now));
-        if (action != "like a comment in the game")
-        {
-            db.Likes.Add(new DbLike
-            {
-                LikeId = seed.LikeId,
-                EntityId = seed.OtherGameCommentId,
-                EntityType = LikeEntityType.Comment,
-                UserId = user.UserId
-            });
+            return await send();
         }
-        if (action != "review the game")
+        finally
         {
-            db.GameReviews.Add(new DbGameReview
-            {
-                GameReviewId = seed.ReviewId,
-                AuthorId = user.UserId,
-                GameId = game,
-                CreatedUtc = now,
-                Text = "Рецензия, написанная до черного списка",
-                IsRemoved = false
-            });
+            await games.ExecuteUpdateAsync(g => g
+                .SetProperty(x => x.Status, was.Status)
+                .SetProperty(x => x.ClosedReason, was.ClosedReason));
         }
-
-        if (action != "rate a post of the game")
-        {
-            db.PostReviews.Add(new DbPostReview
-            {
-                PostReviewId = seed.RatingId,
-                AuthorId = user.UserId,
-                PostId = TestConstants.TestGamePostId,
-                PostAuthorId = TestConstants.TestUserId,
-                GameId = game,
-                CreatedUtc = now,
-                Text = null,
-                SignValue = 0,
-                IsRemoved = false
-            });
-        }
-
-        db.Set<DbCharacter>().AddRange(
-            Character(seed.ApplicationId, user.UserId, "Заявка из черного списка", CharacterStatus.UnderReview, now),
-            Character(seed.CharacterId, user.UserId, "Персонаж в игре", CharacterStatus.Active, now),
-            Character(seed.RetiredCharacterId, user.UserId, "Ушедший персонаж", CharacterStatus.Retired, now));
-        var roomNumber = 1000 + Random.Shared.Next(100_000);
-        db.Set<DbRoom>().AddRange(
-            new DbRoom
-            {
-                RoomId = seed.RoomId,
-                GameId = game,
-                RoomNumber = roomNumber,
-                Title = "Комната внесенного",
-                AccessType = RoomAccessType.Open,
-                Type = RoomType.Default,
-                OrderNumber = 1000.0,
-                IsRemoved = false
-            },
-            new DbRoom
-            {
-                RoomId = seed.ChatRoomId,
-                GameId = game,
-                RoomNumber = roomNumber + 1,
-                Title = "Чат-комната внесенного",
-                AccessType = RoomAccessType.Private,
-                Type = RoomType.Chat,
-                OrderNumber = 1001.0,
-                ChatId = seed.ChatId,
-                IsRemoved = false
-            });
-        db.Chats.Add(new DbChat
-        {
-            ChatId = seed.ChatId,
-            Type = ChatType.GameRoom,
-            Title = "Чат-комната внесенного",
-            RoomId = seed.ChatRoomId,
-            PublicId = $"b{seed.ChatId:N}"[..10]
-        });
-        db.Set<DbRoomAccess>().AddRange(
-            new DbRoomAccess
-            {
-                AccessId = Guid.NewGuid(),
-                CharacterId = seed.CharacterId,
-                RoomId = seed.RoomId,
-                Policy = RoomAccessPolicy.Full
-            },
-            new DbRoomAccess
-            {
-                AccessId = Guid.NewGuid(),
-                CharacterId = seed.RetiredCharacterId,
-                RoomId = seed.RoomId,
-                Policy = RoomAccessPolicy.Full
-            },
-            new DbRoomAccess
-            {
-                AccessId = Guid.NewGuid(),
-                ReaderUserId = user.UserId,
-                RoomId = seed.ChatRoomId,
-                Policy = RoomAccessPolicy.Full
-            });
-        db.Set<DbPost>().Add(new DbPost
-        {
-            PostId = seed.PostId,
-            RoomId = seed.RoomId,
-            CharacterId = seed.CharacterId,
-            AuthorId = user.UserId,
-            CreatedUtc = now.AddMinutes(-1),
-            GameText = "Пост, написанный до черного списка",
-            PrivateAddresseeSnapshotJson = "{}",
-            IsRemoved = false
-        });
-
-        // The blog.
-        db.Publications.Add(new DbPublication
-        {
-            PublicationId = seed.PublicationId,
-            BlogId = blog,
-            PublicationNumber = 9000 + Random.Shared.Next(100_000),
-            AuthorId = TestConstants.TestUserId,
-            Title = "Публикация в блоге со списком",
-            Content = "Текст",
-            Preview = "Текст",
-            IsPublished = true,
-            PublishedUtc = now,
-            CreatedUtc = now,
-            IsRemoved = false
-        });
-        db.Comments.AddRange(
-            Comment(seed.BlogCommentId, blog, user.UserId, now),
-            Comment(seed.OtherBlogCommentId, blog, other, now),
-            Comment(seed.PublicationCommentId, seed.PublicationId, user.UserId, now),
-            Comment(seed.OtherPublicationCommentId, seed.PublicationId, other, now));
-
-        // The forum.
-        db.Boards.Add(new DbBoard
-        {
-            BoardId = seed.BoardId,
-            Title = $"Blacklist board {seed.BoardId:N}",
-            Alias = $"blr-{seed.BoardId:N}",
-            Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
-            CreateTopicPolicy = BoardAccessPolicy.Guest
-        });
-        db.Topics.Add(new DbTopic
-        {
-            TopicId = seed.TopicId,
-            BoardId = seed.BoardId,
-            AuthorId = TestConstants.TestUserId,
-            Title = "Топик того, кто внес",
-            Text = "Текст топика того, кто внес",
-            TopicNumber = 1,
-            CreatedUtc = now.AddHours(-1),
-            IsRemoved = false,
-            IsAttached = false,
-            IsClosed = false
-        });
-        db.Comments.Add(Comment(seed.TopicCommentId, seed.TopicId, TestConstants.TestUserId, now));
-        await db.SaveChangesAsync();
-        return seed;
     }
 
-    private async Task<GeneralUser> SeedUserAsync(
-        string prefix, UserBlacklistSettings settings = UserBlacklistSettings.Default, int quantityRating = 0)
-    {
-        var userId = Guid.NewGuid();
-        await using var db = DatabaseFixture.CreateDbContext();
-        var user = new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id pads the prefix.
-            Username = $"{prefix}{userId:N}"[..20],
-            Email = $"{userId:N}@blacklistrule.example",
-            PasswordHash = "hash",
-            Salt = "salt",
-            BlacklistSettings = settings,
-            QuantityRating = quantityRating
-        };
-        db.Users.Add(user);
-        await db.SaveChangesAsync();
-        return new GeneralUser { UserId = userId, Username = user.Username, Role = UserRole.RegularUser };
-    }
-
-    private static DbComment Comment(Guid commentId, Guid entityId, Guid authorId, DateTimeOffset now) => new()
-    {
-        CommentId = commentId,
-        EntityId = entityId,
-        AuthorId = authorId,
-        CreatedUtc = now.AddMinutes(-1),
-        Text = "Комментарий, написанный до черного списка",
-        IsRemoved = false
-    };
-
-    private static DbCharacter Character(
-        Guid characterId, Guid authorId, string name, CharacterStatus status, DateTimeOffset now) => new()
-        {
-            CharacterId = characterId,
-            GameId = TestConstants.TestGameId,
-            AuthorId = authorId,
-            Name = name,
-            Status = status,
-            IsPlayerLeft = status == CharacterStatus.Retired,
-            IsNpc = false,
-            AccessPolicy = CharacterAccessPolicy.NoAccess,
-            CreatedUtc = now.AddDays(-1),
-            IsRemoved = false
-        };
-
-    private static DbSubscription Subscription(Guid subscriberId, SubscriptionTargetType type, Guid targetId) => new()
-    {
-        SubscriptionId = Guid.NewGuid(),
-        SubscriberId = subscriberId,
-        TargetType = type,
-        TargetId = targetId,
-        Settings = SubscriptionSettings.InApp,
-        CreatedUtc = DateTimeOffset.UtcNow
-    };
-
-    /// <summary>
-    /// Everything the case wrote, or its requests wrote, under the user it made.
-    /// The user row stays, the way the neighbouring suites leave theirs.
-    /// </summary>
-    private async Task DropAsync(Seed seed)
-    {
-        var userId = seed.User.UserId;
-        var rooms = new[] { seed.RoomId, seed.ChatRoomId };
-        var commented = new[] { seed.OtherGameCommentId, seed.OtherBlogCommentId, seed.OtherPublicationCommentId };
-        await using var db = DatabaseFixture.CreateDbContext();
-        await db.Likes.IgnoreQueryFilters()
-            .Where(l => l.UserId == userId || commented.Contains(l.EntityId)).ExecuteDeleteAsync();
-        await db.Topics.IgnoreQueryFilters().Where(t => t.TopicId == seed.TopicId)
-            .ExecuteUpdateAsync(t => t.SetProperty(x => x.LastCommentId, (Guid?)null));
-        await db.Comments.IgnoreQueryFilters()
-            .Where(c => c.AuthorId == userId || commented.Contains(c.CommentId) || c.EntityId == seed.TopicId ||
-                        c.EntityId == seed.PublicationId)
-            .ExecuteDeleteAsync();
-        await db.Publications.IgnoreQueryFilters().Where(p => p.PublicationId == seed.PublicationId)
-            .ExecuteDeleteAsync();
-        await db.Set<DbPostPendency>().Where(p => rooms.Contains(p.RoomId)).ExecuteDeleteAsync();
-        await db.Set<DbPostEdit>().Where(e => db.Set<DbPost>().IgnoreQueryFilters()
-            .Any(p => p.PostId == e.PostId && p.AuthorId == userId)).ExecuteDeleteAsync();
-        await db.PostReviews.IgnoreQueryFilters().Where(r => r.AuthorId == userId).ExecuteDeleteAsync();
-        await db.Set<DbPost>().IgnoreQueryFilters().Where(post => post.AuthorId == userId).ExecuteDeleteAsync();
-        await db.Set<DbRoomAccess>().Where(a => rooms.Contains(a.RoomId)).ExecuteDeleteAsync();
-        await db.Chats.Where(c => c.ChatId == seed.ChatId)
-            .ExecuteUpdateAsync(c => c.SetProperty(x => x.LastMessageId, (Guid?)null));
-        await db.Set<DbMessage>().IgnoreQueryFilters().Where(m => m.ChatId == seed.ChatId).ExecuteDeleteAsync();
-        await db.Set<DbRoom>().IgnoreQueryFilters().Where(r => rooms.Contains(r.RoomId)).ExecuteDeleteAsync();
-        await db.Chats.Where(c => c.ChatId == seed.ChatId).ExecuteDeleteAsync();
-        await db.Set<DbCharacter>().IgnoreQueryFilters().Where(c => c.AuthorId == userId).ExecuteDeleteAsync();
-        await db.Boards.Where(b => b.BoardId == seed.BoardId)
-            .ExecuteUpdateAsync(b => b.SetProperty(x => x.LastTopicId, (Guid?)null));
-        await db.Topics.IgnoreQueryFilters().Where(t => t.BoardId == seed.BoardId).ExecuteDeleteAsync();
-        await db.Boards.Where(b => b.BoardId == seed.BoardId).ExecuteDeleteAsync();
-        await db.GameReviews.IgnoreQueryFilters().Where(r => r.AuthorId == userId).ExecuteDeleteAsync();
-        await db.Tokens.IgnoreQueryFilters().Where(t => t.UserId == userId).ExecuteDeleteAsync();
-        await db.GameBlacklists.Where(b => b.BlockedUserId == userId).ExecuteDeleteAsync();
-        await db.BlogBlacklists.Where(b => b.BlockedUserId == userId).ExecuteDeleteAsync();
-        await db.UserBlacklists.Where(b => b.BlockedUserId == userId || b.OwnerId == userId).ExecuteDeleteAsync();
-        await db.Subscriptions.Where(s => s.SubscriberId == userId).ExecuteDeleteAsync();
-    }
-
-    // ═══ REQUESTS ═══
-
-    private Task<HttpResponseMessage> SendAsync(string action, Seed seed)
+    /// <summary>The rows of the game's list, or null for a row of another list.</summary>
+    private Task<HttpResponseMessage>? GameRequest(string action, Seed seed)
     {
         var game = TestConstants.TestGameId;
-        var blog = TestConstants.TestBlogId;
         var master = CustomWebApplicationFactory.CreateTestUser();
         const string text = "Текст, который пишет пользователь из черного списка";
 
@@ -716,7 +360,8 @@ public class BlacklistRuleShould : IntegrationTestBase
                 $"/v1/games/comments/{seed.OtherGameCommentId}/likes"),
             "take back one's like in the game" => Send(seed.User, HttpMethod.Delete,
                 $"/v1/games/comments/{seed.OtherGameCommentId}/likes"),
-            "review the game" => Send(seed.User, HttpMethod.Post, $"/v1/games/{game}/reviews", new { text }),
+            "review the game" => WhileTheGameIsClosed(() =>
+                Send(seed.User, HttpMethod.Post, $"/v1/games/{game}/reviews", new { text })),
             "edit one's review of the game" => Send(seed.User, HttpMethod.Patch,
                 $"/v1/games/{game}/reviews/{seed.ReviewId}", new { text }),
             "rate a post of the game" => Send(seed.User, HttpMethod.Post,
@@ -743,6 +388,19 @@ public class BlacklistRuleShould : IntegrationTestBase
                 $"/v1/games/{game}/invitations/players", new { username = seed.User.Username }),
             "post in a room as one's retired character" => Send(seed.User, HttpMethod.Post,
                 $"/v1/rooms/{seed.RoomId}/posts", new { characterId = seed.RetiredCharacterId, gameText = text }),
+            _ => null
+        };
+    }
+
+    /// <summary>The rows of the blog's list, or null for a row of another list.</summary>
+    private Task<HttpResponseMessage>? BlogRequest(string action, Seed seed)
+    {
+        var blog = TestConstants.TestBlogId;
+        var author = CustomWebApplicationFactory.CreateTestUser();
+        const string text = "Текст, который пишет пользователь из черного списка";
+
+        return action switch
+        {
             "comment in the blog" => Send(seed.User, HttpMethod.Post, $"/v1/blogs/{blog}/comments", new { text }),
             "edit one's comment in the blog" => Send(seed.User, HttpMethod.Patch,
                 $"/v1/blogs/comments/{seed.BlogCommentId}", new { text }),
@@ -760,19 +418,30 @@ public class BlacklistRuleShould : IntegrationTestBase
                 $"/v1/blogs/comments/{seed.OtherBlogCommentId}/likes"),
             "like a comment under a publication" => Send(seed.User, HttpMethod.Post,
                 $"/v1/publications/comments/{seed.OtherPublicationCommentId}/likes"),
-            "be invited into the blog by its author" => Send(master, HttpMethod.Post,
+            "be invited into the blog by its author" => Send(author, HttpMethod.Post,
                 $"/v1/blogs/{blog}/invitations/readers", new { username = seed.User.Username }),
             "edit one's blog comment through the forum route" => Send(seed.User, HttpMethod.Patch,
                 $"/v1/forum/comments/{seed.BlogCommentId}", new { text }),
             "edit one's blog comment through the game route" => Send(seed.User, HttpMethod.Patch,
                 $"/v1/games/comments/{seed.BlogCommentId}", new { text }),
+            _ => null
+        };
+    }
+
+    /// <summary>The rows of a personal list in the forum, or null for a row of another list.</summary>
+    private Task<HttpResponseMessage>? ForumRequest(string action, Seed seed)
+    {
+        const string text = "Текст, который пишет пользователь из черного списка";
+
+        return action switch
+        {
             "comment in the topic of somebody who blocked you" => Send(seed.User, HttpMethod.Post,
                 $"/v1/topics/{seed.TopicId}/comments", new { text }),
             "like the topic of somebody who blocked you" => Send(seed.User, HttpMethod.Post,
                 $"/v1/topics/{seed.TopicId}/likes"),
             "like a comment of somebody who blocked you in the forum" => Send(seed.User, HttpMethod.Post,
                 $"/v1/forum/comments/{seed.TopicCommentId}/likes"),
-            _ => throw new ArgumentOutOfRangeException(nameof(action), action, "no request for this row")
+            _ => null
         };
     }
 
@@ -815,7 +484,7 @@ public class BlacklistRuleShould : IntegrationTestBase
     {
         await using var db = DatabaseFixture.CreateDbContext();
         return await db.Set<DbMessage>()
-            .Where(m => m.ChatId == DbChat.GlobalChatId && m.UserId == authorId && !m.IsRemoved &&
+            .Where(m => m.ChatId == WellKnownChats.GlobalChatId && m.UserId == authorId && !m.IsRemoved &&
                         m.Text.Contains(word))
             .Select(m => m.MessageId)
             .ToArrayAsync();

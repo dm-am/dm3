@@ -10,27 +10,14 @@ namespace DM.Infrastructure.Core.Parsing.Tags;
 /// whose caption replaces the words on the button.
 /// </summary>
 /// <remarks>
-/// href="#" and not javascript:void(0): a javascript: URL is inline script to
-/// CSP, and two decorative ones were the whole reason script-src carried
-/// 'unsafe-inline' on a site that binds user HTML through v-html. The client
-/// preventDefaults the click on the head, so the href never navigates.
-///
-/// The author-edit variant is the block alone. The head is for a reader, as the
-/// recipients of [private] are: it carries no data-bb-* marker, so the
-/// reverse conversion would keep its words as text above the block, one more
-/// line of it per edit. The caption rides on the block instead, in its own
-/// data-bb-text.
-///
-/// The words of the open head ride in data-swaptext, and the client shows them
-/// while the spoiler is open. A spoiler with a caption keeps it open as well:
-/// the caption names what is inside, and "Скрыть содержимое" over an open
-/// "Карта сокровищ" dropped the name the moment the reader opened it. One
-/// without a caption swaps its words as on DM2.
+/// href="#" and not javascript:, which CSP counts as inline script; the client
+/// cancels the click. A spoiler with a caption keeps it when open, since it names
+/// what is inside; one without swaps its words (data-swaptext) as on DM2.
 /// </remarks>
 internal sealed class SpoilerTag : Tag
 {
     /// <summary>The words on the button of a spoiler that was given no caption.</summary>
-    internal const string DefaultCaption = "Показать содержимое";
+    private const string DefaultCaption = "Показать содержимое";
 
     /// <summary>The words on the button of an open spoiler that was given no caption.</summary>
     private const string OpenCaption = "Скрыть содержимое";
@@ -40,36 +27,34 @@ internal sealed class SpoilerTag : Tag
     private static readonly IReadOnlyDictionary<string, ParameterKind> Declared =
         new Dictionary<string, ParameterKind> { [Text] = ParameterKind.Text };
 
-    private readonly bool _authorEdit;
-
-    internal SpoilerTag(bool authorEdit) : base("spoiler", string.Empty, "</div>")
+    internal SpoilerTag() : base("spoiler", string.Empty, "</div>")
     {
-        _authorEdit = authorEdit;
         Parameters = Declared;
-        // The reading block ends its line; the author's editor gets every
-        // line break back as typed (see BbParserProvider).
-        DropsLineBreakAfter = !authorEdit;
+        DropsLineBreakAfter = true;
     }
 
     /// <inheritdoc />
     public override string GetOpenHtml(TagNode node, string attributeValue)
     {
-        var written = node.Parameters.TryGetValue(Text, out var text);
-        var caption = written && text!.Length > 0 ? text : null;
+        var caption = node.Parameters.TryGetValue(Text, out var text) && text!.Length > 0 ? text : null;
+        return Open(caption == null ? null : HttpUtility.HtmlEncode(caption));
+    }
 
-        // The author is given the caption as written, an empty one included:
-        // [spoiler text=""] draws what [spoiler] draws, and it is still not
-        // what the author typed.
-        if (_authorEdit)
-        {
-            return written
-                ? $"<div class=\"spoiler\" data-bb-tag=\"spoiler\" data-bb-text=\"{HttpUtility.HtmlEncode(text)}\">"
-                : "<div class=\"spoiler\" data-bb-tag=\"spoiler\">";
-        }
-
-        var shown = caption == null ? DefaultCaption : HttpUtility.HtmlEncode(caption);
-        var open = caption == null ? OpenCaption : shown;
-        return $"<a href=\"#\" class=\"spoiler-head\" data-swaptext=\"{open}\">{shown}</a>" +
-               "<div class=\"spoiler\">";
+    /// <summary>
+    /// The head of a spoiler and the opening of its body: the one markup of every
+    /// spoiler, the one an author writes and the one the site puts an image behind,
+    /// so both open and close alike and say the same words.
+    /// </summary>
+    /// <param name="caption">The caption the author gave, encoded; null for none.</param>
+    /// <param name="mark">
+    /// An attribute both elements carry, with its leading space, telling a spoiler
+    /// the site put up from one an author wrote; empty for the author's.
+    /// </param>
+    internal static string Open(string? caption, string mark = "")
+    {
+        var shown = caption ?? DefaultCaption;
+        var open = caption ?? OpenCaption;
+        return $"<a href=\"#\" class=\"spoiler-head\"{mark} data-swaptext=\"{open}\">{shown}</a>" +
+               $"<div class=\"spoiler\"{mark}>";
     }
 }

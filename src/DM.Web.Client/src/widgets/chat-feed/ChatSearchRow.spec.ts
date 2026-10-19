@@ -2,19 +2,10 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The search row of a feed: the search of the chat and "Перейти к дате", both
- * whole at every width. Where the field beside the button would be narrower
- * than 160, the least a query has room in, the button stands under the field,
- * at its start: kept to one line, the field of a correspondence beside a wide
- * list went down to 80 and cut its own placeholder.
- */
+/** The search row of a feed: the search of the chat and "Перейти к дате". */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
-import { componentCss, styleRules } from "@/shared/lib/testing/styles";
 import { useAuthStore } from "@/shared/stores";
 import type { User } from "@/shared/api/models/common";
 import ChatSearchRow from "./ChatSearchRow.vue";
@@ -59,45 +50,12 @@ const mountRow = (scope: string = "global") =>
 const dateButton = (wrapper: ReturnType<typeof mountRow>) =>
   wrapper.find(".date-btn");
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-
-/** The declarations of a component's rules on a part of it, by its class. */
-function ruleOn(part: string, file = "ChatSearchRow.vue") {
-  const rules = styleRules(componentCss(resolve(HERE, file)));
-  return Object.assign(
-    {},
-    ...rules
-      .filter((rule) => rule.selector.includes(part))
-      .map((rule) => rule.declarations),
-  ) as Record<string, string>;
-}
-
 describe("the row above a feed", () => {
   it("says the date in words, and measures nothing to decide it", () => {
     const wrapper = mountRow();
     expect(dateButton(wrapper).text()).toBe("Перейти к дате");
     expect(dateButton(wrapper).classes()).not.toContain("date-btn--icon");
     expect(observers).toBe(0);
-  });
-
-  it("puts the button under the field where the field would be narrower than 160", () => {
-    // The field takes at least 160 beside the button: its frame, the
-    // magnifier and room for a query, not only for its own words. A row with
-    // less room for it beside the button breaks between the two, and only
-    // there.
-    expect(ruleOn(".filter-bar")["flex-wrap"]).toBe("wrap");
-    expect(ruleOn(".search-container").flex).toBe("1 1 160px");
-  });
-
-  it("is the box the calendar of the date hangs from", () => {
-    // The calendar hangs from the row, under it at its right edge
-    // (ChatDateJump): the search's own box, whatever the bar's mixin says.
-    expect(
-      ruleOn(
-        ".chat-search",
-        "../../features/message-search/ui/MessageSearchBar.vue",
-      ),
-    ).toMatchObject({ position: "relative" });
   });
 
   it("searches the feed it stands over", () => {

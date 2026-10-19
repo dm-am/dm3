@@ -11,9 +11,7 @@ namespace DM.Domain.Messaging.Features.Search;
 public interface IMessageSearchService
 {
     /// <summary>
-    /// Execute a unified search for the current authenticated user.
+    /// Search for the current user; the inline operators of the request are parsed here
     /// </summary>
-    /// <param name="request">Raw request (inline operators are parsed here).</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<CursorResult<MessageSearchHit>> SearchAsync(MessageSearchRequest request, CancellationToken ct = default);
 }

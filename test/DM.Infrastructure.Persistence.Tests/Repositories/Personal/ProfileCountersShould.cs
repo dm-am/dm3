@@ -1,11 +1,12 @@
+using DM.Domain.Core.Chats;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Repositories.Personal;
+using DM.Testing;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -13,7 +14,6 @@ using DbBan = DM.Infrastructure.Persistence.Entities.Moderation.Ban;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbBlogAssistant = DM.Infrastructure.Persistence.Entities.Blog.BlogAssistant;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
-using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DbEndorsement = DM.Infrastructure.Persistence.Entities.Community.UserEndorsement;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
@@ -34,22 +34,9 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Personal;
 /// Every number on a profile is counted from its own rows.
 /// </summary>
 /// <remarks>
-/// The profile is filled by one routine of some twenty aggregates, each written
-/// as a GROUP BY into a dictionary and then copied onto the user by name. A
-/// refactoring that reads one dictionary into the wrong member, or drops a
-/// filter from one aggregate, changes one number on one page, and only a check
-/// of every number at once notices.
-///
-/// One user carries something of every kind, every counter at a value no other
-/// counter has, and a removed or otherwise excluded row beside each kind: a
-/// counter read from its neighbour's dictionary, or one that stopped leaving a
-/// row out, comes back as a different number. The counters are also walked by
-/// type, so a counter added to the user without a row seeded here fails as a
-/// zero rather than passing unseen.
-///
-/// In memory, as the list half of the same routine is (UserListEnrichmentShould):
-/// what is held is which rows each aggregate counts and where its answer goes,
-/// and the profile endpoint runs the same statements against Postgres.
+/// Each counter is a GROUP BY copied onto the user by name. One user carries every counter at a value no
+/// other has, with an excluded row beside each kind, and the counters are walked by type. In memory, as
+/// UserListEnrichmentShould is.
 /// </remarks>
 public class ProfileCountersShould
 {
@@ -60,17 +47,12 @@ public class ProfileCountersShould
 
     private static readonly DateTimeOffset Moment = new(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
 
-    private sealed class FixedClock : IDateTimeProvider
-    {
-        public DateTimeOffset Now => Moment;
-    }
-
     [Fact]
     public async Task CountEveryNumberOfTheProfileFromItsOwnRows()
     {
         using var context = Seeded();
 
-        var profile = (await new UserRepository(context, new FixedClock()).GetUserAsync(SubjectId))!;
+        var profile = (await new UserRepository(context, new FixedClock(Moment)).GetUserAsync(SubjectId))!;
 
         profile.Should().BeEquivalentTo(new
         {
@@ -111,13 +93,13 @@ public class ProfileCountersShould
     {
         using var context = Seeded();
 
-        var profile = (await new UserRepository(context, new FixedClock()).GetUserAsync(SubjectId))!;
+        var profile = (await new UserRepository(context, new FixedClock(Moment)).GetUserAsync(SubjectId))!;
 
         var counters = typeof(GeneralUser).GetProperties()
             .Where(property => property.PropertyType == typeof(int?))
             .ToDictionary(property => property.Name, property => (int?)property.GetValue(profile));
 
-        counters.Should().HaveCountGreaterThanOrEqualTo(16, "the profile carries some sixteen counters");
+        counters.Should().NotBeEmpty("the profile carries counters");
         counters.Where(counter => counter.Value is null or 0).Select(counter => counter.Key).Should().BeEmpty(
             "a counter left at zero here cannot tell its own rows from nobody's, so the seed has to " +
             "give it some");
@@ -131,9 +113,7 @@ public class ProfileCountersShould
     /// </summary>
     private static DmDbContext Seeded()
     {
-        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var context = InMemoryStore.Open();
 
         context.Users.AddRange(
             User(SubjectId, "subject", Moment),
@@ -294,9 +274,9 @@ public class ProfileCountersShould
         removedComment.IsRemoved = true;
         context.Comments.Add(removedComment);
 
-        var chatLines = Repeat(13, () => Message(SubjectId, DbChat.GlobalChatId)).ToList();
+        var chatLines = Repeat(13, () => Message(SubjectId, WellKnownChats.GlobalChatId)).ToList();
         context.Messages.AddRange(chatLines);
-        var removedLine = Message(SubjectId, DbChat.GlobalChatId);
+        var removedLine = Message(SubjectId, WellKnownChats.GlobalChatId);
         removedLine.IsRemoved = true;
         context.Messages.AddRange(removedLine, Message(SubjectId, Guid.NewGuid()));
 

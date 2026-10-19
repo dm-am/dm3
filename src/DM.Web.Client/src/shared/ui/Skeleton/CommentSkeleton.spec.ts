@@ -10,8 +10,10 @@
  * column, the strips where the text starts, and the number under both. The
  * compact layout keeps its block without a column.
  *
- * Read off the two stylesheets: the numbers live in two components that
- * change apart.
+ * Read off the stylesheets of both: the numbers live in two components that
+ * change apart. The comment keeps its numbers in two of its parts: the card,
+ * the column and the margin of the text in CommentItem, the content of the
+ * column in CommentAuthor.
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
@@ -25,6 +27,7 @@ import CommentSkeleton from "./CommentSkeleton.vue";
 const HERE = dirname(fileURLToPath(import.meta.url));
 const SKELETON = resolve(HERE, "CommentSkeleton.vue");
 const COMMENT = resolve(HERE, "../../../features/comment/ui/CommentItem.vue");
+const AUTHOR = resolve(HERE, "../../../features/comment/ui/CommentAuthor.vue");
 
 /** Every declaration of the rules that name the selector, alone or grouped. */
 function declarationsOf(css: string, selector: string): Record<string, string> {
@@ -46,6 +49,7 @@ function sides(shorthand: string): [number, number, number, number] {
 describe("the skeleton of a comment", () => {
   const skeleton = componentCss(SKELETON);
   const comment = componentCss(COMMENT);
+  const author = componentCss(AUTHOR);
 
   it("pads its card as the comment does, in either layout", () => {
     expect(declarationsOf(skeleton, ".skeleton-comment").padding).toBe(
@@ -77,7 +81,7 @@ describe("the skeleton of a comment", () => {
 
     // The skeleton pads its column by what the comment spends around its
     // content: the margin of .author-inner and its padding on the right.
-    const inner = declarationsOf(comment, ".author-inner");
+    const inner = declarationsOf(author, ".author-inner");
     const [top, right, bottom, left] = sides(inner.margin);
     const padRight = parseFloat(inner["padding-right"] ?? "0");
     expect(sides(column.padding)).toEqual([
@@ -102,7 +106,10 @@ describe("the skeleton of a comment", () => {
       declarationsOf(comment, ".comment:not(.compact) .comment-body").padding,
     );
     const [textTop, textRight, , textLeft] = sides(
-      declarationsOf(comment, ".comment:not(.compact) .comment-text").margin,
+      declarationsOf(
+        comment,
+        ".comment:not(.compact) .comment-body :deep(.comment-text)",
+      ).margin,
     );
     const [top, right, , left] = sides(
       declarationsOf(skeleton, ".skeleton-text").padding,

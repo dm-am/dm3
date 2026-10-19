@@ -21,41 +21,40 @@ internal class PasswordChangeService : IPasswordChangeService
 {
     private readonly IValidator<UserPasswordChange> _validator;
     private readonly IPasswordChangeRepository _repository;
-    private readonly IAuthenticationService _authenticationService;
+    private readonly ISessionService _sessionService;
     private readonly IIdentityProvider _identityProvider;
     private readonly ISecurityManager _securityManager;
     private readonly ICompromisedPasswordChecker _compromisedPasswordChecker;
     private readonly IEventProducer _eventProducer;
     private readonly IPasswordChangeMailSender _notificationSender;
-    private readonly ISecurityAuditRepository _auditService;
+    private readonly ISecurityAuditRepository _auditRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ITwoFactorRepository _twoFactorRepository;
     private readonly TokenConfiguration _tokenConfig;
 
-    /// <inheritdoc />
     public PasswordChangeService(
         IValidator<UserPasswordChange> validator,
         ISecurityManager securityManager,
         ICompromisedPasswordChecker compromisedPasswordChecker,
         IPasswordChangeRepository repository,
-        IAuthenticationService authenticationService,
+        ISessionService sessionService,
         IIdentityProvider identityProvider,
         IEventProducer eventProducer,
         IPasswordChangeMailSender notificationSender,
-        ISecurityAuditRepository auditService,
+        ISecurityAuditRepository auditRepository,
         IDateTimeProvider dateTimeProvider,
         ITwoFactorRepository twoFactorRepository,
         IOptions<TokenConfiguration> tokenOptions)
     {
         _validator = validator;
         _repository = repository;
-        _authenticationService = authenticationService;
+        _sessionService = sessionService;
         _identityProvider = identityProvider;
         _securityManager = securityManager;
         _compromisedPasswordChecker = compromisedPasswordChecker;
         _eventProducer = eventProducer;
         _notificationSender = notificationSender;
-        _auditService = auditService;
+        _auditRepository = auditRepository;
         _dateTimeProvider = dateTimeProvider;
         _twoFactorRepository = twoFactorRepository;
         _tokenConfig = tokenOptions.Value;
@@ -108,59 +107,47 @@ internal class PasswordChangeService : IPasswordChangeService
             throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UserNotFound);
         }
 
-        // Check if new password matches current password
-        if (_securityManager.ComparePasswords(passwordChange.NewPassword, user.Salt, user.PasswordHash))
-        {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                [nameof(passwordChange.NewPassword)] = "Новый пароль совпадает с текущим"
-            });
-        }
-
-        // NIST SP 800-63B: Check if password has been compromised in data breaches
-        if (await _compromisedPasswordChecker.IsCompromisedAsync(passwordChange.NewPassword))
-        {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                [nameof(passwordChange.NewPassword)] = RefusalMessage.PasswordBreached
-            });
-        }
+        await RefuseUnfitPassword(user, passwordChange.NewPassword);
 
         var (hash, salt) = _securityManager.GeneratePassword(passwordChange.NewPassword);
         await _repository.UpdatePassword(user.UserId, hash, salt, passwordChange.Token);
 
-        // Any login begun with the old password dies with it. Changing a
-        // password is a statement that the account may be compromised, and a
-        // half-finished sign-in that outlived the statement is a sign-in the
-        // statement did not cover. Both routes reach this line: the form inside
-        // a session and the link out of the mailbox.
+        // Any login begun with the old password dies with it, on both routes.
         await _twoFactorRepository.RemoveChallengesOf(user.UserId);
 
-        // When changing via token, user is not authenticated - logout all sessions
-        // When changing via old password, user is authenticated - keep current session
-        //
-        // The security journal is written in the same two branches, with two
-        // types, because "changed from inside a session" and "reset through a
-        // link out of the mailbox" are different events to the person working out
-        // afterwards whether it was him. Nothing wrote either of them, so the
-        // journal answered "nothing happened" to the one question it exists for.
+        // Via token every session ends, via the old password the current one stays;
+        // the journal tells the two events apart.
         if (passwordChange.Token.HasValue)
         {
-            await _authenticationService.LogoutAll(user.UserId);
-            await _auditService.LogAsync(user.UserId, SecurityEventType.PasswordResetComplete);
+            await _sessionService.LogoutAll(user.UserId);
+            await _auditRepository.LogAsync(user.UserId, SecurityEventType.PasswordResetComplete);
         }
         else
         {
-            await _authenticationService.LogoutElsewhere();
-            await _auditService.LogAsync(user.UserId, SecurityEventType.PasswordChange);
+            await _sessionService.LogoutElsewhere();
+            await _auditRepository.LogAsync(user.UserId, SecurityEventType.PasswordChange);
         }
 
-        // Audit logging: record password change event
         await _eventProducer.SendAsync(EventType.PasswordChanged, user.UserId);
-
-        // Send notification email
-        await _notificationSender.Send(user.Email ?? string.Empty);
+        await _notificationSender.Send(user.Email!);
 
         return user;
+    }
+
+    /// <summary>
+    /// Refuses a new password the account must not take: the one it already
+    /// has, and one that has turned up in a breach.
+    /// </summary>
+    private async Task RefuseUnfitPassword(AuthenticatedUser user, string newPassword)
+    {
+        if (_securityManager.ComparePasswords(newPassword, user.Salt, user.PasswordHash))
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [nameof(UserPasswordChange.NewPassword)] = "Новый пароль совпадает с текущим"
+            });
+        }
+
+        await _compromisedPasswordChecker.ThrowIfCompromised(newPassword, nameof(UserPasswordChange.NewPassword));
     }
 }

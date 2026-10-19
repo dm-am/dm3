@@ -80,7 +80,9 @@ public class Post
     public int? Number { get; set; }
 
     /// <summary>
-    /// Files attached to the post, oldest first
+    /// Files attached to the post, oldest first, less those the viewer does not
+    /// see: marked for characters whose hidden block he would not read, or
+    /// mentioned by the game text only inside hidden blocks he does not read
     /// </summary>
     public IEnumerable<PostAttachment> Attachments { get; set; } = [];
 
@@ -112,6 +114,13 @@ public class PostViewer
     /// the neutral review
     /// </summary>
     public bool CanReview { get; set; }
+
+    /// <summary>
+    /// Whether the viewer may edit the post's text: the author; moderation and the
+    /// leads, the latter by the character's post-edit policy, and either only when
+    /// they read every hidden block of the post. False for a guest
+    /// </summary>
+    public bool CanEdit { get; set; }
 }
 
 /// <summary>
@@ -165,6 +174,20 @@ public class PostAttachment
     /// Moment the file was attached
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
+
+    /// <summary>
+    /// Who sees a file marked "Выбранные", the words after "Получатели:", leads
+    /// first: "DungeonMaster, Assistant, Вася". Null for a file every reader of
+    /// the post sees. Present only to a viewer who sees the file
+    /// </summary>
+    public string? Recipients { get; set; }
+
+    /// <summary>
+    /// The characters chosen to see the file, for the checkboxes of the author: one
+    /// gone from the room keeps his box by the name the mark froze. Null when
+    /// <see cref="Recipients"/> is
+    /// </summary>
+    public IReadOnlyList<UploadAddressee>? Addressees { get; set; }
 }
 
 /// <summary>

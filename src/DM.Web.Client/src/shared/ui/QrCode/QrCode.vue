@@ -1,17 +1,5 @@
 <script setup lang="ts">
-/**
- * A string drawn as a QR square.
- *
- * The drawing is done here and not asked of anybody: the one value this
- * component is used for is the otpauth URI of a second factor, and handing that
- * to an outside image service would hand a stranger the secret.
- *
- * `uqr` arrives through a dynamic import, so the package is a chunk of its own
- * and downloads for the reader who opens the second-factor setup and for nobody
- * else. `encode` alone is imported: it returns the module matrix, out of which
- * the markup below is one <path>, and that markup can carry a name for a screen
- * reader - which the package's own renderSVG has nowhere to put.
- */
+// Drawn here, never by an image service: the value is a second factor's secret. uqr is a lazy chunk.
 import { computed, ref, watch } from "vue";
 
 const props = withDefaults(
@@ -26,18 +14,10 @@ const props = withDefaults(
   { size: 220 },
 );
 
-/**
- * Error correction level M rather than the package default L: the otpauth URI
- * is short, so the square barely grows, and the margin buys back a bad camera
- * and a glare.
- */
+/** Level M rather than the default L: the margin buys back a bad camera and a glare. */
 const ERROR_CORRECTION = "M" as const;
 
-/**
- * Quiet zone around the square, in modules. Wider than the package default of
- * one: cameras read a square with a white margin around it and stumble on one
- * that runs into the page.
- */
+/** Wider than the default of one: cameras stumble on a square that runs into the page. */
 const QUIET_ZONE = 3;
 
 /** Modules per side, quiet zone included; 0 until the matrix is drawn. */
@@ -65,8 +45,7 @@ async function draw(value: string) {
       border: QUIET_ZONE,
     });
 
-    // Raced by a later value while the package was loading: that draw owns the
-    // element now, and writing this one over it would show the old secret.
+    // Raced by a later value: writing this one over it would show the old secret.
     if (value !== props.value) return;
 
     const segments: string[] = [];
@@ -80,9 +59,7 @@ async function draw(value: string) {
     modules.value = result.size;
     path.value = segments.join("");
   } catch {
-    // The chunk did not arrive, or the value is longer than any version can
-    // hold. Either way there is no square, and the caller keeps the secret in
-    // text next to it for exactly this case.
+    // No chunk, or a value too long for any version: the caller keeps the secret in text beside it.
     if (value === props.value) failed.value = true;
   }
 }
@@ -92,11 +69,7 @@ watch(() => props.value, draw, { immediate: true });
 
 <template>
   <div class="qr-code" :style="boxStyle">
-    <!-- Dark on white in both themes, and this is the one place in the project
-         where a colour is not taken from the theme. A camera reads a dark
-         drawing on a light field; the dark theme would give it a light drawing
-         on a dark one, which part of the cameras will not take. Decided by the
-         owner as a named exception to the palette rule. -->
+    <!-- Dark on white in both themes, the owner's named exception: cameras read a dark drawing on light. -->
     <svg
       v-if="path"
       class="qr-code-image"
@@ -129,8 +102,7 @@ watch(() => props.value, draw, { immediate: true });
   box-sizing: border-box
   padding: $small
   border: 1px solid $border
-  // The white field the camera needs, and the only surface on the site that
-  // does not follow the theme. See the note in the template.
+  // See the note in the template.
   background-color: white
 
 .qr-code-image
@@ -142,8 +114,7 @@ watch(() => props.value, draw, { immediate: true });
   padding: $small
   text-align: center
   font-size: $secondary-font-size
-  // The box is white in both themes, so the sentence on it cannot take the
-  // theme's text colour either.
+  // The box is white in both themes.
   color: black
 
 .qr-code-pending

@@ -24,21 +24,13 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
         EventType.StatusCharacterResurrected,
         EventType.StatusCharacterReadmitted,
         EventType.StatusCharacterLeft,
-        EventType.StatusCharacterExiled,
-        EventType.StatusCharacterRetired
+        EventType.StatusCharacterExiled
     };
 
-    // Statuses that are public and can be shared with subscribers
-    // Declined is private between master and player
-    private static readonly CharacterStatus[] PrivateStatuses =
-    {
-        CharacterStatus.Declined
-    };
 
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public GameCharacterStatusChangedNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -53,7 +45,7 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
     /// <inheritdoc />
     public async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var data = await _dbContext.Characters
+        var characterData = await _dbContext.Characters
             .Where(c => c.CharacterId == entityId && !c.IsNpc)
             .Select(c => new
             {
@@ -69,32 +61,32 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
             })
             .FirstOrDefaultAsync();
 
-        if (data == null)
+        if (characterData == null)
         {
             yield break;
         }
 
         var usersInterested = new HashSet<Guid>();
 
-        // Always notify character owner (unless they are the master who made the change)
-        if (data.AuthorId.HasValue && data.AuthorId != data.GameMasterId)
+        // The owner, unless they are the master who made the change
+        if (characterData.AuthorId.HasValue && characterData.AuthorId != characterData.GameMasterId)
         {
-            usersInterested.Add(data.AuthorId.Value);
+            usersInterested.Add(characterData.AuthorId.Value);
         }
 
-        // For public statuses (not Declined), also notify game subscribers with StatusChanges enabled
-        if (!PrivateStatuses.Contains(data.Status))
+        // Declined is private between master and player
+        if (characterData.Status != CharacterStatus.Declined)
         {
             var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
                 SubscriptionTargetType.Game,
-                data.GameId,
+                characterData.GameId,
                 SubscriptionSettings.StatusChanges);
 
             foreach (var sub in readerSubscriptions)
             {
-                // Don't notify game team members (they see it in game)
-                if (sub.SubscriberId != data.GameMasterId &&
-                    !data.AssistantIds.Contains(sub.SubscriberId))
+                // The team sees it in the game
+                if (sub.SubscriberId != characterData.GameMasterId &&
+                    !characterData.AssistantIds.Contains(sub.SubscriberId))
                 {
                     usersInterested.Add(sub.SubscriberId);
                 }
@@ -106,22 +98,18 @@ internal class GameCharacterStatusChangedNotificationGenerator : INotificationGe
             yield break;
         }
 
-        // No ActorId: a person did change the status, but the schema does not keep
-        // who. Characters store the status alone, with no author of the transition,
-        // and the statuses here are not one hand's work anyway — a master accepts
-        // and exiles, a player leaves and retires. MasterUsername below names the
-        // game's master for the text, not an actor to filter on.
+        // No ActorId: characters do not record who moved the status.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested,
             Metadata = new
             {
-                CharacterName = data.Name,
-                CharacterId = data.CharacterId.EncodeToReadable(),
-                GameTitle = data.GameTitle,
-                GameId = data.GameId.EncodeToReadable(),
-                NewStatus = data.Status.ToString(),
-                MasterUsername = data.MasterUsername
+                CharacterName = characterData.Name,
+                CharacterId = characterData.CharacterId.EncodeToReadable(),
+                characterData.GameTitle,
+                GameId = characterData.GameId.EncodeToReadable(),
+                NewStatus = characterData.Status.ToString(),
+                characterData.MasterUsername
             }
         };
     }

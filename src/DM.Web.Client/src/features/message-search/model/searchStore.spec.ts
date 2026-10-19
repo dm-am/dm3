@@ -2,18 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The search field stands above a feed, so it searches that feed: the global
- * chat, or one correspondence ("dm:<id>"). It used to default to "Везде" and send no scope at all, which made the
- * chat's own box the site's only entry into private correspondence and game
- * posts. It also carried a "По дате | Лучшее совпадение" toggle for a
- * parameter the endpoint does not accept, so both halves returned the same
- * list by date.
- *
- * These pin what the store may ask for: one scope, sent on every page, and not
- * a word about ordering; and that the store, one for the whole site, forgets a
- * feed's query and hits when it is pointed at another.
- */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 
@@ -26,11 +14,9 @@ vi.mock("../api/messageSearchApi", () => ({
 }));
 
 import { useMessageSearchStore } from "./searchStore";
+import { deferred } from "@/shared/lib/testing/tasks";
 
 const hit = (id: string) => ({
-  sourceType: "global" as const,
-  sourceId: "c1",
-  sourceTitle: null,
   id,
   createdUtc: "2026-01-01T00:00:00Z",
   snippet: [{ text: "hello", isMatch: false }],
@@ -52,18 +38,8 @@ const page = (
   error: null,
 });
 
-/** Params of the n-th call, as the store spelled them. */
 const paramsOf = (call: number) =>
   mockSearchMessages.mock.calls[call][0] as Record<string, unknown>;
-
-/** A response the test releases by hand, to keep two requests in flight. */
-function deferred() {
-  let release!: (value: ReturnType<typeof page>) => void;
-  const promise = new Promise<ReturnType<typeof page>>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
-}
 
 describe("useMessageSearchStore", () => {
   beforeEach(() => {
@@ -117,8 +93,8 @@ describe("useMessageSearchStore", () => {
   });
 
   it("keeps the answer of the newest search when an older one lands later", async () => {
-    const slow = deferred();
-    const fast = deferred();
+    const slow = deferred<ReturnType<typeof page>>();
+    const fast = deferred<ReturnType<typeof page>>();
     mockSearchMessages
       .mockReturnValueOnce(slow.promise)
       .mockReturnValueOnce(fast.promise);
@@ -129,9 +105,9 @@ describe("useMessageSearchStore", () => {
     store.query = "кобольд";
     const second = store.search();
 
-    fast.release(page([hit("new")]));
+    fast.resolve(page([hit("new")]));
     await second;
-    slow.release(page([hit("old")]));
+    slow.resolve(page([hit("old")]));
     await first;
 
     expect(store.results.map((r) => r.id)).toEqual(["new"]);
@@ -144,8 +120,8 @@ describe("useMessageSearchStore", () => {
     store.query = "коб";
     await store.search();
 
-    const older = deferred();
-    const newer = deferred();
+    const older = deferred<ReturnType<typeof page>>();
+    const newer = deferred<ReturnType<typeof page>>();
     mockSearchMessages
       .mockReturnValueOnce(older.promise)
       .mockReturnValueOnce(newer.promise);
@@ -154,9 +130,9 @@ describe("useMessageSearchStore", () => {
     store.query = "кобольд";
     const fresh = store.search();
 
-    newer.release(page([hit("m2")]));
+    newer.resolve(page([hit("m2")]));
     await fresh;
-    older.release(page([hit("m1-page2")], "cur3"));
+    older.resolve(page([hit("m1-page2")], "cur3"));
     await tail;
 
     expect(store.results.map((r) => r.id)).toEqual(["m2"]);
@@ -192,11 +168,6 @@ describe("useMessageSearchStore", () => {
     expect(paramsOf(1).in).toEqual(["dm:c7"]);
   });
 
-  /**
-   * The store is one for the site. Kept over the next feed, the query and its
-   * hits would stand there as that feed's own, and a hit picked there would
-   * jump to a message that feed does not hold.
-   */
   it("forgets the query and the hits of another feed", async () => {
     mockSearchMessages.mockResolvedValue(page([hit("m1")]));
     const store = useMessageSearchStore();
@@ -211,14 +182,14 @@ describe("useMessageSearchStore", () => {
   });
 
   it("drops an answer about the feed it was pointed away from", async () => {
-    const slow = deferred();
+    const slow = deferred<ReturnType<typeof page>>();
     mockSearchMessages.mockReturnValueOnce(slow.promise);
     const store = useMessageSearchStore();
     store.query = "привет";
     const pending = store.search();
 
     store.setScope("dm:c7");
-    slow.release(page([hit("m1")]));
+    slow.resolve(page([hit("m1")]));
     await pending;
 
     expect(store.results).toEqual([]);

@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Community.Features.UserEndorsements;
 using DM.Domain.Community.Features.WebsiteTestimonials;
@@ -37,15 +34,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// A soft-deleted row says who removed it and when.
 /// </summary>
 /// <remarks>
-/// ISoftDeletable declares both columns and the schema carries them for twenty-five tables,
-/// with a foreign key under the author. Most write paths set the flag alone, so moderation
-/// could not answer "who deleted this topic" for anything but blogs — and inside the Comments
-/// table the answer existed for a blog comment and not for a forum one, which makes a report
-/// over that column wrong rather than incomplete.
-///
-/// Asserted against the row rather than against the call: the services were already handing
-/// the identity to the blog comment repository, which dropped it on the floor, so a test that
-/// only watched the call would have been green over the defect.
+/// ISoftDeletable declares both columns with a foreign key under the author. Asserted against the row: a repository
+/// can drop the identity it is handed.
 /// </remarks>
 public class SoftDeleteAuditShould : IntegrationTestBase
 {
@@ -193,17 +183,8 @@ public class SoftDeleteAuditShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The four human-driven removals the first pass left behind.
+    /// The removals a person presses: a room, a site testimonial, an uploaded file, an endorsement.
     /// </summary>
-    /// <remarks>
-    /// Each of these is somebody pressing delete: the master removing a room, a
-    /// moderator removing a testimonial about the site, an owner or a moderator
-    /// removing an uploaded file, an author withdrawing an endorsement. All four
-    /// write the flag and had nothing under the author column, and three of them
-    /// were not in the list of what was left — the endorsement path even wrote
-    /// ModifiedByUserId beside the empty deletion pair, which reads as an answer
-    /// and is not one.
-    /// </remarks>
     [Fact]
     public async Task NameWhoRemovedARoomATestimonialAnUploadAndAnEndorsement()
     {
@@ -342,7 +323,6 @@ public class SoftDeleteAuditShould : IntegrationTestBase
             Title = $"Audit board {boardId:N}",
             Alias = $"audit-{boardId:N}",
             Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = BoardAccessPolicy.Guest,
         });
         dbContext.Topics.Add(new DbTopic
@@ -402,7 +382,6 @@ public class SoftDeleteAuditShould : IntegrationTestBase
             Title = "Audit publication",
             Content = "text",
             Preview = "text",
-            IsPublished = true,
             CreatedUtc = DateTimeOffset.UtcNow,
         });
         await dbContext.SaveChangesAsync();

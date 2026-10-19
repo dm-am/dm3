@@ -1,43 +1,5 @@
 <script setup lang="ts">
-// Left-sidebar "Меню блога" panel for a blog page, built to the same plan as
-// GamePanel. Mounted by LeftSidebar on any /blogs/:id route
-// (route.meta.blogZone). It is the single home for per-blog navigation and
-// management, driven entirely by the shared useBlogDetailsStore (the blog
-// page loads the blog, the rubrics ride inside it; this panel surfaces the
-// mutation actions).
-//
-// Menu order:
-//   "Рубрики" / "Информация" / "Лента публикаций" / "Обсуждение" /
-//   "Управление блогом" / "Действия с блогом" / "Модерация блога"
-//
-// Rubrics nest under their group row and drop their own "- " prefix; the
-// indent is the nesting. Every navigation row carries a counter, zero
-// included, and a counter is grey down to its brackets (SidebarCounter for a
-// single number, CounterPair for the rubric's "(N/A)"). Row labels are the
-// names their routes carry, so the menu and the page it opens agree.
-//
-// Role gates (never a single blanket "moderator" gate):
-//   "Управление блогом" — owner/assistant get the edit items (settings,
-//     create publication, status buttons); the blog mentor ("наставник")
-//     gets the management header and the notepad for oversight, but not the
-//     edit items (the backend BlogNotepadService gate).
-//     The settings row deliberately does NOT widen the way GamePanel's did:
-//     BlogIntention.EditSettings is owner + assistants + senior moderation and
-//     leaves the blog mentor out, because unlike the game curator he only
-//     approves publications. Senior moderation is admitted by the intention
-//     and still gets no row — staff powers are not interface copy.
-//     "Отправить на проверку" is narrower than the edit items — the owner
-//     alone, and only while the blog is on edits
-//     (BlogIntention.SubmitForApproval plus the premoderation machine's one
-//     legality condition).
-//   "Действия с блогом" — any authenticated user except the owner
-//     (subscribe toggle, via features/blog-actions).
-//   "Модерация блога" — the premoderation verdict is Mentor+ (global) and is
-//     two rows, both legal from every status; delete-others-blog is
-//     SeniorModerator+ (mirrors the game panel).
-//
-// Four data-states per UI_STANDARDS: skeleton (initial load), error,
-// empty (blog not found), content.
+// "Меню блога", to GamePanel's plan; the blog mentor gets the notepad, not the settings.
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useRouter } from "vue-router";
@@ -46,8 +8,12 @@ import {
   BlogPremoderationTransition,
 } from "@/entities/blog";
 import { BlogStatusButtons, BlogJoinActions } from "@/features/blog-actions";
-import { useAuthStore } from "@/entities/user";
-import { UserRole, type GeneralError } from "@/shared/api/models/common";
+import {
+  useAuthStore,
+  userIsMentor,
+  userIsSeniorModerator,
+} from "@/entities/user";
+import type { GeneralError } from "@/shared/api/models/common";
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarCounter from "./SidebarCounter.vue";
 import SidebarSectionTitle from "./SidebarSectionTitle.vue";
@@ -55,6 +21,7 @@ import SidebarSkeleton from "./SidebarSkeleton.vue";
 import BlogRubricLink from "./BlogRubricLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{ blogId: string }>();
 
@@ -69,14 +36,7 @@ const {
   canUseNotepad,
 } = storeToRefs(store);
 
-// Owner/assistant may edit the blog (settings, publications, status).
-const canEdit = computed(() => canManage.value);
-
-// Asking a mentor to look at the blog is the owner's move and nobody else's:
-// the server admits BlogIntention.SubmitForApproval for the owner only, and the
-// premoderation machine refuses the move from any status but AwaitingEdits.
-// Both halves are repeated here, because a row the server would answer 403 or
-// 400 to is a promise the panel had no right to make.
+// The owner's move alone, and only while the blog awaits edits, as the server rules.
 const canSubmitForApproval = computed(
   () => isOwner.value && blog.value?.premoderationStatus === "AwaitingEdits",
 );
@@ -84,44 +44,18 @@ const canSubmitForApproval = computed(
 const { user } = storeToRefs(useAuthStore());
 const router = useRouter();
 
-// Blog links use the short public id; fall back to the raw route param until
-// the blog resolves (the blog endpoints are publicId-tolerant: 5-letter
-// public id or GUID).
+// The public id, or the route's own param until the blog resolves.
 const routeId = computed(() => blog.value?.publicId ?? props.blogId);
 
-// --- Actions with the blog ---
-// Any authenticated user except the owner may act on the blog (subscribe).
-// The owner manages via the sections above instead.
+// Anybody signed in but the owner may subscribe.
 const canActOnBlog = computed(() => !!user.value && !isOwner.value);
 
-// --- Moderation (global roles) ---
-
-const globalRoles = computed<UserRole[]>(() => {
-  const u = user.value;
-  if (!u) return [];
-  return u.role ? [u.role] : [];
-});
-const isGlobalMentor = computed(() =>
-  globalRoles.value.some((r) =>
-    [
-      UserRole.Mentor,
-      UserRole.Moderator,
-      UserRole.SeniorModerator,
-      UserRole.Admin,
-    ].includes(r),
-  ),
-);
+const isGlobalMentor = computed(() => userIsMentor(user.value));
 const isGlobalSeniorModerator = computed(() =>
-  globalRoles.value.some((r) =>
-    [UserRole.SeniorModerator, UserRole.Admin].includes(r),
-  ),
-);
-const showModeration = computed(
-  () => isGlobalMentor.value || isGlobalSeniorModerator.value,
+  userIsSeniorModerator(user.value),
 );
 
-// Confirmed moderation actions share a single dialog, and the request is the
-// dialog's action (mirrors GamePanel).
+// One dialog for the moderation moves; the request is its action.
 interface ModAction {
   title: string;
   message: string;
@@ -133,10 +67,7 @@ interface ModAction {
 const pendingMod = ref<ModAction | null>(null);
 
 /** The window prints the refusal, so the interceptor keeps quiet about it. */
-const DIALOG_OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
 
-// The three premoderation moves, each with the wording of its own dialog
-// (mirrors GamePanel).
 const PREMOD_PROMPTS: Record<
   BlogPremoderationTransition,
   { title: string; message: string; confirmLabel: string }
@@ -163,7 +94,7 @@ function askPremod(t: BlogPremoderationTransition) {
     ...PREMOD_PROMPTS[t],
     failure: "Не удалось изменить премодерацию",
     run: async () => ({
-      error: await store.changePremoderation(t, DIALOG_OWNS_REFUSAL),
+      error: await store.changePremoderation(t, OWNS_REFUSAL),
     }),
   };
 }
@@ -175,7 +106,7 @@ function askDelete() {
     confirmLabel: "Удалить",
     failure: "Не удалось удалить блог",
     run: async () => {
-      const error = await store.deleteBlog(DIALOG_OWNS_REFUSAL);
+      const error = await store.deleteBlog(OWNS_REFUSAL);
       if (!error) router.push({ name: "blogs" });
       return { error };
     },
@@ -187,19 +118,14 @@ const runMod = () => pendingMod.value?.run();
 
 <template>
   <SidebarBlock token="BlogPanel" title="Меню блога">
-    <!-- 1. loading -->
     <SidebarSkeleton v-if="blogLoading && !blog" :lines="8" />
 
-    <!-- 2. error -->
     <li v-else-if="blogError">
       <SecondaryText class="error">{{ blogError }}</SecondaryText>
     </li>
 
-    <!-- 3. content -->
     <template v-else-if="blog">
-      <!-- "Рубрики" — the group row; the blog's rubrics follow it indented.
-           They ride inside the blog itself, so this list has no loading or
-           error state of its own (a game fetches its rooms separately). -->
+      <!-- The rubrics ride inside the blog: no loading or error state of their own -->
       <li class="link">
         <span class="muted" aria-hidden="true">- </span>Рубрики
       </li>
@@ -216,7 +142,6 @@ const runMod = () => pendingMod.value?.run();
       </li>
       <li v-else><SecondaryText>Рубрик пока нет</SecondaryText></li>
 
-      <!-- Blog navigation — a flat list of links, each carrying its counter. -->
       <li class="link">
         <span class="muted" aria-hidden="true">- </span>
         <router-link :to="{ name: 'blog', params: { id: routeId } }"
@@ -236,11 +161,9 @@ const runMod = () => pendingMod.value?.run();
         ><SidebarCounter :value="blog.unreadCommentsCount ?? 0" />
       </li>
 
-      <!-- "Управление блогом" section: edit items for owner/assistant, plus
-           the notepad for the mentor's oversight (mirrors GamePanel). -->
-      <template v-if="canEdit || canUseNotepad">
+      <template v-if="canManage || canUseNotepad">
         <SidebarSectionTitle>Управление блогом</SidebarSectionTitle>
-        <template v-if="canEdit">
+        <template v-if="canManage">
           <li class="link">
             <span class="muted" aria-hidden="true">- </span>
             <router-link
@@ -255,12 +178,9 @@ const runMod = () => pendingMod.value?.run();
               >Создать публикацию</router-link
             >
           </li>
-          <!-- Status transition buttons (owner/assistant); placed between the
-               edit items and the notepad link to mirror GamePanel's order. -->
-          <BlogStatusButtons variant="strip" />
+          <BlogStatusButtons />
         </template>
-        <!-- The owner's own premoderation move. Not inside the canEdit block:
-             an assistant writes in the blog but does not declare it ready. -->
+        <!-- Not inside canManage: an assistant writes in the blog but does not declare it ready -->
         <li v-if="canSubmitForApproval" class="link">
           <span class="muted" aria-hidden="true">- </span>
           <button
@@ -279,39 +199,34 @@ const runMod = () => pendingMod.value?.run();
         </li>
       </template>
 
-      <!-- "Действия с блогом" section (any authed except owner) -->
       <template v-if="canActOnBlog">
         <SidebarSectionTitle>Действия с блогом</SidebarSectionTitle>
-        <BlogJoinActions variant="strip" />
+        <BlogJoinActions />
       </template>
 
-      <!-- "Модерация блога" section (global roles) -->
-      <template v-if="showModeration">
+      <template v-if="isGlobalMentor">
         <SidebarSectionTitle>Модерация блога</SidebarSectionTitle>
-        <!-- The verdict, both ways. Legal from every status on the server, so
-             neither row is hidden by the blog's current premoderation state. -->
-        <template v-if="isGlobalMentor">
-          <li class="link">
-            <span class="muted" aria-hidden="true">- </span>
-            <button
-              type="button"
-              class="strip-action"
-              @click="askPremod(BlogPremoderationTransition.SetApproved)"
-            >
-              Одобрить блог
-            </button>
-          </li>
-          <li class="link">
-            <span class="muted" aria-hidden="true">- </span>
-            <button
-              type="button"
-              class="strip-action"
-              @click="askPremod(BlogPremoderationTransition.SetAwaitingEdits)"
-            >
-              Вернуть на доработку
-            </button>
-          </li>
-        </template>
+        <!-- The verdict both ways, legal from every status -->
+        <li class="link">
+          <span class="muted" aria-hidden="true">- </span>
+          <button
+            type="button"
+            class="strip-action"
+            @click="askPremod(BlogPremoderationTransition.SetApproved)"
+          >
+            Одобрить блог
+          </button>
+        </li>
+        <li class="link">
+          <span class="muted" aria-hidden="true">- </span>
+          <button
+            type="button"
+            class="strip-action"
+            @click="askPremod(BlogPremoderationTransition.SetAwaitingEdits)"
+          >
+            Вернуть на доработку
+          </button>
+        </li>
         <li v-if="isGlobalSeniorModerator" class="link">
           <span class="muted" aria-hidden="true">- </span>
           <button type="button" class="strip-action" @click="askDelete">
@@ -321,7 +236,6 @@ const runMod = () => pendingMod.value?.run();
       </template>
     </template>
 
-    <!-- 4. empty / not found -->
     <li v-else><SecondaryText>Блог не найден</SecondaryText></li>
 
     <ConfirmDialog
@@ -337,10 +251,9 @@ const runMod = () => pendingMod.value?.run();
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
-// Rubrics nest under their group row: the indent is the nesting, which is why
-// the rubric rows carry no "- " prefix of their own.
+// Rubrics nest under their group row: the indent is the nesting.
 .rubric-list
   list-style: none
   margin: 0
@@ -349,15 +262,10 @@ const runMod = () => pendingMod.value?.run();
 .link
   display: block
 
-.muted
-  color: $text-muted
-
 .error
   color: $accent-red
 
-// Strip actions are words of the menu like the links around them, and they
-// trigger a store mutation. Deleting is not coloured: it asks first, and the
-// question carries the weight of the act.
+// Words of the menu like the links; deleting is not coloured, its question carries the weight.
 .strip-action
   +inline-link-button
 </style>

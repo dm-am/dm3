@@ -5,18 +5,15 @@ using DomainUserProfileNote = DM.Domain.Personal.Features.ProfileNotes.UserProfi
 
 namespace DM.Web.API.Features.Personal.ProfileNotes;
 
-/// <inheritdoc />
-internal class UserProfileNoteApiService : IUserProfileNoteApiService
+public class UserProfileNoteApiService
 {
     private readonly IUserProfileNoteService _userProfileNoteService;
 
-    /// <inheritdoc />
     public UserProfileNoteApiService(IUserProfileNoteService userProfileNoteService)
     {
         _userProfileNoteService = userProfileNoteService;
     }
 
-    /// <inheritdoc />
     public async Task<UserProfileNote?> GetNote(string username, CancellationToken ct = default)
     {
         var note = await _userProfileNoteService.GetNote(username, ct);
@@ -28,28 +25,16 @@ internal class UserProfileNoteApiService : IUserProfileNoteApiService
         return MapToApiDto(note);
     }
 
-    /// <inheritdoc />
+    /// <summary>Empty or whitespace text deletes the note and answers null.</summary>
     public async Task<UserProfileNote?> UpsertNote(string username, UserProfileNoteRequest request, CancellationToken ct = default)
     {
-        var createNote = new CreateUserProfileNote
-        {
-            SubjectUsername = username,
-            Text = request.Text
-        };
-
-        var note = await _userProfileNoteService.UpsertNote(createNote, ct);
-        if (note == null)
-        {
-            return null;
-        }
-        return MapToApiDto(note);
+        var note = await _userProfileNoteService.UpsertNote(
+            new CreateUserProfileNote { SubjectUsername = username, Text = request.Text }, ct);
+        return note == null ? null : MapToApiDto(note);
     }
 
-    /// <inheritdoc />
-    public async Task DeleteNote(string username, CancellationToken ct = default)
-    {
-        await _userProfileNoteService.DeleteNote(username, ct);
-    }
+    public Task DeleteNote(string username, CancellationToken ct = default) =>
+        _userProfileNoteService.DeleteNote(username, ct);
 
     private static UserProfileNote MapToApiDto(DomainUserProfileNote dto)
     {

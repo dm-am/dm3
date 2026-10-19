@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Uploads;
 using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Core.Blacklists;
@@ -12,7 +11,6 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Forum.Features.Comments;
-using DM.Domain.Forum.Features.Topics;
 using DM.Domain.Game.Features.Comments;
 using DM.Testing;
 using DM.Testing.Dsl;
@@ -22,7 +20,6 @@ using DM.Web.API.Features.Forum.Comments;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Game.Comments;
 using DM.Web.API.Shared.Dto;
-using AwesomeAssertions;
 using NSubstitute;
 using Xunit;
 using DomainComment = DM.Domain.Core.Comments.Comment;
@@ -33,16 +30,8 @@ namespace DM.Web.API.Tests.Features.General;
 /// A blocked author stays blocked on every comment surface.
 /// </summary>
 /// <remarks>
-/// Hiding the comments of a blacklisted author is one rule, but the reading of a
-/// discussion is written once per surface, and the exclusion has to be re-added by
-/// hand in each copy. Three copies carried it and the fourth — publications — did
-/// not, so the same setting hid the same author under a blog, a topic and a game
-/// and left him visible under a publication. Nothing failed: the endpoint answered
-/// 200 with one comment more than the reader had asked to see.
-///
-/// The assertion is on the call into the domain rather than on the response body,
-/// because the filter is applied in the query and a service that never passes the
-/// ids produces a correct-looking response over the wrong rows.
+/// The reading of a discussion is written once per surface, so the exclusion is asserted on each. On the call
+/// into the domain: the filter runs in the query.
 /// </remarks>
 public class CommentBlacklistShould : UnitTestBase
 {
@@ -53,7 +42,6 @@ public class CommentBlacklistShould : UnitTestBase
     private readonly IUserBlacklistChecker _blacklist;
     private readonly IIdentityProvider _identityProvider;
     private readonly CommentMapper _commentMapper;
-    private readonly DiscussionMapper _discussionMapper;
 
     public CommentBlacklistShould()
     {
@@ -65,11 +53,9 @@ public class CommentBlacklistShould : UnitTestBase
         _identityProvider = Mock<IIdentityProvider>();
         _identityProvider.Current.Returns(Identities.User(_userId));
 
-        // Real mappers: nothing is mapped over the empty pages below, but the
-        // constructors still have to be answered for.
-        var userMapper = new UserMapper(Mock<IImgproxyUrlBuilder>());
-        _commentMapper = new CommentMapper(userMapper);
-        _discussionMapper = new DiscussionMapper(userMapper);
+        // A real mapper: nothing is mapped over the empty pages below, but the
+        // constructor still has to be answered for.
+        _commentMapper = new CommentMapper(new UserMapper());
     }
 
     private static (IEnumerable<DomainComment> Comments, PagingResult Paging) NoComments =>
@@ -110,23 +96,6 @@ public class CommentBlacklistShould : UnitTestBase
     }
 
     [Fact]
-    public async Task ExcludeBlockedAuthorsFromAPublicationCommentList()
-    {
-        var commentService = Mock<IPublicationCommentService>();
-        commentService
-            .GetAsync(_entityId, Arg.Any<CommentsQuery>(),
-                Arg.Any<IReadOnlyCollection<Guid>>()).Returns(NoComments);
-
-        var service = new PublicationCommentApiService(
-            commentService, _identityProvider, _blacklist, _commentMapper);
-
-        await service.Get(_entityId, new CommentsQuery());
-
-        await commentService.Received(1).GetAsync(_entityId, Arg.Any<CommentsQuery>(),
-            Arg.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId)));
-    }
-
-    [Fact]
     public async Task ExcludeBlockedAuthorsFromAForumDiscussion()
     {
         var commentService = Mock<ITopicCommentService>();
@@ -134,11 +103,10 @@ public class CommentBlacklistShould : UnitTestBase
             .GetAsync(_entityId, Arg.Any<CommentsQuery>(),
                 Arg.Any<IReadOnlyCollection<Guid>>()).Returns(NoComments);
 
-        var service = new ForumCommentApiService(
-            commentService, Mock<ITopicService>(), _identityProvider, _blacklist,
-            _discussionMapper, new ForumCommentMapper());
+        var service = new TopicCommentApiService(
+            commentService, _identityProvider, _blacklist, _commentMapper);
 
-        await service.GetDiscussion(_entityId, new PagingQuery());
+        await service.Get(_entityId, new CommentsQuery());
 
         await commentService.Received(1).GetAsync(_entityId, Arg.Any<CommentsQuery>(),
             Arg.Is<IReadOnlyCollection<Guid>>(ids => ids != null && ids.Contains(_blockedId)));

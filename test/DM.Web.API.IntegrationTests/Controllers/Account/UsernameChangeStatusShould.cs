@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -19,18 +15,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// <summary>
 /// The account's own name change request is answered, in every state it can be in.
 /// </summary>
-/// <remarks>
-/// Every reply of this feature is mapped from the domain entry, and the map did
-/// not exist: `GET /v1/account/username-change` answered 500 to anyone who had
-/// ever filed a request, filing one wrote the row and then failed on the reply,
-/// and finishing the change renamed the account and failed on the reply too. The
-/// one account that got an answer was the one that had never asked, because that
-/// path returns no content and maps nothing - which is exactly the account every
-/// other test of this area used.
-///
-/// So the assertion here is deliberately unglamorous: file nothing, ask, and read
-/// the payload. What it guards is that a reply exists at all.
-/// </remarks>
+/// <remarks>Every reply is mapped from the domain entry; what this guards is that a reply exists in each state.</remarks>
 public class UsernameChangeStatusShould : IntegrationTestBase
 {
     private const string Url = "/v1/account/username-change";

@@ -13,7 +13,6 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Security;
 /// </summary>
 internal class AccountLockedNotificationGenerator : SecurityNotificationGenerator
 {
-    /// <inheritdoc />
     public AccountLockedNotificationGenerator(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
         : base(dbContext, dateTimeProvider)
     {
@@ -33,13 +32,12 @@ internal class AccountLockedNotificationGenerator : SecurityNotificationGenerato
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { subject.UserId },
-            // No ActorId: a system event. The lock is raised by the failed-login
-            // counter, not by a person, and it goes to the owner of the account.
+            UsersInterested = [subject.UserId],
+            // No ActorId: the failed-login counter raises the lock.
             Metadata = new
             {
-                Username = subject.Username,
-                EventTime = subject.EventTime
+                subject.Username,
+                subject.EventTime
             }
         };
     }

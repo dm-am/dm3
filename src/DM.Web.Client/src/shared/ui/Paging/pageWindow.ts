@@ -2,10 +2,9 @@
  * The page numbers a strip shows around the current page.
  *
  * Ten where the line holds them, fewer where it does not, and the dots and the
- * two jumps at every width: "<< ... 4 5 6 ... >>" (owner, 5 October 2026: if
- * it does not fit, show fewer numbers, and keep the dots). The strip is one
- * line at any width, a three-digit page at 360 included. Paging.vue measures
- * the line and the labels; this file decides from the measure.
+ * two jumps at every width: "<< ... 4 5 6 ... >>". The strip is one line at
+ * any width, a three-digit page at 360 included. Paging.vue measures the line
+ * and the labels; this file decides from the measure.
  */
 export const PAGES_WIDE = 10;
 

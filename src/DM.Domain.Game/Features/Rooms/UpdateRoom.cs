@@ -4,34 +4,16 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Game.Features.Rooms;
 
-/// <summary>
-/// DTO for room updating
-/// </summary>
 public class UpdateRoom
 {
-    /// <summary>
-    /// Room identifier
-    /// </summary>
     public Guid RoomId { get; set; }
 
-    /// <summary>
-    /// Room title
-    /// </summary>
     public string? Title { get; set; }
 
-    /// <summary>
-    /// Room type
-    /// </summary>
     public RoomType? Type { get; set; }
 
-    /// <summary>
-    /// Room access type
-    /// </summary>
     public RoomAccessType? AccessType { get; set; }
 
-    /// <summary>
-    /// Previous room identifier
-    /// </summary>
     public Optional<Guid>? PreviousRoomId { get; set; }
 
     /// <summary>
@@ -44,32 +26,14 @@ public class UpdateRoom
     /// </summary>
     public bool? ViewDiceResults { get; set; }
 
-    /// <summary>
-    /// Dice rolling is enabled in this room
-    /// </summary>
     public bool? DiceEnabled { get; set; }
 
-    /// <summary>
-    /// Room is kept out of the game's room list for those who may not open it
-    /// </summary>
     public bool? HiddenWithoutAccess { get; set; }
 
-    /// <summary>
-    /// Room is archived (hidden from the active rooms list, kept for history)
-    /// </summary>
     public bool? IsArchived { get; set; }
 
-    #region Internal fields (set by service)
-
     /// <summary>
-    /// Soft delete flag
-    /// </summary>
-    public bool? IsRemoved { get; set; }
-
-    /// <summary>
-    /// Linked chat identifier (for RoomType.Chat rooms)
+    /// For RoomType.Chat
     /// </summary>
     public Guid? ChatId { get; set; }
-
-    #endregion
 }

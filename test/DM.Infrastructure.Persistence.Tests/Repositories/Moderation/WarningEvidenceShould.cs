@@ -1,11 +1,12 @@
+using DM.Domain.Core.Chats;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Infrastructure.Persistence.Repositories.Moderation;
-using DM.Infrastructure.Persistence.Shared.Users;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -17,7 +18,6 @@ using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
 using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Moderation;
 
@@ -26,17 +26,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Moderation;
 /// afterwards.
 /// </summary>
 /// <remarks>
-/// The warning named the offending object by identifier and nothing else. The
-/// author of that object may edit it, and no edit history on the site keeps the
-/// previous text — so the person who was warned could erase the evidence for
-/// their own warning by rewriting one sentence, and the moderation page would
-/// show a link to a text that never contained the violation. Deleting the object
-/// removed it entirely.
-///
-/// The snapshot is a column and is written once; the address is not, because
-/// it changes without the warning being touched. Whether the object was edited
-/// after the warning is not read at all: the log shows the snapshot, the text
-/// the warning was given for, and a later edit is no part of it.
+/// No edit history keeps the previous text, so the snapshot is a column written once; the address is not,
+/// it changes on its own. A later edit is no part of the log.
 /// </remarks>
 public class WarningEvidenceShould
 {
@@ -65,18 +56,7 @@ public class WarningEvidenceShould
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
 
-    private DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
-        .UseInMemoryDatabase(_databaseName)
-        .Options);
-
-    private static DbUser NewUser(Guid id, string username) => new()
-    {
-        UserId = id,
-        Username = username,
-        Email = $"{username}@test.local",
-        Salt = "",
-        PasswordHash = ""
-    };
+    private DmDbContext Context() => InMemoryStore.Open(_databaseName);
 
     /// <summary>
     /// A forum topic with one comment under it, and one message in each of the
@@ -86,13 +66,12 @@ public class WarningEvidenceShould
     private DmDbContext Seeded()
     {
         var context = Context();
-        context.Users.AddRange(NewUser(AuthorId, "author"), NewUser(ModeratorId, "moderator"));
+        context.Users.AddRange(InMemoryStore.User(AuthorId, "author"), InMemoryStore.User(ModeratorId, "moderator"));
         context.Boards.Add(new DbBoard
         {
             BoardId = BoardId,
             Title = "Флуд",
-            Alias = "flood",
-            ViewPolicy = BoardAccessPolicy.Guest | BoardAccessPolicy.RegularUser
+            Alias = "flood"
         });
         context.Topics.Add(new DbTopic
         {
@@ -113,14 +92,14 @@ public class WarningEvidenceShould
             CreatedUtc = Written
         });
         context.Chats.AddRange(
-            new DbChat { ChatId = DbChat.GlobalChatId, Type = ChatType.Global },
+            new DbChat { ChatId = WellKnownChats.GlobalChatId, Type = ChatType.Global },
             new DbChat { ChatId = RoomChatId, Type = ChatType.GameRoom, RoomId = Guid.NewGuid() },
             new DbChat { ChatId = DirectChatId, Type = ChatType.Direct });
         context.Messages.AddRange(
             new DbMessage
             {
                 MessageId = MessageId,
-                ChatId = DbChat.GlobalChatId,
+                ChatId = WellKnownChats.GlobalChatId,
                 UserId = AuthorId,
                 Text = Offending,
                 CreatedUtc = Written
@@ -181,32 +160,9 @@ public class WarningEvidenceShould
     }
 
     /// <summary>
-    /// Game content is not moderated: no warn button leads to a post, and nothing
-    /// here resolves one. The line is drawn in code rather than left to the
-    /// absence of a caller.
+    /// One table holds four kinds of conversation and only the global chat is moderated: a game room's chat
+    /// and a private one answer with nothing, as their address does.
     /// </summary>
-    [Fact]
-    public async Task LeaveGameContentAlone()
-    {
-        using var context = Seeded();
-
-        var snapshot = await Resolver(context).CaptureSnapshot(WarningEntityType.Post, CommentId);
-
-        snapshot.Should().BeNull();
-    }
-
-    /// <summary>
-    /// One table holds four kinds of conversation, and only the global chat is
-    /// moderated. A game room's chat and a private one answer with nothing, so
-    /// that no warning ever carries a copy of either.
-    /// </summary>
-    /// <remarks>
-    /// The branch used to read Messages by identifier alone. A moderator holding
-    /// a message id — theirs by being in the conversation, or guessed — could
-    /// have the body of a personal letter or of a game room copied verbatim onto
-    /// a warning, where it stays for as long as the warning does. The address is
-    /// already gated on the same chat; the snapshot was not.
-    /// </remarks>
     [Fact]
     public async Task TakeNothingFromAChatOutsideModeration()
     {
@@ -236,8 +192,7 @@ public class WarningEvidenceShould
     }
 
     /// <summary>
-    /// The whole point: the author rewrites the comment, and the stored snapshot
-    /// does not follow.
+    /// The author rewrites the comment, and the stored snapshot does not follow.
     /// </summary>
     [Fact]
     public async Task KeepTheSnapshotWhenTheTextIsRewrittenAfterwards()
@@ -352,29 +307,12 @@ public class WarningEvidenceShould
         comment.PlaceKind.Should().Be(WarningPlaceKind.Topic);
         comment.PlaceTitle.Should().Be("Тема");
         comment.CreatedUtc.Should().Be(Written);
-        comment.LogClosure.Should().BeNull("a guest reads this board");
+        comment.LogClosure.Should().BeNull("a guest reads every board");
         topic.PlaceKind.Should().Be(WarningPlaceKind.Topic);
         topic.PlaceTitle.Should().Be("Тема");
         message.PlaceKind.Should().Be(WarningPlaceKind.GlobalChat);
         message.PlaceTitle.Should().BeNull("the global chat is named by its kind");
         message.LogClosure.Should().BeNull();
-    }
-
-    /// <summary>
-    /// A board closed to guests keeps its texts out of the open log.
-    /// </summary>
-    [Fact]
-    public async Task CloseTheLogOverABoardAGuestCannotRead()
-    {
-        using var context = Seeded();
-        var board = await context.Boards.SingleAsync(b => b.BoardId == BoardId);
-        board.ViewPolicy = BoardAccessPolicy.RegularUser;
-        await context.SaveChangesAsync();
-
-        (await Resolve(context, CommentId, WarningEntityType.Comment)).LogClosure
-            .Should().Be(WarningLogClosure.BoardClosed);
-        (await Resolve(context, TopicId, WarningEntityType.Topic)).LogClosure
-            .Should().Be(WarningLogClosure.BoardClosed);
     }
 
     /// <summary>
@@ -443,6 +381,8 @@ public class WarningEvidenceShould
         CommentsAccessMode.Public, false, WarningLogClosure.PlaceNotPublic)]
     [InlineData(ModuleStatus.Active, PremoderationStatus.Approved, DraftVisibility.Public,
         CommentsAccessMode.Public, true, WarningLogClosure.PlaceRemoved)]
+    [InlineData(ModuleStatus.Draft, PremoderationStatus.Approved, DraftVisibility.Private,
+        CommentsAccessMode.Public, true, WarningLogClosure.PlaceNotPublic)]
     public async Task ReadAGameDiscussionByTheRulesOfTheGame(
         ModuleStatus status,
         PremoderationStatus premoderation,
@@ -489,6 +429,7 @@ public class WarningEvidenceShould
     [InlineData(ModuleStatus.Draft, PremoderationStatus.Approved, false, WarningLogClosure.PlaceNotPublic)]
     [InlineData(ModuleStatus.Active, PremoderationStatus.AwaitingEdits, false, WarningLogClosure.PlaceNotPublic)]
     [InlineData(ModuleStatus.Active, PremoderationStatus.Approved, true, WarningLogClosure.PlaceRemoved)]
+    [InlineData(ModuleStatus.Draft, PremoderationStatus.Approved, true, WarningLogClosure.PlaceNotPublic)]
     public async Task ReadABlogDiscussionByTheRulesOfTheBlog(
         ModuleStatus status, PremoderationStatus premoderation, bool removed, WarningLogClosure? expected)
     {
@@ -519,27 +460,23 @@ public class WarningEvidenceShould
         state.LogClosure.Should().Be(expected);
         state.PlaceKind.Should().Be(WarningPlaceKind.Blog);
         state.PlaceTitle.Should().Be("Истории персонажей");
+        state.ClosedPlace.Should().Be(expected == WarningLogClosure.PlaceNotPublic
+            ? new ReadablePlace(ReadablePlaceKind.Blog, BlogId)
+            : null);
     }
 
     /// <summary>
-    /// A comment under a publication is placed at the publication, under its
-    /// title, and its address is the comment on the page of the publication. Its
-    /// discussion carries the warn button as every discussion does, and the
-    /// warning used to name no place at all: the log drew it as a warning issued
-    /// from a profile.
+    /// A comment under a publication is placed at the publication, under its title, and addressed on its page.
     /// </summary>
-    /// <remarks>
-    /// A guest follows the link where the blog is open to him and the
-    /// publication is out; a removed publication or blog takes the link with it.
-    /// </remarks>
+    /// <remarks>A guest follows the link where the blog is open to him; a removed publication or blog takes it.</remarks>
     [Theory]
-    [InlineData(ModuleStatus.Active, true, false, false, null)]
-    [InlineData(ModuleStatus.Active, false, false, false, WarningLogClosure.PlaceNotPublic)]
-    [InlineData(ModuleStatus.Draft, true, false, false, WarningLogClosure.PlaceNotPublic)]
-    [InlineData(ModuleStatus.Active, true, true, false, WarningLogClosure.PlaceRemoved)]
-    [InlineData(ModuleStatus.Active, true, false, true, WarningLogClosure.PlaceRemoved)]
+    [InlineData(ModuleStatus.Active, false, false, null)]
+    [InlineData(ModuleStatus.Draft, false, false, WarningLogClosure.PlaceNotPublic)]
+    [InlineData(ModuleStatus.Active, true, false, WarningLogClosure.PlaceRemoved)]
+    [InlineData(ModuleStatus.Active, false, true, WarningLogClosure.PlaceRemoved)]
+    [InlineData(ModuleStatus.Draft, true, false, WarningLogClosure.PlaceNotPublic)]
     public async Task PlaceACommentUnderAPublicationAtThePublication(
-        ModuleStatus blogStatus, bool published, bool publicationRemoved, bool blogRemoved,
+        ModuleStatus blogStatus, bool publicationRemoved, bool blogRemoved,
         WarningLogClosure? expected)
     {
         using var context = Seeded();
@@ -560,7 +497,6 @@ public class WarningEvidenceShould
             BlogId = BlogId,
             AuthorId = ModeratorId,
             Title = "Как я провел лето",
-            IsPublished = published,
             IsRemoved = publicationRemoved,
             CreatedUtc = Written
         });

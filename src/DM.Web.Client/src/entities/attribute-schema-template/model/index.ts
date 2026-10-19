@@ -1,4 +1,1 @@
-export type {
-  AttributeSchemaTemplate,
-  AttributeSchemaTemplateRequest,
-} from "./types";
+export type { AttributeSchemaTemplate } from "./types";

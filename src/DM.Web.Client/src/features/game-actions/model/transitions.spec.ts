@@ -1,100 +1,92 @@
 import { describe, it, expect } from "vitest";
+import { ClosedReason, ModuleStatus } from "@/shared/api/models/common";
 import {
-  ClosedReason,
-  GameStatus,
-  GameStatusTransition,
-} from "@/entities/game";
-import { availableStatusTransitions } from "./transitions";
+  availableStatusTransitions,
+  BLOG_STATUS_WORDS,
+  GAME_STATUS_WORDS,
+  type StatusMachineWords,
+} from "./transitions";
 
-/**
- * Per-status option matrix must mirror the domain state machine
- * (src/DM.Domain.Core/Statuses/ModuleStatusTransition.cs):
- *   Start:  Draft -> Active
- *   Finish: Active -> Closed (Finished)
- *   Freeze: Active -> Closed (Frozen)
- *   Close:  Active or Closed+Frozen -> Closed (None)
- *   Reopen: Closed (any reason) -> Active
- */
-describe("availableStatusTransitions", () => {
-  const values = (
-    status: GameStatus | undefined,
-    closedReason?: ClosedReason,
-  ) => availableStatusTransitions(status, closedReason).map((o) => o.value);
+/** What the machine offers, as the strip draws it: each label, a "!" after a dangerous one. */
+const offered = (
+  words: StatusMachineWords<string>,
+  status: ModuleStatus | undefined,
+  closedReason?: ClosedReason,
+) =>
+  availableStatusTransitions(words, status, closedReason).map(
+    (o) => `${o.value} ${o.label}${o.danger ? " !" : ""}`,
+  );
 
-  it("offers only Start for a draft game", () => {
-    expect(values(GameStatus.Draft)).toEqual([GameStatusTransition.Start]);
+describe("availableStatusTransitions for a game", () => {
+  const game = (status: ModuleStatus | undefined, reason?: ClosedReason) =>
+    offered(GAME_STATUS_WORDS, status, reason);
+
+  it("starts a draft", () => {
+    expect(game(ModuleStatus.Draft)).toEqual(["Start Начать игру"]);
   });
 
-  it("offers Finish, Freeze and Close for an active game", () => {
-    expect(values(GameStatus.Active)).toEqual([
-      GameStatusTransition.Finish,
-      GameStatusTransition.Freeze,
-      GameStatusTransition.Close,
+  it("finishes, freezes or closes an active game, the closing asked first", () => {
+    expect(game(ModuleStatus.Active)).toEqual([
+      "Finish Завершить игру",
+      "Freeze Заморозить игру",
+      "Close Закрыть игру !",
     ]);
   });
 
-  it("offers Reopen and Close for a frozen game (Closed+Frozen)", () => {
-    expect(values(GameStatus.Closed, ClosedReason.Frozen)).toEqual([
-      GameStatusTransition.Reopen,
-      GameStatusTransition.Close,
+  it("resumes a frozen game or closes it without reopening", () => {
+    expect(game(ModuleStatus.Closed, ClosedReason.Frozen)).toEqual([
+      "Reopen Возобновить игру",
+      "Close Закрыть игру !",
     ]);
   });
 
-  it("offers only Reopen for a finished game (Closed+Finished)", () => {
-    expect(values(GameStatus.Closed, ClosedReason.Finished)).toEqual([
-      GameStatusTransition.Reopen,
-    ]);
-  });
-
-  it("offers only Reopen for a closed game (Closed+None)", () => {
-    expect(values(GameStatus.Closed, ClosedReason.None)).toEqual([
-      GameStatusTransition.Reopen,
-    ]);
-  });
-
-  it("offers only Reopen when a closed game carries no reason", () => {
-    expect(values(GameStatus.Closed)).toEqual([GameStatusTransition.Reopen]);
-  });
+  it.each([ClosedReason.Finished, ClosedReason.None, undefined])(
+    "only re-opens a game closed for the reason %s",
+    (reason) => {
+      expect(game(ModuleStatus.Closed, reason)).toEqual([
+        "Reopen Переоткрыть игру",
+      ]);
+    },
+  );
 
   it("offers nothing when the status is unknown", () => {
-    expect(values(undefined)).toEqual([]);
+    expect(game(undefined)).toEqual([]);
+  });
+});
+
+// Finish is absent on purpose: the server would take it, the blog UI never asks for it.
+describe("availableStatusTransitions for a blog", () => {
+  const blog = (status: ModuleStatus | undefined, reason?: ClosedReason) =>
+    offered(BLOG_STATUS_WORDS, status, reason);
+
+  it("publishes a draft", () => {
+    expect(blog(ModuleStatus.Draft)).toEqual(["Start Опубликовать блог"]);
   });
 
-  it("labels Reopen 'Возобновить игру' for a frozen game", () => {
-    const options = availableStatusTransitions(
-      GameStatus.Closed,
-      ClosedReason.Frozen,
-    );
-    const reopen = options.find((o) => o.value === GameStatusTransition.Reopen);
-    expect(reopen?.label).toBe("Возобновить игру");
+  it("freezes or closes an active blog, never finishes it, the closing asked first", () => {
+    expect(blog(ModuleStatus.Active)).toEqual([
+      "Freeze Заморозить блог",
+      "Close Закрыть блог !",
+    ]);
   });
 
-  it("labels Reopen 'Переоткрыть игру' for a finished game", () => {
-    const options = availableStatusTransitions(
-      GameStatus.Closed,
-      ClosedReason.Finished,
-    );
-    const reopen = options.find((o) => o.value === GameStatusTransition.Reopen);
-    expect(reopen?.label).toBe("Переоткрыть игру");
+  it("resumes a frozen blog or closes it without reopening", () => {
+    expect(blog(ModuleStatus.Closed, ClosedReason.Frozen)).toEqual([
+      "Reopen Возобновить блог",
+      "Close Закрыть блог !",
+    ]);
   });
 
-  it("labels Reopen 'Переоткрыть игру' for a closed game with no reason", () => {
-    const reopen = availableStatusTransitions(GameStatus.Closed).find(
-      (o) => o.value === GameStatusTransition.Reopen,
-    );
-    expect(reopen?.label).toBe("Переоткрыть игру");
-  });
+  it.each([ClosedReason.Finished, ClosedReason.None, undefined])(
+    "only re-opens a blog closed for the reason %s",
+    (reason) => {
+      expect(blog(ModuleStatus.Closed, reason)).toEqual([
+        "Reopen Переоткрыть блог",
+      ]);
+    },
+  );
 
-  it("marks every Close option as danger (confirmation prompt)", () => {
-    const statuses: Array<[GameStatus, ClosedReason | undefined]> = [
-      [GameStatus.Active, undefined],
-      [GameStatus.Closed, ClosedReason.Frozen],
-    ];
-    for (const [status, reason] of statuses) {
-      const close = availableStatusTransitions(status, reason).find(
-        (o) => o.value === GameStatusTransition.Close,
-      );
-      expect(close?.danger).toBe(true);
-    }
+  it("offers nothing when the status is unknown", () => {
+    expect(blog(undefined)).toEqual([]);
   });
 });

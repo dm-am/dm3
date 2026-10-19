@@ -1,9 +1,9 @@
 using System;
+using AwesomeAssertions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.AttributeSchemaTemplates;
-using DM.Domain.Game.Features.Games;
-using DM.Testing;
+using DM.Domain.Game.Features.AttributeSchemas;
 using FluentValidation.TestHelper;
 using Xunit;
 
@@ -13,10 +13,10 @@ namespace DM.Domain.Game.Tests.Features.AttributeSchemaTemplates;
 /// A template is checked by the same specification rules as the sheet of a
 /// game, and by the same limit on a title.
 /// </summary>
-public class AttributeSchemaTemplateValidatorsShould : UnitTestBase
+public class AttributeSchemaTemplateValidatorsShould
 {
-    private readonly CreateAttributeSchemaTemplateValidator _createValidator = new();
-    private readonly ReplaceAttributeSchemaTemplateValidator _replaceValidator = new();
+    private readonly CreateAttributeSchemaTemplateValidator createValidator = new();
+    private readonly ReplaceAttributeSchemaTemplateValidator replaceValidator = new();
 
     /// <summary>The longest title the site accepts, and one letter past it.</summary>
     private const int LongestTitle = 100;
@@ -38,37 +38,26 @@ public class AttributeSchemaTemplateValidatorsShould : UnitTestBase
 
     [Fact]
     public void PassAValidCreation() =>
-        _createValidator.TestValidate(Creation("Лайт", ValidSpecification()))
+        createValidator.TestValidate(Creation("Лайт", ValidSpecification()))
             .ShouldNotHaveAnyValidationErrors();
 
     [Fact]
     public void PassAValidReplacement() =>
-        _replaceValidator.TestValidate(Replacement("Лайт", ValidSpecification()))
+        replaceValidator.TestValidate(Replacement("Лайт", ValidSpecification()))
             .ShouldNotHaveAnyValidationErrors();
 
-    [Fact]
-    public void RefuseACreationWithoutATitle() =>
-        _createValidator.TestValidate(Creation(""))
-            .ShouldHaveValidationErrorFor(t => t.Title)
-            .WithErrorMessage(ValidationError.Empty);
+    [Theory]
+    [InlineData(0, ValidationError.Empty)]
+    [InlineData(LongestTitle + 1, ValidationError.Long)]
+    public void RefuseAnEmptyOrTooLongTitleOnBothWrites(int length, string error)
+    {
+        var title = new string('a', length);
 
-    [Fact]
-    public void RefuseAReplacementWithoutATitle() =>
-        _replaceValidator.TestValidate(Replacement(""))
-            .ShouldHaveValidationErrorFor(t => t.Title)
-            .WithErrorMessage(ValidationError.Empty);
-
-    [Fact]
-    public void RefuseACreationWithATooLongTitle() =>
-        _createValidator.TestValidate(Creation(new string('a', LongestTitle + 1)))
-            .ShouldHaveValidationErrorFor(t => t.Title)
-            .WithErrorMessage(ValidationError.Long);
-
-    [Fact]
-    public void RefuseAReplacementWithATooLongTitle() =>
-        _replaceValidator.TestValidate(Replacement(new string('a', LongestTitle + 1)))
-            .ShouldHaveValidationErrorFor(t => t.Title)
-            .WithErrorMessage(ValidationError.Long);
+        createValidator.TestValidate(Creation(title))
+            .ShouldHaveValidationErrorFor(t => t.Title).WithErrorMessage(error);
+        replaceValidator.TestValidate(Replacement(title))
+            .ShouldHaveValidationErrorFor(t => t.Title).WithErrorMessage(error);
+    }
 
     /// <summary>
     /// A replacement addresses a template, and a body naming none is refused
@@ -76,19 +65,25 @@ public class AttributeSchemaTemplateValidatorsShould : UnitTestBase
     /// </summary>
     [Fact]
     public void RefuseAReplacementNamingNoTemplate() =>
-        _replaceValidator.TestValidate(new ReplaceAttributeSchemaTemplate { Title = "Лайт" })
+        replaceValidator.TestValidate(new ReplaceAttributeSchemaTemplate { Title = "Лайт" })
             .ShouldHaveValidationErrorFor(t => t.TemplateId)
             .WithErrorMessage(ValidationError.Empty);
 
+    /// <summary>
+    /// One refusal for one empty field: the schema-level rules name the attribute
+    /// in their sentences and do not repeat the field's own refusal.
+    /// </summary>
     [Fact]
-    public void RefuseASpecificationWithoutATitle()
+    public void RefuseASpecificationWithoutATitleOnce()
     {
         var specification = ValidSpecification();
         specification.Title = "";
 
-        _createValidator.TestValidate(Creation("Лайт", specification))
-            .ShouldHaveValidationErrorFor("Specifications[0].Title")
-            .WithErrorMessage(ValidationError.Empty);
+        var result = createValidator.TestValidate(Creation("Лайт", specification));
+
+        result.Errors.Should().ContainSingle()
+            .Which.ErrorMessage.Should().Be("Введите название атрибута");
+        result.ShouldHaveValidationErrorFor("Specifications[0].Title");
     }
 
     [Fact]
@@ -97,9 +92,39 @@ public class AttributeSchemaTemplateValidatorsShould : UnitTestBase
         var specification = ValidSpecification();
         specification.Order = -1;
 
-        _createValidator.TestValidate(Creation("Лайт", specification))
+        createValidator.TestValidate(Creation("Лайт", specification))
             .ShouldHaveValidationErrorFor("Specifications[0].Order")
             .WithErrorMessage(ValidationError.Invalid);
+    }
+
+    /// <summary>
+    /// A maximal length below one admits no value at all: every character sheet
+    /// written against such a specification would be refused.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void RefuseASpecificationWithANonPositiveMaxLength(int maxLength)
+    {
+        var specification = ValidSpecification();
+        specification.MaxLength = maxLength;
+
+        createValidator.TestValidate(Creation("Лайт", specification))
+            .ShouldHaveValidationErrorFor("Specifications[0].MaxLength")
+            .WithErrorMessage(ValidationError.MustBePositive);
+        replaceValidator.TestValidate(Replacement("Лайт", specification))
+            .ShouldHaveValidationErrorFor("Specifications[0].MaxLength")
+            .WithErrorMessage(ValidationError.MustBePositive);
+    }
+
+    [Fact]
+    public void PassASpecificationWithTheShortestMaxLength()
+    {
+        var specification = ValidSpecification();
+        specification.MaxLength = 1;
+
+        createValidator.TestValidate(Creation("Лайт", specification))
+            .ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact]
@@ -111,9 +136,9 @@ public class AttributeSchemaTemplateValidatorsShould : UnitTestBase
         second.Title = "Agility";
         second.IsDescriptor = true;
 
-        _createValidator.TestValidate(Creation("Лайт", first, second))
+        createValidator.TestValidate(Creation("Лайт", first, second))
             .ShouldHaveValidationErrorFor(t => t.Specifications)
-            .WithErrorMessage("Описателем можно отметить только один атрибут");
+            .WithErrorMessage("Дескриптором можно отметить только один атрибут");
     }
 
     [Fact]
@@ -123,7 +148,7 @@ public class AttributeSchemaTemplateValidatorsShould : UnitTestBase
         specification.Type = AttributeSpecificationType.TextList;
         specification.Values = [];
 
-        _replaceValidator.TestValidate(Replacement("Лайт", specification))
+        replaceValidator.TestValidate(Replacement("Лайт", specification))
             .ShouldHaveValidationErrorFor(t => t.Specifications)
             .WithErrorMessage("У списка 'Strength' должно быть хотя бы одно значение");
     }
@@ -139,7 +164,7 @@ public class AttributeSchemaTemplateValidatorsShould : UnitTestBase
             new ListValue { Value = "Sword" }
         ];
 
-        _replaceValidator.TestValidate(Replacement("Лайт", specification))
+        replaceValidator.TestValidate(Replacement("Лайт", specification))
             .ShouldHaveValidationErrorFor(t => t.Specifications)
             .WithErrorMessage("В списке 'Strength' значения не должны повторяться");
     }

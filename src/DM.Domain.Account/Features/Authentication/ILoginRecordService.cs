@@ -10,13 +10,8 @@ namespace DM.Domain.Account.Features.Authentication;
 /// reads back out of them.
 /// </summary>
 /// <remarks>
-/// The rules were in the HTTP layer. Which identity a failed attempt is filed
-/// under, how much of a user agent is kept, and that a record which cannot be
-/// written never fails the sign-in are decisions about the account rather than
-/// about the response. Reading is here for the same reason: three API services
-/// asked the repository directly, so each of them carried its own idea of how far
-/// back a login history goes. The transport still supplies the address and the
-/// user agent, because only it has them.
+/// Which identity a failed attempt is filed under, how much of a user agent is kept
+/// and how far back a history goes are decisions about the account, not the response.
 /// </remarks>
 public interface ILoginRecordService
 {

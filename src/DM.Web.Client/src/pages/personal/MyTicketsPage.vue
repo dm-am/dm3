@@ -1,19 +1,8 @@
 <script setup lang="ts">
 /**
- * MyTicketsPage — "Мои обращения" (doc 4.2.3.2.6).
- *
- * The current user's own tickets, newest first, each the block every screen
- * draws a ticket with (TicketThread): the reason over the text, and under it
- * the caption "дата | Ответы (N) | состояние", the state a grey word with a
- * red "*" after it where the ticket waits for the reader's answer. Not the
- * author: every ticket here is the reader's. Nothing stands under a block:
- * moderation answers in the conversation of the ticket, on its own page,
- * where the reason and the number of answers lead. A long text folds.
- *
- * No filters: a member has a handful of tickets, two dropdowns over three rows
- * only pushed them down, and the state of each is in its caption. The page is
- * taken server-side (GET /v1/moderation/tickets/mine): the pile of a
- * long-standing member only grows.
+ * The reader's own tickets, newest first, each in the block every screen draws
+ * a ticket with, without the author: every ticket here is his. No filters: a
+ * member has a handful, and the state of each is in its caption.
  */
 import { computed, onMounted, ref, watch } from "vue";
 import { useRoute } from "vue-router";
@@ -29,22 +18,21 @@ import { parsePageNumber } from "@/shared/lib/filters";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 
 const route = useRoute();
-const { entitiesPerPage } = usePaging();
+const { pageSize } = usePaging();
 const { user } = storeToRefs(useAuthStore());
 
 const envelope = ref<ListEnvelope<Ticket> | null>(null);
 const loading = ref(false);
 const loadError = ref<string | null>(null);
 
-// The page lives in the address bar, so a reload and a shared link land on the
-// page that was being read.
+// The page lives in the address, so a reload and a link land on it.
 const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
-async function fetch() {
+async function loadTickets() {
   loading.value = true;
   const { data, error } = await ticketApi.getMyTickets({
     number: pageNumber.value,
-    take: entitiesPerPage.value,
+    take: pageSize.value,
   });
   loading.value = false;
   if (error) {
@@ -55,26 +43,20 @@ async function fetch() {
   envelope.value = data ?? null;
 }
 
-// No auth guard on the fetches: the route is requiresAuth, so the router is
-// the one mechanism that turns a guest away (guardAuthenticated).
-onMounted(fetch);
+// The route is requiresAuth, so the router turns a guest away.
+onMounted(loadTickets);
 
-// Following the pager only changes the address, so the refetch hangs off it
-watch(pageNumber, fetch);
+// The pager only changes the address
+watch(pageNumber, loadTickets);
 
-// Newest first (doc: "от последнего к первому"); ISO strings compare safely
-const tickets = computed(() =>
-  [...(envelope.value?.resources ?? [])].sort((a, b) =>
-    b.createdUtc.localeCompare(a.createdUtc),
-  ),
-);
+// Newest first, as the server sends them.
+const tickets = computed(() => envelope.value?.resources ?? []);
 
 const isEmpty = computed(
   () => envelope.value !== null && tickets.value.length === 0,
 );
 
-// Paging draws itself only when there is more than one page, so a reader with a
-// handful of tickets sees the screen unchanged.
+// Paging draws itself only when there is more than one page.
 const paging = computed(() => envelope.value?.paging ?? null);
 </script>
 
@@ -88,13 +70,12 @@ const paging = computed(() => envelope.value?.paging ?? null);
       <router-link to="/complaint">жалобы</router-link>
     </LeadText>
 
-    <!-- The error is independent of the list: a failed refetch never hides
-         the tickets already loaded. -->
+    <!-- A failed refetch never hides the tickets already loaded. -->
     <ErrorState
       v-if="loadError"
       class="error-banner"
       :message="loadError"
-      :retry="fetch"
+      :retry="loadTickets"
     />
 
     <TicketThreadSkeleton v-if="loading && !envelope" :count="3" />

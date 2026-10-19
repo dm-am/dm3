@@ -1,16 +1,6 @@
-// =============================================================================
-// TYPES FOR TOPICS FILTER
-// =============================================================================
-
 import type { SortOption } from "@/shared/lib/filters";
 
-/**
- * Sort options for topics list.
- *
- * Mirrors the backend's TopicRepository sort switch — adding a value here
- * without a matching SQL case would silently fall through to the default
- * "lastActivity" ordering.
- */
+// Mirrors TopicRepository's sort switch: a value without a SQL case falls through to lastActivity.
 export const SORT_OPTIONS: readonly SortOption[] = [
   {
     value: "lastActivity",
@@ -26,8 +16,8 @@ export const SORT_OPTIONS: readonly SortOption[] = [
   },
   {
     value: "likes",
-    label: "Лайки",
-    hint: "По количеству лайков",
+    label: "Нравится",
+    hint: "По числу отметок Нравится",
     defaultDirection: "desc",
   },
   {
@@ -40,9 +30,6 @@ export const SORT_OPTIONS: readonly SortOption[] = [
 
 export type SortByValue = (typeof SORT_OPTIONS)[number]["value"];
 
-/**
- * Default filter state for comparison
- */
 export const DEFAULT_SORT = {
   sortBy: "lastActivity" as SortByValue,
   sortOrder: "desc" as const,

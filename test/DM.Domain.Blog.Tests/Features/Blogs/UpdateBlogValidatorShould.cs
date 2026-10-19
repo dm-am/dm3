@@ -2,20 +2,14 @@ using System;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
 
-public class UpdateBlogValidatorShould : UnitTestBase
+public class UpdateBlogValidatorShould
 {
-    private readonly UpdateBlogValidator validator;
-
-    public UpdateBlogValidatorShould()
-    {
-        validator = new UpdateBlogValidator();
-    }
+    private readonly UpdateBlogValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -84,7 +78,7 @@ public class UpdateBlogValidatorShould : UnitTestBase
         var input = new UpdateBlog
         {
             BlogId = Guid.NewGuid(),
-            Title = new string('a', 201)
+            Title = new string('a', BlogFieldLimits.BlogTitleMaxLength + 1)
         };
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
@@ -97,7 +91,7 @@ public class UpdateBlogValidatorShould : UnitTestBase
         var input = new UpdateBlog
         {
             BlogId = Guid.NewGuid(),
-            Title = new string('a', 200)
+            Title = new string('a', BlogFieldLimits.BlogTitleMaxLength)
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();

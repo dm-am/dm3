@@ -12,20 +12,12 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Messaging;
 /// Tells the participants of a chat that it has a new message
 /// </summary>
 /// <remarks>
-/// Delivery is realtime only. The unread counter is already incremented by the
-/// messaging domain, so nothing has to be stored here: the push exists to make
-/// an open tab re-read that counter. A stored notification would put every
-/// private message into the notification list and into the mail queue, which is
-/// a decision about what to tell the user, not a way to refresh a badge.
-/// Recipients come from the participant rows of the chat, so the two chats that
-/// have none produce nothing at all: global chat has its own broadcast event,
-/// and a game room chat is entered through the room rather than the messenger.
+/// Realtime only: the messaging domain keeps the unread counter, the push makes an open tab re-read it.
 /// </remarks>
 internal class NewMessageNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public NewMessageNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -61,9 +53,7 @@ internal class NewMessageNotificationGenerator : BaseNotificationGenerator
             RealtimeOnly = true,
             UsersInterested = messageData.RecipientIds,
             ActorId = messageData.AuthorUserId,
-            // Neither the text nor the author travels with the push: the client
-            // answers it by re-reading its chat list from the API, which applies
-            // the reader's own access rules to whatever it returns.
+            // The client re-reads its chat list, which applies its own access rules.
             Metadata = new
             {
                 messageData.MessageId,

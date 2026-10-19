@@ -16,7 +16,7 @@ public class MessageSearchRequest
     /// <summary>
     /// Structured, repeatable scope tokens: "global", "dm:&lt;id&gt;", "game:&lt;id&gt;".
     /// </summary>
-    public IReadOnlyList<string> In { get; set; } = new List<string>();
+    public IReadOnlyList<string> In { get; set; } = [];
 
     /// <summary>Optional explicit author username filter.</summary>
     public string? From { get; set; }

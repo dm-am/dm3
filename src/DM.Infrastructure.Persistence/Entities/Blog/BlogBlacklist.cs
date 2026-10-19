@@ -39,15 +39,9 @@ public class BlogBlacklist
 
     #region Navigation Properties
 
-    /// <summary>
-    /// Blog
-    /// </summary>
     [ForeignKey(nameof(BlogId))]
     public virtual Blog Blog { get; set; } = null!;
 
-    /// <summary>
-    /// Blocked user
-    /// </summary>
     [ForeignKey(nameof(BlockedUserId))]
     public virtual User BlockedUser { get; set; } = null!;
 

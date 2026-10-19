@@ -1,52 +1,17 @@
-// =============================================================================
-// SKELETON LOADING STANDARDS
-// =============================================================================
-// Centralized skeleton shimmer animation for loading states.
-// Use for predictable layouts only (DataTable, ProfileHeader).
-// For variable content (comments, polls), use "Загрузка..." text.
-// See UI_STANDARDS.md for documentation.
-// =============================================================================
+// The shimmer of a placeholder, for predictable layouts only (DataTable,
+// ProfileHeader); variable content says "Загрузка...".
 
-// A partial is not a compilation entry, so vite's injection of the shared layer
-// never reached it: until the module system it read $minor and $bg-element out
-// of whatever file happened to include it.
 @use "Variables" as *
 @use "Themes" as *
 
-// -----------------------------------------------------------------------------
-// Shimmer Mixin
-// -----------------------------------------------------------------------------
-// Provides shimmer animation for skeleton loading elements.
-// Respects prefers-reduced-motion.
-//
-// Usage:
-//   .skeleton-cell
-//     +skeleton-shimmer
-//
-// Duration: $loading-tempo (1.5s, per UI_STANDARDS.md)
-// Easing: ease-in-out / infinite
-
-// Skeleton shimmer: call +skeleton-shimmer AFTER all other declarations
-// in the selector to avoid Sass mixed-decls deprecation warning.
-//
-// A shimmer that stands where a picture will be (an avatar, a portrait, a QR
-// code) takes +skeleton-shimmer($square: true): a picture is never rounded
-// (owner, 5 October 2026), and a placeholder rounder than what replaces it
-// changes shape the moment the page loads.
+// Call it after the selector's own declarations. A shimmer standing where a
+// picture will be takes $square: true, as a picture is never rounded.
 =skeleton-shimmer($square: false)
   @if not $square
-    border-radius: $minor  // 4px
+    border-radius: $minor
   background: linear-gradient(90deg, $bg-element-hover 25%, $bg-element 50%, $bg-element-hover 75%)
   background-size: 200% 100%
   animation: skeleton-shimmer $loading-tempo ease-in-out infinite
 
-// Reduced-motion: handled by the global rule in Reset.sass
-// (animation-duration: 0.01ms !important on *, *::before, *::after).
-// No per-mixin @media needed.
-//
-// The shimmer frames themselves are declared in Reset.sass, not here (named in
-// prose: this directory is scanned for partials carrying the at-rule, and a
-// mention reads exactly like a declaration to a scan over the text). This file
-// is a partial: twenty components import it, and a rule declared in a partial
-// is re-emitted into every one of their scoped stylesheets. Mixins only — the
-// same discipline InputsGlobal.sass records the price of breaking.
+// The frames are declared in Reset.sass, as this file is a partial; reduced
+// motion is the global rule there.

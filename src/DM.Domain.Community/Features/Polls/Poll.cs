@@ -49,16 +49,9 @@ public class Poll
     /// poll opens at <see cref="StartsUtc" /> and closes at <see cref="EndsUtc" />.
     /// </summary>
     /// <remarks>
-    /// The one place the voting window is written down. A vote and an unvote are
-    /// accepted exactly while this answers <see cref="PollStatus.Active" />, and
-    /// the response reports the same value to the reader, so the poll a page
-    /// calls open is the poll that takes the vote. The two halves used to be
-    /// separate comparisons in separate projects, and a boundary moved in one of
-    /// them would have offered a vote the authorization then refused.
-    ///
-    /// The listing in the storage still restates the same window twice - once as
-    /// a filter, once as a CASE ladder for the status sort - because those are
-    /// translated into SQL rather than called.
+    /// The one place the voting window is written down: the vote is taken and the
+    /// page calls the poll open by the same answer. The storage's listing restates
+    /// it in SQL, which cannot call this.
     /// </remarks>
     /// <param name="now">Moment to judge the poll at</param>
     public PollStatus StatusAt(DateTimeOffset now)

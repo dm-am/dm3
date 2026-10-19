@@ -1,21 +1,14 @@
 <script setup lang="ts">
 /**
- * ChatPreview: a row of the list of conversations, laid out as a list of
- * chats of a messenger: the picture, the name with the count of unread and
- * the time of the last message on the first line, the last message under them.
- *
- * In the narrow list (`narrow`) the row keeps the picture and the count of
- * unread under it; the name is the link's own and the picture's tooltip.
- *
- * The row of the open conversation stands selected. The row opens its
- * conversation with the list kept on its page (listPage.ts).
+ * A row of the list of conversations: the picture, the name with its unread
+ * count and the time on the first line, the last message under them. It opens
+ * its conversation with the list kept on its page (listPage.ts).
  */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import type { Chat } from "@/entities/message";
 import type { User } from "@/shared/api/models/community";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
-import { Tooltip } from "@/shared/ui/Tooltip";
 import { listPageQuery } from "./listPage";
 import {
   DATE_FORMAT,
@@ -28,10 +21,8 @@ const props = withDefaults(
     chat: Chat;
     interlocutor?: User;
     currentUser?: User | null;
-    /** The narrow list: the picture and the count of unread alone. */
-    narrow?: boolean;
   }>(),
-  { interlocutor: undefined, currentUser: null, narrow: false },
+  { interlocutor: undefined, currentUser: null },
 );
 
 const route = useRoute();
@@ -54,23 +45,16 @@ const isLastMessageFromMe = computed(() => {
 const lastMessagePreview = computed(() => {
   const msg = props.chat.lastMessage;
   if (!msg) return "";
-  // Strip HTML tags for preview. A drawn line break becomes a space first:
-  // the preview is one run of text, and a message typed on two lines would
-  // otherwise run its last word into the next line's first.
+  // A drawn line break becomes a space first, or two lines run their words together.
   const text = (msg.text || "")
     .replace(/<(?:br|hr)\s*\/?>/gi, " ")
     .replace(/<[^>]*>/g, "");
   const truncated = text.length > 60 ? text.slice(0, 60) + "..." : text;
-  // Add prefix to indicate who sent the message
   const prefix = isLastMessageFromMe.value ? "Вы: " : "";
   return prefix + truncated;
 });
 
-/**
- * When the last message came, on the site's clock: the time for a message of
- * today, the date for an older one, so the time keeps to the first line
- * beside the name.
- */
+/** The time for a message of today, the date for an older one, on the site's clock. */
 const lastMessageDate = computed(() => {
   const created = props.chat.lastMessage?.createdUtc;
   if (!created) return "";
@@ -86,43 +70,12 @@ const name = computed(() =>
     : props.interlocutor?.username || "Пользователь",
 );
 
-/**
- * The unread messages of the conversation, written after the name as the
- * header writes its own: "SolohinLex (2)", brackets grey, the number bold
- * green. Nothing while there are none; the row itself is not tinted, so a
- * read and an unread conversation differ by the number alone.
- */
+/** Written after the name as the header writes it: "SolohinLex (2)"; the row itself is not tinted. */
 const unread = computed(() => props.chat.unreadMessagesCount ?? 0);
-
-/** The narrow row's name for a reader of the screen. */
-const narrowLabel = computed(() =>
-  unread.value > 0 ? `${name.value} (${unread.value})` : name.value,
-);
 </script>
 
 <template>
-  <router-link
-    v-if="narrow"
-    :to="target"
-    class="chat-preview chat-preview--narrow"
-    :aria-label="narrowLabel"
-  >
-    <Tooltip :text="name" placement="left">
-      <AvatarImg
-        :picture="isGroup ? null : interlocutor?.picture"
-        alt=""
-        :size="48"
-        img-class="avatar"
-      />
-    </Tooltip>
-    <span v-if="unread > 0" class="unread" aria-hidden="true"
-      ><span class="bracket">(</span
-      ><span class="unread-number">{{ unread }}</span
-      ><span class="bracket">)</span></span
-    >
-  </router-link>
-
-  <router-link v-else :to="target" class="chat-preview">
+  <router-link :to="target" class="chat-preview">
     <AvatarImg
       :picture="isGroup ? null : interlocutor?.picture"
       :alt="name"
@@ -130,8 +83,7 @@ const narrowLabel = computed(() =>
       img-class="avatar"
     />
 
-    <!-- In the order they stand: the name and the time of the last message
-         on one line, the last message under them. -->
+    <!-- The name and the time on one line, the last message under them. -->
     <div class="content">
       <span class="name-line"
         ><span class="name">{{ name }}</span
@@ -152,9 +104,7 @@ const narrowLabel = computed(() =>
 <style scoped lang="sass">
 @use "@/assets/styles/Tables" as *
 
-// One fill for every row, read or not; under the pointer the shade every row
-// of a list or a table of the site takes, and the open conversation in the
-// selection's shade.
+// One fill for every row, read or not; the open conversation in the selection's shade.
 .chat-preview
   display: flex
   align-items: center
@@ -169,15 +119,7 @@ const narrowLabel = computed(() =>
     background-image: linear-gradient($selected-overlay, $selected-overlay)
   // Rows stand flush, so the ring goes inward.
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
-
-// The narrow row: the picture with 8 on either side, the count under it.
-.chat-preview--narrow
-  flex-direction: column
-  align-items: flex-start
-  gap: $tiny
-  padding: $small
+    +focus-ring($inward: true)
 
 // Square: a picture is never rounded.
 .avatar
@@ -187,9 +129,7 @@ const narrowLabel = computed(() =>
   object-fit: cover
   flex-shrink: 0
 
-// The name with its number, and the time of the last message at the far end
-// of its line; the last message under them across the whole width. A name
-// longer than the line wraps, and the time goes down whole under it.
+// A name longer than the line wraps, and the time goes down whole under it.
 .content
   flex: 1
   min-width: 0
@@ -200,10 +140,8 @@ const narrowLabel = computed(() =>
   row-gap: $tiny
   align-items: baseline
 
-// A line of text and not a flex row, so the name, the space and the number
-// copy as "SolohinLex (2)" in one line. The name is said whole: a name longer
-// than the line breaks as any word of the site does (a flex item is never
-// narrower than its longest word without min-width: 0).
+// Text, not a flex row, so "SolohinLex (2)" copies as one line; min-width: 0
+// lets a long name break as any word does.
 .name-line
   min-width: 0
 
@@ -213,9 +151,6 @@ const narrowLabel = computed(() =>
 
 .unread
   white-space: nowrap
-
-.chat-preview--narrow .unread
-  font-size: $secondary-font-size
 
 .bracket
   color: $text-muted
@@ -229,8 +164,7 @@ const narrowLabel = computed(() =>
   font-size: $secondary-font-size
   color: $text-muted
 
-// The excerpt of the last message (its first 60 letters) is said whole, on a
-// line of its own, and wraps where the row is narrower than it.
+// The excerpt (its first 60 letters) on a line of its own, wrapping where narrower.
 .message-preview
   flex-basis: 100%
   min-width: 0

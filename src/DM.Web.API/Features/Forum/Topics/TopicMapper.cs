@@ -1,3 +1,4 @@
+using DM.Domain.Forum.Authorization;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Forum.Boards;
 using DM.Web.API.Shared.BbRendering;
@@ -11,13 +12,12 @@ using DomainTopicsQuery = DM.Domain.Forum.Features.Topics.TopicsQuery;
 namespace DM.Web.API.Features.Forum.Topics;
 
 /// <summary>
-/// Compile-time mapper from service DTO to API DTO for topics. The board
-/// renders through the composed <see cref="BoardMapper"/> - the migration
-/// bridge that kept the board maps alive in AutoMapper dies with the profile.
+/// Compile-time mapper from service DTO to API DTO for topics; the board renders
+/// through the composed <see cref="BoardMapper"/>.
 /// </summary>
 [Mapper]
 [UseStaticMapper(typeof(BbTextMappers))]
-internal partial class TopicMapper
+public partial class TopicMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -32,40 +32,22 @@ internal partial class TopicMapper
     }
 
     /// <summary>
-    /// Domain topic to its response DTO. The explicit envelope step replaces
-    /// the AutoMapper AfterMap - it must run on every topic that crosses the
-    /// API, or the author round-trip silently breaks.
+    /// Domain topic to its response DTO, with the author bound to the text: an
+    /// editor that got rendered HTML instead of the source would unwrap [mod]
+    /// markup on save.
     /// </summary>
     public Topic ToTopic(DomainTopic topic)
     {
         var result = ToTopicCore(topic);
-
-        // Comment surface allows [mod] blocks. Populate the render-context
-        // envelope with the topic author so the JSON converter honors the
-        // author's AuthorEdit round-trip: getTopicForUpdate (GET
-        // topics/{id}) sends X-Dm-Audience: author_edit to fetch the raw
-        // BBCode source for the editor. Without the owner id the converter
-        // fails closed (Display for everyone) - safe against strangers, but
-        // the author-moderator's editor then receives rendered HTML instead
-        // of source, and saving it silently unwraps their [mod] markup.
-        if (result.Description is not null)
-        {
-            result.Description.Context = new RenderContextEnvelope
-            {
-                Surface = result.Description.Surface,
-                PostAuthorUserId = topic.Author?.UserId
-            };
-        }
-
+        result.Description?.BindAuthor(topic.Author?.UserId,
+            intentions => intentions.IsAllowed(TopicIntention.Edit, topic));
         return result;
     }
 
     [MapProperty(nameof(DomainTopic.TotalCommentsCount), nameof(Topic.CommentsCount))]
     [MapProperty(nameof(DomainTopic.Text), nameof(Topic.Description))]
     [MapProperty(nameof(DomainTopic.LastComment), nameof(Topic.LastComment), Use = nameof(ToLastTopicComment))]
-    // Filled by TopicApiService.EnrichPeriodDigests (one batch marker lookup
-    // per response), not by the per-entity mapping. What the viewer may do is
-    // the domain's answer, composed by TopicApiService on the reads of one.
+    // Both filled by TopicApiService: the digest marker per batch, the viewer per topic.
     [MapperIgnoreTarget(nameof(Topic.PeriodDigest))]
     [MapperIgnoreTarget(nameof(Topic.Viewer))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
@@ -98,9 +80,7 @@ internal partial class TopicMapper
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public partial DomainTopicsQuery ToTopicsQuery(TopicsQuery query);
 
-    // A topic with no comments carries a null even though the member is
-    // declared `= null!`; the guard keeps the AutoMapper null-through
-    // behavior instead of materialising an empty last comment.
+    // A topic with no comments carries a null from a `= null!` member.
     private LastTopicComment ToLastTopicComment(DomainLastComment? comment) =>
         comment == null
             ? null!

@@ -1,9 +1,6 @@
 <script setup lang="ts">
-// Thin blog layout (mirrors GamePage): the blog title (H1) and a
-// <router-view> for the active sub-page. Status, author, assistants and the
-// subscriber count live in the info table (BlogDetails), not duplicated in a
-// header strip. All per-blog navigation and actions live in the left-sidebar
-// BlogPanel; role flags are lifted into the shared useBlogDetailsStore (SSOT).
+// The blog's layout: its title and the router-view of the sub-page; the
+// navigation and the actions live in the sidebar's BlogPanel.
 import { computed, onUnmounted } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -26,17 +23,9 @@ const route = useRoute();
 const blogStore = useBlogDetailsStore();
 const { blog, blogError, blogErrorStatus } = storeToRefs(blogStore);
 
-// Same rule as the game shell, down to where the code is read from: the failure
-// is a page and not a sentence, and it is derived from the store rather than
-// kept in a local ref. Five call sites outside this shell reload the blog
-// (PublicationCreate, PublicationEdit, BlogInfoSection, RolesSection twice); a
-// refusal from any of them nulls `blog`, and a shell-local code stayed null, so
-// the zone held its title skeleton instead of saying anything.
-//
-// The status is read through the sentence and not instead of it: a refusal that
-// carries no status leaves blogErrorStatus null, and zero is a status too
-// (client.ts fills it for a request that never reached the API), so truthiness
-// is not the test either.
+// The failure is a page, derived from the store: any reload of the blog that
+// is refused nulls `blog`. Zero is a status too (a request that never arrived),
+// so the status is not tested for truthiness.
 const errorCode = computed(() =>
   blogError.value
     ? errorCodeForStatus(blogErrorStatus.value ?? undefined)
@@ -45,11 +34,8 @@ const errorCode = computed(() =>
 
 const blogId = computed(() => route.params.id as string);
 
-// The mirror of the game shell: the heading on the page and the name of the tab
-// are one sentence, composed once — the blog name first, the section of the
-// active sub-route second. While the error page is showing, the error owns it:
-// there is no blog behind the id, and the section alone names a page the reader
-// is not looking at.
+// The heading and the tab are one sentence: the blog name, then the section;
+// the error owns it while the error page shows.
 const announced = provideZoneSection();
 const heading = computed(() =>
   joinTitleSegments(blog.value?.title, announced.value ?? route.meta.section),
@@ -59,8 +45,7 @@ useDocumentTitle(() =>
   errorCode.value ? getErrorConfig(errorCode.value).title : heading.value,
 );
 
-// The refusal itself is already in the store, which is what the error page
-// reads through errorCode above.
+// The refusal is already in the store, which errorCode reads.
 async function load(id: string) {
   await blogStore.loadBlog(id);
 }
@@ -71,9 +56,8 @@ useFetchData(
     {
       param: (p) => p.id,
       callback: (id) => {
-        // Same as the game shell: the detail store is not keyed by id and the
-        // route record is shared, so without wiping first the previous blog's
-        // publications and comments stay under the new title.
+        // The store is not keyed by id and the route record is shared, so the previous
+        // blog is wiped first.
         blogStore.reset();
         return load(id as string);
       },
@@ -97,8 +81,7 @@ onUnmounted(() => {
 
   <ErrorPage v-else-if="errorCode" :code="errorCode" />
 
-  <!-- Loading: twin of the loaded header (skeleton-parity). Reuses
-       .blog-header so the margins match; the twin itself owns its geometry. -->
+  <!-- The twin of the loaded header, in its margins. -->
   <div v-else class="blog-header">
     <PageTitleSkeleton />
   </div>

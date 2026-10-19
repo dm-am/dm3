@@ -6,17 +6,8 @@ using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Forum.Features.Topics;
 
-/// <summary>
-/// Service for topic operations
-/// </summary>
 public interface ITopicService
 {
-    /// <summary>
-    /// Create new topic
-    /// </summary>
-    /// <param name="createTopic">Create topic model</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Created topic</returns>
     Task<Topic> CreateAsync(CreateTopic createTopic, CancellationToken ct = default);
 
     /// <summary>
@@ -38,88 +29,51 @@ public interface ITopicService
     /// <param name="board">The board, read for the current user</param>
     bool MayCreateAfterSignIn(Boards.Board board);
 
-    /// <summary>
-    /// Get topic by id
-    /// </summary>
-    /// <param name="topicId">Topic identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Topic</returns>
     Task<Topic> GetAsync(Guid topicId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get topic by board alias and topic number
-    /// </summary>
-    /// <param name="boardAlias">Board URL alias</param>
-    /// <param name="topicNumber">Topic number within board</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Topic</returns>
     Task<Topic> GetByBoardAndNumberAsync(string boardAlias, int topicNumber, CancellationToken ct = default);
 
     /// <summary>
     /// Get topics page of certain board by its title with filtering and sorting
     /// </summary>
-    /// <param name="boardTitle">Board title</param>
-    /// <param name="query">Filtering and paging query</param>
-    /// <param name="ct">Cancellation token</param>
     /// <returns>Topics list and paging data (paging is null for attached-only queries)</returns>
     Task<(IEnumerable<Topic> topics, PagingResult? paging)> GetListAsync(
         string boardTitle, TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
-    /// Get topics page across all boards visible to the current viewer.
-    /// Used by the user-profile "Topics" tab to render every topic the
-    /// target user has authored, regardless of which board it lives in.
-    /// Access policy is enforced inside the repository — topics on boards
-    /// the viewer cannot see are filtered out at the SQL layer.
+    /// Get topics page across all boards visible to the current viewer, for the
+    /// user-profile "Topics" tab. Topics on boards the viewer cannot see are
+    /// filtered out at the SQL layer.
     /// </summary>
     Task<(IEnumerable<Topic> topics, PagingResult? paging)> GetListAcrossBoardsAsync(
         TopicsQuery query, CancellationToken ct = default);
 
     /// <summary>
     /// Get a user's best (most-liked) topic across every board visible to
-    /// the current viewer. Used by the profile "Topics" widget. Access
-    /// policy is enforced in the repository. Returns null when the user has
-    /// no visible topics.
+    /// the current viewer, for the profile "Topics" widget. Returns null when
+    /// the user has no visible topics.
     /// </summary>
-    /// <param name="username">Author username</param>
-    /// <param name="ct">Cancellation token</param>
     Task<Topic?> GetBestUserTopicAsync(string username, CancellationToken ct = default);
 
     /// <summary>
     /// Get the period markers of already-fetched topics in one lookup. Topics
     /// without a marker are absent from the result.
     /// </summary>
-    /// <param name="topicIds">Topic identifiers to look up</param>
-    /// <param name="ct">Cancellation token</param>
     Task<IReadOnlyDictionary<Guid, PeriodDigest>> GetPeriodDigestsAsync(
         IReadOnlyCollection<Guid> topicIds, CancellationToken ct = default);
 
-    /// <summary>
-    /// Update existing topic
-    /// </summary>
-    /// <param name="updateTopic">Update topic model</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Updated topic</returns>
     Task<Topic> UpdateAsync(UpdateTopic updateTopic, CancellationToken ct = default);
 
-    /// <summary>
-    /// Remove existing topic
-    /// </summary>
-    /// <param name="topicId">Topic identifier</param>
-    /// <param name="ct">Cancellation token</param>
     Task DeleteAsync(Guid topicId, CancellationToken ct = default);
 
     /// <summary>
-    /// Replace the order of a board's pinned topics
+    /// Replace the order of a board's pinned topics; <paramref name="topicIds"/>
+    /// in the desired order (first = top), the board by title or alias
     /// </summary>
     /// <remarks>
     /// The whole order, not a correction to it: <paramref name="topicIds"/> names
     /// every pinned topic of the board exactly once, and a list that does not is
-    /// refused. A partial list would leave the topics it skipped on the positions
-    /// this call has just given to others.
+    /// refused.
     /// </remarks>
-    /// <param name="boardTitle">Board title or alias</param>
-    /// <param name="topicIds">Topic IDs in desired order (first = top)</param>
-    /// <param name="ct">Cancellation token</param>
     Task ReorderPinnedAsync(string boardTitle, IReadOnlyList<Guid> topicIds, CancellationToken ct = default);
 }

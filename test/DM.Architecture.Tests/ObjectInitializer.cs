@@ -9,20 +9,8 @@ namespace DM.Architecture.Tests;
 /// and the name every member of it is written under.
 /// </summary>
 /// <remarks>
-/// Two rules read the same anonymous payloads — the one that holds every field a
-/// notification shows its reader to a Russian name, and the one that holds a
-/// notification the client turns into a link to the field that link is built
-/// from. Both need the same three answers out of the text: which brace closes
-/// the one that opened, which commas belong to the initializer rather than to a
-/// call inside it, and what each member is called. A second copy of that parser
-/// is a second place to correct when one of them is wrong, and until somebody
-/// notices, the two disagree about the same payload while both stay green.
-///
-/// It reads the one shape a payload is written in: a member either carries a
-/// name of its own or borrows the last segment of the expression it is assigned
-/// from, which is what the compiler does with it. A payload assembled anywhere
-/// but in an initializer is not read here at all, and the rules built on this
-/// say so by failing rather than by passing over it.
+/// Shared by the two rules that read notification payloads. A member carries a name of its own or
+/// borrows the last segment of its expression; a payload built outside an initializer fails them.
 /// </remarks>
 internal static class ObjectInitializer
 {

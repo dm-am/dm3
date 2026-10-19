@@ -1,37 +1,18 @@
 <script setup lang="ts">
-/**
- * StatBoard — one leaderboard card. Single source of truth for every
- * leaderboard consumer (the statistics page and the period-digest topics),
- * so they always render identical cards.
- *
- * Renders the dashed content card (poll/topic idiom), a plain-bold title, and
- * a ranked list of "N. <entity link> [+score]" rows (plain ordinal 1..N).
- * Scores are shown as "[+N]" with muted brackets and a green value; the
- * server guarantees only positive entries. Large scores (text volume runs
- * to millions of characters) render with locale digit grouping.
- *
- * On player boards the signed-in viewer's own name renders bold — only the
- * name, nothing else.
- *
- * `kind` maps each entry to its route: player -> profile (by username),
- * game/blog -> the entity page (by publicId, falling back to entityId).
- */
+// One card for the statistics page and the digest topics; scores use locale digit grouping.
 import type { RouteLocationRaw } from "vue-router";
 import type { LeaderboardEntry } from "@/shared/api/models/community";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useAuthStore } from "@/shared/stores/auth";
+import type { LeaderboardBoardDef } from "../model/boards";
 
 const props = withDefaults(
   defineProps<{
     title: string;
-    /** Positive-score entries, server-ranked, capped by the caller. */
     entries: LeaderboardEntry[];
-    kind: "player" | "game" | "blog";
-    /** Show shimmer rows instead of content while the period loads. */
+    kind: LeaderboardBoardDef["kind"];
     loading?: boolean;
-    /** Message shown when the period has no positive entries. */
     emptyText?: string;
-    /** Shimmer rows rendered while loading. */
     skeletonRows?: number;
   }>(),
   {
@@ -52,14 +33,8 @@ function entryLink(entry: LeaderboardEntry): RouteLocationRaw {
   };
 }
 
-/** The signed-in viewer's own row (player boards only). */
 function isOwn(entry: LeaderboardEntry): boolean {
   return props.kind === "player" && entry.name === authStore.user?.username;
-}
-
-/** Locale digit grouping ("1 234 567", non-breaking spaces). */
-function formatScore(score: number): string {
-  return score.toLocaleString("ru-RU");
 }
 </script>
 
@@ -87,7 +62,8 @@ function formatScore(score: number): string {
         {{ entry.rank || idx + 1 }}.
         <router-link :to="entryLink(entry)">{{ entry.name }}</router-link
         ><span class="score">
-          [<span class="score-pos">+{{ formatScore(entry.score) }}</span
+          [<span class="score-pos"
+            >+{{ entry.score.toLocaleString("ru-RU") }}</span
           >]</span
         >
       </li>
@@ -98,14 +74,7 @@ function formatScore(score: number): string {
 <style scoped lang="sass">
 @use "@/assets/styles/Skeleton" as *
 
-// Dashed content card with the site element background (poll/topic idiom).
-//
-// A board is as wide as the column of the grid it stands in and never wider:
-// a name longer than a whole line of a narrow board breaks at its edge, the
-// way a login breaks in running text everywhere on the site (UserLink), and
-// does not push the board, the grid and the page past the middle column. A
-// name that fits keeps its line: break-word, unlike anywhere, gives the words
-// no new places to break and leaves the board's measure alone.
+// As wide as its column and never wider: a long name breaks at the edge, as a login does in text.
 .stat-board
   min-width: 0
   border: 1px dashed $border
@@ -114,7 +83,6 @@ function formatScore(score: number): string {
   box-sizing: border-box
   overflow-wrap: break-word
 
-// Plain bold body-text heading (no heading colour/size, never brown).
 .stat-board-title
   margin: 0 0 $small
   font-size: $font-size
@@ -129,14 +97,10 @@ function formatScore(score: number): string {
   li
     line-height: 1.6
 
-  // The viewer's own row (player boards): only the name is bold.
   li.own a
     font-weight: bold
 
-// Score "[+N]" — muted brackets, green value (positive only).
-// The score never leaves the name it belongs to: the space before "[" is the
-// score's own, and unbreakable, so a narrow board moves the last word of the
-// name down with it instead of opening a line with "[+16]".
+// The space before "[" is the score's own and unbreakable, so a line never opens with "[+16]".
 .score
   color: $text-muted
   white-space: nowrap
@@ -149,12 +113,7 @@ function formatScore(score: number): string {
   align-items: center
   height: 1.6em
 
-// A bar is as long as it was on a wide card and never longer than its share
-// of a narrow one. Written as min() rather than as a px width under a max-width
-// in percent: a grid sizes a column of cards by the widest thing in them, and
-// the px width counted there while the percentage did not. The three cards of
-// the statistics page stood 858px wide on their bars alone, the column is 556px
-// at 1280, and the page went sideways until the boards arrived.
+// min(), not a px width under a percent max-width: a grid sizes columns by the px width.
 .skeleton-bar
   display: inline-block
   height: 0.85em

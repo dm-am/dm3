@@ -18,7 +18,6 @@ internal class UserEmailChangeValidator : AbstractValidator<UserEmailChange>
     /// </summary>
     private const string PasswordVerifiedKey = nameof(PasswordVerifiedKey);
 
-    /// <inheritdoc />
     public UserEmailChangeValidator(
         IEmailChangeRepository repository,
         ISecurityManager securityManager)
@@ -55,7 +54,7 @@ internal class UserEmailChangeValidator : AbstractValidator<UserEmailChange>
 
         RuleFor(u => u.Email)
             .NotEmpty().WithMessage(ValidationError.Empty)
-            .EmailAddress().WithMessage(ValidationError.Invalid)
+            .EmailAddress().WithMessage(RefusalMessage.EmailInvalid)
             .Must((model, email, context) =>
             {
                 if (!context.RootContextData.TryGetValue(FoundUserKey, out var userWrapper) ||

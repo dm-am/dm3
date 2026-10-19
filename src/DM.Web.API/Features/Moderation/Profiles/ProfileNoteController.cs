@@ -27,10 +27,9 @@ namespace DM.Web.API.Features.Moderation.Profiles;
 [Tags("ProfileNotes")]
 public class ProfileNoteController : ControllerBase
 {
-    private readonly IModeratedProfileNoteApiService _noteApiService;
+    private readonly ModeratedProfileNoteApiService _noteApiService;
 
-    /// <inheritdoc />
-    public ProfileNoteController(IModeratedProfileNoteApiService noteApiService)
+    public ProfileNoteController(ModeratedProfileNoteApiService noteApiService)
     {
         _noteApiService = noteApiService;
     }

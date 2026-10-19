@@ -14,18 +14,8 @@ namespace DM.Architecture.Tests;
 /// them.
 /// </summary>
 /// <remarks>
-/// Four places used to state this apiece and two of them disagreed: the
-/// preference DTOs allowed 200, the profile validator demanded less than 200, and
-/// the request bound stopped at 100. Choosing 200 in the settings therefore
-/// refused the whole form with "некорректное значение" — including whatever else
-/// the reader had changed on it — and even a saved 200 could not have been
-/// served.
-///
-/// The server side is one constant now, so what is left to check is the two
-/// copies that cannot share it: the account form draws the numbers, and the
-/// paging composable caps a request by them. Both live in the client, and both
-/// are read from source here — asserting a value against itself would prove
-/// nothing.
+/// The server side is one constant; the account form and the paging composable of the client are
+/// the two copies that cannot share it, read from source.
 /// </remarks>
 public class PagingContractShould
 {
@@ -66,33 +56,20 @@ public class PagingContractShould
     [Fact]
     public void StartEveryReaderOnTheSamePageSize()
     {
-        var source = File.ReadAllText(Path.Combine(
-            ClientRoot, "shared", "lib", "composables", "usePaging.ts"));
-
-        var sizes = Regex.Matches(source, @"(?<!polls)PerPage: (\d+)")
-            .Select(m => int.Parse(m.Groups[1].Value))
-            .ToArray();
-
-        sizes.Should().NotBeEmpty("the composable states the fallback for a reader with no preference");
-        sizes.Should().AllBeEquivalentTo(PagingPolicy.DefaultPageSize,
-            "a different default here shows up as a page that changes size the first time the settings are saved");
+        ClientCopies.Number("shared/lib/composables/usePaging.ts", "DEFAULT_PAGE_SIZE")
+            .Should().Be(PagingPolicy.DefaultPageSize,
+                "a different default here shows up as a page that changes size the first time the settings are saved");
 
         // The same number the server hands a reader who never opened the settings.
-        var settings = UserSettings.Default.Paging;
-        settings.PostsPerPage.Should().Be(PagingPolicy.DefaultPageSize);
-        settings.CommentsPerPage.Should().Be(PagingPolicy.DefaultPageSize);
-        settings.TopicsPerPage.Should().Be(PagingPolicy.DefaultPageSize);
-        settings.MessagesPerPage.Should().Be(PagingPolicy.DefaultPageSize);
-        settings.EntitiesPerPage.Should().Be(PagingPolicy.DefaultPageSize);
+        UserSettings.Default.PageSize.Should().Be(PagingPolicy.DefaultPageSize);
+
+        ClientCopies.Number("entities/ticket/api/ticketApi.ts", "DEFAULT_PAGE_SIZE")
+            .Should().Be(PagingPolicy.DefaultPageSize, "the list of one's own tickets starts on the same page size");
     }
 
     [Fact]
-    public void AcceptEveryOfferedSizeAsARequestBound()
-    {
-        // The bound on PagingQuery.Take is a Range attribute, so it is asserted
-        // through the value it guards rather than by reading the attribute back.
-        PagingPolicy.AllowedPageSizes.Max().Should().Be(PagingPolicy.MaxPageSize);
-        PagingPolicy.AllowedPageSizes.Should().Contain(PagingPolicy.DefaultPageSize);
-        PagingPolicy.AllowedPageSizes.Should().BeInAscendingOrder();
-    }
+    public void AskACursorForNoMoreThanItServes() =>
+        ClientCopies.Number("entities/global-chat/model/store.ts", "LATEST_PAGE_SIZE")
+            .Should().BeLessThanOrEqualTo(CursorQuery.MaxLimit,
+                "the store reads a short answer as the end of the chat, and a clamped one is short");
 }

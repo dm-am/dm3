@@ -17,13 +17,7 @@ namespace DM.Web.API.Tests.Shared;
 /// <summary>
 /// The transport decides the Secure attribute of the session cookie.
 /// </summary>
-/// <remarks>
-/// Both halves of the failure are silent: a Secure cookie handed out over plain
-/// http is dropped by the browser without an error, so the login answers 200 and
-/// the next request arrives anonymous. That is what the host name produced on
-/// every stand not called localhost. Asserted on the Set-Cookie header rather
-/// than on CookieOptions, because the header is the whole of what a browser sees.
-/// </remarks>
+/// <remarks>A Secure cookie over plain http is dropped silently; asserted on the Set-Cookie header a browser sees.</remarks>
 public class SessionCookieShould : UnitTestBase
 {
     private static readonly ApiCredentialsStorage Storage =
@@ -56,13 +50,8 @@ public class SessionCookieShould : UnitTestBase
     /// The cookie does not travel on a request another site started.
     /// </summary>
     /// <remarks>
-    /// The origin check lets one shape of request through without asking: no
-    /// Origin header and no Referer, which a browser does not send on a cross-site
-    /// subrequest and a non-browser client does not send at all. What makes that
-    /// branch safe is this attribute — the session simply is not attached to such
-    /// a request — and until now nothing asserted it. The symmetry check below
-    /// does not cover it either: both halves read the same options helper, so they
-    /// would agree on any value, correct or not.
+    /// The origin check lets a request with neither Origin nor Referer through, and this attribute is what keeps
+    /// the session off it.
     /// </remarks>
     [Fact]
     public async Task WithholdTheSessionFromCrossSiteSubrequests()
@@ -90,7 +79,7 @@ public class SessionCookieShould : UnitTestBase
         cleared.Expires.Should().Be(DateTimeOffset.UnixEpoch, "logout has to expire the cookie");
     }
 
-    private async Task<SetCookieHeaderValue> Written(string host, bool isHttps)
+    private static async Task<SetCookieHeaderValue> Written(string host, bool isHttps)
     {
         var context = CreateContext(host, isHttps);
         await Storage.Load(context, AuthenticatedIdentity());
@@ -104,7 +93,7 @@ public class SessionCookieShould : UnitTestBase
         return SetCookie(context);
     }
 
-    private IIdentity AuthenticatedIdentity()
+    private static IIdentity AuthenticatedIdentity()
     {
         var identity = Mock<IIdentity>();
         identity.Session.Returns(new Session { Id = Guid.NewGuid() });

@@ -26,19 +26,11 @@ import {
   POLL_TYPE_OPTIONS,
 } from "./types";
 
-// =============================================================================
-// RETURN TYPE
-// =============================================================================
-
 export interface PollsFilterComposable {
-  /** Current filter state (computed from URL) */
   filterState: ComputedRef<PollsFilterState>;
-  /** API search parameters (computed from filterState) */
   searchParams: ComputedRef<PollsSearchParams>;
-  /** Whether any filters are active */
   hasActiveFilters: ComputedRef<boolean>;
 
-  // Actions
   setStatus: (status: PollStatus | "") => void;
   setPollType: (pollType: "anonymous" | "public" | "") => void;
   setSearch: (search: string) => void;
@@ -51,10 +43,6 @@ export interface PollsFilterComposable {
   clearFilters: () => void;
 }
 
-// =============================================================================
-// ACTION TYPES (Discriminated Union)
-// =============================================================================
-
 type PollsFilterAction =
   | { type: "SET_STATUS"; status: PollStatus | "" }
   | { type: "SET_POLL_TYPE"; pollType: "anonymous" | "public" | "" }
@@ -66,10 +54,6 @@ type PollsFilterAction =
   | { type: "SET_SORT"; sortBy: PollSortBy; sortOrder?: "asc" | "desc" }
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
-
-// =============================================================================
-// PURE REDUCER (Testable, no side effects)
-// =============================================================================
 
 function reducer(
   state: PollsFilterState,
@@ -121,13 +105,11 @@ function reducer(
   }
 }
 
-// =============================================================================
-// VALIDATION & PARSING
-// =============================================================================
-
 const validSortByValues = SORT_OPTIONS.map((o) => o.value);
-const validStatusValues = STATUS_OPTIONS.map((o) => o.value);
-const validPollTypeValues = POLL_TYPE_OPTIONS.map((o) => o.value);
+const validStatusValues = new Set<string>(STATUS_OPTIONS.map((o) => o.value));
+const validPollTypeValues = new Set<string>(
+  POLL_TYPE_OPTIONS.map((o) => o.value),
+);
 
 function createDefaultState(): PollsFilterState {
   return { ...DEFAULT_FILTER_STATE };
@@ -136,29 +118,25 @@ function createDefaultState(): PollsFilterState {
 function parseQueryToState(query: LocationQuery): PollsFilterState {
   const state = createDefaultState();
 
-  // Parse status
   if (query.status) {
     const statusStr = String(query.status);
-    if (validStatusValues.includes(statusStr as any)) {
+    if (validStatusValues.has(statusStr)) {
       state.status = statusStr as PollStatus | "";
     }
   }
 
-  // Parse poll type
   if (query.pollType) {
     const pollTypeStr = String(query.pollType);
-    if (validPollTypeValues.includes(pollTypeStr as any)) {
+    if (validPollTypeValues.has(pollTypeStr)) {
       state.pollType = pollTypeStr as "anonymous" | "public" | "";
     }
   }
 
-  // Parse search
   if (query.search) {
     state.search = String(query.search).slice(0, 200);
   }
 
-  // Parse date filters: a day of the address, YYYY-MM-DD; an ISO moment is
-  // read as its day, and anything else as no date at all.
+  // A day of the address, YYYY-MM-DD; an ISO moment is read as its day, anything else as none.
   const day = (value: LocationQuery[string]) =>
     parseDateFromUrl(toQueryValue(value)) ?? "";
   state.startsFromUtc = day(query.startsFromUtc);
@@ -166,7 +144,6 @@ function parseQueryToState(query: LocationQuery): PollsFilterState {
   state.endsFromUtc = day(query.endsFromUtc);
   state.endsToUtc = day(query.endsToUtc);
 
-  // Parse sort
   state.sortBy = validateSortField(
     query.sortBy as string,
     validSortByValues,
@@ -198,52 +175,29 @@ function buildQueryFromState(state: PollsFilterState): Record<string, string> {
   return query;
 }
 
-// =============================================================================
-// MODULE-LEVEL DISPATCHER (created once per module)
-// =============================================================================
-
 const dispatcher = createFilterDispatcher<PollsFilterState, PollsFilterAction>({
   buildQuery: buildQueryFromState,
   name: "usePollsFilter",
 });
 
-// =============================================================================
-// COMPOSABLE
-// =============================================================================
-
-/**
- * Polls filter composable with action-based state management.
- *
- * Architecture:
- * - URL is the single source of truth (filterState is computed from route.query)
- * - All mutations go through dispatch() which applies actions via pure reducer
- * - Actions batch via module-level debounce - rapid clicks merge into single navigation
- * - Pure reducer is testable in isolation without router
- */
+// The URL is the single source of truth; actions batch through one module-level debounce.
 export function usePollsFilter(): PollsFilterComposable {
   const route = useRoute();
   const router = useRouter();
-  const { pollsPerPage } = usePaging();
+  const { pageSize } = usePaging();
 
-  // Set router for dispatcher
   dispatcher.setRouter(router);
 
-  // Filter state derived from URL (single source of truth)
   const filterState = computed<PollsFilterState>(() =>
     parseQueryToState(route.query),
   );
 
-  // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
 
-  // Dispatch helper
   const dispatch = (action: PollsFilterAction) =>
     dispatcher.dispatch(action, reducer, getCurrentState);
 
-  // Convert to API params. A day of the address is the whole day: from its
-  // start to its end, as every other list of the site asks for it. Sent as the
-  // bare day, the end of a period was its first instant, and a poll that
-  // started on the last day of the period was not found.
+  // A day of the address is the whole day, as every other list asks for it.
   const searchParams = computed<PollsSearchParams>(() => {
     const state = filterState.value;
     const params: PollsSearchParams = {};
@@ -261,15 +215,13 @@ export function usePollsFilter(): PollsFilterComposable {
     params.sortBy = state.sortBy;
     params.sortOrder = state.sortOrder;
 
-    // Page number (from URL query directly)
     const pageNumber = parsePageNumber(route.query.number);
     if (pageNumber) params.number = pageNumber;
 
-    params.size = pollsPerPage.value;
+    params.size = pageSize.value;
     return params;
   });
 
-  // Active filters check
   const hasActiveFilters = computed(() => {
     const state = filterState.value;
     const def = DEFAULT_FILTER_STATE;
@@ -283,10 +235,6 @@ export function usePollsFilter(): PollsFilterComposable {
       state.endsToUtc !== def.endsToUtc
     );
   });
-
-  // ==========================================================================
-  // ACTION DISPATCHERS (thin wrappers around dispatch)
-  // ==========================================================================
 
   const setStatus = (status: PollStatus | "") =>
     dispatch({ type: "SET_STATUS", status });

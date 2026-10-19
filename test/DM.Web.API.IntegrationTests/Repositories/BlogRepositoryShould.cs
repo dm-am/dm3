@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -15,11 +12,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Runs against the container Postgres, not the InMemory provider, because the
-/// two questions this asks are relational ones: the public id is encoded from a
-/// serial number the database generates, and the rubric order is a batch of row
-/// updates. InMemory generated no serial, so the encode had to be stubbed —
-/// leaving the test asserting that a mock returned what the mock was told to.
+/// The public id is encoded from a serial the database generates, and the rubric order is a batch of row updates,
+/// so this runs against the container Postgres.
 /// </summary>
 public class BlogRepositoryShould : IntegrationTestBase
 {
@@ -102,13 +96,7 @@ public class BlogRepositoryShould : IntegrationTestBase
     /// <summary>
     /// A single-blog read knows whether the caller is subscribed to it.
     /// </summary>
-    /// <remarks>
-    /// IsViewerSubscriber is the reader role, and the ViewDraft rule is decided on
-    /// exactly this read. Filled by the list-shaped reads alone it was false for
-    /// everybody here, so a reader of a private-draft blog was indistinguishable
-    /// from a stranger and could not open the blog they had been invited to. The
-    /// game side fills the same field on its own single-game read.
-    /// </remarks>
+    /// <remarks>IsViewerSubscriber is the reader role the ViewDraft rule is decided on, as on the single-game read.</remarks>
     [Fact]
     public async Task KnowTheViewerIsSubscribedOnASingleBlogRead()
     {

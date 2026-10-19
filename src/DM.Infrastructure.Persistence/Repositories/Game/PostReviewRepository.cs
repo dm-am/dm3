@@ -1,4 +1,3 @@
-using Npgsql;
 using DM.Domain.Core.Exceptions;
 using System;
 using System.Collections.Generic;
@@ -7,7 +6,6 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
@@ -26,8 +24,6 @@ internal class PostReviewRepository : IPostReviewRepository
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
     }
-
-    // ═══ READ ═══
 
     /// <inheritdoc />
     public Task<int> CountAsync(Guid postId) => _dbContext.PostReviews
@@ -60,15 +56,6 @@ internal class PostReviewRepository : IPostReviewRepository
     public Task<PostReview?> GetAsync(Guid id) => _dbContext.PostReviews
         .TagWith("DM.PostReview.GetById")
         .Where(r => !r.IsRemoved && r.PostReviewId == id)
-        .ProjectToPostReview()
-        .FirstOrDefaultAsync();
-
-    /// <inheritdoc />
-    public Task<PostReview?> GetByAuthorAsync(Guid postId, Guid authorId) => _dbContext.PostReviews
-        .TagWith("DM.PostReview.GetByAuthor")
-        .Where(r => r.PostId == postId &&
-                    r.AuthorId == authorId &&
-                    !r.IsRemoved)
         .ProjectToPostReview()
         .FirstOrDefaultAsync();
 
@@ -107,8 +94,6 @@ internal class PostReviewRepository : IPostReviewRepository
             .ToArrayAsync();
     }
 
-    // ═══ WRITE ═══
-
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<Guid>> SelectReviewedPostIdsAsync(
         Guid authorId, IReadOnlyCollection<Guid> postIds) =>
@@ -130,7 +115,7 @@ internal class PostReviewRepository : IPostReviewRepository
     /// the rows it counts have no way left to be reconciled. The strategy wrapper
     /// is required because the API host configures EnableRetryOnFailure.
     /// </remarks>
-    public async Task<PostReview> CreateAsync(CreatePostReviewEntity entity, int qualityRatingDelta)
+    public async Task<PostReview> CreateAsync(CreatePostReviewEntity entity)
     {
         var dbReview = new DbPostReview
         {
@@ -149,14 +134,15 @@ internal class PostReviewRepository : IPostReviewRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-            await MoveQualityRating(entity.PostAuthorId, qualityRatingDelta);
+            // Neutral is zero, so the sign is the delta.
+            await MoveQualityRating(entity.PostAuthorId, (int)entity.Sign);
 
             _dbContext.PostReviews.Add(dbReview);
             try
             {
                 await _dbContext.SaveChangesAsync();
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+            catch (DbUpdateException ex) when (ex.IsDuplicateKey())
             {
                 // The caller pre-checks for an existing post review; this is the race
                 // where two concurrent requests both pass that check. Translated here
@@ -202,28 +188,7 @@ internal class PostReviewRepository : IPostReviewRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-            // First statement of the transaction: whoever else is editing or
-            // removing this review waits here until this one commits, and then
-            // reads the row as this write left it.
-            await _dbContext.Database.ExecuteSqlRawAsync(
-                """SELECT "PostReviewId" FROM "PostReviews" WHERE "PostReviewId" = {0} FOR UPDATE""",
-                entity.PostReviewId);
-
-            // Under the lock, past the change tracker and past the soft-delete
-            // filter: one of the states this method starts from is "already
-            // removed", the filter hides it, and a row the context happens to
-            // carry from an earlier read holds what it held before the lock.
-            var stored = await _dbContext.PostReviews
-                .IgnoreQueryFilters()
-                .AsNoTracking()
-                .TagWith("DM.PostReview.Locked")
-                .Where(r => r.PostReviewId == entity.PostReviewId)
-                .Select(r => new { r.SignValue, r.IsRemoved, r.PostAuthorId })
-                .FirstOrDefaultAsync();
-            if (stored == null)
-            {
-                throw new InvalidOperationException($"Review {entity.PostReviewId} not found");
-            }
+            var stored = await ReadLocked(entity.PostReviewId);
 
             // What this write leaves the row holding: a field the caller left out
             // keeps the stored value, which is also what the row write below omits.
@@ -235,50 +200,90 @@ internal class PostReviewRepository : IPostReviewRepository
             await MoveQualityRating(stored.PostAuthorId,
                 Contribution(signAfter, removedAfter) - Contribution(stored.SignValue, stored.IsRemoved));
 
-            // IgnoreQueryFilters for the same reason as the read above; the row is
-            // loaded after the lock, and only the fields the caller named are
+            // IgnoreQueryFilters for the same reason as the read under the lock; the
+            // row is loaded after the lock, and only the fields the caller named are
             // assigned, so the update carries nothing the caller did not ask for.
             var dbReview = await _dbContext.PostReviews
                 .IgnoreQueryFilters()
                 .FirstAsync(r => r.PostReviewId == entity.PostReviewId);
 
-            if (entity.Sign.HasValue)
-                dbReview.Sign = entity.Sign.Value;
-            if (entity.Text != null)
-                dbReview.Text = entity.Text;
-            if (entity.IsRemoved == true && !stored.IsRemoved)
-                // Through the one call that writes the flag and the audit together,
-                // as the endorsement removal does: a review a senior moderator took
-                // down with no hand recorded cannot be reviewed afterwards.
-                //
-                // Only when the row is still live. The audit says who took the
-                // review down and when, and a second removal arriving behind the
-                // first would overwrite that with its own hand and clock, so the
-                // removal that actually happened would be recorded as somebody
-                // else's. The counter above already owes nothing in that case.
-                SoftDelete.Mark(dbReview, entity.DeletedByUserId, entity.DeletedUtc ?? _dateTimeProvider.Now);
-            else if (entity.IsRemoved == false)
-                dbReview.IsRemoved = false;
-            if (entity.ModifiedUtc.HasValue)
-                dbReview.ModifiedUtc = entity.ModifiedUtc.Value;
-            if (entity.ModifiedByUserId.HasValue)
-                dbReview.ModifiedByUserId = entity.ModifiedByUserId;
+            ApplyChanges(dbReview, entity, stored.IsRemoved);
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
         });
 
-        // IgnoreQueryFilters, because one of the updates this method serves is
-        // the removal: the global filter drops soft-deleted rows, so reading the
-        // row back through it throws "Sequence contains no elements" on the way
-        // out of every delete. The caller asked for this row by its identifier
-        // and has just written it, so the filter has nothing to protect here.
+        // The update may be the removal, so the read-back lifts the soft-delete filter.
         return await _dbContext.PostReviews
             .IgnoreQueryFilters()
             .TagWith("DM.PostReview.Updated")
             .Where(r => r.PostReviewId == entity.PostReviewId)
             .ProjectToPostReview()
             .FirstAsync();
+    }
+
+    /// <summary>
+    /// Lock the review row until the transaction ends, and read what it holds
+    /// under the lock.
+    /// </summary>
+    private async Task<LockedReview> ReadLocked(Guid postReviewId)
+    {
+        // First statement of the transaction: whoever else is editing or
+        // removing this review waits here until this one commits, and then
+        // reads the row as this write left it.
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            """SELECT "PostReviewId" FROM "PostReviews" WHERE "PostReviewId" = {0} FOR UPDATE""",
+            postReviewId);
+
+        // Under the lock, past the change tracker and past the soft-delete
+        // filter: one of the states this method starts from is "already
+        // removed", the filter hides it, and a row the context happens to
+        // carry from an earlier read holds what it held before the lock.
+        var stored = await _dbContext.PostReviews
+            .IgnoreQueryFilters()
+            .AsNoTracking()
+            .TagWith("DM.PostReview.Locked")
+            .Where(r => r.PostReviewId == postReviewId)
+            .Select(r => new LockedReview(r.SignValue, r.IsRemoved, r.PostAuthorId))
+            .FirstOrDefaultAsync();
+        if (stored == null)
+        {
+            throw new InvalidOperationException($"Review {postReviewId} not found");
+        }
+
+        return stored;
+    }
+
+    /// <summary>What <see cref="ReadLocked"/> found the row holding.</summary>
+    private sealed record LockedReview(short SignValue, bool IsRemoved, Guid PostAuthorId);
+
+    /// <summary>
+    /// Assign the fields the caller named to the row loaded under the lock, and
+    /// nothing else.
+    /// </summary>
+    private void ApplyChanges(DbPostReview dbReview, UpdatePostReviewEntity entity, bool wasRemoved)
+    {
+        if (entity.Sign.HasValue)
+            dbReview.Sign = entity.Sign.Value;
+        if (entity.Text != null)
+            dbReview.Text = entity.Text;
+        if (entity.IsRemoved == true && !wasRemoved)
+            // Through the one call that writes the flag and the audit together,
+            // as the endorsement removal does: a review a senior moderator took
+            // down with no hand recorded cannot be reviewed afterwards.
+            //
+            // Only when the row is still live. The audit says who took the
+            // review down and when, and a second removal arriving behind the
+            // first would overwrite that with its own hand and clock, so the
+            // removal that actually happened would be recorded as somebody
+            // else's. The counter already owes nothing in that case.
+            SoftDelete.Mark(dbReview, entity.DeletedByUserId, entity.DeletedUtc ?? _dateTimeProvider.Now);
+        else if (entity.IsRemoved == false)
+            dbReview.IsRemoved = false;
+        if (entity.ModifiedUtc.HasValue)
+            dbReview.ModifiedUtc = entity.ModifiedUtc.Value;
+        if (entity.ModifiedByUserId.HasValue)
+            dbReview.ModifiedByUserId = entity.ModifiedByUserId;
     }
 
     /// <summary>
@@ -319,8 +324,6 @@ internal class PostReviewRepository : IPostReviewRepository
             .Where(u => u.UserId == postAuthorId)
             .ExecuteUpdateAsync(u => u.SetProperty(x => x.QualityRating, x => x.QualityRating + delta));
     }
-
-    // ═══ ELIGIBILITY ═══
 
     /// <inheritdoc />
     /// <remarks>
@@ -369,9 +372,7 @@ internal class PostReviewRepository : IPostReviewRepository
         .Select(u => u.QuantityRating)
         .FirstOrDefaultAsync();
 
-    // ═══ PRIVATE ═══
-
-    private IQueryable<DbPostReview> ApplyFilter(IQueryable<DbPostReview> query, PostReviewFilter? filter)
+    private static IQueryable<DbPostReview> ApplyFilter(IQueryable<DbPostReview> query, PostReviewFilter? filter)
     {
         if (filter == null)
             return query;

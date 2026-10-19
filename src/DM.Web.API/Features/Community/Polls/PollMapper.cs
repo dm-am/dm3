@@ -14,13 +14,11 @@ using DomainUpdatePoll = DM.Domain.Community.Features.Polls.UpdatePoll;
 namespace DM.Web.API.Features.Community.Polls;
 
 /// <summary>
-/// Compile-time mapper for polls. The viewer-dependent fields the AutoMapper
-/// profile filled through resolvers and context items are ordinary methods
-/// here: the clock and the identity come through the constructor, the voter
-/// batch comes as an argument.
+/// Compile-time mapper for polls. The viewer-dependent fields take the clock and
+/// the identity from the constructor and the voter batch as an argument.
 /// </summary>
 [Mapper]
-internal partial class PollMapper
+public partial class PollMapper
 {
     private const int MaxVotersInResponse = 15;
 
@@ -43,8 +41,7 @@ internal partial class PollMapper
     public Poll ToPoll(DomainPoll poll, IReadOnlyDictionary<Guid, List<UserRef>>? votersByOptionId)
     {
         var result = ToPollCore(poll);
-        // The status window lives in the domain; see PollStatusResolver's old
-        // remark - a copy of the boundary here would drift from the vote check.
+        // The status window is the domain's: a copy here would drift from the vote check.
         result.Status = poll.StatusAt(_dateTimeProvider.Now);
         result.Options = poll.Options
             .Select(option => ToPollOption(option, poll.IsAnonymous, votersByOptionId))
@@ -58,21 +55,13 @@ internal partial class PollMapper
     private partial Poll ToPollCore(DomainPoll poll);
 
     /// <summary>
-    /// Listing query to the domain one: the same eleven members by name.
+    /// Listing query to the domain one, member by member.
     /// </summary>
     public partial DomainPollsQuery ToDomainQuery(PollsQuery query);
 
     /// <summary>
     /// Create request to the domain DTO.
     /// </summary>
-    /// <remarks>
-    /// The option list is carried over by the caller rather than mapped, so it
-    /// stays the very list the request arrived with - a generated copy would be
-    /// equal but not the same object, and equality is not what the hand-written
-    /// assignment this replaced promised.
-    /// </remarks>
-    [MapperIgnoreTarget(nameof(DomainCreatePoll.Options))]
-    [MapperIgnoreSource(nameof(CreatePollRequest.Options))]
     public partial DomainCreatePoll ToCreatePoll(CreatePollRequest request);
 
     /// <summary>

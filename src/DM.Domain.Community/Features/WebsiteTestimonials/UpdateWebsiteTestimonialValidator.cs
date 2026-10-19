@@ -6,7 +6,6 @@ namespace DM.Domain.Community.Features.WebsiteTestimonials;
 /// <inheritdoc />
 internal class UpdateWebsiteTestimonialValidator : AbstractValidator<UpdateWebsiteTestimonial>
 {
-    /// <inheritdoc />
     public UpdateWebsiteTestimonialValidator()
     {
         RuleFor(t => t.Text)

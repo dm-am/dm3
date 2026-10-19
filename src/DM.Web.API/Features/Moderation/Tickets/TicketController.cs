@@ -4,7 +4,6 @@ using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Shared.RateLimiting;
-using DM.Web.API.Swagger;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -27,10 +26,9 @@ namespace DM.Web.API.Features.Moderation.Tickets;
 [Tags("Tickets")]
 public class TicketController : ControllerBase
 {
-    private readonly ITicketApiService _ticketApiService;
+    private readonly TicketApiService _ticketApiService;
 
-    /// <inheritdoc />
-    public TicketController(ITicketApiService ticketApiService)
+    public TicketController(TicketApiService ticketApiService)
     {
         _ticketApiService = ticketApiService;
     }

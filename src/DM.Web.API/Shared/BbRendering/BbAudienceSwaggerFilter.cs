@@ -13,11 +13,8 @@ namespace DM.Web.API.Shared.BbRendering;
 /// that controls how BBCode-bearing response fields are rendered.
 /// </summary>
 /// <remarks>
-/// Declared where it changes something and nowhere else. On all 363 operations
-/// it told the reader nothing: a generated client grew an unused argument on
-/// every method, and the one question the header answers — does this response
-/// depend on it, and may a shared cache therefore store it without a Vary —
-/// could not be read off the contract at all.
+/// Declared only where it changes something, so the contract says which responses
+/// depend on it and a shared cache may store the rest without a Vary.
 /// </remarks>
 internal class BbAudienceSwaggerFilter : IOperationFilter
 {
@@ -64,19 +61,19 @@ internal class BbAudienceSwaggerFilter : IOperationFilter
             return;
         }
 
-        (operation.Parameters ?? (operation.Parameters = new List<IOpenApiParameter>()))
-            .Add(new OpenApiParameter
-            {
-                Name = BbAudienceHeader.HeaderName,
-                In = ParameterLocation.Header,
-                Required = false,
-                Schema = new OpenApiSchema { Type = JsonSchemaType.String },
-                Description =
-                    "Rendering audience for BbText-bearing response fields. One of: " +
-                    "display (default, permission-filtered view), " +
-                    "author_edit (author loading own content for editing), " +
-                    "plain_text (email / notification body), " +
-                    "embed_safe (link preview / cross-post embed)."
-            });
+        operation.Parameters ??= new List<IOpenApiParameter>();
+        operation.Parameters.Add(new OpenApiParameter
+        {
+            Name = BbAudienceHeader.HeaderName,
+            In = ParameterLocation.Header,
+            Required = false,
+            Schema = new OpenApiSchema { Type = JsonSchemaType.String },
+            Description =
+                "Rendering audience for BbText-bearing response fields. One of: " +
+                $"{BbAudienceHeader.Serialize(RenderAudience.Display)} (default, permission-filtered view), " +
+                $"{BbAudienceHeader.Serialize(RenderAudience.AuthorEdit)} (author loading own content for editing), " +
+                $"{BbAudienceHeader.Serialize(RenderAudience.PlainText)} (email / notification body), " +
+                $"{BbAudienceHeader.Serialize(RenderAudience.EmbedSafe)} (link preview / cross-post embed)."
+        });
     }
 }

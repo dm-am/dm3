@@ -1,26 +1,15 @@
 import type { BadRequestError, GeneralError } from "@/shared/api/models/common";
+import { describeRateLimit } from "./describeRateLimit";
 import { readFieldErrors, type FieldLabels } from "./validationErrors";
 
 /**
- * The best sentence available for a failed request.
- *
- * There are four sources, in descending order of how much they tell the
- * reader, and the point of this function is that the most specific one wins:
- *
- * 1. per-field validation codes, which say what to correct;
- * 2. the problem document's title, which the API fills for anything it names;
- * 3. a 413, which arrives with no document at all — the edge refuses a body over
- *    its limit and the API never sees the request, so the status is the message;
- * 4. the caller's fallback, for a request that never reached the server.
- *
- * Before this, several forms threw their fallback on any error at all, so a
- * wrong current password and a new password that broke the policy produced the
- * same sentence — and those call for opposite corrections. The server had said
- * which was which the whole time.
+ * The most specific sentence for a failed request: the validation codes, the
+ * title of the problem document, a 413 (refused by the edge with no document),
+ * then the caller's fallback.
  *
  * @param labels The screen's labels of the fields the request sent, by the
  * name the server gives them, so a refused field is named in the sentence
- * ("Система: не заполнено") and not left for the reader to find
+ * ("Система: обязательное поле") and not left for the reader to find
  */
 export function describeFailure(
   error: GeneralError | BadRequestError,
@@ -36,9 +25,21 @@ export function describeFailure(
 
   if (error.title) return error.title;
 
-  // No number in the sentence: the limit lives in the edge configuration, and a
-  // copy of it here drifts from the one actually being enforced.
+  // No number: the limit lives in the edge configuration.
   if (error.status === 413) return "Файл слишком большой";
 
   return fallback;
+}
+
+/**
+ * describeFailure, except that a wait keeps the shared wording, which carries
+ * the number the reader acts on.
+ */
+export function describeFailureOrWait(
+  error: GeneralError,
+  fallback: string,
+): string {
+  return error.status === 429
+    ? describeRateLimit(error.retryAfterSeconds)
+    : describeFailure(error, fallback);
 }

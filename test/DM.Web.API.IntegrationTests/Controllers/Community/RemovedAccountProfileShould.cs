@@ -26,21 +26,13 @@ namespace DM.Web.API.IntegrationTests.Controllers.Community;
 /// left, and of nothing that was theirs alone.
 /// </summary>
 /// <remarks>
-/// The name belongs to no row. The profile adds up the public counters of every removed
-/// account, and its tabs are the ordinary lists asked by that name - so the lists keep
-/// their own access rules, and a removed account's topic on a closed board stays as
-/// closed as it was. Everywhere else the name is a name nobody holds.
-///
-/// The removed accounts here are made by the test and written straight to the tables:
-/// the database is shared by the whole suite and holds removed accounts of other tests,
-/// so the sums are asserted as differences, and the lists by rows only this test made.
+/// The profile adds up the counters of every removed account and its tabs are the ordinary lists with their
+/// own access rules. The database is shared, so sums are asserted as differences.
 /// </remarks>
 public class RemovedAccountProfileShould : IntegrationTestBase
 {
     /// <summary>
-    /// The key CommunityProfileService keeps the summary under. The summary is cached for
-    /// a minute for every reader alike, so a test that measures what one more removed
-    /// account adds to it has to drop the entry on both sides of the change.
+    /// The key the summary is cached under for a minute, dropped on both sides of a change.
     /// </summary>
     private const string SummaryCacheKey = "removed_account_summary";
 
@@ -146,8 +138,8 @@ public class RemovedAccountProfileShould : IntegrationTestBase
 
         (Rating(after, "postReviewScoreSum") - Rating(before, "postReviewScoreSum")).Should().Be(7);
         (Rating(after, "totalPosts") - Rating(before, "totalPosts")).Should().Be(3);
-        (Count(after, "postReviewsGiven") - Count(before, "postReviewsGiven")).Should().Be(1);
-        (Count(after, "postReviewsReceived") - Count(before, "postReviewsReceived")).Should().Be(1);
+        (Count(after, "reviewsGiven") - Count(before, "reviewsGiven")).Should().Be(1);
+        (Count(after, "reviewsReceived") - Count(before, "reviewsReceived")).Should().Be(1);
         (Count(after, "gamesHosting") - Count(before, "gamesHosting")).Should().Be(2,
             "it masters an active game and a draft, and the removed assistant of the first adds " +
             "no third: a game is one row in the list the tab opens, however many removed hosts it has");
@@ -166,8 +158,7 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         var name = Uri.EscapeDataString(RemovedAccount.Name);
 
         var topics = await IdsAsync($"/v1/topics?authorUsernames={name}&search={removed.Marker}");
-        topics.Should().Contain(removed.OpenTopicId, "the topic stays on its board, signed by nobody")
-            .And.NotContain(removed.ClosedTopicId, "a board the guest cannot open stays closed under this name too");
+        topics.Should().Contain(removed.OpenTopicId, "the topic stays on its board, signed by nobody");
 
         var hosted = await IdsAsync($"/v1/games?hostUsernames={name}&search={removed.Marker}");
         hosted.Should().Contain(removed.HostedGameId)
@@ -209,7 +200,7 @@ public class RemovedAccountProfileShould : IntegrationTestBase
 
         var topics = await IdsAsync(
             $"/v1/topics?authorUsernames={Uri.EscapeDataString(RemovedAccount.Name)}" +
-            $"&authorUsernames={Uri.EscapeDataString(TestConstants.SecondUserUsername)}&search={removed.Marker}");
+            $"&authorUsernames={Uri.EscapeDataString(TestConstants.SecondUserLogin)}&search={removed.Marker}");
 
         topics.Should().Contain([removed.OpenTopicId, liveTopicId]);
     }
@@ -276,9 +267,7 @@ public class RemovedAccountProfileShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A removed row that carries the name stays removed: brought back it would be a live
-    /// account signing its posts as all the removed ones. The DM2 shared account arrives
-    /// exactly like this.
+    /// A removed row that carries the name stays removed: brought back it would sign as all removed accounts.
     /// </summary>
     [Fact]
     public async Task RefuseToRestoreARowUnderTheName()
@@ -316,8 +305,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
             .Should().BeTrue("the row stays removed");
     }
 
-    // ═══ World ═══
-
     private sealed record Removed(
         string Marker,
         Guid UserId,
@@ -325,7 +312,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         string Email,
         Guid OpenBoardId,
         Guid OpenTopicId,
-        Guid ClosedTopicId,
         Guid HostedGameId,
         Guid DraftGameId,
         Guid PlayedGameId,
@@ -334,10 +320,7 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         Guid BlogId);
 
     /// <summary>
-    /// A removed account with a topic on an open board and one on a closed board, an
-    /// active game it masters with a rated post in an open room and a post in a closed
-    /// one, a private draft it masters, a character in somebody else's game, a blog, and
-    /// one post review given. Removed after everything is written, as it happens.
+    /// A removed account with content of every kind, open and closed, removed after everything is written.
     /// </summary>
     private async Task<Removed> SeedRemovedAccountAsync(int quality, int quantity)
     {
@@ -346,12 +329,8 @@ public class RemovedAccountProfileShould : IntegrationTestBase
 
         var user = AddUser(db, isRemoved: false, quality, quantity);
 
-        var openBoardId = AddBoard(db, marker + "o", BoardAccessPolicy.Guest | BoardAccessPolicy.RegularUser |
-            BoardAccessPolicy.Mentor | BoardAccessPolicy.Moderator | BoardAccessPolicy.SeniorModerator |
-            BoardAccessPolicy.Administrator);
-        var closedBoardId = AddBoard(db, marker + "c", BoardAccessPolicy.Administrator);
+        var openBoardId = AddBoard(db, marker + "o");
         var openTopicId = AddTopic(db, openBoardId, user.UserId, 1, $"Open {marker}");
-        var closedTopicId = AddTopic(db, closedBoardId, user.UserId, 1, $"Closed {marker}");
 
         var hostedGameId = AddGame(db, user.UserId, $"Hosted {marker}", ModuleStatus.Active);
         var draftGameId = AddGame(db, user.UserId, $"Draft {marker}", ModuleStatus.Draft);
@@ -415,7 +394,7 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         row.IsRemoved = true;
         await db.SaveChangesAsync();
 
-        return new Removed(marker, user.UserId, user.Username, user.Email, openBoardId, openTopicId, closedTopicId,
+        return new Removed(marker, user.UserId, user.Username, user.Email, openBoardId, openTopicId,
             hostedGameId, draftGameId, playedGameId, ratedPostId, closedRoomId, blogId);
     }
 
@@ -439,7 +418,7 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         return user;
     }
 
-    private static Guid AddBoard(Infrastructure.Persistence.DmDbContext db, string alias, BoardAccessPolicy view)
+    private static Guid AddBoard(Infrastructure.Persistence.DmDbContext db, string alias)
     {
         var boardId = Guid.NewGuid();
         db.Set<DbBoard>().Add(new DbBoard
@@ -448,7 +427,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
             Title = "Board " + alias,
             Alias = alias,
             Order = 0,
-            ViewPolicy = view,
             CreateTopicPolicy = BoardAccessPolicy.RegularUser,
         });
         return boardId;
@@ -518,8 +496,6 @@ public class RemovedAccountProfileShould : IntegrationTestBase
         });
         return postId;
     }
-
-    // ═══ Reads ═══
 
     private async Task DropSummaryAsync()
     {

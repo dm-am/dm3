@@ -1,29 +1,19 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Messages;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Messaging;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
+using DM.Web.API.IntegrationTests.Helpers;
 using Xunit;
 using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 
 /// <summary>
-/// Messages are paged by the total order (CreatedUtc, MessageId). Ordered by
-/// CreatedUtc alone the page boundary — which is exactly what becomes the cursor —
-/// is whichever row the plan happened to return, and the cursor predicate used
-/// "!= id", which is not an ordering: every message sharing the boundary timestamp
-/// qualified for the next page regardless of which side of the cursor it sat on.
-///
-/// Same-instant messages are routine for bulk-imported data and reachable in a
-/// busy chat, so scrollback duplicated and skipped rows.
+/// Messages are paged by the total order (CreatedUtc, MessageId): same-instant messages are routine after an
+/// import, and a timestamp alone leaves the boundary to the plan.
 /// </summary>
 public class MessagePaginationShould : IntegrationTestBase
 {
@@ -52,9 +42,7 @@ public class MessagePaginationShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The window around a message used strict timestamp comparison on both sides,
-    /// so every message sharing the target's timestamp fell out of both halves and
-    /// disappeared from the result entirely.
+    /// The window around a message keeps the messages that share the target's timestamp.
     /// </summary>
     [Fact]
     public async Task KeepSameInstantNeighboursInTheWindowAroundAMessage()
@@ -78,9 +66,7 @@ public class MessagePaginationShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The anchor takes one of the requested slots. Two halves of limit / 2 plus the
-    /// anchor returned limit + 1 for every even limit, so the default page was 51
-    /// messages and a request for the documented maximum returned 101.
+    /// The anchor takes one of the requested slots.
     /// </summary>
     [Theory]
     [InlineData(1)]
@@ -191,14 +177,6 @@ public class MessagePaginationShould : IntegrationTestBase
     private async Task DropChat(Guid chatId)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """UPDATE "Chats" SET "LastMessageId" = NULL WHERE "ChatId" = {0}""", chatId);
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """DELETE FROM "Messages" WHERE "ChatId" = {0}""", chatId);
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """DELETE FROM "UserChatLinks" WHERE "ChatId" = {0}""", chatId);
-        await dbContext.Database.ExecuteSqlRawAsync(
-            """DELETE FROM "Chats" WHERE "ChatId" = {0}""", chatId);
+        await ChatRows.DropAsync(scope.ServiceProvider.GetRequiredService<DmDbContext>(), chatId);
     }
 }

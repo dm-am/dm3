@@ -23,10 +23,9 @@ namespace DM.Web.API.Features.Personal.Notepads;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class NotepadController : ControllerBase
 {
-    private readonly IUserNotepadApiService _notepadApiService;
+    private readonly UserNotepadApiService _notepadApiService;
 
-    /// <inheritdoc />
-    public NotepadController(IUserNotepadApiService notepadApiService)
+    public NotepadController(UserNotepadApiService notepadApiService)
     {
         _notepadApiService = notepadApiService;
     }

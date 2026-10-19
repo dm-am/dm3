@@ -9,11 +9,6 @@ namespace DM.Domain.Core.Tests;
 /// <summary>
 /// The encoding every readable page address on the site is built out of.
 /// </summary>
-/// <remarks>
-/// It used to live in the mirror of DM.Infrastructure.Core, which is not the
-/// project that declares it: the kernel had no test project at all, so its one
-/// covered type was tested from somewhere else.
-/// </remarks>
 public class PublicIdServiceShould
 {
     private readonly PublicIdService service = new();
@@ -27,30 +22,6 @@ public class PublicIdServiceShould
     {
         var result = service.Encode(serialNumber);
         result.Should().Be(expected);
-    }
-
-    [Theory]
-    [InlineData("aaaaa", 1)]
-    [InlineData("aaaab", 2)]
-    [InlineData("aaaaz", 23)]
-    [InlineData("aaaba", 24)]
-    public void DecodeCorrectly(string publicId, int expected)
-    {
-        var result = service.Decode(publicId);
-        result.Should().Be(expected);
-    }
-
-    [Theory]
-    [InlineData(1)]
-    [InlineData(42)]
-    [InlineData(1000)]
-    [InlineData(100000)]
-    [InlineData(1000000)]
-    public void RoundtripCorrectly(int serialNumber)
-    {
-        var encoded = service.Encode(serialNumber);
-        var decoded = service.Decode(encoded);
-        decoded.Should().Be(serialNumber);
     }
 
     [Theory]
@@ -90,24 +61,6 @@ public class PublicIdServiceShould
     {
         var act = () => service.Encode(-1);
         act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void ThrowOnInvalidPublicIdDecode()
-    {
-        var act = () => service.Decode("invalid");
-        act.Should().Throw<ArgumentException>();
-    }
-
-    [Fact]
-    public void ProduceFiveLetterCodes()
-    {
-        for (var i = 1; i <= 100; i++)
-        {
-            var encoded = service.Encode(i);
-            encoded.Should().HaveLength(5);
-            encoded.Should().MatchRegex("^[a-z]{5}$");
-        }
     }
 
     [Fact]

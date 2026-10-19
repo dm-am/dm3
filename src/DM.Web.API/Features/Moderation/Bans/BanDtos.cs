@@ -5,6 +5,7 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.BbRendering;
+using BanLogEntryKind = DM.Domain.Moderation.Features.Bans.BanLogEntryKind;
 
 namespace DM.Web.API.Features.Moderation.Bans;
 
@@ -12,14 +13,9 @@ namespace DM.Web.API.Features.Moderation.Bans;
 /// Ban type
 /// </summary>
 /// <remarks>
-/// Derived from the stored ban, not sent with it: permanence is the length of the
-/// window and voluntariness is a column. There is deliberately no Auto member. The
-/// site does issue bans of its own on warning points, and one of them is a
-/// <see cref="Temporary" /> ban and nothing else - a two-day window a senior
-/// moderator then settles. Who issued it is already on the ban, in the moderator
-/// field: the automatic one carries the system account there. A member of its own
-/// would put the same fact in a second place, and the two would answer differently
-/// the first time one of them was written by hand.
+/// Derived from the stored ban: permanence is the length of the window and
+/// voluntariness is a column. No Auto member: the automatic ban is
+/// <see cref="Temporary" />, and its issuer is already in the moderator field.
 /// </remarks>
 public enum BanType
 {
@@ -132,29 +128,10 @@ public class Ban
 }
 
 /// <summary>
-/// What happened to a ban at a moment of the ban list
-/// </summary>
-public enum BanLogEntryKind
-{
-    /// <summary>
-    /// The ban was issued; the entry stands at the start of the ban
-    /// </summary>
-    Issued = 1,
-
-    /// <summary>
-    /// The ban was lifted early; the entry stands at the moment of the lift
-    /// </summary>
-    Lifted = 2
-}
-
-/// <summary>
 /// One entry of the ban list: an issue or a lift, at the moment it happened
 /// </summary>
 /// <remarks>
-/// The list is written the way DM2's bot wrote its ban log, a comment for every
-/// issue and every lift in the order they happened. A lifted ban therefore gives
-/// two entries carrying the same ban: its issue, and its lift above every entry
-/// that happened before the lift.
+/// A lifted ban gives two entries carrying the same ban: its issue, and its lift.
 /// </remarks>
 public class BanLogEntry
 {
@@ -207,7 +184,7 @@ public class BansQuery : PagingQuery
     /// <c>paging.skip</c> of the answer.
     /// </summary>
     /// <example>2077</example>
-    [Range(1, int.MaxValue, ErrorMessage = "Номер записи начинается с 1")]
+    [Range(1, int.MaxValue, ErrorMessage = "Номер строки начинается с 1")]
     public int? Entry { get; set; }
 }
 

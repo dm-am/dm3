@@ -3,12 +3,9 @@ import { ref, onMounted, watch } from "vue";
 import { fundraisingApi } from "@/entities/fundraising";
 import { refusalHere } from "@/shared/lib/errors";
 import { useSavedState } from "@/shared/lib/composables/useSavedState";
-import { useRoleGate } from "./lib/useRoleGate";
-import { sectionRole } from "./lib/sections";
+import { FUNDRAISING_TITLE_MAX_LENGTH } from "@/shared/lib/constants/community";
+import { ErrorState } from "@/shared/ui/ErrorState";
 
-const { hasAccess, deniedText } = useRoleGate(
-  sectionRole("moderation-fundraising"),
-);
 const loading = ref(true);
 const loadError = ref<string | null>(null);
 const saving = ref(false);
@@ -20,28 +17,18 @@ const collectedAmount = ref<number>(0);
 /** What the save was refused with, printed in the form under the fields. */
 const saveError = ref<string | null>(null);
 
-/** The fallback, for a refusal the server named nothing about. */
 const SAVE_FAILED = "Не удалось сохранить сбор средств";
 
-/**
- * What a save sends, and so the only thing the button compares the form
- * against. The title is trimmed here rather than at the request: a space typed
- * on the end of a saved title changes nothing the server would store, and the
- * button must not offer a save that would do nothing.
- */
+/** What a save sends: the title as typed. */
 function currentGoal() {
   return {
-    title: title.value.trim(),
+    title: title.value,
     goalAmount: goalAmount.value,
     collectedAmount: collectedAmount.value,
   };
 }
 
-/**
- * The form's own answer about the save. The page shows the three values and
- * nothing else, and a save leaves them exactly as they were on screen, so the
- * button is the only place the outcome can be read.
- */
+/** The button is the only place the outcome of a save can be read. */
 const { saved, label, remember } = useSavedState(currentGoal);
 
 async function load() {
@@ -63,36 +50,22 @@ async function save() {
   saveError.value = null;
   const { data, error } = await fundraisingApi.updateFundraising(currentGoal());
   if (error) {
-    // The refusal goes into the form, beside the fields it is about and the
-    // button that raised it, the way the guest forms put theirs
-    // (features/auth/ui/LoginForm.vue, RegistrationForm.vue). Not into
-    // `loadError` above: that one stands instead of the form, and it would
-    // take away the three fields the administrator had just filled in.
-    //
-    // Every refusal stands in the form's line: a rejected form, where the
-    // server named the field and the rule, and a refused action, a rate limit
-    // or a dead server, whose plate the interceptor held is taken down. An
-    // expired session and a dead connection stay with the plate.
+    // In the form, beside the fields, not in `loadError`: that one replaces the
+    // form and would take the filled fields away.
     saveError.value = refusalHere(error, SAVE_FAILED);
   } else if (!data) {
-    // An answer with neither a failure nor a body: nobody named anything.
     saveError.value = SAVE_FAILED;
   } else {
     title.value = data.resource.title;
     goalAmount.value = data.resource.goalAmount;
     collectedAmount.value = data.resource.collectedAmount;
-    // The stored copy is taken from the fields the answer has just refilled,
-    // so the button speaks about what the server keeps and not about what was
-    // sent to it.
+    // From the refilled fields, so the button speaks about what the server keeps.
     remember();
   }
   saving.value = false;
 }
 
-// The refusal is about the values that were sent, so the first correction to
-// any of them takes it off the screen - the same moment the button goes back
-// to offering the save. A sentence left standing over changed fields is read
-// as a verdict on what is in them now.
+// A refusal left standing over changed fields reads as a verdict on them.
 watch([title, goalAmount, collectedAmount], () => {
   saveError.value = null;
 });
@@ -103,11 +76,19 @@ onMounted(load);
 <template>
   <page-title>Сбор средств</page-title>
 
-  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
-
-  <div v-else class="moderation-fundraising">
-    <div v-if="loading" class="loading">Загрузка...</div>
-    <div v-else-if="loadError" class="error">{{ loadError }}</div>
+  <div class="moderation-fundraising">
+    <!-- The form's twin in its own frame: the note, three fields and the button. -->
+    <div v-if="loading" class="fundraising-form" aria-hidden="true">
+      <div class="skeleton-line skeleton-note" />
+      <div v-for="field in 3" :key="field" class="form-field">
+        <div class="skeleton-line skeleton-caption" />
+        <div class="skeleton-line skeleton-input" />
+      </div>
+      <div class="form-actions">
+        <div class="skeleton-line skeleton-button" />
+      </div>
+    </div>
+    <ErrorState v-else-if="loadError" :message="loadError" :retry="load" />
     <form v-else class="fundraising-form" @submit.prevent="save">
       <SecondaryText>
         Значения отображаются в блоке "Поддержка проекта" и на странице "Помочь
@@ -119,7 +100,7 @@ onMounted(load);
           id="fundraising-title"
           v-model="title"
           type="text"
-          maxlength="200"
+          :maxlength="FUNDRAISING_TITLE_MAX_LENGTH"
           required
         />
       </div>
@@ -157,16 +138,13 @@ onMounted(load);
 
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Skeleton" as *
 
-.loading,
-.error
-  padding: $large
-
-.error
-  color: $accent-red
+// The goal's form: as wide as its fields need, not the page.
+$fundraising-form-width: 450px
 
 .fundraising-form
-  max-width: 450px
+  max-width: $fundraising-form-width
   display: flex
   flex-direction: column
   gap: $medium
@@ -174,10 +152,8 @@ onMounted(load);
   background: $bg-element
   border: 1px solid $border
 
-// The field of the site as it stands on a page (+input through InputsGlobal),
-// only stretched to the form.
+// The page's field (+input), stretched to the form.
 .form-field
-  // A caption of a field of the page: +field-caption, as FormField draws it.
   label
     display: block
     margin-bottom: $minor
@@ -187,13 +163,7 @@ onMounted(load);
     width: 100%
     box-sizing: border-box
 
-// The refusal line the rest of the site prints inside a form, in the same
-// three declarations: features/edit-character/ui/CharacterForm.vue,
-// features/attribute-schema-editor/ui/AttributeSchemaEditor.vue,
-// ModerationAwardsSeries.vue. No margin of its own - the form is a flex column
-// with a $medium gap, which spaces this like every other row in it. `.error`
-// above is not reused: it belongs to the block that stands instead of the
-// form, and carries that block's page padding.
+// The form's refusal line. No margin: the form is a flex column with a gap.
 .form-error
   margin: 0
   color: $accent-red
@@ -201,4 +171,26 @@ onMounted(load);
 
 .form-actions
   display: flex
+
+// Line boxes of the type they wait for, and controls of a control's height.
+.skeleton-line
+  +skeleton-shimmer
+
+// The note above the fields takes two lines at the form's width.
+.skeleton-note
+  height: 2.6em
+  font-size: $secondary-font-size
+
+.skeleton-caption
+  width: 30%
+  height: 1.3em
+  font-size: $secondary-font-size
+  margin-bottom: $minor
+
+.skeleton-input
+  height: $control-height
+
+.skeleton-button
+  width: 30%
+  height: $control-height
 </style>

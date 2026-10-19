@@ -18,9 +18,6 @@ public class UsernameChangeRequest
     /// </summary>
     public Guid UserId { get; set; }
 
-    /// <summary>
-    /// Requested new username
-    /// </summary>
     public string? RequestedUsername { get; set; }
 
     /// <summary>
@@ -91,9 +88,6 @@ public class UsernameChangeRequestEntry
     /// </summary>
     public Guid RequestId { get; set; }
 
-    /// <summary>
-    /// Current username
-    /// </summary>
     public string CurrentUsername { get; set; } = null!;
 
     /// <summary>
@@ -142,9 +136,6 @@ public class UsernameChangeRequestEntry
     /// </summary>
     public string? ResolvedByUsername { get; set; }
 
-    /// <summary>
-    /// Resolver's comment
-    /// </summary>
     public string? ResolverComment { get; set; }
 }
 
@@ -163,14 +154,8 @@ public class CreateUsernameHistory
     /// </summary>
     public Guid UserId { get; set; }
 
-    /// <summary>
-    /// Old username
-    /// </summary>
     public string OldUsername { get; set; } = null!;
 
-    /// <summary>
-    /// New username
-    /// </summary>
     public string NewUsername { get; set; } = null!;
 
     /// <summary>

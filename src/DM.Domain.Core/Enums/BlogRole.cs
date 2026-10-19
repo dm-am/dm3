@@ -5,12 +5,6 @@ namespace DM.Domain.Core.Enums;
 /// </summary>
 /// <remarks>
 /// Privilege order: None &lt; Reader &lt; Mentor &lt; Assistant &lt; Author
-/// These roles are computed from multiple sources:
-/// - None: No relation to the blog
-/// - Reader: Subscriptions table (TargetType=Blog)
-/// - Mentor: Blog.MentorId
-/// - Assistant: BlogAssistants table
-/// - Author: Blog.AuthorId
 /// </remarks>
 public enum BlogRole
 {

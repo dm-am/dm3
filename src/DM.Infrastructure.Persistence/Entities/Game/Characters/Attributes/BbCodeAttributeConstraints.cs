@@ -9,7 +9,4 @@ public class BbCodeAttributeConstraints : AttributeConstraints
     /// Maximum text length (no cap if null)
     /// </summary>
     public int? MaxLength { get; set; }
-
-    /// <inheritdoc />
-    public override string GetDefaultValue() => string.Empty;
 }

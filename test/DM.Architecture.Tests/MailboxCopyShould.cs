@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,14 +13,8 @@ namespace DM.Architecture.Tests;
 /// The mailbox field is called "Почта" in every text a person reads.
 /// </summary>
 /// <remarks>
-/// The login form labelled the field "Почта" and the server answered under it
-/// with "Email обязателен": one field named two ways on one screen, across two
-/// layers that nobody diffs against each other. A plain grep cannot hold the
-/// rule, because the word stays legal as the name of a channel and as the
-/// prefix of every Email* type in the code. So the scan looks only at what a
-/// person can see — a string literal written in Russian, and the text a
-/// template renders between its tags — and lets the channel naming through by
-/// name.
+/// The word stays legal as a channel name and as the prefix of Email* types, so only what a person
+/// sees is scanned: Russian string literals and template text.
 /// </remarks>
 public class MailboxCopyShould
 {
@@ -63,7 +58,6 @@ public class MailboxCopyShould
     private static readonly string[] BuildOutput =
         ["bin", "obj", "node_modules", "coverage", "dist", ".vite"];
 
-    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     [Fact]
     public void CallTheFieldPochtaInEveryVisibleString()
@@ -72,7 +66,7 @@ public class MailboxCopyShould
         var scanned = 0;
         var russianCopy = 0;
 
-        foreach (var file in SourceFiles(Path.Combine(RepositoryRoot.FullName, "src")))
+        foreach (var file in SourceFiles(Path.Combine(RepositoryLayout.RootDirectory.FullName, "src")))
         {
             scanned++;
             var text = File.ReadAllText(file);
@@ -145,29 +139,9 @@ public class MailboxCopyShould
                (single.Length <= 90 ? single : single[..90]);
     }
 
-    private static IEnumerable<string> SourceFiles(string directory)
-    {
-        foreach (var file in Directory.EnumerateFiles(directory))
-        {
-            if (ScannedExtensions.Contains(Path.GetExtension(file))
-                && !file.EndsWith(".spec.ts", StringComparison.Ordinal)
-                && !file.EndsWith(".d.ts", StringComparison.Ordinal))
-            {
-                yield return file;
-            }
-        }
-
-        foreach (var nested in Directory.EnumerateDirectories(directory))
-        {
-            if (BuildOutput.Contains(Path.GetFileName(nested)))
-            {
-                continue;
-            }
-
-            foreach (var file in SourceFiles(nested))
-            {
-                yield return file;
-            }
-        }
-    }
+    private static IEnumerable<string> SourceFiles(string directory) => RepositoryFiles
+        .Files(directory, "*", BuildOutput)
+        .Where(file => ScannedExtensions.Contains(Path.GetExtension(file))
+                       && !file.EndsWith(".spec.ts", StringComparison.Ordinal)
+                       && !file.EndsWith(".d.ts", StringComparison.Ordinal));
 }

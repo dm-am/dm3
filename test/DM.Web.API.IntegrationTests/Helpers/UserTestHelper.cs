@@ -2,7 +2,6 @@ using System.Net;
 using System.Text.Json.Nodes;
 using DM.Domain.Core.Tokens;
 using System.Net.Http.Json;
-using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Web.API.Shared.Http;
 using Microsoft.EntityFrameworkCore;
@@ -12,23 +11,13 @@ using OtpNet;
 namespace DM.Web.API.IntegrationTests.Helpers;
 
 /// <summary>
-/// Helper for creating activated users with real password hashes in integration tests.
-/// Users created through this helper can be used for real login flows.
+/// Activated users with real password hashes, usable for real login flows.
 /// </summary>
 public static class UserTestHelper
 {
     /// <summary>
-    /// Register a new user using email-first flow:
-    /// 1. Register with email + password (no login)
-    /// 2. Find PendingRegistration token in DB
-    /// 3. Activate with chosen login
-    /// Returns the login of the created user.
+    /// Registers by email and password, then activates the pending row with the chosen login.
     /// </summary>
-    /// <param name="client">HttpClient to use for API calls</param>
-    /// <param name="dbFixture">Database fixture for direct DB access</param>
-    /// <param name="login">Desired login (chosen at activation)</param>
-    /// <param name="password">Desired password (must meet policy: 10+ chars, upper+lower+digit)</param>
-    /// <param name="email">Desired email</param>
     public static async Task<string> CreateActivatedUser(
         HttpClient client,
         DatabaseFixture dbFixture,
@@ -60,10 +49,7 @@ public static class UserTestHelper
                 $"PendingRegistration not found for email '{email}'");
         }
 
-        // The row keeps only a hash of the activation secret, so the value that
-        // went into the letter cannot be read back out of the database — which is
-        // the property under test elsewhere. The helper therefore issues a secret
-        // of its own and stamps its hash onto the pending row.
+        // The row keeps only a hash of the secret, so the helper issues one of its own and stamps its hash.
         var secret = Guid.NewGuid();
         pending.SecretHash = ConfirmationSecret.Hash(secret);
         await db.SaveChangesAsync();
@@ -89,10 +75,6 @@ public static class UserTestHelper
     /// <summary>
     /// Login with credentials and return the session cookie value.
     /// </summary>
-    /// <param name="client">HttpClient to use for API calls</param>
-    /// <param name="email">User email</param>
-    /// <param name="password">User password</param>
-    /// <returns>Session cookie value for subsequent authenticated requests</returns>
     public static async Task<string> Login(
         HttpClient client,
         string email,
@@ -131,64 +113,68 @@ public static class UserTestHelper
     }
 
     /// <summary>
-    /// Extract the dm_session cookie value from a response.
-    /// Returns the last non-empty value because the response may contain multiple
-    /// Set-Cookie headers for dm_session (e.g. middleware Unload followed by Login Load).
+    /// The last non-empty dm_session value of a response: middleware may unload before login loads.
     /// </summary>
-    public static string? ExtractSessionCookie(HttpResponseMessage response)
+    public static string? ExtractSessionCookie(HttpResponseMessage response) => Cookie(response, "dm_session");
+
+    /// <summary>The last non-empty value a response sets for the named cookie.</summary>
+    public static string? Cookie(HttpResponseMessage response, string name)
     {
         if (!response.Headers.TryGetValues("Set-Cookie", out var cookies))
+        {
             return null;
+        }
 
-        string? result = null;
+        string? value = null;
         foreach (var cookie in cookies)
         {
-            if (cookie.StartsWith("dm_session=", StringComparison.OrdinalIgnoreCase))
+            if (!cookie.StartsWith(name + "=", StringComparison.Ordinal))
             {
-                var value = cookie.Split(';')[0]; // "dm_session=value"
-                var token = value["dm_session=".Length..];
-                if (!string.IsNullOrEmpty(token))
-                {
-                    result = token;
-                }
+                continue;
+            }
+
+            var candidate = cookie[(name.Length + 1)..].Split(';')[0];
+            if (!string.IsNullOrEmpty(candidate))
+            {
+                value = candidate;
             }
         }
 
-        return result;
+        return value;
     }
 
     /// <summary>
     /// Turns the second factor on for a signed-in session: asks for a secret, then
     /// confirms it with a code computed from that secret.
     /// </summary>
-    /// <param name="client">HttpClient to use for API calls</param>
-    /// <param name="sessionCookie">Session the factor is enabled on</param>
-    /// <param name="password">Password of the account, which the setup call asks for again</param>
-    public static async Task EnableSecondFactor(HttpClient client, string sessionCookie, string password)
+    public static async Task<(string Secret, IReadOnlyList<string> Codes)> EnableSecondFactor(
+        HttpClient client, string sessionCookie, string password)
     {
         var setup = CreateCookieAuthRequest(
             HttpMethod.Post, "/v1/account/two-factor/setup", sessionCookie);
         setup.Content = JsonContent.Create(new { password });
-        var secret = JsonNode.Parse(await (await client.SendAsync(setup)).Content.ReadAsStringAsync())!
+        var setupResponse = await client.SendAsync(setup);
+        setupResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+        var secret = JsonNode.Parse(await setupResponse.Content.ReadAsStringAsync())!
             ["resource"]!["secret"]!.GetValue<string>();
 
         var confirm = CreateCookieAuthRequest(
             HttpMethod.Post, "/v1/account/two-factor/confirm", sessionCookie);
         confirm.Content = JsonContent.Create(
             new { code = new Totp(Base32Encoding.ToBytes(secret)).ComputeTotp(DateTime.UtcNow) });
-        (await client.SendAsync(confirm)).StatusCode.Should().Be(HttpStatusCode.OK);
+        var confirmResponse = await client.SendAsync(confirm);
+        confirmResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        var codes = JsonNode.Parse(await confirmResponse.Content.ReadAsStringAsync())!
+            ["resource"]!["codes"]!.AsArray()
+            .Select(node => node!.GetValue<string>())
+            .ToList();
+        return (secret, codes);
     }
 
     /// <summary>
-    /// Registers and activates an account nobody else in the run can collide with:
-    /// the tests share one database, so the login and the address have to be unique
-    /// per test rather than per file.
+    /// Registers and activates an account with a login and address unique per test: the tests share one database.
     /// </summary>
-    /// <param name="client">HttpClient to use for API calls</param>
-    /// <param name="dbFixture">Database fixture for direct DB access</param>
-    /// <param name="prefix">Readable start of the login, which the unique tail is added to</param>
-    /// <param name="password">Desired password (must meet policy: 10+ chars, upper+lower+digit)</param>
-    /// <returns>The login and the address the account was created under</returns>
     public static async Task<(string Login, string Email)> CreateUniqueUser(
         HttpClient client, DatabaseFixture dbFixture, string prefix, string password)
     {

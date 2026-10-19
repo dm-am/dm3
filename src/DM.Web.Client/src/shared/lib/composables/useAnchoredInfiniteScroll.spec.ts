@@ -17,11 +17,7 @@ let observers: FakeObserver[] = [];
 /** An element with write access to the two properties jsdom leaves inert. */
 type ScrollBox = HTMLElement & { scrollHeight: number; scrollTop: number };
 
-/**
- * A scroll container whose height the loaders can grow and whose offset can be
- * written: jsdom lays nothing out, so anchoring would otherwise have nothing to
- * measure or move.
- */
+/** A container the loaders can grow and scroll: jsdom lays nothing out. */
 function container(scrollHeight: number): ScrollBox {
   const el = document.createElement("div") as ScrollBox;
   Object.defineProperty(el, "scrollHeight", {

@@ -1,28 +1,5 @@
 <script setup lang="ts">
-/**
- * BanDialog — "Создание бана" (product doc 4.2.4.2).
- *
- * Dialog dialog for issuing a ban, triggered from the user moderation
- * block on the profile page. SeniorModerator+ only — the opener gates the
- * trigger, the backend enforces it again ([RequireRole(SeniorModerator)]).
- *
- * Doc contract:
- * - Ban scope ("Охват бана", access policy): "Демократический" / "Полный" —
- *   SEPARATE from the duration. Sent as `accessPolicy`; the backend
- *   (BanService.CreateBan) persists DemocraticBan/FullBan on the ban and the
- *   effective user AccessPolicy aggregates it. Any other value is coerced to
- *   FullBan server-side.
- * - Duration ("Срок"): "1-7 дней" / "2, 4 недели" / "2, 3, 6, 12 месяцев" /
- *   "Бессрочный". "Бессрочный" is encoded as a 100-year durationHours
- *   because the backend validator requires a duration for non-voluntary
- *   bans and the domain itself stores permanent bans as now + 100 years.
- * - Reason ("Причина"): required, max 2000 (mirrors CreateBanValidator).
- *
- * The window runs the request itself (Dialog's `action`): it waits shut, the
- * editor included, prints a refusal over its buttons or under the field the
- * server named (409 is the user already banned), and closes on success alone.
- * A typed reason is asked about before it is dropped.
- */
+// SeniorModerator+ only: the opener gates the trigger and the server enforces it again.
 import { ref, computed } from "vue";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
@@ -30,30 +7,30 @@ import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import type { Ban } from "@/entities/moderation";
 import moderationActionsApi, {
   PERMANENT_BAN_HOURS,
   type BanAccessPolicy,
-  type BanResult,
 } from "../api";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
+import { REASON_MAX_LENGTH } from "../lib/limits";
 
 const props = defineProps<{
-  /** Target user (violator) username. */
   username: string;
 }>();
 
 const emit = defineEmits<{
-  (e: "success", ban: BanResult | null): void;
+  (e: "success", ban: Ban | null): void;
   (e: "cancel"): void;
 }>();
 
-// --- Ban scope ("Охват бана", access policy) ---
 const policyOptions: { value: BanAccessPolicy; label: string }[] = [
   { value: "DemocraticBan", label: "Демократический" },
   { value: "FullBan", label: "Полный" },
 ];
 const policy = ref<BanAccessPolicy>("DemocraticBan");
 
-// --- Duration ("Срок") — values are durationHours as strings for <select> ---
+// Values are durationHours as strings for the select.
 const PERMANENT = "permanent";
 const durationOptions = [
   { value: String(24), label: "1 день" },
@@ -80,8 +57,7 @@ const durationHours = computed(() =>
   isPermanent.value ? PERMANENT_BAN_HOURS : parseInt(duration.value, 10),
 );
 
-// Mirror of the backend rules: comment required + max 2000, duration > 0.
-const commentTooLong = computed(() => comment.value.length > 2000);
+const commentTooLong = computed(() => comment.value.length > REASON_MAX_LENGTH);
 const canSubmit = computed(
   () =>
     comment.value.trim().length > 0 &&
@@ -89,19 +65,15 @@ const canSubmit = computed(
     durationHours.value > 0,
 );
 
-/**
- * The window's action. A form that breaks the rules above never gets here:
- * the main button is shut by `canSubmit`, and a shut button submits nothing.
- */
 async function send() {
   const result = await moderationActionsApi.createBan(
     {
       username: props.username,
       durationHours: durationHours.value,
-      comment: comment.value.trim(),
+      comment: comment.value,
       accessPolicy: policy.value,
     },
-    { ownsRefusal: true, ownsRateLimit: true },
+    OWNS_REFUSAL,
   );
   if (!result.error) emit("success", result.data?.resource ?? null);
   return result;
@@ -120,7 +92,6 @@ async function send() {
   >
     <DialogTitle>Создание бана</DialogTitle>
 
-    <!-- Violator context (prefilled from the profile page) -->
     <div class="ban-context">
       Нарушитель:
       <router-link :to="{ name: 'profile', params: { username } }">{{

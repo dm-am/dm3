@@ -3,18 +3,7 @@ using DM.Domain.Core.Extensions;
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// Message queue event type
-///
-/// 1-29    Community events (User, Message, User status)
-/// 31-39   Poll events
-/// 41-59   Blog events (Publication, BlogComment, PublicationComment, Invitation)
-/// 61-69   GlobalChatEvent
-/// 71-79   Subscription events
-/// 81-89   Moderation events
-/// 91-99   Security events
-/// 101-119 Forum events (Topic, TopicComment)
-/// 201-249 Blog lifecycle events (Blog entity)
-/// 301-499 Game events
+/// Message queue event type, numbered by ranges named in the section headers below
 /// </summary>
 public enum EventType
 {
@@ -26,12 +15,6 @@ public enum EventType
     // ========================================
     // User events (1-9)
     // ========================================
-
-    /// <summary>
-    /// New user has been created
-    /// </summary>
-    [EventRoutingKey("community.user.registered")]
-    NewUser = 1,
 
     /// <summary>
     /// User has been activated
@@ -238,12 +221,6 @@ public enum EventType
     // ========================================
 
     /// <summary>
-    /// New topic in a board user is subscribed to
-    /// </summary>
-    [EventRoutingKey("subscription.board.topic.created")]
-    NewTopicInSubscribedBoard = 71,
-
-    /// <summary>
     /// New comment in a topic user is subscribed to
     /// </summary>
     [EventRoutingKey("subscription.topic.comment.created")]
@@ -260,12 +237,6 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("subscription.game.post.created")]
     NewPostInSubscribedGame = 74,
-
-    // Slot 76 was NewPublicationFromSubscribedAuthor — removed; per-publication
-    // notifications are no longer part of the user-subscription contract.
-    // Subscribers now receive a single NewBlogFromSubscribedAuthor signal
-    // when the blog itself becomes visible (public draft creation OR
-    // activation), not on every internal publication.
 
     /// <summary>
     /// New forum topic from an author user is subscribed to
@@ -295,11 +266,6 @@ public enum EventType
     /// A moderator has written in the conversation of a ticket. The entity is the
     /// comment.
     /// </summary>
-    /// <remarks>
-    /// The number belonged to the assignment of a ticket, which nobody announced
-    /// and which is gone: any moderator who sees a ticket answers it, and the
-    /// conversation shows who did.
-    /// </remarks>
     [EventRoutingKey("moderation.ticket.answered")]
     TicketAnswered = 82,
 
@@ -337,10 +303,7 @@ public enum EventType
     /// Points of a warning have been changed by a moderator.
     /// </summary>
     /// <remarks>
-    /// A warning is never withdrawn, so the correction of its points is the only
-    /// thing that can happen to it after it is issued, and until this event the
-    /// correction happened in silence: the person whose points a moderator took
-    /// off by mistake learned of it by opening the log himself.
+    /// A warning is never withdrawn, so this is the only change it can announce.
     /// </remarks>
     [EventRoutingKey("moderation.warning.points-changed")]
     WarningPointsChanged = 88,
@@ -520,12 +483,6 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("game.status.moderation")]
     StatusGameModeration = 321,
-
-    /// <summary>
-    /// Game is draft
-    /// </summary>
-    [EventRoutingKey("game.status.draft")]
-    StatusGameDraft = 322,
 
     /// <summary>
     /// Game has started
@@ -712,10 +669,6 @@ public enum EventType
     /// </summary>
     [EventRoutingKey("game.character.status.left")]
     StatusCharacterLeft = 375,
-
-    // Slot 376 was StatusCharacterReturned — removed with the transition that
-    // raised it: a character its player took out of the game comes back by no
-    // move (CharacterStatusTransition).
 
     /// <summary>
     /// Character has been exiled from the game by GM

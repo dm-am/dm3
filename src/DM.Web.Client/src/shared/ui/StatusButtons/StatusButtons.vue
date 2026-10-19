@@ -1,32 +1,12 @@
 <script setup lang="ts" generic="T extends string">
-/**
- * StatusButtons — the status-transition action group. Draws the transitions it
- * is given, runs the chosen one through `apply`, and sends a destructive one
- * (danger) through a ConfirmDialog first. The flag decides whether the dialog
- * opens at all and paints nothing: neither the control nor the dialog carries
- * red, the question is what says the move is heavy.
- *
- * A confirmed transition is the dialog's action: the window waits shut for the
- * answer, prints a refusal in itself and closes on success alone. A plain one
- * runs on the spot and a refusal goes to a plate, there being no window to
- * print it in.
- *
- * The blog and the game had one copy of this each, alike to the letter except
- * for the store they read and the noun in three sentences. What legitimately
- * differs stays with the caller: which transitions the state machine offers
- * (features/*-actions/model/transitions.ts — a blog has no Finish) and what
- * calling one does. Gating (who may change status) is the caller's business
- * too — this component only renders and dispatches.
- *
- * `variant`:
- *  - "strip" (default): sidebar-style plain-link actions (one per line).
- *  - "button": a horizontal group of real buttons for page surfaces.
- */
+// A destructive transition asks through a ConfirmDialog first and paints nothing red: the question says
+// the move is heavy. Which transitions there are, and who may run them, is the caller's.
 import { computed, ref, type Ref } from "vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { notifyFailure } from "@/shared/lib/errors";
 import type { GeneralError } from "@/shared/api/models/common";
 import type { StatusTransitionOption } from "./types";
+import { OWNS_REFUSAL, type RequestOptions } from "@/shared/api/interceptor";
 
 const props = withDefaults(
   defineProps<{
@@ -38,10 +18,7 @@ const props = withDefaults(
      * confirmation's, which prints a refusal in itself: passed on to the
      * request, they keep the interceptor from saying it a second time.
      */
-    apply: (
-      value: T,
-      options?: { ownsRefusal?: boolean; ownsRateLimit?: boolean },
-    ) => Promise<GeneralError | null>;
+    apply: (value: T, options?: RequestOptions) => Promise<GeneralError | null>;
     /**
      * The module in the genitive case, as the sentences here spell it:
      * "блога", "игры".
@@ -54,19 +31,14 @@ const props = withDefaults(
   },
 );
 
-// Declared through Ref<…>: ref() unwraps a generic parameter into UnwrapRef<T>,
-// and the value read back out then no longer satisfies the T that `apply` asks
-// for, though it is the very value that came in.
+// Through Ref<…>: ref() unwraps a generic into UnwrapRef<T>, which no longer satisfies `apply`.
 const pending = ref(null) as Ref<T | null>;
 const confirmOption = ref(null) as Ref<{
   value: T;
   label: string;
 } | null>;
 
-// The dialog asks the question in the words of the button that opened it. The
-// transition label is a verb and its object ("Закрыть игру"), so the heading is
-// that label turned into a question and the confirm button is its first word,
-// the verb alone, the length every confirm button on the site keeps.
+// The heading is the button's label as a question, the confirm button its verb alone.
 const confirmTitle = computed(() =>
   confirmOption.value ? `${confirmOption.value.label}?` : "",
 );
@@ -101,17 +73,13 @@ function onClick(t: StatusTransitionOption<T>) {
 async function confirmed() {
   const opt = confirmOption.value;
   if (!opt) return;
-  const error = await props.apply(opt.value, {
-    ownsRefusal: true,
-    ownsRateLimit: true,
-  });
+  const error = await props.apply(opt.value, OWNS_REFUSAL);
   return { error };
 }
 </script>
 
 <template>
   <template v-if="transitions.length">
-    <!-- Sidebar strip variant -->
     <template v-if="variant === 'strip'">
       <li v-for="t in transitions" :key="t.value" class="link">
         <span class="muted" aria-hidden="true">- </span>
@@ -126,7 +94,6 @@ async function confirmed() {
       </li>
     </template>
 
-    <!-- Page button-group variant -->
     <div v-else class="status-buttons">
       <button
         v-for="t in transitions"
@@ -153,17 +120,13 @@ async function confirmed() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
+@use "@/assets/styles/Links" as *
 
 .link
   display: block
 
-.muted
-  color: $text-muted
-
-// A word of the sidebar menu, drawn as every other link of it, out of reach
-// included. A destructive move is not coloured: it asks first, and the
-// question carries the weight.
+// Drawn as every other link of the sidebar menu; a destructive move is not coloured.
 .strip-action
   +inline-link-button
 
@@ -172,7 +135,7 @@ async function confirmed() {
   flex-wrap: wrap
   gap: $small
 
-// The shared secondary button, a destructive move included: see above.
+// The shared secondary button, a destructive move included.
 .status-btn
   font-size: $secondary-font-size
   +button

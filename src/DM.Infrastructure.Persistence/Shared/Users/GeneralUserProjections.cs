@@ -13,7 +13,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Infrastructure.Persistence.Shared.Users;
 
 /// <summary>
-/// SSOT for projecting <see cref="GeneralUser"/> from the user row inside an
+/// The one projection of <see cref="GeneralUser"/> from the user row inside an
 /// EF Select - the replacement for the nested ProjectTo user map that almost
 /// every list projection composed.
 ///
@@ -36,9 +36,7 @@ namespace DM.Infrastructure.Persistence.Shared.Users;
 /// </summary>
 public static class GeneralUserProjections
 {
-    // ═══ The one formula for the shared row fields, whatever the target
-    // tier. Tier formulas below are built from these bindings - never write
-    // a second copy of this member list. ═══
+    // The one formula for the shared row fields: the tier formulas below are built from it.
     private static readonly Expression<Func<DbUser, GeneralUser>> RowFields =
         u => new GeneralUser
         {
@@ -102,13 +100,12 @@ public static class GeneralUserProjections
 
     /// <summary>
     /// The details tier: the row fields plus the account row facts
-    /// (registration moment, bio, ordered contacts). Settings live in their
+    /// (bio, ordered contacts). Settings live in their
     /// own document and are read separately by the repository.
     /// </summary>
     private static readonly Expression<Func<DbUser, UserDetails>> DetailsRowFields =
         WithRowFields<UserDetails>(u => new UserDetails
         {
-            CreatedUtc = u.CreatedUtc,
             Info = u.Info!,
             Contacts = u.Contacts
                 .OrderBy(c => c.SortOrder)
@@ -160,6 +157,8 @@ public static class GeneralUserProjections
             Status = u.Status,
             LastActivityUtc = u.LastActivityUtc,
             Picture = AvatarProjections.From(u.AvatarUpload),
+            // The newbie mark of the card is read from it.
+            QuantityRating = u.QuantityRating,
         };
 
     /// <summary>
@@ -171,7 +170,7 @@ public static class GeneralUserProjections
     public static Task<AuthenticatedUser?> FindAuthenticatedUser(
         this IQueryable<DbUser> query, string username) =>
         query
-            .Where(u => u.Username.ToLower() == username.ToLower())
+            .Where(AccountNames.UsernameIs(username))
             .ProjectToAuthenticatedUser()
             .FirstOrDefaultAsync();
 

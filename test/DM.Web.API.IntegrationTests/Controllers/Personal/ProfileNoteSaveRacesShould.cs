@@ -16,17 +16,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 /// answered and leave the note as one order of them would.
 /// </summary>
 /// <remarks>
-/// The service used to read the note of the pair and decide by what it found,
-/// and that answer stops being true the moment it is given. Each test below is
-/// one way it stopped being true, and each answered one of its requests with a
-/// 500.
-///
-/// Over HTTP and against the container Postgres, because what is under test is
-/// what the database decides when the writes meet. They meet only when the
-/// scheduler lets them, which the test does not control, so every pair of
-/// requests is played over several rounds from the same starting state, and
-/// the order the two are sent in alternates between rounds so that neither
-/// always gets ahead.
+/// Over HTTP against the container Postgres: the database decides when the writes meet. Each pair is played over
+/// several rounds from one state, alternating which is sent first.
 /// </remarks>
 public class ProfileNoteSaveRacesShould : IntegrationTestBase
 {
@@ -49,14 +40,9 @@ public class ProfileNoteSaveRacesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Two saves of one note arriving together are both answered and leave one
-    /// note.
+    /// Two saves of one note arriving together are both answered and leave one note.
     /// </summary>
-    /// <remarks>
-    /// A double press of "Save", or two requests of an end-to-end run: both found
-    /// no note, both inserted, and the unique index over (OwnerId, SubjectUserId)
-    /// refused the second insert.
-    /// </remarks>
+    /// <remarks>The unique index over (OwnerId, SubjectUserId) is what meets the second insert.</remarks>
     [Fact]
     public async Task AnswerBothSavesOfOnePairArrivingTogetherAndKeepOneNote()
     {
@@ -94,15 +80,8 @@ public class ProfileNoteSaveRacesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A save with text and a clear of the same note arriving together are both
-    /// answered, and the pair is left with the new text or with no note.
+    /// A save and a clear arriving together are both answered, leaving the new text or no note, never the old one.
     /// </summary>
-    /// <remarks>
-    /// The save found the note, the clear removed it, and the save went on to
-    /// update a row that was gone. Either order is a correct outcome: the clear
-    /// last leaves nothing, the save last leaves its text. What is never correct
-    /// is the text from before both, or a 500.
-    /// </remarks>
     [Theory]
     [InlineData(Clear.Delete)]
     [InlineData(Clear.EmptySave)]
@@ -160,13 +139,8 @@ public class ProfileNoteSaveRacesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Two clears of one note arriving together are both answered and leave no
-    /// note.
+    /// Two clears of one note arriving together are both answered and leave no note.
     /// </summary>
-    /// <remarks>
-    /// Both loaded the note and both asked to remove it; the second removal found
-    /// no row, and the change tracker took that for a lost concurrency check.
-    /// </remarks>
     [Fact]
     public async Task AnswerTwoClearsOfOneNoteArrivingTogether()
     {

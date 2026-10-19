@@ -1,9 +1,9 @@
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Uploads;
 using Microsoft.EntityFrameworkCore;
 
@@ -45,16 +45,24 @@ internal class UploadOrphanCollector : IUploadOrphanCollector
             // can ever match, so nothing is ever deleted from S3.
             .IgnoreQueryFilters()
             .TagWith("DM.Uploads.SweepOrphans")
-            .Where(u => u.IsRemoved && u.DeletedUtc != null && u.DeletedUtc < cutoff)
-            // An avatar a warning on a profile pinned is the evidence of that
-            // warning, and the owner replacing his avatar marks it deleted with no
-            // author: such a row stays, and so does one the owner deleted himself.
-            // A deletion by anybody else is moderation's decision about the
-            // picture, and the row goes as any other; the key then clears the
-            // warning's column (DATA_STORAGE.md, "Объектное хранилище").
-            .Where(u => (u.DeletedByUserId != null && u.DeletedByUserId != u.UserId) ||
-                        !_dbContext.Warnings.Any(w => w.ProfileAvatarUploadId == u.UploadId))
-            .OrderBy(u => u.DeletedUtc)
+            .Where(u =>
+                (u.IsRemoved && u.DeletedUtc != null && u.DeletedUtc < cutoff &&
+                 // An avatar a warning on a profile pinned is the evidence of that
+                 // warning, and the owner replacing his avatar marks it deleted with no
+                 // author: such a row stays, and so does one the owner deleted himself.
+                 // A deletion by anybody else is moderation's decision about the
+                 // picture, and the row goes as any other; the key then clears the
+                 // warning's column (DATA_STORAGE.md, "Объектное хранилище").
+                 ((u.DeletedByUserId != null && u.DeletedByUserId != u.UserId) ||
+                  !_dbContext.Warnings.Any(w => w.ProfileAvatarUploadId == u.UploadId))) ||
+                // An avatar uploaded and never saved to the profile, the tab closed
+                // before "Сохранить": nothing marks it deleted, so its age past the
+                // grace period is what makes it an orphan. A removed account keeps
+                // the avatar it points at.
+                (!u.IsRemoved && u.Type == UploadType.UserAvatar && u.Status == UploadStatus.Confirmed &&
+                 u.CreatedUtc < cutoff &&
+                 !_dbContext.Users.IgnoreQueryFilters().Any(user => user.AvatarUploadId == u.UploadId)))
+            .OrderBy(u => u.DeletedUtc ?? u.CreatedUtc)
             .Take(BatchSize)
             .ToListAsync(cancellationToken);
 
@@ -68,29 +76,27 @@ internal class UploadOrphanCollector : IUploadOrphanCollector
 
         foreach (var upload in candidates)
         {
-            var allObjectsRemoved = true;
-
-            foreach (var key in EnumerateKeys(upload.ObjectKey))
+            // The original and the thumbnails beside it. The store owns the "already
+            // gone is fine" rule; a refusal keeps the row for the next pass.
+            if (!string.IsNullOrEmpty(upload.ObjectKey))
             {
-                // The store answers whether the key holds anything now, and it
-                // owns both the "already gone is fine" rule and the log line
-                // for a refusal. What is left here is the decision only this
-                // sweeper can make: keep the row for the next pass.
-                if (await _objectStorage.DeleteAsync(key, cancellationToken))
+                var keys = AvatarThumbnail.ObjectKeysOf(upload.ObjectKey, upload.Type);
+                var refused = false;
+                foreach (var key in keys)
                 {
-                    removedObjects++;
+                    refused |= !await _objectStorage.DeleteAsync(key, cancellationToken);
                 }
-                else
+
+                if (refused)
                 {
-                    allObjectsRemoved = false;
+                    continue;
                 }
+
+                removedObjects += keys.Count;
             }
 
-            if (allObjectsRemoved)
-            {
-                _dbContext.Uploads.Remove(upload);
-                deletedRows++;
-            }
+            _dbContext.Uploads.Remove(upload);
+            deletedRows++;
         }
 
         if (deletedRows > 0)
@@ -99,19 +105,5 @@ internal class UploadOrphanCollector : IUploadOrphanCollector
         }
 
         return new UploadSweepResult(candidates.Count, removedObjects, deletedRows);
-    }
-
-    /// <summary>
-    /// Single source file per upload (thumbnails live only in the imgproxy
-    /// cache, not in S3 storage).
-    /// </summary>
-    private static IEnumerable<string> EnumerateKeys(string objectKey)
-    {
-        if (string.IsNullOrEmpty(objectKey))
-        {
-            yield break;
-        }
-
-        yield return objectKey;
     }
 }

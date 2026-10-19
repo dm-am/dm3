@@ -5,54 +5,22 @@ using DM.Domain.Core.Extensions;
 
 namespace DM.Domain.Game.Features.Characters;
 
-/// <summary>
-/// Errors for attribute value validation
-/// </summary>
 public static class AttributeValidationError
 {
-    /// <summary>
-    /// Value should be of one of game specifications
-    /// </summary>
-    public static string InvalidSpecification => "Value specification should be present in the game schema";
+    public static string InvalidSpecification => "Такого атрибута нет в схеме игры";
 
-    /// <summary>
-    /// Specification marks this field as a required, but it is missing
-    /// </summary>
-    public static string RequiredMissing => "Value for this specification is required";
+    public static string RequiredMissing => "Атрибут обязателен";
 
-    /// <summary>
-    /// Specifications are missing entirely from the data
-    /// </summary>
-    /// <param name="specifications">Missing required specifications</param>
-    /// <returns>Error message listing missing specifications</returns>
     public static string ManyRequiredMissing(IEnumerable<(Guid Id, string Title)> specifications) =>
-        $"These specifications were not found, but required: {string.Join(", ", specifications.Select(s => $"{s.Id.EncodeToReadable()} ({s.Title})"))}";
+        $"Не заполнены обязательные атрибуты: {string.Join(", ", specifications.Select(s => $"{s.Id.EncodeToReadable()} ({s.Title})"))}";
 
-    /// <summary>
-    /// One specification carries more than one submitted value
-    /// </summary>
-    /// <param name="specifications">Repeated specifications</param>
-    /// <returns>Error message listing repeated specifications</returns>
     public static string ManyDuplicated(IEnumerable<Guid> specifications) =>
-        $"These specifications were submitted more than once: {string.Join(", ", specifications.Select(s => s.EncodeToReadable()))}";
+        $"Атрибуты переданы больше одного раза: {string.Join(", ", specifications.Select(s => s.EncodeToReadable()))}";
 
-    /// <summary>
-    /// Number should be a valid number
-    /// </summary>
-    public static string NotANumber => "Value should be a number";
+    public static string NotANumber => "Нужно число";
 
-    /// <summary>
-    /// Value should be a short enough string
-    /// </summary>
-    /// <param name="maxLength">Maximum allowed length</param>
-    /// <returns>Error message with max length</returns>
-    public static string StringTooLong(int maxLength) => $"Value should be at most {maxLength} characters long";
+    public static string StringTooLong(int maxLength) => $"Не длиннее {maxLength} символов";
 
-    /// <summary>
-    /// Value should be present in list
-    /// </summary>
-    /// <param name="possibleValues">List of allowed values</param>
-    /// <returns>Error message with allowed values</returns>
     public static string NotPresentInList(IEnumerable<string> possibleValues) =>
-        $"Value should be on of following values: {string.Join(", ", possibleValues)}";
+        $"Выберите одно из значений: {string.Join(", ", possibleValues)}";
 }

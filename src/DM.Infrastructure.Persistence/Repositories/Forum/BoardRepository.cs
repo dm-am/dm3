@@ -1,8 +1,7 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Boards;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
@@ -24,7 +23,7 @@ internal class BoardRepository(
     /// queries over a fixed, tiny set, and in exchange a counter always tells the
     /// truth at the moment it is rendered.
     /// </remarks>
-    public async Task<IEnumerable<Board>> SelectBoards(BoardAccessPolicy? accessPolicy)
+    public async Task<IEnumerable<Board>> SelectBoards()
     {
         var boards = await dmDbContext.Boards
             .TagWith("DM.Forum.BoardsList")
@@ -33,13 +32,7 @@ internal class BoardRepository(
             .ToArrayAsync();
 
         await FillCommentSummary(boards);
-
-        if (!accessPolicy.HasValue)
-        {
-            return boards;
-        }
-
-        return boards.Where(b => (b.ViewPolicy & accessPolicy) != BoardAccessPolicy.None).ToArray();
+        return boards;
     }
 
     /// <summary>
@@ -70,7 +63,7 @@ internal class BoardRepository(
             .ToDictionaryAsync(x => x.BoardId, x => x);
 
         var lastUtcs = summaries.Values.Select(s => s.LastUtc).Distinct().ToArray();
-        var lastByBoard = new Dictionary<System.Guid, BoardLastComment>();
+        var lastByBoard = new Dictionary<Guid, BoardLastComment>();
 
         if (lastUtcs.Length > 0)
         {

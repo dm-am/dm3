@@ -8,18 +8,16 @@ using Microsoft.EntityFrameworkCore;
 namespace DM.Workers.NotificationDispatcher.Notifiers.Security;
 
 /// <summary>
-/// The shared half of the account-security notifications. Each answers its own
-/// event about one account and tells the owner of it; they read the account the
-/// same way and differ only in the event and in the reason there is no actor.
-/// The notification each hands back is written where the notification rules can
-/// read it — in the generator's own file.
+/// The shared half of the account-security notifications.
 /// </summary>
+/// <remarks>
+/// Each generator writes its notification in its own file, where the notification rules read it.
+/// </remarks>
 internal abstract class SecurityNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     protected SecurityNotificationGenerator(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
     {
         _dbContext = dbContext;
@@ -27,8 +25,7 @@ internal abstract class SecurityNotificationGenerator : BaseNotificationGenerato
     }
 
     /// <summary>
-    /// The account the event is about, or null when it is gone: the events carry
-    /// no idempotency key and are redelivered after a deletion.
+    /// The account the event is about, or null once it is gone.
     /// </summary>
     /// <param name="userId">User identifier the event carries</param>
     /// <returns>The account and the moment to report, or null</returns>
@@ -39,17 +36,17 @@ internal abstract class SecurityNotificationGenerator : BaseNotificationGenerato
             .Select(u => new
             {
                 u.UserId,
-                u.Username
+                u.Username,
+                u.Email
             })
             .FirstOrDefaultAsync();
 
-        // As a DateTime rather than the offset the clock answers with: the letter
-        // prints this field the way the serializer writes it down.
+        // A DateTime: the letter prints the field as the serializer writes it.
         return userData == null
             ? null
-            : new SecurityEvent(userData.UserId, userData.Username, _dateTimeProvider.Now.UtcDateTime);
+            : new SecurityEvent(userData.UserId, userData.Username, userData.Email, _dateTimeProvider.Now.UtcDateTime);
     }
 
     /// <summary>One account, and the moment the letter reports.</summary>
-    protected sealed record SecurityEvent(Guid UserId, string Username, DateTime EventTime);
+    protected sealed record SecurityEvent(Guid UserId, string Username, string Email, DateTime EventTime);
 }

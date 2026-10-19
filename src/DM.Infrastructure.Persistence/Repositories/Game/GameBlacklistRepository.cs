@@ -8,8 +8,8 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Blacklists;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 
 using DM.Infrastructure.Persistence.Shared.Users;
 
@@ -22,7 +22,6 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
 
-    /// <inheritdoc />
     public GameBlacklistRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider,
@@ -64,7 +63,7 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
     /// </remarks>
     public Task<int> CopyFromPersonalBlacklist(Guid gameId, Guid ownerId, CancellationToken ct = default) =>
         _dbContext.Database.ExecuteSqlInterpolatedAsync($"""
-            INSERT INTO "GameBlacklists" ("GameBlacklistId", "GameId", "BlockedUserId", "BlockedByUserId", "CreatedUtc")
+            INSERT INTO "GameBlacklists" ("EntryId", "GameId", "BlockedUserId", "BlockedByUserId", "CreatedUtc")
             SELECT gen_random_uuid(), {gameId}, personal."BlockedUserId", {ownerId}, {_dateTimeProvider.Now}
             FROM "UserBlacklists" AS personal
             WHERE personal."OwnerId" = {ownerId}
@@ -87,7 +86,7 @@ internal class GameBlacklistRepository : IGameBlacklistRepository
         {
             await _dbContext.SaveChangesAsync();
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // The caller pre-checks the game's blacklist; this is the race where two
             // concurrent requests both pass that check. Translated here so the domain

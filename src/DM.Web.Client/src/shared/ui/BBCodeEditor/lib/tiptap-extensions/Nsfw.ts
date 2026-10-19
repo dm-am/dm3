@@ -10,37 +10,16 @@ import { Node, mergeAttributes } from "@tiptap/core";
 import { VueNodeViewRenderer } from "@tiptap/vue-3";
 import NsfwView from "./NsfwView.vue";
 
-export interface NsfwOptions {
-  HTMLAttributes: Record<string, unknown>;
-}
-
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     nsfw: {
-      /**
-       * Set a NSFW block
-       */
-      setNsfw: () => ReturnType;
-      /**
-       * Toggle a NSFW block
-       */
       toggleNsfw: () => ReturnType;
-      /**
-       * Unset a NSFW block
-       */
-      unsetNsfw: () => ReturnType;
     };
   }
 }
 
-export const Nsfw = Node.create<NsfwOptions>({
+export const Nsfw = Node.create({
   name: "nsfw",
-
-  addOptions() {
-    return {
-      HTMLAttributes: {},
-    };
-  },
 
   group: "block",
 
@@ -50,11 +29,6 @@ export const Nsfw = Node.create<NsfwOptions>({
 
   addAttributes() {
     return {
-      "data-bb-tag": {
-        default: "nsfw",
-        parseHTML: () => "nsfw",
-        renderHTML: () => ({ "data-bb-tag": "nsfw" }),
-      },
       collapsed: {
         default: true,
         parseHTML: (element) =>
@@ -83,9 +57,8 @@ export const Nsfw = Node.create<NsfwOptions>({
   renderHTML({ HTMLAttributes }) {
     return [
       "div",
-      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+      mergeAttributes({ "data-bb-tag": "nsfw" }, HTMLAttributes, {
         class: "bb-nsfw",
-        "data-bb-tag": "nsfw",
       }),
       0,
     ];
@@ -93,21 +66,10 @@ export const Nsfw = Node.create<NsfwOptions>({
 
   addCommands() {
     return {
-      setNsfw:
-        () =>
-        ({ commands }) => {
-          return commands.wrapIn(this.name);
-        },
       toggleNsfw:
         () =>
-        ({ commands }) => {
-          return commands.toggleWrap(this.name);
-        },
-      unsetNsfw:
-        () =>
-        ({ commands }) => {
-          return commands.lift(this.name);
-        },
+        ({ commands }) =>
+          commands.toggleWrap(this.name),
     };
   },
 
@@ -115,5 +77,3 @@ export const Nsfw = Node.create<NsfwOptions>({
     return VueNodeViewRenderer(NsfwView);
   },
 });
-
-export default Nsfw;

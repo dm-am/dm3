@@ -115,7 +115,6 @@ internal static class PlainTextLetter
     /// </summary>
     private sealed class Page
     {
-        /// <summary>A new line</summary>
         public const int Line = 1;
 
         /// <summary>An empty line between two blocks</summary>

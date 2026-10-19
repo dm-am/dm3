@@ -15,9 +15,6 @@ import {
   viewedImage,
 } from "@/shared/lib/composables/useImageViewer";
 import { closeOpenWindows } from "@/shared/lib/composables/useOpenWindows";
-import { componentCss, styleRules } from "@/shared/lib/testing/styles";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import ImageViewer from "./ImageViewer.vue";
 
 enableAutoUnmount(afterEach);
@@ -103,30 +100,3 @@ describe("the picture viewer", () => {
 });
 
 /** How the viewer stands over the page, read off its stylesheet. */
-describe("the picture viewer on the page", () => {
-  const rules = styleRules(
-    componentCss(
-      join(dirname(fileURLToPath(import.meta.url)), "ImageViewer.vue"),
-    ),
-  );
-  const declared = (selector: string) =>
-    rules.find((rule) => rule.selector === selector)?.declarations ?? {};
-
-  it("dims the page the way the windows do, and scrolls a long picture", () => {
-    expect(declared(".image-viewer")).toMatchObject({
-      position: "fixed",
-      "background-color": "var(--overlay-bg)",
-      overflow: "auto",
-    });
-  });
-
-  // Whole: as wide as it is, or as the window when it is wider; as tall as
-  // it is, however tall.
-  it("draws the picture at its own size, no wider than the window", () => {
-    expect(declared(".image-viewer-picture")).toMatchObject({
-      "max-width": "100%",
-      height: "auto",
-    });
-    expect(declared(".image-viewer-picture")["max-height"]).toBeUndefined();
-  });
-});

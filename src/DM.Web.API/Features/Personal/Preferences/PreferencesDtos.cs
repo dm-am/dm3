@@ -1,7 +1,4 @@
-using System;
 using DM.Domain.Core.Dto;
-using System.Collections.Generic;
-using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Personal.Preferences;
@@ -17,14 +14,17 @@ namespace DM.Web.API.Features.Personal.Preferences;
 public class Preferences
 {
     /// <summary>
-    /// Website color theme
+    /// Website color theme: the one a device takes the first time this account
+    /// signs in on it
     /// </summary>
     public Theme Theme { get; set; }
 
     /// <summary>
-    /// Paging settings for various list views
+    /// How many rows, posts, comments or messages a page of every paged list
+    /// holds. One of PagingPolicy.AllowedPageSizes, PagingPolicy.DefaultPageSize
+    /// for a reader who never chose one
     /// </summary>
-    public Paging Paging { get; set; } = new();
+    public int PageSize { get; set; } = PagingPolicy.DefaultPageSize;
 
     /// <summary>
     /// IANA name of the reader's time zone ("Europe/Moscow"), used by letters
@@ -33,89 +33,4 @@ public class Preferences
     /// Null or empty means UTC.
     /// </summary>
     public string? TimeZoneId { get; set; }
-}
-
-/// <summary>
-/// User paging preferences for various list views
-/// </summary>
-/// <remarks>
-/// Allowed values and the default come from PagingPolicy.
-/// </remarks>
-public class Paging : IValidatableObject
-{
-    /// <summary>
-    /// Number of posts per page in game rooms
-    /// </summary>
-    public int PostsPerPage { get; set; } = PagingPolicy.DefaultPageSize;
-
-    /// <summary>
-    /// Number of comments per page on games or topics
-    /// </summary>
-    public int CommentsPerPage { get; set; } = PagingPolicy.DefaultPageSize;
-
-    /// <summary>
-    /// Number of topics per page on forum boards
-    /// </summary>
-    public int TopicsPerPage { get; set; } = PagingPolicy.DefaultPageSize;
-
-    /// <summary>
-    /// Number of messages per page in conversations
-    /// </summary>
-    public int MessagesPerPage { get; set; } = PagingPolicy.DefaultPageSize;
-
-    /// <summary>
-    /// Number of items per page for other entity lists (users, games, etc.)
-    /// </summary>
-    public int EntitiesPerPage { get; set; } = PagingPolicy.DefaultPageSize;
-
-    /// <inheritdoc />
-    public IEnumerable<ValidationResult> Validate(ValidationContext validationContext)
-    {
-        if (!IsAllowed(PostsPerPage))
-            yield return new ValidationResult("Недопустимое значение постов на страницу", new[] { nameof(PostsPerPage) });
-
-        if (!IsAllowed(CommentsPerPage))
-            yield return new ValidationResult("Недопустимое значение комментариев на страницу", new[] { nameof(CommentsPerPage) });
-
-        if (!IsAllowed(TopicsPerPage))
-            yield return new ValidationResult("Недопустимое значение топиков на страницу", new[] { nameof(TopicsPerPage) });
-
-        if (!IsAllowed(MessagesPerPage))
-            yield return new ValidationResult("Недопустимое значение сообщений на страницу", new[] { nameof(MessagesPerPage) });
-
-        if (!IsAllowed(EntitiesPerPage))
-            yield return new ValidationResult("Недопустимое значение записей на страницу", new[] { nameof(EntitiesPerPage) });
-    }
-
-    private static bool IsAllowed(int value) => PagingPolicy.Allows(value);
-}
-
-/// <summary>
-/// User profile and display settings
-/// </summary>
-/// <remarks>
-/// These settings control how the user's profile appears to others
-/// and their personal display preferences.
-/// </remarks>
-public class UserSettings
-{
-    /// <summary>
-    /// Whether the user's birthday is visible to other users
-    /// </summary>
-    public bool IsBirthdayVisible { get; set; }
-
-    /// <summary>
-    /// Whether the user's birth year is visible (only applies when birthday is visible)
-    /// </summary>
-    public bool IsBirthdayYearVisible { get; set; }
-
-    /// <summary>
-    /// Website color theme preference
-    /// </summary>
-    public Theme Theme { get; set; }
-
-    /// <summary>
-    /// Paging limits for various list views
-    /// </summary>
-    public Paging Paging { get; set; } = new();
 }

@@ -1,33 +1,17 @@
 <script setup lang="ts">
 /**
- * MyTicketPage — one of the reader's own tickets, at /my-tickets/<id>.
- *
- * Where the reader's list "Мои обращения", the card after the support form and
- * the notifications of the ticket lead him. A ticket works as a topic with
- * answers and looks like one: the block of the ticket (TicketThread) with the
- * caption of a topic, the answers of the author and of moderation under it and
- * the form at their foot (TicketConversation). Until somebody answers, the
- * place of the answer says what will come, so the reader knows he need not
- * watch the page. A ticket that waits for his answer has the red "*" after
- * its state.
- *
- * His answer is the author's: it hands the turn to moderation. The server
- * answers with the ticket as it stands after it, and the page shows that, as
- * the next reading of the page would; the form keeps what he has not sent
- * under this ticket.
- *
- * The ticket is read through the moderation endpoint, which hands an author
- * his own ticket and anybody else a 404; a ticket of somebody else is "not
- * found", the same as one that does not exist.
+ * One of the reader's own tickets, at /my-tickets/<id>. It is read through
+ * the moderation endpoint, which hands an author his own ticket and anybody
+ * else a 404, so somebody else's ticket is "not found".
  */
-import { computed, ref, watch } from "vue";
+import { computed, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import {
   TICKET_SUBTYPE_LABELS,
   awaitsReader,
   ticketApi,
-  type TicketDetails,
+  useTicketRead,
 } from "@/entities/ticket";
 import { useAuthStore } from "@/entities/user";
 import {
@@ -47,12 +31,12 @@ const route = useRoute();
 const ticketId = computed(() => String(route.params.ticketId ?? ""));
 const { user } = storeToRefs(useAuthStore());
 
-const ticket = ref<TicketDetails | null>(null);
-const loading = ref(false);
-const loadError = ref<string | null>(null);
-const notFound = ref(false);
+// A 404 is a ticket that is not the reader's or does not exist.
+const { ticket, loading, loadError, notFound, load } = useTicketRead(() =>
+  ticketApi.getTicket(ticketId.value),
+);
 
-// The reason first: it is all that tells two tabs of tickets apart.
+// The reason first: it is what tells two ticket tabs apart.
 useDocumentTitle(() =>
   joinTitleSegments(
     ticket.value ? TICKET_SUBTYPE_LABELS[ticket.value.subtype] : null,
@@ -60,37 +44,13 @@ useDocumentTitle(() =>
   ),
 );
 
-async function fetch() {
-  if (!ticketId.value) return;
-  loading.value = true;
-  notFound.value = false;
-  const { data, error } = await ticketApi.getTicket(ticketId.value);
-  loading.value = false;
-  if (error) {
-    // A 404 is a ticket that is not the reader's or does not exist; anything
-    // else is a failure the reader can retry.
-    if ((error as { status?: number }).status === 404) {
-      notFound.value = true;
-      ticket.value = null;
-      loadError.value = null;
-      return;
-    }
-    loadError.value = "Не удалось загрузить обращение";
-    return;
-  }
-  loadError.value = null;
-  ticket.value = data?.resource ?? null;
-  notFound.value = ticket.value === null;
+async function loadTicket() {
+  if (ticketId.value) await load();
 }
 
-watch(ticketId, fetch, { immediate: true });
+watch(ticketId, loadTicket, { immediate: true });
 
-/**
- * Writes the reader's answer. The server answers with the ticket as it stands
- * after it, the answer at the end of the conversation and the turn handed to
- * moderation; a refusal leaves the ticket as it was, and the form gives the
- * text back.
- */
+/** The server answers with the ticket as it stands after the answer; a refusal leaves it as it was. */
 async function send(text: string) {
   const id = ticketId.value;
   const { data, error } = await ticketApi.createComment(id, { text });
@@ -114,7 +74,7 @@ const awaited = computed(
       <router-link :to="{ name: 'my-tickets' }">Мои обращения</router-link>
     </LeadText>
 
-    <ErrorState v-if="loadError" :message="loadError" :retry="fetch" />
+    <ErrorState v-if="loadError" :message="loadError" :retry="loadTicket" />
 
     <TicketThreadSkeleton v-else-if="loading && !ticket" />
 

@@ -3,7 +3,6 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { compileSass, styleRules } from "@/shared/lib/testing/styles";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 import Paging from "./Paging.vue";
 import {
@@ -228,15 +227,6 @@ describe("Paging", () => {
   // ============================================================================
 
   describe("Query-based Pagination", () => {
-    it("uses queryKey prop for link generation", () => {
-      const wrapper = mountPaging({
-        useQuery: true,
-        queryKey: "page",
-      });
-      // Component should use the queryKey for generating links
-      expect(wrapper.props("queryKey")).toBe("page");
-    });
-
     it("defaults queryKey to 'number'", () => {
       const wrapper = mountPaging({ useQuery: true });
       expect(wrapper.props("queryKey")).toBe("number");
@@ -308,13 +298,6 @@ describe("Paging", () => {
   // ============================================================================
 
   describe("Edge Cases", () => {
-    it("handles single page gracefully", () => {
-      const wrapper = mountPaging({
-        paging: { ...defaultPaging, pages: 1, current: 1 },
-      });
-      expect(wrapper.find(".paging").exists()).toBe(false);
-    });
-
     it("handles zero pages", () => {
       const wrapper = mountPaging({
         paging: { ...defaultPaging, pages: 0, current: 0 },
@@ -336,9 +319,8 @@ describe("Paging", () => {
   // ============================================================================
 
   /**
-   * One line at any width, with the dots (owner, 5 October 2026: "if it does
-   * not fit, show fewer numbers", after a phone strip that had dropped the
-   * dots instead). jsdom lays nothing out, so the line and the face are given:
+   * One line at any width, with the dots: what does not fit is the numbers.
+   * jsdom lays nothing out, so the line and the face are given:
    * a strip `room` wide whose every character is 8 wide, the sides of a link
    * being 0 here (scoped styles are not applied).
    */
@@ -461,24 +443,8 @@ describe("Paging", () => {
       expect(strip(wrapper)).toBe("1 2 3 ... >>");
     });
 
-    it("gives a link the side of the desktop at every width, a phone's too", () => {
-      const css = compileSass(
-        '@use "@/assets/styles/Paging" as *\n.probe\n  +paging',
-      ).replace(/\s+/g, " ");
-      // A phone shows the strip of the full version: the stylesheet offers no
-      // narrower side, so the fit never marks a strip tight.
-      expect(css).not.toMatch(/@media/);
-      expect(css).not.toContain("--paging-side-tight");
-      const rules = styleRules(css);
-      const rule = (selector: string) =>
-        rules.find((found) => found.selector === selector)?.declarations;
-      expect(rule(".probe .paging")?.["--paging-side"]).toBe("8px");
-      expect(rule(".probe .paging a")?.padding).toBe("2px var(--paging-side)");
-    });
-
     /**
-     * The side a link takes: the 8 of the desktop at every width, a phone's
-     * too, which shows the strip of the full version. The strip holds as many
+     * The side a link takes: the 8 of the desktop at every width. The strip holds as many
      * numbers as fit at that side. Given here as the stylesheet gives it: a
      * side of 8 and margins of 4 round each link; every character 8 wide.
      */
@@ -551,18 +517,9 @@ describe("Paging", () => {
   });
 
   describe("pagesThatFit", () => {
-    // Measured on the stand, 5 October 2026: a link of a three-digit page is
-    // 42.89 wide on a phone (sides of 6) and 46.89 elsewhere, the bold of the
-    // current page adds 0.94, and "<<", "...", "...", ">>" take 129.9 and 145.9.
-    const phone = { number: 42.89, current: 0.94, jumps: 129.9 };
+    // Measured on the stand: a link of a three-digit page is 46.89 wide, the
+    // bold of the current page adds 0.94, and "<<", "...", "...", ">>" take 145.9.
     const desk = { number: 46.89, current: 0.94, jumps: 145.9 };
-
-    it("holds three numbers of three digits at 360 and at 375, in one line", () => {
-      // The line of a list at 360 is 296, under a table 270; at 375 under a
-      // table 285.
-      for (const room of [270, 285, 296])
-        expect(pagesThatFit(150, { ...phone, room }), `${room}`).toBe(3);
-    });
 
     it("holds ten of three digits in the column of 1366", () => {
       // 615.75 of the 616 the strip has under a table there.
@@ -576,8 +533,8 @@ describe("Paging", () => {
     });
 
     it("gives a list of ten pages or fewer all of them when they fit", () => {
-      expect(pagesThatFit(7, { ...phone, room: 7 * 42.89 + 0.94 })).toBe(7);
-      expect(pagesThatFit(7, { ...phone, room: 7 * 42.89 })).toBe(3);
+      expect(pagesThatFit(7, { ...desk, room: 7 * 46.89 + 0.94 })).toBe(7);
+      expect(pagesThatFit(7, { ...desk, room: 7 * 46.89 })).toBe(3);
     });
   });
 

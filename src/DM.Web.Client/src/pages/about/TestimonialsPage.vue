@@ -39,20 +39,15 @@ function retryFetch() {
   return testimonialStore.fetchTestimonials(searchParams.value, true);
 }
 
-// Out-of-range page: paging exists, current page has no resources, but
-// earlier pages do (i.e. this isn't just an empty result set).
+// A page past the end of a non-empty list, not an empty result.
 const currentPageOutOfRange = computed(() => {
   const list = testimonials.value;
   if (!list || !list.paging) return false;
   return list.resources.length === 0 && list.paging.current > 1;
 });
 
-// Paging scrolls the testimonials block (top separator + rows) back into
-// view instead of the page top.
+// Paging scrolls back to the list, not to the page top.
 const listRef = ref<HTMLElement | null>(null);
-function pagingAnchor(): HTMLElement | null {
-  return listRef.value;
-}
 </script>
 
 <template>
@@ -69,20 +64,16 @@ function pagingAnchor(): HTMLElement | null {
   <!-- Create Form owns its own moderator gate; render unconditionally -->
   <CreateTestimonialForm />
 
-  <!-- Filter controls -->
   <TestimonialsFilter />
 
-  <!-- Loading state (first load, no stale data yet): skeleton bubbles.
-       Top-paging space is reserved so content doesn't jump when the
-       real paging block appears above the list. -->
+  <!-- The top paging space is reserved so the list does not jump when it loads. -->
   <template v-if="!testimonials && !error">
     <div class="paging-space-reserve" aria-hidden="true" />
     <TestimonialSkeleton :count="3" />
   </template>
 
   <template v-else>
-    <!-- Error banner: rendered above stale content when there is
-         something to show, otherwise it is the only thing on screen. -->
+    <!-- Above the stale list when there is one, alone otherwise. -->
     <ErrorState
       v-if="error"
       class="error-banner"
@@ -90,7 +81,7 @@ function pagingAnchor(): HTMLElement | null {
       :retry="retryFetch"
     />
 
-    <!-- Content (kept visible under the error banner during refetch) -->
+    <!-- Stays visible under the error banner during a refetch -->
     <div
       v-if="testimonials && testimonials.resources.length > 0"
       ref="listRef"
@@ -98,13 +89,12 @@ function pagingAnchor(): HTMLElement | null {
       :class="{ 'is-refetching': loading }"
       :aria-busy="loading ? 'true' : undefined"
     >
-      <!-- Top paging -->
       <PagingWithSeparators
         v-if="testimonials.paging"
         :paging="testimonials.paging"
         :to="{ name: 'testimonials' }"
         :use-query="true"
-        :scroll-anchor="pagingAnchor"
+        :scroll-anchor="() => listRef"
       />
 
       <div class="testimonials-rows">
@@ -112,9 +102,7 @@ function pagingAnchor(): HTMLElement | null {
           v-for="(testimonial, index) in testimonials.resources"
           :key="testimonial.id"
         >
-          <!-- The card plus its own pencil: the editor replaces the text
-               where it stands, which a control in the bubble corner cannot
-               do. The trash is a separate control beside it. -->
+          <!-- The editor replaces the text in place, which a control in the bubble corner cannot do. -->
           <TestimonialEditable
             :testimonial="testimonial"
             :search-query="filterState.search"
@@ -130,17 +118,15 @@ function pagingAnchor(): HTMLElement | null {
         </template>
       </div>
 
-      <!-- Bottom paging -->
       <PagingWithSeparators
         v-if="testimonials.paging"
         :paging="testimonials.paging"
         :to="{ name: 'testimonials' }"
         :use-query="true"
-        :scroll-anchor="pagingAnchor"
+        :scroll-anchor="() => listRef"
       />
     </div>
 
-    <!-- Out-of-range page: paging exists but this page has no resources -->
     <div v-else-if="currentPageOutOfRange" class="empty-state">
       <secondary-text>
         На этой странице отзывов нет.
@@ -150,7 +136,6 @@ function pagingAnchor(): HTMLElement | null {
       </secondary-text>
     </div>
 
-    <!-- Empty state -->
     <div v-else-if="testimonials" class="empty-state">
       <secondary-text>
         {{
@@ -172,22 +157,19 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
-// Paging blocks sit at the same tight $tiny rhythm the rows keep between
-// themselves and their dash separators (COMM-1: paging to rows equals the
-// line gap, matching the polls page where both distances are equal).
+// Paging keeps the $tiny gap the rows keep with their separators, as on the polls page.
 .testimonials-list
   display: flex
   flex-direction: column
   gap: $tiny
   margin-top: $medium
-  transition: opacity 0.15s ease
+  transition: opacity $transition-normal
 
-  // Dim feedback during a refetch (paging/sort/search) while stale
-  // testimonials stay on screen.
+  // Stale testimonials stay on screen, dimmed, during a refetch.
   &.is-refetching
-    opacity: 0.6
+    opacity: $opacity-half
     pointer-events: none
 
 .testimonials-rows
@@ -198,20 +180,12 @@ function pagingAnchor(): HTMLElement | null {
 .error-banner
   margin-top: $medium
 
-// Reserves the top PagingWithSeparators block's height during the
-// skeleton state so paged results don't shift the list down once the
-// real paging controls mount above it. Budget: two dash-separator
-// lines (~21px each, no margins) + one .paging row (~22px links +
-// 4px total vertical margin from the compact override) ~= 68px.
+// Holds the height of the top paging block during the skeleton, so the list does not shift.
 .paging-space-reserve
   height: 68px
   margin-top: $medium
 
-// TestimonialSkeleton itself doesn't carry the page's top margin.
-// No :deep() — the component's root element inherits this page's scope
-// attribute, so the plain scoped selector matches it directly (a :deep
-// descendant selector would not: the page is a root-level fragment).
-// $tiny mirrors the loaded state's paging-to-rows gap so nothing shifts.
+// The skeleton's root carries this page's scope attribute, so a plain scoped selector reaches it.
 .testimonial-skeleton-list
   margin-top: $tiny
 

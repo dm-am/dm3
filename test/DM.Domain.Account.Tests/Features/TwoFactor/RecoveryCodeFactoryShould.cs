@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
@@ -20,16 +19,14 @@ namespace DM.Domain.Account.Tests.Features.TwoFactor;
 /// </remarks>
 public class RecoveryCodeFactoryShould
 {
-    private readonly RecoveryCodeFactory _factory = new();
-
     [Fact]
     public void IssueAsManyCodesAsAsked() =>
-        _factory.Create(10).Should().HaveCount(10);
+        RecoveryCodeFactory.Create(10).Should().HaveCount(10);
 
     [Fact]
     public void IssueCodesOfEightyBits()
     {
-        var codes = _factory.Create(10);
+        var codes = RecoveryCodeFactory.Create(10);
 
         codes.Should().OnlyContain(code => code.Length == RecoveryCodeFactory.CodeLength,
             "sixteen symbols out of an alphabet of thirty-two is eighty bits, and the number " +
@@ -40,7 +37,7 @@ public class RecoveryCodeFactoryShould
     [Fact]
     public void IssueCodesFromTheAlphabetWithoutTheLookalikes()
     {
-        var codes = _factory.Create(50);
+        var codes = RecoveryCodeFactory.Create(50);
 
         string.Concat(codes).Should().NotContainAny("I", "L", "O", "U");
     }
@@ -48,8 +45,8 @@ public class RecoveryCodeFactoryShould
     [Fact]
     public void IssueADifferentSetEveryTime()
     {
-        var first = _factory.Create(10);
-        var second = _factory.Create(10);
+        var first = RecoveryCodeFactory.Create(10);
+        var second = RecoveryCodeFactory.Create(10);
 
         first.Intersect(second).Should().BeEmpty();
         first.Distinct().Should().HaveCount(10);
@@ -60,7 +57,7 @@ public class RecoveryCodeFactoryShould
     [InlineData("ABCD EFGH JKMN PQRS", "ABCDEFGHJKMNPQRS")]
     [InlineData("aBcD-eFgH JkMn.PqRs", "ABCDEFGHJKMNPQRS")]
     public void ForgiveCaseAndSeparators(string typed, string expected) =>
-        _factory.Normalize(typed).Should().Be(expected,
+        RecoveryCodeFactory.Normalize(typed).Should().Be(expected,
             "a code copied onto paper and typed back with dashes must be the same code");
 
     [Theory]
@@ -68,7 +65,7 @@ public class RecoveryCodeFactoryShould
     [InlineData("1", "l")]
     [InlineData("0", "O")]
     public void FoldTheLookalikesOntoTheDigits(string expected, string typed) =>
-        _factory.Normalize(typed).Should().Be(expected,
+        RecoveryCodeFactory.Normalize(typed).Should().Be(expected,
             "the alphabet leaves these letters out precisely because a handwritten code " +
             "loses them to the digits beside them");
 
@@ -78,30 +75,30 @@ public class RecoveryCodeFactoryShould
     [Fact]
     public void StoreOnlyTheHashOfTheValue()
     {
-        var code = _factory.Create(1)[0];
+        var code = RecoveryCodeFactory.Create(1)[0];
 
-        _factory.Hash(code).Should().Equal(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
+        RecoveryCodeFactory.Hash(code).Should().Equal(SHA256.HashData(Encoding.UTF8.GetBytes(code)));
     }
 
     [Fact]
     public void HashTheSameCodeTheSameWayHoweverItWasTyped()
     {
-        var code = _factory.Create(1)[0];
+        var code = RecoveryCodeFactory.Create(1)[0];
         var grouped = string.Join('-', Enumerable.Range(0, 4)
             .Select(i => code.Substring(i * RecoveryCodeFactory.GroupSize, RecoveryCodeFactory.GroupSize)));
 
-        _factory.Hash(grouped.ToLowerInvariant()).Should().Equal(_factory.Hash(code));
+        RecoveryCodeFactory.Hash(grouped.ToLowerInvariant()).Should().Equal(RecoveryCodeFactory.Hash(code));
     }
 
     [Fact]
     public void HashDifferentCodesDifferently()
     {
-        var codes = _factory.Create(2);
+        var codes = RecoveryCodeFactory.Create(2);
 
-        _factory.Hash(codes[0]).Should().NotEqual(_factory.Hash(codes[1]));
+        RecoveryCodeFactory.Hash(codes[0]).Should().NotEqual(RecoveryCodeFactory.Hash(codes[1]));
     }
 
     [Fact]
     public void NormalizeNothingToNothing() =>
-        _factory.Normalize(string.Empty).Should().BeEmpty();
+        RecoveryCodeFactory.Normalize(string.Empty).Should().BeEmpty();
 }

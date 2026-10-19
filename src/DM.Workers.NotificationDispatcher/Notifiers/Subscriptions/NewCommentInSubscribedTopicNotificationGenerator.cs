@@ -18,7 +18,6 @@ internal class NewCommentInSubscribedTopicNotificationGenerator : BaseNotificati
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public NewCommentInSubscribedTopicNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -56,14 +55,12 @@ internal class NewCommentInSubscribedTopicNotificationGenerator : BaseNotificati
             commentData.TopicId,
             SubscriptionSettings.NewComments);
 
-        // Notify subscribers except the comment author
-        // Also notify topic author even if not explicitly subscribed (via topic author subscription)
+        // Subscribers except the comment author, and the topic author
         var subscriberIds = subscriptions
             .Where(s => s.SubscriberId != commentData.AuthorId)
             .Select(s => s.SubscriberId)
             .ToList();
 
-        // Add topic author if they're not the commenter and not already subscribed
         if (commentData.TopicAuthorId != commentData.AuthorId &&
             !subscriberIds.Contains(commentData.TopicAuthorId))
         {
@@ -82,10 +79,10 @@ internal class NewCommentInSubscribedTopicNotificationGenerator : BaseNotificati
             ActorId = commentData.AuthorId,
             Metadata = new
             {
-                CommentId = commentData.CommentId,
+                commentData.CommentId,
                 TopicId = commentData.TopicId.EncodeToReadable(commentData.TopicTitle),
-                TopicTitle = commentData.TopicTitle,
-                AuthorUsername = commentData.AuthorUsername
+                commentData.TopicTitle,
+                commentData.AuthorUsername
             }
         };
     }

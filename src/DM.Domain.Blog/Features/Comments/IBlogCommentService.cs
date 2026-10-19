@@ -6,14 +6,8 @@ using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Blog.Features.Comments;
 
-/// <summary>
-/// Service for managing comments on blogs
-/// </summary>
 public interface IBlogCommentService
 {
-    /// <summary>
-    /// Create a comment on a blog
-    /// </summary>
     Task<Comment> CreateAsync(CreateComment createComment);
 
     /// <summary>
@@ -25,12 +19,6 @@ public interface IBlogCommentService
     /// <param name="blog">The blog, read for the current user</param>
     bool MayCreate(Blogs.Blog blog);
 
-    /// <summary>
-    /// Get comments for a blog
-    /// </summary>
-    /// <param name="blogId">Blog identifier</param>
-    /// <param name="query">Query with filtering, sorting and paging</param>
-    /// <param name="excludeUserIds">Optional user IDs to exclude from results</param>
     Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null);
 
@@ -41,14 +29,8 @@ public interface IBlogCommentService
     /// </summary>
     Task<Comment> GetAsync(Guid commentId);
 
-    /// <summary>
-    /// Update a comment
-    /// </summary>
     Task<Comment> UpdateAsync(UpdateComment updateComment);
 
-    /// <summary>
-    /// Delete a comment
-    /// </summary>
     Task DeleteAsync(Guid commentId);
 
     /// <summary>

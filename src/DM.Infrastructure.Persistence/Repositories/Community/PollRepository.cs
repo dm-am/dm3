@@ -11,7 +11,6 @@ using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
 using DbPoll = DM.Infrastructure.Persistence.Entities.Community.Poll;
 using DbPollOption = DM.Infrastructure.Persistence.Entities.Community.PollOption;
-using DbPollVote = DM.Infrastructure.Persistence.Entities.Community.PollVote;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 
@@ -21,7 +20,6 @@ internal class PollRepository : IPollRepository
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public PollRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
@@ -30,10 +28,8 @@ internal class PollRepository : IPollRepository
         _dateTimeProvider = dateTimeProvider;
     }
 
-    // ═══ READ ═══
-
     /// <inheritdoc />
-    public async Task<long> Count(PollsQuery query)
+    public async Task<int> Count(PollsQuery query)
     {
         return await BuildFilter(query).CountAsync();
     }
@@ -52,17 +48,10 @@ internal class PollRepository : IPollRepository
         return dbPolls.Select(PollMapper.ToPoll);
     }
 
-    private IQueryable<DbPoll> BuildFilter(PollsQuery? query)
+    private IQueryable<DbPoll> BuildFilter(PollsQuery query)
     {
-        // The global soft-delete filter already hides removed polls; everything
-        // else the caller asked for is composed below.
-        var polls = _dbContext.Polls
-            .TagWith("DM.Community.Polls")
-            .AsQueryable();
-
-        if (query == null)
-            return polls;
-
+        // The global soft-delete filter already hides removed polls.
+        IQueryable<DbPoll> polls = _dbContext.Polls.TagWith("DM.Community.Polls");
         // Status is a position relative to now, so it is a comparison on the two
         // dates rather than a stored field. The window is Poll.StatusAt in the
         // community domain; these three arms restate it and have to move with it.
@@ -116,17 +105,12 @@ internal class PollRepository : IPollRepository
         return polls;
     }
 
-    private IOrderedQueryable<DbPoll> BuildSort(IQueryable<DbPoll> polls, PollsQuery? query)
+    private IOrderedQueryable<DbPoll> BuildSort(IQueryable<DbPoll> polls, PollsQuery query)
     {
-        if (query == null)
-            return polls.OrderBy(p => p.StartsUtc);
-
         var isDesc = string.Equals(query.SortOrder, "desc", StringComparison.OrdinalIgnoreCase);
 
         // Status order is derived from the current moment, the same ladder as
-        // Poll.StatusAt: Pending (0) -> Active (1) -> Closed (2). A CASE
-        // expression in SQL replaces the aggregation pipeline the document
-        // store needed for the same sort.
+        // Poll.StatusAt: Pending (0) -> Active (1) -> Closed (2).
         if (string.Equals(query.SortBy, "status", StringComparison.OrdinalIgnoreCase))
         {
             var now = _dateTimeProvider.Now;
@@ -151,8 +135,6 @@ internal class PollRepository : IPollRepository
         var dbPoll = await LoadPoll(id);
         return dbPoll.ToPoll();
     }
-
-    // ═══ WRITE ═══
 
     /// <inheritdoc />
     public async Task<Poll> Create(CreatePollEntity poll)
@@ -195,30 +177,7 @@ internal class PollRepository : IPollRepository
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-            // The poll row first, and the flag comes back with the lock rather
-            // than being read again afterwards. Whether the votes are reset is a
-            // decision about the flag as it stands now, and it used to be made on
-            // a row read with no lock at all: a vote committed between that read
-            // and the delete outlived the reset it was supposed to be cleared by,
-            // and one committed just after it was deleted by a reset the voter's
-            // ballot never showed. Vote holds the same row FOR SHARE, so the two
-            // orderings are now the only ones: the vote is already here and gets
-            // deleted, or it waits for this commit and lands on a poll that is
-            // already public.
-            //
-            // A list rather than a single value, because "no rows" is the poll
-            // that is not there and false is a poll that is public.
-            var locked = await _dbContext.Database
-                .SqlQueryRaw<bool>(
-                    """SELECT "IsAnonymous" AS "Value" FROM "Polls" WHERE "PollId" = {0} FOR UPDATE""",
-                    pollId)
-                .ToListAsync();
-            if (locked.Count == 0)
-            {
-                throw new InvalidOperationException($"Poll {pollId} does not exist");
-            }
-
-            var wasAnonymous = locked[0];
+            var wasAnonymous = await LockPoll(pollId);
 
             // The row alone. Its options and every vote cast on them are a read
             // of unbounded size, and holding a write lock while it runs makes
@@ -228,45 +187,8 @@ internal class PollRepository : IPollRepository
                 .TagWith("DM.Community.Polls.Edited")
                 .FirstAsync(p => p.PollId == pollId);
 
-            if (title != null)
-            {
-                dbPoll.Title = title;
-            }
-
-            if (details != null)
-            {
-                dbPoll.Details = details == string.Empty ? null : details;
-            }
-
-            if (startDate.HasValue)
-            {
-                dbPoll.StartsUtc = startDate.Value.ToUniversalTime();
-            }
-
-            if (endDate.HasValue)
-            {
-                dbPoll.EndsUtc = endDate.Value.ToUniversalTime();
-            }
-
-            // Off the locked value, not off the loaded row: what the reset turns
-            // on is the state no other writer can move until this commit.
-            var resetsVotes = isAnonymous.HasValue && wasAnonymous && !isAnonymous.Value;
-            if (isAnonymous.HasValue)
-            {
-                dbPoll.IsAnonymous = isAnonymous.Value;
-            }
-
-            if (resetsVotes)
-            {
-                // Reset votes when changing from Anonymous to Public: an
-                // anonymous ballot cannot be republished with names on it.
-                // Server-side delete rather than the loaded graph, because the
-                // vote writes bypass the change tracker and the graph only holds
-                // what this context happened to read.
-                await _dbContext.PollVotes
-                    .Where(v => v.PollId == pollId)
-                    .ExecuteDeleteAsync();
-            }
+            ApplyChanges(dbPoll, title, details, startDate, endDate, isAnonymous);
+            await ResetVotesIfMadePublic(pollId, wasAnonymous, isAnonymous);
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -275,13 +197,99 @@ internal class PollRepository : IPollRepository
         return (await LoadPoll(pollId)).ToPoll();
     }
 
+    /// <summary>
+    /// Takes the poll row for the rest of the edit and answers whether the poll
+    /// is anonymous as it stands under that lock.
+    /// </summary>
+    private async Task<bool> LockPoll(Guid pollId)
+    {
+        // The poll row first, and the flag comes back with the lock rather
+        // than being read again afterwards. Whether the votes are reset is a
+        // decision about the flag as it stands now, and it used to be made on
+        // a row read with no lock at all: a vote committed between that read
+        // and the delete outlived the reset it was supposed to be cleared by,
+        // and one committed just after it was deleted by a reset the voter's
+        // ballot never showed. Vote holds the same row FOR SHARE, so the two
+        // orderings are now the only ones: the vote is already here and gets
+        // deleted, or it waits for this commit and lands on a poll that is
+        // already public.
+        //
+        // A list rather than a single value, because "no rows" is the poll
+        // that is not there and false is a poll that is public.
+        var locked = await _dbContext.Database
+            .SqlQueryRaw<bool>(
+                """SELECT "IsAnonymous" AS "Value" FROM "Polls" WHERE "PollId" = {0} FOR UPDATE""",
+                pollId)
+            .ToListAsync();
+        if (locked.Count == 0)
+        {
+            throw new InvalidOperationException($"Poll {pollId} does not exist");
+        }
+
+        return locked[0];
+    }
+
+    /// <summary>
+    /// Writes the fields the edit names onto the tracked row and leaves the
+    /// others as they are.
+    /// </summary>
+    private static void ApplyChanges(DbPoll dbPoll, string? title, string? details,
+        DateTimeOffset? startDate, DateTimeOffset? endDate, bool? isAnonymous)
+    {
+        if (title != null)
+        {
+            dbPoll.Title = title;
+        }
+
+        if (details != null)
+        {
+            dbPoll.Details = details == string.Empty ? null : details;
+        }
+
+        if (startDate.HasValue)
+        {
+            dbPoll.StartsUtc = startDate.Value.ToUniversalTime();
+        }
+
+        if (endDate.HasValue)
+        {
+            dbPoll.EndsUtc = endDate.Value.ToUniversalTime();
+        }
+
+        if (isAnonymous.HasValue)
+        {
+            dbPoll.IsAnonymous = isAnonymous.Value;
+        }
+    }
+
+    /// <summary>
+    /// Clears the ballot of an anonymous poll the edit makes public.
+    /// </summary>
+    private async Task ResetVotesIfMadePublic(Guid pollId, bool wasAnonymous, bool? isAnonymous)
+    {
+        // Off the locked value, not off the loaded row: what the reset turns
+        // on is the state no other writer can move until this commit.
+        var resetsVotes = isAnonymous.HasValue && wasAnonymous && !isAnonymous.Value;
+        if (!resetsVotes)
+        {
+            return;
+        }
+
+        // Reset votes when changing from Anonymous to Public: an
+        // anonymous ballot cannot be republished with names on it.
+        // Server-side delete rather than the loaded graph, because the
+        // vote writes bypass the change tracker and the graph only holds
+        // what this context happened to read.
+        await _dbContext.PollVotes
+            .Where(v => v.PollId == pollId)
+            .ExecuteDeleteAsync();
+    }
+
     /// <inheritdoc />
     public Task Delete(Guid pollId) =>
         _dbContext.Polls
             .Where(p => p.PollId == pollId)
             .ExecuteUpdateAsync(s => s.SetProperty(p => p.IsRemoved, true));
-
-    // ═══ VOTING ═══
 
     /// <inheritdoc />
     /// <remarks>
@@ -344,19 +352,17 @@ internal class PollRepository : IPollRepository
     }
 
     /// <summary>
-    /// The poll with its ballot. Untracked by default: the vote writes bypass
-    /// the change tracker (raw ON CONFLICT, ExecuteDelete), so a tracked read
-    /// after one of them would merge in stale tracked votes. Only Update, which
-    /// edits through the tracker, asks for the tracked shape.
+    /// The poll with its ballot, untracked: the vote writes bypass the change
+    /// tracker (raw ON CONFLICT, ExecuteDelete), so a tracked read after one of
+    /// them would merge in stale tracked votes.
     /// </summary>
-    private Task<DbPoll?> LoadPoll(Guid pollId, bool tracked = false)
-    {
-        var polls = _dbContext.Polls
+    private Task<DbPoll?> LoadPoll(Guid pollId) =>
+        _dbContext.Polls
             .TagWith("DM.Community.Polls.Load")
             .Where(p => p.PollId == pollId)
             .Include(p => p.Options)
             .ThenInclude(o => o.Votes)
-            .AsSplitQuery();
-        return (tracked ? polls : polls.AsNoTracking()).FirstOrDefaultAsync();
-    }
+            .AsSplitQuery()
+            .AsNoTracking()
+            .FirstOrDefaultAsync();
 }

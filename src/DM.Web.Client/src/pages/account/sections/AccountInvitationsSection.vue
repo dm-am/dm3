@@ -1,9 +1,18 @@
 <template>
-  <section v-if="invitations.length > 0 || loading" class="section">
+  <section
+    v-if="invitations.length > 0 || loading || loadError"
+    class="section"
+  >
     <h2 class="section-title">Приглашения</h2>
 
     <div class="invitations-content">
-      <div v-if="loading" class="loading-state">Загрузка...</div>
+      <AccountSectionSkeleton v-if="loading" shape="rows" :count="1" />
+
+      <ErrorState
+        v-else-if="loadError"
+        :message="loadError"
+        :retry="loadInvitations"
+      />
 
       <div v-else class="invitations-list">
         <template v-for="invitation in invitations" :key="invitation.id">
@@ -17,9 +26,7 @@
                   {{ invitation.entityTitle }}
                 </RouterLink>
               </div>
-              <!-- A caption line of the site: where it is short it wraps
-                   between its parts, and every part stands whole, the name
-                   of the inviter too. -->
+              <!-- A caption line of the site: it wraps between its parts, each whole. -->
               <CaptionLine size="secondary" class="invitation-details">
                 <span class="invitation-from"
                   >От:{{ " "
@@ -30,7 +37,7 @@
                   ></span
                 >
                 <span class="invitation-role">{{
-                  typeLabel(invitation.type)
+                  INVITATION_TYPE_LABELS[invitation.type]
                 }}</span>
                 <span class="invitation-date">{{
                   formatDate(invitation.createdUtc)
@@ -38,14 +45,8 @@
               </CaptionLine>
             </div>
 
-            <!--
-            The answer to the press stands where the buttons stood, and the row
-            stays put. Accepting has a half the screen never showed: the server
-            hands over the role in the game or the blog and answers 204 with no
-            body (Personal/Invitations/InvitationController.AcceptInvitation),
-            so the row says which role that was, while the title above it stays
-            a link into what the viewer has just joined.
-          -->
+            <!-- The answer stands where the buttons stood: the server grants the role and
+                 answers 204, so the row names the role, the title still a link into it. -->
             <p
               v-if="acceptedIds.includes(invitation.id)"
               class="invitation-accepted"
@@ -57,7 +58,6 @@
             <div v-else class="invitation-actions">
               <Button
                 type="button"
-                class="action-btn--accept"
                 :disabled="processingId === invitation.id"
                 @click="accept(invitation.id)"
               >
@@ -65,7 +65,6 @@
               </Button>
               <Button
                 type="button"
-                class="action-btn--reject"
                 :disabled="processingId === invitation.id"
                 @click="reject(invitation.id)"
               >
@@ -73,7 +72,7 @@
               </Button>
             </div>
           </div>
-          <!-- A refused answer, under the row it was given in. -->
+          <!-- A refusal, under the row it was given in. -->
           <ActionResult
             v-if="rowRefusal?.id === invitation.id"
             :text="rowRefusal.text"
@@ -88,6 +87,7 @@
 <script setup lang="ts">
 import { ref, onMounted } from "vue";
 import { RouterLink, type RouteLocationRaw } from "vue-router";
+import { INVITATION_TYPE_LABELS } from "@/entities/game";
 import { personalApi } from "@/entities/user";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import type { ReceivedInvitation } from "@/shared/api/models/personal";
@@ -95,12 +95,16 @@ import { refusalHere } from "@/shared/lib/errors";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import Button from "@/shared/ui/Button/Button.vue";
 import { CaptionLine } from "@/shared/ui/CaptionLine";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import AccountSectionSkeleton from "./AccountSectionSkeleton.vue";
+import { OWNED_BY_CARD } from "./loadFailure";
 
-// The shape the endpoint actually answers. The section used to type it as the
-// game-side Invitation (gameId / gameTitle), so every row rendered an empty
-// link — a zero-width anchor with no name in it — pointing at /games/undefined.
+const LOAD_FAILED = "Не удалось загрузить приглашения";
+
+// The shape the endpoint answers (entityId, entityType, entityTitle).
 const invitations = ref<ReceivedInvitation[]>([]);
 const loading = ref(true);
+const loadError = ref<string | null>(null);
 const processingId = ref<string | null>(null);
 
 /** Invitations accepted here, by id: their rows stay and show what came of it. */
@@ -119,50 +123,30 @@ onMounted(async () => {
 
 async function loadInvitations() {
   loading.value = true;
-  const { data, error } = await personalApi.getMyInvitations();
+  const { data, error } = await personalApi.getMyInvitations(OWNED_BY_CARD);
   loading.value = false;
 
+  loadError.value = !error && data ? null : LOAD_FAILED;
   if (!error && data) {
     invitations.value = data.resources;
   }
 }
 
-// Named routes, and the right one per entity: the endpoint answers game and
-// blog invitations together, and /games/<id> is not a route at all (the game
-// lives at /game/:id), so the hand-written path fell through to the catch-all.
+// A named route per entity: the endpoint answers game and blog invitations together.
 function targetRoute(invitation: ReceivedInvitation): RouteLocationRaw {
   return invitation.entityType === "blog"
     ? { name: "blog", params: { id: invitation.entityId } }
     : { name: "game", params: { id: invitation.entityId } };
 }
 
-// The inviter's profile, by name for the same reason: /users/<name> is the
-// path the "profile" route happens to have today, and a hand-written copy of a
-// path goes stale silently — the row above it is what that looks like.
+// The inviter's profile by route name, not by a written path.
 function inviterRoute(username: string): RouteLocationRaw {
   return { name: "profile", params: { username } };
 }
 
-function typeLabel(type: ReceivedInvitation["type"]): string {
-  switch (type) {
-    case "player":
-      return "Игрок";
-    case "assistant":
-      return "Помощник";
-    case "reader":
-      return "Читатель";
-  }
-}
-
-/**
- * What accepting did, in the row it was done in.
- *
- * The role is named with the same word the row itself uses for it, lowered to
- * sit inside a sentence: a second table of names here would be a table that
- * drifts from the one above.
- */
+/** What accepting did, in the word the row uses for the role. */
 function acceptedLabel(invitation: ReceivedInvitation): string {
-  return `Вы приняты как ${typeLabel(invitation.type).toLowerCase()}`;
+  return `Вы приняты как ${INVITATION_TYPE_LABELS[invitation.type].toLowerCase()}`;
 }
 
 async function accept(invitationId: string) {
@@ -174,10 +158,7 @@ async function accept(invitationId: string) {
   if (error) {
     refuse(invitationId, refusalHere(error, "Не удалось принять приглашение"));
   } else {
-    // No toast, and the row is not dropped either. Dropping it showed only the
-    // half that undoes itself — the invitation is gone — and said nothing about
-    // the half that lasts, so the message had to say it instead. The row now
-    // carries both: the role received, and the link to where it is held.
+    // No toast, and the row stays: it says the role received and links to it.
     acceptedIds.value = [...acceptedIds.value, invitationId];
   }
 }
@@ -194,7 +175,7 @@ async function reject(invitationId: string) {
       refusalHere(error, "Не удалось отклонить приглашение"),
     );
   } else {
-    // No toast: the row leaves the list under the button that was pressed.
+    // No toast: the row leaves under the pressed button.
     invitations.value = invitations.value.filter((i) => i.id !== invitationId);
   }
 }
@@ -207,15 +188,12 @@ async function reject(invitationId: string) {
   padding: $medium
   background-color: $bg-element
 
-.loading-state
-  padding: $medium
-
 .invitations-list
   display: flex
   flex-direction: column
   gap: $small
 
-// Spaced by the gap of the list, at the left edge of the row above it.
+// Spaced by the gap of the list.
 .invitation-refusal
   --action-result-margin: 0
 
@@ -224,7 +202,7 @@ async function reject(invitationId: string) {
   justify-content: space-between
   align-items: center
   padding: $small $medium
-  background-color: $bg
+  background-color: $bg-element
   border: 1px solid $border
   gap: $medium
 
@@ -240,14 +218,7 @@ async function reject(invitationId: string) {
   align-items: center
   gap: $small
 
-.invitation-icon
-  font-size: 1.2em
-
-// The one bold link weight of the site; colour and hover are the global link.
-// A long title wraps, whole, rather than losing its end under "...". As an item
-// of the flex header the link is never narrower than its longest word, and
-// break-word does not lower that, so a title of one word wider than the card
-// went past its edge: min-width 0 lets the base rule break the word instead.
+// The site's bold link; a long title wraps whole, and min-width 0 lets a one-word title break inside the card.
 .invitation-target-link
   min-width: 0
   font-weight: 700
@@ -255,7 +226,7 @@ async function reject(invitationId: string) {
 .invitation-details
   display: block
 
-// Sits in the place the buttons held, so the answer is where the press was.
+// Where the buttons stood, so the answer is where the press was.
 .invitation-accepted
   margin: 0
   flex-shrink: 0

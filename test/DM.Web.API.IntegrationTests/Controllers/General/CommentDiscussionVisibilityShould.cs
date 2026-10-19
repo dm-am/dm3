@@ -1,5 +1,4 @@
 using System.Net;
-using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -19,20 +18,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// as on a comment that is not there, end to end.
 /// </summary>
 /// <remarks>
-/// Two holes, one shape. The comments of a blog were read through the one blog
-/// read that skips the private-draft and premoderation gates, so the discussion
-/// of a hidden blog was handed to anybody holding the id of a comment in it or of
-/// the blog itself, guest included - the listing by the blog's GUID, the single
-/// read and the like all went through it. And the single read of every
-/// discussion passed on the discussion's own refusal - "topic not found", "blog
-/// not found", "publication not found" - where the comment was of another kind
-/// or its discussion was hidden, while an id that is nothing answered "comment
-/// not found": the difference told a stranger that the id is a comment, and of
-/// which discussion.
-///
-/// Asserted as indistinguishability, body included, as the publication and blog
-/// visibility tests next door are: a 404 with a different sentence is still an
-/// answer to the question.
+/// A comment of a hidden discussion, of another kind, and an id that is nothing must answer alike, body
+/// included, as the publication and blog visibility tests next door assert.
 /// </remarks>
 public class CommentDiscussionVisibilityShould : IntegrationTestBase
 {
@@ -166,29 +153,7 @@ public class CommentDiscussionVisibilityShould : IntegrationTestBase
         return new Answer(response.StatusCode,
             response.StatusCode == HttpStatusCode.OK
                 ? string.Empty
-                : WithoutCorrelation(await response.Content.ReadAsStringAsync()));
-    }
-
-    /// <summary>
-    /// The refusal document minus its correlation token, which is per request by
-    /// design and the one field two identical refusals may differ in, and with the
-    /// identifier the caller asked about written as a placeholder: the sentence
-    /// repeats the id it was given, which is no news to the caller who gave it.
-    /// </summary>
-    private static string WithoutCorrelation(string body)
-    {
-        if (string.IsNullOrWhiteSpace(body)) return body;
-
-        using var document = JsonDocument.Parse(body);
-        if (document.RootElement.ValueKind != JsonValueKind.Object) return body;
-
-        var fields = string.Join("&", document.RootElement
-            .EnumerateObject()
-            .Where(p => p.Name != "traceId")
-            .OrderBy(p => p.Name, StringComparer.Ordinal)
-            .Select(p => $"{p.Name}={p.Value.GetRawText()}"));
-        return System.Text.RegularExpressions.Regex.Replace(fields,
-            @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "{id}");
+                : Masked(await response.Content.ReadAsStringAsync()));
     }
 
     private sealed record Seeded(
@@ -201,10 +166,8 @@ public class CommentDiscussionVisibilityShould : IntegrationTestBase
         IReadOnlyList<(string Owner, Guid CommentId)> OfEveryDiscussion);
 
     /// <summary>
-    /// A blog in a private draft and an open one, each with a comment; a
-    /// publication in each with a comment; and, when asked, a comment in each of
-    /// the seeded forum topic and game. Fresh identifiers every time: the fixture
-    /// database is shared and its usernames and public ids are uniquely indexed.
+    /// A blog in a private draft and an open one with comments, a publication in each with a comment, and on request
+    /// a comment in the seeded topic and game; fresh identifiers.
     /// </summary>
     private async Task<Seeded> SeedAsync(bool inSharedDiscussions = false)
     {
@@ -308,8 +271,6 @@ public class CommentDiscussionVisibilityShould : IntegrationTestBase
             Title = "Comment visibility entry",
             Content = "Seeded by CommentDiscussionVisibilityShould",
             Preview = "Seeded",
-            IsPublished = true,
-            PublishedUtc = now,
             CreatedUtc = now
         };
         dbContext.Publications.Add(publication);

@@ -16,23 +16,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 /// What a publication inside a blog nobody may open answers, end to end.
 /// </summary>
 /// <remarks>
-/// The listing has always asked the blog first: GET /v1/blogs/{id}/publications
-/// reads the parent through the gated blog read, so a private draft and a blog
-/// still waiting on premoderation hide everything in them. The single read did
-/// not: it fetched the row by id and refused only a draft, so a published
-/// publication in a hidden blog was handed to anybody, guest included, through
-/// GET /v1/publications/{id}.
-///
-/// Nothing had to be guessed to reach it: GET /v1/users/{username}/best-publication
-/// is public and filtered the author's rows by nothing but "published", so it
-/// gave a stranger the identifier and the body at once. That is why the profile
-/// widget is asserted here beside the read.
-///
-/// As with the blog premoderation endpoint next door, the assertions are about
-/// indistinguishability rather than about a status code: a hidden publication has
-/// to answer exactly what a publication that never existed answers, body
-/// included. A 403 would confirm the publication is there, which is the half of
-/// the leak that refusing the content does not close.
+/// The listing reads the parent through the gated blog read, the single read and the profile widget must too.
+/// A hidden publication answers exactly what one that never existed answers, body included.
 /// </remarks>
 public class PublicationVisibilityShould : IntegrationTestBase
 {
@@ -118,10 +103,7 @@ public class PublicationVisibilityShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The profile widget is the reachability half of the same leak: it is public,
-    /// it names one publication of an author it is asked about, and the only thing
-    /// it used to filter on was "published". An author whose single publication
-    /// sits in a hidden blog has nothing to spotlight.
+    /// The public profile widget names nothing from a hidden blog.
     /// </summary>
     [Fact]
     public async Task NameNoPublicationFromAHiddenBlogInTheProfileWidget()
@@ -172,10 +154,7 @@ public class PublicationVisibilityShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The refusal document minus its correlation token. traceId is per-request by
-    /// design and is the one field two identical refusals are allowed to differ
-    /// in, and everything else (status, type, title, detail) has to match, or the
-    /// answer tells the reader which of the two cases they hit.
+    /// The refusal document minus its correlation token, which differs per request by design.
     /// </summary>
     private static string WithoutCorrelation(string body)
     {
@@ -216,11 +195,8 @@ public class PublicationVisibilityShould : IntegrationTestBase
         Guid InPublicBlog);
 
     /// <summary>
-    /// One author with four blogs differing only in what hides them, a published
-    /// publication in each, and a second author whose single publication sits in a
-    /// hidden blog: the profile widget needs an author with nothing else to name.
-    /// Fresh identifiers every time: the fixture database is shared and its
-    /// usernames and public ids are uniquely indexed.
+    /// One author with four blogs differing in what hides them, a publication in each, and a second author whose
+    /// only publication is hidden; fresh identifiers.
     /// </summary>
     private async Task<SeededPublications> SeedAsync()
     {
@@ -321,8 +297,6 @@ public class PublicationVisibilityShould : IntegrationTestBase
             Title = "Publication visibility entry",
             Content = "Seeded by PublicationVisibilityShould",
             Preview = "Seeded",
-            IsPublished = true,
-            PublishedUtc = now,
             CreatedUtc = now,
             IsRemoved = false
         };

@@ -1,11 +1,4 @@
-/**
- * Composable wrapping @tanstack/vue-virtual for dynamic-height lists.
- *
- * Provides virtual scrolling with:
- * - Dynamic row heights via measureElement
- * - Configurable overscan for smooth scrolling
- * - Reactive count and scroll element
- */
+/** @tanstack/vue-virtual for lists of measured, dynamic-height rows. */
 
 import { computed, type Ref, type ComputedRef } from "vue";
 import {
@@ -24,24 +17,20 @@ export interface VirtualScrollOptions {
   /** Number of items to render above/below viewport (default: 10) */
   overscan?: number;
   /**
-   * Stable key for each item (e.g. message id / date-separator date).
-   * Optional — defaults to the virtualizer's own index-based key. Pass this
-   * when the underlying list can be prepended to (history pagination), so
-   * measurements/state stay attached to the same logical item instead of
-   * sliding onto whatever item now occupies that index.
+   * Stable key per item, for a list that is prepended to, so measurements stay
+   * with the item and not the index. Defaults to the index.
    */
   getItemKey?: (index: number) => string | number;
 }
 
 export interface VirtualScrollReturn {
-  /** The virtualizer instance */
   virtualizer: Ref<Virtualizer<HTMLElement, Element>>;
   /** Currently visible virtual items */
   virtualItems: ComputedRef<VirtualItem[]>;
   /** Total height of all items */
   totalSize: ComputedRef<number>;
   /** Ref callback for measuring element heights — pass as :ref on each virtual row */
-  measureElement: (el: HTMLElement) => void;
+  measureElement: (el: Element) => void;
   /** Scroll to a specific index */
   scrollToIndex: (
     index: number,
@@ -89,7 +78,7 @@ export function useVirtualScroll(
   }
 
   // Always call through .value to reference current virtualizer instance
-  function measureElement(el: HTMLElement) {
+  function measureElement(el: Element) {
     virtualizer.value.measureElement(el);
   }
 

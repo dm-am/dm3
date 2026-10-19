@@ -1,41 +1,136 @@
 /**
- * @vitest-environment node
- */
-
-/**
- * Contacts are the one list on the profile a reader builds by hand, and neither
- * of a contact's two fields is an identity. `contactType` is free text and
- * nothing stops two rows from both being "Telegram" — the display list keyed by
- * it, which is a duplicate key, a warning in the console and a patch that can
- * leave one of the two rows stale. The editor keyed by index while offering a
- * splice: delete a row from the middle and the caret stays on an input that now
- * holds the NEXT contact's data, so the reader goes on typing into someone
- * else's record.
- *
- * The fix is an identity per draft row, minted locally and stripped before the
- * value is sent. Read from the template, because the key expression IS the
- * defect and the template is the only place it can come back.
+ * @vitest-environment jsdom
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const source = readFileSync(join(HERE, "ProfilePersonalInfo.vue"), "utf8");
+import { mount } from "@vue/test-utils";
+import { RowIconButton } from "@/shared/ui/RowIconButton";
+import ProfilePersonalInfo from "./ProfilePersonalInfo.vue";
+import type { User } from "@/shared/api/models/community";
 
 describe("the contacts of a profile", () => {
-  it("never keys a row by the contact type", () => {
-    expect(source).not.toContain(':key="contact.contactType"');
+  it("removes a middle row without moving the others into its inputs", async () => {
+    const contacts = [
+      { contactType: "Telegram", value: "@first" },
+      { contactType: "Telegram", value: "@second" },
+      { contactType: "Discord", value: "third" },
+    ];
+    const wrapper = mount(ProfilePersonalInfo, {
+      props: {
+        user: { username: "Reader", contacts } as unknown as User,
+        isEditMode: true,
+      },
+    });
+    const thirdRow = wrapper.findAll(".contact-edit-row")[2].element;
+
+    // The site's row sign, named by what it does.
+    const removes = wrapper.findAllComponents(RowIconButton);
+    expect(removes.map((sign) => sign.props())).toEqual(
+      Array(3).fill({ icon: "trash", label: "Удалить контакт" }),
+    );
+    await removes[1].trigger("click");
+
+    const rows = wrapper.findAll(".contact-edit-row");
+    const values = rows.map(
+      (row) => (row.get(".contact-value").element as HTMLInputElement).value,
+    );
+    expect(values).toEqual(["@first", "third"]);
+    // A row keyed by its index would hand the third contact the second's inputs.
+    expect(rows[1].element).toBe(thirdRow);
+    expect(wrapper.emitted("updateField")?.at(-1)).toEqual([
+      "contacts",
+      JSON.stringify([contacts[0], contacts[2]]),
+    ]);
+  });
+});
+
+/**
+ * The public profile hides a birthday kept private and carries no visibility:
+ * the editor opens on the owner's own profile, as stored.
+ */
+describe("the edit mode of the personal info", () => {
+  const OWN = {
+    visibility: { showBirthday: true, showRating: true },
+    birthday: { day: 14, month: 3, year: 1991 },
+  };
+
+  function editor(own: typeof OWN | null) {
+    return mount(ProfilePersonalInfo, {
+      props: {
+        // No birthday and no visibility, as the public profile of a hidden one.
+        user: { username: "Reader", contacts: [] } as unknown as User,
+        isEditMode: true,
+        // Only the fields the editor reads.
+        own: own as never,
+      },
+    });
+  }
+
+  /** The box beside the words it stands by. */
+  const box = (wrapper: ReturnType<typeof editor>, words: string) => {
+    const row = wrapper
+      .findAll(".checkbox-row")
+      .find((label) => label.text() === words);
+    if (!row) throw new Error(`no box "${words}"`);
+    return row.get('input[type="checkbox"]').element as HTMLInputElement;
+  };
+
+  const yearShown = (wrapper: ReturnType<typeof editor>) =>
+    box(wrapper, "Показывать год рождения").checked;
+
+  const ratingShown = (wrapper: ReturnType<typeof editor>) =>
+    box(wrapper, "Участие в рейтинге").checked;
+
+  it("ticks Показывать год рождения where the owner saved it ticked", () => {
+    expect(yearShown(editor(OWN))).toBe(true);
   });
 
-  it("gives an editable row an identity that survives a delete", () => {
-    expect(source).toContain(':key="contact.uid"');
+  it("opens the date the owner stored, which the public profile left out", () => {
+    const wrapper = editor(OWN);
+
+    expect(
+      (
+        wrapper.get('input[aria-label="День рождения"]')
+          .element as HTMLInputElement
+      ).value,
+    ).toBe("14.03.1991");
   });
 
-  it("keeps that identity out of what the server is told", () => {
-    // The draft carries a field the DTO does not have; the emit must not.
-    expect(source).toMatch(/JSON\.stringify\(asContacts\(/);
-    expect(source).toMatch(/function asContacts\(/);
+  it("leaves the box clear where the owner saved it clear", () => {
+    expect(
+      yearShown(
+        editor({
+          ...OWN,
+          visibility: { showBirthday: false, showRating: true },
+        }),
+      ),
+    ).toBe(false);
+  });
+
+  it("offers Участие в рейтинге beside the year, as the owner saved it, with its hint", () => {
+    const wrapper = editor({
+      ...OWN,
+      visibility: { showBirthday: true, showRating: false },
+    });
+
+    expect(ratingShown(wrapper)).toBe(false);
+    expect(ratingShown(editor(OWN))).toBe(true);
+    expect(wrapper.get(".rating-field .form-field-hint").text()).toBe(
+      "Без участия рейтинг не виден в списках и карточках, в профиле он виден всегда",
+    );
+  });
+
+  it("hands a change of the participation to the bar's save", async () => {
+    const wrapper = editor(OWN);
+
+    await wrapper
+      .findAll(".checkbox-row")
+      .find((label) => label.text() === "Участие в рейтинге")!
+      .get("input")
+      .setValue(false);
+
+    expect(wrapper.emitted("updateField")?.at(-1)).toEqual([
+      "showRating",
+      "false",
+    ]);
   });
 });

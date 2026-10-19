@@ -20,21 +20,14 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 public sealed record RetentionPolicy(string Table, string TimestampColumn, TimeSpan Term);
 
 /// <summary>
-/// The single registry of retention policies, replacing the TTL indexes of the
-/// document store. Declarative on purpose: the architecture suite reads this
-/// list and requires every table of the context to either be here or be named
-/// bounded state, so silence about a growing stream is impossible.
+/// The single registry of retention policies. Declarative, so RetentionShould can
+/// require every table of the context to be here or be named bounded state.
 /// </summary>
 /// <remarks>
-/// The first four terms carry over from the TTL era unchanged: login attempts
-/// decay in the window the lockout policy reads, the security trail and the
-/// notification stream hold personal data for as long as an incident can still
-/// be investigated, and a tombstoned unread marker's job is over in minutes —
-/// seven days is slack, not a requirement. Only the login-attempt term lives in
-/// configuration, because <see cref="AuthenticationConfiguration"/> already
-/// owns it; the mirror constant the index descriptor used to freeze is gone.
-/// The outbox term is younger than the TTL era (W1.5) and follows the same
-/// tombstone pattern: the stamp only exists on rows whose work is done.
+/// Login attempts decay in the window the lockout policy reads, owned by
+/// <see cref="AuthenticationConfiguration"/>; the security trail and the notification
+/// stream hold personal data as long as an incident can be investigated; a tombstoned
+/// unread marker and a published outbox row are done, and seven days is slack.
 /// </remarks>
 internal static class RetentionRegistry
 {

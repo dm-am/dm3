@@ -11,11 +11,6 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// The rated feed carries a post's edits, so its card can say the post was edited
 /// and by whom, as the room does.
 /// </summary>
-/// <remarks>
-/// The feed used to clear the list after the shared projection had read it: the
-/// card showed no edit line, so a post rewritten after its reviews read in the
-/// feed as if it were the text that had been reviewed.
-/// </remarks>
 public class RatedPostEditsShould : IntegrationTestBase
 {
     public RatedPostEditsShould(DatabaseFixture databaseFixture) : base(databaseFixture)

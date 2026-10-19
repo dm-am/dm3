@@ -44,11 +44,8 @@ public class User : IUser, IRemovable
     /// Address a change was requested to and not yet confirmed
     /// </summary>
     /// <remarks>
-    /// The account keeps answering at Email until the link in the letter is
-    /// followed. Writing the new address straight into Email made the letter a
-    /// formality and a typo a locked account: the confirmation had nothing left
-    /// to confirm, and the person could no longer receive the letter telling them
-    /// so. Null whenever no change is waiting.
+    /// Email changes only once the link in the letter is followed, so a typo cannot
+    /// lock the account. Null whenever no change is waiting.
     /// </remarks>
     [MaxLength(100)]
     public string? PendingEmail { get; set; }
@@ -73,9 +70,6 @@ public class User : IUser, IRemovable
     [MaxLength(120)]
     public string Salt { get; set; } = null!;
 
-    /// <summary>
-    /// Password hash
-    /// </summary>
     [MaxLength(300)]
     public string PasswordHash { get; set; } = null!;
 
@@ -148,12 +142,6 @@ public class User : IUser, IRemovable
     /// What the personal blacklist actually does: which surfaces hide a blocked
     /// user's content, and whether direct messages from them are refused.
     /// </summary>
-    /// <remarks>
-    /// Lives here rather than in the settings row because the entries
-    /// it governs are rows in Postgres with a foreign key: keeping the switch in
-    /// the other store made "is this user blocked, and does it apply here" two
-    /// reads across two databases with no way to make them agree.
-    /// </remarks>
     public UserBlacklistSettings BlacklistSettings { get; set; } = UserBlacklistSettings.Default;
 
     /// <summary>
@@ -167,13 +155,13 @@ public class User : IUser, IRemovable
     public Guid? AvatarUploadId { get; set; }
 
     /// <summary>
-    /// Discord ID for future bot notifications. Not used for authentication.
+    /// Discord ID for bot notifications. Not used for authentication.
     /// </summary>
     [MaxLength(50)]
     public string? DiscordId { get; set; }
 
     /// <summary>
-    /// Telegram ID for future bot notifications. Not used for authentication.
+    /// Telegram ID for bot notifications. Not used for authentication.
     /// </summary>
     [MaxLength(30)]
     public string? TelegramId { get; set; }
@@ -186,7 +174,6 @@ public class User : IUser, IRemovable
     [ForeignKey(nameof(AvatarUploadId))]
     public virtual Upload? AvatarUpload { get; set; }
 
-    // NOTE: ProfilePictures navigation removed - Upload.EntityId is polymorphic without FK constraints
 
     /// <summary>
     /// Authorization tokens
@@ -206,9 +193,6 @@ public class User : IUser, IRemovable
     [InverseProperty(nameof(UsernameHistory.User))]
     public virtual ICollection<UsernameHistory> UsernameHistories { get; set; } = [];
 
-    /// <summary>
-    /// Username change requests
-    /// </summary>
     [InverseProperty(nameof(UsernameChangeRequest.User))]
     public virtual ICollection<UsernameChangeRequest> UsernameChangeRequests { get; set; } = [];
 
@@ -229,18 +213,6 @@ public class User : IUser, IRemovable
     public virtual ICollection<Like> Likes { get; set; } = [];
 
     /// <summary>
-    /// User endorsements authored
-    /// </summary>
-    [InverseProperty(nameof(UserEndorsement.Author))]
-    public virtual ICollection<UserEndorsement> UserEndorsementsAuthored { get; set; } = [];
-
-    /// <summary>
-    /// User endorsements received
-    /// </summary>
-    [InverseProperty(nameof(UserEndorsement.TargetUser))]
-    public virtual ICollection<UserEndorsement> UserEndorsementsReceived { get; set; } = [];
-
-    /// <summary>
     /// Website testimonials authored
     /// </summary>
     [InverseProperty(nameof(WebsiteTestimonial.Author))]
@@ -251,18 +223,6 @@ public class User : IUser, IRemovable
     /// </summary>
     [InverseProperty(nameof(GameReview.Author))]
     public virtual ICollection<GameReview> GameReviews { get; set; } = [];
-
-    /// <summary>
-    /// post reviews authored
-    /// </summary>
-    [InverseProperty(nameof(PostReview.Author))]
-    public virtual ICollection<PostReview> PostReviewsAuthored { get; set; } = [];
-
-    /// <summary>
-    /// post reviews of user's posts (as post author)
-    /// </summary>
-    [InverseProperty(nameof(PostReview.PostAuthor))]
-    public virtual ICollection<PostReview> PostReviewsReceived { get; set; } = [];
 
     /// <summary>
     /// User uploads
@@ -291,66 +251,21 @@ public class User : IUser, IRemovable
     #region Game navigations
 
     /// <summary>
-    /// Games user is GM of
-    /// </summary>
-    [InverseProperty(nameof(Game.Game.Master))]
-    public virtual ICollection<Game.Game> GamesAsMaster { get; set; } = [];
-
-    /// <summary>
     /// Game assistant links
     /// </summary>
     [InverseProperty(nameof(GameAssistant.User))]
     public virtual ICollection<GameAssistant> GameAssistants { get; set; } = [];
 
-    /// <summary>
-    /// Games user moderates
-    /// </summary>
-    [InverseProperty(nameof(Game.Game.Mentor))]
-    public virtual ICollection<Game.Game> GamesAsMentor { get; set; } = [];
-
-    /// <summary>
-    /// Games user is blacklisted in
-    /// </summary>
-    [InverseProperty(nameof(GameBlacklist.BlockedUser))]
-    public virtual ICollection<GameBlacklist> GamesBlacklisted { get; set; } = [];
-
-    /// <summary>
-    /// Characters
-    /// </summary>
     [InverseProperty(nameof(Character.Author))]
     public virtual ICollection<Character> Characters { get; set; } = [];
 
-    /// <summary>
-    /// Posts
-    /// </summary>
     [InverseProperty(nameof(Post.Author))]
     public virtual ICollection<Post> Posts { get; set; } = [];
-
-    /// <summary>
-    /// Post pendencies created by user (user is waiting for someone else to post)
-    /// </summary>
-    [InverseProperty(nameof(PostPendency.CreatedBy))]
-    public virtual ICollection<PostPendency> PostPendenciesCreated { get; set; } = [];
-
-    /// <summary>
-    /// Post pendencies where user is expected to post
-    /// </summary>
-    [InverseProperty(nameof(PostPendency.WaitingForUser))]
-    public virtual ICollection<PostPendency> PostPendenciesWaitingFor { get; set; } = [];
 
     #endregion
 
     #region Messaging navigations
 
-    /// <summary>
-    /// Chat participations
-    /// </summary>
-    [InverseProperty(nameof(UserChatLink.User))]
-    public virtual ICollection<UserChatLink> ChatLinks { get; set; } = [];
-
-    /// <summary>
-    /// Messages
-    /// </summary>
     [InverseProperty(nameof(Message.Author))]
     public virtual ICollection<Message> Messages { get; set; } = [];
 
@@ -358,47 +273,8 @@ public class User : IUser, IRemovable
 
     #region Administration navigations
 
-    /// <summary>
-    /// Tickets filed by user
-    /// </summary>
-    [InverseProperty(nameof(Ticket.Author))]
-    public virtual ICollection<Ticket> TicketsFiled { get; set; } = [];
-
-    /// <summary>
-    /// Tickets against user
-    /// </summary>
-    [InverseProperty(nameof(Ticket.Target))]
-    public virtual ICollection<Ticket> TicketsAgainst { get; set; } = [];
-
-    /// <summary>
-    /// Tickets closed by user
-    /// </summary>
-    [InverseProperty(nameof(Ticket.ResolvedBy))]
-    public virtual ICollection<Ticket> TicketsResolved { get; set; } = [];
-
-    /// <summary>
-    /// Warnings received
-    /// </summary>
-    [InverseProperty(nameof(Warning.TargetUser))]
-    public virtual ICollection<Warning> WarningsReceived { get; set; } = [];
-
-    /// <summary>
-    /// Warnings given (authored by this moderator)
-    /// </summary>
-    [InverseProperty(nameof(Warning.Author))]
-    public virtual ICollection<Warning> WarningsGiven { get; set; } = [];
-
-    /// <summary>
-    /// Bans received
-    /// </summary>
     [InverseProperty(nameof(Ban.TargetUser))]
     public virtual ICollection<Ban> BansReceived { get; set; } = [];
-
-    /// <summary>
-    /// Bans given (authored by this moderator)
-    /// </summary>
-    [InverseProperty(nameof(Ban.Author))]
-    public virtual ICollection<Ban> BansGiven { get; set; } = [];
 
     /// <summary>
     /// Login records (IP addresses and user agents for moderation)
@@ -427,12 +303,6 @@ public class User : IUser, IRemovable
     /// </summary>
     [InverseProperty(nameof(UserBlacklist.Owner))]
     public virtual ICollection<UserBlacklist> BlacklistedUsers { get; set; } = [];
-
-    /// <summary>
-    /// Users who have blocked this user
-    /// </summary>
-    [InverseProperty(nameof(UserBlacklist.BlockedUser))]
-    public virtual ICollection<UserBlacklist> BlockedByUsers { get; set; } = [];
 
     #endregion
 }

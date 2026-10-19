@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -23,34 +22,28 @@ namespace DM.Domain.Personal.Tests.Features.Subscriptions;
 /// belongs to no module.
 /// </summary>
 /// <remarks>
-/// It used to ask every module for a rule of its own on being subscribed to,
-/// and the one rule there was is gone: the blacklist
-/// of a game or a blog closes writing, and following a game or a blog is
-/// reading. The two doors to the same row - this endpoint and the module's own
-/// handle - now agree by having nothing to ask, and the endpoint must not grow a
-/// second answer again. The behaviour with a real list behind both doors is in
-/// BlacklistRuleShould.
+/// It has no rules of its own: a blacklist closes writing, and following is reading.
 /// </remarks>
 public class SubscriptionServiceShould : UnitTestBase
 {
-    private readonly ISubscriptionRepository _repository;
-    private readonly SubscriptionService _service;
-    private readonly Guid _currentUserId = Guid.NewGuid();
-    private readonly Guid _targetId = Guid.NewGuid();
+    private readonly ISubscriptionRepository repository;
+    private readonly SubscriptionService service;
+    private readonly Guid currentUserId = Guid.NewGuid();
+    private readonly Guid targetId = Guid.NewGuid();
 
     public SubscriptionServiceShould()
     {
-        _repository = Mock<ISubscriptionRepository>();
+        repository = Mock<ISubscriptionRepository>();
         var identityProvider = Mock<IIdentityProvider>();
         var guidFactory = Mock<IGuidFactory>();
         var dateTimeProvider = Mock<IDateTimeProvider>();
 
-        identityProvider.Current.Returns(Identities.User(_currentUserId, "subscriber"));
+        identityProvider.Current.Returns(Identities.User(currentUserId, "subscriber"));
         guidFactory.Create().Returns(Guid.NewGuid());
         dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _service = new SubscriptionService(
-            _repository,
+        service = new SubscriptionService(
+            repository,
             Mock<IUserLookupService>(),
             identityProvider,
             guidFactory,
@@ -62,22 +55,22 @@ public class SubscriptionServiceShould : UnitTestBase
     [InlineData(SubscriptionTargetType.Blog)]
     public async Task WriteTheSubscriptionWithoutAskingTheTargetsBlacklist(SubscriptionTargetType targetType)
     {
-        await _service.SubscribeAsync(targetType, _targetId);
+        await service.SubscribeAsync(targetType, targetId);
 
-        await _repository.Received(1).CreateAsync(
+        await repository.Received(1).CreateAsync(
             Arg.Is<CreateSubscription>(s =>
-                s.SubscriberId == _currentUserId && s.TargetType == targetType && s.TargetId == _targetId),
+                s.SubscriberId == currentUserId && s.TargetType == targetType && s.TargetId == targetId),
             Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task StillRefuseASubscriptionToOneself()
     {
-        var act = async () => await _service.SubscribeAsync(SubscriptionTargetType.User, _currentUserId);
+        var act = async () => await service.SubscribeAsync(SubscriptionTargetType.User, currentUserId);
 
         (await act.Should().ThrowAsync<HttpException>())
             .Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().CreateAsync(
+        await repository.DidNotReceive().CreateAsync(
             Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
     }
 }

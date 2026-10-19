@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence;
@@ -16,18 +12,12 @@ using Topic = DM.Domain.Forum.Features.Topics.Topic;
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
 /// <summary>
-/// A board carries a denormalized topic count and a "last topic" block. They used
-/// to be raised on creation and adjusted nowhere else, so deleting a topic or
-/// moving one between boards left the board claiming a count it did not have and
-/// pointing at a topic that was no longer there — with no path back short of
-/// editing the database by hand.
+/// A board's denormalized topic count and "last topic" block follow every create, delete and move.
 /// </summary>
 public class BoardTopicSummaryShould : IntegrationTestBase
 {
     /// <summary>
-    /// How long the queued call is watched before it is called blocked. Long
-    /// enough that a call which does not wait at all has finished; short enough
-    /// that it is paid once per test.
+    /// How long the queued call is watched before it is called blocked.
     /// </summary>
     private static readonly TimeSpan Probe = TimeSpan.FromSeconds(2);
 
@@ -35,9 +25,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
 
     /// <summary>
-    /// How many topics share one timestamp in the tie-break case. More than two,
-    /// so that a reading without the tie-break has to guess rather than choose
-    /// between a pair.
+    /// How many topics share one timestamp in the tie-break case: more than two.
     /// </summary>
     private const int TiedTopics = 5;
 
@@ -150,17 +138,8 @@ public class BoardTopicSummaryShould : IntegrationTestBase
     /// leaves behind.
     /// </summary>
     /// <remarks>
-    /// The summary is read from the topics and written back to the board, so two
-    /// of those running at once used to end with the later one writing the number
-    /// it had read before the earlier one committed - a board short one topic, and
-    /// short it stays until somebody writes the board again. The create is held
-    /// open by hand, in the shape the repository creates one in (the board row
-    /// taken first, then the topic, then the summary), because the ordering that
-    /// broke the count is a create the delete's read cannot see and that commits
-    /// before the delete's own write; only a live server can be asked whether one
-    /// write waits for another, which is why this is here and not in the domain
-    /// tests. The delete is the real call, so what is under test is the order of
-    /// its lock against its read.
+    /// The create is held open by hand in the repository's lock order; only a live server shows whether the
+    /// delete's lock waits for it.
     /// </remarks>
     [Fact]
     public async Task CountTheTopicsThatSurviveWhenACreateAndADeleteMeetOnOneBoard()
@@ -219,15 +198,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
     /// A recompute asked for from outside empties the block when the board has
     /// nothing left to name.
     /// </summary>
-    /// <remarks>
-    /// The digest used to carry a second reading of "the last topic" - it took the
-    /// freshest topic and wrote the five columns from it, with no board lock and
-    /// no fallback for a board holding none. On a board whose topics had all gone
-    /// it threw, and the recompute the topic paths run answers the same question
-    /// without either fault. The topic here is marked removed behind the
-    /// repository's back, which is what leaves the board naming a row every read
-    /// filters out.
-    /// </remarks>
+    /// <remarks>The topic is marked removed behind the repository's back, leaving the board naming a filtered row.</remarks>
     [Fact]
     public async Task EmptyTheSummaryOfABoardWhoseTopicsAreAllGone()
     {
@@ -259,14 +230,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
     /// The recompute asked for from outside reads "the last topic" the way the
     /// topic paths do, tie-break included.
     /// </summary>
-    /// <remarks>
-    /// Two topics can share a timestamp - the digest backdates one to midnight of
-    /// the first of a month, and a seeded board carries whole rows stamped
-    /// together. Ordered by the timestamp alone, which topic is the board's last
-    /// one is whichever the plan happened to return, and the answer differed
-    /// between the two writers of these columns: the board flipped between them
-    /// as the two took turns writing it.
-    /// </remarks>
+    /// <remarks>The digest backdates a topic to midnight of the first, so timestamps tie.</remarks>
     [Fact]
     public async Task NameTheSameLastTopicTheTopicPathsWouldOnATie()
     {
@@ -308,15 +272,8 @@ public class BoardTopicSummaryShould : IntegrationTestBase
     /// numbered takes the next free number there.
     /// </summary>
     /// <remarks>
-    /// The number is per board and the topic used to keep the one it had, so a
-    /// move into a board whose numbering had reached that far was refused
-    /// outright by the unique index on (BoardId, TopicNumber): the moderator saw
-    /// a 500 and the topic stayed where it was, and which pairs of boards this
-    /// happened between was a matter of how many topics each had.
-    ///
-    /// What the move costs is the old address: /forum/:alias/:num of the board it
-    /// left stops resolving, which is what a number meaning "the Nth topic of
-    /// this board" is. Every link built on the identifier still opens it.
+    /// The number is per board under the unique index on (BoardId, TopicNumber); the old address stops resolving,
+    /// links by identifier still open it.
     /// </remarks>
     [Fact]
     public async Task GiveAMovedTopicTheNextFreeNumberOfTheBoardItJoins()
@@ -378,9 +335,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Soft-delete straight to the row: the point is a board left naming a topic
-    /// no read returns, which the repository's own deletion would have repaired
-    /// on its way out.
+    /// Soft-delete straight to the row, which the repository's own deletion would have repaired.
     /// </summary>
     private async Task MarkRemoved(Guid topicId)
     {
@@ -405,11 +360,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
     /// The comment counter and the last-comment block are computed on read, so a
     /// new comment has to show up on the very next render.
     /// </summary>
-    /// <remarks>
-    /// They used to be columns that only the demo seeder ever wrote: in production
-    /// the forum showed zero comments on every board forever, and "last activity"
-    /// could never name a comment.
-    /// </remarks>
     [Fact]
     public async Task CountCommentsOfTheBoardAsSoonAsTheyAppear()
     {
@@ -457,7 +407,7 @@ public class BoardTopicSummaryShould : IntegrationTestBase
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider
             .GetRequiredService<DM.Domain.Forum.Features.Boards.IBoardRepository>();
-        var boards = await repository.SelectBoards(null);
+        var boards = await repository.SelectBoards();
         return boards.First(b => b.Id == boardId);
     }
 
@@ -495,7 +445,6 @@ public class BoardTopicSummaryShould : IntegrationTestBase
             Title = $"Summary board {boardId:N}",
             Alias = $"summary-{boardId:N}",
             Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = BoardAccessPolicy.Guest,
         });
         await dbContext.SaveChangesAsync();

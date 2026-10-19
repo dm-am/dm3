@@ -1,13 +1,12 @@
 using System;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.PostReviews;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostReviews;
 
-public class CreatePostReviewValidatorShould : UnitTestBase
+public class CreatePostReviewValidatorShould
 {
     private readonly CreatePostReviewValidator validator = new();
 
@@ -70,6 +69,6 @@ public class CreatePostReviewValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(r => r.Text)
-            .WithErrorMessage("Введите текст рецензии");
+            .WithErrorMessage("Введите текст оценки");
     }
 }

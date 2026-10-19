@@ -3,17 +3,9 @@
  */
 
 /**
- * The birthday field of the profile editor, as it is wired to the page.
- *
- * The date goes to the page's edit draft (useProfileEdit) and is saved with
- * "Завершить"; until then the profile handed down to this block is the saved
- * one. Bound to the saved date alone, the field snapped back to it the moment
- * it lost focus, so a birthday picked or typed seemed to vanish although the
- * draft held it.
- *
- * The field also takes no day after today, opens an empty value on the grid
- * of years round the current year less twelve, stands as wide as its
- * calendar, and says under it why it does not take a date typed in.
+ * The birthday field of the profile editor, wired to the page: a typed date
+ * stays after it loses focus, no day after today is taken, an empty value
+ * opens on the years round twelve years ago, and a refused date says why.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
@@ -31,11 +23,13 @@ afterEach(() => {
   document.body.innerHTML = "";
 });
 
-const mountInfo = (user: Record<string, unknown> = {}) =>
+/** The editor over a public profile with no birthday, and the owner's own as stored. */
+const mountInfo = (own: Record<string, unknown> = {}) =>
   mount(ProfilePersonalInfo, {
     props: {
-      user: { username: "Reader", contacts: [], ...user } as unknown as User,
+      user: { username: "Reader", contacts: [] } as unknown as User,
       isEditMode: true,
+      own: { visibility: { showBirthday: false }, ...own } as never,
     },
     attachTo: document.body,
   });

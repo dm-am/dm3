@@ -1,13 +1,9 @@
 #!/bin/bash
 set -euo pipefail
 
-# The boundaries of the object store, checked against the stack that is up.
-#
-# One script for the pipeline and for an operator, the way smoke-edge.sh is:
-# deployment-smoke runs it after the stack comes up, and the same lines answer
-# on a stand or a server. A test in the solution would need its own copy of the
-# topology - flags, networks, storage-start.sh - and that copy drifts from the
-# compose file without a word. This reads what is deployed.
+# The boundaries of the object store, checked against the stack that is up. One script
+# for the pipeline (deployment-smoke) and for an operator; it reads what is deployed
+# instead of a copy of the topology that would drift from the compose file.
 #
 # What it holds:
 #   - anonymous reads reach the prefixes UploadFolder declares public and
@@ -18,8 +14,7 @@ set -euo pipefail
 #     CPU at rest stays under the threshold;
 #   - each account can do what it is for and nothing more, and an object comes
 #     back with the type and caching it was written with.
-# The last part needs the passwords from docker/.env and is skipped without
-# them, as smoke-edge.sh skips its part without the stand credentials.
+# The last part needs the passwords from docker/.env and is skipped without them.
 #
 # Usage:
 #   check-storage.sh [ENDPOINT]
@@ -45,10 +40,8 @@ APP_NETWORK="${STORAGE_APP_NETWORK:-dm-full-app}"
 # and twice the measured cost after load is still below this.
 CPU_LIMIT="${STORAGE_CPU_LIMIT:-0.25}"
 CPU_WINDOW=30
-# GOMEMLIMIT=180MiB in docker-compose.yml. Without it the runtime reports
-# math.MaxInt64, and the peak under load comes within 23 MiB of the container
-# limit. A constant rather than an override: a ceiling raised from outside would
-# let the check pass on the very stand it exists to fail.
+# GOMEMLIMIT=180MiB in docker-compose.yml, in bytes. A constant, not an override: a ceiling
+# raised from outside would pass the very stand the check exists to fail.
 MEMLIMIT_MAX=188743680
 # UploadFolder.AnonymouslyReadable, and posts as the prefix that is not in it.
 # StorageConfigurationShould fails the build when the first list drifts.
@@ -135,7 +128,7 @@ cleanup() {
         for key in $PUBLIC_PREFIXES $PRIVATE_PREFIX; do
             keys="$keys{Key=$key/$PROBE.webp},"
         done
-        for key in imgproxy backup anonymous; do
+        for key in backup anonymous; do
             keys="$keys{Key=avatars/$PROBE-$key.webp},"
         done
         aws_as "$APP_USER" "$APP_PASSWORD" s3api delete-objects --bucket "$BUCKET" \
@@ -288,12 +281,10 @@ done
 
 APP_USER="${STORAGE_APP_USER:-dm-app}"
 APP_PASSWORD="${STORAGE_APP_PASSWORD:-}"
-IMGPROXY_USER="${STORAGE_IMGPROXY_USER:-dm-imgproxy}"
-IMGPROXY_PASSWORD="${STORAGE_IMGPROXY_PASSWORD:-}"
 BACKUP_USER="${STORAGE_BACKUP_USER:-dm-backup}"
 BACKUP_PASSWORD="${STORAGE_BACKUP_PASSWORD:-}"
 
-if [ -z "$APP_PASSWORD" ] || [ -z "$IMGPROXY_PASSWORD" ] || [ -z "$BACKUP_PASSWORD" ]; then
+if [ -z "$APP_PASSWORD" ] || [ -z "$BACKUP_PASSWORD" ]; then
     echo "no storage passwords in the environment: the signed requests are skipped"
     finish
     exit 0
@@ -324,7 +315,6 @@ denied() {
 }
 
 app=("$APP_USER" "$APP_PASSWORD")
-imgproxy=("$IMGPROXY_USER" "$IMGPROXY_PASSWORD")
 backup=("$BACKUP_USER" "$BACKUP_PASSWORD")
 
 WROTE=1
@@ -344,12 +334,6 @@ for prefix in $PUBLIC_PREFIXES; do
     fi
 done
 expect "anonymous GET of an existing $PRIVATE_PREFIX object" 403 GET "/$BUCKET/$PRIVATE_PREFIX/$PROBE.webp"
-
-allowed "dm-imgproxy HeadObject" "${imgproxy[@]}" s3api head-object --bucket "$BUCKET" --key "avatars/$PROBE.webp"
-allowed "dm-imgproxy GetObject $PRIVATE_PREFIX/" "${imgproxy[@]}" s3 cp "s3://$BUCKET/$PRIVATE_PREFIX/$PROBE.webp" -
-denied "dm-imgproxy PutObject" "${imgproxy[@]}" s3 cp - "s3://$BUCKET/avatars/$PROBE-imgproxy.webp"
-denied "dm-imgproxy DeleteObject" "${imgproxy[@]}" s3api delete-object --bucket "$BUCKET" --key "avatars/$PROBE.webp"
-denied "dm-imgproxy ListObjectsV2" "${imgproxy[@]}" s3api list-objects-v2 --bucket "$BUCKET" --max-keys 1
 
 # Counted by Contents: this store leaves KeyCount out of the answer.
 listed="$(aws_as "${backup[@]}" s3api list-objects-v2 --bucket "$BUCKET" --prefix "avatars/$PROBE" \

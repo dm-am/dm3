@@ -1,83 +1,29 @@
+import type { Envelope, ListEnvelope } from "@/shared/api/models/common";
 import type {
-  AwardTypesResponse,
-  UserAwardsResponse,
-  ContestSeriesAwardsResponse,
-  AchievementTypesResponse,
-  AchievementCategoriesResponse,
-  AchievementCategoryEnvelope,
-  ContestSeriesResponse,
-  ContestSeriesEnvelope,
-  UserAchievementsResponse,
-  AwardTypeEnvelope,
-  AchievementTypeEnvelope,
-  UserAwardEnvelope,
-  CreateAwardTypeRequest,
-  UpdateAwardTypeRequest,
+  AchievementCategory,
+  AchievementType,
+  AwardType,
+  ContestSeries,
+  ContestSeriesAward,
   CreateAchievementTypeRequest,
-  UpdateAchievementTypeRequest,
-  UpdateAchievementCategoryRequest,
   CreateContestSeriesRequest,
-  UpdateContestSeriesRequest,
   GrantUserAwardRequest,
+  UpdateAchievementCategoryRequest,
+  UpdateAchievementTypeRequest,
+  UpdateAwardTypeRequest,
+  UpdateContestSeriesRequest,
+  UserAchievement,
+  UserAward,
 } from "@/shared/api/models/achievements";
 import { Api } from "@/shared/api";
+import { FRESH, type RequestOptions } from "@/shared/api/interceptor";
 
-/**
- * Options that keep one call out of both caches.
- *
- * The four catalogues below are the endpoints the API declares
- * `Cache-Control: public, max-age=300` on, and the client no longer puts
- * `no-cache` on every request it makes. Their writes live under
- * `v1/moderation/...`, a different address, so a POST there invalidates no
- * stored copy of the list — a moderator who adds an award type and asks the
- * catalogue to reload would be handed the browser's own five-minute-old copy,
- * without the row just written, and would read it as the write having failed.
- *
- * `no-cache` on the request forbids the store and asks the origin, which is
- * what the directive is for. What was wrong before was that it was on every
- * request by default, deciding caching for endpoints it knew nothing about.
- */
-const FRESH = { headers: { "Cache-Control": "no-cache" } };
-
-/**
- * The refusal a caller takes over because its own screen carries it: the
- * moderation windows print a refused save in themselves, and the response
- * interceptor has to stay quiet or the same sentence stands in two places.
- * Every call that leaves it out is unchanged.
- *
- * Declared here rather than imported: `shared/api` keeps its own copy of the
- * type to itself, and the client reads the two fields off the request by name,
- * so a structural twin carries them just as well.
- */
-type RefusalFlags = {
-  /** The screen shows a 403 and a 5xx itself. */
-  ownsRefusal?: boolean;
-  /** The screen shows a 429 itself, the wait included. */
-  ownsRateLimit?: boolean;
-};
-
-/**
- * API client for the award/achievement catalogs and user records.
- *
- * Endpoint structure:
- *   GET  v1/award-types                              — public catalog
- *   GET  v1/contest-series                           — public catalog
- *   GET  v1/users/{u}/awards                         — public awards
- *   GET  v1/achievement-categories                   — public catalog
- *   GET  v1/achievement-types                        — public catalog
- *   GET  v1/users/{u}/achievements                   — public + lazy-eval
- *   POST/PATCH/DELETE v1/moderation/award-types       — SeniorMod
- *   POST/PATCH/DELETE v1/moderation/contest-series    — SeniorMod
- *   POST/PATCH/DELETE v1/moderation/achievement-types — SeniorMod
- *   PATCH            v1/moderation/achievement-categories/{id} — SeniorMod
- *   POST/DELETE      v1/moderation/users/{u}/awards   — SeniorMod
- */
 export default new (class AchievementApi {
   // ---- Achievements: public read ----
 
   /** @param fresh Skip the caches — for a reload after an edit. */
   public getAchievementCategories(fresh = false) {
-    return Api.get<AchievementCategoriesResponse>(
+    return Api.get<ListEnvelope<AchievementCategory>>(
       "achievement-categories",
       undefined,
       undefined,
@@ -87,7 +33,7 @@ export default new (class AchievementApi {
 
   /** @param fresh Skip the caches — for a reload after an edit. */
   public getAchievementTypes(fresh = false) {
-    return Api.get<AchievementTypesResponse>(
+    return Api.get<ListEnvelope<AchievementType>>(
       "achievement-types",
       undefined,
       undefined,
@@ -96,7 +42,7 @@ export default new (class AchievementApi {
   }
 
   public getUserAchievements(username: string) {
-    return Api.get<UserAchievementsResponse>(
+    return Api.get<ListEnvelope<UserAchievement>>(
       `users/${encodeURIComponent(username)}/achievements`,
     );
   }
@@ -106,9 +52,9 @@ export default new (class AchievementApi {
   public updateAchievementCategory(
     id: string,
     body: UpdateAchievementCategoryRequest,
-    options?: RefusalFlags,
+    options?: RequestOptions,
   ) {
-    return Api.patch<AchievementCategoryEnvelope>(
+    return Api.patch<Envelope<AchievementCategory>>(
       `moderation/achievement-categories/${id}`,
       body,
       options,
@@ -117,9 +63,9 @@ export default new (class AchievementApi {
 
   public createAchievementType(
     body: CreateAchievementTypeRequest,
-    options?: RefusalFlags,
+    options?: RequestOptions,
   ) {
-    return Api.post<AchievementTypeEnvelope>(
+    return Api.post<Envelope<AchievementType>>(
       "moderation/achievement-types",
       body,
       options,
@@ -129,16 +75,16 @@ export default new (class AchievementApi {
   public updateAchievementType(
     id: string,
     body: UpdateAchievementTypeRequest,
-    options?: RefusalFlags,
+    options?: RequestOptions,
   ) {
-    return Api.patch<AchievementTypeEnvelope>(
+    return Api.patch<Envelope<AchievementType>>(
       `moderation/achievement-types/${id}`,
       body,
       options,
     );
   }
 
-  public deleteAchievementType(id: string, options?: RefusalFlags) {
+  public deleteAchievementType(id: string, options?: RequestOptions) {
     return Api.delete(`moderation/achievement-types/${id}`, undefined, options);
   }
 
@@ -146,7 +92,7 @@ export default new (class AchievementApi {
 
   /** @param fresh Skip the caches — for a reload after an edit. */
   public getAwardTypes(fresh = false) {
-    return Api.get<AwardTypesResponse>(
+    return Api.get<ListEnvelope<AwardType>>(
       "award-types",
       undefined,
       undefined,
@@ -156,7 +102,7 @@ export default new (class AchievementApi {
 
   /** @param fresh Skip the caches — for a reload after an edit. */
   public getContestSeries(fresh = false) {
-    return Api.get<ContestSeriesResponse>(
+    return Api.get<ListEnvelope<ContestSeries>>(
       "contest-series",
       undefined,
       undefined,
@@ -165,61 +111,51 @@ export default new (class AchievementApi {
   }
 
   public getUserAwards(username: string) {
-    return Api.get<UserAwardsResponse>(
+    return Api.get<ListEnvelope<UserAward>>(
       `users/${encodeURIComponent(username)}/awards`,
     );
   }
 
   // ---- Awards: moderation (SeniorMod) ----
 
-  public createAwardType(body: CreateAwardTypeRequest) {
-    return Api.post<AwardTypeEnvelope>("moderation/award-types", body);
-  }
-
-  /**
-   * Full catalogs for the admin pages, inactive records included. The
-   * public catalogs serve active records only, so a hidden entry vanished
-   * from the very list that carries its restore button.
-   */
+  /** The admin catalogs keep the inactive records the public ones leave out. */
   public getModerationAwardTypes() {
-    return Api.get<AwardTypesResponse>("moderation/award-types");
+    return Api.get<ListEnvelope<AwardType>>("moderation/award-types");
   }
 
   public getModerationContestSeries() {
-    return Api.get<ContestSeriesResponse>("moderation/contest-series");
+    return Api.get<ListEnvelope<ContestSeries>>("moderation/contest-series");
   }
 
   public getModerationAchievementCategories() {
-    return Api.get<AchievementCategoriesResponse>(
+    return Api.get<ListEnvelope<AchievementCategory>>(
       "moderation/achievement-categories",
     );
   }
 
   public getModerationAchievementTypes() {
-    return Api.get<AchievementTypesResponse>("moderation/achievement-types");
+    return Api.get<ListEnvelope<AchievementType>>(
+      "moderation/achievement-types",
+    );
   }
 
   public updateAwardType(
     id: string,
     body: UpdateAwardTypeRequest,
-    options?: RefusalFlags,
+    options?: RequestOptions,
   ) {
-    return Api.patch<AwardTypeEnvelope>(
+    return Api.patch<Envelope<AwardType>>(
       `moderation/award-types/${id}`,
       body,
       options,
     );
   }
 
-  public deactivateAwardType(id: string) {
-    return Api.delete(`moderation/award-types/${id}`);
-  }
-
   public createContestSeries(
     body: CreateContestSeriesRequest,
-    options?: RefusalFlags,
+    options?: RequestOptions,
   ) {
-    return Api.post<ContestSeriesEnvelope>(
+    return Api.post<Envelope<ContestSeries>>(
       "moderation/contest-series",
       body,
       options,
@@ -227,25 +163,21 @@ export default new (class AchievementApi {
   }
 
   public updateContestSeries(id: string, body: UpdateContestSeriesRequest) {
-    return Api.patch<ContestSeriesEnvelope>(
+    return Api.patch<Envelope<ContestSeries>>(
       `moderation/contest-series/${id}`,
       body,
     );
   }
 
-  public deactivateContestSeries(id: string) {
-    return Api.delete(`moderation/contest-series/${id}`);
-  }
-
   public grantUserAward(username: string, body: GrantUserAwardRequest) {
-    return Api.post<UserAwardEnvelope>(
+    return Api.post<Envelope<UserAward>>(
       `moderation/users/${encodeURIComponent(username)}/awards`,
       body,
     );
   }
 
   public getContestSeriesAwards(seriesId: string) {
-    return Api.get<ContestSeriesAwardsResponse>(
+    return Api.get<ListEnvelope<ContestSeriesAward>>(
       `moderation/contest-series/${seriesId}/awards`,
     );
   }
@@ -253,7 +185,7 @@ export default new (class AchievementApi {
   public revokeUserAward(
     username: string,
     awardId: string,
-    options?: RefusalFlags,
+    options?: RequestOptions,
   ) {
     return Api.delete(
       `moderation/users/${encodeURIComponent(username)}/awards/${awardId}`,

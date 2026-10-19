@@ -1,6 +1,4 @@
-using System.Collections.Generic;
 using System.Threading.Tasks;
-using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -18,39 +16,25 @@ namespace DM.Web.API.Features.Community.Statistics;
 [Tags("Statistics")]
 public class StatisticsController : ControllerBase
 {
-    // Wide sanity bounds for the public period routes: the site was founded
-    // in 2007, but the API stays permissive (an out-of-range-but-plausible
-    // year just returns empty boards). The bounds only reject values that
-    // would overflow date arithmetic or are plainly nonsensical.
-    private const int MinYear = 1900;
-    private const int MaxYear = 2100;
+    private readonly CommunityStatsApiService _statsService;
 
-    private readonly ICommunityStatsApiService _statsService;
-
-    /// <inheritdoc />
-    public StatisticsController(ICommunityStatsApiService statsService)
+    public StatisticsController(CommunityStatsApiService statsService)
     {
         _statsService = statsService;
     }
-
-    #region Live Stats
 
     /// <summary>
     /// Get community statistics
     /// </summary>
     /// <remarks>
     /// Returns real-time statistics including online users, totals with today's delta,
-    /// last reviewed post, and weekly best post.
+    /// and weekly best post.
     /// </remarks>
     /// <response code="200">Statistics retrieved successfully</response>
     [HttpGet("v1/stats", Name = nameof(GetStats))]
     [ProducesResponseType(typeof(Envelope<LiveStats>), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetStats() =>
         Ok(await _statsService.GetLiveStats());
-
-    #endregion
-
-    #region Leaderboards
 
     /// <summary>
     /// Get yearly leaderboards
@@ -65,11 +49,8 @@ public class StatisticsController : ControllerBase
     [HttpGet("v1/leaderboards/{year:int}", Name = nameof(GetYearlyLeaderboards))]
     [ProducesResponseType(typeof(Envelope<Leaderboards>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetYearlyLeaderboards(int year)
-    {
-        ValidatePeriod(year, null);
-        return Ok(await _statsService.GetLeaderboards(year, null));
-    }
+    public async Task<IActionResult> GetYearlyLeaderboards(int year) =>
+        Ok(await _statsService.GetLeaderboards(year, null));
 
     /// <summary>
     /// Get monthly leaderboards
@@ -81,34 +62,6 @@ public class StatisticsController : ControllerBase
     [HttpGet("v1/leaderboards/{year:int}/{month:int}", Name = nameof(GetMonthlyLeaderboards))]
     [ProducesResponseType(typeof(Envelope<Leaderboards>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    public async Task<IActionResult> GetMonthlyLeaderboards(int year, int month)
-    {
-        ValidatePeriod(year, month);
-        return Ok(await _statsService.GetLeaderboards(year, month));
-    }
-
-    /// <summary>
-    /// Rejects period values that would overflow date arithmetic (year 9999)
-    /// or are plainly invalid (month 13) with a 400 instead of letting
-    /// DateTimeOffset construction throw into a 500. year == 0 is the
-    /// documented all-time period; a month with year 0 is meaningless.
-    /// </summary>
-    private static void ValidatePeriod(int year, int? month)
-    {
-        var errors = new Dictionary<string, string>();
-
-        if (year != 0 && (year < MinYear || year > MaxYear))
-            errors["year"] = $"Год должен быть 0 (за все время) или от {MinYear} до {MaxYear}";
-
-        if (month.HasValue && (month.Value < 1 || month.Value > 12))
-            errors["month"] = "Месяц должен быть от 1 до 12";
-
-        if (month.HasValue && year == 0)
-            errors["year"] = "Для месяца нужен конкретный год";
-
-        if (errors.Count > 0)
-            throw new HttpBadRequestException(errors, "Некорректный период");
-    }
-
-    #endregion
+    public async Task<IActionResult> GetMonthlyLeaderboards(int year, int month) =>
+        Ok(await _statsService.GetLeaderboards(year, month));
 }

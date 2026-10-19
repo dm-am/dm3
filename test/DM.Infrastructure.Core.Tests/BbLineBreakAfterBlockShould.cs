@@ -1,9 +1,7 @@
-using System;
 using AwesomeAssertions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
-using DM.Testing.Dsl;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
@@ -14,39 +12,22 @@ namespace DM.Infrastructure.Core.Tests;
 /// it is text in the line, and the breaks around it are drawn as typed.
 /// </summary>
 /// <remarks>
-/// The element of a block ends the line it stands on, and a &lt;br /&gt; after it
-/// stood alone on a line of its own: every [quote] written on its own line had
-/// an empty line under it, and none over it, where the browser draws no line
-/// for a break that ends the text in front of a block. The rule is
-/// BBCODE_RENDERING.md, section "Перевод строки после блока"; the rows of the
-/// grammar table hold it on both sides, and these hold the cases the table has
-/// no neutral way to state.
+/// BBCODE_RENDERING.md, section "Перевод строки после блока"; the grammar table holds it on both sides,
+/// these the cases it has no neutral way to state.
 /// </remarks>
 public class BbLineBreakAfterBlockShould
 {
     private const string Opening =
         "<span class=\"private-message\" data-recipients=\"DungeonMaster, Assistant\">";
 
-    private static readonly TestSubject Author = new()
-    {
-        UserId = Guid.Parse("11111111-1111-1111-1111-111111111111"),
-        Role = UserRole.RegularUser,
-        IsAuthenticated = true,
-        AccessPolicy = AccessPolicy.NotSpecified
-    };
+    private static readonly IAuthorizationSubject Author = BbVisibilityRender.Viewer(UserRole.RegularUser, BbVisibilityRender.AuthorId);
 
-    private static readonly TestSubject Stranger = new()
-    {
-        UserId = Guid.Parse("44444444-4444-4444-4444-444444444444"),
-        Role = UserRole.RegularUser,
-        IsAuthenticated = true,
-        AccessPolicy = AccessPolicy.NotSpecified
-    };
+    private static readonly IAuthorizationSubject Stranger = BbVisibilityRender.Viewer(UserRole.RegularUser, BbVisibilityRender.OtherUser);
 
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 
-    private string Html(BbSurface surface, string bbCode, TestSubject viewer) =>
-        ((BbParserWrapper)_parserProvider.GetForSurface(surface)).RenderHtml(bbCode, new RenderContext
+    private string Html(BbSurface surface, string bbCode, IAuthorizationSubject viewer) =>
+        _parserProvider.GetForSurface(surface).RenderHtml(bbCode, new RenderContext
         {
             Audience = RenderAudience.Display,
             Surface = surface,
@@ -63,7 +44,7 @@ public class BbLineBreakAfterBlockShould
     /// and ends no line: the break typed after it ends its line, as after text.
     /// </summary>
     [Fact]
-    public void KeepTheBreakAfterAHiddenBlock_WhichStandsInTheLine() =>
+    public void KeepTheBreakAfterAHiddenBlockWhichStandsInTheLine() =>
         Post("перед\n[private]секрет[/private]\nпосле").Should().Be(
             "перед<br />" + Opening + "секрет</span><br />после");
 
@@ -81,14 +62,11 @@ public class BbLineBreakAfterBlockShould
         Comment("[quote]раз[/quote]\rдва").Should().Be("<div class=\"quote\">раз</div>\rдва");
 
     [Fact]
-    public void DrawTheSecondLineBreak_TheEmptyLineTheAuthorAskedFor() =>
+    public void DrawTheSecondLineBreakTheEmptyLineTheAuthorAskedFor() =>
         Comment("[quote]раз[/quote]\n\nпосле").Should().Be("<div class=\"quote\">раз</div><br />после");
 
     /// <summary>
-    /// The break at the end of a sentence written after the block, on its line,
-    /// ends that sentence. A rule in the styles that hid the break after the
-    /// line of recipients took this one as well, and glued the sentence to the
-    /// next line.
+    /// The break at the end of a sentence written after the block, on its line, ends that sentence.
     /// </summary>
     [Fact]
     public void KeepTheBreakAtTheEndOfTextWrittenAfterTheBlock() =>
@@ -96,13 +74,11 @@ public class BbLineBreakAfterBlockShould
             Opening + "секрет</span> и замечают.<br />Дверь");
 
     /// <summary>
-    /// A reader who does not see the block gets the text as if its line had not
-    /// been typed: the block stood on a line of its own, and the line goes with it
-    /// and with one of its breaks, where an empty line would say something stood
-    /// there (BbErasedBlockShould holds the rest of that rule).
+    /// A reader who does not see a block on a line of its own gets the text without that line and one of
+    /// its breaks (BbErasedBlockShould holds the rest).
     /// </summary>
     [Fact]
-    public void DropTheLineTheBlockStoodOn_ForAReaderTheBlockIsHiddenFrom() =>
+    public void DropTheLineTheBlockStoodOnForAReaderTheBlockIsHiddenFrom() =>
         Html(BbSurface.GamePost, "перед\n[private]секрет[/private]\nпосле", Stranger)
             .Should().Be("перед<br />после");
 
@@ -155,20 +131,8 @@ public class BbLineBreakAfterBlockShould
         Comment("[quote=\"Вася\"]раз[/quote]\nдва").Should().Be("[quote=\"Вася\"]раз[/quote]<br />два");
 
     [Fact]
-    public void GiveTheAuthorsEditorEveryBreakBack()
-    {
-        var html = ((BbParserWrapper)_parserProvider.GetForAuthorEdit(BbSurface.GamePost)).RenderHtml(
-            "[private]секрет[/private]\nпосле\n[quote]раз[/quote]\nдва\n[spoiler]три[/spoiler]\nчетыре",
-            RenderContext.ForAuthorEdit(Author, BbSurface.GamePost));
-
-        html.Should().Contain("секрет</span><br />после");
-        html.Should().Contain("раз</div><br />два");
-        html.Should().Contain("три</div><br />четыре");
-    }
-
-    [Fact]
     public void KeepTheBreakInThePlainText() =>
-        ((BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment))
+        _parserProvider.GetForSurface(BbSurface.Comment)
         .RenderText("[quote]раз[/quote]\nдва", RenderContext.ForPlainText() with { Surface = BbSurface.Comment })
         .Should().Be("раз\nдва");
 }

@@ -1,11 +1,13 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Inactivity;
 using Microsoft.EntityFrameworkCore;
+using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -19,6 +21,30 @@ internal class InactivityRepository : IInactivityRepository
         _dbContext = dbContext;
     }
 
+    // Each condition is read by the selection and repeated by its write, so a game that
+    // posted or restarted in between is left alone. Removed games are out by the global filter.
+
+    /// <summary>Active, unwarned, and no post (or no activation) since the threshold</summary>
+    private static Expression<Func<DbGame, bool>> SilentAndUnwarned(DateTimeOffset threshold) => g =>
+        g.Status == ModuleStatus.Active &&
+        g.InactivityWarningUtc == null &&
+        ((g.LastPostCreatedUtc == null && g.ActivatedUtc < threshold) ||
+         (g.LastPostCreatedUtc != null && g.LastPostCreatedUtc < threshold));
+
+    /// <summary>Active, warned, and no post since the warning</summary>
+    private static readonly Expression<Func<DbGame, bool>> WarnedAndSilent = g =>
+        g.Status == ModuleStatus.Active &&
+        g.InactivityWarningUtc != null &&
+        (g.LastPostCreatedUtc == null || g.LastPostCreatedUtc < g.InactivityWarningUtc);
+
+    /// <summary>Frozen and not yet warned of closure</summary>
+    private static readonly Expression<Func<DbGame, bool>> FrozenUnwarned = g =>
+        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Frozen && g.ClosureWarningUtc == null;
+
+    /// <summary>Frozen and warned of closure</summary>
+    private static readonly Expression<Func<DbGame, bool>> FrozenWarned = g =>
+        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Frozen && g.ClosureWarningUtc != null;
+
     /// <inheritdoc />
     public async Task<IEnumerable<Guid>> GetInactiveGamesToWarn(
         TimeSpan inactivityThreshold, DateTimeOffset now, CancellationToken ct = default)
@@ -26,12 +52,7 @@ internal class InactivityRepository : IInactivityRepository
         var threshold = now - inactivityThreshold;
 
         return await _dbContext.Games
-            .Where(g => !g.IsRemoved)
-            .Where(g => g.Status == ModuleStatus.Active)
-            .Where(g => g.InactivityWarningUtc == null)
-            // Either no posts at all (check activation date) or last post is old
-            .Where(g => (g.LastPostCreatedUtc == null && g.ActivatedUtc < threshold) ||
-                        (g.LastPostCreatedUtc != null && g.LastPostCreatedUtc < threshold))
+            .Where(SilentAndUnwarned(threshold))
             .Select(g => g.GameId)
             .ToListAsync(ct);
     }
@@ -43,12 +64,8 @@ internal class InactivityRepository : IInactivityRepository
         var threshold = now - warningGracePeriod;
 
         return await _dbContext.Games
-            .Where(g => !g.IsRemoved)
-            .Where(g => g.Status == ModuleStatus.Active)
-            .Where(g => g.InactivityWarningUtc != null)
+            .Where(WarnedAndSilent)
             .Where(g => g.InactivityWarningUtc < threshold)
-            // Check that no new posts were created after warning
-            .Where(g => g.LastPostCreatedUtc == null || g.LastPostCreatedUtc < g.InactivityWarningUtc)
             .Select(g => g.GameId)
             .ToListAsync(ct);
     }
@@ -60,10 +77,7 @@ internal class InactivityRepository : IInactivityRepository
         var threshold = now - frozenThreshold;
 
         return await _dbContext.Games
-            .Where(g => !g.IsRemoved)
-            .Where(g => g.Status == ModuleStatus.Closed)
-            .Where(g => g.ClosedReason == ClosedReason.Frozen)
-            .Where(g => g.ClosureWarningUtc == null)
+            .Where(FrozenUnwarned)
             .Where(g => g.ClosedUtc != null && g.ClosedUtc < threshold)
             .Select(g => g.GameId)
             .ToListAsync(ct);
@@ -76,10 +90,7 @@ internal class InactivityRepository : IInactivityRepository
         var threshold = now - warningGracePeriod;
 
         return await _dbContext.Games
-            .Where(g => !g.IsRemoved)
-            .Where(g => g.Status == ModuleStatus.Closed)
-            .Where(g => g.ClosedReason == ClosedReason.Frozen)
-            .Where(g => g.ClosureWarningUtc != null)
+            .Where(FrozenWarned)
             .Where(g => g.ClosureWarningUtc < threshold)
             .Select(g => g.GameId)
             .ToListAsync(ct);
@@ -96,20 +107,14 @@ internal class InactivityRepository : IInactivityRepository
     public async Task<bool> SetInactivityWarning(
         Guid gameId, TimeSpan inactivityThreshold, DateTimeOffset now, CancellationToken ct = default)
     {
-        // The silence itself, and measured back from the same moment the selection
-        // used. A post landing between the two clears the warning stamp as it
-        // writes its own moment, so "still unwarned" alone was true right after it:
-        // the stamp went on a game that had just spoken, and the freeze a week
-        // later reads that post as older than the warning and takes the game.
+        // The silence itself, measured back from the same moment the selection used:
+        // a post landing between the two clears the stamp, so "still unwarned" alone
+        // would warn a game that had just spoken.
         var threshold = now - inactivityThreshold;
 
         var written = await _dbContext.Games
             .Where(g => g.GameId == gameId)
-            .Where(g => !g.IsRemoved)
-            .Where(g => g.Status == ModuleStatus.Active)
-            .Where(g => g.InactivityWarningUtc == null)
-            .Where(g => (g.LastPostCreatedUtc == null && g.ActivatedUtc < threshold) ||
-                        (g.LastPostCreatedUtc != null && g.LastPostCreatedUtc < threshold))
+            .Where(SilentAndUnwarned(threshold))
             .ExecuteUpdateAsync(g => g
                 .SetProperty(x => x.InactivityWarningUtc, now), ct);
 
@@ -127,10 +132,7 @@ internal class InactivityRepository : IInactivityRepository
     {
         var written = await _dbContext.Games
             .Where(g => g.GameId == gameId)
-            .Where(g => !g.IsRemoved)
-            .Where(g => g.Status == ModuleStatus.Active)
-            .Where(g => g.InactivityWarningUtc != null)
-            .Where(g => g.LastPostCreatedUtc == null || g.LastPostCreatedUtc < g.InactivityWarningUtc)
+            .Where(WarnedAndSilent)
             .ExecuteUpdateAsync(g => g
                 .SetProperty(x => x.Status, ModuleStatus.Closed)
                 .SetProperty(x => x.ClosedReason, ClosedReason.Frozen)
@@ -147,10 +149,7 @@ internal class InactivityRepository : IInactivityRepository
     {
         var written = await _dbContext.Games
             .Where(g => g.GameId == gameId)
-            .Where(g => !g.IsRemoved)
-            .Where(g => g.Status == ModuleStatus.Closed)
-            .Where(g => g.ClosedReason == ClosedReason.Frozen)
-            .Where(g => g.ClosureWarningUtc == null)
+            .Where(FrozenUnwarned)
             .ExecuteUpdateAsync(g => g
                 .SetProperty(x => x.ClosureWarningUtc, warningUtc), ct);
 
@@ -163,10 +162,7 @@ internal class InactivityRepository : IInactivityRepository
     {
         var written = await _dbContext.Games
             .Where(g => g.GameId == gameId)
-            .Where(g => !g.IsRemoved)
-            .Where(g => g.Status == ModuleStatus.Closed)
-            .Where(g => g.ClosedReason == ClosedReason.Frozen)
-            .Where(g => g.ClosureWarningUtc != null)
+            .Where(FrozenWarned)
             .ExecuteUpdateAsync(g => g
                 .SetProperty(x => x.ClosedReason, ClosedReason.None)
                 .SetProperty(x => x.ClosureWarningUtc, (DateTimeOffset?)null), ct);

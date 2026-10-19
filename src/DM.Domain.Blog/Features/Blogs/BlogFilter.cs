@@ -5,11 +5,7 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Blog.Features.Blogs;
 
 /// <summary>
-/// Filter and sort for the public blog list. The list and its total count take
-/// this one object instead of a dozen positional arguments each: the two can no
-/// longer be filtered differently by accident, and adding a criterion is a
-/// property here rather than a new argument threaded through three call sites
-/// where two same-typed timestamps sit next to each other.
+/// Filter and sort for the public blog list.
 /// </summary>
 public record BlogFilter
 {
@@ -45,34 +41,16 @@ public record BlogFilter
     /// </summary>
     public string? SortOrder { get; init; }
 
-    /// <summary>
-    /// Created date range start
-    /// </summary>
     public DateTimeOffset? CreatedFromUtc { get; init; }
 
-    /// <summary>
-    /// Created date range end
-    /// </summary>
     public DateTimeOffset? CreatedToUtc { get; init; }
 
-    /// <summary>
-    /// Activated date range start
-    /// </summary>
     public DateTimeOffset? ActivatedFromUtc { get; init; }
 
-    /// <summary>
-    /// Activated date range end
-    /// </summary>
     public DateTimeOffset? ActivatedToUtc { get; init; }
 
-    /// <summary>
-    /// Closed date range start
-    /// </summary>
     public DateTimeOffset? ClosedFromUtc { get; init; }
 
-    /// <summary>
-    /// Closed date range end
-    /// </summary>
     public DateTimeOffset? ClosedToUtc { get; init; }
 
     /// <summary>

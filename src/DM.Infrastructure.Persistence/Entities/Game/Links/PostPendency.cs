@@ -54,15 +54,9 @@ public class PostPendency
     /// </summary>
     public DateTimeOffset? LastReminderUtc { get; set; }
 
-    /// <summary>
-    /// Room
-    /// </summary>
     [ForeignKey(nameof(RoomId))]
     public virtual Room Room { get; set; } = null!;
 
-    /// <summary>
-    /// Character
-    /// </summary>
     [ForeignKey(nameof(CharacterId))]
     public virtual Character Character { get; set; } = null!;
 

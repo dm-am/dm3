@@ -2,13 +2,7 @@
  * @vitest-environment node
  */
 
-/**
- * The countdown a guest form stands in its own strip is rewritten every second
- * it runs, so the noun after the number is read at every one of its values. A
- * single spelling said "через 3 секунд" on the way in — the one screen a person
- * retries on purpose, and therefore the one where the sentence is actually read
- * to the end.
- */
+// The countdown is rewritten every second, so the noun is read at every value.
 import { describe, expect, it } from "vitest";
 import { describeRateLimit } from "./describeRateLimit";
 
@@ -32,13 +26,8 @@ describe("the sentence of a rate limit", () => {
     );
   });
 
-  /**
-   * The lockout after fifteen wrong passwords is half an hour, and it comes
-   * through this same sentence. "Через 1800 секунд" is a number the reader has
-   * to divide before it means anything, so past a minute and a half the wait is
-   * said in minutes and rounded up: a sentence that names a shorter wait than
-   * the real one sends the reader back into a door that is still shut.
-   */
+  // The lockout is half an hour: past a minute and a half the wait is said in
+  // minutes, rounded up, never shorter than the real one.
   it("says a long wait in minutes", () => {
     expect(describeRateLimit(1800)).toBe(
       "Слишком много попыток, попробуйте через 30 минут",
@@ -60,8 +49,7 @@ describe("the sentence of a rate limit", () => {
     );
   });
 
-  // No header, no number: the sentence then names no time, because a wait this
-  // side invented would be a guess enforced on the reader.
+  // No header: a wait the client invented would be a guess.
   it("names no time when the server asked for none", () => {
     expect(describeRateLimit()).toBe("Слишком много попыток, попробуйте позже");
     expect(describeRateLimit(0)).toBe(

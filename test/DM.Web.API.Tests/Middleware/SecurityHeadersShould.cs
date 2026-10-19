@@ -14,14 +14,7 @@ namespace DM.Web.API.Tests.Middleware;
 /// This origin allows an inline script only where Swagger UI lives, and it names
 /// the origin a page here may reach rather than whole schemes.
 /// </summary>
-/// <remarks>
-/// 'unsafe-inline' in script-src is the directive being paid for, and the API
-/// needs it for exactly one document: the Swagger page, which inlines its own
-/// boot script and is mapped in Development alone. Everywhere else the API
-/// answers JSON, and a document able to run an inline script from here is the
-/// incident rather than the feature. The value is one string in one middleware,
-/// which is precisely why widening it back costs one word and shows nowhere.
-/// </remarks>
+/// <remarks>Swagger, mapped in Development alone, inlines its boot script; everywhere else the API answers JSON.</remarks>
 public class SecurityHeadersShould : UnitTestBase
 {
     [Fact]
@@ -44,13 +37,7 @@ public class SecurityHeadersShould : UnitTestBase
     /// <summary>
     /// connect-src names this origin, not every host that speaks a scheme.
     /// </summary>
-    /// <remarks>
-    /// A scheme source matches every host there is, so `wss:` here allowed a
-    /// socket to anywhere at all and the directive restricted nothing. The
-    /// single-origin topology is the whole of what is needed: 'self' covers
-    /// ws:// and wss:// on the same host and port, which is where the hub is
-    /// mapped, and the one document this origin ever serves is Swagger.
-    /// </remarks>
+    /// <remarks>A scheme source matches every host; 'self' covers ws:// and wss:// where the hub is mapped.</remarks>
     [Fact]
     public async Task NameNoHostBeyondThisOriginInConnectSrc()
     {
@@ -64,17 +51,7 @@ public class SecurityHeadersShould : UnitTestBase
     /// <summary>
     /// The retired header stays retired.
     /// </summary>
-    /// <remarks>
-    /// X-XSS-Protection asked for a filter that no browser this application runs
-    /// in still has, and the one implementation that did have it was removed
-    /// because the filter itself introduced holes. Sent anyway, it was a line in
-    /// every response and a row in the requirements table claiming a defence that
-    /// nothing performs - which is worse than no line, because a reader counts it.
-    ///
-    /// Asserted rather than deleted quietly: it is one line to add back, it breaks
-    /// nothing when added, and the whole cost of it is that it says something
-    /// untrue.
-    /// </remarks>
+    /// <remarks>X-XSS-Protection asks for a filter no browser has; sent, it claims a defence nothing performs.</remarks>
     [Fact]
     public async Task SendNoHeaderThatNoBrowserStillHonours()
     {
@@ -85,10 +62,10 @@ public class SecurityHeadersShould : UnitTestBase
             "it reads as a defence nothing performs");
     }
 
-    private async Task<string> Policy(string environmentName) =>
+    private static async Task<string> Policy(string environmentName) =>
         (await Headers(environmentName))["Content-Security-Policy"].ToString();
 
-    private async Task<IHeaderDictionary> Headers(string environmentName)
+    private static async Task<IHeaderDictionary> Headers(string environmentName)
     {
         var environment = Mock<IWebHostEnvironment>();
         environment.EnvironmentName.Returns(environmentName);

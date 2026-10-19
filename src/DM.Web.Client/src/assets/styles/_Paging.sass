@@ -1,56 +1,27 @@
-// =============================================================================
-// PAGINATION COMPONENT STYLES
-// =============================================================================
-// Unified styles for pagination component.
-// =============================================================================
-
 @use "Themes" as *
 @use "Variables" as *
 
-// -----------------------------------------------------------------------------
-// Paging Mixin
-// -----------------------------------------------------------------------------
-
 =paging
   .paging
-    // Inline flow, NOT flex: element flex items copy with newlines between
-    // them (Chrome selection serializer), so a flex strip copied as
-    // "1\n2\n3". Centered inline-blocks + side margins reproduce the old
-    // "gap: $small; justify-content: center" geometry, while zero-width
-    // .copy-space text nodes between items make the strip copy as "1 2 3"
-    // on a single line.
+    // Inline flow and not flex, whose items copy with newlines; the .copy-space
+    // between the links copies the strip as "1 2 3".
     display: block
     text-align: center
-    // Kill the parent-font line-box strut so the block line is exactly as
-    // tall as the inline-block links — same height the flex row had (the
-    // strip sits between optically 1.5px-tuned separators, see
-    // PagingWithSeparators.vue, so even ~1px of extra leading matters).
+    // No strut: the line is exactly as tall as the links.
     line-height: 0
     margin: $small 0
-    // The side of a link, read by Paging.vue as well: the same at every width.
+    // The side of a link, read by Paging.vue as well.
     --paging-side: #{$small}
 
     a
       display: inline-block
       line-height: normal
-      // Half-gap per side = former flex gap $small between neighbors.
-      margin: 0 ($small * 0.5)
+      // Half the gap on each side.
+      margin: 0 $minor
       padding: $tiny var(--paging-side)
       font-size: $secondary-font-size
-      color: $link
-      text-decoration: none
 
-      &:hover
-        color: $link-hover
-        text-decoration: underline
-
-    // Zero-width preserved space between page links: invisible in layout
-    // (font-size: 0), but Selection.toString() still emits a real " ".
-    .copy-space
-      white-space: pre
-      font-size: 0
-
-    // The current page: bold at the face's one bold weight, and not a link.
+    // The current page: bold, and not a link.
     .page-number
       &.active
         font-weight: 700

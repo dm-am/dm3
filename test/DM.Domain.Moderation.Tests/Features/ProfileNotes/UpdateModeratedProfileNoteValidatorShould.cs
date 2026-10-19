@@ -1,21 +1,14 @@
 using System;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.ProfileNotes;
-using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.ProfileNotes;
 
-public class UpdateModeratedProfileNoteValidatorShould : UnitTestBase
+public class UpdateModeratedProfileNoteValidatorShould
 {
-    private readonly UpdateModeratedProfileNoteValidator validator;
-
-    public UpdateModeratedProfileNoteValidatorShould()
-    {
-        validator = new UpdateModeratedProfileNoteValidator();
-    }
+    private readonly UpdateModeratedProfileNoteValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -77,7 +70,7 @@ public class UpdateModeratedProfileNoteValidatorShould : UnitTestBase
         var input = new UpdateModeratedProfileNote
         {
             Id = Guid.NewGuid(),
-            Text = new string('x', 4001)
+            Text = new string('x', ProfileNoteFieldLimits.ContentMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
@@ -91,7 +84,7 @@ public class UpdateModeratedProfileNoteValidatorShould : UnitTestBase
         var input = new UpdateModeratedProfileNote
         {
             Id = Guid.NewGuid(),
-            Text = new string('x', 4000)
+            Text = new string('x', ProfileNoteFieldLimits.ContentMaxLength)
         };
 
         var result = validator.TestValidate(input);

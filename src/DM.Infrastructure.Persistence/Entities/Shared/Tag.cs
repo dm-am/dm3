@@ -28,9 +28,6 @@ public class Tag
     /// </summary>
     public Guid TagGroupId { get; set; }
 
-    /// <summary>
-    /// Title
-    /// </summary>
     public string Title { get; set; } = null!;
 
     /// <summary>
@@ -43,9 +40,6 @@ public class Tag
     /// </summary>
     public int SortOrder { get; set; }
 
-    /// <summary>
-    /// Tag group
-    /// </summary>
     [ForeignKey(nameof(TagGroupId))]
     public virtual TagGroup TagGroup { get; set; } = null!;
 

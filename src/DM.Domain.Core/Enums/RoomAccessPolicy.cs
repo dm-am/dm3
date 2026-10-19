@@ -1,8 +1,5 @@
 namespace DM.Domain.Core.Enums;
 
-/// <summary>
-/// Access policy to room
-/// </summary>
 public enum RoomAccessPolicy
 {
     /// <summary>

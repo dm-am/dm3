@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using AwesomeAssertions;
 using Xunit;
@@ -16,16 +12,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 /// the routes of the global chat itself.
 /// </summary>
 /// <remarks>
-/// It used to be addressed through <c>/v1/messages/{id}</c>, the routes of
-/// private correspondence, whose read asks whether the reader is a participant
-/// of the chat. The global chat has no participants — the right to read it
-/// belongs to everyone by definition — so that question answered "no" for
-/// everybody, the author of the message included, and every one of these
-/// operations answered 404 on the reader's own line.
-///
-/// Written against the HTTP surface rather than the services: the refusal lived
-/// in a query predicate, which every test with a substituted repository steps
-/// straight over.
+/// The global chat has no participants, so the private-correspondence routes refuse everybody. Over HTTP: the
+/// refusal lived in a query predicate.
 /// </remarks>
 public class GlobalChatMessageOperationsShould : IntegrationTestBase
 {
@@ -88,13 +76,13 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
     [Fact]
     public async Task ReadOneReply()
     {
-        var messageId = await Say(Author, "Одна реплика общего чата");
+        var messageId = await Say(Author, "Одна реплика глобального чата");
 
         var response = await Client.SendAsync(CreateAuthenticatedRequest(
             HttpMethod.Get, $"/v1/global-chat/messages/{messageId}", Author));
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await TextOf(response)).Should().Contain("Одна реплика общего чата");
+        (await TextOf(response)).Should().Contain("Одна реплика глобального чата");
     }
 
     /// <summary>
@@ -113,17 +101,12 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
 
     /// <summary>
     /// The author asks for their own line the way the editor opens it: with the
-    /// audience header that returns round-trip markup instead of the display
+    /// audience header that returns the BBCode as typed instead of the display
     /// render.
     /// </summary>
-    /// <remarks>
-    /// Told apart by [mod], one of the tags this surface renders differently for
-    /// the author — the round-trip one carries <c>data-bb-tag</c> so the
-    /// editor can turn the markup back into BBCode. Authored by a moderator
-    /// because a regular author's [mod] is stripped on the way in.
-    /// </remarks>
+    /// <remarks>Authored by a moderator, whose [mod] stays.</remarks>
     [Fact]
-    public async Task HandTheAuthorTheRoundTripMarkupOfTheirOwnReply()
+    public async Task HandTheAuthorTheSourceOfTheirOwnReply()
     {
         var messageId = await Say(Moderator, "[mod]Объявление[/mod]");
 
@@ -133,13 +116,33 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
         var response = await Client.SendAsync(forEditing);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await TextOf(response)).Should().Contain("data-bb-tag=\"mod\"",
-            "the editor is filled with markup it can turn back into BBCode");
+        (await TextOf(response)).Should().Be("[mod]Объявление[/mod]",
+            "the editor works on BBCode and is filled with the text as typed");
 
         var display = await Client.SendAsync(CreateAuthenticatedRequest(
             HttpMethod.Get, $"/v1/global-chat/messages/{messageId}", Reader));
-        (await TextOf(display)).Should().NotContain("data-bb-tag",
-            "the round-trip markup is the author's own view, and reading it is the ordinary render");
+        (await TextOf(display)).Should().Contain("mod-block").And.NotContain("[mod]",
+            "the source is the author's own view, and reading it is the ordinary render");
+    }
+
+    /// <summary>
+    /// Moderation edits somebody else's line, and gets it for editing as it was
+    /// typed; a reader without the right gets the render.
+    /// </summary>
+    [Fact]
+    public async Task HandAModeratorTheSourceOfSomebodyElsesReply()
+    {
+        var messageId = await Say(Author, "[b]Реплика[/b] для правки");
+
+        var forEditing = CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/v1/global-chat/messages/{messageId}", Moderator);
+        forEditing.Headers.Add("X-Dm-Audience", "author_edit");
+        (await TextOf(await Client.SendAsync(forEditing))).Should().Be("[b]Реплика[/b] для правки");
+
+        var byReader = CreateAuthenticatedRequest(
+            HttpMethod.Get, $"/v1/global-chat/messages/{messageId}", Reader);
+        byReader.Headers.Add("X-Dm-Audience", "author_edit");
+        (await TextOf(await Client.SendAsync(byReader))).Should().Contain("<strong>").And.NotContain("[b]");
     }
 
     [Fact]
@@ -157,9 +160,7 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A second like of the same line is refused as a duplicate, and only a like
-    /// that exists can be duplicated. What the answer carries is the subject of
-    /// <see cref="HandBackTheReplyCarryingTheLikeJustLeft" /> below.
+    /// A second like of the same line is refused as a duplicate.
     /// </summary>
     [Fact]
     public async Task LetAReaderLikeSomebodyElsesReply()
@@ -202,11 +203,7 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
     /// The answer to the like carries the line it was left on, and that line
     /// carries the like.
     /// </summary>
-    /// <remarks>
-    /// This is what the reader sees: the client replaces the message it has with
-    /// the one the answer brings back, so a like missing from the answer puts the
-    /// heart out again the instant it was clicked.
-    /// </remarks>
+    /// <remarks>The client replaces its message with the one the answer brings.</remarks>
     [Fact]
     public async Task HandBackTheReplyCarryingTheLikeJustLeft()
     {
@@ -299,9 +296,7 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Somebody else's line is not an ordinary reader's to rewrite. The rule is
-    /// <c>MessageIntention.Edit</c>, the one the private-message route has always
-    /// applied.
+    /// Somebody else's line is not an ordinary reader's to rewrite: <c>MessageIntention.Edit</c>.
     /// </summary>
     [Fact]
     public async Task RefuseAnOrdinaryReaderTheEditOfSomebodyElsesReply()
@@ -328,10 +323,7 @@ public class GlobalChatMessageOperationsShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// And moderation deletes somebody else's line by the same rule it deletes a
-    /// private one by: <c>MessageIntentionResolver.CanEditOrDelete</c> lets
-    /// Moderator and above through without asking about authorship or about the
-    /// editing window.
+    /// Moderation deletes somebody else's line: <c>MessageIntentionResolver.CanEditOrDelete</c> lets Moderator and above through.
     /// </summary>
     [Fact]
     public async Task LetModerationDeleteSomebodyElsesReply()

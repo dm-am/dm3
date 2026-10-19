@@ -15,15 +15,9 @@ namespace DM.Web.API.HostedServices;
 /// belong to <see cref="IUploadOrphanCollector" />; this only decides how often
 /// to ask.
 /// </remarks>
-internal class UploadOrphanCleanupService : PeriodicHostedService
+internal class UploadOrphanCleanupService(IServiceProvider serviceProvider, ILogger<UploadOrphanCleanupService> logger)
+    : PeriodicHostedService(serviceProvider, logger)
 {
-    private readonly ILogger<UploadOrphanCleanupService> _logger;
-
-    public UploadOrphanCleanupService(
-        IServiceProvider serviceProvider,
-        ILogger<UploadOrphanCleanupService> logger)
-        : base(serviceProvider, logger) => _logger = logger;
-
     /// <inheritdoc />
     protected override string Tag => "[Upload Orphan Cleanup]";
 
@@ -37,14 +31,11 @@ internal class UploadOrphanCleanupService : PeriodicHostedService
             .GetRequiredService<IUploadOrphanCollector>()
             .SweepAsync(cancellationToken);
 
-        if (swept.Candidates == 0)
+        if (swept.Candidates > 0)
         {
-            _logger.LogDebug("[Upload Orphan Cleanup] No orphans to remove");
-            return;
+            Logger.LogInformation(
+                "{Tag} Swept {Candidates} candidate(s): removed {ObjectCount} objects + {DbCount} DB rows",
+                Tag, swept.Candidates, swept.ObjectsRemoved, swept.RecordsDeleted);
         }
-
-        _logger.LogInformation(
-            "[Upload Orphan Cleanup] Swept {Candidates} candidate(s): removed {ObjectCount} objects + {DbCount} DB rows",
-            swept.Candidates, swept.ObjectsRemoved, swept.RecordsDeleted);
     }
 }

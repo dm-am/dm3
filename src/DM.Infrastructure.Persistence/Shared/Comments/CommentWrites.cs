@@ -15,25 +15,10 @@ namespace DM.Infrastructure.Persistence.Shared.Comments;
 /// The writing side of a comment, for all four discussions at once.
 /// </summary>
 /// <remarks>
-/// The reading side moved here first (<see cref="CommentQueries" />) and the edit
-/// trace after it (<see cref="CommentEdits" />); the write that ties the two
-/// together stayed behind in four repositories, word for word, comment included.
-///
-/// Three of the four are served by <see cref="Create{TOwner}" /> and
-/// <see cref="Delete{TOwner}" />: a game, a blog and a publication differ only in
-/// which row carries the discussion's comment count and last-comment pointer, so
-/// the owner is named by the caller as a set, a key predicate and a column
-/// selector apiece, and everything else is stated once: the order of the
-/// statements, the transaction around them, the condition each write is guarded
-/// by. The one thing a caller still spells out is the table its pointer lives
-/// in, because that half of the move is raw SQL and a raw statement has to name
-/// its table. The forum topic keeps its own copy of both, in the same form and
-/// for one reason: it carries no comment count for these to raise and lower, so
-/// the statement that takes the owner row here would have nothing to write, and
-/// the topic takes its row by name instead.
-///
-/// The query tag stays with the caller, for the reason it does on the reading
-/// side: it is what names the module a slow query came from.
+/// A game, a blog and a publication differ only in which row carries the comment
+/// count and last-comment pointer, so the caller names the owner and the table of its
+/// pointer (raw SQL). The forum topic carries no comment count and keeps its own copy.
+/// The query tag stays with the caller: it names the module a slow query came from.
 /// </remarks>
 internal static class CommentWrites
 {
@@ -129,7 +114,7 @@ internal static class CommentWrites
 
             await owners
                 .Where(owner)
-                .ExecuteUpdateAsync(o => o.SetProperty(commentCount, Raised(commentCount)), cancellation);
+                .ExecuteUpdateAsync(o => o.SetProperty(commentCount, StoredCounters.Raised(commentCount)), cancellation);
 
             dbContext.Comments.Add(comment);
             await dbContext.SaveChangesAsync(cancellation);
@@ -207,23 +192,17 @@ internal static class CommentWrites
         {
             await using var transaction = await dbContext.Database.BeginTransactionAsync(cancellation);
 
-            var marked = await dbContext.Comments
-                .Where(c => c.CommentId == commentId && !c.IsRemoved)
-                .ExecuteUpdateAsync(c => c
-                    .SetProperty(x => x.IsRemoved, true)
-                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
-                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)deletedUtc), cancellation);
+            var marked = await SoftDelete.MarkWhere(
+                dbContext.Comments.Where(c => c.CommentId == commentId && !c.IsRemoved),
+                deletedByUserId, deletedUtc, cancellation);
 
             removed = marked == 1;
             if (removed)
             {
-                // Floored at zero rather than trusted: the column is stored and
-                // nothing recomputes it, so a count that has already drifted below
-                // its discussion must not go negative and stay there.
                 await owners
                     .Where(owner)
                     .ExecuteUpdateAsync(
-                        o => o.SetProperty(commentCount, Lowered(commentCount)), cancellation);
+                        o => o.SetProperty(commentCount, StoredCounters.Lowered(commentCount)), cancellation);
 
                 var successor = await CommentQueries.NewestExcept(
                     dbContext, ownerId, commentId, queryTag, cancellation);
@@ -269,20 +248,4 @@ internal static class CommentWrites
         DateTimeOffset createdUtc,
         CancellationToken ct) =>
         dbContext.Database.ExecuteSqlRawAsync(statement, [ownerId, commentId, createdUtc], ct);
-
-    /// <summary>The same counter, one higher.</summary>
-    private static Expression<Func<TOwner, int>> Raised<TOwner>(
-        Expression<Func<TOwner, int>> counter) =>
-        Expression.Lambda<Func<TOwner, int>>(
-            Expression.Add(counter.Body, Expression.Constant(1)), counter.Parameters);
-
-    /// <summary>The same counter, one lower but never below zero.</summary>
-    private static Expression<Func<TOwner, int>> Lowered<TOwner>(
-        Expression<Func<TOwner, int>> counter) =>
-        Expression.Lambda<Func<TOwner, int>>(
-            Expression.Condition(
-                Expression.GreaterThan(counter.Body, Expression.Constant(0)),
-                Expression.Subtract(counter.Body, Expression.Constant(1)),
-                Expression.Constant(0)),
-            counter.Parameters);
 }

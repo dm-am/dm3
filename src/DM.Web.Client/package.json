@@ -13,6 +13,7 @@
     "preview": "vite preview",
     "test:unit": "vitest --environment jsdom --root src/",
     "test:coverage": "vitest run --coverage --environment jsdom --root src/",
+    "test:conventions": "vitest run --environment jsdom --root src/ --dir src/gates",
     "test:e2e": "playwright test",
     "test:e2e:fast": "playwright test --project=chromium",
     "test:e2e:ui": "playwright test --ui",
@@ -20,14 +21,14 @@
     "build-only": "vite build",
     "type-check": "vue-tsc --noEmit -p tsconfig.app.json --composite false && vue-tsc --noEmit -p tsconfig.vitest.json --composite false && vue-tsc --noEmit -p tsconfig.e2e.json --composite false && vue-tsc --noEmit -p tsconfig.config.json --composite false",
     "lint": "eslint . --fix",
-    "lint:ci": "eslint . --max-warnings 0"
+    "lint:ci": "eslint . --max-warnings 0",
+    "knip": "knip --no-progress"
   },
   "dependencies": {
     "@microsoft/signalr": "^10.0.11",
     "@tanstack/vue-virtual": "^3.13.23",
     "@tiptap/core": "^3.30.6",
     "@tiptap/extension-code": "^3.30.6",
-    "@tiptap/extension-code-block": "^3.30.6",
     "@tiptap/extension-placeholder": "^3.30.6",
     "@tiptap/extension-underline": "^3.30.6",
     "@tiptap/pm": "^3.30.6",
@@ -63,11 +64,12 @@
     "eslint-plugin-vuejs-accessibility": "^2.6.0",
     "fast-check": "^4.10.2",
     "jsdom": "^24.1.1",
+    "knip": "6.39.0",
     "npm-run-all2": "^8.0.4",
     "prettier": "^3.3.3",
     "sass": "^1.103.1",
     "typescript": "^6.0.3",
-    "vite": "^8.2.1",
+    "vite": "^8.2.4",
     "vitest": "^4.1.11",
     "vue-eslint-parser": "^10.4.1",
     "vue-tsc": "^3.3.11"

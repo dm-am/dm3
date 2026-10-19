@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Persistence;
@@ -8,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Npgsql;
 using Xunit;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
@@ -16,15 +14,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// One participant is signed under one testimonial, and the refusal of a second
 /// one comes from the schema rather than from a read.
 /// </summary>
-/// <remarks>
-/// Creating is check-then-insert - the service asks whether the named
-/// participant already has an entry and inserts afterwards - and a check cannot
-/// see the request running beside it. The partial unique index by author is the
-/// only place the rule holds for rows that do not exist yet, so what is asserted
-/// here is that it answers the insert and that the repository hands the domain
-/// its own currency instead of a storage error the moderator reads as a broken
-/// site.
-/// </remarks>
+/// <remarks>Creating is check-then-insert, so the partial unique index by author decides, and the repository answers in the domain's terms.</remarks>
 public class WebsiteTestimonialUniquenessShould : IntegrationTestBase
 {
     public WebsiteTestimonialUniquenessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -79,32 +69,12 @@ public class WebsiteTestimonialUniquenessShould : IntegrationTestBase
             .Should().Be(1);
     }
 
-    private static CreateWebsiteTestimonialEntity NewEntity(Guid authorId, string text) => new()
-    {
-        Id = Guid.NewGuid(),
-        AuthorId = authorId,
-        CreatedUtc = DateTime.UtcNow,
-        Text = text
-    };
+    private static CreateWebsiteTestimonialEntity NewEntity(Guid authorId, string text) =>
+        TestimonialEntities.New(authorId, text);
 
     /// <summary>
     /// A participant of this test's own: the fixture database is shared and
     /// seeded, so a fixed identifier would depend on whoever else wrote one.
     /// </summary>
-    private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
-    {
-        var userId = Guid.NewGuid();
-        dbContext.Users.Add(new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id is
-            // truncated rather than used whole.
-            Username = $"wt{userId:N}"[..20],
-            Email = $"{userId:N}@example.com",
-            PasswordHash = "hash",
-            Salt = "salt",
-        });
-        await dbContext.SaveChangesAsync();
-        return userId;
-    }
+    private static Task<Guid> AddUserAsync(DmDbContext dbContext) => UserRows.AddAsync(dbContext, "wt");
 }

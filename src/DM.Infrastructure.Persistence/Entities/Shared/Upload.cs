@@ -78,8 +78,7 @@ public class Upload : ISoftDeletable
 
     /// <summary>
     /// Intrinsic width of the stored file in pixels, measured after the upload
-    /// pipeline's downscale. Null for a row written before the pipeline recorded
-    /// it — a reader that needs the aspect ratio has to cope with not knowing it.
+    /// pipeline's downscale. Nullable as the domain contract (NewUpload) declares it.
     /// </summary>
     /// <remarks>
     /// Kept so a page can reserve the exact box the picture will occupy: the
@@ -99,16 +98,16 @@ public class Upload : ISoftDeletable
     /// uploaded twice gets two keys, and nothing deduplicates by content. What
     /// the key does guarantee is immutability — it is never reused, so the object
     /// behind it never changes and may be cached forever. Used by GC and cleanup
-    /// logic; FilePath is the public URL for rendering. There are no derived
-    /// keys: thumbnail variants are made on-the-fly by imgproxy at serving time.
+    /// logic; FilePath is the public URL for rendering. The thumbnails of an
+    /// avatar lie under keys derived from this one
+    /// (<see cref="DM.Domain.Core.Uploads.AvatarThumbnail"/>) and go with it.
     /// </summary>
     [MaxLength(500)]
     public string ObjectKey { get; set; } = null!;
 
     /// <summary>
-    /// Public URL to the source file (≤1024 px, EXIF-stripped). One file per
-    /// upload — thumbnail variants are generated on-the-fly via imgproxy
-    /// at serving time, not pre-generated.
+    /// Public URL to the source file (≤1024 px, EXIF-stripped). The thumbnails of
+    /// an avatar are served from beside it.
     /// </summary>
     [MaxLength(500)]
     public string? FilePath { get; set; }
@@ -119,6 +118,20 @@ public class Upload : ISoftDeletable
     [MaxLength(255)]
     public string? FileName { get; set; }
 
+    /// <summary>
+    /// Who sees a file of a post: NULL for every reader of the post, else the
+    /// addressees chosen, an array of the shape a hidden block keeps them in
+    /// (PrivateAddresseeSnapshot.ReadList); empty is the author and the leads.
+    /// </summary>
+    /// <remarks>
+    /// Written in the insert that stores the file, so no file exists for a moment
+    /// with a wider mark than was chosen. Only a post attachment carries one
+    /// (CK_Uploads_AddresseesOnPostAttachment): an avatar is shown wherever its
+    /// owner is named. Nothing queries inside it, hence one jsonb column.
+    /// </remarks>
+    [Column(TypeName = "jsonb")]
+    public string? AddresseesJson { get; set; }
+
     /// <inheritdoc />
     public bool IsRemoved { get; set; }
 
@@ -128,9 +141,6 @@ public class Upload : ISoftDeletable
     /// <inheritdoc />
     public DateTimeOffset? DeletedUtc { get; set; }
 
-    /// <summary>
-    /// Owner
-    /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User Owner { get; set; } = null!;
 
@@ -141,7 +151,7 @@ public class Upload : ISoftDeletable
     public virtual User? DeletedBy { get; set; }
 
     // Navigation properties for the target columns are intentionally not defined:
-    // FK constraints are configured via OnModelCreating, and navigations
+    // FK constraints are configured in UploadModel, and navigations
     // on the Upload side are not needed. The user avatar is reached from the owner
     // side via User.AvatarUploadId; a character has no such column, so its portrait
     // is read by querying Uploads on TargetCharacterId.

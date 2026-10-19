@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
@@ -111,11 +110,6 @@ public class Blog : ISoftDeletable
     public int PopularityScore { get; set; }
 
     /// <summary>
-    /// When the popularity score was last recalculated (UTC)
-    /// </summary>
-    public DateTimeOffset? PopularityScoreUpdatedUtc { get; set; }
-
-    /// <summary>
     /// Last comment identifier (denormalized for navigation)
     /// </summary>
     public Guid? LastCommentId { get; set; }
@@ -173,11 +167,6 @@ public class Blog : ISoftDeletable
     [InverseProperty(nameof(BlogBlacklist.Blog))]
     public virtual ICollection<BlogBlacklist> Blacklist { get; set; } = [];
 
-    /// <summary>
-    /// Blog discussion comments (polymorphic - loaded manually via EntityId)
-    /// </summary>
-    [NotMapped]
-    public virtual ICollection<Comment> Comments { get; set; } = [];
 
     /// <summary>
     /// Invitation tokens for this blog (polymorphic - uses EntityId)

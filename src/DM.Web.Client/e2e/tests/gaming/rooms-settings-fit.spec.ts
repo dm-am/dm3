@@ -4,6 +4,7 @@ import {
   PRIMARY_STORAGE_STATE,
 } from "../../fixtures/auth";
 import type { Page } from "@playwright/test";
+import { PRIMARY_GAME } from "../../fixtures/seed";
 
 /**
  * The table of the rooms in the settings of a game keeps the name of every
@@ -29,11 +30,8 @@ const test = base.extend<{ master: Page }>({
   },
 });
 
-/** The seeded game, the primary account its master. */
-const GAME = "aaaaa";
-
 test("keeps the name of every room whole in its field", async ({ master }) => {
-  await master.goto(`/game/${GAME}/settings`);
+  await master.goto(`/game/${PRIMARY_GAME}/settings`);
   const table = master.locator(".rooms-table");
   await expect(table.locator(".col-title input").first()).toBeVisible();
 

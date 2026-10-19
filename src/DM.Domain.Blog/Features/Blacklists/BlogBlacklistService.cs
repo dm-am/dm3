@@ -24,7 +24,7 @@ internal class BlogBlacklistService : IBlogBlacklistService
     private readonly IUserLookupService _userLookupService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IIntentionManager _intentionManager;
-    private readonly IEventProducer _producer;
+    private readonly IEventProducer _eventProducer;
 
     public BlogBlacklistService(
         IBlogBlacklistRepository repository,
@@ -32,30 +32,30 @@ internal class BlogBlacklistService : IBlogBlacklistService
         IUserLookupService userLookupService,
         IIdentityProvider identityProvider,
         IIntentionManager intentionManager,
-        IEventProducer producer)
+        IEventProducer eventProducer)
     {
         _repository = repository;
         _blogService = blogService;
         _userLookupService = userLookupService;
         _identityProvider = identityProvider;
         _intentionManager = intentionManager;
-        _producer = producer;
+        _eventProducer = eventProducer;
     }
 
-    private async Task<IEnumerable<GeneralUser>> GetBlacklistAsync(Guid blogId, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<IEnumerable<GeneralUser>> Get(Guid blogId, CancellationToken ct = default)
     {
-        var blog = await _blogService.GetBlogAsync(blogId, ct);
-        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.Edit, blog, ct);
+        await _intentionManager.GetPermittedBlogAsync(_blogService, BlogIntention.Edit, blogId, ct);
 
         return await _repository.GetBlacklist(blogId, ct);
     }
 
-    private async Task<GeneralUser> AddToBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task<GeneralUser> Add(OperateBlogBlacklistLink dto, CancellationToken ct = default)
     {
-        var blog = await _blogService.GetBlogAsync(blogId, ct);
-        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.Edit, blog, ct);
+        var blog = await _intentionManager.GetPermittedBlogAsync(_blogService, BlogIntention.Edit, dto.BlogId, ct);
 
-        var user = await _userLookupService.GetAsync(username);
+        var user = await _userLookupService.GetAsync(dto.Username);
 
         // The same order and the same words as the game's list: already on it,
         // one of the people who run the blog, somebody who has to leave it first.
@@ -76,62 +76,39 @@ internal class BlogBlacklistService : IBlogBlacklistService
 
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // A subscriber stays subscribed. The list closes comments, and a
-        // subscription is reading: the publications it announces are open to the
-        // person anyway. The entry used to end the subscription, which is
-        // the one thing the list is not for.
+        // A subscriber stays subscribed: the list closes comments, and a subscription is reading.
         try
         {
-            await _repository.Add(blogId, user.UserId, currentUserId, ct);
+            await _repository.Add(dto.BlogId, user.UserId, currentUserId, ct);
         }
         catch (DuplicateEntityException)
         {
             // The request that lost the race against an identical one gets the
-            // answer the check above gives, as on the game's list: the person is
-            // on the list either way.
+            // answer the check above gives, as on the game's list.
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyInBlacklist);
         }
 
-        // Cancel pending invitations for this user
-        var cancelledInvitations = await _repository.CancelInvitationsForUser(blogId, user.UserId, ct);
+        var cancelledInvitations = await _repository.CancelInvitationsForUser(dto.BlogId, user.UserId, ct);
         foreach (var tokenId in cancelledInvitations)
         {
-            await _producer.SendAsync(EventType.BlogInvitationCancelled, tokenId);
+            await _eventProducer.SendAsync(EventType.BlogInvitationCancelled, tokenId);
         }
 
-        // The lookup already answers the domain shape; the AutoMapper call
-        // here was an identity pass-through (same source and target type).
         return user;
     }
 
-    private async Task RemoveFromBlacklistAsync(Guid blogId, string username, CancellationToken ct = default)
+    /// <inheritdoc />
+    public async Task Remove(OperateBlogBlacklistLink dto, CancellationToken ct = default)
     {
-        var blog = await _blogService.GetBlogAsync(blogId, ct);
-        await _intentionManager.ThrowIfForbiddenOrHiddenAsync(_blogService, BlogIntention.Edit, blog, ct);
+        var blog = await _intentionManager.GetPermittedBlogAsync(_blogService, BlogIntention.Edit, dto.BlogId, ct);
 
-        var user = await _userLookupService.GetAsync(username);
+        var user = await _userLookupService.GetAsync(dto.Username);
 
         if (!blog.IsBlacklisted(user.UserId))
         {
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.NotInBlacklist);
         }
 
-        await _repository.Remove(blogId, user.UserId, ct);
+        await _repository.Remove(dto.BlogId, user.UserId, ct);
     }
-
-    #region IBlogBlacklistService domain-specific methods
-
-    /// <inheritdoc />
-    public Task<IEnumerable<GeneralUser>> Get(Guid blogId, CancellationToken ct = default) =>
-        GetBlacklistAsync(blogId, ct);
-
-    /// <inheritdoc />
-    public Task<GeneralUser> Add(OperateBlogBlacklistLink dto, CancellationToken ct = default) =>
-        AddToBlacklistAsync(dto.BlogId, dto.Username, ct);
-
-    /// <inheritdoc />
-    public Task Remove(OperateBlogBlacklistLink dto, CancellationToken ct = default) =>
-        RemoveFromBlacklistAsync(dto.BlogId, dto.Username, ct);
-
-    #endregion
 }

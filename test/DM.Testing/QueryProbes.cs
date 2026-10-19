@@ -9,13 +9,7 @@ namespace DM.Testing;
 /// <summary>
 /// Values a default query object does not carry, for walking every field of it.
 /// </summary>
-/// <remarks>
-/// The cache-key rules walk a query by reflection rather than through a list,
-/// because a list has the defect the rules look for: a field is added, the
-/// hand-kept key and the hand-kept "may be cached" check both forget it, and two
-/// listings share one entry. One generator for all of them, so a type that is
-/// learned here is learned by every walk at once.
-/// </remarks>
+/// <remarks>The cache-key rules walk a query by reflection: a hand-kept list forgets the new field.</remarks>
 public static class QueryProbes
 {
     /// <summary>The properties a caller can set on a query of the given type.</summary>

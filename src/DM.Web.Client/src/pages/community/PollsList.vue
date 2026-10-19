@@ -12,12 +12,11 @@ const pollsStore = usePollsStore();
 const { polls, pollsLoading, pollsError } = storeToRefs(pollsStore);
 
 // Skeleton grid mirrors the loaded page size (stale count when reloading)
-const { pollsPerPage } = usePaging();
+const { pageSize } = usePaging();
 const skeletonCount = computed(
-  () => polls.value?.resources.length || pollsPerPage.value,
+  () => polls.value?.resources.length || pageSize.value,
 );
 
-// Two-state empty text
 const { filterState, searchParams, hasActiveFilters } = usePollsFilter();
 const emptyTitle = computed(() =>
   hasActiveFilters.value
@@ -25,8 +24,7 @@ const emptyTitle = computed(() =>
     : "Опросов пока нет",
 );
 
-// Out-of-range page: paging exists, current page has no resources, but
-// earlier pages do (i.e. this isn't just an empty result set).
+// A page past the end of a non-empty list, not an empty result.
 const currentPageOutOfRange = computed(() => {
   const list = polls.value;
   if (!list || !list.paging) return false;
@@ -37,25 +35,19 @@ function retry() {
   pollsStore.fetchPolls(searchParams.value);
 }
 
-// Paging scrolls the polls block (top separator + grid) back into view
-// instead of the page top. The loading and loaded branches render
-// different `.polls-list` wrappers — mutually exclusive, so one ref
-// always points at the rendered one.
+// Paging scrolls back to the list, not to the page top; only one of the two lists is drawn at a time.
 const listRef = ref<HTMLElement | null>(null);
-function pagingAnchor(): HTMLElement | null {
-  return listRef.value;
-}
 </script>
 
 <template>
-  <!-- Loading state: skeleton grid; paging stays visible when stale data is present -->
+  <!-- Paging stays while stale data is present -->
   <div v-if="pollsLoading" ref="listRef" class="polls-list" aria-busy="true">
     <PagingWithSeparators
       v-if="polls?.paging"
       :paging="polls.paging"
       :to="{ name: 'polls' }"
       :use-query="true"
-      :scroll-anchor="pagingAnchor"
+      :scroll-anchor="() => listRef"
     />
 
     <div class="polls-grid" aria-hidden="true">
@@ -76,14 +68,12 @@ function pagingAnchor(): HTMLElement | null {
       :paging="polls.paging"
       :to="{ name: 'polls' }"
       :use-query="true"
-      :scroll-anchor="pagingAnchor"
+      :scroll-anchor="() => listRef"
     />
   </div>
 
-  <!-- Error state -->
   <ErrorState v-else-if="pollsError" :message="pollsError" :retry="retry" />
 
-  <!-- Out-of-range page: paging exists but this page has no resources -->
   <div v-else-if="currentPageOutOfRange" class="empty-state">
     <secondary-text>
       На этой странице опросов нет.
@@ -93,20 +83,17 @@ function pagingAnchor(): HTMLElement | null {
     </secondary-text>
   </div>
 
-  <!-- Empty state -->
   <div v-else-if="polls && polls.resources.length === 0" class="empty-state">
     <secondary-text>{{ emptyTitle }}</secondary-text>
   </div>
 
-  <!-- Polls list -->
   <div v-else-if="polls" ref="listRef" class="polls-list">
-    <!-- Top paging -->
     <PagingWithSeparators
       v-if="polls.paging"
       :paging="polls.paging"
       :to="{ name: 'polls' }"
       :use-query="true"
-      :scroll-anchor="pagingAnchor"
+      :scroll-anchor="() => listRef"
     />
 
     <div class="polls-grid">
@@ -119,13 +106,12 @@ function pagingAnchor(): HTMLElement | null {
       </div>
     </div>
 
-    <!-- Bottom paging -->
     <PagingWithSeparators
       v-if="polls.paging"
       :paging="polls.paging"
       :to="{ name: 'polls' }"
       :use-query="true"
-      :scroll-anchor="pagingAnchor"
+      :scroll-anchor="() => listRef"
     />
   </div>
 </template>
@@ -136,8 +122,7 @@ function pagingAnchor(): HTMLElement | null {
 .polls-list
   display: flex
   flex-direction: column
-  // Paging blocks sit $medium from the poll grid — same rhythm as between
-  // the poll cards themselves (.polls-grid gap)
+  // The same rhythm as between the poll cards
   gap: $medium
   margin-top: $medium
 
@@ -157,8 +142,7 @@ function pagingAnchor(): HTMLElement | null {
 .empty-state
   margin-top: $medium
 
-// Skeleton card mirrors the poll card content: title, status line,
-// then options (label + progress bar). Uses the shared shimmer mixin.
+// Mirrors the poll card: title, status line, then options with their bars.
 .poll-skeleton
   display: flex
   flex-direction: column

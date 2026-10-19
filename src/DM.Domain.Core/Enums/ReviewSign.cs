@@ -1,7 +1,7 @@
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
-/// Review sign/sentiment for post reviews (formerly VoteSign)
+/// Review sign/sentiment for post reviews
 /// </summary>
 public enum ReviewSign
 {

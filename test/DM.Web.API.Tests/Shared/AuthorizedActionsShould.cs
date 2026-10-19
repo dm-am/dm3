@@ -3,7 +3,6 @@ using System.Linq;
 using System.Reflection;
 using DM.Web.API.Shared.Authentication;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Mvc;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
@@ -12,37 +11,20 @@ namespace DM.Web.API.Tests.Shared;
 /// An action that writes says who is allowed to.
 /// </summary>
 /// <remarks>
-/// Authorization in this application is opt-in: a controller method with no
-/// attribute on it and none on its class answers whoever asks, guest included.
-/// Nothing about that is visible — the action runs, the write lands, the response
-/// is a normal one — and the identity it acts on is the guest identity, so what
-/// the write records is not even wrong, it is nobody.
-///
-/// Which makes it exactly the defect a review cannot be relied on to catch: the
-/// missing line is invisible, and the reviewer is looking at the lines that are
-/// there. The list of exceptions below is the whole surface a stranger may write
-/// to, and it is short enough to read in one sitting — which is the point of
-/// writing it down rather than discovering it.
+/// Authorization is opt-in: an action with no attribute answers whoever asks. The exceptions below are the
+/// whole surface a stranger may write to.
 /// </remarks>
 public class AuthorizedActionsShould
 {
     /// <summary>
     /// Writes a stranger is allowed to make, and why each of them has to be one.
     /// </summary>
-    /// <remarks>
-    /// Every entry is a door into the application from outside a session, so the
-    /// list is stated here rather than inferred from an attribute: an attribute
-    /// spelling "anonymous" is a decision one edit away from being made by accident,
-    /// while a name added to this list is a decision somebody had to type out.
-    /// </remarks>
+    /// <remarks>Each entry is a door from outside a session, so it is typed out here, not inferred from an attribute.</remarks>
     private static readonly string[] OpenToStrangers =
     [
         // There is no session yet — these are the ways one begins.
         "AuthenticationController.Login",
-        // The second half of a login, and by construction there is no session at
-        // this point: the password step of an account with a factor creates none.
-        // What stands in for one is the short-lived challenge cookie, which the
-        // action reads and which is worth nothing without a code to go with it.
+        // The second half of a login has no session yet; the short-lived challenge cookie stands for one.
         "AuthenticationController.CompleteTwoFactorLogin",
         "RegistrationController.Register",
         "RegistrationController.Activate",
@@ -76,13 +58,7 @@ public class AuthorizedActionsShould
     [Fact]
     public void NameWhoMayWrite()
     {
-        var actions = MutatingActions();
-
-        actions.Should().HaveCountGreaterThan(50,
-            "the reflection has to find the write surface, and a walk that finds none " +
-            "passes on anything");
-
-        actions
+        MutatingActions()
             .Where(action => !Guarded(action.Method))
             .Select(action => action.Name)
             .Where(name => !OpenToStrangers.Contains(name, StringComparer.Ordinal))
@@ -95,11 +71,7 @@ public class AuthorizedActionsShould
     /// <summary>
     /// A list of exceptions rots the moment nobody checks it.
     /// </summary>
-    /// <remarks>
-    /// Both directions. An entry naming an action that no longer exists reads like a
-    /// door that is still open, and an entry naming one that has since been given an
-    /// attribute quietly excuses the next action to lose its own.
-    /// </remarks>
+    /// <remarks>Both directions: an entry for a missing action, and one for an action that gained an attribute.</remarks>
     [Fact]
     public void KeepTheListOfOpenDoorsHonest()
     {

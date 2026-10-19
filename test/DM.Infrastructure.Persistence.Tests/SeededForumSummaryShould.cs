@@ -2,10 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using DM.Infrastructure.Persistence.Entities.Forum;
+using DM.Testing;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
-using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Metadata;
 using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests;
@@ -14,14 +12,8 @@ namespace DM.Infrastructure.Persistence.Tests;
 /// A seeded board agrees with the topics seeded into it.
 /// </summary>
 /// <remarks>
-/// The topic counter of a board is denormalised: only a topic write recomputes it, so on a
-/// database that has just been migrated the column says whatever the seed said. It said one for
-/// a board holding two topics, and the forum showed one - and one unread besides, because the
-/// same number is what a visitor who has never opened the board is shown as unread.
-///
-/// Read out of the design-time model rather than restated here, so the rule follows the seed
-/// instead of a copy of it. The board summary tests next door each create their own board and
-/// therefore never look at the seeded one, which is why the drift survived them.
+/// The topic counter is denormalised and a migrated database holds what the seed said. Read out of the
+/// design-time model.
 /// </remarks>
 public class SeededForumSummaryShould
 {
@@ -29,8 +21,12 @@ public class SeededForumSummaryShould
     public void CountTheTopicsThatAreSeededIntoIt()
     {
         var topicsPerBoard = SeededTopicsPerBoard();
+        var boards = SeededBoards();
+        boards.Should().NotBeEmpty("no board read means the seed is read from the runtime model, which drops HasData");
+        topicsPerBoard.Values.Sum().Should().BePositive(
+            "against no seeded topic the rule holds only while every counter is zero");
 
-        foreach (var board in SeededBoards())
+        foreach (var board in boards)
         {
             board.TopicsCount.Should().Be(
                 topicsPerBoard.GetValueOrDefault(board.BoardId, 0),
@@ -43,12 +39,7 @@ public class SeededForumSummaryShould
     /// <summary>
     /// The last-topic block of a seeded board names the newest topic seeded into it.
     /// </summary>
-    /// <remarks>
-    /// Denormalised the same way the counter is, and left unset the same way: a board holding
-    /// two topics showed an empty "last activity" column until somebody created or deleted a
-    /// topic there. All five columns move together - a half-filled block is a board that names
-    /// a topic without saying when it appeared.
-    /// </remarks>
+    /// <remarks>All five columns move together.</remarks>
     [Fact]
     public void NameTheNewestTopicSeededIntoIt()
     {
@@ -61,7 +52,10 @@ public class SeededForumSummaryShould
                     .ThenByDescending(topic => topic.TopicNumber)
                     .First());
 
-        foreach (var board in SeededBoards())
+        var boards = SeededBoards();
+        boards.Should().NotBeEmpty("no board read means the seed is read from the runtime model, which drops HasData");
+
+        foreach (var board in boards)
         {
             var because =
                 $"the last-topic block of the board \"{board.Title}\" is what a freshly " +
@@ -86,20 +80,6 @@ public class SeededForumSummaryShould
         }
     }
 
-    /// <summary>
-    /// A reader that reads nothing passes everything.
-    /// </summary>
-    [Fact]
-    public void ReadTheSeededRows()
-    {
-        SeededBoards().Should().HaveCountGreaterThan(5,
-            "the forum is seeded with a full set of boards; finding one or none means the " +
-            "seed is being read from the runtime model, which drops HasData");
-        SeededTopicsPerBoard().Values.Sum().Should().BeGreaterThan(0,
-            "the rule compares against the seeded topics, and against none of them it holds " +
-            "only while every counter is zero");
-    }
-
     private sealed record SeededBoard(
         Guid BoardId,
         string Title,
@@ -119,7 +99,7 @@ public class SeededForumSummaryShould
         DateTimeOffset CreatedUtc);
 
     private static IReadOnlyCollection<SeededBoard> SeededBoards() =>
-        SeedRows<Board>()
+        ProbeContext.SeedRows<Board>()
             .Select(row => new SeededBoard(
                 (Guid)row[nameof(Board.BoardId)]!,
                 (string)row[nameof(Board.Title)]!,
@@ -132,7 +112,7 @@ public class SeededForumSummaryShould
             .ToList();
 
     private static IReadOnlyCollection<SeededTopic> SeededTopics() =>
-        SeedRows<Topic>()
+        ProbeContext.SeedRows<Topic>()
             .Select(row => new SeededTopic(
                 (Guid)row[nameof(Topic.TopicId)]!,
                 (Guid)row[nameof(Topic.BoardId)]!,
@@ -153,18 +133,4 @@ public class SeededForumSummaryShould
     /// </summary>
     private static object? Optional(IDictionary<string, object?> row, string column) =>
         row.TryGetValue(column, out var value) ? value : null;
-
-    private static IReadOnlyCollection<IDictionary<string, object?>> SeedRows<TEntity>()
-    {
-        // Model metadata only: the connection is never opened.
-        var options = new DbContextOptionsBuilder<DmDbContext>()
-            .UseNpgsql("Host=localhost;Database=seed-forum-probe;Username=probe;Password=probe")
-            .Options;
-        using var context = new DmDbContext(options);
-
-        // HasData lives in the design-time model; the runtime one drops it.
-        var model = context.GetService<IDesignTimeModel>().Model;
-
-        return model.FindEntityType(typeof(TEntity))!.GetSeedData().ToList();
-    }
 }

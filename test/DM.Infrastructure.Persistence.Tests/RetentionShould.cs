@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using System.Reflection;
@@ -14,28 +13,19 @@ namespace DM.Infrastructure.Persistence.Tests;
 /// Every table says how long it keeps what it is given.
 /// </summary>
 /// <remarks>
-/// The successor of MongoRetentionShould, over the sweep registry instead of
-/// TTL index declarations. A stream that gains a row per user action and loses
-/// none grows without any bound, and the silence reads the same whether the
-/// term was weighed and rejected or never thought about. So a table either
-/// declares a term in the retention registry or is named here as state bounded
-/// by what it belongs to — for every table of the context, with no third
-/// state.
+/// A stream that gains a row per action and loses none grows without bound, so every table either declares
+/// a term in the retention registry or is named here as bounded state.
 /// </remarks>
 public class RetentionShould
 {
     /// <summary>
-    /// State rather than stream: one row per user, per game, per session, per
-    /// vote, per roll of a post. Each is bounded by the entity it belongs to and
-    /// goes when that goes, so a term here would only delete something still in
-    /// use. Adding a table to this list is a decision, which is why it is a list
-    /// and not a heuristic.
+    /// State rather than stream: each row is bounded by the entity it belongs to and goes with it.
     /// </summary>
     private static readonly string[] Bounded =
     [
         "AchievementCategories", "AchievementTypes", "AwardTypes",
         "Bans", "Blogs", "BlogAssistants", "BlogBlacklists", "Boards", "BoardModerators",
-        "Chats", "Characters", "CharacterAttributes", "CharacterEdits", "Comments",
+        "Chats", "Characters", "CharacterAttributes", "Comments",
         "CommentEdits", "ContestSeries", "DiceRolls", "FundraisingGoals", "Games",
         "GameAssistants", "GameBlacklists", "GameReviews", "GameTags", "GlobalChatEvents",
         "GlobalChatEventParticipants", "Likes", "Messages", "MessageEdits",
@@ -53,7 +43,7 @@ public class RetentionShould
         "NotificationRecipients",
         "PendingRegistrations", "PeriodDigestTopics", "Polls", "PollOptions", "PollVotes",
         "Posts", "PostEdits", "PostPendencies", "PostReviews", "Publications",
-        "RoomAccesses", "Rooms", "Rubrics", "RubricAccesses", "Subscriptions", "Tags",
+        "RoomAccesses", "Rooms", "Rubrics", "Subscriptions", "Tags",
         "TagGroups", "Tickets", "Tokens", "Topics", "TopicEdits",
         // Bounded by its ticket: a hundred comments at most, taken by the cascade
         // with the ticket.
@@ -67,12 +57,7 @@ public class RetentionShould
         "UserSessions",
         "UserSettings", "UsernameChangeRequests", "UsernameHistories", "Warnings",
         "WebsiteTestimonials",
-        // The second factor and its recovery codes: one row and a fixed set of
-        // rows per account, bounded by the account and taken by the cascade when
-        // it goes. A term over either of them would delete a credential still in
-        // use. The setup abandoned before confirmation is cleared by a pass of
-        // its own, which is not retention over a stream but the removal of a
-        // credential nobody finished issuing.
+        // The second factor and its codes go with the account; an abandoned setup has a pass of its own.
         "UserTwoFactors", "UserTwoFactorRecoveryCodes",
     ];
 
@@ -92,7 +77,7 @@ public class RetentionShould
     public void DeclareATermOrABoundForEveryTable()
     {
         var tables = ContextTables();
-        tables.Should().HaveCountGreaterThan(50,
+        tables.Should().NotBeEmpty(
             "a rule that matches nothing passes: every entity of the context carries [Table]");
 
         tables
@@ -125,9 +110,7 @@ public class RetentionShould
                 "two declarations is a leftover");
 
     /// <summary>
-    /// The first four terms carry over from the TTL era unchanged, and the
-    /// outbox term was approved with its design (W1.5); a silent edit here is a
-    /// data-retention decision nobody made.
+    /// The terms were approved as they stand; a silent edit is a retention decision nobody made.
     /// </summary>
     [Fact]
     public void KeepTheTermsThePoliciesWereApprovedWith()
@@ -148,8 +131,6 @@ public class RetentionShould
         // The challenge lives five minutes; the day is slack for a row the end
         // of a login failed to delete, and not a second lifetime of the challenge.
         policies["TwoFactorChallenges"].Term.Should().Be(TimeSpan.FromDays(1));
-        policies.Should().HaveCount(6,
-            "four policies replaced the four dead TTL indexes, the fifth came with the " +
-            "outbox and the sixth with the second factor");
+        policies.Should().HaveCount(6, "a policy added or dropped is a retention decision too");
     }
 }

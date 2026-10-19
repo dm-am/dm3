@@ -1,16 +1,13 @@
 <script setup lang="ts">
 /**
- * ForumPage — persistent shell for every forum route (/forum,
- * /forum/:alias, /forum/:alias/:num). It renders the shared header stack
- * (h1 "Форум" + board strip) exactly once: because all forum routes are
- * children of the same route record, this component is never remounted
- * between forum pages, so BoardNavigation keeps a single live instance
- * and its active-first FLIP animation is actually visible when the
- * reader switches boards.
+ * The shell of every forum route: all of them are children of one route
+ * record, so the header and the board strip are drawn once and the strip's
+ * FLIP animation is seen when the reader switches boards.
  */
 import { computed, provide, ref } from "vue";
 import { useRoute } from "vue-router";
-import { BOARD_PAGE_OWNS_REFUSAL, useBoardsStore } from "@/entities/forum";
+import { useBoardsStore } from "@/entities/forum";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 import { storeToRefs } from "pinia";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import {
@@ -27,19 +24,13 @@ const boardsStore = useBoardsStore();
 const { selectedBoard, topics, attachedTopics } = storeToRefs(boardsStore);
 const { trySelectBoardByAlias, fetchBoards } = boardsStore;
 
-// The /forum index navigates with its boards table — the strip would
-// duplicate it, so the shell only shows the strip on board/topic levels.
+// The index navigates with its boards table, so the strip stands on board and topic levels only.
 const boardAlias = computed(() => route.params.alias as string | undefined);
 
-// Error code when the requested board alias fails to resolve. Distinguishes a
-// missing board from a board that simply has no topics (TopicsList shows the
-// empty state). The mapping is shared with every other page that raises an
-// error page from a status, see errorCodeForStatus.
+// A board that did not resolve, told from one with no topics (errorCodeForStatus).
 const errorCode = ref<number | null>(null);
 
-// Leaf-reported page-level failure (topic not found, …): the shell hides
-// its header stack and renders the full-screen ErrorPage itself, so an
-// error is never shown squeezed under the forum title and board strip.
+// A leaf's page-level failure: the shell draws the full ErrorPage, never under the header.
 const leafErrorCode = ref<number | null>(null);
 provide(reportForumShellError, (code) => {
   leafErrorCode.value = code;
@@ -47,11 +38,8 @@ provide(reportForumShellError, (code) => {
 
 const shownErrorCode = computed(() => errorCode.value ?? leafErrorCode.value);
 
-// ErrorPage itself does not set document.title (only the route-level
-// ErrorPageRoute.vue does) — this shell owns the title while the embedded
-// ErrorPage is showing, and on the /forum index (no dynamic entity there).
-// On the happy path of board/topic routes the leaf view (TopicsList /
-// TopicPage) owns the title once its data loads.
+// The shell owns the title while its ErrorPage shows and on the index; the
+// leaf owns it on board and topic pages once its data loads.
 useDocumentTitle(() => {
   if (shownErrorCode.value) return getErrorConfig(shownErrorCode.value).title;
   return boardAlias.value ? null : "Форум";
@@ -60,33 +48,22 @@ useDocumentTitle(() => {
 async function fetchData() {
   const alias = route.params.alias as string | undefined;
   errorCode.value = null;
-  // Drop the previously selected board so a failed lookup can't leave a stale
-  // board (and its topics) visible under a wrong URL. The old board's topics
-  // are cleared too: cross-board navigation is a different dataset, so the
-  // table shows its skeleton instead of the previous board's rows
-  // (stale-while-revalidate is for same-board refreshes only).
+  // A failed lookup must not leave the previous board and its topics under a
+  // wrong URL, so both are dropped: another board shows its skeleton.
   selectedBoard.value = null;
   topics.value = null;
   attachedTopics.value = null;
-  // The /forum index has no board to resolve — its leaf (ForumIndexPage)
-  // loads the boards table itself.
+  // The index loads its boards table itself.
   if (!alias) return;
-  // Load boards for navigation and select current board. The read takes its
-  // refusal over: a failure stands below as the error page of the status, a
-  // 429 included, and the interceptor's plate over it said the same twice.
+  // The read owns its refusal: the error page of the status stands in place of the board.
   await fetchBoards();
-  const { ok, status } = await trySelectBoardByAlias(
-    alias,
-    BOARD_PAGE_OWNS_REFUSAL,
-  );
-  // Stale continuation: the user navigated to another board while this one
-  // was resolving — that navigation's own fetchData owns all state now.
+  const { ok, status } = await trySelectBoardByAlias(alias, OWNS_REFUSAL);
+  // Another board was asked for meanwhile; its own fetch owns the state now.
   if ((route.params.alias as string | undefined) !== alias) return;
   if (!ok) {
     errorCode.value = errorCodeForStatus(status);
     return;
   }
-  // Topics are loaded by TopicsList.vue via paramsKey watcher
 }
 
 useFetchData(
@@ -97,19 +74,14 @@ useFetchData(
       callback: () => fetchData(),
     },
   ],
-  // No query watchers - pagination handled by TopicsList via URL
 );
 </script>
 
 <template>
   <ErrorPage v-if="shownErrorCode" :code="shownErrorCode" />
-  <!-- v-show (not v-else/v-if): the leaf inside <router-view> must stay
-       mounted while it reports an error, otherwise its unmount would clear
-       the very error it reported. -->
+  <!-- v-show: the leaf must stay mounted while it reports an error, or its unmount clears it. -->
   <div v-show="!shownErrorCode">
-    <!-- Shared forum header stack, owned by the shell so it persists across
-         all forum levels. On board/topic pages the strip's highlighted item
-         names the current board and carries the whole "where am I" role. -->
+    <!-- On board and topic pages the strip's highlighted item names the board. -->
     <page-title v-once>Форум</page-title>
     <BoardNavigation v-if="boardAlias" />
     <router-view />

@@ -7,52 +7,21 @@
 
 import { Mark, mergeAttributes } from "@tiptap/core";
 
-export interface NoparseOptions {
-  HTMLAttributes: Record<string, unknown>;
-}
-
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     noparse: {
-      /**
-       * Set noparse mark
-       */
-      setNoparse: () => ReturnType;
-      /**
-       * Toggle noparse mark
-       */
       toggleNoparse: () => ReturnType;
-      /**
-       * Unset noparse mark
-       */
-      unsetNoparse: () => ReturnType;
     };
   }
 }
 
-export const Noparse = Mark.create<NoparseOptions>({
+export const Noparse = Mark.create({
   name: "noparse",
-
-  addOptions() {
-    return {
-      HTMLAttributes: {},
-    };
-  },
 
   // The innermost mark: what it holds is text, so every other mark on its
   // text is written around it (see the order of the marks in
   // editorExtensions.ts). No mark is excluded from its text for that reason.
   priority: 50,
-
-  addAttributes() {
-    return {
-      "data-bb-tag": {
-        default: "noparse",
-        parseHTML: () => "noparse",
-        renderHTML: () => ({ "data-bb-tag": "noparse" }),
-      },
-    };
-  },
 
   parseHTML() {
     return [
@@ -68,9 +37,8 @@ export const Noparse = Mark.create<NoparseOptions>({
   renderHTML({ HTMLAttributes }) {
     return [
       "span",
-      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+      mergeAttributes({ "data-bb-tag": "noparse" }, HTMLAttributes, {
         class: "bb-noparse",
-        "data-bb-tag": "noparse",
       }),
       0,
     ];
@@ -78,23 +46,10 @@ export const Noparse = Mark.create<NoparseOptions>({
 
   addCommands() {
     return {
-      setNoparse:
-        () =>
-        ({ commands }) => {
-          return commands.setMark(this.name);
-        },
       toggleNoparse:
         () =>
-        ({ commands }) => {
-          return commands.toggleMark(this.name);
-        },
-      unsetNoparse:
-        () =>
-        ({ commands }) => {
-          return commands.unsetMark(this.name);
-        },
+        ({ commands }) =>
+          commands.toggleMark(this.name),
     };
   },
 });
-
-export default Noparse;

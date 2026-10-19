@@ -24,8 +24,8 @@ public enum HiddenTextReader
     /// <summary>A reader of a room that shows private text to every reader.</summary>
     RoomOverride,
 
-    /// <summary>A reader of a post its author shared with every reader.</summary>
-    PostOverride
+    /// <summary>A reader of a game that shows every hidden block to every reader.</summary>
+    GameOverride
 }
 
 /// <summary>A [private] block as the rule reads it.</summary>
@@ -45,7 +45,7 @@ public sealed record HiddenBlock(int Start, int OpeningEnd, int End, bool WellSp
             HiddenTextReader.Author or HiddenTextReader.Lead => true,
             HiddenTextReader.Addressee => WellSpelled &&
                                           Names.Contains(HiddenTextOracle.AddresseeName, StringComparer.OrdinalIgnoreCase),
-            HiddenTextReader.RoomOverride or HiddenTextReader.PostOverride => WellSpelled && Names.Count > 0,
+            HiddenTextReader.RoomOverride or HiddenTextReader.GameOverride => WellSpelled && Names.Count > 0,
             _ => false
         };
 }
@@ -81,26 +81,8 @@ public sealed record HiddenTextReading(string Text, IReadOnlyList<HiddenBlock> B
 /// BBCODE_RENDERING.md alone.
 /// </summary>
 /// <remarks>
-/// <para>
-/// A third reading of the same rule, next to the parser and the save path, and
-/// small on purpose: it knows the two tags the rule is about, [private] and
-/// [noparse], and nothing else, because nothing else changes what is hidden. A
-/// closing tag of another name cannot end a hidden block, and no well spelled
-/// value can hold a "[" in which a token could hide. So the checks built on it
-/// can ask the renderer, the plain text, the search and the save path about any
-/// text at all, and know the answer without trusting any of them.
-/// </para>
-/// <para>
-/// What it reads, in order along the text both sides read:
-/// [noparse] exactly, in any case, with [/noparse] somewhere after it, is an
-/// example up to that closing tag, and nothing in it is a token; without one it
-/// is text, and so is every later [noparse]. "[private" in any case followed by
-/// "]", "=", a whitespace character or the end of the text opens a block; it is
-/// well spelled as [private] or as [private="value"] whose value runs to the
-/// first quote that "]" follows and holds no "[" and no line break. [/private]
-/// exactly, in any case, closes the innermost open block, and with none open
-/// closes nothing. A block nobody closed runs to the end of the text.
-/// </para>
+/// Next to the parser and the save path, so checks can ask those about any text without trusting them.
+/// It knows [private] and [noparse] only: nothing else changes what is hidden.
 /// </remarks>
 public static class HiddenTextOracle
 {
@@ -179,16 +161,28 @@ public static class HiddenTextOracle
             position++;
         }
 
+        CloseLeftOpen(open, blocks, text.Length, Refuse);
+        blocks.Sort((left, right) => left.Start.CompareTo(right.Start));
+
+        return new HiddenTextReading(text, blocks, WordsIn(text, blocks), refusal, hidingAt);
+    }
+
+    /// <summary>A block nobody closed runs to the end of the text, and the save path refuses it.</summary>
+    private static void CloseLeftOpen(
+        Stack<(int Start, int OpeningEnd, bool WellSpelled, IReadOnlyList<string> Names)> open,
+        List<HiddenBlock> blocks, int end, Action<string, int> refuse)
+    {
         while (open.Count > 0)
         {
             var (start, openingEnd, wellSpelled, names) = open.Pop();
-            Refuse("a block left open", start);
-            blocks.Add(new HiddenBlock(start, openingEnd, text.Length, wellSpelled, names, Closed: false));
+            refuse("a block left open", start);
+            blocks.Add(new HiddenBlock(start, openingEnd, end, wellSpelled, names, Closed: false));
         }
+    }
 
-        blocks.Sort((left, right) => left.Start.CompareTo(right.Start));
-
-        var words = WordPattern.Matches(text)
+    /// <summary>Every word of the text, with the blocks it stands in.</summary>
+    private static HiddenTextWord[] WordsIn(string text, IReadOnlyList<HiddenBlock> blocks) =>
+        WordPattern.Matches(text)
             .Select(match =>
             {
                 var around = blocks.Where(block => block.Start <= match.Index && match.Index < block.End).ToArray();
@@ -196,9 +190,6 @@ public static class HiddenTextOracle
                 return new HiddenTextWord(match.Value, around, inOpening);
             })
             .ToArray();
-
-        return new HiddenTextReading(text, blocks, words, refusal, hidingAt);
-    }
 
     /// <summary>
     /// Whether "private" in any case of A-Z starts at the index and ends a token:
@@ -275,9 +266,8 @@ public static class HiddenTextOracle
     }
 
     /// <summary>
-    /// White space as Unicode defines it (the White_Space property), which ends a
-    /// tag name: listed rather than asked of the runtime, because each language
-    /// answers the question differently and the client has to copy this list.
+    /// White space as Unicode defines it (White_Space), listed: each language answers differently and the
+    /// client copies this list.
     /// </summary>
     public static bool IsWhiteSpace(char character) => character is
         (>= '\u0009' and <= '\u000D') or '\u0020' or '\u0085' or '\u00A0' or '\u1680' or

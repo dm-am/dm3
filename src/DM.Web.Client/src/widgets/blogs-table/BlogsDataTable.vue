@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
+import { DataTable, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { CounterPair } from "@/shared/ui/CounterPair";
@@ -17,18 +17,17 @@ import { BlogsFilter, useBlogsFilter } from "@/features/blog-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { stableCacheKey } from "@/shared/lib/utils/keyedCache";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
+import { BLOG_COLUMNS } from "./columns";
 
 const blogsStore = useBlogsStore();
 const { searchResult, searchLoading, searchError } = storeToRefs(blogsStore);
 
-// filterState is computed from URL (single source of truth, no sync needed)
 const { filterState, searchParams, hasActiveFilters } = useBlogsFilter();
 
 function retrySearch() {
   blogsStore.searchBlogs(searchParams.value);
 }
 
-// Two-state empty text
 const emptyText = computed(() =>
   hasActiveFilters.value
     ? "Блогов по заданным фильтрам не найдено"
@@ -44,28 +43,8 @@ const {
   isNew,
 } = useBlogDisplay();
 
-// Columns that have direct mapping to sort options
 const sortableColumnKeys = new Set(["title", "status"]);
 
-// Define table columns (unified with GamesDataTable): "Название" takes what
-// the others leave, their shares are of the whole table.
-const columns: Column[] = [
-  {
-    key: "title",
-    label: "Название",
-    align: "left",
-  },
-  { key: "authors", label: "Ведущие", width: "23.7%", align: "left" },
-  {
-    key: "status",
-    label: "Статус блога",
-    width: "23.7%",
-    align: "left",
-  },
-  { key: "readers", label: "Читатели", width: "10.6%", align: "center" },
-];
-
-// Current sort state for DataTable (only when sorting by a column that exists in the table)
 const currentSort = computed<SortState | undefined>(() => {
   const sortBy = filterState.value.sortBy;
   if (sortableColumnKeys.has(sortBy)) {
@@ -77,19 +56,15 @@ const currentSort = computed<SortState | undefined>(() => {
   return undefined;
 });
 
-// Computed blogs array
 const blogs = computed(() => searchResult.value?.resources ?? []);
 
-// Refetch whenever the cache key (covering every filter param) changes.
-// Shares the store's key builder so the widget and store never diverge.
+// The store's own key builder, so the widget and the store never disagree.
 const paramsKey = computed(() => stableCacheKey(searchParams.value));
 
-// Closed blogs never get the green "new" highlight (matches BlogLink)
-function isNewHighlight(blog: Blog): boolean {
-  return blog.status !== "Closed" && isNew(blog);
+function blogRoute(blog: Blog) {
+  return { name: "blog", params: { id: blog.publicId ?? blog.id } };
 }
 
-// Fetch blogs when search params key changes (immediate for initial load)
 watch(
   paramsKey,
   () => {
@@ -97,11 +72,6 @@ watch(
   },
   { immediate: true },
 );
-
-// Prefetch next page when pagination becomes visible
-function handlePrefetch(page: number) {
-  blogsStore.prefetchPage(page);
-}
 
 // Paging scrolls the table itself back into view (not the page top)
 const tableRef = ref<{ $el: HTMLElement } | null>(null);
@@ -112,10 +82,8 @@ function pagingAnchor(): HTMLElement | null {
 
 <template>
   <div class="blogs-data-table">
-    <!-- Filters -->
     <BlogsFilter class="filters" />
 
-    <!-- Error state -->
     <ErrorState
       v-if="searchError"
       :message="searchError"
@@ -123,12 +91,11 @@ function pagingAnchor(): HTMLElement | null {
       class="error-state-block"
     />
 
-    <!-- Table. Hidden when the request failed and there is nothing to show,
-         so the empty-state text never appears next to the error message -->
+    <!-- With nothing to show, a failed request gets no empty text beside its error -->
     <DataTable
       v-if="!searchError || blogs.length > 0"
       ref="tableRef"
-      :columns="columns"
+      :columns="BLOG_COLUMNS"
       :data="blogs"
       :loading="searchLoading"
       :show-row-numbers="true"
@@ -138,14 +105,13 @@ function pagingAnchor(): HTMLElement | null {
       :sort="currentSort"
       :empty-text="emptyText"
     >
-      <!-- Title column: Title (unread/comments) -->
       <template #cell-title="{ row }">
         <router-link
-          :to="{ name: 'blog', params: { id: row.publicId ?? row.id } }"
+          :to="blogRoute(row)"
           :class="[
             'blog-link',
             {
-              'new-item': isNewHighlight(row),
+              'new-item': isNew(row),
               'closed-item': row.status === 'Closed',
             },
           ]"
@@ -158,17 +124,16 @@ function pagingAnchor(): HTMLElement | null {
         >{{ " "
         }}<CounterPair
           :first-value="getUnreadPublications(row)"
-          :first-to="{ name: 'blog', params: { id: row.publicId ?? row.id } }"
+          :first-to="blogRoute(row)"
           :first-label="
             formatUnreadPublicationsTooltip(getUnreadPublications(row))
           "
           :second-value="getUnreadComments(row)"
-          :second-to="{ name: 'blog', params: { id: row.publicId ?? row.id } }"
+          :second-to="blogRoute(row)"
           :second-label="formatUnreadCommentsTooltip(getUnreadComments(row))"
         />
       </template>
 
-      <!-- Authors column (unified with games "Ведущие") -->
       <template #cell-authors="{ row }">
         <UserLink
           v-if="row.author"
@@ -183,7 +148,6 @@ function pagingAnchor(): HTMLElement | null {
         >
       </template>
 
-      <!-- Status column with date tooltip -->
       <template #cell-status="{ row }">
         <Tooltip :text="buildStatusTooltip(row)" focusable>
           <span class="status-wrapper">
@@ -192,14 +156,12 @@ function pagingAnchor(): HTMLElement | null {
         </Tooltip>
       </template>
 
-      <!-- Readers column (unified with games) -->
       <template #cell-readers="{ row }">
         <Tooltip :text="buildReadersTooltip(row)" focusable>
           <span class="readers-count">{{ row.subscribersCount ?? 0 }}</span>
         </Tooltip>
       </template>
 
-      <!-- Footer with pagination -->
       <template
         v-if="searchResult?.paging && searchResult.paging.pages > 1"
         #footer
@@ -208,7 +170,7 @@ function pagingAnchor(): HTMLElement | null {
           :paging="searchResult.paging"
           :to="{ name: 'blogs' }"
           :use-query="true"
-          :on-prefetch="handlePrefetch"
+          :on-prefetch="blogsStore.prefetchPage"
           :scroll-anchor="pagingAnchor"
         />
       </template>
@@ -217,7 +179,7 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .blogs-data-table
   width: 100%
@@ -229,9 +191,6 @@ function pagingAnchor(): HTMLElement | null {
   margin-bottom: $medium
 
 .blog-link
-  color: $link
-  &:hover
-    color: $link-hover
   &.new-item
     +link-tone($accent-green, $accent-green-hover)
   &.closed-item

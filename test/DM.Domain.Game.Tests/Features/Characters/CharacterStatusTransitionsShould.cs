@@ -4,22 +4,13 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Identity;
-using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Characters;
-using DM.Domain.Game.Features.Games;
-using DM.Domain.Game.Features.Subscriptions;
-using DM.Testing;
-using DM.Testing.Dsl;
-using DM.Testing.Markup;
+using DM.Domain.Game.Features.Blacklists;
+using DM.Domain.Game.Tests.Dsl;
 using AwesomeAssertions;
-using FluentValidation;
 using NSubstitute;
 using Xunit;
 
@@ -31,66 +22,14 @@ namespace DM.Domain.Game.Tests.Features.Characters;
 /// Every way out of a game, and every way back.
 /// </summary>
 /// <remarks>
-/// Retirement had no working HTTP path at all. The update endpoint took a target
-/// status with three booleans beside it and guessed the intent from the
-/// combination; the mapping dropped all three booleans on the way in, so the
-/// combination that arrived matched no arm and the converter threw a plain
-/// exception — which is a 500. Nothing covered it: the converter was mocked in
-/// the one place it appeared in tests, so the table it encoded was never checked
-/// against anything.
-///
-/// The transition is now named by the caller and the table lives here. Each row
-/// asserts the right the transition needs, since that is what differs between
-/// three ways of reaching the same status: the lead kills and exiles, the player
-/// leaves. The way back undoes only a move of the lead: Accept after Decline,
-/// Resurrect after Kill, Readmit after Exile. What the player took out of the
-/// game stays out.
+/// Each row asserts the right the transition needs, since that is what differs between ways to one status.
 /// </remarks>
-public class CharacterStatusTransitionsShould : UnitTestBase
+public class CharacterStatusTransitionsShould : CharacterServiceTestBase
 {
-    private readonly ICharacterRepository _repository;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IEventProducer _producer;
-    private readonly IGameSubscriptionService _subscriptions;
-    private readonly IGameService _gameService;
-    private readonly Guid _currentUserId = Guid.NewGuid();
-    private readonly ICharacterService _service;
-
     public CharacterStatusTransitionsShould()
     {
-        var createValidator = Mock<IValidator<CreateCharacter>>();
-        var updateValidator = Mock<IValidator<UpdateCharacter>>();
-        _repository = Mock<ICharacterRepository>();
-        _intentionManager = Mock<IIntentionManager>();
-        _producer = Mock<IEventProducer>();
-        _producer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
-
-        var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Current.Returns(Identities.User(_currentUserId));
-
-        var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        _subscriptions = Mock<IGameSubscriptionService>();
-
         // A game that blacklisted nobody, unless a case says otherwise.
-        _gameService = Mock<IGameService>();
-        _gameService.GetAsync(Arg.Any<Guid>()).Returns(call => new GameDto { Id = call.Arg<Guid>() });
-
-        _service = new CharacterService(
-            createValidator,
-            updateValidator,
-            _gameService,
-            _intentionManager,
-            _repository,
-            Mock<ICharacterAttributeValueFiller>(),
-            Mock<IUnreadCountersRepository>(),
-            _subscriptions,
-            _producer,
-            identityProvider,
-            Mock<IGuidFactory>(),
-            dateTimeProvider,
-            new TagNamesAsTyped());
+        gameService.GetAsync(Arg.Any<Guid>()).Returns(call => new GameDto { Id = call.Arg<Guid>() });
     }
 
     public static TheoryData<CharacterStatusTransition, CharacterStatus, CharacterIntention,
@@ -122,19 +61,14 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     {
         var characterId = Given(from);
         UpdateCharacterEntity? written = null;
-        _repository.Update(Arg.Any<UpdateCharacterEntity>())
-            .Returns(new Character { Id = characterId })
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdateCharacterEntity>(0);
-                written = e;
-            });
+        repository.Update(Arg.Do<UpdateCharacterEntity>(e => written = e))
+            .Returns(new Character { Id = characterId });
 
-        await _service.ChangeStatusAsync(characterId, transition);
+        await service.ChangeStatusAsync(characterId, transition);
 
-        _intentionManager.Received(1).ThrowIfForbidden(intention, Arg.Any<CharacterToUpdate>());
+        intentionManager.Received(1).ThrowIfForbidden(intention, Arg.Any<CharacterToUpdate>());
         written!.Status.Should().Be(to);
-        await _producer.Received(1).SendAsync(
+        await producer.Received(1).SendAsync(
             Arg.Is<IEnumerable<EventType>>(e => e.Contains(raised)), characterId);
     }
 
@@ -151,15 +85,10 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     {
         var characterId = Given(CharacterStatus.Active);
         UpdateCharacterEntity? written = null;
-        _repository.Update(Arg.Any<UpdateCharacterEntity>())
-            .Returns(new Character { Id = characterId })
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdateCharacterEntity>(0);
-                written = e;
-            });
+        repository.Update(Arg.Do<UpdateCharacterEntity>(e => written = e))
+            .Returns(new Character { Id = characterId });
 
-        await _service.ChangeStatusAsync(characterId, transition);
+        await service.ChangeStatusAsync(characterId, transition);
 
         written!.IsDead.Should().Be(dead ? true : null);
         written.IsPlayerLeft.Should().Be(left ? true : null);
@@ -177,15 +106,10 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     {
         var characterId = Given(CharacterStatus.Retired);
         UpdateCharacterEntity? written = null;
-        _repository.Update(Arg.Any<UpdateCharacterEntity>())
-            .Returns(new Character { Id = characterId })
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdateCharacterEntity>(0);
-                written = e;
-            });
+        repository.Update(Arg.Do<UpdateCharacterEntity>(e => written = e))
+            .Returns(new Character { Id = characterId });
 
-        await _service.ChangeStatusAsync(characterId, transition);
+        await service.ChangeStatusAsync(characterId, transition);
 
         written!.IsDead.Should().Be(false);
         written.IsPlayerLeft.Should().Be(false);
@@ -209,8 +133,6 @@ public class CharacterStatusTransitionsShould : UnitTestBase
 
     /// <summary>
     /// A transition that makes no sense from here is the caller's mistake, so 400.
-    /// It used to be an unhandled exception, which is 500 with a correlation token
-    /// and a line in the error log.
     /// </summary>
     [Theory]
     [MemberData(nameof(IllegalTransitions))]
@@ -219,20 +141,20 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     {
         var characterId = Given(from);
 
-        var act = () => _service.ChangeStatusAsync(characterId, transition);
+        var act = () => service.ChangeStatusAsync(characterId, transition);
 
         var thrown = await act.Should().ThrowAsync<HttpException>();
         thrown.Which.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        await _repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
+        await repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
     }
 
     [Fact]
     public async Task AnswerNotFoundForACharacterThatIsNotThere()
     {
         var characterId = Guid.NewGuid();
-        _repository.FindCharacter(characterId).Returns((Character?)null);
+        repository.FindCharacter(characterId).Returns((Character?)null);
 
-        var act = () => _service.ChangeStatusAsync(characterId, CharacterStatusTransition.Kill);
+        var act = () => service.ChangeStatusAsync(characterId, CharacterStatusTransition.Kill);
 
         var thrown = await act.Should().ThrowAsync<HttpException>();
         thrown.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -252,13 +174,13 @@ public class CharacterStatusTransitionsShould : UnitTestBase
         {
             var characterId = Given(CharacterStatus.Retired);
 
-            var act = () => _service.ChangeStatusAsync(characterId, transition);
+            var act = () => service.ChangeStatusAsync(characterId, transition);
 
             (await act.Should().ThrowAsync<HttpException>(transition.ToString()))
                 .Which.StatusCode.Should().Be(HttpStatusCode.BadRequest, transition.ToString());
         }
 
-        await _repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
+        await repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
     }
 
     /// <summary>
@@ -278,11 +200,11 @@ public class CharacterStatusTransitionsShould : UnitTestBase
         var authorId = Guid.NewGuid();
         var characterId = Given(from, authorId);
         BlacklistInTheGameOf(characterId, authorId);
-        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+        repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
-        await _service.ChangeStatusAsync(characterId, transition);
+        await service.ChangeStatusAsync(characterId, transition);
 
-        await _repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
+        await repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
     }
 
     /// <summary>
@@ -297,13 +219,13 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     public async Task LeaveTheWaysOutOpenForABlacklistedAuthor(
         CharacterStatusTransition transition, CharacterStatus from)
     {
-        var characterId = Given(from, _currentUserId);
-        BlacklistInTheGameOf(characterId, _currentUserId);
-        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+        var characterId = Given(from, currentUserId);
+        BlacklistInTheGameOf(characterId, currentUserId);
+        repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
-        await _service.ChangeStatusAsync(characterId, transition);
+        await service.ChangeStatusAsync(characterId, transition);
 
-        await _repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
+        await repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
     }
 
     /// <summary>
@@ -312,8 +234,8 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     private Guid Given(CharacterStatus status, Guid? authorId = null)
     {
         var characterId = Guid.NewGuid();
-        _repository.FindCharacter(characterId).Returns(new Character { Id = characterId });
-        _repository.GetForUpdate(characterId).Returns(new CharacterToUpdate
+        repository.FindCharacter(characterId).Returns(new Character { Id = characterId });
+        repository.GetForUpdate(characterId).Returns(new CharacterToUpdate
         {
             Id = characterId,
             Status = status,
@@ -329,8 +251,8 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     /// </summary>
     private void BlacklistInTheGameOf(Guid characterId, Guid userId)
     {
-        var gameId = _repository.GetForUpdate(characterId).Result!.GameId;
-        _gameService.GetAsync(gameId).Returns(new GameDto
+        var gameId = repository.GetForUpdate(characterId).Result!.GameId;
+        gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
             BlacklistedUsers = [new BlacklistedUser { UserId = userId }]
@@ -338,10 +260,7 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     }
 
     /// <summary>
-    /// Losing the last active character leaves the PLAYER with the game as a
-    /// reader. The subscription was written for whoever sent the request while the
-    /// "any characters left" question was asked about the character's author, so
-    /// the lead subscribed himself to his own game and the player lost it.
+    /// Losing the last active character leaves the player, not the caller, with the game as a reader.
     /// </summary>
     [Theory]
     [InlineData(CharacterStatusTransition.Kill)]
@@ -350,13 +269,13 @@ public class CharacterStatusTransitionsShould : UnitTestBase
     public async Task SubscribeThePlayerAndNotTheCaller(CharacterStatusTransition transition)
     {
         var characterId = Given(CharacterStatus.Active);
-        var character = (await _repository.GetForUpdate(characterId))!;
-        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
-        _repository
+        var character = (await repository.GetForUpdate(characterId))!;
+        repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+        repository
             .HasOtherActiveCharacters(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<Guid>()).Returns(false);
 
-        await _service.ChangeStatusAsync(characterId, transition);
+        await service.ChangeStatusAsync(characterId, transition);
 
-        await _subscriptions.Received(1).SubscribeUserAsync(character.GameId, character.UserId, Arg.Any<CancellationToken>());
+        await subscriptions.Received(1).SubscribeUserAsync(character.GameId, character.AuthorId, Arg.Any<CancellationToken>());
     }
 }

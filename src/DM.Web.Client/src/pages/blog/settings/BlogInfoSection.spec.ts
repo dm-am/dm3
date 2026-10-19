@@ -2,25 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * How the blog information form reports a save.
- *
- * It cannot report one by changing: the fields after a save hold the very
- * values the reader typed into them, and the section used to answer with a
- * toast in the corner because of it. The answer now belongs to the submit
- * button — "Сохранено" and inert while the form matches the server's copy,
- * "Сохранить" again the moment a field moves.
- *
- * What each test here catches, since a button that always reads "Сохранить"
- * looks perfectly normal on screen:
- *  - remember() left out of save(), or called before the request: the button
- *    never changes, or changes over a save that never happened;
- *  - a comparison that reads the title alone: the choice of who sees the
- *    blog in the making stops taking the button back to "Сохранить";
- *  - remember() above the error return in save(): a refused save reads as a
- *    successful one;
- *  - the toast put back beside the button: one event announced twice.
- */
+// The save is answered by the submit button: "Сохранено" and inert while the
+// form matches the server's copy, "Сохранить" again when a field moves, and a
+// refused save never reads as a saved one.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -30,27 +14,35 @@ import {
   useBlogDetailsStore,
   type Blog,
 } from "@/entities/blog";
+import { useAuthStore, type User } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
 import BlogInfoSection from "./BlogInfoSection.vue";
+import { problem } from "@/shared/lib/testing/problem";
+import { expectRefusalUnderField } from "@/shared/lib/testing/formField";
+
+// The editor is tiptap; the form reads its value and nothing else.
+vi.mock("@/shared/ui/BBCodeEditor", async () =>
+  (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeEditor(),
+);
 
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
 
-/** A blog whose settings are open in front of its owner. */
-function mountSection() {
+/** A blog whose settings are open; the reader, when named, is signed in. */
+function mountSection(readerId?: string) {
   const pinia = createPinia();
   setActivePinia(pinia);
+  if (readerId) useAuthStore().user = { id: readerId } as User;
   const store = useBlogDetailsStore();
   store.blog = {
     id: "the-blog",
     title: "Дневник",
     draftVisibility: DraftVisibility.Public,
-    author: { username: "the-owner" },
+    author: { id: "owner-id", username: "the-owner" },
     assistants: [],
   } as unknown as Blog;
-  // The reload after a successful save is not this spec's subject, and left
-  // real it would reach for the endpoint.
+  // The reload after a save is not this spec's subject.
   vi.spyOn(store, "loadBlog").mockResolvedValue({ ok: true });
 
   return mount(BlogInfoSection, { global: { plugins: [pinia] } });
@@ -117,8 +109,7 @@ describe("BlogInfoSection save confirmation", () => {
     expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
   });
 
-  // The field the button forgets when the comparison is written against the
-  // title alone: the choice travels in the same patch and has to count.
+  // The choice travels in the same patch and has to count.
   it("offers the save again when who sees the blog in the making changes", async () => {
     const wrapper = mountSection();
     await save(wrapper);
@@ -146,8 +137,7 @@ describe("BlogInfoSection save confirmation", () => {
 
   it("keeps offering the save after the server refuses it", async () => {
     const wrapper = mountSection();
-    // A 400: the statuses the interceptor speaks for are the ones the section
-    // stays quiet about, and this is not one of them.
+    // A 400: not one of the statuses the interceptor speaks for.
     update.mockResolvedValue({
       data: null,
       error: { status: 400, title: "", type: "", traceId: "t" } as GeneralError,
@@ -156,8 +146,7 @@ describe("BlogInfoSection save confirmation", () => {
     await save(wrapper);
 
     expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
-    // Where the press was, and in no plate (the owner's rule of 26 September
-    // 2026, UI_STANDARDS "Всплывающие сообщения").
+    // Where the press was, and in no plate.
     expect(wrapper.get(".action-result").text()).toBe(
       "Не удалось сохранить информацию блога",
     );
@@ -165,11 +154,7 @@ describe("BlogInfoSection save confirmation", () => {
   });
 });
 
-/**
- * The settings of a blog are the settings of a game in small: DM2's captioned
- * rows, the blog in the making said in the site's word, and no switch of the
- * comments, which are never off.
- */
+// DM2's captioned rows, the blog in the making in the site's word, no switch of comments.
 describe("BlogInfoSection as DM2's settings", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -188,5 +173,137 @@ describe("BlogInfoSection as DM2's settings", () => {
     ).toEqual(["Все", "Только участники"]);
     expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false);
     expect(wrapper.text()).not.toMatch(/черновик|Комментарии/i);
+  });
+});
+
+// The server gives the description as typed to the owner alone: a lead would be
+// given it drawn, and a save of the drawing would write the markup over.
+describe("BlogInfoSection description", () => {
+  const TYPED =
+    '[b]Записки[/b] о походах [spoiler text="Карта"]тропа[/spoiler]';
+  let update: ReturnType<typeof vi.fn>;
+  let read: ReturnType<typeof vi.fn>;
+
+  beforeEach(() => {
+    update = vi.fn().mockResolvedValue({ data: null, error: null });
+    vi.spyOn(blogApi, "updateBlog").mockImplementation(
+      update as unknown as typeof blogApi.updateBlog,
+    );
+    read = vi.fn().mockResolvedValue({
+      data: { resource: { id: "the-blog", description: TYPED } },
+      error: null,
+    });
+    vi.spyOn(blogApi, "getBlogForEdit").mockImplementation(
+      read as unknown as typeof blogApi.getBlogForEdit,
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const editor = (wrapper: VueWrapper) =>
+    wrapper.findComponent({ name: "BBCodeEditor" });
+
+  it("opens in front of the owner on the text as typed", async () => {
+    const wrapper = mountSection("owner-id");
+    await flushPromises();
+
+    expect(read).toHaveBeenCalledWith("the-blog");
+    expect(editor(wrapper).props("modelValue")).toBe(TYPED);
+    expect(
+      wrapper.findAll(".form-field-label label").map((l) => l.text()),
+    ).toEqual(["Название:", "Кто видит оформляющийся блог:", "Описание:"]);
+  });
+
+  it("is not offered to a lead of the blog, and not read for him", async () => {
+    const wrapper = mountSection("assistant-id");
+    await flushPromises();
+
+    expect(read).not.toHaveBeenCalled();
+    expect(editor(wrapper).exists()).toBe(false);
+  });
+
+  it("is not sent untouched", async () => {
+    const wrapper = mountSection("owner-id");
+    await flushPromises();
+
+    await save(wrapper);
+
+    expect(update.mock.calls[0][1]).not.toHaveProperty("description");
+  });
+
+  it("is sent as typed once changed, and the save is offered again", async () => {
+    const wrapper = mountSection("owner-id");
+    await flushPromises();
+    await save(wrapper);
+    expect(answer(wrapper).label).toBe("Сохранено");
+
+    editor(wrapper).vm.$emit("update:modelValue", "[i]Новое[/i] описание");
+    await flushPromises();
+    expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
+    await save(wrapper);
+
+    expect(update.mock.calls.at(-1)?.[1]).toMatchObject({
+      description: "[i]Новое[/i] описание",
+    });
+  });
+
+  // An erased description is a change like any other: it goes, and the field
+  // then holds what the server kept, not what was sent.
+  it("sends an erased description as an empty string and reads the field back", async () => {
+    const wrapper = mountSection("owner-id");
+    await flushPromises();
+    read.mockResolvedValue({
+      data: { resource: { id: "the-blog", description: "" } },
+      error: null,
+    });
+
+    editor(wrapper).vm.$emit("update:modelValue", "");
+    await flushPromises();
+    await save(wrapper);
+
+    expect(update.mock.calls.at(-1)?.[1]).toMatchObject({ description: "" });
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(editor(wrapper).props("modelValue")).toBe("");
+    expect(answer(wrapper)).toEqual({ label: "Сохранено", inert: true });
+  });
+
+  it("says the server's refusal of the description under the field, never Сохранено", async () => {
+    const wrapper = mountSection("owner-id");
+    await flushPromises();
+    update.mockResolvedValue({
+      data: null,
+      error: problem(400, "", {
+        errors: { Description: ["Описание нельзя стереть"] },
+      } as never),
+    });
+
+    editor(wrapper).vm.$emit("update:modelValue", "");
+    await flushPromises();
+    await save(wrapper);
+
+    expect(answer(wrapper)).toEqual({ label: "Сохранить", inert: false });
+    expect(read).toHaveBeenCalledTimes(1);
+    await expectRefusalUnderField(
+      wrapper,
+      "Описание:",
+      "Описание нельзя стереть",
+      () => {
+        editor(wrapper).vm.$emit("update:modelValue", "и снова");
+        return flushPromises();
+      },
+    );
+  });
+
+  it("sends the title as typed, spaces included", async () => {
+    const wrapper = mountSection();
+    await wrapper.find("#blog-title").setValue("  Дневник  ");
+
+    await save(wrapper);
+
+    expect(update.mock.calls.at(-1)?.[1]).toMatchObject({
+      title: "  Дневник  ",
+    });
   });
 });

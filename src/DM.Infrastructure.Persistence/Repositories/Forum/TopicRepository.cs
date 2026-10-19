@@ -4,22 +4,20 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Dto;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Extensions;
 using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Likes;
-using DM.Infrastructure.Persistence.Shared.Queries;
-using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
+using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 
 /// <summary>
 /// Repository for forum topics (unified CRUD operations)
 /// </summary>
-internal class TopicRepository : ITopicRepository
+internal partial class TopicRepository : ITopicRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IGuidFactory _guidFactory;
@@ -35,216 +33,9 @@ internal class TopicRepository : ITopicRepository
         _dateTimeProvider = dateTimeProvider;
     }
 
-    // --- READ ---
-
     /// <inheritdoc />
-    public async Task<int> Count(Guid? boardId, BoardAccessPolicy accessPolicy, TopicsQuery query, CancellationToken ct = default)
-    {
-        var dbQuery = _dbContext.Topics
-            .TagWith("DM.Forum.TopicsCount")
-            .Where(t => !t.IsRemoved);
-
-        dbQuery = ApplyScope(dbQuery, boardId, accessPolicy);
-        dbQuery = ApplyFilters(dbQuery, query,
-            await RemovedAccountScope.IdsIfAsked(_dbContext.Users, query.AuthorUsernames, ct));
-
-        return await dbQuery.CountAsync(ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<Topic>> Get(Guid? boardId, BoardAccessPolicy accessPolicy, PagingData? pagingData, TopicsQuery query, CancellationToken ct = default)
-    {
-        var dbQuery = _dbContext.Topics
-            .TagWith(boardId.HasValue ? "DM.Forum.TopicsList" : "DM.Forum.TopicsList.CrossBoard")
-            .Where(t => !t.IsRemoved);
-
-        dbQuery = ApplyScope(dbQuery, boardId, accessPolicy);
-        dbQuery = ApplyFilters(dbQuery, query,
-            await RemovedAccountScope.IdsIfAsked(_dbContext.Users, query.AuthorUsernames, ct));
-
-        // Sort by LastActivityUtc needs the raw LastComment relation so
-        // we sort in SQL BEFORE the Topic DTO projection. AutoMapper's
-        // projected query would otherwise generate an extra subquery per
-        // row to compute the same value.
-        var sortBy = (query.SortBy ?? "lastActivity").ToLowerInvariant();
-        var sortDesc = string.IsNullOrEmpty(query.SortOrder) ||
-                       query.SortOrder.Equals("desc", StringComparison.OrdinalIgnoreCase);
-
-        IOrderedQueryable<Entities.Forum.Topic> sortedDbQuery = (sortBy, sortDesc) switch
-        {
-            ("created", true) => dbQuery.OrderByDescending(t => t.CreatedUtc),
-            ("created", false) => dbQuery.OrderBy(t => t.CreatedUtc),
-            ("title", true) => dbQuery.OrderByDescending(t => t.Title),
-            ("title", false) => dbQuery.OrderBy(t => t.Title),
-            // Sort by likes uses a subquery on the Likes table. The same
-            // count is materialised below into LikesCount via a single
-            // batched GROUP BY — but the sort happens inside SQL so the
-            // ordering is consistent with the projected count.
-            ("likes", true) => dbQuery.OrderByDescending(t => _dbContext.Likes.Count(l =>
-                !l.IsRemoved &&
-                l.EntityId == t.TopicId &&
-                l.EntityType == Domain.Core.Enums.LikeEntityType.Topic)),
-            ("likes", false) => dbQuery.OrderBy(t => _dbContext.Likes.Count(l =>
-                !l.IsRemoved &&
-                l.EntityId == t.TopicId &&
-                l.EntityType == Domain.Core.Enums.LikeEntityType.Topic)),
-            // Sort by LastActivityUtc = LastComment?.CreatedUtc ?? CreatedUtc.
-            // EF translates the coalesce into a single ORDER BY expression.
-            (_, true) => dbQuery.OrderByDescending(t =>
-                t.LastComment != null ? t.LastComment.CreatedUtc : t.CreatedUtc),
-            (_, false) => dbQuery.OrderBy(t =>
-                t.LastComment != null ? t.LastComment.CreatedUtc : t.CreatedUtc),
-        };
-
-        // For attached topics without custom sort, use AttachOrder then CreatedUtc.
-        if (query.IsAttached == true && string.IsNullOrEmpty(query.SortBy))
-        {
-            sortedDbQuery = dbQuery
-                .OrderBy(t => t.AttachOrder ?? int.MaxValue)
-                .ThenByDescending(t => t.CreatedUtc);
-        }
-
-        // A last key nothing can tie on. Not one key above it is unique: two topics can
-        // share a title, a like count, an attach position or the second they were created
-        // in. Paging asks for the same order once per page, and rows the order cannot tell
-        // apart may be arranged differently between two of those asks, which shows one of
-        // them on both pages and the other on neither.
-        sortedDbQuery = sortedDbQuery.ThenBy(t => t.TopicId);
-
-        // ProjectTo materialises the Topic DTO and not the entity, so the change
-        // tracker is not involved either way. AsNoTracking stays as the default of
-        // a read path. See PERFORMANCE.md → "AsNoTracking".
-        var topics = await sortedDbQuery
-            .Page(pagingData)
-            .AsNoTracking()
-            .ProjectToTopic()
-            .ToArrayAsync(ct);
-
-        // Fill TotalCommentsCount + LikesCount in two batched GROUP BY
-        // queries instead of correlated subqueries per row (PERFORMANCE.md
-        // → "Avoid inline aggregations"). For a page of N topics we trade
-        // 2N subqueries for 2 indexed lookups.
-        //
-        // topicIds is a List<Guid>, NOT Guid[] — EF Core's LINQ
-        // translator has a Guid[] edge case that throws TypeLoadException
-        // on the ReadOnlySpan<Guid> interpreter path. List<Guid> avoids it.
-        if (topics.Length > 0)
-        {
-            var topicIds = topics.Select(t => t.Id).ToList();
-            var commentCounts = await _dbContext.Comments
-                .AsNoTracking()
-                .Where(c => topicIds.Contains(c.EntityId) && !c.IsRemoved)
-                .GroupBy(c => c.EntityId)
-                .Select(g => new { EntityId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.EntityId, x => x.Count, ct);
-
-            var likeCounts = await _dbContext.Likes
-                .AsNoTracking()
-                .Where(l =>
-                    !l.IsRemoved &&
-                    l.EntityType == Domain.Core.Enums.LikeEntityType.Topic &&
-                    topicIds.Contains(l.EntityId))
-                .GroupBy(l => l.EntityId)
-                .Select(g => new { EntityId = g.Key, Count = g.Count() })
-                .ToDictionaryAsync(x => x.EntityId, x => x.Count, ct);
-
-            foreach (var topic in topics)
-            {
-                commentCounts.TryGetValue(topic.Id, out var count);
-                topic.TotalCommentsCount = count;
-                likeCounts.TryGetValue(topic.Id, out var likes);
-                topic.LikesCount = likes;
-            }
-        }
-
-        await FillLikes(topics, ct);
-        return topics;
-    }
-
-    /// <summary>
-    /// Scope predicate: either a single board (per-board listing) or all
-    /// boards visible to the current viewer (cross-board listing — used by
-    /// the user profile's Topics tab). The access-policy bitmask is the
-    /// same one already used by <see cref="Get(Guid, BoardAccessPolicy, CancellationToken)"/>
-    /// and the single-topic lookup, so visibility is consistent across paths.
-    /// </summary>
-    private static IQueryable<Entities.Forum.Topic> ApplyScope(
-        IQueryable<Entities.Forum.Topic> dbQuery, Guid? boardId, BoardAccessPolicy accessPolicy)
-    {
-        return boardId.HasValue
-            ? dbQuery.Where(t => t.BoardId == boardId.Value)
-            : dbQuery.Where(t => (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None);
-    }
-
-    /// <summary>
-    /// Shared filter predicates for both count and listing queries — kept
-    /// in one place so a new filter (added to TopicsQuery) automatically
-    /// affects pagination AND the listing without diverging.
-    /// </summary>
-    /// <param name="dbQuery">Topics in scope</param>
-    /// <param name="query">What the reader asked for</param>
-    /// <param name="authorIds">
-    /// The authors meant when the names asked include "Аккаунт удален" - the removed
-    /// accounts and the live ones named alongside (<see cref="RemovedAccountScope" />);
-    /// null otherwise.
-    /// </param>
-    private static IQueryable<Entities.Forum.Topic> ApplyFilters(
-        IQueryable<Entities.Forum.Topic> dbQuery, TopicsQuery query, IReadOnlyCollection<Guid>? authorIds)
-    {
-        if (query.IsAttached.HasValue)
-        {
-            dbQuery = dbQuery.Where(t => t.IsAttached == query.IsAttached.Value);
-        }
-
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            var searchPattern = LikePatterns.Contains(query.Search.Trim());
-            dbQuery = dbQuery.Where(t => EF.Functions.ILike(t.Title, searchPattern));
-        }
-
-        if (authorIds is not null)
-        {
-            // The profile of removed accounts asks for its topics this way: by the
-            // author column, joining no account.
-            dbQuery = dbQuery.Where(t => authorIds.Contains(t.AuthorId));
-        }
-        else if (query.AuthorUsernames is { Count: > 0 })
-        {
-            // The listing lifts the account filter to keep the topics of removed
-            // accounts (RemovedAuthors), so a removed login is refused here in the
-            // open: asked by the old name, the list would otherwise hand back
-            // exactly what the removal took off that name.
-            var authorNames = query.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
-            dbQuery = dbQuery.Where(t => !t.Author.IsRemoved && authorNames.Contains(t.Author.Username.ToLower()));
-        }
-
-        if (query.CreatedFromUtc.HasValue)
-        {
-            dbQuery = dbQuery.Where(t => t.CreatedUtc >= query.CreatedFromUtc.Value);
-        }
-
-        if (query.CreatedToUtc.HasValue)
-        {
-            dbQuery = dbQuery.WhereAtOrBefore(t => t.CreatedUtc, query.CreatedToUtc.Value);
-        }
-
-        return dbQuery;
-    }
-
-    /// <inheritdoc />
-    public async Task<Topic?> Get(Guid topicId, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
-    {
-        var topic = await _dbContext.Topics
-            .TagWith("DM.Forum.Topic")
-            .Where(t => !t.IsRemoved && t.TopicId == topicId &&
-                        (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
-            .AsNoTracking()
-            .ProjectToTopic()
-            .FirstOrDefaultAsync(ct);
-
-        await FillCounts(topic, ct);
-        return topic;
-    }
+    public Task<Topic?> Get(Guid topicId, CancellationToken ct = default) =>
+        ReadOne(_dbContext.Topics.TagWith("DM.Forum.Topic").Where(t => t.TopicId == topicId), ct);
 
     /// <inheritdoc />
     public async Task<IReadOnlyDictionary<Guid, PeriodDigest>> GetPeriodDigests(
@@ -263,13 +54,8 @@ internal class TopicRepository : ITopicRepository
             m => new PeriodDigest { Year = m.Year, Month = m.Month });
     }
 
+    // These two probes ignore the soft-delete filter, so a deleted topic answers 410, not 404.
     /// <inheritdoc />
-    /// <inheritdoc />
-    // IgnoreQueryFilters is the whole point of these two probes: the soft-delete
-    // filter is global, so without it they can only ever see rows that are NOT
-    // removed — which is exactly the case the caller already knows about. With
-    // the filter applied the 410 branch is unreachable and every deleted topic
-    // reports 404.
     public Task<bool> Exists(Guid topicId, CancellationToken ct = default) =>
         _dbContext.Topics
             .IgnoreQueryFilters()
@@ -283,41 +69,30 @@ internal class TopicRepository : ITopicRepository
             .TagWith("DM.Forum.TopicExistsByNumber")
             .AnyAsync(t => t.BoardId == boardId && t.TopicNumber == topicNumber, ct);
 
-    public async Task<Topic?> GetByBoardAndNumber(Guid boardId, int topicNumber, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
-    {
-        var topic = await _dbContext.Topics
+    /// <inheritdoc />
+    public Task<Topic?> GetByBoardAndNumber(Guid boardId, int topicNumber, CancellationToken ct = default) =>
+        ReadOne(_dbContext.Topics
             .TagWith("DM.Forum.TopicByBoardAndNumber")
-            .Where(t => !t.IsRemoved && t.BoardId == boardId && t.TopicNumber == topicNumber &&
-                        (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
-            .AsNoTracking()
-            .ProjectToTopic()
-            .FirstOrDefaultAsync(ct);
-
-        await FillCounts(topic, ct);
-        return topic;
-    }
+            .Where(t => t.BoardId == boardId && t.TopicNumber == topicNumber), ct);
 
     /// <inheritdoc />
-    public async Task<Topic?> GetBestUserTopic(Guid authorId, BoardAccessPolicy accessPolicy, CancellationToken ct = default)
-    {
-        // Single-query "best" lookup: sort by the same likes subquery
-        // pattern used by the listing path, take the top row, project to
-        // the Topic DTO. Soft-deleted topics and topics on boards the
-        // viewer cannot see are filtered out so the profile widget never
-        // surfaces hidden content.
-        var topic = await _dbContext.Topics
+    public Task<Topic?> GetBestUserTopic(Guid authorId, CancellationToken ct = default) =>
+        ReadOne(_dbContext.Topics
             .TagWith("DM.Forum.GetBestUserTopic")
-            .Where(t => !t.IsRemoved && t.AuthorId == authorId &&
-                        (t.Board.ViewPolicy & accessPolicy) != BoardAccessPolicy.None)
+            .Where(t => t.AuthorId == authorId)
             .OrderByDescending(t => _dbContext.Likes.Count(l =>
-                !l.IsRemoved &&
                 l.EntityId == t.TopicId &&
-                l.EntityType == Domain.Core.Enums.LikeEntityType.Topic))
-            // Tie-breaker: newer-first so two zero-like topics still produce
-            // a deterministic result rather than relying on insertion order,
-            // and the identifier after it for the two that also share a second.
+                l.EntityType == LikeEntityType.Topic))
+            // Newer first, then the identifier, so ties still answer one topic.
             .ThenByDescending(t => t.CreatedUtc)
-            .ThenBy(t => t.TopicId)
+            .ThenBy(t => t.TopicId), ct);
+
+    /// <summary>
+    /// The first topic of the query, counts filled.
+    /// </summary>
+    private async Task<Topic?> ReadOne(IQueryable<DbTopic> topics, CancellationToken ct)
+    {
+        var topic = await topics
             .AsNoTracking()
             .ProjectToTopic()
             .FirstOrDefaultAsync(ct);
@@ -329,10 +104,8 @@ internal class TopicRepository : ITopicRepository
     /// <summary>
     /// Backfill <see cref="Topic.TotalCommentsCount"/>,
     /// <see cref="Topic.LikesCount"/> and <see cref="Topic.Likes"/> for a single
-    /// topic — the same values the list path fills in batches. The mapping
-    /// profile intentionally ignores these to avoid per-row correlated
-    /// subqueries, so the single-topic page would otherwise show 0. See the list
-    /// path above and TopicMapper for the rationale.
+    /// topic, the values the list path fills in batches: the projection leaves them
+    /// out to avoid per-row correlated subqueries.
     /// </summary>
     private async Task FillCounts(Topic? topic, CancellationToken ct)
     {
@@ -341,19 +114,7 @@ internal class TopicRepository : ITopicRepository
             return;
         }
 
-        topic.TotalCommentsCount = await _dbContext.Comments
-            .AsNoTracking()
-            .Where(c => c.EntityId == topic.Id && !c.IsRemoved)
-            .CountAsync(ct);
-
-        topic.LikesCount = await _dbContext.Likes
-            .AsNoTracking()
-            .Where(l =>
-                !l.IsRemoved &&
-                l.EntityType == Domain.Core.Enums.LikeEntityType.Topic &&
-                l.EntityId == topic.Id)
-            .CountAsync(ct);
-
+        await FillListCounts([topic], ct);
         await FillLikes([topic], ct);
     }
 
@@ -370,8 +131,6 @@ internal class TopicRepository : ITopicRepository
         LikeBackfill.Fill(_dbContext, topics, LikeEntityType.Topic,
             t => t.Id, (t, likes) => t.Likes = likes,
             "DM.Forum.TopicLikes", "DM.Forum.TopicLikers", ct);
-
-    // --- WRITE ---
 
     /// <inheritdoc />
     public async Task<Topic> Create(CreateTopicEntity createTopic, Guid authorId, Guid boardId, CancellationToken ct = default)
@@ -396,14 +155,14 @@ internal class TopicRepository : ITopicRepository
             await _dbContext.Database.ExecuteSqlRawAsync(
                 """SELECT "BoardId" FROM "Boards" WHERE "BoardId" = {0} FOR UPDATE""", [boardId], ct);
 
-            _dbContext.Topics.Add(new Entities.Forum.Topic
+            _dbContext.Topics.Add(new DbTopic
             {
                 TopicId = topicId,
                 BoardId = boardId,
                 TopicNumber = await NextTopicNumber(boardId, ct),
                 AuthorId = authorId,
-                Title = createTopic.Title.Trim(),
-                Text = createTopic.Text.Trim(),
+                Title = createTopic.Title,
+                Text = AuthoredText.AsTyped(createTopic.Text),
                 CreatedUtc = now,
                 IsRemoved = false,
                 IsClosed = false,
@@ -475,97 +234,25 @@ internal class TopicRepository : ITopicRepository
             // wait has to come before: taken after the write, the number came
             // from a snapshot the wait had already made stale, and the unique
             // index on (BoardId, TopicNumber) refused it.
-            //
-            // Ordering by identifier is arbitrary, which is all a lock order has
-            // to be as long as everyone shares it: a move is the only write here
-            // that holds two board rows at once, so two moves in opposite
-            // directions are the pair that would otherwise take them in opposite
-            // orders and deadlock. The board the topic is leaving is named by a
-            // subquery rather than by a read of its own, so that nothing this
-            // transaction decides on happens before the lock.
             if (boardId.HasValue)
             {
-                await _dbContext.Database.ExecuteSqlRawAsync(
-                    """
-                    SELECT "BoardId" FROM "Boards"
-                    WHERE "BoardId" IN ((SELECT "BoardId" FROM "Topics" WHERE "TopicId" = {0}), {1})
-                    ORDER BY "BoardId"
-                    FOR UPDATE
-                    """,
-                    updateTopic.TopicId, boardId.Value);
+                await LockBoardsForMove(updateTopic.TopicId, boardId.Value);
             }
 
             var topic = await _dbContext.Topics.FindAsync(updateTopic.TopicId);
             if (topic != null)
             {
-                if (!string.IsNullOrEmpty(updateTopic.Title))
-                {
-                    topic.Title = updateTopic.Title.Trim();
-                }
-
-                // null = don't update (the UpdateTopic contract); an empty
-                // string is a deliberate clear — topic text is optional.
-                if (updateTopic.Text != null)
-                {
-                    topic.Text = updateTopic.Text.Trim();
-                }
-
-                if (updateTopic.IsClosed.HasValue)
-                {
-                    topic.IsClosed = updateTopic.IsClosed.Value;
-                }
-
-                if (updateTopic.ClosedByAuthor.HasValue)
-                {
-                    topic.ClosedByAuthor = updateTopic.ClosedByAuthor.Value;
-                }
-
-                if (updateTopic.IsAttached.HasValue)
-                {
-                    topic.IsAttached = updateTopic.IsAttached.Value;
-                }
+                ApplyEdit(topic, updateTopic);
 
                 // A move changes the summary of both boards: the one losing the topic
                 // and the one gaining it.
                 var previousBoardId = topic.BoardId;
                 if (boardId.HasValue && boardId.Value != previousBoardId)
                 {
-                    topic.BoardId = boardId.Value;
-
-                    // The number is per board, and the topic kept the one it had:
-                    // moved into a board that already had a topic under that
-                    // number, the write was refused by the unique index on
-                    // (BoardId, TopicNumber) and the move failed outright. It is
-                    // allocated the way creation allocates one, under the same
-                    // board lock and over the same set, so a move and a creation
-                    // racing for the next number cannot both take it.
-                    //
-                    // The old address stops resolving, which is the price of the
-                    // number meaning "the Nth topic of this board": the topic
-                    // keeps its identifier and every link built on that still
-                    // opens it.
-                    topic.TopicNumber = await NextTopicNumber(boardId.Value);
+                    await MoveToBoard(topic, boardId.Value);
                 }
 
-                // The tracker is the one fact about whether this request changed anything:
-                // a request that round-trips the values the topic already holds leaves it
-                // Unchanged. Both consequences hang off it — no row in the edit history,
-                // and no ChangedTopic announcement, since a notification whose actor is
-                // read back from that history would otherwise name the previous editor.
-                changed = _dbContext.Entry(topic).State == EntityState.Modified;
-
-                // The topic row keeps its author and no editor, so the history is the
-                // only record of who changed it.
-                if (updateTopic.EditorUserId != Guid.Empty && changed)
-                {
-                    _dbContext.TopicEdits.Add(new Entities.Forum.TopicEdit
-                    {
-                        TopicEditId = _guidFactory.Create(),
-                        TopicId = topic.TopicId,
-                        EditorUserId = updateTopic.EditorUserId,
-                        EditedUtc = _dateTimeProvider.Now
-                    });
-                }
+                changed = RecordEdit(topic, updateTopic.EditorUserId);
 
                 await _dbContext.SaveChangesAsync();
 
@@ -594,6 +281,112 @@ internal class TopicRepository : ITopicRepository
         await FillCounts(updated, CancellationToken.None);
 
         return new TopicUpdateResult(updated, changed);
+    }
+
+    /// <summary>
+    /// Takes the rows of the board a topic leaves and of the board it joins.
+    /// </summary>
+    private async Task LockBoardsForMove(Guid topicId, Guid boardId)
+    {
+        // Ordering by identifier is arbitrary, which is all a lock order has
+        // to be as long as everyone shares it: a move is the only write here
+        // that holds two board rows at once, so two moves in opposite
+        // directions are the pair that would otherwise take them in opposite
+        // orders and deadlock. The board the topic is leaving is named by a
+        // subquery rather than by a read of its own, so that nothing this
+        // transaction decides on happens before the lock.
+        await _dbContext.Database.ExecuteSqlRawAsync(
+            """
+            SELECT "BoardId" FROM "Boards"
+            WHERE "BoardId" IN ((SELECT "BoardId" FROM "Topics" WHERE "TopicId" = {0}), {1})
+            ORDER BY "BoardId"
+            FOR UPDATE
+            """,
+            topicId, boardId);
+    }
+
+    /// <summary>
+    /// Writes the fields an edit names onto the tracked topic.
+    /// </summary>
+    private static void ApplyEdit(DbTopic topic, UpdateTopicEntity updateTopic)
+    {
+        if (!string.IsNullOrEmpty(updateTopic.Title))
+        {
+            topic.Title = updateTopic.Title;
+        }
+
+        // null = don't update (the UpdateTopic contract); an empty
+        // string is a deliberate clear — topic text is optional.
+        if (updateTopic.Text != null)
+        {
+            topic.Text = AuthoredText.AsTyped(updateTopic.Text);
+        }
+
+        if (updateTopic.IsClosed.HasValue)
+        {
+            topic.IsClosed = updateTopic.IsClosed.Value;
+        }
+
+        if (updateTopic.ClosedByAuthor.HasValue)
+        {
+            topic.ClosedByAuthor = updateTopic.ClosedByAuthor.Value;
+        }
+
+        if (updateTopic.IsAttached.HasValue)
+        {
+            topic.IsAttached = updateTopic.IsAttached.Value;
+        }
+    }
+
+    /// <summary>
+    /// Puts the topic into another board, under the next number of that board.
+    /// </summary>
+    private async Task MoveToBoard(DbTopic topic, Guid boardId)
+    {
+        topic.BoardId = boardId;
+
+        // The number is per board, and the topic kept the one it had:
+        // moved into a board that already had a topic under that
+        // number, the write was refused by the unique index on
+        // (BoardId, TopicNumber) and the move failed outright. It is
+        // allocated the way creation allocates one, under the same
+        // board lock and over the same set, so a move and a creation
+        // racing for the next number cannot both take it.
+        //
+        // The old address stops resolving, which is the price of the
+        // number meaning "the Nth topic of this board": the topic
+        // keeps its identifier and every link built on that still
+        // opens it.
+        topic.TopicNumber = await NextTopicNumber(boardId);
+    }
+
+    /// <summary>
+    /// Writes the edit into the history of the topic when the request changed it.
+    /// </summary>
+    /// <returns>Whether the request changed the topic.</returns>
+    private bool RecordEdit(DbTopic topic, Guid editorUserId)
+    {
+        // The tracker is the one fact about whether this request changed anything:
+        // a request that round-trips the values the topic already holds leaves it
+        // Unchanged. Both consequences hang off it — no row in the edit history,
+        // and no ChangedTopic announcement, since a notification whose actor is
+        // read back from that history would otherwise name the previous editor.
+        var changed = _dbContext.Entry(topic).State == EntityState.Modified;
+
+        // The topic row keeps its author and no editor, so the history is the
+        // only record of who changed it.
+        if (editorUserId != Guid.Empty && changed)
+        {
+            _dbContext.TopicEdits.Add(new Entities.Forum.TopicEdit
+            {
+                TopicEditId = _guidFactory.Create(),
+                TopicId = topic.TopicId,
+                EditorUserId = editorUserId,
+                EditedUtc = _dateTimeProvider.Now
+            });
+        }
+
+        return changed;
     }
 
     /// <inheritdoc />
@@ -626,131 +419,5 @@ internal class TopicRepository : ITopicRepository
 
             await transaction.CommitAsync();
         });
-    }
-
-    /// <inheritdoc />
-    public Task RefreshBoardSummary(Guid boardId, CancellationToken ct = default) =>
-        // The same recompute the three write paths of this file run, offered to a
-        // caller that changed a topic without going through any of them. It is the
-        // one definition of what a board's summary means: a second reading of
-        // "the last topic" written next door drifted from this one over the
-        // tie-break and overwrote it, and the two then took turns.
-        //
-        // The transaction is here rather than around the private method because
-        // the private one is called from inside transactions that already hold the
-        // board row, and a transaction opened inside a transaction is refused.
-        RetryableWrite.Run(_dbContext, async cancellation =>
-        {
-            await using var transaction = await _dbContext.Database.BeginTransactionAsync(cancellation);
-
-            await RefreshBoardTopicSummary(boardId, cancellation);
-            await _dbContext.SaveChangesAsync(cancellation);
-
-            await transaction.CommitAsync(cancellation);
-        }, ct);
-
-    /// <summary>
-    /// Recompute a board's denormalized topic summary from the topics themselves.
-    /// </summary>
-    /// <remarks>
-    /// Recomputed, not incremented. An increment is only ever as correct as the
-    /// number of places that remember to apply it, and the count used to be
-    /// raised on creation and adjusted nowhere else: deleting a topic or moving
-    /// one to another board left both boards claiming something untrue, with no
-    /// way back short of touching the database by hand. A recompute is the single
-    /// definition of what the summary means, and it heals a row that is already
-    /// wrong instead of carrying the error forward.
-    ///
-    /// The soft-delete filter applies, so a removed topic drops out of both the
-    /// count and the "last topic" fields, which is what a reader expects to see.
-    /// </remarks>
-    private async Task RefreshBoardTopicSummary(Guid boardId, CancellationToken ct = default)
-    {
-        // A recompute is a read of the topics followed by a write of the board, and
-        // the board row is what serializes it against the next one: without the lock
-        // a delete and a create counted the same board at the same moment, each saw
-        // the other's topic missing, and whichever committed last wrote its own
-        // number over the truth - a count nothing recomputes until the board is
-        // written again. The lock is the first statement of the pair rather than a
-        // consequence of the write itself: a wait that begins at the write has
-        // already taken its number from a snapshot the wait made stale. Taking it
-        // again inside a transaction that holds it (Create) costs nothing.
-        await _dbContext.Database.ExecuteSqlRawAsync(
-            """SELECT "BoardId" FROM "Boards" WHERE "BoardId" = {0} FOR UPDATE""", [boardId], ct);
-
-        var board = await _dbContext.Boards.FindAsync([boardId], ct);
-        if (board == null)
-        {
-            return;
-        }
-
-        var summary = await _dbContext.Topics
-            .TagWith("DM.Forum.BoardTopicSummary")
-            .Where(t => t.BoardId == boardId)
-            .GroupBy(_ => 1)
-            .Select(g => new
-            {
-                Count = g.Count(),
-                Last = g.OrderByDescending(t => t.CreatedUtc)
-                    .ThenByDescending(t => t.TopicNumber)
-                    .Select(t => new
-                    {
-                        t.TopicId,
-                        t.TopicNumber,
-                        t.Title,
-                        t.AuthorId,
-                        t.CreatedUtc
-                    })
-                    .First()
-            })
-            .FirstOrDefaultAsync(ct);
-
-        board.TopicsCount = summary?.Count ?? 0;
-        board.LastTopicId = summary?.Last.TopicId;
-        board.LastTopicNumber = summary?.Last.TopicNumber;
-        board.LastTopicTitle = summary?.Last.Title;
-        board.LastTopicAuthorId = summary?.Last.AuthorId;
-        board.LastTopicCreatedUtc = summary?.Last.CreatedUtc;
-    }
-
-    /// <inheritdoc />
-    public async Task<IReadOnlyList<Guid>> GetAttachedTopicIds(Guid boardId, CancellationToken ct = default) =>
-        await _dbContext.Topics
-            .TagWith("DM.Forum.AttachedTopicIds")
-            .AsNoTracking()
-            .Where(t => t.BoardId == boardId && t.IsAttached && !t.IsRemoved)
-            .OrderBy(t => t.AttachOrder ?? int.MaxValue)
-            .ThenBy(t => t.TopicId)
-            .Select(t => t.TopicId)
-            .ToArrayAsync(ct);
-
-    /// <inheritdoc />
-    public async Task ReplaceAttachOrder(
-        Guid boardId, IReadOnlyList<Guid> orderedTopicIds, CancellationToken ct = default)
-    {
-        // The board is in the predicate and not only in the caller's address:
-        // keyed by topic id alone, this write moved whatever ids the body
-        // happened to carry, and the moderator of one board could renumber the
-        // pinned topics of another.
-        var topics = await _dbContext.Topics
-            .TagWith("DM.Forum.ReplaceAttachOrder")
-            .Where(t => t.BoardId == boardId && t.IsAttached && !t.IsRemoved)
-            .ToArrayAsync(ct);
-
-        var positions = new Dictionary<Guid, int>();
-        for (var position = 0; position < orderedTopicIds.Count; position++)
-        {
-            positions[orderedTopicIds[position]] = position;
-        }
-
-        foreach (var topic in topics)
-        {
-            if (positions.TryGetValue(topic.TopicId, out var order))
-            {
-                topic.AttachOrder = order;
-            }
-        }
-
-        await _dbContext.SaveChangesAsync(ct);
     }
 }

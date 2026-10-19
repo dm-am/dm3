@@ -5,8 +5,6 @@ using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.RateLimiting;
-using DM.Web.API.Shared.RateLimiting;
 
 namespace DM.Web.API.Features.Messaging.Chats;
 
@@ -23,13 +21,10 @@ namespace DM.Web.API.Features.Messaging.Chats;
 [Tags("Chats")]
 public class ChatController : ControllerBase
 {
-    private readonly IMessagingApiService _apiService;
+    private readonly MessagingApiService _apiService;
 
-    /// <summary>
-    /// Creates a new instance of ChatController
-    /// </summary>
     public ChatController(
-        IMessagingApiService apiService)
+        MessagingApiService apiService)
     {
         _apiService = apiService;
     }
@@ -63,7 +58,7 @@ public class ChatController : ControllerBase
     /// <response code="401">User must be authenticated</response>
     [HttpGet("unread", Name = nameof(GetUnreadMessagesCount))]
     [AuthenticationRequired]
-    [ProducesResponseType(typeof(Envelope<ChatUnreadCount>), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(Envelope<UnreadCount>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetUnreadMessagesCount() =>
         Ok(await _apiService.GetUnreadCountAsync());
@@ -220,13 +215,4 @@ public class ChatController : ControllerBase
         await _apiService.ClearChatHistoryAsync(chatId);
         return NoContent();
     }
-
-    // There is no "can a chat be started" address. The one that answered it had a
-    // rule of its own - refused if either person blocked the other, never asked
-    // the addressee's "Блокировать личные сообщения" - so it contradicted what
-    // sending then did, and it told the asker whether the other person had put
-    // them on a list at all. The question is answered where the page offers the
-    // write, by the code that refuses it (MessageService): viewer.canWrite of a
-    // chat read here, viewer.canMessage of a profile. Both say what the refusal
-    // of the message says, and only that.
 }

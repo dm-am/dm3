@@ -6,110 +6,53 @@ using System.Threading.Tasks;
 namespace DM.Domain.Messaging.Features.GlobalChatEvents;
 
 /// <summary>
-/// Unified service for global chat events: CRUD, lifecycle, and participants
+/// Global chat events: CRUD, lifecycle and participants
 /// </summary>
 public interface IGlobalChatEventService
 {
-    // ═══ CREATE ═══
-
-    /// <summary>
-    /// Create a new chat event
-    /// </summary>
-    /// <param name="createGlobalChatEvent">Creation DTO</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Created event</returns>
     Task<GlobalChatEvent> CreateAsync(CreateGlobalChatEvent createGlobalChatEvent, CancellationToken ct = default);
 
-    // ═══ READ ═══
-
-    /// <summary>
-    /// Get chat event by ID
-    /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <returns>Chat event</returns>
     /// <exception cref="DM.Domain.Core.Exceptions.HttpException">If event not found</exception>
     Task<GlobalChatEvent> GetAsync(Guid eventId);
 
     /// <summary>
-    /// Get currently active (Live) event or null
+    /// The live event, or null
     /// </summary>
-    /// <returns>Live event or null</returns>
     Task<GlobalChatEvent?> GetActiveEventAsync();
 
     /// <summary>
-    /// Get all non-ended events (Live + Scheduled)
+    /// Every event not ended yet, live and scheduled
     /// </summary>
-    /// <returns>List of events</returns>
     Task<IEnumerable<GlobalChatEvent>> GetAllAsync();
 
-    // ═══ UPDATE ═══
-
-    /// <summary>
-    /// Update a chat event
-    /// </summary>
-    /// <param name="updateGlobalChatEvent">Update DTO</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Updated event</returns>
     Task<GlobalChatEvent> UpdateAsync(UpdateGlobalChatEvent updateGlobalChatEvent, CancellationToken ct = default);
 
-    // ═══ DELETE ═══
-
-    /// <summary>
-    /// Delete a chat event
-    /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
     Task DeleteAsync(Guid eventId, CancellationToken ct = default);
 
-    // ═══ LIFECYCLE ═══
-
     /// <summary>
-    /// Start a scheduled event (transition to Live)
+    /// Start a scheduled event
     /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Updated event</returns>
     Task<GlobalChatEvent> StartAsync(Guid eventId, CancellationToken ct = default);
 
     /// <summary>
-    /// End a live event (transition to Ended)
+    /// End a live event
     /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Updated event</returns>
     Task<GlobalChatEvent> EndAsync(Guid eventId, CancellationToken ct = default);
 
-    // ═══ PARTICIPANTS ═══
-
     /// <summary>
-    /// Join an open event (self-service for users)
+    /// Join an open event
     /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Created participant</returns>
     Task<GlobalChatEventParticipant> JoinAsync(Guid eventId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Leave an event (self-service for participants)
-    /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
     Task LeaveAsync(Guid eventId, CancellationToken ct = default);
 
     /// <summary>
-    /// Add participant to event (organizer action)
+    /// Add a participant, as the organizer
     /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <param name="userId">User identifier to add</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>Created participant</returns>
     Task<GlobalChatEventParticipant> AddParticipantAsync(Guid eventId, Guid userId, CancellationToken ct = default);
 
     /// <summary>
-    /// Remove participant from event (organizer action)
+    /// Remove a participant, as the organizer
     /// </summary>
-    /// <param name="eventId">Event identifier</param>
-    /// <param name="userId">User identifier to remove</param>
-    /// <param name="ct">Cancellation token</param>
     Task RemoveParticipantAsync(Guid eventId, Guid userId, CancellationToken ct = default);
 }

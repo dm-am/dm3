@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
@@ -19,18 +15,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// directions.
 /// </summary>
 /// <remarks>
-/// The ordering is one method of nine branches, each a different expression over
-/// up to four columns, and a request that asks for an order only proves the list
-/// came back. A branch moved with one column swapped for its neighbour, or with
-/// a direction turned, answers 200 all the same; only the sequence says it.
-///
-/// Against the container Postgres because the order is the database's: booleans
-/// sort false first there, the fallbacks for a missing date are coalesced in SQL,
-/// and relevance is a trigram similarity no other provider computes.
-///
-/// One set of nine games, built so that no two orders below are the same list:
-/// a branch answering with its neighbour's expression is a different sequence of
-/// titles, not a coincidence that passes.
+/// Only the sequence shows a branch with a swapped column or direction. Against the container Postgres: booleans,
+/// coalesced dates and trigram relevance are the database's; no two orders below are the same list.
 /// </remarks>
 public class GameListSortingShould : IntegrationTestBase
 {
@@ -131,10 +117,7 @@ public class GameListSortingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A search without a key answers the closest titles first: the exact title,
-    /// then a title that starts with the words, then the rest by trigram
-    /// similarity rather than by the alphabet, which decides only between two
-    /// titles equally close.
+    /// A search without a key answers the closest titles first: exact, starting with the words, then by trigram similarity.
     /// </summary>
     [Fact]
     public async Task PutTheClosestTitlesFirstWhenASearchNamesNoKey()
@@ -160,9 +143,7 @@ public class GameListSortingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Five titles a search for "ember" finds in four different ways, two of them
-    /// equally close so that the title decides between them, and one it does not
-    /// find.
+    /// Five titles "ember" finds four ways, two equally close, and one it does not find.
     /// </summary>
     private static readonly IReadOnlyList<Seed> Relevance =
     [
@@ -200,15 +181,7 @@ public class GameListSortingShould : IntegrationTestBase
     /// <summary>
     /// Two games equal in the key fall back to the title, in every order.
     /// </summary>
-    /// <remarks>
-    /// On the site equal keys are the common case rather than the edge: every new
-    /// game has the same popularity, a draft has no recruitment date, and a list
-    /// is read a page at a time. Without a fixed second key the database may
-    /// answer tied games in any order on each request, and the next page repeats
-    /// one game and skips another. The nine games above are all unequal, so the
-    /// title after the key is checked here, on pairs of games that differ in
-    /// nothing else.
-    /// </remarks>
+    /// <remarks>Equal keys are common, and without a second key a page repeats one game and skips another.</remarks>
     [Theory]
     [MemberData(nameof(TieBreaks))]
     public async Task BreakATieByTheTitle(string? sortBy, string sortOrder, bool closedOnly, bool titlesRunBackwards)
@@ -235,9 +208,7 @@ public class GameListSortingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Five pairs of games that differ only in the title, the two titles of a
-    /// pair next to each other in the alphabet: wherever several pairs tie at
-    /// once, each pair still stands together.
+    /// Five pairs of games that differ only in adjacent titles.
     /// </summary>
     private static readonly IReadOnlyList<Seed> Twins =
     [

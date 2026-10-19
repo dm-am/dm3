@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Identity;
 
@@ -11,11 +9,6 @@ namespace DM.Domain.Core.Users;
 /// </summary>
 public class UserDetails : GeneralUser
 {
-    /// <summary>
-    /// Date of user registration
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
-
     /// <summary>
     /// User contact information (flexible type+value pairs)
     /// </summary>

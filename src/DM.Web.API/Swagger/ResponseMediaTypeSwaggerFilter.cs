@@ -10,18 +10,10 @@ namespace DM.Web.API.Swagger;
 /// Publishes the media type a response actually carries.
 /// </summary>
 /// <remarks>
-/// With no [Produces] anywhere in the host, Swashbuckle guesses from the
-/// registered formatters and writes text/plain, application/json and text/json
-/// under every body. Two of the three never travel — one output formatter is
-/// registered — and under a refusal none of them does: ErrorHandlingMiddleware
-/// answers with application/problem+json. A client generated from the document
-/// picks its deserialiser by media type, so naming three wrong ones is worse
-/// than naming none.
-///
-/// A filter rather than an attribute per controller: [Produces] is a rule every
-/// new controller has to remember, and the answer here is a property of the host
-/// rather than of any one action. Nothing on the wire changes — this describes
-/// what the middleware and the formatter already do.
+/// Without [Produces] Swashbuckle guesses three types from the formatters, and
+/// one formatter is registered while a refusal is application/problem+json from
+/// ErrorHandlingMiddleware. A filter, because the answer is a property of the
+/// host, not of any one action.
 /// </remarks>
 internal class ResponseMediaTypeSwaggerFilter : IOperationFilter
 {
@@ -48,15 +40,10 @@ internal class ResponseMediaTypeSwaggerFilter : IOperationFilter
 
             var isFailure = int.TryParse(response.Key, out var statusCode) && statusCode >= 400;
 
-            // Swashbuckle emits the same schema under each guessed type, so any
-            // entry is the body; what changes is the single name it is published
-            // under.
+            // Swashbuckle emits the same schema under each guessed type.
             var body = content.Values.First();
             mutable.Content = new Dictionary<string, OpenApiMediaType>
             {
-                // ApiContentTypes.ProblemJson is what ErrorHandlingMiddleware writes on
-                // every refusal; documenting anything else here would describe a
-                // response the API does not send.
                 [isFailure ? ApiContentTypes.ProblemJson : ApiContentTypes.Json] = body,
             };
         }

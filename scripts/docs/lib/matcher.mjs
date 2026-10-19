@@ -22,10 +22,10 @@ function compileSegment(segment) {
   return { pattern: `/${body}`, rank: custom ? 3 : 2 };
 }
 
-export function compileRoutePath(path) {
+function compileRoutePath(path) {
   const segments = path.split("/").filter((s) => s !== "");
   const compiled = segments.map(compileSegment);
-  const source = compiled.map((c) => c.pattern).join("") || "";
+  const source = compiled.map((c) => c.pattern).join("");
   return {
     regex: new RegExp(`^${source}/?$`),
     // The root is one static segment for the ranking: "/" outranks a splat.
@@ -41,7 +41,7 @@ function better(a, b) {
 }
 
 /** The address part of a link: no query, no fragment, no trailing slash. */
-export function addressOf(text) {
+function linkPath(text) {
   const cut = text.search(/[?#]/);
   const path = cut === -1 ? text : text.slice(0, cut);
   return path === "" ? "/" : path;
@@ -55,7 +55,7 @@ export function addressOf(text) {
 export function routeResolver(rows) {
   const compiled = rows.map((row) => ({ row, ...compileRoutePath(row.path) }));
   return (text) => {
-    const address = addressOf(text);
+    const address = linkPath(text);
     if (!address.startsWith("/")) return undefined;
     let best;
     for (const candidate of compiled) {
@@ -65,27 +65,3 @@ export function routeResolver(rows) {
     return best?.row;
   };
 }
-
-/** Server routes in the snapshot spelling (`/v1/games/{id}`), the same way round. */
-export function endpointResolver(endpoints) {
-  const compiled = endpoints.map((endpoint) => {
-    const segments = endpoint.path.split("/").filter((s) => s !== "");
-    const pattern = segments
-      .map((s) => (/^\{[^}]*\}$/.test(s) ? "/[^/]+" : `/${escape(s)}`))
-      .join("");
-    return {
-      endpoint,
-      regex: new RegExp(`^${pattern}$`),
-      score: segments.map((s) => (s.startsWith("{") ? 2 : 4)),
-    };
-  });
-  return (method, path) => {
-    let best;
-    for (const candidate of compiled) {
-      if (candidate.endpoint.method !== method || !candidate.regex.test(path)) continue;
-      if (!best || better(candidate.score, best.score)) best = candidate;
-    }
-    return best?.endpoint;
-  };
-}
-

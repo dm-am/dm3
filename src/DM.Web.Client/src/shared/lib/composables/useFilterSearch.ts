@@ -1,20 +1,17 @@
 import { ref, watch, onMounted, onUnmounted, type Ref } from "vue";
+import { SEARCH_DEBOUNCE_MS } from "@/shared/lib/constants/search";
 
 /**
- * Composable for filter search input with debounce.
- * Handles:
- * - Local input state synced with filter state
- * - 300ms debounce per PERFORMANCE.md
- * - Timer cleanup on unmount
+ * A filter's search input with a debounce (UI_STANDARDS/controls.md, "Фильтры и выпадающие панели").
  *
  * @param filterSearch - Ref to the current search value from filter state
  * @param setSearch - Function to update the search in filter state
- * @param debounceMs - Debounce delay in ms (default: 300)
+ * @param debounceMs - Debounce delay in ms (default: SEARCH_DEBOUNCE_MS)
  */
 export function useFilterSearch(
   filterSearch: Ref<string>,
   setSearch: (value: string) => void,
-  debounceMs = 300,
+  debounceMs = SEARCH_DEBOUNCE_MS,
 ) {
   const localInput = ref("");
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
@@ -29,9 +26,6 @@ export function useFilterSearch(
     localInput.value = newSearch;
   });
 
-  /**
-   * Handle input with debounce
-   */
   function handleInput() {
     if (debounceTimer) {
       clearTimeout(debounceTimer);
@@ -43,9 +37,7 @@ export function useFilterSearch(
     }, debounceMs);
   }
 
-  /**
-   * Apply search immediately (on blur or Enter)
-   */
+  /** On blur or Enter. */
   function applySearch() {
     if (debounceTimer) {
       clearTimeout(debounceTimer);
@@ -56,9 +48,6 @@ export function useFilterSearch(
     }
   }
 
-  /**
-   * Clear the search input
-   */
   function clearSearch() {
     localInput.value = "";
     setSearch("");

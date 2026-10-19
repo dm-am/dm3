@@ -8,13 +8,10 @@ namespace DM.Domain.Messaging.Features.Chats;
 /// </summary>
 public class CreateChat
 {
-    /// <summary>
-    /// Chat title
-    /// </summary>
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// List of participant user IDs (not including creator)
+    /// Participants, the creator not included
     /// </summary>
     public IEnumerable<Guid> ParticipantIds { get; set; } = [];
 }

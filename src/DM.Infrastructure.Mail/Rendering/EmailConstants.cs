@@ -17,7 +17,7 @@ namespace DM.Infrastructure.Mail.Rendering;
 /// centred the way a status card is. The frontend theme cannot reach this far -
 /// its custom properties resolve in a browser, against a document this markup
 /// never belongs to - so the values are copied from ThemeVariables.css,
-/// Variables.sass and AuthSurface.sass by hand, and EmailThemeShould keeps the
+/// Variables.sass and _AuthTokens.sass by hand, and EmailThemeShould keeps the
 /// copy equal to its source.
 /// </remarks>
 public static class EmailConstants

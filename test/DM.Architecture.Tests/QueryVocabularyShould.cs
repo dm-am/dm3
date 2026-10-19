@@ -13,26 +13,8 @@ namespace DM.Architecture.Tests;
 /// One filter is called by one name on every endpoint that takes it.
 /// </summary>
 /// <remarks>
-/// Eighty-one distinct query parameters were published across nine documents,
-/// and several of them were the same question asked under different words: the
-/// two search endpoints sitting in one folder took the search string as
-/// <c>query</c> and as <c>q</c> while thirteen other lists already called it
-/// <c>search</c>; /v1/posts bounded a date with <c>createdAfter</c> where eight
-/// neighbours used <c>createdFromUtc</c>; /v1/uploads paged with
-/// <c>number</c>/<c>size</c> alone against twenty-eight lists on
-/// <c>skip</c>/<c>take</c>.
-///
-/// The cost is not aesthetic. A query parameter the server does not know is not
-/// refused, it is ignored — so a consumer carrying a filter over from the
-/// neighbouring list gets 200 and the unfiltered set, which reads as "the filter
-/// found everything" rather than as an error.
-///
-/// Read from the assembly rather than from the sources: the wire name is what
-/// the binder derives from a parameter or a bound property, and deriving it
-/// again from text would be a second implementation of the same rule. The
-/// retired names are a list because neither of them is something the code could
-/// re-derive; the other two rules are derived from the type, which is why they
-/// hold for parameters nobody has written yet.
+/// An unknown query parameter is ignored, not refused, so a filter carried from a neighbour answers the
+/// unfiltered set. Read from the assembly, as the binder derives the wire name.
 /// </remarks>
 public class QueryVocabularyShould
 {
@@ -99,26 +81,19 @@ public class QueryVocabularyShould
     }
 
     /// <summary>Query parameter name of a member, honouring an explicit binder name.</summary>
-    private static string WireName(string declared, BindingSource? explicitName) =>
-        explicitName?.Name ?? char.ToLowerInvariant(declared[0]) + declared[1..];
+    private static string WireName(string declared, string? explicitName) =>
+        explicitName ?? char.ToLowerInvariant(declared[0]) + declared[1..];
 
     /// <summary>An explicitly given binder name, as the attributes state it.</summary>
-    private sealed record BindingSource(string Name);
-
-    private static BindingSource? ExplicitName(ICustomAttributeProvider member)
+    private static string? ExplicitName(ICustomAttributeProvider member)
     {
         var name = member.GetCustomAttributes(typeof(FromQueryAttribute), inherit: true)
             .Cast<FromQueryAttribute>().FirstOrDefault()?.Name;
-        return string.IsNullOrEmpty(name) ? null : new BindingSource(name);
+        return string.IsNullOrEmpty(name) ? null : name;
     }
 
     /// <summary>Placeholders of the route this action answers, constraints stripped.</summary>
-    /// <remarks>
-    /// The controller's own [Route] carries the tokens shared by every action on
-    /// it, and an action template starting with '~' replaces it rather than
-    /// extending it — both matter, because a parameter named by either binds
-    /// from the path and never from the query.
-    /// </remarks>
+    /// <remarks>The controller's [Route] counts, and a template starting with '~' replaces it.</remarks>
     private static ISet<string> RouteTokens(Type controller, MethodInfo action)
     {
         var templates = action.GetCustomAttributes<HttpMethodAttribute>(inherit: true)
@@ -138,6 +113,48 @@ public class QueryVocabularyShould
         }
 
         return tokens;
+    }
+
+    /// <summary>Whether the query binds a parameter of an action.</summary>
+    /// <remarks>A name the route template holds is a path segment.</remarks>
+    private static bool BindsFromQuery(ParameterInfo parameter, ISet<string> routeTokens) =>
+        !(parameter.GetCustomAttributes(inherit: true).Any(a =>
+              a is FromBodyAttribute or FromRouteAttribute or FromHeaderAttribute or
+                  FromFormAttribute or FromServicesAttribute) ||
+          parameter.ParameterType.FullName == "System.Threading.CancellationToken" ||
+          parameter.ParameterType.Namespace?.StartsWith("Microsoft.AspNetCore.Http") == true ||
+          routeTokens.Contains(parameter.Name!));
+
+    /// <summary>
+    /// A container the query binds: its properties are the parameters. Inherited
+    /// ones included — skip/take arrive through PagingQuery.
+    /// </summary>
+    private static IEnumerable<WireParameter> PropertiesOf(Type container, string origin)
+    {
+        foreach (var property in container.GetProperties(BindingFlags.Public | BindingFlags.Instance))
+        {
+            if (property.GetIndexParameters().Length > 0 || property.SetMethod == null)
+            {
+                continue;
+            }
+
+            var element = ElementOf(property.PropertyType);
+            if (!IsSimple(property.PropertyType) && element == null)
+            {
+                continue;
+            }
+
+            if (element != null && !IsSimple(element))
+            {
+                continue;
+            }
+
+            yield return new WireParameter(
+                WireName(property.Name, ExplicitName(property)),
+                element ?? property.PropertyType,
+                element != null,
+                $"{origin} ({container.Name}.{property.Name})");
+        }
     }
 
     /// <summary>
@@ -169,17 +186,7 @@ public class QueryVocabularyShould
 
                 foreach (var parameter in action.GetParameters())
                 {
-                    // Only what the query binds. A body, a route value, a header,
-                    // a form field and an injected service are other sources; a
-                    // cancellation token is not bound at all. A name the route
-                    // template holds is a path segment: the path has a vocabulary
-                    // of its own and this rule is not it.
-                    if (parameter.GetCustomAttributes(inherit: true).Any(a =>
-                            a is FromBodyAttribute or FromRouteAttribute or FromHeaderAttribute or
-                                FromFormAttribute or FromServicesAttribute) ||
-                        parameter.ParameterType.FullName == "System.Threading.CancellationToken" ||
-                        parameter.ParameterType.Namespace?.StartsWith("Microsoft.AspNetCore.Http") == true ||
-                        routeTokens.Contains(parameter.Name!))
+                    if (!BindsFromQuery(parameter, routeTokens))
                     {
                         continue;
                     }
@@ -203,32 +210,7 @@ public class QueryVocabularyShould
                         continue;
                     }
 
-                    // A container: its properties are the parameters. Inherited
-                    // ones included — skip/take arrive through PagingQuery.
-                    foreach (var property in type.GetProperties(BindingFlags.Public | BindingFlags.Instance))
-                    {
-                        if (property.GetIndexParameters().Length > 0 || property.SetMethod == null)
-                        {
-                            continue;
-                        }
-
-                        var element = ElementOf(property.PropertyType);
-                        if (!IsSimple(property.PropertyType) && element == null)
-                        {
-                            continue;
-                        }
-
-                        if (element != null && !IsSimple(element))
-                        {
-                            continue;
-                        }
-
-                        found.Add(new WireParameter(
-                            WireName(property.Name, ExplicitName(property)),
-                            element ?? property.PropertyType,
-                            element != null,
-                            $"{origin} ({type.Name}.{property.Name})"));
-                    }
+                    found.AddRange(PropertiesOf(type, origin));
                 }
             }
         }
@@ -295,23 +277,7 @@ public class QueryVocabularyShould
     /// <summary>
     /// One filter, one name — read from the type the filter is written in.
     /// </summary>
-    /// <remarks>
-    /// The rows of the vocabulary table the other three facts cannot reach. The
-    /// drift that opened this finding was between the two mirrored module lists:
-    /// /v1/games took <c>statuses</c> and /v1/blogs took <c>status</c>, and
-    /// <c>premoderationStatuses</c> against <c>premoderationStatus</c> the same
-    /// way. Neither pair shares a name, so <see cref="GiveOneNameOneArity" />
-    /// sees nothing, and neither name is retired anywhere, so
-    /// <see cref="UseNoRetiredParameterName" /> sees nothing either. Left as it
-    /// was, the table in API_DESIGN.md would have stated a rule for the two rows
-    /// the finding is about and nothing would have held them.
-    ///
-    /// An enum is the one query type that says which filter it is: a
-    /// <c>ModuleStatus</c> is the status of a module wherever it is taken, so the
-    /// endpoints that take it agree on a name or one of them is wrong. Strings
-    /// and numbers carry no such meaning — <c>string</c> is every filter at once
-    /// — which is why the rule is enum-only rather than a rule about all types.
-    /// </remarks>
+    /// <remarks>An enum says which filter it is wherever it is taken; strings and numbers do not, so enums only.</remarks>
     [Fact]
     public void GiveOneFilterOneName()
     {

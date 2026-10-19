@@ -2,25 +2,21 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Moderation.Features.Warnings;
 using DM.Web.API.Shared.Dto;
-using ApiBan = DM.Web.API.Features.Moderation.Bans.Ban;
 using DomainViolator = DM.Domain.Moderation.Features.Warnings.Violator;
 
 namespace DM.Web.API.Features.Moderation.Warnings;
 
-/// <inheritdoc />
-internal class ViolatorApiService : IViolatorApiService
+public class ViolatorApiService
 {
     private readonly IWarningService _warningService;
     private readonly WarningMapper _mapper;
 
-    /// <inheritdoc />
     public ViolatorApiService(IWarningService warningService, WarningMapper mapper)
     {
         _warningService = warningService;
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Violator>> GetViolators(string banState)
     {
         var violators = await _warningService.GetViolators(ParseFilter(banState));

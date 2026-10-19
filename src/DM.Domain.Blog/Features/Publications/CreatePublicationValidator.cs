@@ -7,7 +7,6 @@ namespace DM.Domain.Blog.Features.Publications;
 /// <inheritdoc />
 internal class CreatePublicationValidator : AbstractValidator<CreatePublication>
 {
-    /// <inheritdoc />
     public CreatePublicationValidator()
     {
         RuleFor(x => x.BlogId)
@@ -20,9 +19,7 @@ internal class CreatePublicationValidator : AbstractValidator<CreatePublication>
         RuleFor(x => x.Content)
             .NotEmpty().WithMessage(ValidationError.Empty);
 
-        // A publication renders on the Comment surface, which does not declare
-        // [private]. The tag is not markup there, so it hides nothing and the
-        // line is published with the tag still around it.
+        // The Comment surface does not declare [private]: the tag would hide nothing there.
         RuleFor(x => x.Content)
             .Must(content => !PrivateBlockMarkup.ContainsPrivateMarkup(content))
             .WithMessage(x => PrivateBlockMarkup.DescribeSurfaceRefusal(x.Content));

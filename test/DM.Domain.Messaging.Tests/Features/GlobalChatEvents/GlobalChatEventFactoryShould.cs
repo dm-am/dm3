@@ -11,18 +11,18 @@ namespace DM.Domain.Messaging.Tests.Features.GlobalChatEvents;
 
 public class GlobalChatEventFactoryShould : UnitTestBase
 {
-    private readonly GlobalChatEventFactory _factory;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly GlobalChatEventFactory factory;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
 
     public GlobalChatEventFactoryShould()
     {
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _factory = new GlobalChatEventFactory(
-            _guidFactory,
-            _dateTimeProvider);
+        factory = new GlobalChatEventFactory(
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
@@ -43,12 +43,11 @@ public class GlobalChatEventFactoryShould : UnitTestBase
             IsOpen = true
         };
 
-        _guidFactory.Create().Returns(eventId);
-        _dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(eventId);
+        dateTimeProvider.Now.Returns(now);
 
-        var result = _factory.Create(createEvent, userId);
+        var result = factory.Create(createEvent, userId);
 
-        result.Should().NotBeNull();
         result.GlobalChatEventId.Should().Be(eventId);
         result.Title.Should().Be(createEvent.Title);
         result.Description.Should().Be(createEvent.Description);
@@ -71,10 +70,10 @@ public class GlobalChatEventFactoryShould : UnitTestBase
             IsOpen = true
         };
 
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        guidFactory.Create().Returns(Guid.NewGuid());
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        var result = _factory.Create(createEvent, Guid.NewGuid());
+        var result = factory.Create(createEvent, Guid.NewGuid());
 
         result.Duration.Should().Be(TimeSpan.FromHours(4));
     }
@@ -90,43 +89,33 @@ public class GlobalChatEventFactoryShould : UnitTestBase
             IsOpen = true
         };
 
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        guidFactory.Create().Returns(Guid.NewGuid());
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        var result = _factory.Create(createEvent, Guid.NewGuid());
+        var result = factory.Create(createEvent, Guid.NewGuid());
 
         result.Description.Should().BeEmpty();
     }
 
-    [Fact]
-    public void CreateParticipantWithCorrectProperties()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void CreateParticipantWithCorrectProperties(bool isOrganizer)
     {
         var participantId = Guid.NewGuid();
         var eventId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var now = DateTimeOffset.UtcNow;
 
-        _guidFactory.Create().Returns(participantId);
-        _dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(participantId);
+        dateTimeProvider.Now.Returns(now);
 
-        var result = _factory.CreateParticipant(eventId, userId, isOrganizer: true);
+        var result = factory.CreateParticipant(eventId, userId, isOrganizer);
 
-        result.Should().NotBeNull();
         result.GlobalChatEventParticipantId.Should().Be(participantId);
         result.GlobalChatEventId.Should().Be(eventId);
         result.UserId.Should().Be(userId);
-        result.IsOrganizer.Should().BeTrue();
+        result.IsOrganizer.Should().Be(isOrganizer);
         result.JoinedUtc.Should().Be(now);
-    }
-
-    [Fact]
-    public void CreateParticipantAsNonOrganizer()
-    {
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.CreateParticipant(Guid.NewGuid(), Guid.NewGuid(), isOrganizer: false);
-
-        result.IsOrganizer.Should().BeFalse();
     }
 }

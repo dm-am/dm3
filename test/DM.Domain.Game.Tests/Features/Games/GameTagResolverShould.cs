@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
@@ -26,21 +25,21 @@ public class GameTagResolverShould : UnitTestBase
     private static readonly Guid SecondSystemTag = Guid.NewGuid();
     private static readonly Guid ThirdSystemTag = Guid.NewGuid();
 
-    private readonly IGameRepository _repository;
-    private readonly GameTagResolver _resolver;
+    private readonly IGameRepository repository;
+    private readonly GameTagResolver resolver;
 
     public GameTagResolverShould()
     {
-        _repository = Mock<IGameRepository>();
-        _repository.GetTags(Arg.Any<CancellationToken>()).Returns(Catalogue);
+        repository = Mock<IGameRepository>();
+        repository.GetTags(Arg.Any<CancellationToken>()).Returns(Catalogue);
 
-        _resolver = new GameTagResolver(_repository);
+        resolver = new GameTagResolver(repository);
     }
 
     [Fact]
     public async Task TranslateASetWithinTheLimits()
     {
-        var resolved = await _resolver.ResolveTagIds([1, 2]);
+        var resolved = await resolver.ResolveTagIds([1, 2]);
 
         resolved.Should().BeEquivalentTo(new[] { FirstSystemTag, SecondSystemTag });
     }
@@ -48,7 +47,7 @@ public class GameTagResolverShould : UnitTestBase
     [Fact]
     public async Task RefuseASetOverAGroupLimit()
     {
-        var resolve = async () => await _resolver.ResolveTagIds([1, 2, 3]);
+        var resolve = async () => await resolver.ResolveTagIds([1, 2, 3]);
 
         (await resolve.Should().ThrowAsync<HttpBadRequestException>(
                 "the group takes two tags and three were submitted"))
@@ -69,10 +68,10 @@ public class GameTagResolverShould : UnitTestBase
     [Fact]
     public async Task NotMeasureTagsThatWereNotSubmitted()
     {
-        var resolved = await _resolver.ResolveTagIds(null);
+        var resolved = await resolver.ResolveTagIds(null);
 
         resolved.Should().BeEmpty();
-        await _repository.DidNotReceive().GetTags(Arg.Any<CancellationToken>());
+        await repository.DidNotReceive().GetTags(Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -82,7 +81,7 @@ public class GameTagResolverShould : UnitTestBase
     [Fact]
     public async Task CountOnlyTagsTheCatalogueKnows()
     {
-        var resolved = await _resolver.ResolveTagIds([1, 2, 404]);
+        var resolved = await resolver.ResolveTagIds([1, 2, 404]);
 
         resolved.Should().BeEquivalentTo(new[] { FirstSystemTag, SecondSystemTag });
     }
@@ -93,7 +92,7 @@ public class GameTagResolverShould : UnitTestBase
     [Fact]
     public async Task CountARepeatedTagOnce()
     {
-        var resolve = async () => await _resolver.ResolveTagIds([1, 1, 2, 2]);
+        var resolve = async () => await resolver.ResolveTagIds([1, 1, 2, 2]);
 
         await resolve.Should().NotThrowAsync();
     }

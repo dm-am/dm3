@@ -21,7 +21,7 @@ internal class RecoveryService : IRecoveryService
     private readonly IRegistrationMailSender _activationEmailSender;
     private readonly ITokenFactory _tokenFactory;
     private readonly IGuidFactory _guidFactory;
-    private readonly ISecurityAuditRepository _auditService;
+    private readonly ISecurityAuditRepository _auditRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<RecoveryService> _logger;
 
@@ -33,7 +33,7 @@ internal class RecoveryService : IRecoveryService
         IRegistrationMailSender activationEmailSender,
         ITokenFactory tokenFactory,
         IGuidFactory guidFactory,
-        ISecurityAuditRepository auditService,
+        ISecurityAuditRepository auditRepository,
         IDateTimeProvider dateTimeProvider,
         ILogger<RecoveryService> logger)
     {
@@ -44,7 +44,7 @@ internal class RecoveryService : IRecoveryService
         _activationEmailSender = activationEmailSender;
         _tokenFactory = tokenFactory;
         _guidFactory = guidFactory;
-        _auditService = auditService;
+        _auditRepository = auditRepository;
         _dateTimeProvider = dateTimeProvider;
         _logger = logger;
     }
@@ -56,47 +56,33 @@ internal class RecoveryService : IRecoveryService
 
         var user = await _emailLookupRepository.GetUserByEmail(normalizedEmail);
 
-        // A removed account answers exactly as a live one: the same result, and
-        // so the same status and body on the wire. Answered "not found" it was
-        // one half of a subtraction - "taken" on registration minus "not
-        // found" here equalled "removed", learned by a guest in two requests
-        // and without a password. Nothing leaves by mail either, and no reset
-        // token is issued, because there is no password to reset; the way back
-        // runs through support. The address is checked for the same reason the
-        // live branch below checks it: an account without one answers the same
-        // way whether it is removed or not.
+        // A removed account answers exactly as a live one, but nothing is mailed:
+        // the way back runs through support.
         if (user != null && user.IsRemoved && !string.IsNullOrEmpty(user.Email))
         {
             _logger.LogInformation("Recovery requested for a removed account");
             return RecoveryResult.PasswordReset;
         }
 
-        // Check if email belongs to an active user
         if (user != null && !string.IsNullOrEmpty(user.Email))
         {
-            // Send password reset email
             var token = _tokenFactory.Create(user.UserId, TokenType.PasswordChange);
             await _passwordResetRepository.ReplacePasswordResetToken(user.UserId, token);
             // Secret, not TokenId: the row keeps a hash of this value and nothing
             // that would let a reader of the table redeem the link.
             await _passwordResetEmailSender.Send(user.Email, token.Secret);
 
-            // The journal the owner of the account reads: a reset he did not ask
-            // for is the visible half of somebody working on his mailbox, and the
-            // application log is not a place he can look.
-            await _auditService.LogAsync(user.UserId, SecurityEventType.PasswordResetRequest);
+            // The owner reads the journal: a reset he did not ask for is a warning.
+            await _auditRepository.LogAsync(user.UserId, SecurityEventType.PasswordResetRequest);
 
             _logger.LogInformation("Password reset email sent for active user");
             return RecoveryResult.PasswordReset;
         }
 
-        // Check if email belongs to a pending registration
         var pending = await _registrationRepository.FindPendingByEmail(normalizedEmail, CancellationToken.None);
         if (pending != null)
         {
-            // Resend activation email with new token
-            // A resend issues a new secret rather than mailing the old one again:
-            // the old value is not recoverable from the row by design.
+            // A new secret: the old value is not recoverable from the row by design.
             pending.Secret = _guidFactory.Create();
             pending.SecretHash = ConfirmationSecret.Hash(pending.Secret);
             pending.TokenCreatedUtc = _dateTimeProvider.Now;
@@ -107,7 +93,6 @@ internal class RecoveryService : IRecoveryService
             return RecoveryResult.ActivationResent;
         }
 
-        // Email not found
         _logger.LogInformation("Recovery requested for unknown email");
         return RecoveryResult.NotFound;
     }

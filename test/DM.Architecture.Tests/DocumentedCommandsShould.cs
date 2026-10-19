@@ -16,29 +16,9 @@ namespace DM.Architecture.Tests;
 /// takes.
 /// </summary>
 /// <remarks>
-/// A block of shell in a guide is pasted, not read, and a command that no longer
-/// exists fails in the reader's terminal rather than in review. Whether a command
-/// does what the prose around it says cannot be checked; whether there is anything
-/// to run can.
-///
-/// What is read: the blocks of code a document marks as shell (bash, sh, shell,
-/// console, powershell, ps1, pwsh), line by line, a line continued with a
-/// backslash or a backtick read once. A line is cut at an unquoted "#" and into
-/// commands at unquoted "&amp;&amp;", "||", "|" and ";". Leading assignments of the
-/// environment and a leading sudo are stepped over, and "cd" is followed, so a
-/// script is looked for where the block stands: a path through a folder named dm3
-/// is the checkout (the server guides clone it to /opt/dm3), any other absolute
-/// path is outside the tree and its scripts are not looked for.
-///
-/// What is checked: the program is on <see cref="KnownPrograms"/> or is a path; a
-/// script, whether run by its path or handed to bash, sh, powershell -File, node or
-/// "." is a file of the tree; scripts/dm.ps1 and scripts/dm.sh are given a command
-/// their ValidateSet or their case list takes; "cd" enters a folder of the tree;
-/// "npm run" names a script of the package.json in the folder the block stands
-/// in. A placeholder in angle brackets is not a path and is not looked for.
-///
-/// Recorded per document at its count (see <see cref="HandwrittenDocuments"/> for
-/// the contract of the register).
+/// A block of shell is pasted, not read. Shell blocks are read line by line, cut into commands at
+/// unquoted separators, with "cd" followed; the program, the script, the dm.ps1 and dm.sh command
+/// and the npm script are checked against the tree.
 /// </remarks>
 public class DocumentedCommandsShould
 {
@@ -69,17 +49,6 @@ public class DocumentedCommandsShould
 
     private static readonly Regex Assignment = new(@"^[A-Za-z_]\w*=", RegexOptions.Compiled);
 
-    /// <summary>A document holding commands that do not exist, at their count.</summary>
-    /// <param name="File">Path from the repository root, forward slashes.</param>
-    /// <param name="Count">How many such commands the document holds.</param>
-    private sealed record Recorded(string File, int Count);
-
-    private static readonly Recorded[] Register =
-    [
-        new(".claude/skills/html-doc/SKILL.md", 4),
-        new("docs/guides/LOCAL_SETUP.md", 1),
-    ];
-
     private static readonly Lazy<HashSet<string>> TreeFiles = new(() => RepositoryFiles.CommittableFiles()
         .Select(HandwrittenDocuments.Relative)
         .ToHashSet(StringComparer.Ordinal));
@@ -89,31 +58,21 @@ public class DocumentedCommandsShould
         .ToHashSet(StringComparer.Ordinal));
 
     [Fact]
-    public void HoldEveryCommandThatDoesNotExistAtItsRecordedCount()
+    public void GiveNoCommandThatDoesNotExist()
     {
         var found = new List<string>();
-        var measured = new Dictionary<string, int>(StringComparer.Ordinal);
         var read = 0;
         foreach (var document in HandwrittenDocuments.All())
         {
-            var problems = Blocks(document.Lines).SelectMany(block => { read += block.Count; return Problems(block); }).ToList();
-            if (problems.Count > 0)
-            {
-                measured[document.Path] = problems.Count;
-                found.AddRange(problems.Select(problem => $"  {document.Path}:{problem}"));
-            }
+            found.AddRange(Blocks(document.Lines)
+                .SelectMany(block => { read += block.Count; return Problems(block); })
+                .Select(problem => $"{document.Path}:{problem}"));
         }
 
         read.Should().BeGreaterThan(50, "the guides hold some hundred lines of shell, and a walk that finds none checks nothing");
 
-        var disagreements = HandwrittenDocuments.Disagreements(
-            Register.ToDictionary(entry => entry.File, entry => entry.Count, StringComparer.Ordinal),
-            measured,
-            (file, count) => $"new(\"{file}\", {count}),");
-
-        string.Join(Environment.NewLine, disagreements.Concat(disagreements.Count > 0 ? found : [])).Should().BeEmpty(
-            "a command a guide gives is pasted into a terminal: point it at a script and a subcommand the tree " +
-            "has, and lower the record the moment a document loses one");
+        found.Should().BeEmpty(
+            "a command a guide gives is pasted into a terminal: point it at a script and a subcommand the tree has");
     }
 
     /// <summary>What a command needs to exist.</summary>

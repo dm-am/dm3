@@ -1,18 +1,5 @@
 <script setup lang="ts">
-/**
- * CounterPair — the shared "(A/B)" counter widget used everywhere a pair of
- * related numbers is shown next to a title or field: games-table title cell,
- * blogs-table title cell, sidebar GameLink, sidebar BlogLink (both values as
- * links), and plain non-link counters like a textarea's remaining-chars
- * indicator (firstTo/secondTo omitted). One place owns the bracket/slash
- * markup and coloring so call sites can never drift apart again.
- *
- * Visual contract (matches HEAD):
- *   - Muted brackets "(" / ")" and muted "/" separator
- *   - Values render as links when firstTo/secondTo are given (each with its
- *     own destination + aria-label), otherwise as plain text
- *   - No tooltips (approved change — tooltips removed from these counters)
- */
+// The "(A/B)" pair of counters, each a link where its route is given.
 import type { RouteLocationRaw } from "vue-router";
 
 defineProps<{

@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics.Metrics;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Security;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Identity;
@@ -26,17 +24,8 @@ namespace DM.Web.API.Tests.Shared.Authentication;
 /// The warning about a login from an unknown address leaves before the request does.
 /// </summary>
 /// <remarks>
-/// Sending it publishes through MailSender, which is scoped to the request and
-/// returns its rented AMQP channel in Dispose. Handed to a task nobody waits for,
-/// the publish raced the end of the request with nothing ordering the two — and
-/// the losing side went through a disposed sender, which either throws where
-/// nobody listens or leaks the channel. Neither outcome is visible from outside:
-/// the login answers normally and the letter that never left looks exactly like a
-/// letter nobody needed.
-///
-/// So the assertion is about state and not about time. The sender is held on an
-/// unfinished task and the login is required to be unfinished with it — no sleep,
-/// no polling, no timeout, and nothing that can go green on a lucky schedule.
+/// MailSender is scoped to the request and returns its channel in Dispose. Asserted on state, not time: the
+/// sender is held on an unfinished task and the login must stay unfinished with it.
 /// </remarks>
 public class WebAuthenticationServiceShould : UnitTestBase
 {
@@ -74,7 +63,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
             .LogAsync(Arg.Any<Guid>(), Arg.Any<SecurityEventType>(), Arg.Any<string>(),
                 Arg.Any<string>(), Arg.Any<string>()).Returns(Task.CompletedTask);
 
-        service = new WebAuthenticationService(authentication, credentials, identitySetter,
+        service = new WebAuthenticationService(authentication, Mock<ISessionService>(), credentials, identitySetter,
             detector, sender, audit, events, logger);
     }
 
@@ -125,25 +114,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
             .ThrowsAsync(new BrokerUnreachableException(new Exception("connection refused")));
 
         var events = new List<string?>();
-        using var listener = new MeterListener();
-        listener.InstrumentPublished = (instrument, l) =>
-        {
-            if (instrument.Name == "dm.messaging.publish_failed")
-            {
-                l.EnableMeasurementEvents(instrument);
-            }
-        };
-        listener.SetMeasurementEventCallback<long>((_, _, tags, _) =>
-        {
-            foreach (var tag in tags)
-            {
-                if (tag.Key == "event")
-                {
-                    events.Add(tag.Value?.ToString());
-                }
-            }
-        });
-        listener.Start();
+        using var listener = CounterTags.Listen("dm.messaging.publish_failed", "event", events);
 
         await service.Authenticate(Credentials(), Context());
         listener.RecordObservableInstruments();
@@ -158,11 +129,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
     /// <summary>
     /// The site says it too, not only the letter.
     /// </summary>
-    /// <remarks>
-    /// The event type, its wording and its category all existed and nothing ever
-    /// produced it, so the Security category the settings screen offers to
-    /// subscribe to was one item short of what it promised.
-    /// </remarks>
+    /// <remarks>The Security category the settings offer counts this event.</remarks>
     [Fact]
     public async Task AnnounceASuspiciousLoginOnTheSiteAsWell()
     {

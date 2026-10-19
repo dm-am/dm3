@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, watch, nextTick } from "vue";
-import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { vBbcodeInteractive } from "@/shared/directives";
 import { highlightDom, clearDomHighlight } from "@/shared/lib/utils/highlight";
 
 const props = withDefaults(
@@ -14,36 +14,24 @@ const props = withDefaults(
 
 const contentRef = ref<HTMLElement | null>(null);
 
-function processContent() {
+function highlight() {
   nextTick(() => {
-    if (!contentRef.value) return;
-    initBbcodeInteractive(contentRef.value);
-    // Apply search highlighting after BBCode interactive init
-    clearDomHighlight(contentRef.value);
-    if (props.searchQuery) {
-      highlightDom(contentRef.value, props.searchQuery);
-    }
+    const content = contentRef.value;
+    if (!content) return;
+    clearDomHighlight(content);
+    if (props.searchQuery) highlightDom(content, props.searchQuery);
   });
 }
 
-onMounted(processContent);
-watch(() => props.html, processContent);
-watch(
-  () => props.searchQuery,
-  () => {
-    nextTick(() => {
-      if (!contentRef.value) return;
-      clearDomHighlight(contentRef.value);
-      if (props.searchQuery) {
-        highlightDom(contentRef.value, props.searchQuery);
-      }
-    });
-  },
-);
+onMounted(highlight);
+watch([() => props.html, () => props.searchQuery], highlight);
 </script>
 
 <template>
-  <div ref="contentRef" class="bbcode-content" v-html="html" />
+  <div
+    ref="contentRef"
+    v-bbcode-interactive="html"
+    class="bbcode-content"
+    v-html="html"
+  />
 </template>
-
-<!-- No scoped styles needed - .bbcode-content is defined globally in BbcodeGlobal.sass -->

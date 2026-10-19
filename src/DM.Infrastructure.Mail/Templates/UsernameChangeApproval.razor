@@ -1,12 +1,5 @@
-@*
-    Письмо об одобрении запроса на смену имени. Ссылка ведет на страницу, где
-    человек выбирает новое имя. Срок в тексте письма обязан совпадать со сроком,
-    который проставляет сервис при одобрении.
-*@
 <EmailLayout Title="Смена имени одобрена">
-    <p style="@EmailConstants.ParagraphStyles">
-        Ссылка для изменения имени действительна 48 часов
-    </p>
+    <LinkLifetime Hours="@Model.LinkLifetimeHours">Ссылка для изменения имени</LinkLifetime>
     <ActionButton Url="@Model.ApprovalLinkUrl">Выбрать новое имя</ActionButton>
 </EmailLayout>
 

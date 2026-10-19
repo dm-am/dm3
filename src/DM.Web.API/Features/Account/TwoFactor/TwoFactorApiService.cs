@@ -1,27 +1,27 @@
 using System;
 using System.Threading.Tasks;
+using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.TwoFactor;
+using Microsoft.Extensions.Options;
 
 namespace DM.Web.API.Features.Account.TwoFactor;
 
-/// <inheritdoc />
-internal class TwoFactorApiService : ITwoFactorApiService
+public class TwoFactorApiService
 {
     private readonly ITwoFactorService _twoFactorService;
     private readonly ITwoFactorRemovalService _removalService;
+    private readonly TokenConfiguration _tokens;
 
-    /// <summary>
-    /// Creates a new instance of TwoFactorApiService
-    /// </summary>
     public TwoFactorApiService(
         ITwoFactorService twoFactorService,
-        ITwoFactorRemovalService removalService)
+        ITwoFactorRemovalService removalService,
+        IOptions<TokenConfiguration> tokens)
     {
         _twoFactorService = twoFactorService;
         _removalService = removalService;
+        _tokens = tokens.Value;
     }
 
-    /// <inheritdoc />
     public async Task<TwoFactorStatusResponse> GetStatus()
     {
         var status = await _twoFactorService.GetStatus();
@@ -35,7 +35,6 @@ internal class TwoFactorApiService : ITwoFactorApiService
         };
     }
 
-    /// <inheritdoc />
     public async Task<TwoFactorSetupResponse> Setup(TwoFactorSetupRequest request)
     {
         var setup = await _twoFactorService.IssueSecret(request.Password);
@@ -46,15 +45,12 @@ internal class TwoFactorApiService : ITwoFactorApiService
         };
     }
 
-    /// <inheritdoc />
     public async Task<RecoveryCodesResponse> Confirm(TwoFactorConfirmRequest request) =>
         new() { Codes = (await _twoFactorService.Confirm(request.Code)).Codes };
 
-    /// <inheritdoc />
     public Task Disable(TwoFactorConfirmedActionRequest request) =>
         _twoFactorService.Disable(request.Password, request.Code);
 
-    /// <inheritdoc />
     public async Task<RecoveryCodesResponse> ReissueRecoveryCodes(
         TwoFactorConfirmedActionRequest request) =>
         new()
@@ -62,16 +58,16 @@ internal class TwoFactorApiService : ITwoFactorApiService
             Codes = (await _twoFactorService.ReissueRecoveryCodes(request.Password, request.Code)).Codes
         };
 
-    /// <inheritdoc />
-    public Task RequestRemoval(TwoFactorRemovalRequest request) =>
-        _removalService.Request(request.Email);
+    /// <returns>The lifetime of the link, the same for every address: the answer must not tell them apart</returns>
+    public async Task<MailedLink> RequestRemoval(TwoFactorRemovalRequest request)
+    {
+        await _removalService.Request(request.Email);
+        return new MailedLink { LinkLifetimeHours = _tokens.TwoFactorRemovalTokenLifetimeHours };
+    }
 
-    /// <inheritdoc />
     public Task ScheduleRemoval(Guid secret) => _removalService.Schedule(secret);
 
-    /// <inheritdoc />
     public Task CancelRemoval(Guid secret) => _removalService.Cancel(secret);
 
-    /// <inheritdoc />
     public Task ClearForColleague(string username) => _removalService.ClearForColleague(username);
 }

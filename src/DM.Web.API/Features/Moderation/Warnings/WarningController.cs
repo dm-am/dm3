@@ -17,12 +17,11 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 /// Most operations require Moderator role or higher.
 ///
 /// ## Warning Points
-/// - Each warning carries 0-6 points (0 = verbal warning, no points)
+/// - Zero points is a verbal warning
 /// - A warning is never withdrawn; its points can be changed, and the total of a
 ///   user counts the points as they stand now
-/// - Reaching the threshold (WarningPolicy) puts the site's own two-day ban on the
-///   user, the ordinary scope and nothing heavier; every other ban is a senior
-///   moderator's decision, and so is what happens to the automatic one
+/// - Reaching the threshold (WarningPolicy) puts the site's own ban on the user, the
+///   ordinary scope; every other ban is a senior moderator's decision
 /// </remarks>
 [ApiController]
 [Route("v1/moderation/warnings")]
@@ -30,10 +29,9 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 [Tags("Warnings")]
 public class WarningController : ControllerBase
 {
-    private readonly IWarningApiService _warningApiService;
+    private readonly WarningApiService _warningApiService;
 
-    /// <inheritdoc />
-    public WarningController(IWarningApiService warningApiService)
+    public WarningController(WarningApiService warningApiService)
     {
         _warningApiService = warningApiService;
     }
@@ -49,9 +47,7 @@ public class WarningController : ControllerBase
     /// </remarks>
     /// <param name="username">Username</param>
     /// <response code="200">User warnings info</response>
-    // No 404 is declared: an unknown name is answered with an empty list, the way
-    // the service has always answered it, and a contract promising otherwise
-    // described a refusal nothing here throws.
+    // No 404: an unknown name answers an empty list.
     [HttpGet("~/v1/users/{username}/warnings", Name = nameof(GetUserWarnings))]
     [ProducesResponseType(typeof(UserWarningsInfo), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserWarnings(string username) =>
@@ -71,10 +67,14 @@ public class WarningController : ControllerBase
     /// what the warning was given for as well: the offending text as it stood at
     /// the moment of issue, with its place, or for a warning on a profile the
     /// status, "О себе" and the avatar of that moment, the avatar until moderation
-    /// deletes it. The address of the text is given only where a guest could
-    /// follow it. The identifier of the object, the address a guest could not
-    /// follow, the full cards of both users and whether the caller may change the
-    /// points are moderation's and stay in GET /v1/moderation/warnings.
+    /// deletes it. The row is its reader's: the text, its place, its date and
+    /// its address come only where the reader reads the place by the place's own
+    /// read rule, the address only where it still leads somewhere. Where the
+    /// reader does not, and where no place is found, they are held back alike and
+    /// the row says accessRestricted, so a refusal reads as an absence. The
+    /// identifier of the object, the full cards of both users and whether the
+    /// caller may change the points are moderation's and stay in
+    /// GET /v1/moderation/warnings.
     /// </remarks>
     /// <param name="q">Username filter and page bounds</param>
     /// <response code="200">Page of the warning log</response>
@@ -104,8 +104,6 @@ public class WarningController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    // A username filter is `username` on the wire, per the query vocabulary in
-    // API_DESIGN.md; this one alone said `user`.
     public async Task<IActionResult> GetAllWarnings([FromQuery] WarningsQuery q) =>
         Ok(await _warningApiService.GetAllWarnings(q));
 

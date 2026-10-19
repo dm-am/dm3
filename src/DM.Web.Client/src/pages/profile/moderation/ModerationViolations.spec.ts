@@ -1,33 +1,15 @@
 /**
- * "Нарушения", the first section of the profile's "Модерация" tab.
- *
- * The two counts read as the stat lines of the profile, and each leads where
- * its records can be read, narrowed to this user. The warnings lead to
- * "Последние предупреждения"; the bans lead to "Последние баны", written as
- * DM2's ban log, with their reasons, their moderators and their lifts. The
- * list of bans that used to open in place had none of that, left the lifted
- * bans out and stood under a count that counted them: "Баны: 11" over ten
- * rows. A count of zero leads nowhere.
- *
- * A warning issued here is a warning on the profile: the dialog is told so,
- * and the server copies the profile as it stands into the record. The dialog
- * is asked for no plate: the count in this section goes up under the
- * moderator's eyes once the parent refetches, which it is told to.
+ * "Нарушения" of the "Модерация" tab: the counts as stat lines, each leading
+ * to its log narrowed to the user, none from zero; a warning issued here is
+ * one on the profile or one with no place, and the dialog raises no plate.
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { mount, flushPromises, RouterLinkStub } from "@vue/test-utils";
+import { mount, RouterLinkStub } from "@vue/test-utils";
 import type {
   ViolationSummary,
   ModerationPermissions,
 } from "@/shared/api/models/moderation";
 import ModerationViolations from "./ModerationViolations.vue";
-
-const getBans = vi.hoisted(() => vi.fn());
-
-vi.mock("@/entities/moderation", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/entities/moderation")>()),
-  moderationApi: { getBans },
-}));
 
 const dialogs = vi.hoisted(() => ({
   WarningDialog: { template: "<div />" },
@@ -36,10 +18,7 @@ const dialogs = vi.hoisted(() => ({
 
 vi.mock("@/features/moderation-actions", () => dialogs);
 
-/**
- * The dialogs are never mounted here. What this block decides about them is in
- * the attrs it hands over, so the modal registrations are collected.
- */
+/** The dialogs are not mounted: their registrations and attrs are read. */
 type ModalRegistration = {
   component: unknown;
   attrs: Record<string, unknown>;
@@ -59,6 +38,10 @@ const registered = (component: unknown): ModalRegistration => {
   if (!found) throw new Error("the dialog was never registered");
   return found;
 };
+
+/** Both warning dialogs, the one on the profile first. */
+const warningDialogs = () =>
+  opened.filter((r) => r.component === dialogs.WarningDialog);
 
 const permissions = {
   canViewEmail: true,
@@ -95,8 +78,6 @@ const lines = (wrapper: ReturnType<typeof render>) =>
 
 describe("the violations section", () => {
   beforeEach(() => {
-    getBans.mockReset();
-    getBans.mockResolvedValue({ data: { history: [] } });
     opened.length = 0;
   });
 
@@ -126,11 +107,7 @@ describe("the violations section", () => {
     });
   });
 
-  /**
-   * The bans of one person are the ban list narrowed to him, the way his
-   * warnings are the warning log narrowed to him: one place reads a ban, in
-   * the words of DM2, lifts included.
-   */
+  /** The bans lead to the ban list narrowed to the user, as the warnings to theirs. */
   it("leads the bans to the ban list narrowed to this user", () => {
     const link = linkOf(render({ totalBans: 11 }), "Баны");
 
@@ -141,15 +118,6 @@ describe("the violations section", () => {
     });
   });
 
-  it("opens no list in place and asks for no bans of its own", async () => {
-    const wrapper = render();
-    await flushPromises();
-
-    expect(wrapper.find("[aria-expanded]").exists()).toBe(false);
-    expect(wrapper.find(".mod-violations_lines button").exists()).toBe(false);
-    expect(getBans).not.toHaveBeenCalled();
-  });
-
   it("leads nowhere from a count of zero", () => {
     const wrapper = render({ totalWarnings: 0, totalBans: 0 });
 
@@ -158,26 +126,28 @@ describe("the violations section", () => {
     expect(wrapper.find(".mod-violations_lines button").exists()).toBe(false);
   });
 
-  it("asks the warning dialog for no plate, and tells the profile to recount", () => {
+  it("asks the warning dialogs for no plate, and tells the profile to recount", () => {
     const wrapper = render();
-    const warn = registered(dialogs.WarningDialog);
 
-    expect(warn.attrs.hideToast).toBe(true);
-    (warn.attrs.onSuccess as () => void)();
-    expect(wrapper.emitted("updated")).toHaveLength(1);
+    for (const warn of warningDialogs()) {
+      expect(warn.attrs.hideToast).toBe(true);
+      (warn.attrs.onSuccess as () => void)();
+    }
+    expect(wrapper.emitted("updated")).toHaveLength(2);
   });
 
   /**
-   * A warning issued from the profile is a warning on the profile: the server
-   * keeps the avatar, the status and "О себе" as they stand, and the log
-   * shows them. It used to name nothing, and the log had nothing to show.
+   * One warning names the profile, whose avatar, status and "О себе" the server keeps. The other names
+   * nothing: it is for what was done where nothing is moderated, a conversation or a game room.
    */
-  it("tells the warning dialog the warning is on the profile", () => {
+  it("tells one warning dialog the warning is on the profile, and the other no place", () => {
     render();
-    const warn = registered(dialogs.WarningDialog);
+    const [onProfile, placeless] = warningDialogs();
 
-    expect(warn.attrs.entityType).toBe("Profile");
-    expect(warn.attrs.entityId).toBeUndefined();
+    expect(onProfile.attrs.entityType).toBe("Profile");
+    expect(onProfile.attrs.entityId).toBeUndefined();
+    expect(placeless.attrs.entityType).toBeUndefined();
+    expect(placeless.attrs.entityId).toBeUndefined();
   });
 
   it("tells the profile to recount after a ban", () => {
@@ -190,9 +160,11 @@ describe("the violations section", () => {
 
   it("offers the two actions the server allows, and none it does not", () => {
     const both = render();
-    expect(both.findAll("button").map((b) => b.text())).toContain(
-      "Выдать предупреждение",
-    );
+    expect(both.findAll("button").map((b) => b.text())).toEqual([
+      "Выдать предупреждение за профиль",
+      "Выдать предупреждение без места",
+      "Выдать бан",
+    ]);
 
     const none = mount(ModerationViolations, {
       props: {

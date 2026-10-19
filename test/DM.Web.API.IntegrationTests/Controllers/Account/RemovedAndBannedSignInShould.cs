@@ -1,11 +1,8 @@
-using System;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json.Nodes;
-using System.Threading.Tasks;
 using AwesomeAssertions;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Identity;
 using DM.Infrastructure.Persistence.Entities.Moderation;
 using DM.Web.API.IntegrationTests.Helpers;
 using Microsoft.EntityFrameworkCore;
@@ -16,19 +13,9 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// <summary>
 /// What the sign-in says about an account that moderation has closed, and when.
 /// </summary>
-/// <remarks>
-/// On a live database, because the unit tests mock the repository and the
-/// defect these gates were written for lived in the query: the lookup by
-/// address ran under the global filter on removed rows, so a removed account
-/// did not exist for the sign-in, the right password earned "wrong email or
-/// password", and the removed branch of the service was unreachable. The ban
-/// date had a defect of the same family: computed off the guest the refused
-/// identity carries, it was always empty.
-/// </remarks>
+/// <remarks>On a live database: the lookup by address runs past the global filter on removed rows.</remarks>
 public class RemovedAndBannedSignInShould : IntegrationTestBase
 {
-    private const string Password = "TestPass123ok";
-
     public RemovedAndBannedSignInShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
@@ -43,7 +30,7 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
     [Fact]
     public async Task NameARemovedAccountToItsOwnerOnceThePasswordIsProven()
     {
-        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "removed", Password);
+        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "removed", TestConstants.Password);
         await using (var db = DatabaseFixture.CreateDbContext())
         {
             var user = await db.Users.FirstAsync(u => u.Username == login);
@@ -51,7 +38,7 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
             await db.SaveChangesAsync();
         }
 
-        var response = await SignIn(email, Password);
+        var response = await SignIn(email, TestConstants.Password);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         var problem = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;
@@ -65,7 +52,7 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
     [Fact]
     public async Task HideARemovedAccountBehindTheUnifiedRefusalWithoutThePassword()
     {
-        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "removedwrong", Password);
+        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "removedwrong", TestConstants.Password);
         await using (var db = DatabaseFixture.CreateDbContext())
         {
             var user = await db.Users.FirstAsync(u => u.Username == login);
@@ -83,15 +70,12 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
     /// <summary>
     /// Recovery answers a removed account exactly as a live one on the wire.
     /// </summary>
-    /// <remarks>
-    /// The truth goes to the mailbox. On the screen, "not found" here plus
-    /// "taken" on registration equalled "removed" for two guest requests.
-    /// </remarks>
+    /// <remarks>The truth goes to the mailbox; on the screen two guest requests must not combine into "removed".</remarks>
     [Fact]
     public async Task AnswerRecoveryForARemovedAccountAsForALiveOne()
     {
-        var (liveLogin, liveEmail) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "recolive", Password);
-        var (goneLogin, goneEmail) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "recogone", Password);
+        var (_, liveEmail) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "recolive", TestConstants.Password);
+        var (goneLogin, goneEmail) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "recogone", TestConstants.Password);
         await using (var db = DatabaseFixture.CreateDbContext())
         {
             var user = await db.Users.FirstAsync(u => u.Username == goneLogin);
@@ -106,7 +90,6 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
         var liveBody = JsonNode.Parse(await live.Content.ReadAsStringAsync())!;
         var goneBody = JsonNode.Parse(await gone.Content.ReadAsStringAsync())!;
         goneBody["status"]!.GetValue<string>().Should().Be(liveBody["status"]!.GetValue<string>());
-        _ = liveLogin;
     }
 
     /// <summary>
@@ -115,7 +98,7 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
     [Fact]
     public async Task CarryTheEndOfATemporaryBan()
     {
-        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "banned", Password);
+        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, "banned", TestConstants.Password);
         var ends = new DateTimeOffset(2027, 2, 28, 0, 0, 0, TimeSpan.Zero);
         await using (var db = DatabaseFixture.CreateDbContext())
         {
@@ -133,7 +116,7 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
             await db.SaveChangesAsync();
         }
 
-        var response = await SignIn(email, Password);
+        var response = await SignIn(email, TestConstants.Password);
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
         var problem = JsonNode.Parse(await response.Content.ReadAsStringAsync())!;

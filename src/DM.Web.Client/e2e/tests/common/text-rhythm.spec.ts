@@ -1,11 +1,7 @@
-import { test as base, expect, API_BASE_URL } from "../../fixtures/auth";
-import { phoneContext } from "../../fixtures/phone";
-import type {
-  APIRequestContext,
-  BrowserContext,
-  Locator,
-  Page,
-} from "@playwright/test";
+import { test as base, expect } from "../../fixtures/auth";
+import { masteredGameRoom } from "../../fixtures/seed";
+import type { BrowserContext, Locator, Page } from "@playwright/test";
+import { settle } from "../../fixtures/window";
 
 /**
  * The text of a post, of a comment, of a topic and of a record of the log
@@ -24,25 +20,21 @@ import type {
  * line box of the last line of the game text to the line box of the first
  * line of the brown text.
  *
- * Read in a window of 1366 and on a phone, as a phone lays the page out
- * (fixtures/phone.ts). The chat keeps its own lines and is not read here.
+ * Read in a window of 1366. The chat keeps its own lines and is not read here.
  */
-const SCREENS = [1366, "phone"] as const;
+const SCREENS = [1366] as const;
 type Screen = (typeof SCREENS)[number];
 
 const test = base.extend<{
-  /** A page on a phone or in a window of a width, closed after the test. */
+  /** A page in a window of a width, closed after the test. */
   pageOn: (screen: Screen) => Promise<Page>;
 }>({
   pageOn: async ({ browser }, use) => {
     const contexts: BrowserContext[] = [];
     await use(async (screen) => {
-      const context =
-        screen === "phone"
-          ? await phoneContext(browser)
-          : await browser.newContext({
-              viewport: { width: screen, height: 900 },
-            });
+      const context = await browser.newContext({
+        viewport: { width: screen, height: 900 },
+      });
       contexts.push(context);
       return context.newPage();
     });
@@ -66,9 +58,6 @@ const FIRST =
 const SECOND = "Команда отвечает дружным ревом, до рассвета еще далеко.";
 const TEXT = `${FIRST}<br /><br />${SECOND}`;
 const BROWN = "Это было прекрасно. У меня слезы на глазах.";
-
-/** A seeded game whose first ordinary room a guest reads, with posts. */
-const GAME_TITLE = "Хроники Забытых Королевств";
 
 /** A seeded topic with comments, open to a guest. */
 const TOPIC = "/forum/general/5";
@@ -99,28 +88,10 @@ async function substitute(
   );
 }
 
-/** The address of the first ordinary room of the seeded game. */
-async function roomPath(api: APIRequestContext): Promise<string> {
-  const games = await api.get(`${API_BASE_URL}/v1/games?take=50`);
-  expect(games.ok(), `GET /v1/games answered ${games.status()}`).toBe(true);
-  const { resources } = await games.json();
-  const game = (resources ?? []).find(
-    (g: { title: string }) => g.title === GAME_TITLE,
-  );
-  expect(game, `the seed has no game "${GAME_TITLE}"`).toBeTruthy();
-  const rooms = await api.get(`${API_BASE_URL}/v1/games/${game.id}/rooms`);
-  expect(rooms.ok(), `GET rooms answered ${rooms.status()}`).toBe(true);
-  const room = ((await rooms.json()).resources ?? []).find(
-    (r: { type: string }) => r.type === "Default",
-  );
-  expect(room, `"${GAME_TITLE}" has no ordinary room`).toBeTruthy();
-  return `/game/${game.publicId ?? game.id}/rooms/${room.roomNumber}`;
-}
-
 async function open(page: Page, path: string, ready: Locator) {
   await page.goto(path);
   await expect(ready).toBeVisible({ timeout: 15000 });
-  await page.evaluate(() => document.fonts.ready);
+  await settle(page);
 }
 
 interface Lines {
@@ -184,7 +155,7 @@ async function expectDm2Lines(name: string, block: Locator): Promise<Lines> {
 
 test.describe("Text in the lines of DM2", () => {
   for (const screen of SCREENS) {
-    const where = screen === "phone" ? "on a phone" : `at ${screen}px`;
+    const where = `at ${screen}px`;
     test(`a post ${where}: a line of ${LINE}, a blank line of ${PARAGRAPH}, the brown text ${BROWN_GAP} under the game text`, async ({
       pageOn,
       request,
@@ -203,7 +174,7 @@ test.describe("Text in the lines of DM2", () => {
       const brown = page.locator("main#main .metagame-text", {
         hasText: BROWN,
       });
-      await open(page, await roomPath(request), text);
+      await open(page, await masteredGameRoom(request), text);
 
       const game = await expectDm2Lines("the game text", text);
       const meta = await linesOf(brown);

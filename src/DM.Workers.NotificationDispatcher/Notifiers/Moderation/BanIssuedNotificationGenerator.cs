@@ -16,7 +16,6 @@ internal class BanIssuedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public BanIssuedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -29,8 +28,7 @@ internal class BanIssuedNotificationGenerator : BaseNotificationGenerator
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
         var banData = await _dbContext.Bans
-            // A ban keeps its row when it is lifted, so there is nothing to filter out:
-            // the notification is about the moment it was issued.
+            // A ban keeps its row when it is lifted, so there is nothing to filter out.
             .Where(b => b.BanId == entityId)
             .Select(b => new
             {
@@ -52,21 +50,17 @@ internal class BanIssuedNotificationGenerator : BaseNotificationGenerator
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { banData.TargetUserId },
-            // No ActorId although the moderator is right there in banData.AuthorId:
-            // this is the notification that tells a person they are banned, and
-            // blacklisting the moderator must not be a way to stop it arriving.
+            UsersInterested = [banData.TargetUserId],
+            // No ActorId: blacklisting the moderator must not stop the ban notification.
             Metadata = new
             {
-                BanId = banData.BanId,
-                // The name of the banned reader: the notification leads to the
-                // profile, where the length of the ban stands, and both the list
-                // and the letter build that address out of this field.
+                banData.BanId,
+                // The link to the profile is built out of this field.
                 Username = banData.TargetUsername,
                 Reason = banData.Comment,
-                ModeratorUsername = banData.ModeratorUsername,
-                EndedUtc = banData.EndedUtc,
-                StartedUtc = banData.StartedUtc
+                banData.ModeratorUsername,
+                banData.EndedUtc,
+                banData.StartedUtc
             }
         };
     }

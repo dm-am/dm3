@@ -3,39 +3,16 @@
  */
 
 /**
- * A button that only closes a form or a dialog is labelled "Отмена" — the
- * noun. The verb "Отменить" means the button undoes something already done,
- * and then it carries an object: "Отменить голос", "Отменить приглашение".
- * See docs/conventions/UI_STANDARDS.md.
- *
- * The two spellings drifted apart on their own: fourteen dialogs said
- * "Отмена" while the ban and the warning dialogs said "Отменить" next to
- * "Оформить бан", where a moderator can read the second button as undoing the
- * ban rather than closing the form. Nothing but reading caught that, so this
- * test reads for it.
- *
- * Scope is deliberately narrow — only a label that is the bare verb and
- * nothing else:
- *   - a quoted literal equal to the verb (prop value, ternary, constant);
- *   - a template text node whose whole content is the verb.
- * Comments are stripped first, so prose that quotes a label is not a
- * violation, and any verb with an object passes untouched.
+ * A button that only closes a form or a dialog is "Отмена"; the verb
+ * "Отменить" undoes something and carries an object ("Отменить голос"), see
+ * docs/conventions/UI_STANDARDS.md. Only a label that is the bare verb fails.
  */
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "fs";
-import { dirname, join, relative, resolve } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
+import { stripComments } from "@/shared/lib/testing/comments";
+import { CLIENT_SRC, asPath, collect } from "@/shared/lib/testing/sourceTree";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-// lib -> shared -> src
-const SRC_ROOT = resolve(HERE, "..", "..");
-
-/**
- * Bare "Отменить" that is not a violation, and why.
- *
- * Every entry is checked to still match something: an exception for code that
- * has since changed is an exception nobody will notice has stopped applying.
- */
+/** Bare "Отменить" that is not a violation, each still matching something. */
 const ALLOWED: Record<string, string> = {
   // Row action in the list of sent invitations: it revokes an invitation that
   // exists, and the row itself names the object.
@@ -43,43 +20,17 @@ const ALLOWED: Record<string, string> = {
   "pages/game/settings/InvitationsSection.vue": "revokes a sent invitation",
 };
 
-const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
-
-function sourceFiles(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      if (!SKIP_DIRS.has(name)) sourceFiles(full, out);
-    } else if (
-      (name.endsWith(".vue") || name.endsWith(".ts")) &&
-      !name.endsWith(".spec.ts")
-    ) {
-      out.push(full);
-    }
-  }
-  return out;
-}
-
-/**
- * HTML, block and line comments. The line-comment pattern wants whitespace or
- * a line start before the slashes, so a URL inside a string survives.
- */
-const withoutComments = (text: string): string =>
-  text
-    .replace(/<!--[\s\S]*?-->/g, "")
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|\s)\/\/[^\n]*/g, "$1");
+const isSource = (name: string): boolean =>
+  (name.endsWith(".vue") || name.endsWith(".ts")) && !name.endsWith(".spec.ts");
 
 /** A quoted literal that is exactly the bare verb, or a text node that is. */
 const BARE_VERB = /(["'`])Отменить\1|>\s*Отменить\s*</;
 
-const rel = (file: string) => relative(SRC_ROOT, file).split("\\").join("/");
-
 describe("cancel label", () => {
   const offenders = new Set<string>();
-  for (const file of sourceFiles(SRC_ROOT)) {
-    if (BARE_VERB.test(withoutComments(readFileSync(file, "utf8")))) {
-      offenders.add(rel(file));
+  for (const file of collect(CLIENT_SRC, isSource)) {
+    if (BARE_VERB.test(stripComments(readFileSync(file, "utf8")))) {
+      offenders.add(asPath(file));
     }
   }
 

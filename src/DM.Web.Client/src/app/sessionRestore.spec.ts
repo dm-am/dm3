@@ -3,15 +3,8 @@
  */
 
 /**
- * The header of a page whose browser holds nobody, while the session cookie
- * may still hold somebody.
- *
- * The page used to read the stored copy alone: empty, it drew "Вход |
- * Регистрация" over a live session, and the reader had to sign in again to a
- * site that had never signed him out. The start of the page now asks the
- * server once (restoreSession), and the header is read here the way the reader
- * reads it: the real header over the real store, with only the answer of the
- * server put in place.
+ * The header over a live session the browser has no stored copy of: the real
+ * header over the real store, with only the server's answer in place.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
@@ -20,11 +13,14 @@ import { createPinia, setActivePinia } from "pinia";
 /** "Кто я": the one request the page makes about it. */
 const whoAmI = vi.hoisted(() => vi.fn());
 vi.mock("@/entities/user/api/personalApi", () => ({
-  default: { getMyProfile: whoAmI },
+  // The page sizes read along with it have no part in who the header greets.
+  default: {
+    getMyProfile: whoAmI,
+    getMyPreferences: async () => ({ data: null, error: null }),
+  },
 }));
 
-// The counters and the sign-out the header carries have no part in who it
-// greets; their stores and calls are left out so nothing else is asked.
+// The counters and the sign-out have no part in who the header greets.
 vi.mock("@/entities/message", async () => {
   const { ref } = await import("vue");
   return { useMessagingStore: () => ({ totalUnreadCount: ref(0) }) };

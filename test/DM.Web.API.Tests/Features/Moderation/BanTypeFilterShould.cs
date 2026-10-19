@@ -3,31 +3,20 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Uploads;
-using DM.Domain.Moderation.Features.Warnings;
-using DM.Testing;
-using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Moderation.Bans;
-using DM.Web.API.Features.Moderation.Warnings;
 using AwesomeAssertions;
 using NSubstitute;
 using Xunit;
-using DomainBan = DM.Domain.Moderation.Features.Warnings.Ban;
+using DomainBan = DM.Domain.Moderation.Features.Bans.Ban;
+using DM.Domain.Moderation.Features.Bans;
 
 namespace DM.Web.API.Tests.Features.Moderation;
 
 /// <summary>
 /// GET /v1/bans?type=... answers with bans of that type.
 /// </summary>
-/// <remarks>
-/// The parameter was declared on the controller, documented as "Optional ban type
-/// filter" and never read: every request came back with every active ban, which
-/// reads as "there are no permanent bans" to a moderator who filtered for them.
-/// The type is derived during mapping rather than stored, so the filter has to run
-/// after it - a detail easy to get wrong in the direction of filtering on nothing.
-/// </remarks>
-public class BanTypeFilterShould : UnitTestBase
+/// <remarks>The type is derived during mapping, so the filter runs after it.</remarks>
+public class BanTypeFilterShould
 {
     private static readonly DateTimeOffset Moment = new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
 

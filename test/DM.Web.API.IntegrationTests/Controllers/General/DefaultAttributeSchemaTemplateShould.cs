@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Infrastructure.Persistence.InitialData;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
@@ -13,12 +10,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// game from.
 /// </summary>
 /// <remarks>
-/// The creation form starts a game from the default template of the catalogue,
-/// and only the development seed wrote one: a site built from the migration had
-/// an empty catalogue and no sheet to offer. The row ships with the schema now,
-/// so this reads a throwaway database no seed has touched, and reads it through
-/// the model, which is also what proves the document the migration carries is
-/// one the column converter can read back.
+/// The creation form starts from the default template, and the row ships with the schema. Read through the
+/// model on a throwaway database no seed touched.
 /// </remarks>
 public class DefaultAttributeSchemaTemplateShould : IntegrationTestBase
 {

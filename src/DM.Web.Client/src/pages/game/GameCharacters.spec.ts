@@ -2,19 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The roster is where a master meets an application: the "Новый персонаж"
- * notification points at this page. Accept and decline live on the character's
- * own page, and every link into it used to depend on something the master of a
- * young game does not have — an NPC (the sidebar item) or a character of their
- * own (the join actions, which the master is never shown). The application was
- * readable here and answerable nowhere, and the same dead end held the rest of
- * the lifecycle: kill, exile, resurrect.
- *
- * So the roster carries the link, and it is drawn by the rule the backend
- * enforces rather than by the game's canManage: the master and assistants act
- * on characters, the game mentor reads them.
- */
+// The roster links every character to the actions the backend lets the
+// viewer take on it: the master and assistants act, the game mentor reads.
 import { describe, expect, it, vi } from "vitest";
 import { mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -25,8 +14,7 @@ import {
 } from "@/entities/game";
 import GameCharacters from "./GameCharacters.vue";
 
-// Only the route param is needed; the rest of the router stays real so the
-// components that import it from the same module keep working.
+// The rest of the router stays real for the components that import it.
 vi.mock("vue-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue-router")>()),
   useRoute: () => ({ params: { id: "the-game" }, query: {} }),
@@ -76,7 +64,7 @@ function render(
   store.characters = characters;
   store.charactersLoading = state.charactersLoading ?? false;
   store.charactersError = state.charactersError ?? null;
-  // An empty roster makes the page ask for one; the endpoint is not the subject.
+  // An empty roster makes the page ask for one.
   vi.spyOn(store, "loadCharacters").mockResolvedValue(undefined);
 
   return mount(GameCharacters, {
@@ -109,8 +97,6 @@ describe("GameCharacters", () => {
   });
 
   it("links a character in the game to the actions the master has on it", () => {
-    // The same dead end, one status further: without an NPC the master could
-    // not reach "Отметить погибшим" or "Изгнать из игры" either.
     const wrapper = render(
       ["Owner", "Authority"],
       [character({ status: "Active" })],
@@ -122,13 +108,41 @@ describe("GameCharacters", () => {
   });
 
   it("draws no link to a page that would offer the master nothing", () => {
-    // Retired by leaving: staff have no transition for it and the sheet is the
-    // owner's, so a link would only move the dead end one screen further.
+    // Staff have no transition for a character that left.
     const wrapper = render(
       ["Owner", "Authority"],
       [character({ status: "Retired", isPlayerLeft: true })],
     );
 
+    expect(manageLinks(wrapper)).toHaveLength(0);
+  });
+
+  it("names the two lists of the roster and a character with no player", () => {
+    const wrapper = render(
+      [],
+      [
+        character({ id: "char-1", status: "Active" }),
+        {
+          ...character({ id: "char-2", status: "Active", isNpc: true }),
+          author: undefined,
+        } as unknown as Character,
+      ],
+    );
+
+    expect(wrapper.findAll(".section-title").map((h) => h.text())).toEqual([
+      "Персонажи игроков",
+      "Неигровые персонажи",
+    ]);
+    expect(wrapper.get(".character-card[data-id='char-2']").text()).toContain(
+      "Неигровой персонаж",
+    );
+  });
+
+  it("shows an application to a guest, with no way to decide it", () => {
+    const wrapper = render([], [character()]);
+
+    expect(wrapper.find(".section-title").text()).toBe("На рассмотрении");
+    expect(wrapper.text()).toContain("Ронин");
     expect(manageLinks(wrapper)).toHaveLength(0);
   });
 
@@ -142,12 +156,7 @@ describe("GameCharacters", () => {
   });
 });
 
-/**
- * The same class of lie the messenger told about conversations: a roster still
- * on the wire, and a roster that failed to arrive, were both rendered as "нет
- * персонажей" — a statement about the game, made without knowing anything about
- * it. The store carried the loading flag and the failure the whole time.
- */
+// A roster still loading or failed is not an empty one.
 describe("GameCharacters load states", () => {
   const EMPTY = "В этой игре пока нет персонажей";
 

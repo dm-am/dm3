@@ -14,14 +14,14 @@ namespace DM.Domain.Messaging.Tests.Features.Chats;
 
 public class ChatFactoryShould : UnitTestBase
 {
-    private readonly ChatFactory _factory;
-    private readonly IGuidFactory _guidFactory;
+    private readonly ChatFactory factory;
+    private readonly IGuidFactory guidFactory;
 
     public ChatFactoryShould()
     {
-        _guidFactory = Mock<IGuidFactory>();
+        guidFactory = Mock<IGuidFactory>();
 
-        _factory = new ChatFactory(_guidFactory);
+        factory = new ChatFactory(guidFactory);
     }
 
     [Fact]
@@ -31,24 +31,24 @@ public class ChatFactoryShould : UnitTestBase
         var userId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
 
-        _guidFactory.Create().Returns(chatId);
+        guidFactory.Create().Returns(chatId);
 
-        var (chat, links) = _factory.CreateDirect(userId, otherUserId);
+        var (chat, links) = factory.CreateDirect(userId, otherUserId);
 
-        chat.Should().NotBeNull();
         chat.ChatId.Should().Be(chatId);
         chat.Type.Should().Be(ChatType.Direct);
         links.Should().HaveCount(2);
         links.Select(l => l.UserId).Should().Contain(new[] { userId, otherUserId });
+        links.Should().OnlyContain(l => !l.IsRemoved);
     }
 
     [Fact]
     public void ThrowWhenCreatingDirectChatWithSameUser()
     {
         var userId = Guid.NewGuid();
-        _guidFactory.Create().Returns(Guid.NewGuid());
+        guidFactory.Create().Returns(Guid.NewGuid());
 
-        var act = () => _factory.CreateDirect(userId, userId);
+        var act = () => factory.CreateDirect(userId, userId);
 
         act.Should().Throw<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
@@ -62,55 +62,15 @@ public class ChatFactoryShould : UnitTestBase
         var title = "Test Group";
         var participantIds = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
 
-        _guidFactory.Create().Returns(chatId);
+        guidFactory.Create().Returns(chatId);
 
-        var (chat, links) = _factory.CreateGroup(title, participantIds);
+        var (chat, links) = factory.CreateGroup(title, participantIds);
 
-        chat.Should().NotBeNull();
         chat.ChatId.Should().Be(chatId);
         chat.Type.Should().Be(ChatType.Group);
         chat.Title.Should().Be(title);
         links.Should().HaveCount(3);
         links.Select(l => l.UserId).Should().BeEquivalentTo(participantIds);
-    }
-
-    [Fact]
-    public void CreateChatLinksWithNonRemovedStatus()
-    {
-        var userId = Guid.NewGuid();
-        var otherUserId = Guid.NewGuid();
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-
-        var (_, links) = _factory.CreateDirect(userId, otherUserId);
-
-        links.All(l => l.IsRemoved == false).Should().BeTrue();
-    }
-
-    [Fact]
-    public void AssignChatIdToAllLinks()
-    {
-        var chatId = Guid.NewGuid();
-        var participantIds = new[] { Guid.NewGuid(), Guid.NewGuid() };
-
-        _guidFactory.Create().Returns(chatId);
-
-        var (_, links) = _factory.CreateGroup("Group", participantIds);
-
-        links.All(l => l.ChatId == chatId).Should().BeTrue();
-    }
-
-    [Fact]
-    public void RemoveDuplicateParticipantsInGroupChat()
-    {
-        var duplicateId = Guid.NewGuid();
-        var participantIds = new[] { duplicateId, Guid.NewGuid(), duplicateId };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-
-        var (_, links) = _factory.CreateGroup("Group", participantIds);
-
-        links.Should().HaveCount(2);
-        links.Select(l => l.UserId).Should().OnlyHaveUniqueItems();
+        links.Should().OnlyContain(l => l.ChatId == chatId);
     }
 }

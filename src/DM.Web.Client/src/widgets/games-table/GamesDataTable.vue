@@ -19,6 +19,7 @@ import { GamesFilter, useGamesFilter } from "@/features/game-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { stableCacheKey } from "@/shared/lib/utils/keyedCache";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
+import { GAME_COLUMNS } from "./columns";
 
 const gamesStore = useGamesStore();
 const { searchResult, searchLoading, searchError, tags, tagsError } =
@@ -26,21 +27,18 @@ const { searchResult, searchLoading, searchError, tags, tagsError } =
 
 const route = useRoute();
 
-// filterState is computed from URL (single source of truth, no sync needed)
 const { filterState, searchParams, hasActiveFilters } = useGamesFilter();
 
 function retrySearch() {
   gamesStore.searchGames(searchParams.value);
 }
 
-// Two-state empty text
 const emptyText = computed(() =>
   hasActiveFilters.value
     ? "Игр по заданным фильтрам не найдено"
     : "Игр пока нет",
 );
 
-// O(1) tag lookup Map from cached store tags (for descriptions)
 const tagMap = computed(() => {
   const map = new Map<number, { title: string; description?: string }>();
   for (const tag of tags.value ?? []) {
@@ -49,12 +47,10 @@ const tagMap = computed(() => {
   return map;
 });
 
-// Get tag info from cache (fallback to id if not loaded yet)
 function getTagInfo(tagId: number): { title: string; description?: string } {
   return tagMap.value.get(tagId) ?? { title: `#${tagId}` };
 }
 
-// Ensure tags are loaded (sidebar may have loaded them already)
 onMounted(() => {
   gamesStore.fetchTags();
 });
@@ -64,63 +60,27 @@ const {
   getUnreadComments,
   formatUnreadPostsTooltip,
   formatUnreadCommentsTooltip,
-  isNew,
+  isNewHighlight,
   formatSlots,
   buildSlotsTooltip,
   buildAssistantTooltip,
 } = useGameDisplay();
 
-// Title-link colour convention (same as GameLink/BlogLink): closed games are
-// muted grey; the green "new" highlight excludes closed (muted takes priority).
 function isClosedGame(game: Game): boolean {
   return game.status === GameStatus.Closed;
 }
-function isNewHighlight(game: Game): boolean {
-  return !isClosedGame(game) && isNew(game);
-}
 
-// Columns that have direct mapping to sort options
 const sortableColumnKeys = new Set(["title", "status"]);
 
-// Define table columns. "Название" takes what the others leave; the shares
-// are of the whole table, the "#" column and the padding of each cell
-// included, and stand every column where it stood when the table was laid
-// out "fixed" (1920).
 const columns: Column[] = [
-  {
-    key: "title",
-    label: "Название",
-    align: "left",
-  },
-  { key: "master", label: "Ведущие", width: "17.4%", align: "left" },
-  {
-    key: "tags",
-    label: "Теги",
-    width: "19.2%",
-    align: "left",
-  },
-  {
-    key: "status",
-    label: "Статус игры",
-    width: "15.9%",
-    align: "left",
-  },
-  // One column, one meaning. It used to hold two counts behind a muted "/" —
-  // reviews OF THE GAME and ratings of POSTS in it — told apart only by an
-  // aria-label. A listing of games is about games, so the column keeps the
-  // reviews; the ratings of posts address a player's post and are a row of the
-  // game's own fact table now. Its width comes out of "Статус игры", the only
-  // column with spare width, so the header word fits inside its cell.
-  {
-    key: "reviews",
-    label: "Рецензии",
-    width: "8.5%",
-    align: "center",
-  },
-  { key: "readers", label: "Читатели", width: "7.9%", align: "center" },
+  GAME_COLUMNS.title,
+  GAME_COLUMNS.master,
+  GAME_COLUMNS.tags,
+  GAME_COLUMNS.status,
+  GAME_COLUMNS.reviews,
+  GAME_COLUMNS.readers,
 ];
 
-// Current sort state for DataTable (only when sorting by a column that exists in the table)
 const currentSort = computed<SortState | undefined>(() => {
   const sortBy = filterState.value.sortBy;
   if (sortableColumnKeys.has(sortBy)) {
@@ -132,15 +92,12 @@ const currentSort = computed<SortState | undefined>(() => {
   return undefined;
 });
 
-// Computed games array
 const games = computed(() => searchResult.value?.resources ?? []);
 
-// Refetch whenever the cache key (covering every filter param) changes.
-// Shares the store's key builder so the widget and store never diverge.
+// The store's own key builder, so the widget and the store never disagree.
 const paramsKey = computed(() => stableCacheKey(searchParams.value));
 
-// Build a tag-click destination that PRESERVES the current query (adds the
-// clicked tag to requiredTags) instead of resetting all other filters.
+// A tag adds to the current filters rather than replacing them.
 function tagFilterQuery(tagId: number): Record<string, string> {
   const query: Record<string, string> = {};
   for (const [key, value] of Object.entries(route.query)) {
@@ -154,7 +111,6 @@ function tagFilterQuery(tagId: number): Record<string, string> {
   return query;
 }
 
-// Fetch games when search params key changes (immediate for initial load)
 watch(
   paramsKey,
   () => {
@@ -162,11 +118,6 @@ watch(
   },
   { immediate: true },
 );
-
-// Prefetch next page when pagination becomes visible
-function handlePrefetch(page: number) {
-  gamesStore.prefetchPage(page);
-}
 
 // Paging scrolls the table itself back into view (not the page top)
 const tableRef = ref<{ $el: HTMLElement } | null>(null);
@@ -177,10 +128,8 @@ function pagingAnchor(): HTMLElement | null {
 
 <template>
   <div class="games-data-table">
-    <!-- Filters -->
     <GamesFilter class="filters" />
 
-    <!-- Error state -->
     <ErrorState
       v-if="searchError"
       :message="searchError"
@@ -188,9 +137,7 @@ function pagingAnchor(): HTMLElement | null {
       class="error-state-block"
     />
 
-    <!-- Table. Hidden when the request failed and there is nothing to
-         show - an error must not be presented as an empty list. Stale
-         rows (if any) stay visible under the error message. -->
+    <!-- With nothing to show, a failed request is not presented as an empty list -->
     <DataTable
       v-if="!searchError || games.length > 0"
       ref="tableRef"
@@ -204,7 +151,6 @@ function pagingAnchor(): HTMLElement | null {
       :sort="currentSort"
       :empty-text="emptyText"
     >
-      <!-- Title column: Title (unread/comments) with search highlighting -->
       <template #cell-title="{ row }">
         <router-link
           :to="{ name: 'game', params: { id: row.publicId || row.id } }"
@@ -236,7 +182,6 @@ function pagingAnchor(): HTMLElement | null {
         />
       </template>
 
-      <!-- Master column -->
       <template #cell-master="{ row }">
         <UserLink
           v-if="row.master"
@@ -251,7 +196,6 @@ function pagingAnchor(): HTMLElement | null {
         >
       </template>
 
-      <!-- Status column with date tooltip + slots -->
       <template #cell-status="{ row }">
         <Tooltip :text="buildStatusTooltip(row)" focusable>
           <span class="status-wrapper">
@@ -268,46 +212,43 @@ function pagingAnchor(): HTMLElement | null {
         </Tooltip>
       </template>
 
-      <!-- Tags column: use tagIds + cached store tags for descriptions -->
       <template #cell-tags="{ row }">
-        <!-- While the tag catalog hasn't loaded yet, render a shimmer
-             placeholder instead of a raw "#id" link target -->
-        <div v-if="row.tagIds?.length && !tags && !tagsError" class="tags-list">
-          <span
-            v-for="tagId in row.tagIds"
-            :key="tagId"
-            class="tag-shimmer"
-          ></span>
-        </div>
-        <!-- On tag catalog load failure, render plain text (no link,
-             no tooltip) rather than a dead "#id" link -->
-        <div v-else-if="row.tagIds?.length && tagsError" class="tags-list">
-          <template v-for="(tagId, idx) in row.tagIds" :key="tagId"
-            ><span class="tag-pending">{{ getTagInfo(tagId).title }}</span
-            ><template v-if="idx < row.tagIds.length - 1">, </template>
-          </template>
-        </div>
-        <div v-else-if="row.tagIds?.length" class="tags-list">
-          <template v-for="(tagId, idx) in row.tagIds" :key="tagId">
-            <!-- Tag with description tooltip from cached store -->
-            <Tooltip>
-              <template #content>
-                <TooltipContent
-                  :html="getTagInfo(tagId).description"
-                  :text="getTagInfo(tagId).title"
-                />
-              </template>
-              <router-link
-                :to="{ name: 'games', query: tagFilterQuery(tagId) }"
-                class="tag-link"
-                >{{ getTagInfo(tagId).title }}</router-link
-              > </Tooltip
-            ><template v-if="idx < row.tagIds.length - 1">, </template>
-          </template>
-        </div>
+        <!-- Until the tag catalog loads, a shimmer instead of a raw "#id" link -->
+        <template v-if="row.tagIds?.length">
+          <div v-if="!tags && !tagsError" class="tags-list">
+            <span
+              v-for="tagId in row.tagIds"
+              :key="tagId"
+              class="tag-shimmer"
+            ></span>
+          </div>
+          <!-- A failed tag catalog gives plain text rather than a dead "#id" link -->
+          <div v-else-if="tagsError" class="tags-list">
+            <template v-for="(tagId, idx) in row.tagIds" :key="tagId"
+              ><span class="tag-pending">{{ getTagInfo(tagId).title }}</span
+              ><template v-if="idx < row.tagIds.length - 1">, </template>
+            </template>
+          </div>
+          <div v-else class="tags-list">
+            <template v-for="(tagId, idx) in row.tagIds" :key="tagId">
+              <Tooltip>
+                <template #content>
+                  <TooltipContent
+                    :html="getTagInfo(tagId).description"
+                    :text="getTagInfo(tagId).title"
+                  />
+                </template>
+                <router-link
+                  :to="{ name: 'games', query: tagFilterQuery(tagId) }"
+                  class="tag-link"
+                  >{{ getTagInfo(tagId).title }}</router-link
+                > </Tooltip
+              ><template v-if="idx < row.tagIds.length - 1">, </template>
+            </template>
+          </div>
+        </template>
       </template>
 
-      <!-- Reviews column -->
       <template #cell-reviews="{ row }">
         <router-link
           :to="{
@@ -320,14 +261,12 @@ function pagingAnchor(): HTMLElement | null {
         >
       </template>
 
-      <!-- Readers column -->
       <template #cell-readers="{ row }">
         <Tooltip :text="buildReadersTooltip(row)" focusable>
           <span class="readers-count">{{ row.subscribersCount ?? 0 }}</span>
         </Tooltip>
       </template>
 
-      <!-- Footer with pagination -->
       <template
         v-if="searchResult?.paging && searchResult.paging.pages > 1"
         #footer
@@ -336,7 +275,7 @@ function pagingAnchor(): HTMLElement | null {
           :paging="searchResult.paging"
           :to="{ name: 'games' }"
           :use-query="true"
-          :on-prefetch="handlePrefetch"
+          :on-prefetch="gamesStore.prefetchPage"
           :scroll-anchor="pagingAnchor"
         />
       </template>
@@ -345,7 +284,7 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 @use "@/assets/styles/Skeleton" as *
 
 .games-data-table
@@ -358,22 +297,13 @@ function pagingAnchor(): HTMLElement | null {
   margin-bottom: $medium
 
 .game-link
-  color: $link
-  &:hover
-    color: $link-hover
   &.new-item
     +link-tone($accent-green, $accent-green-hover)
   &.closed-item
     +muted-link
-  // .search-highlight styled globally in Reset.sass
 
 .tags-list
   line-height: 1.4
-
-.tag-link
-  color: $link
-  &:hover
-    color: $link-hover
 
 .tag-pending
   color: $text-muted
@@ -389,8 +319,7 @@ function pagingAnchor(): HTMLElement | null {
 .status-wrapper
   cursor: help
 
-// One token, "[0/∞]": the status wraps between its words, never inside the
-// brackets.
+// "[0/∞]" is one token: the cell wraps between words, never inside the brackets.
 .slots-indicator
   color: $text-muted
   cursor: help
@@ -399,11 +328,6 @@ function pagingAnchor(): HTMLElement | null {
 .assistant-count
   color: $text-muted
   cursor: help
-
-.review-link
-  color: $link
-  &:hover
-    color: $link-hover
 
 .readers-count
   cursor: help

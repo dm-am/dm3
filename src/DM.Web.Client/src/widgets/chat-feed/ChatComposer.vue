@@ -1,21 +1,9 @@
 <script setup lang="ts">
-/**
- * ChatComposer: the editor under the frame of a chat and its "Отправить",
- * one and the same in the global chat and in a correspondence.
- *
- * It stands only where the reader may write (ChatFeed decides with its
- * `canWrite`): a guest, or a reader outside a closed event, has no field at
- * all rather than a field with a line above it saying the message will be
- * refused (owner, 5 October 2026, ACC-364). The server refuses all the same.
- *
- * The send itself is ChatFeed's (useChatComposer); here is what is drawn: the
- * field, its hint, the button, and the refused send under it with the text
- * back in the field.
- */
+// One composer for both chats; ChatFeed draws it only for a reader who may write.
 import { ref } from "vue";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { ActionResult } from "@/shared/ui/ActionResult";
-import type { BBCodeContext } from "@/shared/lib/utils/bbcode";
+import type { BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
 import type { ActionResult as SendResult } from "@/shared/lib/composables/useActionResult";
 import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
 
@@ -56,7 +44,7 @@ defineExpose({
       :min-height="60"
       :max-height="200"
       :max-length="BODY_TEXT_MAX_LENGTH"
-      :resizable="true"
+      resizable
       :is-moderator="isModerator"
       @submit="emit('submit')"
     />
@@ -73,7 +61,7 @@ defineExpose({
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
 .chat-composer
   display: flex

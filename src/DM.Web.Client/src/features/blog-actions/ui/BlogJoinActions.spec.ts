@@ -2,17 +2,11 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The reading row of the blog menu in the left sidebar.
- *
- * A button of a sidebar answers a refusal with a plate, not with a line under
- * its row (UI_STANDARDS, "Всплывающие сообщения"), the same as the game menu
- * (GameJoinActions.spec.ts).
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useBlogDetailsStore, type Blog } from "@/entities/blog";
+import { useAuthStore } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
 import BlogJoinActions from "./BlogJoinActions.vue";
@@ -20,7 +14,6 @@ import BlogJoinActions from "./BlogJoinActions.vue";
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((one) => one.message);
 
-/** A refusal the server named nothing in: the plate says the press. */
 const refused: GeneralError = {
   status: 404,
   title: "",
@@ -33,7 +26,7 @@ function mountStrip() {
   store.blog = { id: "b-1", title: "Записки" } as unknown as Blog;
   // Readers present keep the mount off the network.
   store.readers = [{ id: "u-1", username: "Читатель" }] as never;
-  return mount(BlogJoinActions, { props: { variant: "strip" } });
+  return mount(BlogJoinActions);
 }
 
 describe("BlogJoinActions in the sidebar", () => {
@@ -44,6 +37,20 @@ describe("BlogJoinActions in the sidebar", () => {
   afterEach(() => {
     toast.toasts.value.forEach((one) => toast.dismiss(one.id));
     vi.restoreAllMocks();
+  });
+
+  it.each([
+    ["Читатель", "Убрать из читаемого"],
+    ["Прохожий", "Добавить в читаемое"],
+  ])("offers %s the move the readers leave open: %s", (username, move) => {
+    useAuthStore().user = { username } as never;
+    const store = useBlogDetailsStore();
+    store.blog = { id: "b-1", title: "Записки" } as unknown as Blog;
+    store.readers = [
+      { user: { username: "Читатель" }, role: "reader" },
+    ] as never;
+
+    expect(mount(BlogJoinActions).get("button").text()).toBe(move);
   });
 
   it("answers a refused subscription with a plate and adds no row", async () => {

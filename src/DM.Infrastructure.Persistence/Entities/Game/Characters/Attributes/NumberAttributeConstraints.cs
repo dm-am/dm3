@@ -9,7 +9,4 @@ public class NumberAttributeConstraints : AttributeConstraints
     /// Maximum number of digits (no cap if null)
     /// </summary>
     public int? MaxLength { get; set; }
-
-    /// <inheritdoc />
-    public override string GetDefaultValue() => "0";
 }

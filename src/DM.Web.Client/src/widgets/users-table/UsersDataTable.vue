@@ -11,23 +11,25 @@ import {
   UserRating,
   useCommunityStore,
   useUserDisplay,
+  type User,
 } from "@/entities/user";
 import { stableCacheKey } from "@/shared/lib/utils/keyedCache";
 import { UsersFilter, useUsersFilter } from "@/features/user-filter";
-import { buildStatusLines } from "@/shared/lib/utils/tooltipBuilders";
+import {
+  buildStatusLines,
+  type PluralForms,
+} from "@/shared/lib/utils/tooltipBuilders";
 
 const communityStore = useCommunityStore();
 const { searchResult, searchLoading, searchError } =
   storeToRefs(communityStore);
 
-// filterState is computed from URL (single source of truth, no sync needed)
 const { filterState, searchParams, hasActiveFilters } = useUsersFilter();
 
 function retrySearch() {
   communityStore.searchUsers(searchParams.value);
 }
 
-// Two-state empty text
 const emptyText = computed(() =>
   hasActiveFilters.value
     ? "Пользователей по заданным фильтрам не найдено"
@@ -36,7 +38,6 @@ const emptyText = computed(() =>
 const { isOnline, buildOnlineTooltip, buildRegistrationTooltip } =
   useUserDisplay();
 
-// Map column keys to sort field names (only for sortable columns)
 const columnToSortKey: Record<string, string> = {
   username: "username",
   activity: "lastActivity",
@@ -44,16 +45,11 @@ const columnToSortKey: Record<string, string> = {
   registered: "registered",
 };
 
-// Reverse mapping: sort field to column key
 const sortKeyToColumn: Record<string, string> = Object.fromEntries(
   Object.entries(columnToSortKey).map(([col, sort]) => [sort, col]),
 );
 
-// Define table columns (UX order: identity → availability → quality →
-// counts → tenure). Identifier/date columns left-aligned; short numeric
-// count columns centered. "Имя пользователя" takes what the others leave;
-// their shares are of the whole table, the "#" column and the padding of each
-// cell included.
+// "Имя пользователя" takes the width the others leave; the shares are of the whole table.
 const columns: Column[] = [
   {
     key: "username",
@@ -104,7 +100,6 @@ const columns: Column[] = [
   },
 ];
 
-// Current sort state for DataTable (maps API sort fields to column keys)
 const currentSort = computed<SortState | undefined>(() => {
   const sortBy = filterState.value.sortBy;
   const columnKey = sortKeyToColumn[sortBy];
@@ -117,11 +112,9 @@ const currentSort = computed<SortState | undefined>(() => {
   return undefined;
 });
 
-// Computed users array
 const users = computed(() => searchResult.value?.resources ?? []);
 
-// Refetch whenever the cache key (covering every filter param) changes.
-// Shares the store's key builder so the widget and store never diverge.
+// The store's own key builder, so the widget and the store never disagree.
 const paramsKey = computed(() => stableCacheKey(searchParams.value));
 
 watch(
@@ -132,69 +125,59 @@ watch(
   { immediate: true },
 );
 
-// Prefetch next page when pagination becomes visible
-function handlePrefetch(page: number) {
-  communityStore.prefetchPage(page);
-}
-
 // Paging scrolls the table itself back into view (not the page top)
 const tableRef = ref<{ $el: HTMLElement } | null>(null);
 function pagingAnchor(): HTMLElement | null {
   return tableRef.value?.$el ?? null;
 }
 
-// Build hosting tooltip for games (left number)
-function buildHostingTooltip(row: {
-  gamesHosting?: number;
-  gamesHostingByStatus?: { draft: number; active: number; closed: number };
-}): string {
-  const total = row.gamesHosting ?? 0;
-  if (total === 0) return "Нет игр в роли ведущего";
-  const lines = ["В роли ведущего:"];
-  lines.push(
-    ...buildStatusLines(row.gamesHostingByStatus, ["игра", "игры", "игр"]),
-  );
-  if (lines.length === 1) lines.push(`Игр: ${total}`);
+const GAME_FORMS: PluralForms = ["игра", "игры", "игр"];
+
+/** [none, heading, fallback]: the words of one role's tooltip. */
+function roleTooltip(
+  total: number | undefined,
+  byStatus: Parameters<typeof buildStatusLines>[0],
+  [none, heading, fallback]: [string, string, string],
+  forms: PluralForms,
+): string {
+  if (!total) return none;
+  const lines = [heading, ...buildStatusLines(byStatus, forms)];
+  if (lines.length === 1) lines.push(`${fallback}: ${total}`);
   return lines.join("\n");
 }
 
-// Build playing tooltip for games (right number) - includes current and former players
-function buildPlayingTooltip(row: {
-  gamesPlaying?: number;
-  gamesPlayingByStatus?: { draft: number; active: number; closed: number };
-}): string {
-  const total = row.gamesPlaying ?? 0;
-  if (total === 0) return "Нет игр в роли игрока";
-  const lines = ["В роли игрока:"];
-  lines.push(
-    ...buildStatusLines(row.gamesPlayingByStatus, ["игра", "игры", "игр"]),
+function buildHostingTooltip(row: User): string {
+  return roleTooltip(
+    row.gamesHosting,
+    row.gamesHostingByStatus,
+    ["Нет игр в роли ведущего", "В роли ведущего:", "Игр"],
+    GAME_FORMS,
   );
-  if (lines.length === 1) lines.push(`Игр: ${total}`);
-  return lines.join("\n");
 }
 
-// Build blogs hosting tooltip
-function buildBlogsTooltip(row: {
-  blogsHosting?: number;
-  blogsHostingByStatus?: { draft: number; active: number; closed: number };
-}): string {
-  const total = row.blogsHosting ?? 0;
-  if (total === 0) return "Не ведет блогов";
-  const lines = ["Ведет блоги:"];
-  lines.push(
-    ...buildStatusLines(row.blogsHostingByStatus, ["блог", "блога", "блогов"]),
+function buildPlayingTooltip(row: User): string {
+  return roleTooltip(
+    row.gamesPlaying,
+    row.gamesPlayingByStatus,
+    ["Нет игр в роли игрока", "В роли игрока:", "Игр"],
+    GAME_FORMS,
   );
-  if (lines.length === 1) lines.push(`Блогов: ${total}`);
-  return lines.join("\n");
+}
+
+function buildBlogsTooltip(row: User): string {
+  return roleTooltip(
+    row.blogsHosting,
+    row.blogsHostingByStatus,
+    ["Не ведет блогов", "Ведет блоги:", "Блогов"],
+    ["блог", "блога", "блогов"],
+  );
 }
 </script>
 
 <template>
   <div class="users-data-table">
-    <!-- Filters -->
     <UsersFilter class="filters" />
 
-    <!-- Error state -->
     <ErrorState
       v-if="searchError"
       :message="searchError"
@@ -202,11 +185,9 @@ function buildBlogsTooltip(row: {
       class="error-state-block"
     />
 
-    <!-- Table. Hidden when the request failed and there is nothing to
-         show - an error must not be presented as an empty list. Stale
-         rows (if any) stay visible under the error message. -->
+    <!-- A failed search shows the refusal alone: no empty list, and no rows of the search before it -->
     <DataTable
-      v-if="!searchError || users.length > 0"
+      v-if="!searchError"
       ref="tableRef"
       :columns="columns"
       :data="users"
@@ -218,7 +199,6 @@ function buildBlogsTooltip(row: {
       :sort="currentSort"
       :empty-text="emptyText"
     >
-      <!-- Username column with role badges and search highlighting -->
       <template #cell-username="{ row }">
         <UserLink :user="row" :search-query="filterState.search" />
       </template>
@@ -227,7 +207,6 @@ function buildBlogsTooltip(row: {
         <UserRating :user="row" />
       </template>
 
-      <!-- Games column: X/Y (hosting/playing) — links to the profile -->
       <template #cell-games="{ row }">
         <span class="games-cell">
           <Tooltip :text="buildHostingTooltip(row)">
@@ -250,7 +229,6 @@ function buildBlogsTooltip(row: {
         </span>
       </template>
 
-      <!-- Blogs column: X (hosting) — link to the profile -->
       <template #cell-blogs="{ row }">
         <Tooltip :text="buildBlogsTooltip(row)">
           <router-link
@@ -262,14 +240,12 @@ function buildBlogsTooltip(row: {
         </Tooltip>
       </template>
 
-      <!-- Registration date column -->
       <template #cell-registered="{ row }">
         <Tooltip :text="buildRegistrationTooltip(row)" focusable>
           <span>{{ formatDate(row.registeredUtc) }}</span>
         </Tooltip>
       </template>
 
-      <!-- Recommendations column: endorsements received — link to received-endorsements page -->
       <template #cell-reviews="{ row }">
         <router-link
           :to="{
@@ -282,9 +258,6 @@ function buildBlogsTooltip(row: {
         >
       </template>
 
-      <!-- Game reviews received — the counter's second entry point. Until now
-           it existed only as two StatLine rows on the profile, so a reader
-           browsing the community had no way to see who is reviewed at all. -->
       <template #cell-gameReviews="{ row }">
         <router-link
           :to="{
@@ -297,8 +270,7 @@ function buildBlogsTooltip(row: {
         >
       </template>
 
-      <!-- Activity column (online/offline status) -->
-      <!-- Compute isOnline once per row to ensure consistency between indicator and tooltip -->
+      <!-- One reading of isOnline per row, so the mark and its tooltip agree -->
       <template #cell-activity="{ row }">
         <template v-for="online in [isOnline(row)]" :key="String(online)">
           <Tooltip :text="buildOnlineTooltip(row, online)" focusable>
@@ -312,7 +284,6 @@ function buildBlogsTooltip(row: {
         </template>
       </template>
 
-      <!-- Footer with pagination -->
       <template
         v-if="searchResult?.paging && searchResult.paging.pages > 1"
         #footer
@@ -321,7 +292,7 @@ function buildBlogsTooltip(row: {
           :paging="searchResult.paging"
           :to="{ name: 'community' }"
           :use-query="true"
-          :on-prefetch="handlePrefetch"
+          :on-prefetch="communityStore.prefetchPage"
           :scroll-anchor="pagingAnchor"
         />
       </template>
@@ -338,11 +309,6 @@ function buildBlogsTooltip(row: {
 
 .error-state-block
   margin-bottom: $medium
-
-.stats-value
-  color: $link
-  &:hover
-    color: $link-hover
 
 .games-cell
   white-space: nowrap

@@ -6,25 +6,12 @@ namespace DM.Infrastructure.Mail;
 /// Message-Id of an outgoing letter.
 /// </summary>
 /// <remarks>
-/// RFC 5322 spells a msg-id as id-left "@" id-right, and the header used to
-/// carry a bare GUID, which is neither half of one. A malformed value is the
-/// relay's to replace, and the replacement is what a bounce report and the
-/// reader's client quote back, so the identifier the sender wrote could not be
-/// found again anywhere.
-///
-/// The right-hand side is the domain of the address this installation sends
-/// from, because that is the only domain it can claim an identifier in. It lives
-/// beside the SMTP configuration rather than in the worker, so the one piece of
-/// protocol knowledge here is testable without a broker and a relay.
+/// RFC 5322 id-left "@" id-right: a relay replaces a malformed value, and the bounce then quotes another id.
 /// </remarks>
 public static class MessageIdentifier
 {
     /// <summary>
-    /// Domain used when the configured sender address carries none. Only a
-    /// misconfigured host reaches it: the same address is handed to a mailbox a
-    /// line later, and an address without a domain does not survive that either —
-    /// but a header that ends in an at sign is exactly the malformed value this
-    /// exists to avoid, so it must not be the way that failure shows up.
+    /// Domain used when the configured sender address carries none, rather than a header ending in "@".
     /// </summary>
     private const string FallbackDomain = "localhost";
 

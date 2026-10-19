@@ -1,29 +1,32 @@
 using System;
 using System.Threading.Tasks;
+using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Recovery;
 using DM.Domain.Account.Features.PasswordChange;
 using DM.Web.API.Features.Community.Users;
+using Microsoft.Extensions.Options;
 
 namespace DM.Web.API.Features.Account.Recovery;
 
-/// <inheritdoc />
-internal class RecoveryApiService : IRecoveryApiService
+public class RecoveryApiService
 {
     private readonly IRecoveryService _recoveryService;
     private readonly IPasswordChangeService _passwordChangeService;
     private readonly UserMapper _mapper;
+    private readonly TokenConfiguration _tokens;
 
     public RecoveryApiService(
         IRecoveryService recoveryService,
         IPasswordChangeService passwordChangeService,
-        UserMapper mapper)
+        UserMapper mapper,
+        IOptions<TokenConfiguration> tokens)
     {
         _recoveryService = recoveryService;
         _passwordChangeService = passwordChangeService;
         _mapper = mapper;
+        _tokens = tokens.Value;
     }
 
-    /// <inheritdoc />
     public async Task<RecoveryResponse> Recover(RecoveryRequest request)
     {
         var result = await _recoveryService.Recover(request.Email);
@@ -34,17 +37,19 @@ internal class RecoveryApiService : IRecoveryApiService
             {
                 RecoveryResult.PasswordReset => RecoveryStatus.PasswordResetSent,
                 RecoveryResult.ActivationResent => RecoveryStatus.ActivationResent,
-                // NotFound is also what an unknown enum value answers with.
-                // Recovery does tell the caller the address is unknown - a
-                // recorded exception (SECURITY.md) - so a value this switch does
-                // not know must not read as a letter that went out.
+                // An unknown value must not read as a letter that went out.
                 _ => RecoveryStatus.NotFound
             },
-            Email = request.Email
+            Email = request.Email,
+            LinkLifetimeHours = result switch
+            {
+                RecoveryResult.PasswordReset => _tokens.PasswordResetTokenLifetimeHours,
+                RecoveryResult.ActivationResent => _tokens.ActivationTokenLifetimeHours,
+                _ => null
+            }
         };
     }
 
-    /// <inheritdoc />
     public async Task<PasswordResetTokenInfo?> GetTokenInfo(Guid token)
     {
         var result = await _passwordChangeService.GetTokenInfo(token);
@@ -54,7 +59,6 @@ internal class RecoveryApiService : IRecoveryApiService
         return new PasswordResetTokenInfo { Status = result.Status };
     }
 
-    /// <inheritdoc />
     public async Task<User> ResetPassword(Guid token, PasswordResetCompletion request)
     {
         var passwordChange = new UserPasswordChange

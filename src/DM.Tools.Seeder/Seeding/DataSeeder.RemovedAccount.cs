@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Identity;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Posts;
@@ -28,15 +29,9 @@ internal sealed partial class DataSeeder
     /// rated post in an open room, and a character with a post in somebody else's game.
     /// </summary>
     /// <remarks>
-    /// Nothing else in the seed is removed, so without this the profile of removed
-    /// accounts comes up empty on a fresh stand and every signature "Аккаунт удален" the
-    /// site can draw has nothing to draw it on. Written live and removed at the end, the
-    /// way an account leaves: the removal sets the flag and touches nothing it wrote.
-    ///
-    /// Idempotent by the login, looked up past the soft-delete filter because the row it
-    /// finds is a removed one.
+    /// Written live and removed at the end, as an account leaves. Idempotent by the login, past the soft-delete filter.
     /// </remarks>
-    private async Task SeedRemovedAccount(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task SeedRemovedAccount(List<DbUser> users, ComprehensiveSeedResult result)
     {
         var exists = await _dbContext.Users
             .IgnoreQueryFilters()
@@ -49,9 +44,7 @@ internal sealed partial class DataSeeder
 
         var reviewer = users.FirstOrDefault(u => u.Username == "TestUser") ?? users.First();
 
-        var board = (await _dbContext.Set<Board>()
-                .Where(b => (b.ViewPolicy & BoardAccessPolicy.Guest) != BoardAccessPolicy.None)
-                .ToListAsync())
+        var board = (await _dbContext.Set<Board>().ToListAsync())
             .OrderBy(b => b.Order)
             .ThenBy(b => b.Alias, StringComparer.Ordinal)
             .FirstOrDefault();
@@ -68,7 +61,30 @@ internal sealed partial class DataSeeder
             return;
         }
 
-        var (hash, salt) = _securityManager.GeneratePassword("Test123!");
+        var account = NewRemovedAccount();
+        var (topic, comment) = await SeedRemovedAccountTopic(account, board, result);
+        await SeedRemovedAccountGame(account, reviewer, result);
+        await SeedRemovedAccountCharacter(account, hostGame, result);
+
+        // The public counters, as the run recomputed them for the live accounts: three posts, one point.
+        account.QuantityRating = 3;
+        account.QualityRating = 1;
+
+        await _dbContext.SaveChangesAsync();
+
+        topic.LastCommentId = comment.CommentId;
+        account.IsRemoved = true;
+        await _dbContext.SaveChangesAsync();
+
+        result.Details.Add(
+            $"Removed account \"{RemovedAccountLogin}\" seeded: a topic, a game it mastered, a rated post, " +
+            "a character in another game");
+    }
+
+    /// <summary>The account itself, written live: it is removed at the end of the step.</summary>
+    private DbUser NewRemovedAccount()
+    {
+        var (hash, salt) = _securityManager.GeneratePassword(TestPassword);
         var account = new DbUser
         {
             UserId = _guidFactory.Create(),
@@ -76,19 +92,27 @@ internal sealed partial class DataSeeder
             Email = "removed@test.local",
             PasswordHash = hash,
             Salt = salt,
-            PasswordHashVersion = 2,
+            PasswordHashVersion = PasswordHashing.CurrentVersion,
             Role = UserRole.RegularUser,
-            CreatedUtc = now.AddYears(-5),
-            LastActivityUtc = now.AddDays(-60),
+            CreatedUtc = _now.AddYears(-5),
+            LastActivityUtc = _now.AddDays(-60),
             Status = "Ухожу, но истории остаются",
             Name = string.Empty,
             Location = string.Empty,
             Info = string.Empty,
-            IsRemoved = false,
         };
         _dbContext.Users.Add(account);
+        return account;
+    }
 
-        // The topic, backdated below the board's newest so its "last topic" stays.
+    /// <summary>
+    /// The topic it opened on an open board, with its comment, backdated below
+    /// the board's newest so its "last topic" stays.
+    /// </summary>
+    /// <returns>The topic and the comment its LastCommentId is set to after the save.</returns>
+    private async Task<(Topic Topic, DbComment Comment)> SeedRemovedAccountTopic(
+        DbUser account, Board board, ComprehensiveSeedResult result)
+    {
         var topicNumber = await _dbContext.Set<Topic>()
             .IgnoreQueryFilters()
             .Where(t => t.BoardId == board.BoardId)
@@ -102,7 +126,7 @@ internal sealed partial class DataSeeder
             Title = "Последний сбор у старого маяка",
             Text = "Друзья, это мой последний сбор. Кто помнит маяк на мысе, приходите: " +
                    "расскажем друг другу, чем закончились наши истории.",
-            CreatedUtc = now.AddDays(-75),
+            CreatedUtc = _now.AddDays(-75),
         };
         _dbContext.Set<Topic>().Add(topic);
         board.TopicsCount++;
@@ -111,22 +135,30 @@ internal sealed partial class DataSeeder
             CommentId = _guidFactory.Create(),
             EntityId = topic.TopicId,
             AuthorId = account.UserId,
-            CreatedUtc = now.AddDays(-74),
+            CreatedUtc = _now.AddDays(-74),
             Text = "Маяк на месте, огонь зажжен. Жду всех к полуночи.",
         };
         _dbContext.Set<DbComment>().Add(comment);
         result.TopicsCreated++;
         result.CommentsCreated++;
 
-        // The game it mastered, with a post in an open room that another reader rated.
+        return (topic, comment);
+    }
+
+    /// <summary>
+    /// The game it mastered, with a post in an open room that another reader rated.
+    /// </summary>
+    private async Task SeedRemovedAccountGame(
+        DbUser account, DbUser reviewer, ComprehensiveSeedResult result)
+    {
         var gameSerialNumber = await SerialNumberAllocator.NextAsync<DbGame>(_dbContext);
         var game = new DbGame
         {
             GameId = _guidFactory.Create(),
             SerialNumber = gameSerialNumber,
             PublicId = _publicIdService.Encode(gameSerialNumber),
-            CreatedUtc = now.AddDays(-120),
-            ActivatedUtc = now.AddDays(-118),
+            CreatedUtc = _now.AddDays(-120),
+            ActivatedUtc = _now.AddDays(-118),
             Status = ModuleStatus.Active,
             PremoderationStatus = PremoderationStatus.Approved,
             DraftVisibility = DraftVisibility.Public,
@@ -136,7 +168,7 @@ internal sealed partial class DataSeeder
             NarrativeSetting = "Приморский городок",
             Info = "Игра мастера, который ушел с сайта. Все, что здесь написано, осталось на месте.",
             CommentsAccessMode = CommentsAccessMode.Public,
-            LastPostCreatedUtc = now.AddDays(-65),
+            LastPostCreatedUtc = _now.AddDays(-65),
         };
         _dbContext.Set<DbGame>().Add(game);
         _dbContext.GameAttributeSchemas.Add(new DbGameAttributeSchema
@@ -165,7 +197,7 @@ internal sealed partial class DataSeeder
             PostId = _guidFactory.Create(),
             RoomId = room.RoomId,
             AuthorId = account.UserId,
-            CreatedUtc = now.AddDays(-66),
+            CreatedUtc = _now.AddDays(-66),
             GameText = "Туман стелется по камням, и маяк впервые за много лет гаснет. " +
                        "Кто-то должен подняться наверх и снова зажечь огонь.",
         };
@@ -175,7 +207,7 @@ internal sealed partial class DataSeeder
             PostId = _guidFactory.Create(),
             RoomId = room.RoomId,
             AuthorId = account.UserId,
-            CreatedUtc = now.AddDays(-65),
+            CreatedUtc = _now.AddDays(-65),
             GameText = "Огонь горит. Корабли видят берег, а мастер уходит дальше по тропе.",
         });
         _dbContext.PostReviews.Add(new DbPostReview
@@ -187,12 +219,18 @@ internal sealed partial class DataSeeder
             GameId = game.GameId,
             SignValue = 1,
             Text = "Лучший пост этой игры.",
-            CreatedUtc = now.AddDays(-64),
+            CreatedUtc = _now.AddDays(-64),
         });
         result.GamesCreated++;
         result.PostsCreated += 2;
+    }
 
-        // A character in somebody else's game, with one post in its open room.
+    /// <summary>
+    /// A character in somebody else's game, with one post in its open room.
+    /// </summary>
+    private async Task SeedRemovedAccountCharacter(
+        DbUser account, DbGame hostGame, ComprehensiveSeedResult result)
+    {
         var hostRoom = await _dbContext.Set<Room>()
             .Where(r => r.GameId == hostGame.GameId && r.AccessType == RoomAccessType.Open)
             .OrderBy(r => r.RoomNumber)
@@ -204,12 +242,10 @@ internal sealed partial class DataSeeder
             AuthorId = account.UserId,
             Name = "Смотритель Ион",
             Status = CharacterStatus.Active,
-            IsNpc = false,
-            AccessPolicy = CharacterAccessPolicy.NoAccess,
-            CreatedUtc = now.AddDays(-90),
+            CreatedUtc = _now.AddDays(-90),
         };
         _dbContext.Set<Character>().Add(character);
-        AddLegacyCharacterAttributes(character.CharacterId,
+        AddCharacterSheetValues(character.CharacterId,
             story: "Смотритель маяка, который однажды не вернулся с ночного дежурства.");
         _dbContext.Set<Post>().Add(new Post
         {
@@ -217,25 +253,10 @@ internal sealed partial class DataSeeder
             RoomId = hostRoom.RoomId,
             CharacterId = character.CharacterId,
             AuthorId = account.UserId,
-            CreatedUtc = now.AddDays(-80),
+            CreatedUtc = _now.AddDays(-80),
             GameText = "Ион молча кивает и уходит к берегу, туда, где всегда горит свет.",
         });
         result.CharactersCreated++;
         result.PostsCreated++;
-
-        // The public counters the row carries, as the ones the run recomputed for the
-        // live accounts: three posts written, one point from the one review.
-        account.QuantityRating = 3;
-        account.QualityRating = 1;
-
-        await _dbContext.SaveChangesAsync();
-
-        topic.LastCommentId = comment.CommentId;
-        account.IsRemoved = true;
-        await _dbContext.SaveChangesAsync();
-
-        result.Details.Add(
-            $"Removed account \"{RemovedAccountLogin}\" seeded: a topic, a game it mastered, a rated post, " +
-            "a character in another game");
     }
 }

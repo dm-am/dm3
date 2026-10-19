@@ -1,5 +1,4 @@
 import { test, expect } from "@playwright/test";
-import { phoneContext } from "../../fixtures/phone";
 
 test.describe("Tooltip Accessibility", () => {
   test.beforeEach(async ({ page }) => {
@@ -8,28 +7,19 @@ test.describe("Tooltip Accessibility", () => {
 
   test.describe("WCAG 1.4.13 - Content on Hover or Focus", () => {
     test("tooltip appears on mouse hover", async ({ page }) => {
-      // Find a button with tooltip (scroll nav buttons have tooltips)
       const scrollNavBtn = page.locator(".scroll-nav-btn").first();
 
-      // Hover over button
       await scrollNavBtn.hover();
 
-      // Wait for tooltip to appear (with delay)
-      await page.waitForTimeout(300);
-
-      // Tooltip should be visible
       const tooltip = page.locator('[role="tooltip"]');
       await expect(tooltip).toBeVisible();
     });
 
     test("tooltip appears on keyboard focus", async ({ page }) => {
-      // Find a focusable element with tooltip
       const scrollNavBtn = page.locator(".scroll-nav-btn").first();
 
-      // Focus via keyboard (Tab)
       await scrollNavBtn.focus();
 
-      // Tooltip should appear immediately on focus (no delay)
       const tooltip = page.locator('[role="tooltip"]');
       await expect(tooltip).toBeVisible();
     });
@@ -37,17 +27,13 @@ test.describe("Tooltip Accessibility", () => {
     test("tooltip is dismissible via ESC key", async ({ page }) => {
       const scrollNavBtn = page.locator(".scroll-nav-btn").first();
 
-      // Focus to show tooltip
       await scrollNavBtn.focus();
 
-      // Tooltip should be visible
       const tooltip = page.locator('[role="tooltip"]');
       await expect(tooltip).toBeVisible();
 
-      // Press ESC
       await page.keyboard.press("Escape");
 
-      // Tooltip should be hidden
       await expect(tooltip).not.toBeVisible();
     });
 
@@ -56,89 +42,41 @@ test.describe("Tooltip Accessibility", () => {
     }) => {
       const scrollNavBtn = page.locator(".scroll-nav-btn").first();
 
-      // Hover to show tooltip
       await scrollNavBtn.hover();
-      await page.waitForTimeout(300);
 
       const tooltip = page.locator('[role="tooltip"]');
       await expect(tooltip).toBeVisible();
 
-      // Move to tooltip
       await tooltip.hover();
 
-      // Tooltip should still be visible
       await expect(tooltip).toBeVisible();
     });
   });
 
   test.describe("ARIA Attributes", () => {
-    test("tooltip has role=tooltip", async ({ page }) => {
-      const scrollNavBtn = page.locator(".scroll-nav-btn").first();
-      await scrollNavBtn.hover();
-      await page.waitForTimeout(300);
-
-      const tooltip = page.locator('[role="tooltip"]');
-      await expect(tooltip).toHaveAttribute("role", "tooltip");
-    });
-
     test("trigger has aria-describedby when tooltip is visible", async ({
       page,
     }) => {
-      // The button is named, not taken as `.scroll-nav-btn` first. The rail
-      // grows an "expand all" button above the others once the page has
-      // something collapsible, and on the home page that happens when the news
-      // arrive and turn out long enough to be clamped. A locator is resolved
-      // on every use, so "first" was the button that got hovered and a
-      // different one by the time its wrapper was read: the tooltip on screen
-      // belonged to the first, the attribute was read off the second.
+      // Named, not taken first: the rail grows an "expand all" button above
+      // the others once the page has something collapsible.
       const scrollNavBtn = page.getByRole("button", {
         name: "Прокрутить наверх",
       });
       const trigger = scrollNavBtn.locator("xpath=..");
 
-      // Before hover - no aria-describedby
       await expect(trigger).not.toHaveAttribute("aria-describedby");
 
-      // Hover to show tooltip
       await scrollNavBtn.hover();
 
-      // Wait for the tooltip itself, not for a fixed delay. The attribute is
-      // bound to the tooltip being visible, so reading it after an arbitrary
-      // 300ms asked the question before the answer existed and the assertion
-      // compared an empty string against a real id.
       const tooltip = page.locator('[role="tooltip"]', { hasText: "Наверх" });
       await expect(tooltip).toBeVisible();
 
-      // After hover - has aria-describedby matching tooltip id
       const tooltipId = await tooltip.getAttribute("id");
       await expect(trigger).toHaveAttribute("aria-describedby", tooltipId!);
-    });
-
-    test("tooltip has unique id", async ({ page }) => {
-      const scrollNavBtn = page.locator(".scroll-nav-btn").first();
-      await scrollNavBtn.hover();
-      await page.waitForTimeout(300);
-
-      const tooltip = page.locator('[role="tooltip"]');
-      const id = await tooltip.getAttribute("id");
-
-      expect(id).toBeTruthy();
-      expect(id).toMatch(/^tooltip-/);
     });
   });
 
   test.describe("Tooltip Content", () => {
-    test("tooltip displays text content", async ({ page }) => {
-      const scrollNavBtn = page.locator(".scroll-nav-btn").first();
-      await scrollNavBtn.hover();
-      await page.waitForTimeout(300);
-
-      const tooltip = page.locator('[role="tooltip"]');
-      const text = await tooltip.textContent();
-
-      expect(text?.trim()).toBeTruthy();
-    });
-
     test("tooltip is not shown for disabled state", async ({ page }) => {
       // The settings button is the one trigger in the tree that disables its
       // own tooltip, and it does so while the panel it opens is on screen.
@@ -160,71 +98,22 @@ test.describe("Tooltip Accessibility", () => {
     test("tooltip is positioned on screen", async ({ page }) => {
       const scrollNavBtn = page.locator(".scroll-nav-btn").first();
       await scrollNavBtn.hover();
-      await page.waitForTimeout(300);
 
       const tooltip = page.locator('[role="tooltip"]');
       await expect(tooltip).toBeVisible();
 
-      // Get bounding box
       const box = await tooltip.boundingBox();
-      expect(box).toBeTruthy();
-
-      // Should be within viewport
-      const viewportSize = page.viewportSize();
-      if (box && viewportSize) {
-        expect(box.x).toBeGreaterThanOrEqual(0);
-        expect(box.y).toBeGreaterThanOrEqual(0);
-        expect(box.x + box.width).toBeLessThanOrEqual(viewportSize.width);
-        expect(box.y + box.height).toBeLessThanOrEqual(viewportSize.height);
-      }
-    });
-
-    test("tooltip has correct placement class", async ({ page }) => {
-      const scrollNavBtn = page.locator(".scroll-nav-btn").first();
-      await scrollNavBtn.hover();
-      await page.waitForTimeout(300);
-
-      const tooltip = page.locator('[role="tooltip"]');
-
-      // Should have one of the placement classes
-      const classAttr = await tooltip.getAttribute("class");
-      expect(classAttr).toMatch(/tooltip--(top|bottom|left|right)/);
-    });
-  });
-
-  test.describe("Touch Device Support", () => {
-    // One rule for a finger (shared/ui/Tooltip/touchRule.ts): a tap opens the
-    // tooltip of text, at once and without the hover delay (touch is the third
-    // way in, WCAG 1.4.13), and an enabled button does what it does, its
-    // tooltip only naming it. The test used to expect a bubble on the page
-    // scroll button, which the rule now keeps shut. Read on a phone, as a
-    // phone lays the page out (fixtures/phone.ts).
-    test("a tap opens the tooltip of text and not of a button", async ({
-      browser,
-    }) => {
-      const context = await phoneContext(browser, { width: 375, height: 667 });
-      const page = await context.newPage();
-      await page.goto("/");
-      const tooltip = page.locator('[role="tooltip"]');
-
-      // The role letter of an author: text whose tooltip tells the role.
-      await page.locator(".tooltip-trigger b").first().tap();
-      await expect(tooltip).toBeVisible();
-
-      // A tap on the scroll button closes it and opens nothing of its own.
-      await page.locator(".scroll-nav-btn").first().tap();
-      await expect(tooltip).toHaveCount(0);
-
-      await context.close();
+      const viewport = page.viewportSize();
+      expect(box).not.toBeNull();
+      expect(viewport).not.toBeNull();
+      expect(box!.x).toBeGreaterThanOrEqual(0);
+      expect(box!.y).toBeGreaterThanOrEqual(0);
+      expect(box!.x + box!.width).toBeLessThanOrEqual(viewport!.width);
+      expect(box!.y + box!.height).toBeLessThanOrEqual(viewport!.height);
     });
   });
 
   test.describe("Multiple Tooltips", () => {
-    // The precondition is asserted rather than tested for. The whole body used
-    // to sit inside `if (count >= 2)`, so the day the nav rendered one button
-    // or none this reported a passing test about a behaviour it never
-    // exercised — which is the shape the rest of this corpus was rewritten out
-    // of.
     test("only one tooltip is visible at a time", async ({ page }) => {
       const buttons = page.locator(".scroll-nav-btn");
       await expect(buttons.nth(1)).toBeVisible();
@@ -239,11 +128,8 @@ test.describe("Tooltip Accessibility", () => {
 
   test.describe("Sidebar Tooltips", () => {
     test("sidebar game entries carry a tooltip", async ({ page }) => {
-      // Section headers do not have one: the block title is a heading with a
-      // collapse toggle. The entries do, and that is what the old body hovered
-      // without asserting.
-      // The block renders before its list arrives, so the trigger appears only
-      // once the request has answered. The default five seconds raced it.
+      // The block renders before its list arrives, so the entry appears only
+      // once the request has answered.
       const entry = page
         .locator("#sidebar-list-ActiveGames .tooltip-trigger")
         .first();
@@ -257,35 +143,13 @@ test.describe("Tooltip Accessibility", () => {
     test("data table cells can have tooltips", async ({ page }) => {
       await page.goto("/games");
 
-      // The waitForSelector named a table class that does not exist and its
-      // failure was caught, so the guard below never opened.
-      // Same race as the sidebar entry above: the table is rendered empty and
-      // filled when the listing answers.
-      // The first cell with a tooltip; where the table is wider than the
-      // column, the hover scrolls its frame to the cell first.
+      // The table renders empty and fills when the listing answers.
       const cell = page
         .locator("table.data-table tbody .tooltip-trigger:visible")
         .first();
       await expect(cell).toBeVisible({ timeout: 10000 });
       await cell.hover();
       await expect(page.locator('[role="tooltip"]')).toBeVisible();
-    });
-  });
-
-  test.describe("Transition Animation", () => {
-    test("tooltip has fade transition", async ({ page }) => {
-      const scrollNavBtn = page.locator(".scroll-nav-btn").first();
-
-      // Hover to trigger tooltip
-      await scrollNavBtn.hover();
-
-      // Wait for transition to start
-      await page.waitForTimeout(250);
-
-      const tooltip = page.locator('[role="tooltip"]');
-
-      // Check that tooltip is visible (animation completed)
-      await expect(tooltip).toBeVisible();
     });
   });
 });

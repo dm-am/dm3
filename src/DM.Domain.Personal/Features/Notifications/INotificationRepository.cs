@@ -11,14 +11,14 @@ namespace DM.Domain.Personal.Features.Notifications;
 /// </summary>
 public interface INotificationRepository
 {
-    // ═══ READ ═══
+    // Read
 
     /// <summary>
     /// Counts user notifications
     /// </summary>
     /// <param name="userId">User identifier</param>
     /// <returns>All notifications count</returns>
-    Task<long> Count(Guid userId);
+    Task<int> Count(Guid userId);
 
     /// <summary>
     /// Counts unread notifications for user
@@ -48,7 +48,7 @@ public interface INotificationRepository
     /// <returns>Event types stored under the identifier</returns>
     Task<IReadOnlySet<EventType>> GetCreatedEventTypes(Guid eventId);
 
-    // ═══ WRITE ═══
+    // Write
 
     /// <summary>
     /// Create new notifications

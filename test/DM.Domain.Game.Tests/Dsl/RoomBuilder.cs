@@ -2,7 +2,9 @@ using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Characters;
+using DM.Domain.Game.Features.RoomAccesses;
+using DM.Domain.Game.Features.Rooms;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Tests.Dsl;

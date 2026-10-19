@@ -2,136 +2,63 @@
 
 Платформа для текстовых ролевых игр.
 
-Технологии и версии описаны в [STACK](./docs/STACK.md).
-
----
-
 ## Быстрый старт
 
 ```powershell
 # Windows
 powershell -File .\scripts\dm.ps1 start    # Запуск Docker + API
 powershell -File .\scripts\dm.ps1 seed     # Тестовые данные
-powershell -File .\scripts\dm.ps1 stop     # Остановка
-powershell -File .\scripts\dm.ps1 reset    # Сброс БД и перезапуск
-powershell -File .\scripts\dm.ps1 status   # Статус сервисов
-powershell -File .\scripts\dm.ps1 logs     # Логи (или logs dm-api)
-powershell -File .\scripts\dm.ps1 e2e      # API для e2e и хука перед пушем (лимит запросов выключен до следующего start)
+powershell -File .\scripts\dm.ps1 help     # Остальные команды
 
-# Linux/Mac — те же команды через ./scripts/dm.sh
+# Linux и Mac: те же команды через ./scripts/dm.sh
 
-# Frontend (отдельно)
+# Клиент отдельно
 cd src/DM.Web.Client && npm install && npm run dev
 
-# Гейты CI перед пушем — один раз на клон
+# Гейты CI перед пушем, один раз на клон
 git config core.hooksPath scripts/hooks
 ```
 
-| Сервис | URL |
-|--------|-----|
-| Frontend | http://localhost:5173 |
-| API / Swagger | http://localhost:5000 |
-| Объектное хранилище (S3) | http://localhost:9000 |
-| imgproxy | http://localhost:8080 |
-| Mailpit | http://localhost:8025 |
-
-**Подробнее:** [docs/guides/LOCAL_SETUP.md](./docs/guides/LOCAL_SETUP.md)
-
----
+Адреса сервисов и подробности в [LOCAL_SETUP](./docs/guides/LOCAL_SETUP.md).
 
 ## Документация
 
-### architecture/ — Как устроена система
+architecture/, как устроена система:
 
-| Документ | User Story |
-|----------|------------|
-| [SYSTEM](./docs/architecture/SYSTEM.md) | "Из чего состоит система? Какая архитектура?" |
-| [AUTHENTICATION](./docs/architecture/AUTHENTICATION.md) | "Как работает вход? Какие параметры безопасности?" |
-| [AUTHORIZATION](./docs/architecture/AUTHORIZATION.md) | "Какие роли? Кто что может?" |
-| [UPLOADS](./docs/architecture/UPLOADS.md) | "Как работает upload аватаров? Какие варианты, форматы, защиты?" |
-| [BBCODE_RENDERING](./docs/architecture/BBCODE_RENDERING.md) | "Как рендерится BBCode? Кто видит приватные теги?" |
+- [SYSTEM](./docs/architecture/SYSTEM.md): модули, слои и зависимости
+- [AUTHENTICATION](./docs/architecture/AUTHENTICATION.md): вход, сессии, второй фактор
+- [AUTHORIZATION](./docs/architecture/AUTHORIZATION.md): роли и права
+- [UPLOADS](./docs/architecture/UPLOADS.md): прием, хранение и выдача загруженных картинок
+- [BBCODE_RENDERING](./docs/architecture/BBCODE_RENDERING.md): разбор и вывод BBCode, кто видит скрытое
 
-### conventions/ — Правила разработки
+conventions/, правила разработки:
 
-| Документ | User Story |
-|----------|------------|
-| [PATTERNS](./docs/conventions/PATTERNS.md) | "Как структурировать новую фичу? Какой блюпринт?" |
-| [CODE_STYLE](./docs/conventions/CODE_STYLE.md) | "Какие стандарты кода? Какой чеклист?" |
-| [API_DESIGN](./docs/conventions/API_DESIGN.md) | "Какие принципы API? Какие форматы ответов?" |
-| [SECURITY](./docs/conventions/SECURITY.md) | "Какие требования к безопасности?" |
-| [DATA_STORAGE](./docs/conventions/DATA_STORAGE.md) | "Как организовано хранение данных?" |
-| [USERNAME_POLICY](./docs/conventions/USERNAME_POLICY.md) | "Какие символы разрешены в именах?" |
-| [UI_STANDARDS](./docs/conventions/UI_STANDARDS.md) | "Какие правила верстки, токенов, диалогов?" |
-| [URL_STRUCTURE](./docs/conventions/URL_STRUCTURE.md) | "Как устроены адреса страниц?" |
-| [PERFORMANCE](./docs/conventions/PERFORMANCE.md) | "Какие правила оптимизации? Что нельзя делать?" |
-| [PROCESS](./docs/conventions/PROCESS.md) | "Как устроена работа над изменением? Что должно случиться до готовности?" |
+- [PATTERNS](./docs/conventions/PATTERNS.md): структура кода и блюпринт фичи
+- [CODE_STYLE](./docs/conventions/CODE_STYLE.md): стандарты кода и русского текста
+- [API_DESIGN](./docs/conventions/API_DESIGN.md): контракт HTTP API и форматы ответов
+- [SECURITY](./docs/conventions/SECURITY.md): требования к безопасности
+- [DATA_STORAGE](./docs/conventions/DATA_STORAGE.md): хранение данных
+- [USERNAME_POLICY](./docs/conventions/USERNAME_POLICY.md): символы в именах
+- [UI_STANDARDS](./docs/conventions/UI_STANDARDS.md): верстка, токены, окна
+- [URL_STRUCTURE](./docs/conventions/URL_STRUCTURE.md): адреса страниц
+- [PERFORMANCE](./docs/conventions/PERFORMANCE.md): правила оптимизации
+- [PROCESS](./docs/conventions/PROCESS.md): работа над изменением до готовности
 
-### guides/ — Как делать
+guides/, как делать:
 
-| Документ | User Story |
-|----------|------------|
-| [LOCAL_SETUP](./docs/guides/LOCAL_SETUP.md) | "Как запустить проект локально?" |
-| [TESTING](./docs/guides/TESTING.md) | "Как запускать тесты? Какие паттерны?" |
-| [DEPLOYMENT](./docs/guides/DEPLOYMENT.md) | "Как развернуть на сервере?" |
-| [POINT_OF_PRESENCE](./docs/guides/POINT_OF_PRESENCE.md) | "Зачем сайту второй адрес? Как поднять точку присутствия?" |
-| [MONITORING](./docs/guides/MONITORING.md) | "Где смотреть логи? Как настроить алерты?" |
+- [LOCAL_SETUP](./docs/guides/LOCAL_SETUP.md): запуск локально
+- [TESTING](./docs/guides/TESTING.md): тесты и их паттерны
+- [DEPLOYMENT](./docs/guides/DEPLOYMENT.md): развертывание на сервере
+- [POINT_OF_PRESENCE](./docs/guides/POINT_OF_PRESENCE.md): второй адрес сайта, точка присутствия
+- [MONITORING](./docs/guides/MONITORING.md): логи, метрики, алерты
 
-### Живые документы проекта
+references/, справка:
 
-Лежат в корне раздела документации, а не в рубрике: они описывают проект целиком и
-не отвечают ни на вопрос как устроено, ни на вопрос как писать, ни на вопрос что
-делать дальше.
+- [GLOSSARY](./docs/references/GLOSSARY.md): термины
+- [CONFIGURATION](./docs/references/CONFIGURATION.md): где лежат настройки
 
-| Документ | User Story |
-|----------|------------|
-| [PROGRESS](./docs/PROGRESS.md) | "Что уже готово?" |
-| [STATUS](./docs/STATUS.md) | "Какие страницы, кадры и ручки есть сейчас, чего нет у клиента, что держат тесты?" (считается скриптом) |
-| [STACK](./docs/STACK.md) | "Из чего собран DM3? Почему выбрано это, а не другое?" |
-| [STACK_DM2](./docs/STACK_DM2.md) | "Из чего собран DM2, старый живой сайт? Что о нем известно наверняка, а что только по документу?" |
+В корне docs/ документы о проекте целиком:
 
-### plans/ — Планы
-
-| Документ | User Story |
-|----------|------------|
-| [ROADMAP](./docs/plans/ROADMAP.md) | "Что планируется? Что рассматривается? Какой техдолг?" |
-| [DM2_MIGRATION](./docs/plans/DM2_MIGRATION.md) | "Как мигрировать данные со старого сайта?" |
-| [ERROR_PAGES_AND_LORE](./docs/plans/ERROR_PAGES_AND_LORE.md) | "Как оформлены страницы ошибок? Какой лор и достижения?" |
-
-### references/ — Справка
-
-| Документ | User Story |
-|----------|------------|
-| [GLOSSARY](./docs/references/GLOSSARY.md) | "Что означает этот термин?" |
-| [CONFIGURATION](./docs/references/CONFIGURATION.md) | "Где найти настройки? Какой файл редактировать?" |
-
----
-
-## Структура проекта
-
-```
-dm3/
-├── src/                    # Backend (.NET 10)
-│   ├── BBCodeParser/       # Завендоренный чужой парсер разметки
-│   ├── DM.Domain.*/        # Доменные сервисы
-│   ├── DM.Infrastructure.*/# Инфраструктура
-│   ├── DM.Web.API/         # REST API
-│   ├── DM.Web.Client/      # Frontend (Vue 3)
-│   └── DM.Workers.*/       # Background workers
-├── test/                   # Backend тесты
-├── docker/                 # Docker конфигурация
-├── scripts/                # CLI скрипты
-└── docs/                   # Документация (в корне — живые документы проекта)
-    ├── architecture/       # ФАКТЫ — как устроена система
-    ├── conventions/        # ПРАВИЛА — как писать код
-    ├── guides/             # ИНСТРУКЦИИ — как делать
-    ├── plans/              # ПЛАНЫ — что делать
-    └── references/         # СПРАВКА — где найти
-```
-
----
-
-## Принципы документации
-
-- **Минимум дублирования** — ссылки вместо копирования
-- **Код > документация** — паттерны смотреть в коде
-- **Только необходимое** — то, что нельзя узнать из кода
+- [STATUS](./docs/STATUS.md): что готово, считается скриптом
+- [STACK](./docs/STACK.md): из чего собран DM3 и почему
+- [STACK_DM2](./docs/STACK_DM2.md): из чего собран DM2, старый живой сайт

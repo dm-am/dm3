@@ -44,7 +44,6 @@ internal class BlogSubscriptionService : IBlogSubscriptionService
     {
         var userId = _identityProvider.Current.User.UserId;
 
-        // Check if already subscribed
         var existing = await _repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, ct);
         if (existing != null)
         {
@@ -74,27 +73,15 @@ internal class BlogSubscriptionService : IBlogSubscriptionService
     /// <inheritdoc />
     public async Task<IEnumerable<UserReference>> GetReadersAsync(Guid blogId, CancellationToken ct = default)
     {
-        var subscriberIds = await _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Blog, blogId, ct);
-        var subscriberIdList = subscriberIds.ToList();
-
-        if (!subscriberIdList.Any())
+        var subscriberIds = (await _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Blog, blogId, ct))
+            .ToList();
+        if (subscriberIds.Count == 0)
         {
-            return Enumerable.Empty<UserReference>();
+            return [];
         }
 
-        // One read for the whole list. Asked one at a time, a hundred subscribers
-        // were a hundred round trips, and GetAsync throws on a user who is no
-        // longer there — a single removed subscriber answered the entire page
-        // with 404. The batch form returns the users that exist and says
-        // nothing about the ones that do not, which is what a list of readers
-        // needs.
-        return await _userLookupService.GetReferencesAsync(subscriberIdList);
-    }
-
-    /// <inheritdoc />
-    public async Task<bool> IsSubscribedAsync(Guid userId, Guid blogId, CancellationToken ct = default)
-    {
-        var subscription = await _repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, ct);
-        return subscription != null;
+        // One read for the whole list, and the users that exist: a removed
+        // subscriber does not turn the page into a 404.
+        return await _userLookupService.GetReferencesAsync(subscriberIds);
     }
 }

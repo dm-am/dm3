@@ -5,32 +5,16 @@ import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import { useBoardsStore } from "@/entities/forum";
 import { useAuthStore } from "@/entities/user";
-import { onMounted, watch } from "vue";
 import { storeToRefs } from "pinia";
-import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
-import { useRoute } from "vue-router";
+import { useSidebarRefresh } from "./useSidebarRefresh";
 
 const store = useBoardsStore();
 const { boards, boardsError } = storeToRefs(store);
 const userStore = useAuthStore();
-const route = useRoute();
 
-// Fetch on mount (uses cache with stale-while-revalidate)
-onMounted(() => store.fetchBoards());
+useSidebarRefresh(store.fetchBoards);
 
-// Refetch on any change of viewer to update unread counts
-useViewerChange(() => store.fetchBoards(true));
-
-// Re-trigger on navigation so a failed fetch gets another chance once the
-// TTL cache considers it stale, without requiring a full page reload.
-watch(
-  () => route.fullPath,
-  () => store.fetchBoards(),
-);
-
-// For guests the backend returns total counts (nothing can be unread),
-// so the tooltip must not claim the counters are unread. Same wording
-// pattern as useGameDisplay/useBlogDisplay counter tooltips.
+// A guest gets totals, nothing unread, and the tooltip must not claim otherwise.
 function commentsTooltip(count: number): string {
   return userStore.user
     ? `Непрочитанных комментариев: ${count}`
@@ -40,7 +24,6 @@ function commentsTooltip(count: number): string {
 
 <template>
   <SidebarBlock token="ForumBoards" title="Форум">
-    <template #title>Форум</template>
     <SidebarSkeleton v-if="boards === null && !boardsError" :lines="6" />
     <li v-else-if="boards === null" class="error-row">
       <SecondaryText
@@ -73,13 +56,7 @@ function commentsTooltip(count: number): string {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
-
-.muted
-  color: $text-muted
-
-.counters
-  // Container only, no color
+@use "@/assets/styles/Links" as *
 
 .bracket
   color: $text-muted

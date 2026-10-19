@@ -20,18 +20,7 @@
  */
 
 import { Extension } from "@tiptap/core";
-
-/** An attribute read from and written to one data-* attribute, as a string. */
-function kept(name: string) {
-  return {
-    default: null,
-    parseHTML: (element: HTMLElement) => element.getAttribute(name),
-    renderHTML: (attributes: Record<string, unknown>) => {
-      const value = attributes[attributeKey(name)];
-      return typeof value === "string" ? { [name]: value } : {};
-    },
-  };
-}
+import { attributeKey, kept } from "./kept";
 
 /** A flag read from and written to one data-* attribute, "true" or absent. */
 function flag(name: string) {
@@ -43,15 +32,8 @@ function flag(name: string) {
   };
 }
 
-/** The key of the attribute on a node: data-bb-glue-after is glueAfter. */
-function attributeKey(name: string): string {
-  return name
-    .replace(/^data-bb-/, "")
-    .replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
-}
-
 /** The marks and nodes whose opening and closing tag can be typed in any case. */
-export const SPELLED_TYPES = [
+const SPELLED_TYPES = [
   "bold",
   "italic",
   "underline",
@@ -72,7 +54,7 @@ export const SPELLED_TYPES = [
  * which is a block when it holds one: its mark then stands on the blocks it
  * holds, and the glue on it is the glue of the whole of them.
  */
-export const GLUED_TYPES = [
+const GLUED_TYPES = [
   "private",
   "spoiler",
   "nsfw",
@@ -112,5 +94,3 @@ export const BbSpelling = Extension.create({
     ];
   },
 });
-
-export default BbSpelling;

@@ -33,8 +33,8 @@ tests:
               severity: warning
               queue: dm.notifications
             exp_annotations:
-              summary: "Queue dm.notifications is backing up"
-              description: "More than 1000 messages have been waiting or in flight for 10 minutes. Both halves count: work a consumer has taken and not finished is a backlog the queue depth alone does not show."
+              summary: "Очередь dm.notifications растет"
+              description: "Больше 1000 сообщений ждут или обрабатываются десять минут подряд. Считаются и ожидающие, и взятые обработчиком, но не завершенные. Смотреть очередь в RabbitMQ и docker logs ее обработчика."
 
   # Обратная сторона: сумма ниже порога молчит. Без этого случая правило,
   # срабатывающее всегда, прошло бы проверку выше.
@@ -63,8 +63,8 @@ tests:
               severity: warning
               channel: email
             exp_annotations:
-              summary: "Notifications over email are not being delivered"
-              description: "The channel is refusing what it is handed. Nothing retries these: the message was acknowledged when the sender swallowed the refusal."
+              summary: "Уведомления по каналу email не доставляются"
+              description: "Канал отклоняет то, что ему передают, и повторов не будет. Остальные правила при этом остаются зелеными. Смотреть docker logs dm-notification-worker и dm-mail-worker."
 
   # Отказы входа разрезаются по причине: WrongLogin потоком — это перебор
   # адресов, WrongPassword — перебор паролей, и общее число не говорит ни того,
@@ -81,5 +81,5 @@ tests:
               severity: warning
               reason: WrongLogin
             exp_annotations:
-              summary: "Logins are being refused as WrongLogin"
-              description: "Sustained refusals of one kind. WrongLogin at this rate is somebody walking a list of addresses; WrongPassword against few addresses is somebody walking a list of passwords; AccountLocked is either of those having gone on long enough to lock real people out."
+              summary: "Отказы входа по причине WrongLogin"
+              description: "Отказы одной причины идут быстрее двух в секунду десять минут подряд. WrongLogin похож на перебор адресов, WrongPassword на перебор паролей, AccountLocked на уже запертых людей. Смотреть docker logs dm-api."

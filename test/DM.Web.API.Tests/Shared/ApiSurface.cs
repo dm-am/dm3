@@ -10,13 +10,7 @@ namespace DM.Web.API.Tests.Shared;
 /// <summary>
 /// The actions the host exposes, asked of the assembly rather than listed.
 /// </summary>
-/// <remarks>
-/// Rules about the whole surface — what a write may take, what a stranger may
-/// reach, what a cache header says — all begin by finding every action there is,
-/// and each of them used to spell that search out again. One spelling, so that a
-/// controller shape none of them expected is missed by all of them at once
-/// rather than by some of them silently.
-/// </remarks>
+/// <remarks>One spelling, so a controller shape none of the rules expected is missed by all of them at once.</remarks>
 internal static class ApiSurface
 {
     /// <summary>

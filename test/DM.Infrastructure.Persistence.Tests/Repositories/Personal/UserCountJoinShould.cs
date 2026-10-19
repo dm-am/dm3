@@ -16,13 +16,7 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Personal;
 /// The counter join answers the number the correlated count answered, including
 /// for the users it has no row for.
 /// </summary>
-/// <remarks>
-/// A <c>Count()</c> correlated to the user row returns zero for a user who runs no
-/// games; a join returns him only if it is a left one. The distinction is invisible
-/// in the sorted-by-nothing case and total in the sorted case: an inner join silently
-/// removes from <c>GET /v1/users</c> everybody the sort is about to put at the far
-/// end, which is most of the registry.
-/// </remarks>
+/// <remarks>A join returns a user without games only if it is a left one.</remarks>
 public class UserCountJoinShould
 {
     private static readonly Guid MasterId = Guid.Parse("5f3a2b40-0000-4000-8000-000000000001");
@@ -47,9 +41,7 @@ public class UserCountJoinShould
     /// </summary>
     private static DmDbContext Seeded()
     {
-        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var context = InMemoryStore.Open();
 
         context.Users.AddRange(
             NewUser(MasterId, "master"),

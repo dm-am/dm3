@@ -19,20 +19,16 @@ async function loadDirectChat() {
     router.replace({ name: "messenger" });
     return;
   }
-  try {
-    const chat = await messagingStore.selectDirectChat(username);
-    if (chat) {
-      // The list beside it stays on its page (listPage.ts).
-      router.replace({
-        name: "chat",
-        params: { id: chat.id },
-        query: listPageQuery(route.query),
-      });
-    } else {
-      error.value = `Не удалось начать переписку с ${username}`;
-    }
-  } catch {
-    error.value = "Произошла ошибка при загрузке переписки";
+  const chat = await messagingStore.selectDirectChat(username);
+  if (chat) {
+    // The list beside it stays on its page (listPage.ts).
+    router.replace({
+      name: "chat",
+      params: { id: chat.id },
+      query: listPageQuery(route.query),
+    });
+  } else {
+    error.value = `Не удалось начать переписку с ${username}`;
   }
 }
 

@@ -4,6 +4,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,18 +13,8 @@ namespace DM.Architecture.Tests;
 /// A value the deployment has to supply has no answer in the repository.
 /// </summary>
 /// <remarks>
-/// Three hosts declare what they open - RequireRelationalStorage,
-/// RequireDocumentStorage, RequireObjectStorage - and each of those refuses to
-/// start on an empty value. The tracked appsettings.json answered all of them:
-/// a connection string with a password in it and the object-store account, so
-/// the check could never fire and a deployment that lost DM_ConnectionStrings__Rdb
-/// started clean, answered its liveness probe, and failed on the first request
-/// that touched data. The values live in the Development overlay now, which a
-/// Production host does not read and the image does not carry.
-///
-/// Asserted on the files rather than on a built host, because what defeats the
-/// check is the presence of a default, and a default is invisible from inside
-/// the process that used it.
+/// Each Require* refuses to start on an empty value, which a tracked default defeats; the values live
+/// in the Development overlay. Asserted on the files: a default is invisible from inside the process.
 /// </remarks>
 public class RequiredConfigurationShould
 {
@@ -41,24 +32,13 @@ public class RequiredConfigurationShould
     /// credentials compose brings it up with.
     /// </summary>
     /// <remarks>
-    /// The development overlays name localhost and the ports of that stack, so
-    /// they are not a separate environment - they are the same one, reached
-    /// without the container. They had drifted from the template all the same: the
-    /// password of the relational store, no credentials at all for the document
-    /// store while it requires them, and the administrator account of the object
-    /// store instead of the one scoped to the bucket.
-    ///
-    /// Nothing failed until somebody cloned the repository and ran the API from
-    /// sources, and what they got was a connection refused with no hint that the
-    /// answer was in a file two directories away.
-    ///
-    /// The template is the source: it is the file the installer copies to become
-    /// the environment, so a value read from anywhere else is a fourth copy.
+    /// The development overlays reach the compose stack without the container, and the template is the
+    /// source. The broker's guest password sits in every base file, so each overlay has to answer it.
     /// </remarks>
     [Fact]
     public void ReachTheLocalStackWithTheCredentialsItIsBroughtUpWith()
     {
-        var template = File.ReadAllText(Path.Combine(RepositoryRoot, "docker", ".env.example"));
+        var template = File.ReadAllText(Path.Combine(RepositoryLayout.Root, "docker", ".env.example"));
 
         string Declared(string key)
         {
@@ -68,7 +48,7 @@ public class RequiredConfigurationShould
         }
 
         var overlays = Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "appsettings.Development.json",
+            .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src"), "appsettings.Development.json",
                 SearchOption.AllDirectories)
             .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}",
                 StringComparison.Ordinal))
@@ -100,6 +80,20 @@ public class RequiredConfigurationShould
                 settings.Should().Contain($"\"{Declared("STORAGE_APP_PASSWORD")}\"",
                     $"{name} uses the secret of that account");
             }
+        }
+
+        var brokerHosts = Hosts
+            .Where(host => Reads(BaseSettings(host), "RabbitMqConfiguration", "Endpoint"))
+            .ToArray();
+        brokerHosts.Should().HaveCountGreaterThanOrEqualTo(3,
+            "the API and both workers talk to the broker, and a walk that finds none passes on anything");
+
+        foreach (var host in brokerHosts)
+        {
+            Answer(OverlaySettings(host), "RabbitMqConfiguration", "Password").Should().Be(
+                Declared("RABBITMQ_DEFAULT_PASS"),
+                $"{host} talks to the broker, and the base file answers it with the guest password " +
+                "of the image, which the stack does not start the broker with");
         }
     }
 
@@ -146,26 +140,20 @@ public class RequiredConfigurationShould
     /// A settings file the SDK does not copy by itself has to be declared, and
     /// declared as the item type that SDK actually globs.
     /// </summary>
-    /// <remarks>
-    /// The mail worker declared its appsettings.json as a Content item under the
-    /// plain SDK, where appsettings.json is a None item: the Update matched
-    /// nothing, the file never reached the output, and the worker ran on whatever
-    /// the environment supplied plus type defaults for everything else. In the
-    /// stack that is every value; on a local run it is none of them.
-    /// </remarks>
+    /// <remarks>Under the plain SDK appsettings.json is a None item, so a Content Update matches nothing.</remarks>
     [Fact]
     public void CopyTheSettingsOfEveryHostWhoseSdkDoesNotDoItAlone()
     {
         foreach (var host in Hosts)
         {
-            var project = File.ReadAllText(Path.Combine(RepositoryRoot, "src", host, $"{host}.csproj"));
+            var project = File.ReadAllText(Path.Combine(RepositoryLayout.Root, "src", host, $"{host}.csproj"));
             if (project.Contains("Microsoft.NET.Sdk.Web", StringComparison.Ordinal))
             {
                 continue;
             }
 
             foreach (var settings in Directory
-                         .EnumerateFiles(Path.Combine(RepositoryRoot, "src", host), "appsettings*.json")
+                         .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src", host), "appsettings*.json")
                          .Select(Path.GetFileName))
             {
                 project.Should().Contain($"<None Update=\"{settings}\">",
@@ -179,17 +167,7 @@ public class RequiredConfigurationShould
     /// <summary>
     /// The overlay stays out of the image.
     /// </summary>
-    /// <remarks>
-    /// This is the property the whole move rests on and the one nothing asserted:
-    /// the guarded values were taken out of the base file and put into the
-    /// Development overlay, which is harmless only as long as the overlay is not
-    /// published. A Production host does not read it, so it would sit in the image
-    /// unused — until someone runs the container with ASPNETCORE_ENVIRONMENT unset
-    /// in a place that defaults it, and the deployment that lost its variables
-    /// starts against localhost with a password of "admin" instead of refusing to
-    /// start. Dropping CopyToPublishDirectory from any of the three projects put
-    /// it back, with all four facts of this class green.
-    /// </remarks>
+    /// <remarks>An overlay in the image would start a deployment without variables against localhost.</remarks>
     [Fact]
     public void PublishNoDevelopmentOverlayIntoTheImage()
     {
@@ -198,7 +176,7 @@ public class RequiredConfigurationShould
         overlays.Should().NotBeEmpty("the local defaults live in overlays now");
         foreach (var host in overlays)
         {
-            var project = File.ReadAllText(Path.Combine(RepositoryRoot, "src", host, $"{host}.csproj"));
+            var project = File.ReadAllText(Path.Combine(RepositoryLayout.Root, "src", host, $"{host}.csproj"));
             var declaration = Regex.Match(
                 project,
                 @"<(?:None|Content) Update=""appsettings\.Development\.json"">(.*?)</(?:None|Content)>",
@@ -215,17 +193,21 @@ public class RequiredConfigurationShould
     }
 
     private static string BaseSettings(string host) =>
-        Path.Combine(RepositoryRoot, "src", host, "appsettings.json");
+        Path.Combine(RepositoryLayout.Root, "src", host, "appsettings.json");
 
     private static string OverlaySettings(string host) =>
-        Path.Combine(RepositoryRoot, "src", host, "appsettings.Development.json");
+        Path.Combine(RepositoryLayout.Root, "src", host, "appsettings.Development.json");
 
     /// <summary>True when the file answers the key with a non-empty value.</summary>
-    private static bool Reads(string path, string section, string key)
+    private static bool Reads(string path, string section, string key) =>
+        !string.IsNullOrEmpty(Answer(path, section, key));
+
+    /// <summary>The value the file gives the key, or null when it gives none.</summary>
+    private static string? Answer(string path, string section, string key)
     {
         if (!File.Exists(path))
         {
-            return false;
+            return null;
         }
 
         using var document = JsonDocument.Parse(
@@ -234,9 +216,8 @@ public class RequiredConfigurationShould
 
         return document.RootElement.TryGetProperty(section, out var sectionElement) &&
                sectionElement.ValueKind == JsonValueKind.Object &&
-               sectionElement.TryGetProperty(key, out var value) &&
-               !string.IsNullOrEmpty(value.GetString());
+               sectionElement.TryGetProperty(key, out var value)
+            ? value.GetString()
+            : null;
     }
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

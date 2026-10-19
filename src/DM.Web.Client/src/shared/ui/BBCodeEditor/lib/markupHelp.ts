@@ -1,21 +1,15 @@
-/**
- * What the help of the markup editor says: every tag a surface reads, in the
- * order of the toolbar, each with what the author types and what a reader gets.
- *
- * The typed half is markup the grammar accepts as written (BBCODE_RENDERING.md,
- * "Грамматика разметки"): the forms of DM2 and the parameters added over them,
- * with lower-case names, as the editor writes them itself. The shown half is
- * the markup the server sends a reader for it (BbParserProvider and the tags
- * under Parsing/Tags), drawn by the same global .bbcode-content styles a post
- * is drawn with, so the help shows the page and not a picture of it. The
- * preview of the editor is not used for it: it draws a spoiler open and
- * without its caption, and a hidden block without the recipients the tooltip
- * over it names.
- *
- * markupHelp.spec.ts holds both halves to the grammar: every typed example is
- * markup the check passes in silence, and every shown one says the words the
- * preview of that markup says.
- */
+// The shown half is the server's reading markup, not the editor's preview: the preview draws a spoiler
+// open and a hidden block without its readers. markupHelp.spec.ts holds both halves to the grammar.
+
+import {
+  DEFAULT_LINK_TEXT,
+  NSFW_HIDE_TEXT,
+  NSFW_SHOW_TEXT,
+  SPOILER_HIDE_TEXT,
+  SPOILER_SHOW_TEXT,
+} from "@/shared/lib/utils/bbcodeConstants";
+import { MAX_PIXELS } from "@/shared/lib/utils/bbcodeTagSet";
+import { privateRecipientsLine } from "@/shared/lib/utils/bbcodePrivateRecipients";
 
 /** A chord of the editor: Ctrl (Cmd on a Mac), maybe Shift, and a letter. */
 export interface HelpChord {
@@ -24,7 +18,7 @@ export interface HelpChord {
 }
 
 /** One example: what is typed, and what a reader gets for it. */
-export interface HelpExample {
+interface HelpExample {
   typed: string;
   /** The server's reading markup for `typed`, as HTML. */
   shown: string;
@@ -47,38 +41,26 @@ export interface HelpEntry {
 /** The address every example of an image and a link points at. */
 const EXAMPLE_ADDRESS = "https://example.com/";
 
-/**
- * The pictures shown for an image. The addresses of the examples are made up,
- * and a made-up address draws nothing, so the results are the site's own d20,
- * served from the site itself: a copy of it at 32px shown at its own size, and
- * the large one held to the size its example names. Shown at its own 192px the
- * large one took a screen's worth of the table for one line of markup. The
- * small one is not the favicon: a page that names /favicon.ico as its icon
- * does not always load it as a picture, and the first example showed an empty
- * cell.
- */
+// Made-up addresses draw nothing, so the pictures are the site's own d20; not the favicon, which a page
+// does not always load as a picture.
 const SMALL_PICTURE = "/images/markup-help-d20.png";
 const LARGE_PICTURE = "/apple-touch-icon.png";
 
-// A captioned spoiler keeps its caption on the open button, as the server
-// draws it; one without a caption swaps to the old site's words.
+// A captioned spoiler keeps its caption on the open button, as the server draws it.
 const spoiler = (content: string, caption?: string) =>
-  `<a href="#" class="spoiler-head" data-swaptext="${caption ?? "Скрыть содержимое"}">${caption ?? "Показать содержимое"}</a>` +
+  `<a href="#" class="spoiler-head" data-swaptext="${caption ?? SPOILER_HIDE_TEXT}">${caption ?? SPOILER_SHOW_TEXT}</a>` +
   `<div class="spoiler">${content}</div>`;
 
 const nsfw = (content: string) =>
-  `<a href="#" class="nsfw-head" data-swaptext="Скрыть шокирующий контент">Показать шокирующий контент</a>` +
+  `<a href="#" class="nsfw-head" data-swaptext="${NSFW_HIDE_TEXT}">${NSFW_SHOW_TEXT}</a>` +
   `<div class="nsfw-spoiler">${content}</div>`;
-
-/** The leads, whom the readers of every hidden block start with. */
-const LEADS = "DungeonMaster, Assistant";
 
 /**
  * The green text, its readers on it for the tooltip: the leads, then the
  * names, if any.
  */
 const hidden = (content: string, names?: string) =>
-  `<span class="private-message" data-recipients="${names ? `${LEADS}, ${names}` : LEADS}">${content}</span>`;
+  `<span class="private-message" data-recipients="${privateRecipientsLine(names ? [names] : [])}">${content}</span>`;
 
 const image = (picture: string, width?: number) => {
   const img =
@@ -168,7 +150,7 @@ export const HELP_ENTRIES: readonly HelpEntry[] = [
     ],
     note:
       "Имена персонажей пишутся через запятую, текст видят их игроки и автор поста. " +
-      "DungeonMaster и Assistant видят любой скрытый текст игры, в том числе без имен. " +
+      "DungeonMaster и Assistant видят любой скрытый блок игры, в том числе без имен. " +
       "Кому виден текст, показывает подсказка: наведите мышь или коснитесь зеленого текста.",
   },
   {
@@ -193,13 +175,16 @@ export const HELP_ENTRIES: readonly HelpEntry[] = [
     ],
     note:
       "Адрес начинается с http:// или https://. Параметры width и height задают " +
-      "наибольший размер в пикселях, от 1 до 9999, и картинка сохраняет пропорции. " +
+      `наибольший размер в пикселях, от 1 до ${MAX_PIXELS}, и картинка сохраняет пропорции. ` +
       "Без height картинка не выше 500 пикселей, щелчок по ней открывает ее целиком.",
   },
   {
     tag: "link",
     examples: [
-      { typed: `[link]${EXAMPLE_ADDRESS}[/link]`, shown: link("ссылка") },
+      {
+        typed: `[link]${EXAMPLE_ADDRESS}[/link]`,
+        shown: link(DEFAULT_LINK_TEXT),
+      },
       {
         typed: `[link text="Главная"]${EXAMPLE_ADDRESS}[/link]`,
         shown: link("Главная"),
@@ -232,8 +217,8 @@ export const HELP_ENTRIES: readonly HelpEntry[] = [
     tag: "mod",
     examples: [
       {
-        typed: "[mod]сообщение модератора[/mod]",
-        shown: '<div class="mod-block">сообщение модератора</div>',
+        typed: "[mod]текст модератора[/mod]",
+        shown: '<div class="mod-block">текст модератора</div>',
       },
     ],
     note: "Видят все читатели, пишут только модераторы",

@@ -2,6 +2,7 @@ using System;
 using System.Linq;
 using System.Linq.Expressions;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Infrastructure.Persistence.Shared.Comments;
@@ -10,16 +11,8 @@ namespace DM.Infrastructure.Persistence.Shared.Comments;
 /// The order a page of comments is read in, for all four discussions at once.
 /// </summary>
 /// <remarks>
-/// Forum topics, games, blogs and publications keep their comments in one table, and each
-/// of the four repositories carried a byte-identical copy of this switch. A fix to the
-/// order therefore had to be made four times, which is the shape a fix takes right before
-/// it gets made three.
-///
-/// Every branch ends on the identifier, and that is what the class is for. Neither key
-/// above it is unique: a busy second gives several comments one timestamp, and a like
-/// count ties by design. Paging asks for the same order once per page, and rows the order
-/// cannot tell apart may come back arranged differently between two of those asks, which
-/// shows one of them on both pages and the other on neither.
+/// Every branch ends on the identifier: neither a timestamp nor a like count is unique,
+/// and paging needs the same order on every page.
 /// </remarks>
 internal static class CommentSorting
 {
@@ -38,15 +31,9 @@ internal static class CommentSorting
     {
         var isDescending = string.Equals(sortOrder, "desc", StringComparison.OrdinalIgnoreCase);
 
-        var ordered = sortBy?.ToLowerInvariant() switch
-        {
-            "likes" => isDescending
-                ? query.OrderByDescending(LiveLikes(dbContext))
-                : query.OrderBy(LiveLikes(dbContext)),
-            _ => isDescending // "created" or default
-                ? query.OrderByDescending(c => c.CreatedUtc)
-                : query.OrderBy(c => c.CreatedUtc)
-        };
+        var ordered = string.Equals(sortBy, "likes", StringComparison.OrdinalIgnoreCase)
+            ? query.OrderByDirection(LiveLikes(dbContext), !isDescending)
+            : query.OrderByDirection(c => c.CreatedUtc, !isDescending);
 
         return ordered.ThenBy(c => c.CommentId);
     }

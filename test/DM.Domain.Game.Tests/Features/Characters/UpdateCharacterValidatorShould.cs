@@ -5,11 +5,10 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.GameAttributeSchemas;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Testing;
 using FluentValidation.TestHelper;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
@@ -22,9 +21,6 @@ public class UpdateCharacterValidatorShould : UnitTestBase
 
     public UpdateCharacterValidatorShould()
     {
-        // Held in fields: Mock<T>() hands out a new substitute on every call, so
-        // a stub written through a second call would configure an instance the
-        // validator never saw.
         characterRepository = Mock<ICharacterRepository>();
         attributeValueValidator = Mock<IAttributeValueValidator>();
         validator = new UpdateCharacterValidator(characterRepository, attributeValueValidator);

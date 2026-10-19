@@ -11,11 +11,11 @@ namespace DM.Domain.Account.Features.Authentication;
 /// <inheritdoc />
 internal class SuspiciousLoginDetector : ISuspiciousLoginDetector
 {
-    private readonly ISecurityAuditRepository _auditService;
+    private readonly ISecurityAuditRepository _auditRepository;
 
-    public SuspiciousLoginDetector(ISecurityAuditRepository auditService)
+    public SuspiciousLoginDetector(ISecurityAuditRepository auditRepository)
     {
-        _auditService = auditService;
+        _auditRepository = auditRepository;
     }
 
     /// <inheritdoc />
@@ -24,22 +24,9 @@ internal class SuspiciousLoginDetector : ISuspiciousLoginDetector
         if (string.IsNullOrEmpty(ipAddress) && string.IsNullOrEmpty(userAgent))
             return false;
 
-        // Successes only, and asked for as such. Only earlier successes count as
-        // evidence that an address is the owner's: a failure records whoever was
-        // guessing, so treating failures as history lets one wrong password
-        // launder the next one into "known".
-        //
-        // Asking for the mixed trail and filtering it here made the window mean
-        // twenty entries of any kind, so nineteen wrong passwords in a row
-        // pushed every previous success out of it — and the login that followed
-        // the guessing, the one this exists to catch, met an empty history and
-        // was called ordinary.
-        //
-        // The login being judged is already in the list: it is written before
-        // the caller gets here, so left in it makes its own address known to
-        // itself and the answer is false for every login there has ever been. It
-        // is the newest entry, because the trail comes back newest first.
-        var previousLogins = (await _auditService.GetByTypesAsync(userId, SecurityEventCategories.SuccessfulLogins, 20))
+        // Successes only: a failure records whoever was guessing, and failures must not
+        // fill the window. The newest entry is the login being judged.
+        var previousLogins = (await _auditRepository.GetByTypesAsync(userId, SecurityEventCategories.SuccessfulLogins, 20))
             .Skip(1)
             .ToList();
 
@@ -49,12 +36,7 @@ internal class SuspiciousLoginDetector : ISuspiciousLoginDetector
             return false;
         }
 
-        // The network, not the address. A residential connection is renumbered by
-        // the provider on its own schedule and a phone changes address every time it
-        // leaves the house, so an exact comparison called half the logins of an
-        // ordinary reader suspicious - and a warning that arrives on ordinary days
-        // is one nobody reads on the day it matters. A prefix moves with the
-        // provider and stays put across a reconnect.
+        // The network, not the address: a prefix stays put across a reconnect.
         var knownNetworks = previousLogins
             .Select(entry => NetworkOf(entry.IpAddress))
             .Where(network => network != null)
@@ -66,14 +48,8 @@ internal class SuspiciousLoginDetector : ISuspiciousLoginDetector
             return true;
         }
 
-        // The device is the other half, and it was accepted as an argument and never
-        // read: a session opened from the owner's own network on a machine that has
-        // never been seen - the case of a browser somebody else is sitting at - was
-        // indistinguishable from the owner opening their laptop.
-        //
-        // Compared as the description, not as the raw header: the header carries a
-        // build number that moves with every browser update, and comparing it would
-        // call every update a new device.
+        // The device, compared as the description: the raw header changes with
+        // every browser update.
         var knownDevices = previousLogins
             .Where(entry => !string.IsNullOrEmpty(entry.DeviceInfo))
             .Select(entry => entry.DeviceInfo!)

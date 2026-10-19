@@ -5,7 +5,7 @@
 // first.
 import { join } from "node:path";
 import { ROOT, read } from "./repo.mjs";
-import { parse, propertiesOf, scopeOf, textOf, unwrap, visit } from "./source.mjs";
+import { parse, propertiesOf, scopeOf, stringOf, textOf, unwrap, visit } from "./source.mjs";
 
 const VISUAL = join(ROOT, "scripts", "visual");
 
@@ -28,7 +28,7 @@ function exportedArray(ts, sourceFile, name) {
 }
 
 /** The address of a state: a string, a template, or a function of the fixture returning one. */
-function addressOf(ts, node, scope) {
+function stateAddress(ts, node, scope) {
   const value = unwrap(ts, node);
   if (value && ts.isArrowFunction(value)) {
     // The fixture is read through its fields (f.playedGame), which no scope
@@ -38,11 +38,6 @@ function addressOf(ts, node, scope) {
     return returned ? textOf(ts, returned.expression, scope) : null;
   }
   return textOf(ts, value, scope);
-}
-
-function stringOf(ts, node) {
-  const value = node && unwrap(ts, node);
-  return value && ts.isStringLiteral(value) ? value.text : undefined;
 }
 
 /** Names of the roles, in the order roles.ts lists them. */
@@ -75,7 +70,7 @@ export function readFrames(ts, resolve) {
     }
     const props = propertiesOf(ts, state);
     const name = stringOf(ts, props.get("name"));
-    const address = props.has("url") ? addressOf(ts, props.get("url"), scope) : null;
+    const address = props.has("url") ? stateAddress(ts, props.get("url"), scope) : null;
     if (name === undefined || address === null) {
       unread++;
       continue;

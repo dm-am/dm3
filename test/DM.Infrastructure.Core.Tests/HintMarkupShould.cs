@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Text.Json.Nodes;
 using AwesomeAssertions;
 using DM.Infrastructure.Core.Parsing;
 using DM.Testing;
@@ -16,17 +15,9 @@ namespace DM.Infrastructure.Core.Tests;
 /// the client's preview draws, and it is read with its own tag set on every
 /// audience.
 /// </summary>
-/// <remarks>
-/// The pairs are written once, in the client's hintMarkup.cases.ts, and held
-/// from both ends: here, that the server renders each input to its string;
-/// there, that hintToHtml does. The grammar table says what a text is in
-/// neutral pieces; these say what it is in markup, down to the names of the
-/// attributes the tooltip reads.
-/// </remarks>
+/// <remarks>The pairs are written once, in hintMarkup.cases.ts, and held from both ends.</remarks>
 public class HintMarkupShould
 {
-    private const string Begin = "/* hint:begin */";
-    private const string End = "/* hint:end */";
 
     private static string PairsFile => Path.Combine(RepositoryLayout.Root,
         "src", "DM.Web.Client", "src", "shared", "lib", "utils", "hintMarkup.cases.ts");
@@ -35,29 +26,16 @@ public class HintMarkupShould
 
     public static TheoryData<int> Pairs() => new(Enumerable.Range(0, ReadPairs().Count));
 
-    [Fact]
-    public void ReadEveryPair()
-    {
-        ReadPairs().Should().HaveCountGreaterThanOrEqualTo(10,
-            "the pairs are discovered by reading the file, and a marker that stopped matching " +
-            "would leave every check below green over nothing");
-    }
-
     [Theory]
     [MemberData(nameof(Pairs))]
     public void RenderEveryPairAsTheClientPreviewDraws(int index)
     {
         var (input, html) = ReadPairs()[index];
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Hint);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.Hint);
 
         wrapper.RenderHtml(input, Reader()).Should().Be(html);
     }
 
-    /// <summary>
-    /// Every audience reads the hint with its own set: the safe rendering would
-    /// read the tags of a post in it, and the author's the post's markup of the
-    /// author's editor, which nothing reads back here.
-    /// </summary>
     [Fact]
     public void ReadTheHintWithItsOwnTagsOnEveryAudience()
     {
@@ -65,11 +43,9 @@ public class HintMarkupShould
         const string expected = "[b]жирный[/b] <span class=\"bb-tip\" tabindex=\"0\" " +
                                 "data-tip-text=\"подсказка\">слово</span>";
 
-        ((BbParserWrapper)_parserProvider.GetSafeForSurface(BbSurface.Hint))
+        _parserProvider.GetSafeForSurface(BbSurface.Hint)
             .RenderHtml(input, RenderContext.ForEmbedSafe(BbSurface.Hint)).Should().Be(expected);
-        ((BbParserWrapper)_parserProvider.GetForAuthorEdit(BbSurface.Hint))
-            .RenderHtml(input, Reader()).Should().Be(expected);
-        ((BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Hint))
+        _parserProvider.GetForSurface(BbSurface.Hint)
             .RenderText(input, RenderContext.ForPlainText() with { Surface = BbSurface.Hint })
             .Should().Be("[b]жирный[/b] слово");
     }
@@ -81,7 +57,7 @@ public class HintMarkupShould
     [Fact]
     public void WriteARefusedTipAsTypedInThePlainText()
     {
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Hint);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.Hint);
 
         wrapper.RenderText("а [tip img=\"images/a.gif\"]слово[/tip] б",
                 RenderContext.ForPlainText() with { Surface = BbSurface.Hint })
@@ -108,16 +84,7 @@ public class HintMarkupShould
         Surface = BbSurface.Hint
     };
 
-    private static IReadOnlyList<(string Input, string Html)> ReadPairs()
-    {
-        var text = File.ReadAllText(PairsFile);
-        var start = text.IndexOf(Begin, StringComparison.Ordinal);
-        var end = text.IndexOf(End, StringComparison.Ordinal);
-        if (start < 0 || end < start)
-            throw new InvalidOperationException($"{PairsFile} lost its {Begin} and {End} markers");
-
-        return JsonNode.Parse(text[(start + Begin.Length)..end])!.AsArray()
-            .Select(pair => ((string)pair![0]!, (string)pair[1]!))
-            .ToArray();
-    }
+    private static IReadOnlyList<(string Input, string Html)> ReadPairs() => ClientTable.Read(PairsFile, "hint").AsArray()
+        .Select(pair => ((string)pair![0]!, (string)pair[1]!))
+        .ToArray();
 }

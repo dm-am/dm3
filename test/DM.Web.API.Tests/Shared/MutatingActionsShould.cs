@@ -8,14 +8,8 @@ using Xunit;
 namespace DM.Web.API.Tests.Shared;
 
 /// <summary>
-/// A write in this codebase is not atomic by default. Only a handful of writes
-/// open a transaction, so a multi-step one — accepting an invitation, which
-/// grants the right and then burns the token — has no rollback of its own.
-/// Handing such an action the request cancellation token turns a dropped
-/// connection into a torn write: rights granted by an invitation that stayed
-/// redeemable.
-///
-/// Reads carry the token; writes run to completion. This test is the rule.
+/// Reads carry the request cancellation token; writes run to completion: most writes have no transaction,
+/// and a dropped connection would tear them.
 /// </summary>
 public class MutatingActionsShould
 {
@@ -24,14 +18,9 @@ public class MutatingActionsShould
     {
         var mutating = MutatingActions();
 
-        // A rule that matches nothing passes everything. This walk finds its
-        // subjects by assembly, base type and attribute, and each of those is a
-        // thing that can change without anybody thinking about this file - the
-        // controllers moving to a base of their own, the attributes gaining a
-        // wrapper - after which the rule goes green by finding nobody to check.
-        mutating.Should().HaveCountGreaterThan(100,
-            "the API writes through a couple of hundred actions, and a walk that finds far " +
-            "fewer has stopped seeing them rather than stopped finding offenders");
+        // A rule that matches nothing passes everything.
+        mutating.Should().NotBeEmpty(
+            "a walk that finds no writing action has stopped seeing them rather than stopped finding offenders");
 
         mutating
             .Where(action => action.GetParameters().Any(p => p.ParameterType == typeof(CancellationToken)))

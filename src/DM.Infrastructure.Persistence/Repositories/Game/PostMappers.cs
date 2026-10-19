@@ -1,7 +1,9 @@
 using System;
 using System.Linq;
 using System.Linq.Expressions;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Characters;
+using DM.Domain.Game.Features.Comments;
+using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence.Shared.Comments;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
@@ -13,24 +15,10 @@ using DtoPostEdit = DM.Domain.Game.Features.Posts.PostEdit;
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
 /// <summary>
-/// Projection formula for the game post - the hottest read of the site.
-///
-/// Npgsql has refused this projection twice, so any edit here must be
-/// followed by a SQL check on a room with posts:
-/// - the lead list: concatenating the assistants onto a one-element array
-///   inside the projection made the whole query untranslatable, and every
-///   post read answered 500. Master and assistants are projected as two
-///   members and joined by the model (GameLeadUserIds).
-/// - attachments: a post may carry several files, so an inline projection
-///   would be a correlated subquery per row; they are filled by a batched
-///   read after the page is materialised, the way character portraits are.
-///
-/// The rating and the number of reviews are derived, not stored, and they
-/// belong to this formula: four reads project through it, and a rule about
-/// what a post's rating IS must not live in four copies. Two correlated
-/// subqueries per row, the same shape GetRated already runs; staying inside
-/// the one query keeps paging untouched. Sum over an empty set is NULL in
-/// SQL, hence the nullable cast and the coalesce; Count answers 0 on its own.
+/// Projection formula for the game post, the hottest read of the site.
+/// Any edit here needs a SQL check on a room with posts: Npgsql refuses some shapes.
+/// Master and assistants are two members joined by the model (GameLeadUserIds), and
+/// attachments are filled by a batched read after the page.
 /// </summary>
 internal static class PostMappers
 {
@@ -65,12 +53,12 @@ internal static class PostMappers
             CreatedUtc = p.CreatedUtc,
             GameText = p.GameText,
             MetagameText = p.MetagameText!,
-            SharePrivateWithAll = p.SharePrivateWithAll,
+            GameShowPrivateMessages = p.Room.Game.ShowPrivateMessages,
             RoomViewPrivateText = p.Room.ViewPrivateText,
             GameMasterUserId = p.Room.Game.MasterId,
             GameAssistantUserIds = p.Room.Game.Assistants.Select(a => a.UserId).ToList(),
             PrivateAddresseeSnapshotJson = p.PrivateAddresseeSnapshotJson,
-            Rating = p.Reviews.Where(r => !r.IsRemoved).Sum(r => (int?)r.SignValue) ?? 0,
+            Rating = PostFilters.RatingOf.Splice(p),
             ReviewCount = p.Reviews.Count(r => !r.IsRemoved),
             Author = GeneralUserProjections.Projection.Splice(p.Author),
             Character = p.Character == null ? null! : CharacterShortProjection.Splice(p.Character),

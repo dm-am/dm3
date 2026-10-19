@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Uploads;
@@ -17,23 +14,17 @@ using DbLike = DM.Infrastructure.Persistence.Entities.Shared.Like;
 using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
 using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using DbUsernameChangeRequest = DM.Infrastructure.Persistence.Entities.Account.UsernameChangeRequest;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Three rules that used to hold only while requests did not overlap: one subscription per
-/// (subscriber, target), one live like per (entity, reader), and one live portrait per
-/// character.
+/// One subscription per (subscriber, target), one live like per (entity, reader), one live portrait per character,
+/// one tag per game, one name change awaiting a moderator per account.
 /// </summary>
 /// <remarks>
-/// All three writes are check-then-insert, and a check cannot see the request running
-/// beside it. None of the duplicates was something the person who caused it could undo:
-/// unsubscribing removes one row per click while the button reads as subscribed
-/// either way, a duplicated like inflates the counter and the award metric of somebody
-/// else, and a second portrait took the whole room's post list down with it.
-/// A rule about rows that do not exist yet can only be stated in the schema, so
-/// what is asserted here is that the refusal comes from there — the second insert
-/// reaches the database and the database is what says no.
+/// Each write is check-then-insert, so the rule lives in the schema: the second insert reaches the database and the
+/// database says no.
 /// </remarks>
 public class SchemaUniquenessShould : IntegrationTestBase
 {
@@ -65,12 +56,7 @@ public class SchemaUniquenessShould : IntegrationTestBase
     /// <summary>
     /// The write answers the refusal instead of forwarding it.
     /// </summary>
-    /// <remarks>
-    /// The index turns the loser of the race from an extra row into an error, and
-    /// an error is the worse of the two: the reader asked to subscribe and is
-    /// subscribed. All three subscribe services go through this one insert, so the
-    /// answer belongs here and not in each of them.
-    /// </remarks>
+    /// <remarks>All three subscribe services go through this one insert, so the answer belongs here.</remarks>
     [Fact]
     public async Task AnswerARacingSubscribeWithTheRowThatWon()
     {
@@ -97,13 +83,7 @@ public class SchemaUniquenessShould : IntegrationTestBase
     /// Refuses a second live like of one entity by one reader, and keeps accepting the next
     /// one after it is withdrawn.
     /// </summary>
-    /// <remarks>
-    /// Liking is check-then-insert over a loaded navigation, so two overlapping clicks both
-    /// find nothing and both insert. The counter then reports one person twice, and the same
-    /// duplicate reaches the LikesReceived metric, where somebody else's double click moves the
-    /// author towards an award. Partial on live rows for the reason the portrait index is:
-    /// unliking sets IsRemoved and liking again has to be allowed.
-    /// </remarks>
+    /// <remarks>Partial on live rows, as the portrait index is: unliking sets IsRemoved and liking again is allowed.</remarks>
     [Fact]
     public async Task RefuseASecondLiveLikeOfOneEntityByOneReader()
     {
@@ -140,12 +120,7 @@ public class SchemaUniquenessShould : IntegrationTestBase
     /// <summary>
     /// Refuses the second live portrait and keeps accepting the replacement.
     /// </summary>
-    /// <remarks>
-    /// Both halves decide the index. A rule that only refused would be satisfied by
-    /// a total unique index, and a total one would refuse every portrait a
-    /// character ever changes: the row it replaces stays in the table until the
-    /// orphan sweeper drops it, which is a day later at the earliest.
-    /// </remarks>
+    /// <remarks>A total index would refuse every replacement: the replaced row stays until the orphan sweeper drops it.</remarks>
     [Fact]
     public async Task RefuseASecondLivePortraitOfOneCharacter()
     {
@@ -182,13 +157,7 @@ public class SchemaUniquenessShould : IntegrationTestBase
     /// <summary>
     /// The rule is the character's, and only the character's.
     /// </summary>
-    /// <remarks>
-    /// The insert retires the previous row for a portrait because the schema leaves
-    /// it no choice. A user avatar becomes current when the profile is saved and
-    /// the superseded rows are collected then, and a post is meant to carry several
-    /// attachments, so an insert that retired on every type would break both without
-    /// any index refusing anything.
-    /// </remarks>
+    /// <remarks>A user avatar is collected when the profile is saved and a post carries several attachments.</remarks>
     [Fact]
     public async Task LeaveASecondAvatarOfOneUserAlone()
     {
@@ -259,19 +228,7 @@ public class SchemaUniquenessShould : IntegrationTestBase
     /// <summary>
     /// One tag is on one game once.
     /// </summary>
-    /// <remarks>
-    /// The required-tag filter of the game catalogue counts the rows a game has
-    /// among the tags asked for and compares that count to how many were asked
-    /// for, so a game carrying one tag twice answered a query for two tags it
-    /// holds one of. The write side deduplicates its input and computes a
-    /// difference on update, but neither can see the request running beside it —
-    /// the rule is about rows that do not exist yet, so it belongs to the schema.
-    ///
-    /// The other two finding of this shape, subscriptions and likes, were given a
-    /// fact each; this one was closed on the index alone and left with the
-    /// migration-versus-snapshot check named as its gate, which agrees with any
-    /// index the model happens to declare, unique or not.
-    /// </remarks>
+    /// <remarks>The required-tag filter compares a count of rows to the count of tags asked for.</remarks>
     [Fact]
     public async Task RefuseTheSameTagTwiceOnOneGame()
     {
@@ -318,6 +275,46 @@ public class SchemaUniquenessShould : IntegrationTestBase
             .Which.SqlState.Should().Be("23505", "that is unique_violation");
     }
 
+    /// <summary>
+    /// Refuses a second name change request awaiting a moderator, and accepts the next one once the first is decided.
+    /// </summary>
+    /// <remarks>
+    /// Partial on Status = 0: a total index would leave an account one request in its lifetime. Approvals stay out:
+    /// one stops being in flight when its link runs out, and no index predicate can be written against the clock.
+    /// </remarks>
+    [Fact]
+    public async Task RefuseASecondPendingNameChangeOfOneAccount()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var userId = await AddUserAsync(dbContext);
+
+        var first = NewNameChange(userId);
+        dbContext.UsernameChangeRequests.Add(first);
+        await dbContext.SaveChangesAsync();
+
+        var second = NewNameChange(userId);
+        dbContext.UsernameChangeRequests.Add(second);
+        Func<Task> duplicate = () => dbContext.SaveChangesAsync();
+
+        var refusal = await duplicate.Should().ThrowAsync<DbUpdateException>(
+            "two requests in flight are two answers a moderator gives one account");
+        refusal.And.InnerException.Should().BeOfType<PostgresException>()
+            .Which.SqlState.Should().Be("23505", "that is unique_violation");
+
+        dbContext.Entry(second).State = EntityState.Detached;
+        first.Status = UsernameChangeRequestStatus.Rejected;
+        first.ResolvedUtc = DateTimeOffset.UtcNow;
+        await dbContext.SaveChangesAsync();
+
+        dbContext.UsernameChangeRequests.Add(second);
+        Func<Task> afterDecision = () => dbContext.SaveChangesAsync();
+
+        await afterDecision.Should().NotThrowAsync(
+            "a decided request must not hold the slot of the next one");
+    }
+
     private static DbLike NewLike(Guid userId, Guid entityId) => new()
     {
         LikeId = Guid.NewGuid(),
@@ -325,6 +322,15 @@ public class SchemaUniquenessShould : IntegrationTestBase
         EntityId = entityId,
         EntityType = LikeEntityType.Topic,
         IsRemoved = false,
+    };
+
+    private static DbUsernameChangeRequest NewNameChange(Guid userId) => new()
+    {
+        RequestId = Guid.NewGuid(),
+        UserId = userId,
+        Reason = "Reason of the uniqueness check",
+        Status = UsernameChangeRequestStatus.Pending,
+        CreatedUtc = DateTimeOffset.UtcNow,
     };
 
     private static DbSubscription NewSubscription(Guid subscriberId, Guid targetId) => new()

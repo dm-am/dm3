@@ -2,21 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * NodeView Components Tests
- *
- * Tests for SpoilerView and NsfwView Vue NodeView components.
- * Covers rendering, click-to-toggle behavior, keyboard accessibility,
- * and ARIA attributes.
- *
- * Actual component structure (collapse via the shared .bb-collapse grid
- * animation, NOT v-show — the wrapper's `open` class drives visibility):
- * - SpoilerView: .spoiler-wrapper > .spoiler-head (span)
- *     + .bb-collapse > .bb-collapse-clip > .spoiler (content)
- * - NsfwView: .nsfw-wrapper > .nsfw-head (span)
- *     + .bb-collapse > .bb-collapse-clip > .nsfw-spoiler (content + .nsfw-overlay)
- */
-
 import {
   describe,
   it,
@@ -120,32 +105,7 @@ describe("SpoilerView", () => {
     vi.clearAllMocks();
   });
 
-  // ============================================================================
-  // BASIC RENDERING
-  // ============================================================================
-
   describe("Basic Rendering", () => {
-    it("renders without errors", () => {
-      const wrapper = mount(SpoilerView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.exists()).toBe(true);
-    });
-
-    it("renders spoiler-wrapper container", () => {
-      const wrapper = mount(SpoilerView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".spoiler-wrapper").exists()).toBe(true);
-    });
-
-    it("renders spoiler-head toggle", () => {
-      const wrapper = mount(SpoilerView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".spoiler-head").exists()).toBe(true);
-    });
-
     it('shows "Показать содержимое" when collapsed', () => {
       const wrapper = mount(SpoilerView, {
         props: createMockProps({ collapsed: true }, updateAttributesMock),
@@ -192,10 +152,6 @@ describe("SpoilerView", () => {
     });
   });
 
-  // ============================================================================
-  // COLLAPSE/EXPAND
-  // ============================================================================
-
   describe("Collapse/Expand", () => {
     it("toggles collapsed state on click", async () => {
       const wrapper = mount(SpoilerView, {
@@ -225,18 +181,7 @@ describe("SpoilerView", () => {
     });
   });
 
-  // ============================================================================
-  // KEYBOARD ACCESSIBILITY
-  // ============================================================================
-
   describe("Keyboard Accessibility", () => {
-    it("toggle is a span element (styled as link)", () => {
-      const wrapper = mount(SpoilerView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".spoiler-head").element.tagName).toBe("SPAN");
-    });
-
     it("toggles on Enter key", async () => {
       const wrapper = mount(SpoilerView, {
         props: createMockProps({ collapsed: true }, updateAttributesMock),
@@ -254,25 +199,7 @@ describe("SpoilerView", () => {
       await wrapper.find(".spoiler-head").trigger("keydown.space");
       expect(updateAttributesMock).toHaveBeenCalledWith({ collapsed: false });
     });
-
-    it('toggle has role="button"', () => {
-      const wrapper = mount(SpoilerView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".spoiler-head").attributes("role")).toBe("button");
-    });
-
-    it('toggle has tabindex="0"', () => {
-      const wrapper = mount(SpoilerView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".spoiler-head").attributes("tabindex")).toBe("0");
-    });
   });
-
-  // ============================================================================
-  // ARIA ATTRIBUTES
-  // ============================================================================
 
   describe("ARIA Attributes", () => {
     it('toggle has aria-expanded="false" when collapsed', () => {
@@ -299,15 +226,6 @@ describe("SpoilerView", () => {
       });
       expect(wrapper.find(".spoiler").attributes("role")).toBe("region");
     });
-
-    it("toggle is not editable", () => {
-      const wrapper = mount(SpoilerView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".spoiler-head").attributes("contenteditable")).toBe(
-        "false",
-      );
-    });
   });
 });
 
@@ -322,32 +240,7 @@ describe("NsfwView", () => {
     vi.clearAllMocks();
   });
 
-  // ============================================================================
-  // BASIC RENDERING
-  // ============================================================================
-
   describe("Basic Rendering", () => {
-    it("renders without errors", () => {
-      const wrapper = mount(NsfwView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.exists()).toBe(true);
-    });
-
-    it("renders nsfw-wrapper container", () => {
-      const wrapper = mount(NsfwView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".nsfw-wrapper").exists()).toBe(true);
-    });
-
-    it("renders nsfw-head toggle", () => {
-      const wrapper = mount(NsfwView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".nsfw-head").exists()).toBe(true);
-    });
-
     it('shows "Показать шокирующий контент" when collapsed', () => {
       const wrapper = mount(NsfwView, {
         props: createMockProps({ collapsed: true }, updateAttributesMock),
@@ -366,10 +259,6 @@ describe("NsfwView", () => {
       );
     });
   });
-
-  // ============================================================================
-  // COLLAPSE/EXPAND
-  // ============================================================================
 
   describe("Collapse/Expand", () => {
     it("toggles collapsed state on click", async () => {
@@ -399,18 +288,7 @@ describe("NsfwView", () => {
     });
   });
 
-  // ============================================================================
-  // KEYBOARD ACCESSIBILITY
-  // ============================================================================
-
   describe("Keyboard Accessibility", () => {
-    it("toggle is a span element (styled as link)", () => {
-      const wrapper = mount(NsfwView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".nsfw-head").element.tagName).toBe("SPAN");
-    });
-
     it("toggles on Enter key", async () => {
       const wrapper = mount(NsfwView, {
         props: createMockProps({ collapsed: true }, updateAttributesMock),
@@ -428,40 +306,7 @@ describe("NsfwView", () => {
       await wrapper.find(".nsfw-head").trigger("keydown.space");
       expect(updateAttributesMock).toHaveBeenCalledWith({ collapsed: false });
     });
-
-    it('toggle has role="button"', () => {
-      const wrapper = mount(NsfwView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".nsfw-head").attributes("role")).toBe("button");
-    });
-
-    it('toggle has tabindex="0"', () => {
-      const wrapper = mount(NsfwView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".nsfw-head").attributes("tabindex")).toBe("0");
-    });
   });
-
-  // ============================================================================
-  // ARIA ATTRIBUTES
-  // ============================================================================
-
-  describe("ARIA Attributes", () => {
-    it("toggle is not editable", () => {
-      const wrapper = mount(NsfwView, {
-        props: createMockProps({}, updateAttributesMock),
-      });
-      expect(wrapper.find(".nsfw-head").attributes("contenteditable")).toBe(
-        "false",
-      );
-    });
-  });
-
-  // ============================================================================
-  // 18+ OVERLAY
-  // ============================================================================
 
   describe("18+ Overlay", () => {
     it("shows overlay when expanded but not confirmed", () => {
@@ -488,5 +333,19 @@ describe("NsfwView", () => {
       });
       expect(wrapper.find(".nsfw-warning").text()).toContain("18 лет");
     });
+  });
+});
+
+describe.each([
+  { view: SpoilerView, root: ".spoiler-wrapper", head: ".spoiler-head" },
+  { view: NsfwView, root: ".nsfw-wrapper", head: ".nsfw-head" },
+])("the head of $root", ({ view, root, head }) => {
+  it("is a focusable span button the editor does not edit", () => {
+    const wrapper = mount(view, { props: createMockProps() });
+    const toggle = wrapper.find(`${root} ${head}`);
+    expect(toggle.element.tagName).toBe("SPAN");
+    expect(toggle.attributes("role")).toBe("button");
+    expect(toggle.attributes("tabindex")).toBe("0");
+    expect(toggle.attributes("contenteditable")).toBe("false");
   });
 });

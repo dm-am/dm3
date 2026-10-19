@@ -1,8 +1,6 @@
 using System;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
-using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Xunit;
 
@@ -13,24 +11,13 @@ namespace DM.Infrastructure.Core.Tests;
 /// must never close.
 /// </summary>
 /// <remarks>
-/// The rule has a security half and a formatting half, and the security half is
-/// why the file exists. A closing tag whose name belongs to some ancestor used
-/// to unwind the whole stack to the root, so everything written after it left
-/// the block it was written inside - including a [private] block, whose
-/// remainder was then printed to the room while the visibility filter dutifully
-/// removed the part before the stray tag. Nothing else caught it: the balance
-/// check at save time counts [private] tags and finds one open and one close,
-/// the normaliser rewrites spellings rather than structure, and the depth guard
-/// measures depth.
-///
-/// The input is not adversarial. Opening a formatting tag before a block and
-/// closing it inside is the most ordinary nesting mistake there is.
+/// The security half: a stray closing tag must not move the rest of a [private] block out of it, which
+/// neither the balance check, the normaliser nor the depth guard would catch.
 /// </remarks>
 public class BbMismatchedClosingTagShould
 {
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 
-    private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid Stranger = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
     [Theory]
@@ -42,7 +29,7 @@ public class BbMismatchedClosingTagShould
     // Same, through a tag the reader never sees the inside of either way.
     [InlineData("[private=\"Вася\"]секрет[/quote]хвост[/private]")]
     [InlineData("[i]наклонно [private=\"Вася\"]секрет[/i] и еще[/private]")]
-    public void KeepPrivateTextInside_WhenClosingTagDoesNotMatch(string input)
+    public void KeepPrivateTextInsideWhenClosingTagDoesNotMatch(string input)
     {
         var html = RenderForStranger(input);
 
@@ -52,9 +39,9 @@ public class BbMismatchedClosingTagShould
     }
 
     [Fact]
-    public void KeepPrivateTextOutOfPlainText_WhenClosingTagDoesNotMatch()
+    public void KeepPrivateTextOutOfPlainTextWhenClosingTagDoesNotMatch()
     {
-        var parser = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var parser = _parserProvider.GetForSurface(BbSurface.GamePost);
 
         var text = parser.RenderText(
             "[private=\"Вася\"]секрет[/b]хвост[/private]",
@@ -72,14 +59,13 @@ public class BbMismatchedClosingTagShould
     [Fact]
     public void CloseOnlyUpToTheNearestMatchingAncestor()
     {
-        var parser = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment);
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
 
         var html = parser.RenderHtml(
             "[b]жирно [i]наклонно [spoiler]скрыто[/i] дальше[/b] конец",
             new RenderContext { Audience = RenderAudience.Display, Surface = BbSurface.Comment });
 
-        // "дальше" is written after [/i] and before [/b], so it is bold and no
-        // longer italic. Unwound to the root it used to be neither.
+        // "дальше" is written after [/i] and before [/b], so it is bold and no longer italic.
         html.Should().Contain("дальше");
         html.Should().MatchRegex("<strong>.*дальше.*</strong>");
         html.Should().NotMatchRegex("<em>[^<]*дальше");
@@ -90,9 +76,9 @@ public class BbMismatchedClosingTagShould
     /// particular does not end a block it stands inside.
     /// </summary>
     [Fact]
-    public void CloseNothing_WhenNoAncestorCarriesThatName()
+    public void CloseNothingWhenNoAncestorCarriesThatName()
     {
-        var parser = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment);
+        var parser = _parserProvider.GetForSurface(BbSurface.Comment);
 
         var html = parser.RenderHtml(
             "[b]жирно [/i] дальше[/b] конец",
@@ -104,19 +90,13 @@ public class BbMismatchedClosingTagShould
 
     private string RenderForStranger(string input)
     {
-        var parser = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var parser = _parserProvider.GetForSurface(BbSurface.GamePost);
         return parser.RenderHtml(input, new RenderContext
         {
             Audience = RenderAudience.Display,
             Surface = BbSurface.GamePost,
-            Viewer = new TestSubject
-            {
-                UserId = Stranger,
-                Role = UserRole.RegularUser,
-                IsAuthenticated = true,
-                AccessPolicy = AccessPolicy.NotSpecified
-            },
-            PostAuthorUserId = AuthorId
+            Viewer = BbVisibilityRender.Viewer(UserRole.RegularUser, Stranger),
+            PostAuthorUserId = BbVisibilityRender.AuthorId
         });
     }
 

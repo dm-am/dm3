@@ -15,71 +15,49 @@ namespace DM.Domain.Messaging.Tests.Features.Likes;
 
 public class MessageLikeServiceShould : UnitTestBase
 {
-    private readonly IMessageService _messageService;
-    private readonly IIntentionManager _intentionManager;
-    private readonly ILikeOperations _likeOperations;
-    private readonly MessageLikeService _service;
+    private readonly IMessageService messageService;
+    private readonly IIntentionManager intentionManager;
+    private readonly ILikeOperations likeOperations;
+    private readonly MessageLikeService service;
 
     public MessageLikeServiceShould()
     {
-        _messageService = Mock<IMessageService>();
-        _intentionManager = Mock<IIntentionManager>();
+        messageService = Mock<IMessageService>();
+        intentionManager = Mock<IIntentionManager>();
 
-        _likeOperations = Mock<ILikeOperations>();
-        _likeOperations.LikeAsync(Arg.Any<Message>(), Arg.Any<EventType>()).Returns(new GeneralUser());
-        _likeOperations.UnlikeAsync(Arg.Any<Message>()).Returns(Task.CompletedTask);
+        likeOperations = Mock<ILikeOperations>();
+        likeOperations.LikeAsync(Arg.Any<Message>(), Arg.Any<EventType>()).Returns(new GeneralUser());
+        likeOperations.UnlikeAsync(Arg.Any<Message>()).Returns(Task.CompletedTask);
 
-        _service = new MessageLikeService(
-            _messageService,
-            _intentionManager,
-            _likeOperations);
+        service = new MessageLikeService(
+            messageService,
+            intentionManager,
+            likeOperations);
     }
 
     [Fact]
-    public async Task AuthorizeLikeAction()
+    public async Task LikeAMessageTheCallerMayLike()
     {
         var messageId = Guid.NewGuid();
         var message = new Message { Id = messageId };
-        _messageService.GetAsync(messageId, default).Returns(message);
+        messageService.GetAsync(messageId, default).Returns(message);
 
-        await _service.LikeMessageAsync(messageId);
+        await service.LikeMessageAsync(messageId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(MessageIntention.Like, message);
+        intentionManager.Received(1).ThrowIfForbidden(MessageIntention.Like, message);
+        await likeOperations.Received(1).LikeAsync(message, EventType.LikedMessage);
     }
 
     [Fact]
-    public async Task CallLikeOperationsWithCorrectEventType()
+    public async Task UnlikeAMessageTheCallerMayLike()
     {
         var messageId = Guid.NewGuid();
         var message = new Message { Id = messageId };
-        _messageService.GetAsync(messageId, default).Returns(message);
+        messageService.GetAsync(messageId, default).Returns(message);
 
-        await _service.LikeMessageAsync(messageId);
+        await service.UnlikeMessageAsync(messageId);
 
-        await _likeOperations.Received(1).LikeAsync(message, EventType.LikedMessage);
-    }
-
-    [Fact]
-    public async Task AuthorizeUnlikeAction()
-    {
-        var messageId = Guid.NewGuid();
-        var message = new Message { Id = messageId };
-        _messageService.GetAsync(messageId, default).Returns(message);
-
-        await _service.UnlikeMessageAsync(messageId);
-
-        _intentionManager.Received(1).ThrowIfForbidden(MessageIntention.Like, message);
-    }
-
-    [Fact]
-    public async Task CallUnlikeOperations()
-    {
-        var messageId = Guid.NewGuid();
-        var message = new Message { Id = messageId };
-        _messageService.GetAsync(messageId, default).Returns(message);
-
-        await _service.UnlikeMessageAsync(messageId);
-
-        await _likeOperations.Received(1).UnlikeAsync(message);
+        intentionManager.Received(1).ThrowIfForbidden(MessageIntention.Like, message);
+        await likeOperations.Received(1).UnlikeAsync(message);
     }
 }

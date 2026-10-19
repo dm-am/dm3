@@ -3,11 +3,8 @@ using System;
 namespace DM.Infrastructure.Core.Parsing;
 
 /// <summary>
-/// HTTP contract for selecting the rendering audience. Clients pass
-/// the desired intent in the <see cref="HeaderName"/> header; the
-/// server resolves it to a <see cref="RenderAudience"/> and renders
-/// BbText fields accordingly. Unknown header values fall back to
-/// <see cref="Default"/> (fail-safe to Display).
+/// The header a client names its <see cref="RenderAudience"/> in. An unknown value
+/// falls back to <see cref="Default"/>.
 /// </summary>
 public static class BbAudienceHeader
 {
@@ -24,9 +21,9 @@ public static class BbAudienceHeader
         return raw.Trim().ToLowerInvariant() switch
         {
             "display" => RenderAudience.Display,
-            "author_edit" or "authoredit" => RenderAudience.AuthorEdit,
-            "plain_text" or "plaintext" or "text" => RenderAudience.PlainText,
-            "embed_safe" or "embedsafe" or "safehtml" => RenderAudience.EmbedSafe,
+            "author_edit" => RenderAudience.AuthorEdit,
+            "plain_text" => RenderAudience.PlainText,
+            "embed_safe" => RenderAudience.EmbedSafe,
             _ => Default
         };
     }

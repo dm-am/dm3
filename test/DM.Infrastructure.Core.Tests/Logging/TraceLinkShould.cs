@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
@@ -24,17 +23,8 @@ namespace DM.Infrastructure.Core.Tests.Logging;
 /// looks for.
 /// </summary>
 /// <remarks>
-/// It did not, and nothing said so. An enricher put the ids on as properties
-/// called TraceId and SpanId; both names are reserved by the sink, which renamed
-/// them to _TraceId and _SpanId on the way out. The derived field of the log
-/// datasource matches a quote immediately before the name, so it matched nothing:
-/// every line carried the ids, and not one of them was ever a link into a trace.
-///
-/// Which is why this test speaks to a real sink over a real socket and reads the
-/// bytes that would have gone to the store. The three parts that have to agree -
-/// what the sink writes, what it calls it, and what the datasource looks for -
-/// live in three files, two languages and one package, and no compiler sees any
-/// pair of them.
+/// The sink renames reserved properties, and the datasource matches a quote before the name. A real sink
+/// over a real socket: the three parts live in three files, two languages and one package.
 /// </remarks>
 [Collection(StaticLoggerCollection.Name)]
 public class TraceLinkShould
@@ -71,10 +61,7 @@ public class TraceLinkShould
 
         body.Should().NotBeNullOrEmpty("the sink has to have pushed the line somewhere");
 
-        // The line, not the envelope it travelled in. The dashboard applies the
-        // expression to what it shows, and what it shows is one value out of the
-        // stream - reading the envelope instead would test the escaping of the
-        // push protocol.
+        // The line, not the envelope: the dashboard applies the expression to one value of the stream.
         var line = LineOf(body);
 
         var found = Regex.Match(line, matcher);

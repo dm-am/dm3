@@ -5,7 +5,7 @@
 /**
  * The panel an insertion of the markup editor opens under its button: what it
  * asks, what it refuses and says so in itself, and how it lets go. The editor's
- * side, the button and what lands in the text, is in BBCodeEditor.spec.ts.
+ * side, the button and what lands in the text, is in lib/insertions.spec.ts.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
 import { mount, enableAutoUnmount } from "@vue/test-utils";
@@ -13,9 +13,7 @@ import { defineComponent, h, nextTick } from "vue";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import {
-  componentCss,
   outranks,
-  ruleMap,
   scopedComponentCss,
   specificity,
   styleRules,
@@ -227,36 +225,24 @@ describe("InsertPanel", () => {
       expect(wrapper.text()).not.toContain("*");
     });
 
-    it("puts the caret in the first empty field", async () => {
-      const { wrapper } = await mountPanel([
-        { name: "url", label: "URL", type: "url" },
-        { name: "text", label: "Текст", type: "text" },
-      ]);
-      await nextTick();
-      expect(document.activeElement).toBe(field(wrapper, "url").element);
-    });
-
     it("gives each field an id of its own panel", async () => {
-      const one = (await mountPanel()).wrapper;
-      const two = (await mountPanel()).wrapper;
-      expect(field(one, "url").attributes("id")).not.toBe(
-        field(two, "url").attributes("id"),
+      const anchor = document.createElement("button");
+      document.body.appendChild(anchor);
+      const wrapper = mount(
+        {
+          components: { InsertPanel },
+          setup: () => ({ fields: address, anchor }),
+          template: `<div>
+            <InsertPanel label="Вставить ссылку" :fields="fields" :anchor="anchor" />
+            <InsertPanel label="Вставить ссылку" :fields="fields" :anchor="anchor" />
+          </div>`,
+        },
+        { attachTo: document.body },
       );
-    });
+      await nextTick();
 
-    it("sets its captions as a field on a page has them", () => {
-      // The captions were in the weight of the text, and the owner found
-      // them weaker than a form's (28 September 2026). Bold, at the size of a
-      // page's field, with "необязательно" beside it in the regular weight.
-      const panel = ruleMap(componentCss(join(HERE, "InsertPanel.vue")));
-      const page = ruleMap(componentCss(join(HERE, "../Form/FormField.vue")));
-      expect(panel.get(".insert-field-label")?.["font-weight"]).toBe("700");
-      expect(panel.get(".insert-field-optional")?.["font-weight"]).toBe("400");
-      for (const property of ["font-weight", "font-size"]) {
-        expect(panel.get(".insert-field-label")?.[property], property).toBe(
-          page.get(".form-field-label")?.[property],
-        );
-      }
+      const [one, two] = wrapper.findAll(`input[name="url"]`);
+      expect(one.attributes("id")).not.toBe(two.attributes("id"));
     });
 
     it("puts the main action first in the filled button, and Отмена after it", async () => {
@@ -323,7 +309,7 @@ describe("InsertPanel", () => {
       await field(wrapper, "url").setValue("javascript:alert(1)");
       await pressButton(wrapper, "Вставить");
       expect(refusals(wrapper)).toEqual([
-        "Разрешены только адреса http и https",
+        "Адрес начинается с http:// или https://",
       ]);
       expect(wrapper.emitted("submit")).toBeFalsy();
       expect(wrapper.emitted("close")).toBeFalsy();
@@ -333,7 +319,9 @@ describe("InsertPanel", () => {
       const { wrapper } = await mountPanel();
       await field(wrapper, "url").setValue("not-a-url");
       await field(wrapper, "url").trigger("blur");
-      expect(refusals(wrapper)).toEqual(["Введите корректный URL"]);
+      expect(refusals(wrapper)).toEqual([
+        "Адрес начинается с http:// или https://",
+      ]);
       await field(wrapper, "url").setValue("https://example.com");
       await field(wrapper, "url").trigger("blur");
       expect(refusals(wrapper)).toEqual([]);
@@ -354,7 +342,7 @@ describe("InsertPanel", () => {
         "ftp://files.example.com/file.txt",
       ]) {
         expect(await refusal(refused), refused).toBe(
-          "Разрешены только адреса http и https",
+          "Адрес начинается с http:// или https://",
         );
       }
       for (const accepted of ["http://example.com", "https://example.com"]) {
@@ -387,7 +375,7 @@ describe("InsertPanel", () => {
       await field(wrapper, "url").setValue("javascript:alert(1)");
       await pressButton(wrapper, "Вставить");
       expect(refusals(wrapper)).toEqual([
-        "Разрешены только адреса http и https",
+        "Адрес начинается с http:// или https://",
       ]);
     });
   });

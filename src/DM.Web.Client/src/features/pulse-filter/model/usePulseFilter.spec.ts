@@ -2,12 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The pulse filter read through the address: what an address means, what each
- * action writes into it, and that an address the filter wrote reads back as
- * itself. Unlike the filters of the catalogue it keeps the address as it is for
- * an action that changes nothing, page number included.
- */
+// Unlike the catalogue filters, an action that changes nothing keeps the address, page included.
 import { describe, it, expect, afterEach } from "vitest";
 import {
   filterOnListPage,
@@ -112,8 +107,7 @@ describe("usePulseFilter: what an address means", () => {
       ...DEFAULT_STATE,
       maxRating: 4,
       authorUsernames: ["anna", "boris"],
-      // The day check reads the shape of a date and what Date makes of it,
-      // and Date rolls the 30th of February over into March.
+      // Date rolls the 30th of February over into March.
       createdFrom: "2026-02-30",
     });
   });
@@ -205,11 +199,7 @@ describe("usePulseFilter: what an action writes", () => {
 });
 
 describe("usePulseFilter: an address written reads back as itself", () => {
-  /**
-   * The address the filter writes for what it read off this one. A search
-   * set to the one it has is no change here, so the search is moved away and
-   * back in one go.
-   */
+  // A search set to the one it has is no change, so it is moved away and back in one go.
   async function rewritten(query: Record<string, string>) {
     const { filter, settled, wrapper } = await on(query);
     const search = filter.filterState.value.search;

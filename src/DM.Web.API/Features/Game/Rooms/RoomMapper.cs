@@ -2,10 +2,10 @@ using System;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Game.Characters;
 using Riok.Mapperly.Abstractions;
-using DomainRoom = DM.Domain.Game.Features.Games.Room;
-using DomainRoomSettings = DM.Domain.Game.Features.Games.RoomSettings;
-using DomainRoomAccess = DM.Domain.Game.Features.Games.RoomAccess;
-using DomainPostPendency = DM.Domain.Game.Features.Games.PostPendency;
+using DomainRoom = DM.Domain.Game.Features.Rooms.Room;
+using DomainRoomSettings = DM.Domain.Game.Features.Rooms.RoomSettings;
+using DomainRoomAccess = DM.Domain.Game.Features.RoomAccesses.RoomAccess;
+using DomainPostPendency = DM.Domain.Game.Features.PostPendencies.PostPendency;
 using DomainCreateRoom = DM.Domain.Game.Features.Rooms.CreateRoom;
 using DomainUpdateRoom = DM.Domain.Game.Features.Rooms.UpdateRoom;
 using DomainCreateRoomAccess = DM.Domain.Game.Features.RoomAccesses.CreateRoomAccess;
@@ -19,7 +19,7 @@ namespace DM.Web.API.Features.Game.Rooms;
 /// and its post pendencies.
 /// </summary>
 [Mapper]
-internal partial class RoomMapper
+public partial class RoomMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -34,14 +34,9 @@ internal partial class RoomMapper
     }
 
     /// <summary>
-    /// Domain room to its response DTO. Access answers from AccessType -
-    /// it used to be ignored, which left every room in game-details responses
-    /// with `access = null` and made downstream tooltip logic default every
-    /// room to "open" and leak the wrong character list.
+    /// Domain room to its response DTO
     /// </summary>
-    // Rooms are returned nested under their game; the domain Room carries
-    // only GameId (no GameRef nav), so this back-reference stays null
-    // instead of being re-hydrated per room.
+    // Rooms come nested under their game, and the domain room carries only GameId.
     [MapperIgnoreTarget(nameof(Room.Game))]
     [MapProperty(nameof(DomainRoom.AccessType), nameof(Room.Access))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
@@ -51,10 +46,7 @@ internal partial class RoomMapper
     private partial RoomSettings ToRoomSettings(DomainRoomSettings settings);
 
     /// <summary>
-    /// Domain access grant to its response DTO. The policy used to be
-    /// ignored, so every access of every response answered null: the screen
-    /// that grants access could not show which grant it had just made, and
-    /// the same value now decides who may write.
+    /// Domain access grant to its response DTO
     /// </summary>
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public partial RoomAccess ToRoomAccess(DomainRoomAccess access);
@@ -73,15 +65,11 @@ internal partial class RoomMapper
 
     /// <summary>
     /// Update request to the write model. RoomId comes from the route, the
-    /// service sets it; ChatId is server-managed (linked chat room) and the
-    /// API Room DTO does not expose it, so an update never reassigns it.
-    /// The settings toggles flatten from the nested Settings block and the
-    /// repository applies each only when its nullable is set - a sparse
-    /// PATCH with Settings omitted leaves them null (== unchanged).
+    /// service sets it; ChatId is the server's. An omitted Settings block leaves
+    /// the toggles null, unchanged.
     /// </summary>
     [MapperIgnoreTarget(nameof(DomainUpdateRoom.RoomId))]
     [MapperIgnoreTarget(nameof(DomainUpdateRoom.ChatId))]
-    [MapperIgnoreTarget(nameof(DomainUpdateRoom.IsRemoved))]
     [MapProperty(nameof(UpdateRoomRequest.Access), nameof(DomainUpdateRoom.AccessType))]
     [MapProperty(
         [nameof(UpdateRoomRequest.Settings), nameof(RoomSettings.ViewPrivateText)],
@@ -104,7 +92,7 @@ internal partial class RoomMapper
     /// nested object, of which only the identifying member is read. RoomId
     /// comes from the route, the service sets it.
     /// </summary>
-    public DomainCreateRoomAccess ToCreateRoomAccess(RoomAccess access) => new()
+    public static DomainCreateRoomAccess ToCreateRoomAccess(RoomAccess access) => new()
     {
         CharacterId = access.Character?.Id,
         ReaderUsername = access.User?.Username!,
@@ -122,7 +110,7 @@ internal partial class RoomMapper
     /// <summary>
     /// Pendency request to the write model, the room taken from the route.
     /// </summary>
-    public DomainCreatePostPendency ToCreatePostPendency(Guid roomId, CreatePostPendencyRequest request) => new()
+    public static DomainCreatePostPendency ToCreatePostPendency(Guid roomId, CreatePostPendencyRequest request) => new()
     {
         RoomId = roomId,
         CharacterId = request.CharacterId

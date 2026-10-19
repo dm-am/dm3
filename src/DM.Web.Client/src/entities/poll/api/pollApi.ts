@@ -4,13 +4,14 @@ import type {
   ApiResult,
 } from "@/shared/api/models/common";
 import type {
+  CreatePollRequest,
   Poll,
   PollId,
   PollOptionId,
   PollsSearchParams,
+  UpdatePollRequest,
 } from "../model/types";
 import { Api } from "@/shared/api";
-import type { Patch, Post } from "@/shared/api/models";
 
 export default new (class PollApi {
   public getPolls(params: PollsSearchParams) {
@@ -28,11 +29,9 @@ export default new (class PollApi {
     if (params.sortBy) queryParams.sortBy = params.sortBy;
     if (params.sortOrder) queryParams.sortOrder = params.sortOrder;
 
-    // Page size (defaults to 20 if not specified)
     const pageSize = params.size || 20;
     queryParams.take = pageSize;
 
-    // Convert page number to skip (number is 1-indexed page)
     if (params.number && params.number > 1) {
       queryParams.skip = (params.number - 1) * pageSize;
     }
@@ -40,7 +39,6 @@ export default new (class PollApi {
     return Api.get<ListEnvelope<Poll>>("polls", queryParams);
   }
 
-  /** Fetch active polls for sidebar (max 3) */
   public getActivePolls() {
     return Api.get<ListEnvelope<Poll>>("polls", {
       status: "Active",
@@ -62,11 +60,11 @@ export default new (class PollApi {
     >;
   }
 
-  public postPoll(poll: Post<Poll>) {
+  public postPoll(poll: CreatePollRequest) {
     return Api.post<Envelope<Poll>>("polls", poll);
   }
 
-  public patchPoll(pollId: PollId, poll: Patch<Poll>) {
+  public patchPoll(pollId: PollId, poll: UpdatePollRequest) {
     return Api.patch<Envelope<Poll>>(`polls/${pollId}`, poll);
   }
 })();

@@ -3,86 +3,65 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Blogs;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Blog.Users;
 
-/// <inheritdoc />
-internal class BlogUserApiService : IBlogUserApiService
+public class BlogUserApiService
 {
     private readonly IBlogService _blogService;
+    private readonly IBlogUserService _blogUserService;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public BlogUserApiService(
-        IBlogService blogService)
+        IBlogService blogService,
+        IBlogUserService blogUserService,
+        IDateTimeProvider dateTimeProvider)
     {
         _blogService = blogService;
+        _blogUserService = blogUserService;
+        _dateTimeProvider = dateTimeProvider;
     }
 
-    #region Users
-
-    /// <inheritdoc />
     public async Task<IEnumerable<BlogUser>> GetUsers(Guid blogId, BlogRole? role = null)
     {
-        var users = new List<BlogUser>();
-
-        // Get author from blog. A removed owner is nested as nobody (the blog
-        // read keeps the blogs of removed accounts), and a roster names nobody:
-        // the row is left out rather than listed without a person in it.
+        // A removed owner is nested as nobody, and a roster lists no row without a person.
         var blog = await _blogService.GetAsync(blogId);
-        BlogUser? author = blog.Author is null
+        var author = blog.Author is null
             ? null
             : new BlogUser
             {
                 User = UserRefMappers.ToUserRef(blog.Author),
-                Role = nameof(BlogRole.Author),
+                Role = BlogRole.Author,
                 JoinedUtc = blog.CreatedUtc
             };
 
-        // Get mentor if assigned
-        BlogUser? mentor = null;
-        if (blog.Mentor != null)
-        {
-            mentor = new BlogUser
+        var mentor = blog.Mentor is null
+            ? null
+            : new BlogUser
             {
                 User = UserRefMappers.ToUserRef(blog.Mentor),
-                Role = nameof(BlogRole.Mentor),
+                Role = BlogRole.Mentor,
                 JoinedUtc = null // Mentor assignment date not tracked in model
             };
-        }
 
-        // Get assistants
-        var assistants = await _blogService.GetAssistants(blogId);
-        var assistantDtos = assistants.Select(a => new BlogUser
-        {
-            User = UserRefMappers.ToUserRef(a.User),
-            Role = nameof(BlogRole.Assistant),
-            JoinedUtc = a.JoinedUtc
-        }).ToList();
+        var assistants = await GetAssistants(blogId);
+        var readers = await GetReaders(blogId);
 
-        // Get readers
-        var readers = await _blogService.GetReaders(blogId);
-        var readerDtos = readers.Select(r => new BlogUser
-        {
-            User = UserRefMappers.ToUserRef(r),
-            Role = nameof(BlogRole.Reader),
-            JoinedUtc = null // Subscription date not included in GeneralUser
-        }).ToList();
-
-        // Apply role filter or return all
+        var users = new List<BlogUser>();
         if (role == null)
         {
             if (author != null) users.Add(author);
             if (mentor != null) users.Add(mentor);
-            users.AddRange(assistantDtos);
-            users.AddRange(readerDtos);
+            users.AddRange(assistants);
+            users.AddRange(readers);
         }
         else
         {
-            // No default arm that answers with everybody: a value outside the
-            // vocabulary is refused by model binding before this runs, and a
-            // filter that silently widens to the whole roster is read as the
-            // filtered answer.
+            // No default arm: model binding refuses a value outside the vocabulary,
+            // and a filter that silently widens reads as the filtered answer.
             switch (role.Value)
             {
                 case BlogRole.Author:
@@ -92,10 +71,10 @@ internal class BlogUserApiService : IBlogUserApiService
                     if (mentor != null) users.Add(mentor);
                     break;
                 case BlogRole.Assistant:
-                    users.AddRange(assistantDtos);
+                    users.AddRange(assistants);
                     break;
                 case BlogRole.Reader:
-                    users.AddRange(readerDtos);
+                    users.AddRange(readers);
                     break;
             }
         }
@@ -103,76 +82,41 @@ internal class BlogUserApiService : IBlogUserApiService
         return users;
     }
 
-    /// <inheritdoc />
-    public async Task RemoveUser(Guid blogId, Guid userId)
-    {
-        // Only assistants can be removed - readers can only unsubscribe themselves.
-        // The blacklist does not remove one either: it closes writing, not reading.
-        var assistants = await _blogService.GetAssistants(blogId);
-        var assistant = assistants.FirstOrDefault(a => a.User.UserId == userId);
-        if (assistant != null)
-        {
-            await _blogService.RemoveAssistant(blogId, assistant.User.Username);
-        }
-    }
-
-    #endregion
-
-    #region Readers
-
-    /// <inheritdoc />
     public async Task<IEnumerable<BlogUser>> GetReaders(Guid blogId)
     {
-        var readers = await _blogService.GetReaders(blogId);
+        var readers = await _blogUserService.GetReaders(blogId);
         return readers.Select(r => new BlogUser
         {
             User = UserRefMappers.ToUserRef(r),
-            Role = nameof(BlogRole.Reader),
+            Role = BlogRole.Reader,
             JoinedUtc = null // Subscription date not included in GeneralUser
         });
     }
 
-    /// <inheritdoc />
     public async Task<BlogUser> Subscribe(Guid blogId)
     {
-        var user = await _blogService.Subscribe(blogId);
+        var user = await _blogUserService.Subscribe(blogId);
         return new BlogUser
         {
             User = UserRefMappers.ToUserRef(user),
-            Role = nameof(BlogRole.Reader),
-            JoinedUtc = DateTimeOffset.UtcNow
+            Role = BlogRole.Reader,
+            JoinedUtc = _dateTimeProvider.Now
         };
     }
 
-    /// <inheritdoc />
-    public async Task Unsubscribe(Guid blogId)
-    {
-        await _blogService.Unsubscribe(blogId);
-    }
+    public Task Unsubscribe(Guid blogId) => _blogUserService.Unsubscribe(blogId);
 
-    // Note: RemoveReader is not provided - readers can only unsubscribe themselves
-
-    #endregion
-
-    #region Assistants
-
-    /// <inheritdoc />
     public async Task<IEnumerable<BlogUser>> GetAssistants(Guid blogId)
     {
-        var assistants = await _blogService.GetAssistants(blogId);
+        var assistants = await _blogUserService.GetAssistants(blogId);
         return assistants.Select(a => new BlogUser
         {
             User = UserRefMappers.ToUserRef(a.User),
-            Role = nameof(BlogRole.Assistant),
+            Role = BlogRole.Assistant,
             JoinedUtc = a.JoinedUtc
         });
     }
 
-    /// <inheritdoc />
-    public async Task RemoveAssistantByUsername(Guid blogId, string username)
-    {
-        await _blogService.RemoveAssistant(blogId, username);
-    }
-
-    #endregion
+    public Task RemoveAssistantByUsername(Guid blogId, string username) =>
+        _blogUserService.RemoveAssistant(blogId, username);
 }

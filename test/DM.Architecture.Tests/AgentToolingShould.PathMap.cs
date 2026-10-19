@@ -1,12 +1,12 @@
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -16,21 +16,8 @@ namespace DM.Architecture.Tests;
 /// machine that pushes.
 /// </summary>
 /// <remarks>
-/// A push used to run every gate whatever it touched, and a change to one
-/// document paid for nineteen thousand tests and an end-to-end tier. The map in
-/// scripts/ci-paths.json sorts the changed paths into groups and names the jobs
-/// each group needs; scripts/ci-paths.mjs is the one reader of it, and the
-/// changes job of the workflow, the pre-push hook and scripts/gates.sh all call
-/// that reader. Two copies of the map would drift in the worst direction there
-/// is: the hook skipping what CI runs is a push that finds out, and CI skipping
-/// what the hook ran is a check nothing enforces.
-///
-/// A skipped job is the cheap outcome only while it is a decision. The rules
-/// below hold the parts where a skip would be silent instead: a job of the
-/// workflow the map does not know, a job name the hook misspells (its gates
-/// would never run again), a document or a client file a server test reads
-/// sorted where the build job does not run, a file the deployment checks parse
-/// sorted where they do not run, and the decisions themselves, which a dry run pins down case by case.
+/// scripts/ci-paths.mjs is the one reader of scripts/ci-paths.json, for CI, the hook and the
+/// gates script alike. The rules below hold the places where a skip would be silent.
 /// </remarks>
 public partial class AgentToolingShould
 {
@@ -41,10 +28,7 @@ public partial class AgentToolingShould
     /// <summary>
     /// Jobs of the .NET workflow the map does not gate, with the reason each.
     /// </summary>
-    /// <remarks>
-    /// Every other job is the map's to call. A row naming a job that no longer
-    /// exists fails the rule, the way a stale row of the registers above does.
-    /// </remarks>
+    /// <remarks>Every other job is the map's to call; a row naming no job fails.</remarks>
     private static readonly Dictionary<string, string> JobsOutsideTheMap = new(StringComparer.Ordinal)
     {
         ["changes"] = "is where the map is read; every gated job waits for it",
@@ -60,57 +44,29 @@ public partial class AgentToolingShould
     private static string[] MapJobs()
     {
         using var map = JsonDocument.Parse(
-            File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", "ci-paths.json")));
+            File.ReadAllText(Path.Combine(RepositoryLayout.Root, "scripts", "ci-paths.json")));
 
         return map.RootElement.GetProperty("jobs").EnumerateObject().Select(job => job.Name).ToArray();
     }
 
     /// <summary>The jobs of one workflow, each with its lines, comments out.</summary>
-    private static Dictionary<string, string> JobBodies(string workflow)
-    {
-        var jobs = new Dictionary<string, string>(StringComparer.Ordinal);
-        var body = new StringBuilder();
-        string? job = null;
-        var inside = false;
-
-        foreach (var line in File.ReadAllLines(WorkflowPath(workflow))
-                     .Where(line => !line.TrimStart().StartsWith("#", StringComparison.Ordinal)))
-        {
-            inside |= line.StartsWith("jobs:", StringComparison.Ordinal);
-            var header = inside ? JobHeader.Match(line) : Match.Empty;
-            if (header.Success)
-            {
-                if (job != null)
-                {
-                    jobs[job] = body.ToString();
-                }
-
-                job = header.Groups[1].Value;
-                body.Clear();
-            }
-            else if (job != null)
-            {
-                body.AppendLine(line);
-            }
-        }
-
-        if (job != null)
-        {
-            jobs[job] = body.ToString();
-        }
-
-        return jobs;
-    }
+    private static Dictionary<string, string> JobBodies(string workflow) => WorkflowJobs.Read(workflow)
+        .ToDictionary(
+            job => job.Name,
+            job => string.Concat(job.Lines.Where(WorkflowJobs.IsCode).Select(line => line + Environment.NewLine)),
+            StringComparer.Ordinal);
 
     /// <summary>The code of a file: its lines, the ones that are comments out.</summary>
-    private static string ShellCode(string path, string comment = "#") => string.Join("\n", File.ReadAllLines(path)
-        .Where(line => !line.TrimStart().StartsWith(comment, StringComparison.Ordinal)));
+    private static string ShellCode(string path, string comment = "#") => string.Join("\n", ShellLines(path, comment));
+
+    private static IEnumerable<string> ShellLines(string path, string comment = "#") => File.ReadAllLines(path)
+        .Where(line => !line.TrimStart().StartsWith(comment, StringComparison.Ordinal));
 
     [Fact]
     public void ReadOneMapOfPaths()
     {
-        var hook = ShellCode(Path.Combine(RepositoryRoot, "scripts", "hooks", "pre-push"));
-        var gates = ShellCode(Path.Combine(RepositoryRoot, "scripts", "gates.sh"));
+        var hook = ShellCode(Path.Combine(RepositoryLayout.Root, "scripts", "hooks", "pre-push"));
+        var gates = ShellCode(Path.Combine(RepositoryLayout.Root, "scripts", "gates.sh"));
         var changes = JobBodies("dotnet.yml").GetValueOrDefault("changes");
 
         changes.Should().NotBeNull("dotnet.yml decides in its changes job which jobs a change needs");
@@ -128,8 +84,7 @@ public partial class AgentToolingShould
         // A second map in another syntax: a trigger filter, a filtering action,
         // or a diff read and sorted by the caller itself.
         var secondMaps = Workflows
-            .SelectMany(workflow => File.ReadAllLines(WorkflowPath(workflow))
-                .Where(line => !line.TrimStart().StartsWith("#", StringComparison.Ordinal))
+            .SelectMany(workflow => ShellLines(WorkflowPath(workflow))
                 .Where(line => Regex.IsMatch(line, @"^\s+paths(?:-ignore)?:|paths-filter"))
                 .Select(line => $"{workflow}: {line.Trim()}"))
             .Concat(new[] { ("pre-push", hook), ("gates.sh", gates) }
@@ -190,11 +145,8 @@ public partial class AgentToolingShould
     /// or was cancelled still does.
     /// </summary>
     /// <remarks>
-    /// GitHub skips a job whose need was skipped unless its condition says
-    /// otherwise, so with the implicit success() every push the map narrowed
-    /// would publish nothing, and nothing on the run page would call that a
-    /// failure. failure() alone is the opposite hole: a check cancelled by
-    /// concurrency is not a failure, and the image would go out past it.
+    /// With the implicit success() a narrowed push would publish nothing, and failure() alone
+    /// lets an image out past a cancelled check.
     /// </remarks>
     [Fact]
     public void PublishPastWhatTheMapSkippedAndNothingElse()
@@ -213,12 +165,7 @@ public partial class AgentToolingShould
     /// <summary>
     /// The job a change to the documents calls runs both suites that read them.
     /// </summary>
-    /// <remarks>
-    /// DM.Architecture.Tests holds the documents to the tree, and the client
-    /// unit specs resolve every file a comment names and parse SURFACES.md and
-    /// BBCODE_RENDERING.md as data. Without either, a rename in docs/ lands
-    /// green and reddens the next push that happens to run it.
-    /// </remarks>
+    /// <remarks>DM.Architecture.Tests and the client unit specs both read docs/.</remarks>
     [Fact]
     public void RunBothSuitesThatReadTheDocuments()
     {
@@ -234,16 +181,13 @@ public partial class AgentToolingShould
     /// <summary>
     /// Every job the hook and scripts/gates.sh ask the map about is a job of the map.
     /// </summary>
-    /// <remarks>
-    /// The map answers "false" for a name it does not have, so a misspelt job in
-    /// either script skips its gates on every push from then on, green.
-    /// </remarks>
+    /// <remarks>The map answers "false" for a name it does not have, so a misspelt job skips its gates.</remarks>
     [Fact]
     public void AskTheMapOnlyAboutItsOwnJobs()
     {
         var map = MapJobs().Append("always").ToHashSet(StringComparer.Ordinal);
-        var hook = ShellCode(Path.Combine(RepositoryRoot, "scripts", "hooks", "pre-push"));
-        var gates = ShellCode(Path.Combine(RepositoryRoot, "scripts", "gates.sh"));
+        var hook = ShellCode(Path.Combine(RepositoryLayout.Root, "scripts", "hooks", "pre-push"));
+        var gates = ShellCode(Path.Combine(RepositoryLayout.Root, "scripts", "gates.sh"));
 
         var asked = Regex.Matches(hook, @"\bwants ([a-z][a-z0-9-]*)")
             .Select(match => ("pre-push", match.Groups[1].Value))
@@ -259,54 +203,107 @@ public partial class AgentToolingShould
             .Should().BeEmpty("the map answers false for a job it does not have, and the gates behind it never run again");
     }
 
-    /// <summary>The one function both scripts ask whether the suite was asked for.</summary>
-    private const string EndToEndRequest = "e2e_requested";
+    /// <summary>The one function both scripts ask whether the full set was asked for.</summary>
+    private const string FullRequest = "full_requested";
 
-    /// <summary>A condition that holds only when the suite was asked for: the request, not negated.</summary>
-    private static readonly Regex AsksForTheSuite = new(
-        @"(?<!!\s*)\b" + EndToEndRequest + @"\b", RegexOptions.Compiled);
+    /// <summary>A condition that holds only when the full set was asked for: the request, not negated.</summary>
+    private static readonly Regex AsksForTheFullSet = new(
+        @"(?<!!\s*)\b" + FullRequest + @"\b", RegexOptions.Compiled);
+
+    /// <summary>The first line of a function written over several lines; a lone "}" closes it.</summary>
+    private static readonly Regex FunctionStart = new(@"^([a-z_]+)\(\)\s*\{$", RegexOptions.Compiled);
+
+    /// <summary>The check of the stand, which GateSyntax leaves out: no workflow runs it.</summary>
+    private static readonly Regex StandCheck = new(@"check-e2e-stand\.sh", RegexOptions.Compiled);
 
     /// <summary>
-    /// The end-to-end suite, and the check of the stand it runs against, run on
-    /// a push of a branch only when they are asked for, whatever the map says.
+    /// The gates a push of a branch runs, each as the start of its command with
+    /// the root and the quotes dropped.
+    /// </summary>
+    /// <remarks>The gates that answer in seconds or minutes and name what broke.</remarks>
+    private static readonly string[] GatesOfABranchPush =
+    [
+        "block-dangerous-git.test.js",
+        "block-new-migrations.test.js",
+        "lint-edited-file.test.js",
+        "ci-paths.mjs",
+        "npm ci --dry-run",
+        "compare-code.test.mjs",
+        "npm run test:conventions",
+        "npm run knip",
+        "npm run lint:ci",
+        "npm run type-check",
+        "dotnet format",
+        "dotnet build",
+        "dotnet test test/DM.Architecture.Tests",
+    ];
+
+    /// <summary>
+    /// A push of a branch runs the gates that answer first, and every other gate
+    /// waits until the full set is asked for, whatever the map says.
     /// </summary>
     /// <remarks>
-    /// The one job the local scripts hold back after the map has called it. A
-    /// branch reaches dev only as a pull request, and the e2e job runs the suite
-    /// there against a stack it stands up itself. Run on a push, the suite
-    /// measured the owner's stand, and the stand check holds the API of that
-    /// stand to the commit being pushed, so every push of a branch meant
-    /// rebuilding the stand under it. A push to dev or main is refused before
-    /// any gate (PrePushGateShould.RefuseAPushToABranchThatTakesOnlyMerges), so
-    /// a push that gets as far as the suite is a push of a branch, and what is
-    /// left to run the suite locally is the request: DM_GATES_FULL, the switch
-    /// that makes the map call every job, and for scripts/gates.sh the name of a
-    /// step as well.
-    ///
-    /// Read as the conditions of the if blocks a gate stands in. The branch
-    /// after else or elif is not guarded by the condition of its if, and a
-    /// negated request is the opposite of one.
+    /// A branch reaches dev only through a pull request, where CI runs every gate; the rest runs on
+    /// DM_GATES_FULL. Read from the if blocks a gate stands in, and held both ways.
     /// </remarks>
     [Theory]
     [InlineData("hooks/pre-push")]
     [InlineData("gates.sh")]
-    public void RunTheEndToEndSuiteOnlyWhenAskedFor(string script)
+    public void RunOnABranchOnlyTheGatesThatAnswerFirst(string script)
     {
-        var code = File.ReadAllLines(Path.Combine(RepositoryRoot, "scripts", script))
+        var code = ShellLines(Path.Combine(RepositoryLayout.Root, "scripts", script))
             .Select(line => line.Trim())
-            .Where(line => !line.StartsWith("#", StringComparison.Ordinal))
+            .Where(line => line.Length > 0)
             .ToList();
 
-        var request = code.FirstOrDefault(line => line.StartsWith($"{EndToEndRequest}()", StringComparison.Ordinal));
-        request.Should().NotBeNull($"scripts/{script} asks whether the suite was asked for in one place, {EndToEndRequest}");
-        request.Should().Contain("DM_GATES_FULL",
-            "the switch that asks for the full set is the one that asks for the suite");
+        var request = code.FirstOrDefault(line => line.StartsWith($"{FullRequest}()", StringComparison.Ordinal));
+        request.Should().NotBeNull($"scripts/{script} asks whether the full set was asked for in one place, {FullRequest}");
+        request.Should().Contain("DM_GATES_FULL", "the switch that asks for the full set is the one that runs it");
+
+        var gates = GatesByGuard(code).ToList();
+        var onTheBranch = gates.Where(gate => !gate.Guarded).Select(gate => gate.Command).Distinct().ToList();
+
+        gates.Should().Contain(gate => gate.Guarded && gate.Command.StartsWith("npm run test:e2e", StringComparison.Ordinal),
+            $"scripts/{script} holds the full set too, the end-to-end suite last");
+        Named(onTheBranch.Where(gate => !GatesOfABranchPush.Any(cheap => gate.StartsWith(cheap, StringComparison.Ordinal))))
+            .Should().BeEmpty(
+                $"scripts/{script} runs these on every push of a branch, and CI runs them on the pull request: " +
+                $"put them behind {FullRequest}, or name them in GatesOfABranchPush, see the remarks");
+        Named(GatesOfABranchPush.Where(cheap => !onTheBranch.Any(gate => gate.StartsWith(cheap, StringComparison.Ordinal))))
+            .Should().BeEmpty(
+                $"scripts/{script} no longer runs these on a push of a branch, so the push loses the answer that comes " +
+                "in minutes and waits for the pull request to give it");
+    }
+
+    /// <summary>Every gate a script runs, and whether a request for the full set guards it.</summary>
+    private static IEnumerable<(string Command, bool Guarded)> GatesByGuard(List<string> code)
+    {
+        var functions = new Dictionary<string, List<string>>(StringComparer.Ordinal);
+        var top = new List<string>();
+        List<string>? body = null;
+        foreach (var line in code)
+        {
+            var start = FunctionStart.Match(line);
+            if (body is null && start.Success)
+            {
+                functions[start.Groups[1].Value] = body = new List<string>();
+            }
+            else if (body is not null && line == "}")
+            {
+                body = null;
+            }
+            else if (body is not null)
+            {
+                body.Add(line);
+            }
+            else
+            {
+                top.Add(line);
+            }
+        }
 
         var guards = new Stack<string>();
-        var gates = new List<string>();
-        var unguarded = new List<string>();
-
-        foreach (var line in code)
+        foreach (var line in top)
         {
             if (line.StartsWith("if ", StringComparison.Ordinal) && !line.EndsWith("fi", StringComparison.Ordinal))
             {
@@ -321,32 +318,28 @@ public partial class AgentToolingShould
             {
                 guards.Pop();
             }
-            else if (line.Contains("check-e2e-stand.sh", StringComparison.Ordinal) ||
-                     line.Contains("npm run test:e2e", StringComparison.Ordinal))
+
+            var called = functions
+                .Where(function => Regex.IsMatch(line, $@"\b{function.Key}\b"))
+                .SelectMany(function => function.Value);
+            foreach (var gate in called.Prepend(line).SelectMany(GatesOfLine))
             {
-                gates.Add(line);
-                if (!guards.Any(AsksForTheSuite.IsMatch))
-                {
-                    unguarded.Add(line);
-                }
+                yield return (gate, AsksForTheFullSet.IsMatch(line) || guards.Any(AsksForTheFullSet.IsMatch));
             }
         }
-
-        gates.Should().NotBeEmpty($"scripts/{script} runs the suite and checks its stand");
-        Named(unguarded).Should().BeEmpty(
-            $"scripts/{script} runs these on every push that touches what the suite covers: on a " +
-            "branch the e2e job runs them on the pull request, and here they wait for " +
-            $"{EndToEndRequest}, see the remarks");
     }
+
+    /// <summary>The gates one line runs, with the root and the quotes dropped.</summary>
+    private static IEnumerable<string> GatesOfLine(string line) => GateSyntax.Matches(line)
+        .Concat(StandCheck.Matches(line))
+        .Select(match => match.Value.Trim()
+            .Replace("$ROOT/", "", StringComparison.Ordinal)
+            .Replace("\"", "", StringComparison.Ordinal));
 
     /// <summary>
     /// The decisions of the map, one change at a time.
     /// </summary>
-    /// <remarks>
-    /// A dry run of the script itself rather than a copy of its logic here: the
-    /// cases are what has to stay true of the map, and the thing they are held
-    /// against is the one CI and the hook run.
-    /// </remarks>
+    /// <remarks>A dry run of the script itself, the one CI and the hook run.</remarks>
     [Theory]
     [InlineData("docs/guides/TESTING.md|README.md|.claude/agents/debugger.md", "docs")]
     [InlineData("src/DM.Web.Client/src/App.vue|src/DM.Web.Client/package.json",
@@ -375,14 +368,8 @@ public partial class AgentToolingShould
     /// job runs, not with the prose or with the client.
     /// </summary>
     /// <remarks>
-    /// Only the build job runs those tests, and a group that does not call it
-    /// lets a change to that file land without the test that reads it, and
-    /// reddens the next server push instead. OpenApiContractShould reads
-    /// API_DESIGN.md this way, EmailThemeShould the styles of the SPA and the
-    /// markup tests the tables of the client. Found by the spelling such a read
-    /// takes, Path.Combine over "docs" or over "src", "DM.Web.Client" and the
-    /// segments after it. A read that stops at a folder holds every file in it.
-    /// DM.Architecture.Tests is left out: the docs job runs it for the client.
+    /// Only the build job runs those tests. Found by Path.Combine over "docs" or over "src",
+    /// "DM.Web.Client"; DM.Architecture.Tests is left out, the docs job runs it.
     /// </remarks>
     [Fact]
     public void SortTheFilesServerTestsReadWhereTheBuildRuns()
@@ -397,7 +384,7 @@ public partial class AgentToolingShould
             .ToList();
 
         read.Should().Contain(path => path.EndsWith("/API_DESIGN.md", StringComparison.Ordinal),
-            "OpenApiContractShould reads it, and a walk that misses it holds nothing");
+            "OpenApiParametersShould reads it, and a walk that misses it holds nothing");
         read.Should().Contain(path => path.StartsWith("src/DM.Web.Client/", StringComparison.Ordinal),
             "the markup tests read the tables of the client, and a walk that misses them holds nothing");
 
@@ -409,16 +396,11 @@ public partial class AgentToolingShould
     /// A file of the source tree the deployment checks parse is sorted where
     /// compose-topology runs.
     /// </summary>
-    /// <remarks>
-    /// check-nginx-configuration.sh parses the nginx.conf of the SPA, and the
-    /// client group would let a typo in it reach the push, the place the check
-    /// was moved into the hook to keep it from. Found by the src/ paths the
-    /// scripts of scripts/deployment name.
-    /// </remarks>
+    /// <remarks>Found by the src/ paths the scripts of scripts/deployment name.</remarks>
     [Fact]
     public void SortTheFilesTheDeploymentChecksReadWhereTheyRun()
     {
-        var read = Directory.EnumerateFiles(Path.Combine(RepositoryRoot, "scripts", "deployment"), "*.sh")
+        var read = Directory.EnumerateFiles(Path.Combine(RepositoryLayout.Root, "scripts", "deployment"), "*.sh")
             .SelectMany(script => Regex.Matches(ShellCode(script), @"\bsrc/[\w./-]+\.\w+"))
             .Select(match => match.Value)
             .Distinct()
@@ -434,7 +416,7 @@ public partial class AgentToolingShould
     private static IEnumerable<string> ServerTestSources()
     {
         var separator = Path.DirectorySeparatorChar;
-        return Directory.EnumerateFiles(Path.Combine(RepositoryRoot, "test"), "*.cs", SearchOption.AllDirectories)
+        return Directory.EnumerateFiles(Path.Combine(RepositoryLayout.Root, "test"), "*.cs", SearchOption.AllDirectories)
             .Where(file => !file.Contains($"{separator}bin{separator}", StringComparison.Ordinal)
                            && !file.Contains($"{separator}obj{separator}", StringComparison.Ordinal)
                            && !file.Contains("DM.Architecture.Tests", StringComparison.Ordinal));
@@ -443,10 +425,10 @@ public partial class AgentToolingShould
     /// <summary>A file as itself, a folder as every file under it, repository-relative.</summary>
     private static IEnumerable<string> TrackedUnder(string path)
     {
-        var full = Path.Combine(RepositoryRoot, path);
+        var full = Path.Combine(RepositoryLayout.Root, path);
         return Directory.Exists(full)
             ? Directory.EnumerateFiles(full, "*", SearchOption.AllDirectories)
-                .Select(file => Path.GetRelativePath(RepositoryRoot, file).Replace('\\', '/'))
+                .Select(file => Path.GetRelativePath(RepositoryLayout.Root, file).Replace('\\', '/'))
             : new[] { path };
     }
 
@@ -458,40 +440,7 @@ public partial class AgentToolingShould
         .OrderBy(job => job, StringComparer.Ordinal));
 
     /// <summary>Runs the map on the given paths, one per line, at the repository root.</summary>
-    private static (int ExitCode, string Output, string Error) AskTheMap(string paths)
-    {
-        var start = new ProcessStartInfo("node", $"{PathMap} --stdin")
-        {
-            WorkingDirectory = RepositoryRoot,
-            RedirectStandardInput = true,
-            // No preamble: a BOM in front of the first path is a path no group names.
-            StandardInputEncoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
-            RedirectStandardOutput = true,
-            RedirectStandardError = true,
-            StandardOutputEncoding = Encoding.UTF8,
-            StandardErrorEncoding = Encoding.UTF8,
-            UseShellExecute = false,
-        };
-
-        // The switch that forces the full set belongs to whoever runs the gates,
-        // and inherited here it would turn every case into the same answer.
-        start.Environment.Remove("DM_GATES_FULL");
-
-        using var process = Process.Start(start)
-            ?? throw new InvalidOperationException("node could not be started at the repository root");
-
-        process.StandardInput.Write(paths);
-        process.StandardInput.Close();
-
-        // Both pipes drained before the wait: a full pipe blocks the child nobody reads.
-        var output = process.StandardOutput.ReadToEndAsync();
-        var error = process.StandardError.ReadToEndAsync();
-        if (!process.WaitForExit(MapTimeout))
-        {
-            process.Kill(entireProcessTree: true);
-            throw new TimeoutException($"node {PathMap} did not finish in {MapTimeout}");
-        }
-
-        return (process.ExitCode, output.Result, error.Result);
-    }
+    /// <remarks>The switch that forces the full set belongs to whoever runs the gates: inherited, it gives every case one answer.</remarks>
+    private static (int ExitCode, string Output, string Error) AskTheMap(string paths) =>
+        RepositoryFiles.Run("node", $"{PathMap} --stdin", paths, MapTimeout, "DM_GATES_FULL");
 }

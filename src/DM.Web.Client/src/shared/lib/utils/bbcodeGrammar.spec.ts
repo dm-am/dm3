@@ -3,45 +3,26 @@
  */
 
 /**
- * The client's half of the grammar table (bbcodeGrammar.cases.ts).
- *
- * Every row is checked in the editor context of its surface, and a row for
- * "any" surface in all five. Three things are held to it:
+ * The client's half of the grammar table (bbcodeGrammar.cases.ts), every row
+ * in the editor context of its surface ("any" in all five):
  *
  * - the preview draws tags, broken spellings and hidden blocks as the row
- *   says. Typography is the reader's page and not the author's draft, so the
- *   preview keeps it as typed, and an image of the global chat has no spoiler
- *   in it. A hidden block nobody reads (an empty seenBy: hiding markup on a
- *   surface that has none) is the author's own text in the editor, so the
- *   preview shows the whole input of such a row as typed, or, where the block
- *   stands inside a tag, the text of its typed in its place. [code] holds its
- *   children drawn as anywhere else. Line breaks are left out of the
- *   comparison: the round trip below holds them exactly;
- * - bbcodeToHtml followed by htmlToBbcode gives the input back unchanged, less
- *   the characters that reorder text and the control characters, which both
- *   sides take out before reading;
- * - validateBBCode, in the same context, names the reason of a broken row
- *   and nothing on the others.
+ *   says, typography as typed, no spoiler on a chat image, a hidden block no
+ *   one reads as the author's text; line breaks are left to the round trip;
+ * - bbcodeToHtml then htmlToBbcode gives the input back, less the characters
+ *   both sides take out;
+ * - validateBBCode names the reason of a broken row and nothing else.
  *
- * One mapping differs from the header of the table: DirectMessage is read in
- * the "direct" context and not in "message". The row a-mod-direct has [mod]
- * stay text in private messages, and "message" is the context of the global
- * chat, where [mod] is a tag.
- *
- * The hint, the description of a game tag, has no visual mode: its preview is
- * the reader's markup, hintToHtml, and a row for it is drawn by that. Its tag
- * is text in the editor's HTML, so the round trip gives it back as typed.
+ * DirectMessage is read in "direct", where [mod] is text. The hint has no
+ * visual mode: its rows are drawn by hintToHtml.
  */
 
 import { describe, expect, it } from "vitest";
-import {
-  bbcodeToHtml,
-  hintToHtml,
-  htmlToBbcode,
-  validateBBCode,
-  type BBCodeContext,
-  type BBCodeIssueReason,
-} from "./bbcode";
+import { bbcodeToHtml } from "./bbcodeToHtml";
+import { hintToHtml } from "./hintMarkup";
+import { htmlToBbcode } from "./htmlToBbcode";
+import { validateBBCode, type BBCodeIssueReason } from "./bbcodeWarnings";
+import { type BBCodeContext } from "./bbcodeTagSet";
 import {
   BBCODE_GRAMMAR_CASES,
   type GrammarCase,
@@ -270,11 +251,9 @@ const REASONS: BBCodeIssueReason[] = BBCODE_GRAMMAR_CASES.flatMap((row) =>
 );
 
 /**
- * The text less what both sides take out before reading it: the characters
- * that reorder text for display, U+202A..U+202E and U+2066..U+2069, and the C0
- * and C1 control characters other than tab, line feed and carriage return.
- * Written out here rather than taken from the converter, so a range the
- * converter got wrong is a failure.
+ * The text less what both sides take out (U+202A..U+202E, U+2066..U+2069, C0
+ * and C1 controls but tab and line breaks), written out here so a range the
+ * converter got wrong fails.
  */
 function withoutRemoved(text: string): string {
   return Array.from(text)

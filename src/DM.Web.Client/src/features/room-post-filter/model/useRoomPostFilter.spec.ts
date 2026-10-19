@@ -2,14 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The room filter lives in the address, and the room list is asked what the
- * address says. These pin the translation both ways: every filter and sort of
- * the bar reaches the request under the name the API takes, the room itself
- * asks with nothing at all (so its request, and the cheap numbering the server
- * gives it, stay what they were), and "Сбросить" brings the address back to
- * the bare room.
- */
+// The bare room asks with nothing at all, so its request and the server's cheap numbering stay.
 import { describe, it, expect } from "vitest";
 import { defineComponent, h } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
@@ -136,8 +129,7 @@ describe("room filter in the address", () => {
     return { router, filter };
   }
 
-  // The dispatcher batches rapid changes into one navigation after a short
-  // debounce.
+  // The dispatcher batches rapid changes into one navigation after a short debounce.
   const settle = async () => {
     await new Promise((resolve) => setTimeout(resolve, 80));
     await flushPromises();

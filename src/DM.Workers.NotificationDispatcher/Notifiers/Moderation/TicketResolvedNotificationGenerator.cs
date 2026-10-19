@@ -13,19 +13,12 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Moderation;
 /// Notifies the author of the ticket.
 /// </summary>
 /// <remarks>
-/// The event was declared, sorted into the moderation category and sent by
-/// nobody, so an author learned of the outcome only by opening "Мои обращения"
-/// again. Only an author with an account is told: a guest has no inbox, and his
-/// tracking page says the answer will appear there and nowhere else. An answer
-/// in the conversation is an event of its own (TicketAnsweredNotificationGenerator);
-/// this one says the ticket is over. Spam is closed without it: the service
-/// sends no event for that.
+/// A guest has no inbox. Spam is closed without the event.
 /// </remarks>
 internal class TicketResolvedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public TicketResolvedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -55,17 +48,14 @@ internal class TicketResolvedNotificationGenerator : BaseNotificationGenerator
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { ticketData.UserId.Value },
-            // No ActorId although the moderator who closed it is on the row: the
-            // closing of a ticket is not less delivered because its author has the
-            // moderator on his blacklist, as with every moderation decision.
+            UsersInterested = [ticketData.UserId.Value],
+            // No ActorId: a moderation decision is delivered whoever is on the blacklist.
             Metadata = new
             {
-                // The page of the ticket is built out of this field, in the list
-                // and in the letter alike.
-                TicketId = ticketData.TicketId,
-                ModeratorUsername = ticketData.ModeratorUsername,
-                CreatedUtc = ticketData.CreatedUtc
+                // The link to the ticket is built out of this field.
+                ticketData.TicketId,
+                ticketData.ModeratorUsername,
+                ticketData.CreatedUtc
             }
         };
     }

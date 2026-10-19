@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
@@ -10,7 +6,7 @@ using AwesomeAssertions;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
@@ -18,17 +14,9 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// The per-category subscriber counts on a user read.
 /// </summary>
 /// <remarks>
-/// Runs against the container Postgres: the counts are
-/// count(*) FILTER (WHERE "Settings" &amp; bit &lt;&gt; 0) aggregates folded into the
-/// same GROUP BY as the preview, and neither the FILTER form nor the bitwise
-/// predicate inside an aggregate is exercised by an in-memory provider.
-///
-/// The case worth pinning is the one the profile got wrong: the preview is capped
-/// at <see cref="SubscriptionPolicy.PreviewCap" /> and ranked by activity before
-/// anything knows about categories, so a category whose subscribers all sort
-/// below the cap contributes no name at all. Its count still has to be right —
-/// that number is the only thing standing between the reader and a line that
-/// silently claims nobody is subscribed.
+/// The counts are FILTER aggregates over a bitwise predicate in the preview's GROUP BY, which no in-memory provider
+/// runs. The preview is capped at <see cref="SubscriptionPolicy.PreviewCap" />, so a category below the cap still
+/// needs its count.
 /// </remarks>
 public class UserSubscriberSummaryShould : IntegrationTestBase
 {
@@ -126,23 +114,9 @@ public class UserSubscriberSummaryShould : IntegrationTestBase
     /// A fresh user. The fixture database is shared and seeded, so identifiers
     /// and usernames have to be unique per test run.
     /// </summary>
-    private static async Task<Guid> AddUserAsync(
-        DmDbContext dbContext, string prefix, DateTimeOffset? lastActivityUtc)
-    {
-        var userId = Guid.NewGuid();
-        dbContext.Users.Add(new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed.
-            Username = $"{prefix}{userId:N}"[..20],
-            Email = $"{userId:N}@example.com",
-            PasswordHash = "hash",
-            Salt = "salt",
-            LastActivityUtc = lastActivityUtc,
-        });
-        await dbContext.SaveChangesAsync();
-        return userId;
-    }
+    private static Task<Guid> AddUserAsync(
+        DmDbContext dbContext, string prefix, DateTimeOffset? lastActivityUtc) =>
+        UserRows.AddAsync(dbContext, prefix, lastActivityUtc);
 
     private static void AddSubscription(
         DmDbContext dbContext, Guid subscriberId, Guid targetId, SubscriptionSettings settings)

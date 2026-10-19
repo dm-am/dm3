@@ -18,14 +18,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// <summary>
 /// A file stops existing when the thing it hangs on does.
 /// </summary>
-/// <remarks>
-/// Before this, nothing ever removed an attachment. The row stayed live when the
-/// post was deleted and when the game was, the sweeper walks soft-deleted upload
-/// rows and so never saw it, and the object sat in the bucket for the life of the
-/// bucket. What is asserted here is the soft delete and its author — that stamp
-/// is what starts the grace period the existing sweeper waits out, so getting it
-/// written is the whole of "the file goes too".
-/// </remarks>
+/// <remarks>The soft delete and its author are asserted: the stamp starts the grace period the sweeper waits out.</remarks>
 public class PostAttachmentLifecycleShould : IntegrationTestBase
 {
     public PostAttachmentLifecycleShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -35,7 +28,7 @@ public class PostAttachmentLifecycleShould : IntegrationTestBase
     private static GeneralUser Master => new()
     {
         UserId = TestConstants.TestUserId,
-        Username = TestConstants.TestUserUsername,
+        Username = TestConstants.TestUserLogin,
         Role = UserRole.RegularUser,
     };
 
@@ -153,6 +146,42 @@ public class PostAttachmentLifecycleShould : IntegrationTestBase
             HttpMethod.Get, $"/v1/uploads/{uploadId:D}/content", Master));
 
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
+    }
+
+    /// <summary>
+    /// The browser keeps a file a guest reads too, for a guest and a reader signed in alike, and not one whose
+    /// mark makes it a matter of the reader: the next account signed in the same browser would get the copy.
+    /// </summary>
+    [Fact]
+    public async Task LetTheBrowserKeepOnlyAFileEveryReaderGets()
+    {
+        var (_, _, uploadId) = await SeedAsync(Guid.NewGuid().ToString("N")[..10]);
+        InMemoryObjectStorage.Seed($"posts/{uploadId:N}.png", [0x89, 0x50, 0x4E, 0x47], "image/png");
+        var address = $"/v1/uploads/{uploadId:D}/content";
+
+        foreach (var request in new[]
+                 {
+                     new HttpRequestMessage(HttpMethod.Get, address),
+                     CreateAuthenticatedRequest(HttpMethod.Get, address, Master)
+                 })
+        {
+            var open = await Client.SendAsync(request);
+            open.StatusCode.Should().Be(HttpStatusCode.OK);
+            open.Headers.CacheControl!.Private.Should().BeTrue();
+            open.Headers.CacheControl.NoStore.Should().BeFalse("everybody reads this file");
+            open.Headers.CacheControl.MaxAge.Should().Be(TimeSpan.FromSeconds(300));
+        }
+
+        await using (var db = DatabaseFixture.CreateDbContext())
+        {
+            await db.Uploads.Where(u => u.UploadId == uploadId)
+                .ExecuteUpdateAsync(u => u.SetProperty(row => row.AddresseesJson, "[]"));
+        }
+
+        var marked = await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, address, Master));
+        marked.StatusCode.Should().Be(HttpStatusCode.OK, "the author reads a file marked for nobody");
+        marked.Headers.CacheControl!.NoStore.Should().BeTrue("a marked file is read by some readers and not others");
+        marked.Headers.CacheControl.MaxAge.Should().BeNull();
     }
 
     [Fact]

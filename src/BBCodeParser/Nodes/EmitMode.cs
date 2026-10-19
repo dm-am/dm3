@@ -3,12 +3,7 @@
 // package BBCodeParser 1.0.0 was built from: upstream commit
 // c2ccefdf9d657e130186b60fc253821c7af4e168.
 //
-// DM3 change against the original: this file is new. The original had three
-// parallel renderers (ToHtml / ToText / ToBb), each overridden once per node
-// type and each recursing into its children; this enum is what lets the single
-// iterative walk in Node.Render carry "which of the three outputs am I
-// producing" as data instead of as a call target. See Node.cs for why the
-// recursion had to go.
+// DM3 change against the original: this file is new, the output of the one walk in Node.Render.
 
 namespace BBCodeParser.Nodes
 {
@@ -22,13 +17,6 @@ namespace BBCodeParser.Nodes
         Text,
 
         /// <summary>BBCode source rebuilt from the tree.</summary>
-        Bb,
-
-        /// <summary>
-        /// DM3 addition against the original: BBCode source rebuilt from the
-        /// tree, with the names of every tag read as markup, and of its
-        /// parameters, in lower case. See NodeTree.ToBbInLowerCase.
-        /// </summary>
-        BbInLowerCase
+        Bb
     }
 }

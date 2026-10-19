@@ -1,30 +1,6 @@
 <script setup lang="ts">
-/**
- * UnreadLine — "Непрочитанных: 4 | Отметить прочитанными" under the heading of
- * a page that marks everything it counts as read at once: the notifications
- * and the forum. One action, so one look in both places; it used to be a large
- * grey button beside one heading and a shaded one over a table on the other.
- *
- * The line is a run of muted secondary text, the number bold green as the
- * counters of the header are, the action a plain link of the site whose
- * target a finger finds 32 high without the line growing. It stands only while
- * something is unread: an action with nothing to act on is not offered. From a
- * thousand the number reads "999+".
- *
- * It is a caption line of the site (CaptionLine) in the size of secondary
- * text: the number with its word is one part and the link another, so where
- * the column is narrower than the line ("999+" on a phone of 360) the link
- * takes the next line whole, with no bar at either end. The word is
- * "Непрочитанных:" at every width (owner, 12 October 2026: never shorten a
- * thing on a phone; it used to turn into "Новых:" where the line had no room).
- *
- * After a press a refusal is said in red under the line, and the line stays
- * for another try. Success is the page's to show (it marks its rows and its
- * count falls to zero, which takes the line away); the line says it to a
- * screen reader and puts the focus on the heading it stood under, since the
- * link that held the focus is gone and focus on a removed node falls to the
- * document.
- */
+// Stands only while something is unread. On success the focus goes to the heading above: the link that
+// held it is gone, and focus on a removed node falls to the document.
 import { computed, nextTick, ref, watch } from "vue";
 import type { GeneralError } from "@/shared/api/models/common";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
@@ -54,8 +30,7 @@ const result = useActionResult();
 const busy = ref(false);
 const announced = ref("");
 
-// Something new arrived after a press: what was said about it is stale, and so
-// is a refusal about a count that is not the one on the line any more.
+// A new arrival makes what was said about the last count stale.
 watch(
   () => props.count,
   (count, previous) => {
@@ -64,11 +39,7 @@ watch(
   },
 );
 
-/**
- * The page heading the line stands under: the last h1 before it in its page.
- * It takes the focus from script only, so it is given tabindex -1 if the page
- * did not give it one, which keeps it out of the Tab order.
- */
+/** The last h1 before the line; tabindex -1 lets script focus it without entering the Tab order. */
 function headingAbove(el: HTMLElement): HTMLElement | null {
   const scope = el.closest("main") ?? el.ownerDocument;
   let heading: HTMLElement | null = null;
@@ -105,10 +76,7 @@ async function press() {
 </script>
 
 <template>
-  <!-- The space between the word and the number is text inside the part: the
-       template compiler drops whitespace that holds a line break between two
-       tags, and they would run together on the screen and in a copy. The bar
-       between the parts is the caption line's. -->
+  <!-- The space after the word is text inside the part: the compiler drops whitespace holding a line break. -->
   <div ref="root" class="unread-place">
     <p v-if="count > 0" class="unread-line">
       <CaptionLine size="secondary">
@@ -132,18 +100,15 @@ async function press() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
-// The height a finger finds the link by. An overlay out of the flow, so the
-// line itself does not grow, and a press on it is a press on the link.
+// A finger's target, out of the flow, so the line itself does not grow.
 $mark-target-height: 32px
 
-// The size of the line's text, which the caption line repeats, set on the box
-// so the paragraph around the line stands on the line's height.
+// The line's text size on the box, so the paragraph stands on the line's height.
 .unread-place
   font-size: $secondary-font-size
 
-// One step down to what it counts: the list, the table.
 .unread-line
   margin: 0 0 $medium
 
@@ -163,13 +128,11 @@ $mark-target-height: 32px
     height: $mark-target-height
     transform: translateY(-50%)
 
-  // Waiting for the server: the look of a link out of reach, while the focus
-  // stays where the reader left it (a disabled button drops it).
+  // A link out of reach while the focus stays: a disabled button drops it.
   &[aria-busy="true"]
     opacity: $disabled-opacity
     cursor: default
 
-// Under the line, one step over the list the line keeps.
 .unread-refusal
   --action-result-margin: calc(#{$small} - #{$medium}) 0 #{$medium}
 </style>

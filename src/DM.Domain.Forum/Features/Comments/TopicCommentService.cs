@@ -31,8 +31,7 @@ internal class TopicCommentService : ITopicCommentService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ITopicCommentRepository _repository;
     private readonly IUnreadCountersRepository _countersRepository;
-    private readonly IEventProducer _invokedEventProducer;
-    private readonly IBbTagNameCase _tagNames;
+    private readonly IEventProducer _eventProducer;
 
     public TopicCommentService(
         IValidator<CreateComment> createValidator,
@@ -44,8 +43,7 @@ internal class TopicCommentService : ITopicCommentService
         IDateTimeProvider dateTimeProvider,
         ITopicCommentRepository repository,
         IUnreadCountersRepository countersRepository,
-        IEventProducer invokedEventProducer,
-        IBbTagNameCase tagNames)
+        IEventProducer eventProducer)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -56,8 +54,7 @@ internal class TopicCommentService : ITopicCommentService
         _dateTimeProvider = dateTimeProvider;
         _repository = repository;
         _countersRepository = countersRepository;
-        _invokedEventProducer = invokedEventProducer;
-        _tagNames = tagNames;
+        _eventProducer = eventProducer;
     }
 
     /// <inheritdoc />
@@ -70,24 +67,21 @@ internal class TopicCommentService : ITopicCommentService
         // cannot part.
         _intentionManager.ThrowIfForbidden(TopicIntention.CreateComment, topic);
 
-        // A topic is a public place: the personal blacklist of whoever opened it
-        // does not close it to anybody. Keeping somebody out of the forum is a
-        // ban, and the gate above asks it; the author's list only hides the
-        // blocked person's comments from the author (HideComments).
+        // A topic is a public place: the author's personal blacklist closes it to
+        // nobody, keeping somebody out of the forum is a ban.
         var currentUser = _identityProvider.Current.User;
 
         var createEntity = new CreateTopicCommentEntity
         {
             TopicId = topic.Id,
             AuthorId = currentUser.UserId,
-            // Strip [mod] authored by a non-moderator (it renders as a green
-            // mod block on the Comment surface); Moderator+ may author it.
-            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role), BbTagSet.WithModBlock)
+            // [mod] renders as a mod block on the Comment surface; Moderator+ may author it.
+            Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role)
         };
 
         var createdComment = await _repository.Create(createEntity);
         await _countersRepository.IncrementAsync(topic.Id, UnreadEntryType.Message);
-        await _invokedEventProducer.SendAsync(EventType.NewTopicComment, createdComment.Id);
+        await _eventProducer.SendAsync(EventType.NewTopicComment, createdComment.Id);
 
         return createdComment;
     }
@@ -107,7 +101,7 @@ internal class TopicCommentService : ITopicCommentService
         await _topicService.GetAsync(topicId);
 
         var totalCount = await _repository.Count(topicId, query, excludeUserIds);
-        var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
+        var paging = new PagingData(query, _identityProvider.Current.Settings.PageSize, totalCount);
 
         var comments = await _repository.Get(topicId, query, paging, excludeUserIds);
 
@@ -119,22 +113,16 @@ internal class TopicCommentService : ITopicCommentService
     {
         var comment = await FindAsync(commentId);
 
-        // The four discussions share one table and the row above is read by its
-        // id alone, so the discussion is asked here exactly as the listing asks it.
-        // A discussion that is not there to the reader - hidden, removed, or of
-        // another kind, which this route has nothing to check by - answers exactly
-        // as a comment that is not there: a different answer would tell a
-        // stranger that the id resolves, and to what.
+        // The discussions share one table: a comment of a topic not there to the
+        // reader answers as one that is not there, or the id would tell a stranger what it resolves to.
         await DiscussionRefusal.AsCommentNotFound(commentId, () => _topicService.GetAsync(comment.EntityId));
 
         return comment;
     }
 
     /// <summary>
-    /// The comment by its identifier, among the comments of topics only (the
-    /// repository narrows it: a lookup by id alone let this route edit a comment
-    /// of a game or a blog past that discussion's blacklist). The edit keeps to
-    /// this lookup: who may edit is CommentIntention.Edit's answer on the row.
+    /// The comment by its identifier, among the comments of topics only, so this
+    /// route cannot edit a comment of a game or a blog past that discussion's blacklist.
     /// </summary>
     private async Task<Comment> FindAsync(Guid commentId) =>
         await _repository.Get(commentId) ??
@@ -148,10 +136,8 @@ internal class TopicCommentService : ITopicCommentService
         // see never comes back from it, exactly as on the reading paths above.
         var topic = await _topicService.GetByBoardAndNumberAsync(boardAlias, topicNumber);
 
-        // A guest has no marker of his own and the anonymous one belongs to
-        // nobody, so asking for it would answer with somebody else's reading.
-        // No marker at all means the same thing for an authenticated reader who
-        // has never opened the topic: everything is unread, he starts at the top.
+        // A guest has no marker of his own; no marker at all means everything is
+        // unread, and the reader starts at the top.
         var user = _identityProvider.Current.User;
         var lastRead = user.IsAuthenticated
             ? await _countersRepository.GetLastReadTimeAsync(user.UserId, topic.Id, UnreadEntryType.Message)
@@ -160,10 +146,8 @@ internal class TopicCommentService : ITopicCommentService
             ? new DateTimeOffset(DateTime.SpecifyKind(lastRead.Value, DateTimeKind.Utc))
             : DateTimeOffset.MinValue;
 
-        // Nothing unread is the ordinary state one second after the topic was
-        // opened, because opening it flushes the marker. The end of the
-        // discussion is what the reader wants there, never its beginning: the
-        // beginning is what every repeat visit used to get.
+        // Nothing unread is the ordinary state after opening the topic flushes the
+        // marker, and the reader wants the end of the discussion then.
         return await _repository.FindFirstUnread(topic.Id, lastReadUtc, excludeUserIds)
                ?? await _repository.GetLastComment(topic.Id, excludeUserIds)
                ?? new FirstUnreadComment();
@@ -177,26 +161,21 @@ internal class TopicCommentService : ITopicCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
-        // Rewriting a comment publishes text exactly as writing one does, so the
-        // ban is asked here too. Only the author is asked: a moderator editing
-        // somebody else's comment is moderating, and a ban takes no moderator
-        // tool away. The forum has no own-space exemption, the same answer
-        // TopicIntention.CreateComment gives.
+        // Rewriting publishes text as writing does, so the author is asked the ban
+        // too; a moderator editing somebody else's comment is moderating.
         var currentUser = _identityProvider.Current.User;
         if (comment.Author?.UserId == currentUser.UserId)
         {
             currentUser.ThrowIfMayNotComment();
         }
 
-        var text = updateComment.Text?.Trim();
+        var text = AuthoredText.AsTyped(updateComment.Text);
         if (!string.IsNullOrEmpty(text))
         {
-            // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(text, _identityProvider.Current.User.Role), BbTagSet.WithModBlock);
+            text = ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role);
         }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {
-            // No actual changes
             return comment;
         }
 
@@ -209,7 +188,7 @@ internal class TopicCommentService : ITopicCommentService
         };
 
         var updatedComment = await _repository.Update(updateEntity);
-        await _invokedEventProducer.SendAsync(EventType.ChangedTopicComment, updateComment.CommentId);
+        await _eventProducer.SendAsync(EventType.ChangedTopicComment, updateComment.CommentId);
         return updatedComment;
     }
 
@@ -237,17 +216,13 @@ internal class TopicCommentService : ITopicCommentService
         var removed = await _repository.Delete(deleteComment);
         if (!removed)
         {
-            // Somebody else removed this comment between the read above and the
-            // write. The topic's unread counter and the event belong to the removal
-            // that happened, and repeating them here takes the counter down twice
-            // for one comment. The caller is answered the same either way: the
-            // comment is gone, which is what they asked for.
+            // Somebody else removed it in between; the counter and the event are that removal's.
             return;
         }
 
         await _countersRepository.DecrementAsync(comment.EntityId, UnreadEntryType.Message, comment.CreatedUtc);
 
-        await _invokedEventProducer.SendAsync(EventType.DeletedTopicComment, commentId);
+        await _eventProducer.SendAsync(EventType.DeletedTopicComment, commentId);
     }
 
     /// <inheritdoc />
@@ -269,11 +244,8 @@ internal class TopicCommentService : ITopicCommentService
     /// <inheritdoc />
     public async Task MarkAllAsReadAsync()
     {
-        // Identifiers, which is all the loop below reads. The list with counters
-        // fills them from two aggregate reads and three queries, and every one of
-        // those numbers is discarded a line later - by the very call that makes
-        // them all zero.
-        var boards = await _boardService.GetAvailableBoards();
+        // Identifiers only: the counters of the full list would be zeroed a line later.
+        var boards = await _boardService.GetBoardsWithoutCounters();
         var userId = _identityProvider.Current.User.UserId;
         foreach (var board in boards)
         {

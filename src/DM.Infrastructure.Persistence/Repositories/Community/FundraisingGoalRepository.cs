@@ -10,7 +10,6 @@ internal class FundraisingGoalRepository : IFundraisingGoalRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public FundraisingGoalRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;

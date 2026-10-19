@@ -4,9 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Community.Features.Statistics;
 using DM.Domain.Core.Abstractions;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
+using Leaderboard = System.Collections.Generic.List<DM.Domain.Community.Features.Statistics.LeaderboardEntry>;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
@@ -18,10 +20,6 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
-
-    private static readonly TimeSpan OnlineThreshold = TimeSpan.FromMinutes(5);
-
-    /// <inheritdoc />
     public CommunityStatsRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
@@ -36,46 +34,70 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
         var now = _dateTimeProvider.Now;
         var todayStart = now.Date;
         var todayStartUtc = new DateTimeOffset(todayStart, TimeSpan.Zero);
-        var onlineThreshold = now - OnlineThreshold;
+        var onlineThreshold = now - ActivityPolicy.OnlinePeriod;
         var weekAgo = now.AddDays(-7);
 
-        // Online users count
         var onlineCount = await _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved &&
             u.LastActivityUtc.HasValue && u.LastActivityUtc.Value > onlineThreshold, ct);
 
-        // Totals with today's delta
-        var totalUsers = await _dbContext.Users.CountAsync(u => !u.IsRemoved, ct);
-        var usersToday = await _dbContext.Users.CountAsync(u =>
-            !u.IsRemoved && u.CreatedUtc >= todayStartUtc, ct);
+        var totals = await Totals(todayStartUtc, ct);
+        var weeklyBestPost = await WeeklyBestPost(weekAgo, ct);
 
-        var totalCharacters = await _dbContext.Characters.CountAsync(c => !c.IsRemoved, ct);
-        var charactersToday = await _dbContext.Characters.CountAsync(c =>
-            !c.IsRemoved && c.CreatedUtc >= todayStartUtc, ct);
+        return new LiveStats
+        {
+            Online = onlineCount,
+            Totals = totals,
+            WeeklyBestPost = weeklyBestPost
+        };
+    }
 
-        var totalGames = await _dbContext.Games.CountAsync(g => !g.IsRemoved, ct);
-        var gamesToday = await _dbContext.Games.CountAsync(g =>
-            !g.IsRemoved && g.CreatedUtc >= todayStartUtc, ct);
+    /// <summary>
+    /// Totals with today's delta: every row that is not removed, and how many of
+    /// them were created since the start of the day.
+    /// </summary>
+    private async Task<TotalsWithDelta> Totals(DateTimeOffset todayStartUtc, CancellationToken ct)
+    {
+        var totalUsers = await _dbContext.Users.CountAsync(ct);
+        var usersToday = await _dbContext.Users.CountAsync(u => u.CreatedUtc >= todayStartUtc, ct);
 
-        var totalPosts = await _dbContext.Posts.CountAsync(p => !p.IsRemoved, ct);
-        var postsToday = await _dbContext.Posts.CountAsync(p =>
-            !p.IsRemoved && p.CreatedUtc >= todayStartUtc, ct);
+        var totalCharacters = await _dbContext.Characters.CountAsync(ct);
+        var charactersToday = await _dbContext.Characters.CountAsync(c => c.CreatedUtc >= todayStartUtc, ct);
+
+        var totalGames = await _dbContext.Games.CountAsync(ct);
+        var gamesToday = await _dbContext.Games.CountAsync(g => g.CreatedUtc >= todayStartUtc, ct);
+
+        var totalPosts = await _dbContext.Posts.CountAsync(ct);
+        var postsToday = await _dbContext.Posts.CountAsync(p => p.CreatedUtc >= todayStartUtc, ct);
 
         // Count all blogs (including drafts and private)
-        var totalBlogs = await _dbContext.Blogs.CountAsync(b => !b.IsRemoved, ct);
-        var blogsToday = await _dbContext.Blogs.CountAsync(b =>
-            !b.IsRemoved && b.CreatedUtc >= todayStartUtc, ct);
+        var totalBlogs = await _dbContext.Blogs.CountAsync(ct);
+        var blogsToday = await _dbContext.Blogs.CountAsync(b => b.CreatedUtc >= todayStartUtc, ct);
 
-        // Count all publications (including unpublished drafts)
-        var totalPublications = await _dbContext.Publications.CountAsync(p => !p.IsRemoved, ct);
-        var publicationsToday = await _dbContext.Publications.CountAsync(p =>
-            !p.IsRemoved && p.CreatedUtc >= todayStartUtc, ct);
+        // Count all publications
+        var totalPublications = await _dbContext.Publications.CountAsync(ct);
+        var publicationsToday = await _dbContext.Publications.CountAsync(p => p.CreatedUtc >= todayStartUtc, ct);
 
-        // Weekly best post (highest total rating from post reviews), among the
-        // posts a guest can read: the block names the post, its game and author.
+        return new TotalsWithDelta
+        {
+            Users = new StatValue { Value = totalUsers, TodayDelta = usersToday },
+            Characters = new StatValue { Value = totalCharacters, TodayDelta = charactersToday },
+            Games = new StatValue { Value = totalGames, TodayDelta = gamesToday },
+            GamePosts = new StatValue { Value = totalPosts, TodayDelta = postsToday },
+            Blogs = new StatValue { Value = totalBlogs, TodayDelta = blogsToday },
+            Publications = new StatValue { Value = totalPublications, TodayDelta = publicationsToday }
+        };
+    }
+
+    /// <summary>
+    /// Weekly best post (highest total rating from post reviews), among the
+    /// posts a guest can read: the block names the post, its game and author.
+    /// None when the best of the week is not rated above zero.
+    /// </summary>
+    private async Task<PostHighlight?> WeeklyBestPost(DateTimeOffset weekAgo, CancellationToken ct)
+    {
         var publicPosts = PublicPosts();
         var weeklyBest = await _dbContext.PostReviews
-            .Where(r => !r.IsRemoved && r.CreatedUtc >= weekAgo)
+            .Where(r => r.CreatedUtc >= weekAgo)
             .Where(r => publicPosts.Any(p => p.PostId == r.PostId))
             .GroupBy(r => new { r.PostId, r.GameId })
             .Select(g => new
@@ -101,211 +123,152 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
                 })
             .FirstOrDefaultAsync(ct);
 
-        return new LiveStats
-        {
-            Online = onlineCount,
-            Totals = new TotalsWithDelta
+        return weeklyBest != null && weeklyBest.RatingSum > 0
+            ? new PostHighlight
             {
-                Users = new StatValue { Value = totalUsers, TodayDelta = usersToday },
-                Characters = new StatValue { Value = totalCharacters, TodayDelta = charactersToday },
-                Games = new StatValue { Value = totalGames, TodayDelta = gamesToday },
-                GamePosts = new StatValue { Value = totalPosts, TodayDelta = postsToday },
-                Blogs = new StatValue { Value = totalBlogs, TodayDelta = blogsToday },
-                Publications = new StatValue { Value = totalPublications, TodayDelta = publicationsToday }
-            },
-            WeeklyBestPost = weeklyBest != null && weeklyBest.RatingSum > 0
-                ? new PostHighlight
-                {
-                    PostId = weeklyBest.PostId,
-                    GameId = weeklyBest.GameId,
-                    GameTitle = weeklyBest.GameTitle,
-                    AuthorUsername = weeklyBest.AuthorUsername,
-                    RatingSum = weeklyBest.RatingSum
-                }
-                : null
-        };
+                PostId = weeklyBest.PostId,
+                GameId = weeklyBest.GameId,
+                GameTitle = weeklyBest.GameTitle,
+                AuthorUsername = weeklyBest.AuthorUsername,
+                RatingSum = weeklyBest.RatingSum
+            }
+            : null;
     }
 
     /// <inheritdoc />
-    public async Task<LeaderboardBoards> GetLeaderboards(
+    public async Task<Leaderboards> GetLeaderboards(
         DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct = default)
     {
-        // Top players by rating received (sum of post review ratings)
-        var topByRating = await _dbContext.PostReviews
-            .Where(r => !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
+        var players = await PlayerBoards(startDate, endDate, ct);
+        var games = await GameBoards(startDate, endDate, ct);
+        var blogs = await BlogBoards(startDate, endDate, ct);
+        var blogAuthorsByVolume = await TopBlogAuthorsByVolume(startDate, endDate, ct);
+
+        return new Leaderboards
+        {
+            TopPlayersByRating = players.ByRating,
+            TopPlayersByPosts = players.ByPosts,
+            TopGamesByRating = games.ByRating,
+            TopGamesByPosts = games.ByPosts,
+            TopPlayersByVolume = players.ByVolume,
+            TopBlogsByRating = blogs.ByRating,
+            TopBlogsByPosts = blogs.ByPosts,
+            TopBlogAuthorsByVolume = blogAuthorsByVolume
+        };
+    }
+
+    /// <summary>
+    /// The boards of players over the [start, end) window: by rating received, by
+    /// posts written and by the volume of the text they wrote.
+    /// </summary>
+    private async Task<(Leaderboard ByRating, Leaderboard ByPosts, Leaderboard ByVolume)> PlayerBoards(
+        DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct)
+    {
+        var topByRating = await UserBoard(_dbContext.PostReviews
+            .Where(r => r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
             .GroupBy(r => r.PostAuthorId)
-            .Select(g => new { UserId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(LeaderboardBoards.BoardSize)
-            .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
-            {
-                EntityId = u.UserId,
-                Name = u.Username,
-                Score = x.Score
-            })
-            .ToListAsync(ct);
+            .Select(g => new Scored { Id = g.Key, Score = g.Sum(r => (int)r.SignValue) }), ct);
 
-        // Top players by posts count
-        var topByPosts = await _dbContext.Posts
-            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+        var topByPosts = await UserBoard(_dbContext.Posts
+            .Where(p => p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .GroupBy(p => p.AuthorId)
-            .Select(g => new { UserId = g.Key, Score = g.Count() })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(LeaderboardBoards.BoardSize)
-            .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
-            {
-                EntityId = u.UserId,
-                Name = u.Username,
-                Score = x.Score
-            })
-            .ToListAsync(ct);
+            .Select(g => new Scored { Id = g.Key, Score = g.Count() }), ct);
 
-        // The boards of games and blogs name them and link to them, so they rank
-        // only the modules a guest can open: a hidden game or blog is not on a
-        // public page under any heading.
+        // Counted on the visible text (SearchText), so markup and hidden blocks do not score.
+        var topByVolume = await UserBoard(_dbContext.Posts
+            .Where(p => p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+            .GroupBy(p => p.AuthorId)
+            .Select(g => new Scored { Id = g.Key, Score = g.Sum(p => (int)EF.Property<string>(p, "SearchText").Length) }), ct);
+
+        return (topByRating, topByPosts, topByVolume);
+    }
+
+    /// <summary>
+    /// The boards of games over the [start, end) window: by rating and by posts.
+    /// </summary>
+    private async Task<(Leaderboard ByRating, Leaderboard ByPosts)> GameBoards(
+        DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct)
+    {
+        // The boards name and link the modules, so they rank only what a guest can open.
         var publicGames = PublicGames();
-        var publicBlogs = PublicBlogs();
 
-        // Top games by rating (sum of post review ratings)
-        var topGamesByRating = await _dbContext.PostReviews
-            .Where(r => !r.IsRemoved && r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
+        var topGamesByRating = await GameBoard(_dbContext.PostReviews
+            .Where(r => r.CreatedUtc >= startDate && r.CreatedUtc < endDate)
             .Where(r => publicGames.Any(g => g.GameId == r.GameId))
             .GroupBy(r => r.GameId)
-            .Select(g => new { GameId = g.Key, Score = g.Sum(r => (int)r.SignValue) })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.GameId)
-            .Take(LeaderboardBoards.BoardSize)
-            .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
-            {
-                EntityId = g.GameId,
-                PublicId = g.PublicId,
-                Name = g.Title,
-                Score = x.Score
-            })
-            .ToListAsync(ct);
+            .Select(g => new Scored { Id = g.Key, Score = g.Sum(r => (int)r.SignValue) }), ct);
 
-        // Top games by posts
-        var topGamesByPosts = await _dbContext.Posts
-            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+        var topGamesByPosts = await GameBoard(_dbContext.Posts
+            .Where(p => p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .Where(p => publicGames.Any(g => g.GameId == p.Room.GameId))
             .GroupBy(p => p.Room.GameId)
-            .Select(g => new { GameId = g.Key, Score = g.Count() })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.GameId)
-            .Take(LeaderboardBoards.BoardSize)
-            .Join(_dbContext.Games, x => x.GameId, g => g.GameId, (x, g) => new LeaderboardEntry
-            {
-                EntityId = g.GameId,
-                PublicId = g.PublicId,
-                Name = g.Title,
-                Score = x.Score
-            })
-            .ToListAsync(ct);
+            .Select(g => new Scored { Id = g.Key, Score = g.Count() }), ct);
 
-        // Top players by written text volume ("Самый многопишущий игрок"):
-        // how much text the player wrote in the period, counted on the visible
-        // text of the post rather than on its source.
-        //
-        // The source was the wrong string on a public board, in two ways that
-        // point the same direction. Markup counted: a post wrapped in tags scored
-        // for characters no reader ever sees, so the same paragraph could outscore
-        // itself by being formatted. And [private] counted: its whole point is
-        // that the room does not see it, and it was adding to a number the room
-        // is shown - a player could take the top place with text nobody could
-        // read, and nobody could tell from the board that they had.
-        //
-        // SearchText is the plain-text render written beside the body, the same
-        // projection the search index and the post filter read: markup gone,
-        // hidden blocks filtered out as tree nodes rather than cut as strings,
-        // runs of whitespace collapsed to one space. So the score is now the text
-        // a reader of the room actually got, which is what the board claims to be
-        // measuring. Numbers on it move down, and they move down most for the
-        // authors who were furthest from the claim.
-        var topByVolume = await _dbContext.Posts
-            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
-            .GroupBy(p => p.AuthorId)
-            .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)EF.Property<string>(p, "SearchText").Length) })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(LeaderboardBoards.BoardSize)
-            .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
-            {
-                EntityId = u.UserId,
-                Name = u.Username,
-                Score = x.Score
-            })
-            .ToListAsync(ct);
+        return (topGamesByRating, topGamesByPosts);
+    }
 
-        // Top blogs by rating (blog analog of TopGamesByRating). Blog publications
-        // are rated via the polymorphic Likes table (LikeEntityType.Publication),
-        // so a blog's rating is the number of likes received on its publications.
-        // Likes carry no timestamp, so the period is scoped by the publication's
-        // CreatedUtc (same window as the publications count board below). Drives
-        // from the period-filtered publications and inner-joins likes, so removed
-        // or non-publication likes are excluded and there is no cartesian product.
-        var topBlogsByRating = await _dbContext.Publications
-            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+    /// <summary>
+    /// The boards of blogs over the [start, end) window: by rating and by
+    /// publications.
+    /// </summary>
+    private async Task<(Leaderboard ByRating, Leaderboard ByPosts)> BlogBoards(
+        DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct)
+    {
+        var publicBlogs = PublicBlogs();
+
+        // A blog's rating is the likes on its publications; likes carry no timestamp, so the
+        // window is the publication's. Driven from publications, so removed likes drop out.
+        var topBlogsByRating = await BlogBoard(_dbContext.Publications
+            .Where(p => p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .Where(p => publicBlogs.Any(b => b.BlogId == p.BlogId))
-            .Join(_dbContext.Likes.Where(l => !l.IsRemoved && l.EntityType == LikeEntityType.Publication),
+            .Join(_dbContext.Likes.Where(l => l.EntityType == LikeEntityType.Publication),
                 p => p.PublicationId,
                 l => l.EntityId,
                 (p, l) => p.BlogId)
             .GroupBy(blogId => blogId)
-            .Select(g => new { BlogId = g.Key, Score = g.Count() })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.BlogId)
-            .Take(LeaderboardBoards.BoardSize)
-            .Join(_dbContext.Blogs, x => x.BlogId, b => b.BlogId, (x, b) => new LeaderboardEntry
-            {
-                EntityId = b.BlogId,
-                PublicId = b.PublicId,
-                Name = b.Title,
-                Score = x.Score
-            })
-            .ToListAsync(ct);
+            .Select(g => new Scored { Id = g.Key, Score = g.Count() }), ct);
 
-        // Top blogs by publications count (blog analog of TopGamesByPosts).
-        var topBlogsByPosts = await _dbContext.Publications
-            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+        var topBlogsByPosts = await BlogBoard(_dbContext.Publications
+            .Where(p => p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .Where(p => publicBlogs.Any(b => b.BlogId == p.BlogId))
             .GroupBy(p => p.BlogId)
-            .Select(g => new { BlogId = g.Key, Score = g.Count() })
-            .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.BlogId)
-            .Take(LeaderboardBoards.BoardSize)
-            .Join(_dbContext.Blogs, x => x.BlogId, b => b.BlogId, (x, b) => new LeaderboardEntry
-            {
-                EntityId = b.BlogId,
-                PublicId = b.PublicId,
-                Name = b.Title,
-                Score = x.Score
-            })
-            .ToListAsync(ct);
+            .Select(g => new Scored { Id = g.Key, Score = g.Count() }), ct);
 
-        // Top blog authors by written text volume ("Самый многопишущий блогер"):
-        // the blog analog of TopPlayersByVolume. Users are ranked by the total
-        // number of characters in their blog publications' Content authored in
-        // the period, grouped by the publication's AuthorId.
-        //
-        // Still counted on the source, unlike the player board above, and that is
-        // a gap rather than a decision: markup counts here too, so a formatted
-        // publication outscores the same words unformatted. The board cannot be
-        // moved with it because a publication has no projected text beside it -
-        // Message, Post, Topic and Comment do (see DmDbContext.ProjectedBodies),
-        // Publication does not - and giving it one is a column, a migration and a
-        // reseed rather than a line here. What does not apply is the other half:
-        // [private] is a game-post tag, so no publication can score for text its
-        // readers cannot see.
-        var topBlogAuthorsByVolume = await _dbContext.Publications
-            .Where(p => !p.IsRemoved && p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
+        return (topBlogsByRating, topBlogsByPosts);
+    }
+
+    /// <summary>
+    /// The board of blog authors over the [start, end) window, by the volume of
+    /// the publications they wrote.
+    /// </summary>
+    /// <remarks>
+    /// Counted on the source, unlike the player board: a publication has no projected
+    /// text beside it, so its markup scores.
+    /// </remarks>
+    private Task<Leaderboard> TopBlogAuthorsByVolume(
+        DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct) =>
+        UserBoard(_dbContext.Publications
+            .Where(p => p.CreatedUtc >= startDate && p.CreatedUtc < endDate)
             .GroupBy(p => p.AuthorId)
-            .Select(g => new { UserId = g.Key, Score = g.Sum(p => (int)p.Content.Length) })
+            .Select(g => new Scored { Id = g.Key, Score = g.Sum(p => (int)p.Content.Length) }), ct);
+
+    /// <summary>One aggregate of a board before it is named.</summary>
+    private sealed class Scored
+    {
+        public Guid Id { get; set; }
+        public int Score { get; set; }
+    }
+
+    /// <summary>The board's places: scored above zero, highest first, ties by identifier.</summary>
+    private static IQueryable<Scored> Top(IQueryable<Scored> scores) =>
+        scores
             .Where(x => x.Score > 0)
-            .OrderByDescending(x => x.Score).ThenBy(x => x.UserId)
-            .Take(LeaderboardBoards.BoardSize)
-            .Join(_dbContext.Users, x => x.UserId, u => u.UserId, (x, u) => new LeaderboardEntry
+            .OrderByDescending(x => x.Score).ThenBy(x => x.Id)
+            .Take(Leaderboards.BoardSize);
+
+    private Task<Leaderboard> UserBoard(IQueryable<Scored> scores, CancellationToken ct) =>
+        Top(scores)
+            .Join(_dbContext.Users, x => x.Id, u => u.UserId, (x, u) => new LeaderboardEntry
             {
                 EntityId = u.UserId,
                 Name = u.Username,
@@ -313,18 +276,27 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
             })
             .ToListAsync(ct);
 
-        return new LeaderboardBoards
-        {
-            TopPlayersByRating = topByRating,
-            TopPlayersByPosts = topByPosts,
-            TopGamesByRating = topGamesByRating,
-            TopGamesByPosts = topGamesByPosts,
-            TopPlayersByVolume = topByVolume,
-            TopBlogsByRating = topBlogsByRating,
-            TopBlogsByPosts = topBlogsByPosts,
-            TopBlogAuthorsByVolume = topBlogAuthorsByVolume
-        };
-    }
+    private Task<Leaderboard> GameBoard(IQueryable<Scored> scores, CancellationToken ct) =>
+        Top(scores)
+            .Join(_dbContext.Games, x => x.Id, g => g.GameId, (x, g) => new LeaderboardEntry
+            {
+                EntityId = g.GameId,
+                PublicId = g.PublicId,
+                Name = g.Title,
+                Score = x.Score
+            })
+            .ToListAsync(ct);
+
+    private Task<Leaderboard> BlogBoard(IQueryable<Scored> scores, CancellationToken ct) =>
+        Top(scores)
+            .Join(_dbContext.Blogs, x => x.Id, b => b.BlogId, (x, b) => new LeaderboardEntry
+            {
+                EntityId = b.BlogId,
+                PublicId = b.PublicId,
+                Name = b.Title,
+                Score = x.Score
+            })
+            .ToListAsync(ct);
 
     /// <summary>
     /// The games a guest can open, by the filter every read of a game applies to a
@@ -346,8 +318,5 @@ internal class CommunityStatsRepository : ICommunityStatsRepository
     /// not a private draft.
     /// </summary>
     private IQueryable<DbBlog> PublicBlogs() =>
-        _dbContext.Blogs.Where(b =>
-            !b.IsRemoved &&
-            b.PremoderationStatus == PremoderationStatus.Approved &&
-            (b.Status != ModuleStatus.Draft || b.DraftVisibility == DraftVisibility.Public));
+        _dbContext.Blogs.Where(BlogAccessibilityFilters.PubliclyVisible);
 }

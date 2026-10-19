@@ -1,17 +1,14 @@
-// Reading TypeScript and Vue sources: the syntax tree comes from the compiler,
-// the split of a .vue file into its script and template parts is textual.
+// Reading TypeScript sources: the syntax tree comes from the compiler.
 //
-// An address in code is rarely one literal. It is a template with variables in
-// it, a constant of the module at its head, a field of a class, or the body of a
+// A path in code is rarely one literal. It is a template with variables in it,
+// a constant of the module at its head, a field of a class, or the body of a
 // small arrow function. textOf() follows exactly those shapes and nothing more:
 // what it follows becomes text, any other expression inside a template becomes
 // PARAM, and an argument that is not a string at all comes back as null and is
-// counted by the caller as unread. choicesOf() adds the one shape where an
-// address is one of several: a conditional between literals, directly or in a
-// local constant.
+// counted by the caller as unread.
 
 /** What an expression the reader cannot evaluate stands for inside an address. */
-export const PARAM = "\u0001";
+const PARAM = "\u0001";
 
 export function parse(ts, fileName, text) {
   return ts.createSourceFile(fileName, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
@@ -33,8 +30,17 @@ export function unwrap(ts, node) {
   return current;
 }
 
+/** The text of a string literal, plain or a template without holes. */
+export function stringOf(ts, node) {
+  const value = node && unwrap(ts, node);
+  if (value && (ts.isStringLiteral(value) || ts.isNoSubstitutionTemplateLiteral(value))) {
+    return value.text;
+  }
+  return undefined;
+}
+
 /** Name of a property of an object literal, when it is spelled plainly. */
-export function keyOf(ts, property) {
+function keyOf(ts, property) {
   const name = property.name;
   if (name && (ts.isIdentifier(name) || ts.isStringLiteral(name))) return name.text;
   return undefined;
@@ -107,7 +113,7 @@ export function bind(scope, names, value) {
   return { ...scope, bindings };
 }
 
-export function parameterNames(ts, fn) {
+function parameterNames(ts, fn) {
   return fn.parameters.map((p) => (ts.isIdentifier(p.name) ? p.name.text : ""));
 }
 
@@ -170,80 +176,4 @@ export function textOf(ts, expression, scope) {
   }
   if (ts.isCallExpression(node) && ts.isIdentifier(node.expression)) return arrowCall(ts, node, scope);
   return null;
-}
-
-
-/**
- * A .vue file cut into what the compiler reads and what it does not. The
- * script blocks are found by their tags, which a single-file component spells
- * one way; the rest is the template, with its HTML comments taken out.
- */
-export function vueParts(text) {
-  const scripts = [];
-  const template = text
-    .replace(/<script\b[^>]*>([\s\S]*?)<\/script>/g, (_, body) => {
-      scripts.push(body);
-      return "";
-    })
-    .replace(/<style\b[^>]*>[\s\S]*?<\/style>/g, "")
-    .replace(/<!--[\s\S]*?-->/g, "");
-  return { scripts, template };
-}
-
-/**
- * Attributes of a template. The value of an attribute is always written in
- * double quotes in this client and cannot hold one, so the regular expression
- * finds every attribute exactly; a bound value (`:to`, `v-bind:`, `v-*`, `@`)
- * is an expression and is handed back for the compiler to parse.
- */
-export function templateAttributes(template) {
-  const bound = [];
-  const plain = [];
-  for (const match of template.matchAll(/\s([:@#]?[\w.:-]+)="([^"]*)"/g)) {
-    const [, name, value] = match;
-    if (/^(?::|@|#|v-)/.test(name)) bound.push(value);
-    else plain.push({ name, value });
-  }
-  return { bound, plain };
-}
-
-/** The initializer of a `const` of that name in a block around the node. */
-function localConstant(ts, identifier) {
-  for (let block = identifier.parent; block; block = block.parent) {
-    if (!ts.isBlock(block) && !ts.isSourceFile(block)) continue;
-    for (const statement of block.statements) {
-      if (!ts.isVariableStatement(statement)) continue;
-      if (!(statement.declarationList.flags & ts.NodeFlags.Const)) continue;
-      const found = statement.declarationList.declarations.find(
-        (d) => ts.isIdentifier(d.name) && d.name.text === identifier.text && d.initializer,
-      );
-      if (found) return found.initializer;
-    }
-  }
-  return undefined;
-}
-
-/**
- * Every text an expression can take when it picks between addresses:
- * `a ? "x" : "y"`, `a ?? "x"`, or a local constant holding such a choice.
- */
-export function choicesOf(ts, expression, scope) {
-  const node = unwrap(ts, expression);
-  if (!node) return [];
-  if (ts.isConditionalExpression(node)) {
-    return [...choicesOf(ts, node.whenTrue, scope), ...choicesOf(ts, node.whenFalse, scope)];
-  }
-  if (
-    ts.isBinaryExpression(node) &&
-    [ts.SyntaxKind.QuestionQuestionToken, ts.SyntaxKind.BarBarToken].includes(node.operatorToken.kind)
-  ) {
-    return [...choicesOf(ts, node.left, scope), ...choicesOf(ts, node.right, scope)];
-  }
-  const text = textOf(ts, node, scope);
-  if (text !== null) return [text];
-  if (ts.isIdentifier(node)) {
-    const initializer = localConstant(ts, node);
-    if (initializer) return choicesOf(ts, initializer, scope);
-  }
-  return [];
 }

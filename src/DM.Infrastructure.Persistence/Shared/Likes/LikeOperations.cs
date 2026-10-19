@@ -1,13 +1,17 @@
+using System;
 using System.Linq;
 using System.Net;
 using System.Threading.Tasks;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Identity;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Likes;
+using DM.Infrastructure.Persistence.Entities.Shared;
+using DM.Infrastructure.Persistence.RelationalStorage;
+using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Shared.Likes;
 
@@ -15,19 +19,22 @@ namespace DM.Infrastructure.Persistence.Shared.Likes;
 internal class LikeOperations : ILikeOperations
 {
     private readonly IIdentityProvider _identityProvider;
-    private readonly ILikeFactory _likeFactory;
-    private readonly ILikeRepository _likeRepository;
+    private readonly IGuidFactory _guidFactory;
+    private readonly DmDbContext _dbContext;
+    private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IEventProducer _producer;
 
     public LikeOperations(
         IIdentityProvider identityProvider,
-        ILikeFactory likeFactory,
-        ILikeRepository likeRepository,
+        IGuidFactory guidFactory,
+        DmDbContext dbContext,
+        IDateTimeProvider dateTimeProvider,
         IEventProducer producer)
     {
         _identityProvider = identityProvider;
-        _likeFactory = likeFactory;
-        _likeRepository = likeRepository;
+        _guidFactory = guidFactory;
+        _dbContext = dbContext;
+        _dateTimeProvider = dateTimeProvider;
         _producer = producer;
     }
 
@@ -36,26 +43,29 @@ internal class LikeOperations : ILikeOperations
     {
         var currentUser = _identityProvider.Current.User;
 
-        // Asked of the store. The entity that was just read carries an empty
-        // Likes collection for every aggregate whose mapping profile declares
-        // it Ignore - the topic and the blog among them - so this check used to
-        // pass on a like that exists, and only the unique index below refused
-        // the second one.
-        if (await _likeRepository.Exists(entity.Id, currentUser.UserId))
+        // Asked of the store: the entity just read may carry an empty Likes collection.
+        if (await Exists(entity.Id, currentUser.UserId))
         {
             throw new HttpException(HttpStatusCode.Conflict,
                 RefusalMessage.AlreadyLiked);
         }
 
-        var like = _likeFactory.Create(entity.Id, entity.LikeEntityType, currentUser.UserId);
+        var like = new Like
+        {
+            LikeId = _guidFactory.Create(),
+            UserId = currentUser.UserId,
+            EntityId = entity.Id,
+            EntityType = entity.LikeEntityType
+        };
+        _dbContext.Likes.Add(like);
         try
         {
-            await _likeRepository.Add(like);
+            await _dbContext.SaveChangesAsync();
         }
-        catch (DuplicateEntityException)
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
-            // The check above and this one answer the same question; the difference is
-            // that the schema answers it after the other request has committed.
+            // Two clicks both passed the check above; the schema answers after the other committed.
+            _dbContext.ChangeTracker.Clear();
             throw new HttpException(HttpStatusCode.Conflict,
                 RefusalMessage.AlreadyLiked);
         }
@@ -69,17 +79,19 @@ internal class LikeOperations : ILikeOperations
     {
         var currentUser = _identityProvider.Current.User;
 
-        // The same question, and the reason this one had to change: All() over
-        // an empty collection is true, so on every aggregate that ignores Likes
-        // in its mapping this refused unconditionally. A like on a forum topic
-        // could be left and never taken back - the heart stayed filled and the
-        // site answered "Вы еще не ставили лайк" to the person who had.
-        if (!await _likeRepository.Exists(entity.Id, currentUser.UserId))
+        if (!await Exists(entity.Id, currentUser.UserId))
         {
-            throw new HttpException(HttpStatusCode.Conflict,
-                "Вы еще не ставили лайк");
+            throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.NotLiked);
         }
 
-        await _likeRepository.Delete(entity.Id, currentUser.UserId);
+        // A like is withdrawn by the person who left it.
+        var userId = currentUser.UserId;
+        var entityId = entity.Id;
+        await SoftDelete.MarkWhere(
+            _dbContext.Likes.Where(l => l.UserId == userId && l.EntityId == entityId),
+            userId, _dateTimeProvider.Now);
     }
+
+    private Task<bool> Exists(Guid entityId, Guid userId) => _dbContext.Likes
+        .AnyAsync(l => !l.IsRemoved && l.EntityId == entityId && l.UserId == userId);
 }

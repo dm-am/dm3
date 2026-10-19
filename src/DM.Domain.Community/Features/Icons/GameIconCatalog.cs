@@ -5,9 +5,9 @@ using DM.Domain.Core.Exceptions;
 namespace DM.Domain.Community.Features.Icons;
 
 /// <summary>
-/// Registry of icon names from the game-icons.net sprite. Kept in sync
-/// manually with the frontend manifest <c>src/DM.Web.Client/src/shared/ui/Icon/gameIcons.ts</c>
-/// when a new SVG is added. Used by Award/Achievement type validation:
+/// Registry of icon names from the game-icons.net sprite. Held equal to the
+/// frontend manifest <c>src/DM.Web.Client/src/shared/ui/Icon/gameIcons.ts</c>
+/// by its spec (gameIcons.spec.ts) when a new SVG is added. Used by Award/Achievement type validation:
 /// when saving a type with an unknown name the service throws
 /// 400 — an explicit rejection for the admin is better than a broken icon
 /// for the user.
@@ -44,8 +44,7 @@ public static class GameIconCatalog
     };
 
     /// <summary>True if the icon name is known to the sprite.</summary>
-    public static bool IsValid(string iconName) =>
-        !string.IsNullOrWhiteSpace(iconName) && Names.Contains(iconName);
+    public static bool IsValid(string iconName) => Names.Contains(iconName);
 
     /// <summary>Rejects an unknown icon name with 400, for the save paths.</summary>
     public static void EnsureValid(string iconName)

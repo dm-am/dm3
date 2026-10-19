@@ -38,15 +38,9 @@ public class BlogAssistant
 
     #region Navigation Properties
 
-    /// <summary>
-    /// Blog
-    /// </summary>
     [ForeignKey(nameof(BlogId))]
     public virtual Blog Blog { get; set; } = null!;
 
-    /// <summary>
-    /// User
-    /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User User { get; set; } = null!;
 

@@ -17,7 +17,6 @@ internal class ActivationApiService : IActivationApiService
     private readonly IWebAuthenticationService _webAuthenticationService;
     private readonly UserMapper _mapper;
 
-    /// <inheritdoc />
     public ActivationApiService(
         IActivationService activationService,
         IWebAuthenticationService webAuthenticationService,
@@ -48,7 +47,6 @@ internal class ActivationApiService : IActivationApiService
     /// <inheritdoc />
     public async Task<Envelope<User>> Activate(Guid token, ActivationRequest request, HttpContext httpContext)
     {
-        // Map API DTO to service DTO
         var serviceRequest = new ServiceActivationRequest
         {
             Token = token,
@@ -63,13 +61,8 @@ internal class ActivationApiService : IActivationApiService
             new UnconditionalCredentials { UserId = userId },
             httpContext);
 
-        // The account is activated by the call above, and the session is the only
-        // thing that can still be missing here. A passwordless session is refused
-        // for an account that already carries a second factor, and a name chosen
-        // seconds ago cannot carry one, so a guest at this line is a broken rule
-        // rather than an answer to hand back. Unchecked, it returned a user with
-        // no identity in it under a screen that said the account was ready, and
-        // the reader was left signed out with nothing saying so.
+        // A new account carries no second factor, so a guest here is a broken rule,
+        // not an answer: the screen would say "ready" to a reader left signed out.
         if (!identity.User.IsAuthenticated)
         {
             throw new InvalidOperationException(

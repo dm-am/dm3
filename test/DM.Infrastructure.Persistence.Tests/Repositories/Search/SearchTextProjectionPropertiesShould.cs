@@ -1,6 +1,7 @@
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
+using DM.Domain.Core.Content;
 using DM.Infrastructure.Core.Parsing;
 using DM.Infrastructure.Persistence.Repositories.Search;
 using DM.Testing.Markup;
@@ -14,21 +15,14 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Search;
 /// the reference reading of hidden blocks (HiddenTextOracle).
 /// </summary>
 /// <remarks>
-/// The search is the one reader who never has a right to a hidden block: what is
-/// indexed is found by everybody who can search. So every word the rule places
-/// inside a block has to be missing from the projection, on every surface, and
-/// from what the second lock of the database leaves of it.
-///
-/// Half of the texts start nested deeper than the renderer builds. The
-/// projection then falls back to cutting blocks out of the raw text by the
-/// pattern of the second lock, which is a second reading of the markup, and that
-/// path is otherwise never reached by a generated text.
+/// What is indexed is found by everybody who can search. Half of the texts start nested past the renderer,
+/// which sends the projection down its fallback path.
 /// </remarks>
 public class SearchTextProjectionPropertiesShould
 {
     private static readonly string TooDeep = string.Concat(Enumerable.Repeat("[quote]", 520));
 
-    private static readonly Regex SecondLock = new(SearchSnippet.PrivateBlockPattern);
+    private static readonly Regex SecondLock = new(PrivateBlockMarkup.BlockPattern);
 
     [Fact]
     public void IndexNoWordOfAHiddenBlock() =>

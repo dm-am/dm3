@@ -1,97 +1,5 @@
-<template>
-  <article class="bubble-card">
-    <div
-      class="bubble"
-      :class="{
-        expandable,
-        collapsed: expandable && !isExpanded && isOverflowing,
-        'has-toggle': expandable && isOverflowing,
-      }"
-      :style="
-        expandable
-          ? {
-              '--line-height': LINE_HEIGHT,
-              '--max-lines': MAX_COLLAPSED_LINES,
-            }
-          : undefined
-      "
-    >
-      <!-- The collapsed clamp is applied via CSS max-height (calc based on
-           line-height × lines × em), driven by the .collapsed class. During
-           transitions the JS handler pins an inline max-height override so the
-           animation has concrete start and end values. -->
-      <div
-        ref="contentRef"
-        class="bubble-content"
-        :style="
-          overrideMaxHeight !== null
-            ? { maxHeight: overrideMaxHeight }
-            : undefined
-        "
-        @transitionend="onTransitionEnd"
-      >
-        <!-- Holds the corner the actions below stand in, so a first line long
-             enough to reach them wraps short instead of running under them. -->
-        <span
-          v-if="$slots.actions"
-          class="bubble-actions-space"
-          aria-hidden="true"
-        />
-        <slot />
-      </div>
-      <!-- The icons that act on what is said: in the top right corner of the
-           bubble, whatever height the text is centered at. After the text in
-           the DOM, so a screen reader hears what is being edited before the
-           controls, and so the box paints above the content it overlaps. -->
-      <span v-if="$slots.actions" class="bubble-actions"
-        ><slot name="actions"
-      /></span>
-      <button
-        v-if="expandable && isOverflowing"
-        type="button"
-        class="bubble-toggle"
-        :aria-expanded="isExpanded"
-        :aria-label="isExpanded ? 'Свернуть' : 'Показать полностью'"
-        @click="manualToggle"
-      >
-        <SvgIcon
-          name="chevronDown"
-          class="toggle-icon"
-          :class="{ expanded: isExpanded }"
-        />
-      </button>
-    </div>
-    <!-- The footer is a block line (left part inline, right part floated) —
-         NOT a flex row: Chrome's selection serializer emits a newline between
-         element flex items, so a flex footer copied as "author\ndate". Inline
-         flow plus float keeps the same geometry and copies as one line. The
-         .copy-space span is a zero-width (font-size: 0) preserved-space text
-         node: invisible, but Selection.toString() still yields a real space
-         between the two parts. Both are the caller's slots, because their
-         links come from the user slice and shared may not reach for it. -->
-    <div v-if="$slots.left || $slots.right" class="bubble-footer">
-      <span class="bubble-footer-left"><slot name="left" /></span
-      ><span class="copy-space">{{ " " }}</span
-      ><span class="bubble-footer-right"><slot name="right" /></span>
-    </div>
-  </article>
-</template>
-
 <script setup lang="ts">
-/**
- * The green speech bubble of the review family: geometry, the tail, and the
- * three-line collapse with its chevron. What goes inside is the caller's —
- * plain text for a recommendation, server-rendered BBCode for a game review —
- * so the two surfaces share one shape instead of one copying the other's CSS.
- *
- * Extracted from TestimonialCard, which now renders through it unchanged. The
- * bubble knows nothing about authors or dates: the footer is a slot, because
- * its links come from the user slice and shared may not reach for it.
- *
- * The `actions` slot is the top right corner: the edit and delete icons
- * (BubbleAction) of whoever may act on the entry. The caller decides who that
- * is; a slot that renders nothing for the viewer holds no space.
- */
+/** The bubble knows nothing of authors or dates: its links come from the user slice. */
 import { ref, watch, nextTick, onMounted, onBeforeUnmount } from "vue";
 import SvgIcon from "@/shared/ui/Icon/SvgIcon.vue";
 import {
@@ -101,22 +9,14 @@ import {
 
 const props = withDefaults(
   defineProps<{
-    /** Enable expand/collapse for long content (gallery mode) */
     expandable?: boolean;
-    /**
-     * Identity of what is being shown. A change re-measures and re-collapses:
-     * the gallery swaps one testimonial for another inside the same component
-     * instance, and without this the new text would inherit the old one's
-     * expanded state and overflow verdict.
-     */
+    /** Identity of what is shown: a change re-measures and re-collapses (the gallery reuses the instance). */
     contentKey?: string | number;
   }>(),
   { expandable: false, contentKey: undefined },
 );
 
-// Single source of truth for the collapsed-state budget. These values
-// are shared between the JS measurement and the CSS variables so the
-// visual clip and the overflow detection can never drift.
+// Shared by the measurement and the CSS variables, so the clip and the overflow test never drift.
 const MAX_COLLAPSED_LINES = 3;
 const LINE_HEIGHT = 1.5;
 
@@ -124,31 +24,23 @@ const isExpanded = ref(false);
 const isOverflowing = ref(false);
 const contentRef = ref<HTMLElement | null>(null);
 
-// Inline max-height applied during transitions. null = no inline override
-// (the declarative CSS max-height via .collapsed class takes over).
+// The inline max-height during a transition; null leaves it to .collapsed.
 const overrideMaxHeight = ref<string | null>(null);
 
 function collapsedMaxHeightPx(): number {
   if (!contentRef.value) return 0;
   const fontSize = parseFloat(getComputedStyle(contentRef.value).fontSize);
-  // Use floor to guarantee the value is strictly less than or equal to
-  // MAX_COLLAPSED_LINES lines — browsers sometimes round line box metrics
-  // upward, and we want to match what scrollHeight reports.
+  // Floor: browsers round line boxes up, and scrollHeight is what it is compared with.
   return Math.floor(fontSize * LINE_HEIGHT * MAX_COLLAPSED_LINES);
 }
 
 function measureOverflow() {
-  if (!props.expandable) {
-    isOverflowing.value = false;
-    return;
-  }
   const el = contentRef.value;
-  if (!el) {
+  if (!props.expandable || !el) {
     isOverflowing.value = false;
     return;
   }
-  // Temporarily release the clamp so scrollHeight reflects the natural
-  // content height, measure, then restore.
+  // The clamp is released for the measure.
   const prevMaxHeight = el.style.maxHeight;
   el.style.maxHeight = "none";
   void el.offsetHeight;
@@ -157,12 +49,7 @@ function measureOverflow() {
   isOverflowing.value = natural > collapsedMaxHeightPx() + 1;
 }
 
-// Smooth expand/collapse. See TruncatedContent.vue for the full pattern
-// rationale — same scrollHeight pin-and-animate approach with a mandatory
-// `await nextTick()` between the start-state and target-state writes so
-// Vue commits the start value to the DOM before the target value goes in.
-// Without the nextTick pause, Vue coalesces the two writes into one render
-// and the browser never sees the transition starting point.
+// Pin, nextTick, measure, release on transitionend: without the nextTick Vue coalesces both writes.
 async function toggleExpand() {
   const el = contentRef.value;
   if (!isOverflowing.value || !el) return;
@@ -170,16 +57,7 @@ async function toggleExpand() {
   const collapsedPx = collapsedMaxHeightPx();
 
   if (!isExpanded.value) {
-    // Collapsed → expanded: pin the current clamped height as the
-    // transition start, let Vue render it, force reflow so the pinned value
-    // becomes the browser's committed "before" state, then flip state and
-    // pin the target (natural scrollHeight).
-    //
-    // The target MUST be measured only after the `.collapsed` class removal
-    // has committed: `.collapsed` also switches `white-space`, and for
-    // multi-paragraph content the natural height differs between the two
-    // modes. Measuring before the flip yields an undersized target — the
-    // animation lands short and the rest pops in at transitionend.
+    // The target is measured after .collapsed goes: it switches white-space, and multi-paragraph text changes height.
     overrideMaxHeight.value = `${collapsedPx}px`;
     await nextTick();
     void el.offsetHeight;
@@ -188,7 +66,6 @@ async function toggleExpand() {
     void el.offsetHeight;
     overrideMaxHeight.value = `${el.scrollHeight}px`;
   } else {
-    // Expanded → collapsed: mirror sequence.
     overrideMaxHeight.value = `${el.scrollHeight}px`;
     await nextTick();
     void el.offsetHeight;
@@ -197,8 +74,7 @@ async function toggleExpand() {
   }
 }
 
-/** Manual user toggle (chevron click): clears the registry's pending bulk
- * action; registry-driven expand/collapse call toggleExpand directly. */
+/** A press of the reader's own clears the registry's pending bulk action. */
 function manualToggle() {
   notifyExpandableChanged();
   toggleExpand();
@@ -208,12 +84,9 @@ function onTransitionEnd(e: TransitionEvent) {
   if (e.propertyName !== "max-height") return;
   if (!contentRef.value) return;
   if (isExpanded.value) {
-    // Post-expand: release the constraint so late-loading content (e.g. a
-    // link preview unfurling) can freely reflow.
+    // Released, so late content (a link preview) can reflow.
     overrideMaxHeight.value = "none";
   } else {
-    // Post-collapse: drop the inline override so the .collapsed class
-    // drives max-height via its declarative calc().
     overrideMaxHeight.value = null;
   }
 }
@@ -224,7 +97,6 @@ onMounted(() => {
   }
 });
 
-// Re-measure when the shown content changes (gallery rotation).
 watch(
   () => props.contentKey,
   () => {
@@ -235,16 +107,10 @@ watch(
   },
 );
 
-// Exposed for a parent transition callback (the rotating gallery) and for its
-// pause-on-expanded logic: isExpanded lets a carousel avoid swapping content
-// out mid-read.
+// isExpanded lets the rotating gallery keep an entry being read.
 defineExpose({ measureContent: measureOverflow, isExpanded });
 
-// Register with the global expand/collapse-all registry ONLY while the
-// content actually overflows (has something to collapse). Short entries must
-// not register, or the ScrollNav "Свернуть все" button would appear on pages
-// where nothing is collapsible. Overflow is measured async, so a watch
-// registers/unregisters as it flips.
+// Registered only while something overflows, or "Свернуть все" would show where nothing collapses.
 let unregister: (() => void) | null = null;
 
 function syncRegistration() {
@@ -274,36 +140,83 @@ onBeforeUnmount(() => {
 });
 </script>
 
+<template>
+  <article class="bubble-card">
+    <div
+      class="bubble"
+      :class="{
+        expandable,
+        collapsed: expandable && !isExpanded && isOverflowing,
+        'has-toggle': expandable && isOverflowing,
+      }"
+      :style="
+        expandable
+          ? {
+              '--line-height': LINE_HEIGHT,
+              '--max-lines': MAX_COLLAPSED_LINES,
+            }
+          : undefined
+      "
+    >
+      <!-- During a transition an inline max-height gives the animation concrete ends. -->
+      <div
+        ref="contentRef"
+        class="bubble-content"
+        :style="
+          overrideMaxHeight !== null
+            ? { maxHeight: overrideMaxHeight }
+            : undefined
+        "
+        @transitionend="onTransitionEnd"
+      >
+        <!-- Holds the actions' corner, so a long first line wraps short of them. -->
+        <span
+          v-if="$slots.actions"
+          class="bubble-actions-space"
+          aria-hidden="true"
+        />
+        <slot />
+      </div>
+      <!-- After the text in the DOM: a screen reader hears what is edited before the controls. -->
+      <span v-if="$slots.actions" class="bubble-actions"
+        ><slot name="actions"
+      /></span>
+      <button
+        v-if="expandable && isOverflowing"
+        type="button"
+        class="bubble-toggle"
+        :aria-expanded="isExpanded"
+        :aria-label="isExpanded ? 'Свернуть' : 'Показать полностью'"
+        @click="manualToggle"
+      >
+        <SvgIcon
+          name="chevronDown"
+          class="toggle-icon"
+          :class="{ expanded: isExpanded }"
+        />
+      </button>
+    </div>
+    <!-- A block line, not a flex row: flex items copy as separate lines. The footer is the caller's slots:
+         its links come from the user slice. -->
+    <div v-if="$slots.left || $slots.right" class="bubble-footer">
+      <span class="bubble-footer-left"><slot name="left" /></span
+      ><span class="copy-space">{{ " " }}</span
+      ><span class="bubble-footer-right"><slot name="right" /></span>
+    </div>
+  </article>
+</template>
+
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 @use "@/assets/styles/Animations" as *
 
-// The side padding of the bubble, named because the corner actions hold a
-// share of the first line measured from the same edge.
+// Named: the corner actions hold a share of the first line from the same edge.
 $bubble-padding-x: $medium + $small
 
 .bubble-card
   margin: 0
 
-// Speech bubble. `position: relative` is REQUIRED for the tail
-// pseudo-element (`::after`) AND the absolutely-positioned toggle
-// button — without it both fall through to an unrelated ancestor.
-//
-// Size-invariant layout:
-//   The min-height reserves enough space for 3 lines of content plus
-//   the symmetric top/bottom padding. Every entry — 1-line short,
-//   3-line short, 10-line collapsed — renders at exactly the same
-//   height, so rotation in the gallery never causes the footer row or
-//   the surrounding page blocks to shift. The toggle, when present, is
-//   absolutely positioned INSIDE the bottom padding strip, so it costs
-//   no extra height and the bubble's bottom gap stays exactly equal to
-//   the top one (owner rule: the chevron must not make the bottom
-//   space bigger).
-//
-// Short-case flex alignment: `justify-content: center` keeps short
-// content centered in the taller min-height box. For the has-toggle
-// case (long content, chevron visible) we switch to `flex-start` so
-// the content pins to the top and the toggle sits in the bottom strip.
+// Every entry renders at the same height, so the gallery's rotation shifts nothing; the toggle lives
+// inside the bottom padding (the owner's rule: the chevron must not grow the bottom space).
 .bubble
   position: relative
   display: flex
@@ -315,19 +228,9 @@ $bubble-padding-x: $medium + $small
   border-radius: $bubble-radius
   background-color: $bg-highlight-green
   color: $text-on-green
-  // Budget: 3 lines of content + symmetric top/bottom padding.
-  // Concrete numbers resolve to 72 + 18 + 18 = 108px at default
-  // font-size, which is both short-case and long-collapsed size.
   min-height: calc(var(--line-height, 1.5) * var(--max-lines, 3) * 1em + 2 * ($medium + $tiny))
 
-  // Long content with a chevron toggle — content pinned to top; the bottom
-  // padding stays the base symmetric 18px (the chevron lives inside it,
-  // absolutely positioned).
-  //
-  // IMPORTANT: gate on `.has-toggle` (stable while the chevron is visible),
-  // NOT on `.collapsed`. The collapsed class flips at the START of the
-  // expand/collapse animation — if alignment were tied to it, the bubble
-  // would jump the instant the animation begins.
+  // On .has-toggle, not .collapsed: that flips at the start of the animation and would jump the bubble.
   &.has-toggle
     justify-content: flex-start
 
@@ -335,32 +238,17 @@ $bubble-padding-x: $medium + $small
     position: relative
     overflow: hidden
     white-space: pre-wrap
-    word-wrap: break-word
+    overflow-wrap: break-word
     line-height: var(--line-height, 1.5)
-    // Smooth max-height transition on expand/collapse. The JS handler pins
-    // concrete start/end pixel values so CSS can animate between them (it
-    // cannot transition from px to `none`). Curve matches
-    // TruncatedContent.vue — a single site-wide "reveal" feel.
-    //
-    // Direction-aware duration: the quint ease-out curve spends ~60% of its
-    // time on the last 20% of the path. On expand that long tail is masked
-    // by the text appearing; on collapse the nearly-closed bubble visibly
-    // "crawls" to the finish. $expand-duration open / 0.4s close makes both
-    // directions read at the same perceived tempo.
+    // Quint ease-out crawls at its end: collapse runs the slow step, so both directions read at one tempo.
     transition: max-height $expand-duration $expand-easing
 
-  // Declarative collapsed max-height — hard clip at 3 lines via
-  // `overflow: hidden`. The JS handler overlays an inline max-height during
-  // the transition so the animation has concrete start/end pixel values.
+  // Paragraph breaks collapse to spaces in the excerpt.
   &.collapsed .bubble-content
     max-height: calc(var(--line-height) * var(--max-lines) * 1em)
-    transition-duration: 0.4s
-    // Collapsed preview reads as a continuous excerpt: paragraph breaks
-    // collapse to spaces so the clamp never shows an awkward empty line.
-    // Full paragraph formatting returns on expand.
+    transition-duration: $duration-slow
     white-space: normal
 
-  // Speech bubble arrow (on the left side)
   &::after
     position: absolute
     top: 100%
@@ -370,18 +258,7 @@ $bubble-padding-x: $medium + $small
     border-top-color: $bg-highlight-green
     border-left-color: $bg-highlight-green
 
-// Expand toggle — a real <button> absolutely positioned inside the bubble's
-// bottom PADDING strip (18px), so it adds zero height and the bottom gap
-// stays equal to the top one. Absolute positioning also keeps the bubble's
-// outer height identical between the "short entry" and "long collapsed"
-// cases, so gallery rotation never shifts the surrounding layout.
-//
-// `bottom: $tiny` lifts the 18px-tall button off the bubble's lower edge:
-// flush with it, the chevron read as if it were falling out of the bubble.
-// `left: 50% + translateX(-50%)` is the classic pixel-perfect horizontal
-// centering pattern. A real <button> preserves native keyboard focus and
-// ARIA state; the tap target is intentionally the visual 18px strip — the
-// owner's symmetric-padding rule wins over the 24px guideline here.
+// Inside the bottom padding strip, lifted $tiny off the edge; the tap target is the 18px strip by the owner's rule.
 .bubble-toggle
   position: absolute
   left: 50%
@@ -398,34 +275,29 @@ $bubble-padding-x: $medium + $small
   background: transparent
   color: $text-on-green
   cursor: pointer
-  opacity: 0.65
-  transition: opacity 0.2s ease, background-color 0.2s ease
+  opacity: $opacity-soft
+  transition: opacity $transition-normal, background-color $transition-normal
 
   &:hover
     opacity: 1
     background-color: $hover-overlay
 
   &:focus-visible
-    outline: 2px solid $text-on-green
-    outline-offset: -2px
+    +focus-ring($inward: true)
+    outline-color: $text-on-green
     opacity: 1
 
 .toggle-icon
   display: block
   font-size: 16px
-  // Chevron rotation matches the content curve/duration exactly — a single
-  // synchronized motion instead of two competing tempos.
-  transition: transform 0.4s $expand-easing
+  // The content's curve and duration: one motion.
+  transition: transform $duration-slow $expand-easing
 
   &.expanded
     transform: rotate(180deg)
     transition-duration: $expand-duration
 
-// Corner actions (the `actions` slot). Absolute, pinned to the bubble and not
-// to the text: the text is centered in a box reserved for three lines, and
-// icons that followed it would stand halfway down beside a one-line entry.
-// The 16px glyphs land 12px from the top edge and 14px from the right one,
-// each 4px inside its button.
+// Pinned to the bubble, not to the centred text, or the icons would stand halfway down a one-line entry.
 $actions-top: $small
 $actions-right: $small + $tiny
 $actions-gap: $minor
@@ -438,21 +310,16 @@ $action-glyph-inset: $minor
   display: flex
   gap: $actions-gap
 
-  // Nothing the viewer may do: the slot renders only comments, and the
-  // corner stays free.
+  // The slot renders only comments for a viewer who may do nothing.
   &:empty
     display: none
 
-  // The keyboard ring of a corner control is drawn in the bubble's ink, like
-  // the chevron's: $link has nothing to stand against on the green fill.
+  // The bubble's ink: $link has nothing to stand against on green.
   :deep(button:focus-visible)
-    outline: 2px solid $text-on-green
-    outline-offset: -2px
+    +focus-ring($inward: true)
+    outline-color: $text-on-green
 
-// The first line's share of that corner, so text long enough to reach the
-// icons wraps short of them with a $medium gap before the first glyph. Only
-// the first line can meet them: the second starts below the buttons. Sized
-// for both icons, since a slot does not say how many it holds.
+// Only the first line can meet the icons; sized for both, since a slot does not say how many it holds.
 .bubble-actions-space
   float: right
   width: $actions-right + 2 * $bubble-action-size + $actions-gap + $medium - $action-glyph-inset - $bubble-padding-x
@@ -461,28 +328,18 @@ $action-glyph-inset: $minor
 .bubble:has(> .bubble-actions:empty) .bubble-actions-space
   display: none
 
-// Block line, NOT flex — see the template comment for why.
+// A block line, not flex: see the template.
 .bubble-footer
   display: block
-  margin-top: 18px  // Clear the speech bubble arrow
+  margin-top: 18px
 
-  // Contain the float without creating a BFC (which could change width
-  // interaction with the bubble arrow) — classic clearfix.
+  // A clearfix, not a BFC, which could change the width against the arrow.
   &::after
     content: ""
     display: block
     clear: both
 
-// float:right rather than flex space-between: same "pinned to the right edge
-// of the same line" geometry, but the span stays in the inline copy flow
-// (floats do not force line breaks in Selection.toString()).
+// A float, not space-between: the span stays in the inline copy flow.
 .bubble-footer-right
   float: right
-
-// Zero-width preserved space: invisible in layout (font-size: 0) but
-// Selection.toString() still emits it as a real " " between the inline parts
-// of the footer line. See Tabs.vue for the visible-space variant.
-.copy-space
-  white-space: pre
-  font-size: 0
 </style>

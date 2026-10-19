@@ -6,9 +6,6 @@ using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Moderation.Features.Warnings;
 
-/// <summary>
-/// Repository for warning operations
-/// </summary>
 public interface IWarningRepository
 {
     /// <summary>
@@ -40,9 +37,6 @@ public interface IWarningRepository
     /// </remarks>
     Task<Warning?> Get(Guid warningId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Create a warning
-    /// </summary>
     Task<Warning> Create(CreateWarningEntity warning, CancellationToken ct = default);
 
     /// <summary>
@@ -54,20 +48,12 @@ public interface IWarningRepository
     /// signature of whoever moved them is written beside the points rather than
     /// over the moderator who issued the warning.
     /// </remarks>
-    /// <param name="warningId">Warning to change</param>
-    /// <param name="points">New points, 0 to 6</param>
-    /// <param name="changedByUserId">Moderator making the change</param>
-    /// <param name="changedUtc">Moment of the change</param>
-    /// <param name="text">Why the points were changed</param>
-    /// <param name="ct">Cancellation token</param>
     Task<bool> ChangePoints(Guid warningId, int points, Guid changedByUserId,
         DateTimeOffset changedUtc, string text, CancellationToken ct = default);
 
     /// <summary>
     /// The user a warning was issued to, null when there is no such warning
     /// </summary>
-    /// <param name="warningId">Warning identifier</param>
-    /// <param name="ct">Cancellation token</param>
     Task<Guid?> GetTargetUserId(Guid warningId, CancellationToken ct = default);
 
     /// <summary>
@@ -75,18 +61,10 @@ public interface IWarningRepository
     /// moderator who asked. Answers whether the warning was there.
     /// </summary>
     /// <remarks>
-    /// The upload is marked deleted the way a moderator deletes a file of
-    /// somebody else, and that mark is what both the answer of the log and the
-    /// orphan sweeper read as "moderation took it": the picture leaves the log at
-    /// once and the file goes once the grace period is over. A mark that is
-    /// already moderation's is left as it stands, so a second request moves
-    /// neither its author nor the start of the grace period. A warning that pins
-    /// no picture is there all the same and has nothing to delete.
+    /// The upload is marked deleted as a moderator deletes a file of somebody else, which
+    /// the log and the orphan sweeper read as moderation's. A mark already moderation's
+    /// stays as it stands, so a second request moves neither its author nor its grace period.
     /// </remarks>
-    /// <param name="warningId">Warning whose picture to delete</param>
-    /// <param name="deletedByUserId">Moderator deleting it</param>
-    /// <param name="deletedUtc">Moment of the deletion</param>
-    /// <param name="ct">Cancellation token</param>
     Task<bool> DeleteProfilePicture(Guid warningId, Guid deletedByUserId,
         DateTimeOffset deletedUtc, CancellationToken ct = default);
 

@@ -13,19 +13,8 @@ namespace DM.Architecture.Tests;
 /// event, and the kernel contracts one module implements for another only read.
 /// </summary>
 /// <remarks>
-/// PATTERNS used to answer the same question twice and differently: the layer
-/// section allowed cross-module contracts in Domain.Core, the FAQ said modules
-/// may not call each other at all and that communication is events only. The
-/// code followed the first and ignored the second, in twenty-two files of six
-/// modules. The document now states one rule — synchronous reading through a
-/// kernel contract, writing through events — and says both halves are checked.
-///
-/// The reading half is DomainBoundaryShould: no module names another, in either
-/// direction. This is the writing half. Its shape is the signal: a member that
-/// hands nothing back is being called for its effect, and an effect on somebody
-/// else's area asked for synchronously is exactly what the events exist to carry
-/// — the caller waits for it, shares its failure, and the owner never gets to
-/// decide what to do about it.
+/// The reading half is DomainBoundaryShould; this is the writing half. A member that hands
+/// nothing back is called for its effect, which is what events carry.
 /// </remarks>
 public class CrossModuleContractShould
 {
@@ -86,11 +75,7 @@ public class CrossModuleContractShould
     /// A member called for its effect rather than for its answer: nothing comes
     /// back, or the only thing that comes back is the completion.
     /// </summary>
-    /// <remarks>
-    /// Property accessors are skipped. Some of these contracts are DTO shapes
-    /// (ILikable is the like counter four DTOs carry) and a settable property on
-    /// one is not a module being told to do something.
-    /// </remarks>
+    /// <remarks>Property accessors are skipped: some contracts are DTO shapes.</remarks>
     private static bool IsCommand(MethodInfo method) =>
         !method.IsSpecialName &&
         !CheckVerbs.Any(verb => method.Name.StartsWith(verb, StringComparison.Ordinal)) &&

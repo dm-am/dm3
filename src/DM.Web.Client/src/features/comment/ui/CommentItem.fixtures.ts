@@ -1,0 +1,91 @@
+import { mount, type VueWrapper } from "@vue/test-utils";
+import { createPinia } from "pinia";
+import { useToast } from "@/shared/lib/composables/useToast";
+import type { Comment } from "@/shared/api/models/common/comment";
+import CommentItem from "./CommentItem.vue";
+import {
+  route,
+  submitDelete,
+  submitEdit,
+  submitLike,
+  submitUnlike,
+} from "./CommentItem.doubles";
+
+// Keeps `to`: the number's destination is what it has to say.
+export const RouterLinkStub = {
+  name: "RouterLink",
+  props: ["to"],
+  template: "<a><slot /></a>",
+};
+
+export const comment = (over: Partial<Comment> = {}): Comment =>
+  ({
+    id: "c-1",
+    text: "<strong>Правила</strong>",
+    createdUtc: new Date().toISOString(),
+    modifiedUtc: null,
+    author: {
+      username: "SolohinLex",
+      role: "RegularUser",
+      lastActivityUtc: null,
+    },
+    likes: [],
+    isRemoved: false,
+    ...over,
+  }) as unknown as Comment;
+
+export const refused = (status: number, title = "") => ({
+  data: null,
+  error: { type: "", title, status, traceId: "t" },
+});
+
+export function freshComment() {
+  route.query = {};
+  localStorage.clear();
+  localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
+  for (const answer of [submitEdit, submitDelete, submitLike, submitUnlike]) {
+    answer.mockReset().mockResolvedValue({ error: null });
+  }
+  // Error toasts never auto-dismiss and deduplicate by text.
+  const { toasts, dismiss } = useToast();
+  [...toasts.value].forEach((t) => dismiss(t.id));
+}
+
+// Signed in as this reader (the auth store seeds itself from localStorage).
+export const signInAs = (username: string, role?: string) =>
+  localStorage.setItem("user", JSON.stringify({ username, role }));
+
+export const mountComponent = (
+  fetchEditSource: (id: string) => Promise<unknown>,
+  over: Partial<Comment> = {},
+  extra: Record<string, unknown> = {},
+) =>
+  mount(CommentItem, {
+    global: {
+      plugins: [createPinia()],
+      stubs: { RouterLink: RouterLinkStub },
+    },
+    props: {
+      comment: comment(over),
+      fetchEditSource: fetchEditSource as never,
+      submitEdit: submitEdit as never,
+      submitDelete: submitDelete as never,
+      submitLike: submitLike as never,
+      submitUnlike: submitUnlike as never,
+      ...extra,
+    },
+  });
+
+export const plates = () => useToast().toasts.value.map((t) => t.message);
+
+export const LINE = ".action-result";
+
+export const action = (wrapper: VueWrapper, word: string) => {
+  const found = wrapper
+    .findAll(".caption-action")
+    .find((one) => one.text() === word);
+  if (!found) throw new Error(`"${word}" is not in the caption line`);
+  return found;
+};
+
+export const LIKE_BUTTON = "button.like-badge";

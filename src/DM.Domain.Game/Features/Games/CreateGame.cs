@@ -1,21 +1,13 @@
 using System.Collections.Generic;
 using DM.Domain.Core.Enums;
+using DM.Domain.Game.Features.AttributeSchemas;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// DTO model for new game
-/// </summary>
 public class CreateGame
 {
-    /// <summary>
-    /// Game title
-    /// </summary>
     public string Title { get; set; } = null!;
 
-    /// <summary>
-    /// Game RPG system
-    /// </summary>
     public string SystemName { get; set; } = null!;
 
     /// <summary>
@@ -23,18 +15,12 @@ public class CreateGame
     /// </summary>
     public string NarrativeSetting { get; set; } = null!;
 
-    /// <summary>
-    /// Game public information
-    /// </summary>
     public string Info { get; set; } = null!;
 
-    /// <summary>
-    /// Game assistant username
-    /// </summary>
     public string AssistantUsername { get; set; } = null!;
 
     /// <summary>
-    /// Only GM and post author can see dice roll result
+    /// Only the leads and the post author see a roll result
     /// </summary>
     public bool HideDiceResult { get; set; }
 
@@ -48,44 +34,30 @@ public class CreateGame
     /// </summary>
     public bool HidePostStats { get; set; }
 
-    /// <summary>
-    /// comments access mode
-    /// </summary>
     public CommentsAccessMode CommentsAccessMode { get; set; }
 
     /// <summary>
-    /// Specifications the character sheet of the game starts with. An empty set
-    /// is a game whose characters carry no attributes, which is a choice the
-    /// master is allowed to make.
+    /// The sheet the game starts with; an empty set is a game whose characters carry no attributes
     /// </summary>
     public IEnumerable<CreateAttributeSpecification> AttributeSpecifications { get; set; } = [];
 
     /// <summary>
-    /// Game tag short identifiers: the public alias the tag list and the game
-    /// filters speak, translated to the tags' own identifiers on the way in
+    /// Short identifiers of the tags, the alias the tag list and the filters speak
     /// </summary>
     public IEnumerable<int> Tags { get; set; } = [];
 
-    /// <summary>
-    /// Create game as a draft
-    /// </summary>
     public bool Draft { get; set; }
 
     /// <summary>
-    /// Visibility of draft content (when Draft = true)
+    /// When <see cref="Draft"/> is set
     /// </summary>
     public DraftVisibility DraftVisibility { get; set; }
 
     /// <summary>
-    /// Copy the creator's personal blacklist into the game's on creation.
-    /// Null leaves the choice to the creator's account setting "Переносить
-    /// черный список в новые игры и блоги" (AutoPopulateContentBlacklist).
+    /// Copy the creator's personal blacklist into the game's; null leaves it to AutoPopulateContentBlacklist.
     /// </summary>
     /// <remarks>
-    /// Copying shows who is on the creator's personal list to whoever manages the
-    /// game's list with them, and tells the people on it that they are on the
-    /// game's list the first time they try to write there. That is the price
-    /// of the switch, and the reason it is off unless the creator turns it on.
+    /// Off unless the creator turns it on: copying shows his personal list to whoever manages the game's.
     /// </remarks>
     public bool? CopyBlacklist { get; set; }
 }

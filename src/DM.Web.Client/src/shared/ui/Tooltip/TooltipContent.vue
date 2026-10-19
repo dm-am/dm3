@@ -1,37 +1,10 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from "vue";
 import TooltipBubble from "./TooltipBubble.vue";
-import {
-  isCompatMouseEvent,
-  isKeyboardFocus,
-  isTap,
-  trackInput,
-} from "./touchRule";
+import { isKeyboardFocus, trackInput } from "./inputSource";
 
-/**
- * The words of a tooltip: a tag description as the server renders it, or a
- * plain text the client writes itself ("в группе уже выбран тег").
- *
- * A description is the hint surface (BbSurface.Hint), whose one tag is [tip].
- * The server draws each such word as a span.bb-tip carrying what it shows in
- * data-tip-text and data-tip-img, and nothing of the picture itself: this
- * component wires the words, and draws the small tooltip over the word that
- * is open, from the attributes, by binding and not by markup. The picture is
- * requested when a reader opens it, not with the list of tags on every page.
- * The only markup put into the page is the server's (BBCODE_RENDERING.md),
- * or the preview's in the window of the tag, which draws the same string.
- *
- * A word opens on hover, on a tap and on a focus from the keyboard. The tap is
- * the one of touchRule.ts, the rule Tooltip.vue gives its own trigger: a
- * reader meets the two as one control. Inside a tooltip carried to <body>
- * Tab does not reach the words, so the keyboard reads them where the text
- * stands in the page: the card of the tag and the preview in its window.
- *
- * The small tooltip is the site's bubble, framed to stand apart from the one
- * under it (TooltipBubble, nested). Its words wrap at 280, the width of a
- * picture, and it stays inside the window: over the word, or under it when
- * there is no room above.
- */
+// The server draws each [tip] word as a span.bb-tip with data-tip-text and data-tip-img; this component wires
+// the words and binds the small tooltip from the attributes, so no markup but the server's enters the page.
 withDefaults(
   defineProps<{
     /** The server's markup of a tag description. */
@@ -56,7 +29,7 @@ const bubbleRef = ref<InstanceType<typeof TooltipBubble> | null>(null);
 
 /** The word whose small tooltip is open, and how it was opened. */
 const active = ref<HTMLElement | null>(null);
-const openedBy = ref<"hover" | "tap" | "focus" | null>(null);
+const openedBy = ref<"hover" | "focus" | null>(null);
 
 let hideTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -65,7 +38,7 @@ function cancelHide() {
   hideTimer = null;
 }
 
-function open(word: HTMLElement, by: "hover" | "tap" | "focus") {
+function open(word: HTMLElement, by: "hover" | "focus") {
   cancelHide();
   active.value = word;
   openedBy.value = by;
@@ -82,50 +55,31 @@ function scheduleClose() {
   hideTimer = setTimeout(close, HIDE_DELAY);
 }
 
-/** The word of a [tip] the event reached, inside this text. */
 function wordOf(target: EventTarget | null): HTMLElement | null {
   if (!(target instanceof Element)) return null;
   const word = target.closest<HTMLElement>(".bb-tip");
   return word && rootRef.value?.contains(word) ? word : null;
 }
 
-/** Whether a node is inside the small tooltip. */
 function inBubble(node: EventTarget | null): boolean {
   const bubble = bubbleRef.value?.element;
   return !!bubble && node instanceof Node && bubble.contains(node);
 }
 
-// ---------------------------------------------------------------------------
-// The words are the server's markup: one listener each on the text for the
-// pointer, the finger and the focus, read by the word they reached.
-// ---------------------------------------------------------------------------
+// One listener each on the text, read by the word the event reached: the words are the server's markup.
 
-// Hover, by the mouse only: the mouse events a browser makes up after a tap
-// would otherwise open the popup a second time behind the tap's back.
 function handleMouseOver(event: MouseEvent) {
-  if (isCompatMouseEvent() || inBubble(event.target)) return;
+  if (inBubble(event.target)) return;
   const word = wordOf(event.target);
   if (word) open(word, "hover");
 }
 
 function handleMouseOut(event: MouseEvent) {
-  if (isCompatMouseEvent() || !wordOf(event.target)) return;
+  if (!wordOf(event.target)) return;
   // Moving within the word, or onto its small tooltip, is not leaving it.
   const next = event.relatedTarget;
   if (wordOf(next) === active.value || inBubble(next)) return;
   scheduleClose();
-}
-
-// A tap, read from the click the browser sends for it (touchRule.ts): a scroll
-// that starts on a word and a long press that selects it open nothing. The
-// small tooltip opens at once, and a second tap on the word closes it; a tap
-// on neither the word nor its tooltip closes it (handleDocumentPointerDown).
-function handleClick(event: MouseEvent) {
-  if (!isTap(event) || inBubble(event.target)) return;
-  const word = wordOf(event.target);
-  if (!word) return;
-  if (active.value === word && openedBy.value === "tap") close();
-  else open(word, "tap");
 }
 
 function handleFocusIn(event: FocusEvent) {
@@ -158,9 +112,7 @@ onMounted(() => {
   });
 });
 
-// A tooltip renders this component behind a v-if, so closing it unmounts the
-// text and takes an open small tooltip with it. What does not go by itself is
-// this listener and a pending close, hence both by hand.
+// Closing the tooltip unmounts this text; the document listener and a pending close do not go by themselves.
 onUnmounted(() => {
   cancelHide();
   document.removeEventListener("pointerdown", handleDocumentPointerDown, {
@@ -168,31 +120,22 @@ onUnmounted(() => {
   });
 });
 
-// ---------------------------------------------------------------------------
-// The small tooltip, from the attributes of the open word
-// ---------------------------------------------------------------------------
-
 const tipText = computed(() => active.value?.dataset.tipText ?? null);
 const tipImage = computed(() => active.value?.dataset.tipImg ?? null);
 
-// Pictures that failed to load, by address. The failure is state Vue renders
-// from, not a node the handler swaps by hand: replacing the <img> from the
-// event took the element out from under the patcher.
+// State Vue renders from: swapping the <img> in the handler took it from under the patcher.
 const failedImages = ref(new Set<string>());
 
 const imageFailed = computed(
   () => tipImage.value !== null && failedImages.value.has(tipImage.value),
 );
 
-// Takes the address the failing element was drawn with: an error can arrive
-// after the pointer has moved on, and the open word is no longer the one that
-// failed by then.
+// The address the element was drawn with: the open word may have changed by the time of the error.
 function markImageFailed(address: string) {
   failedImages.value = new Set(failedImages.value).add(address);
 }
 
-// A picture that loads changes the size of the tooltip, which is placed by
-// its size: placed again once the picture is in.
+// A loaded picture changes the tooltip's size, which places it.
 function placeAgain() {
   bubbleRef.value?.reposition();
 }
@@ -207,7 +150,6 @@ const anchor = (): DOMRect | null =>
     class="rich-text"
     @mouseover="handleMouseOver"
     @mouseout="handleMouseOut"
-    @click="handleClick"
     @focusin="handleFocusIn"
     @focusout="handleFocusOut"
     @keydown="handleKeydown"
@@ -218,7 +160,6 @@ const anchor = (): DOMRect | null =>
       ref="bubbleRef"
       :key="tipImage ?? tipText ?? ''"
       nested
-      :rich="!!tipImage"
       :text="tipImage ? undefined : (tipText ?? undefined)"
       :anchor="anchor"
       :max-width="TIP_WIDTH"

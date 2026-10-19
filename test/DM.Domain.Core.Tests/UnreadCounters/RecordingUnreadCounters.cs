@@ -11,15 +11,7 @@ namespace DM.Domain.Core.Tests.UnreadCounters;
 /// A counters store that writes nothing and remembers everything it was asked to.
 /// </summary>
 /// <remarks>
-/// Written by hand rather than mocked, because the project it lives in references
-/// the kernel and nothing else on purpose: a test assembly that dragged an
-/// implementation in beside the kernel would let a dependency reach the kernel's
-/// types without the build saying so, which is the property the kernel exists for.
-///
-/// Only the four members of the marker lifecycle do anything. The rest of the
-/// contract is reads and arithmetic over markers that were never written, and a
-/// reservation has no business calling any of it — so they refuse rather than
-/// return an empty answer that would let a wrong call look right.
+/// Members outside the marker lifecycle refuse, so a wrong call cannot look right.
 /// </remarks>
 internal sealed class RecordingUnreadCounters : IUnreadCountersRepository
 {
@@ -53,8 +45,6 @@ internal sealed class RecordingUnreadCounters : IUnreadCountersRepository
         return Task.CompletedTask;
     }
 
-    public Task CreateMarkerAsync(Guid entityId, UnreadEntryType entryType) =>
-        CreateMarkerAsync(entityId, entityId, entryType);
 
     public Task DeleteAsync(Guid entityId, UnreadEntryType entryType)
     {

@@ -6,7 +6,7 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 
 /// <summary>
 /// DAL model for user login record. Tracks IP addresses and user agents for moderation purposes.
-/// Records are immutable (append-only) and cleaned up after 365 days.
+/// Records are immutable (append-only).
 /// </summary>
 [Table("UserLoginRecords")]
 public class UserLoginRecord

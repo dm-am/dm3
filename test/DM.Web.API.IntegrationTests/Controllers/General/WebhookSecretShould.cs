@@ -1,7 +1,5 @@
-using System.Collections.Generic;
 using System.Net;
 using System.Text;
-using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using AwesomeAssertions;
 using Xunit;
@@ -9,12 +7,8 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
 /// <summary>
-/// The bot webhook links an external chat id to a DM account, so its shared
-/// secret is the only thing standing between an anonymous caller and someone
-/// else's account. Two properties are load-bearing and neither is obvious from
-/// reading the action: an unconfigured secret must close the endpoint rather
-/// than open it, and the secret must never be accepted from the URL, because a
-/// path is copied verbatim into every access log and trace.
+/// The webhook secret guards someone else's account: an unconfigured secret closes the endpoint, and the secret
+/// is never accepted from the URL, which every access log copies.
 /// </summary>
 public class WebhookSecretShould : IntegrationTestBase
 {
@@ -52,10 +46,7 @@ public class WebhookSecretShould : IntegrationTestBase
     private const string TelegramHeader = "X-Telegram-Bot-Api-Secret-Token";
 
     /// <summary>
-    /// A host that has the secret configured, which the shared one deliberately
-    /// has not: "no secret configured" is the shipped default and the tests above
-    /// are about it. Without this the wrong-secret test returned 404 before the
-    /// comparison, so FixedTimeEquals and the 403 arm were executed by nothing.
+    /// A host with the secret configured, which the shared one has not; it reaches the comparison and the 403 arm.
     /// </summary>
     private HttpClient ConfiguredClient() => DatabaseFixture.Factory
         .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
@@ -91,10 +82,7 @@ public class WebhookSecretShould : IntegrationTestBase
 
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden,
             "the comparison is reached and refuses");
-        // The refusal travels as the shape every other refusal in this host
-        // travels as. This controller is hidden from the OpenAPI document, so the
-        // ProblemDetails gate cannot see it, and it is where two hand-built
-        // {"error": ...} bodies used to live.
+        // The refusal has the shape of every other: this controller is hidden from the OpenAPI gate.
         response.Content.Headers.ContentType?.MediaType.Should().Be("application/problem+json");
     }
 

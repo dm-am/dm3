@@ -1,31 +1,12 @@
 <script setup lang="ts">
-/**
- * DateRangePicker - Date range input with From/To fields and Apply button.
- *
- * Used for filtering by date ranges (created, activated, closed, etc.)
- *
- * One calendar for the whole range, set into the panel under the two fields.
- * Each field used to open a calendar of its own over the panel, which covered
- * the other field and "Применить", and neither calendar showed the range. Now
- * the first click on a day sets the start and the second the end, the band
- * between them follows the pointer until the second click, and two ends
- * clicked back to front change places. A date typed into a field is drawn on
- * the calendar at once. "Неделя", "Месяц" and "Год" fill both fields with a
- * period that ends today; applying is still "Применить".
- *
- * Days after today are out of reach, since nothing a filter looks for (a game
- * created, a topic written, a user registered) happens tomorrow. A poll is the
- * exception: it starts and ends ahead, and its filter passes `allowFuture`.
- * "Today" is on the site's clock (siteTime), not the device's.
- */
+// One calendar under both fields: the first pick sets the start, the second the end. Days after today
+// are out of reach (nothing a filter finds happens tomorrow), except where `allowFuture` says otherwise.
 import { ref, watch, computed } from "vue";
 import dayjs from "dayjs";
 import { CalendarGrid, DateInput } from "@/shared/ui/DatePicker";
-import { siteTime } from "@/shared/lib/utils/datetime";
+import { DAY, siteTime } from "@/shared/lib/utils/datetime";
 import { FilterApplyButton } from "../primitives";
 import type { DateRangePickerProps } from "../types";
-
-defineOptions({ name: "DateRangePicker" });
 
 const props = withDefaults(defineProps<DateRangePickerProps>(), {
   fromLabel: "От",
@@ -39,8 +20,6 @@ const emit = defineEmits<{
   clear: [];
 }>();
 
-const DAY = "YYYY-MM-DD";
-
 /** The quick periods, each ending today and counted back by one unit. */
 const PRESETS = [
   { label: "Неделя", unit: "week" },
@@ -50,14 +29,12 @@ const PRESETS = [
 
 const calendarRef = ref<InstanceType<typeof CalendarGrid> | null>(null);
 
-// Local state for inputs
 const fromInput = ref(props.fromValue || "");
 const toInput = ref(props.toValue || "");
 
 /** The start is set and the next click on a day sets the end. */
 const awaitingEnd = ref(false);
 
-// Sync with props when they change
 watch(
   () => props.fromValue,
   (newVal) => {
@@ -83,10 +60,7 @@ const isInvalidRange = computed(() => {
   );
 });
 
-// Check if apply button should be enabled. This is the only source for the
-// button's disabled state: an inverted range has to keep the button locked,
-// otherwise the "Начало не может быть позже конца" reason never reaches the
-// tooltip and the range gets applied backwards.
+// The only source of the button's disabled state: an inverted range keeps it locked, with its reason.
 const canApply = computed(() => {
   if (isInvalidRange.value) return false;
   const fromChanged = (fromInput.value || null) !== props.fromValue;
@@ -94,7 +68,6 @@ const canApply = computed(() => {
   return fromChanged || toChanged;
 });
 
-// Check if clear button should be shown
 const showClear = computed(() => {
   return props.showClearButton && (props.fromValue || props.toValue);
 });
@@ -164,8 +137,6 @@ function handleClear() {
         {{ preset.label }}
       </button>
     </div>
-    <!-- The fields are the page's own, 38 with the text 8 in, level with the
-         buttons of the panel above and below them. -->
     <div class="date-range-row">
       <span class="date-label">{{ fromLabel }}</span>
       <DateInput
@@ -220,13 +191,27 @@ function handleClear() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Filters" as *
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
-+dropdown-date-range
+.dropdown-date-range
+  padding: $small
+  border-bottom: 1px solid $border
 
-// Three quick periods in a row over the fields, the panel's own buttons
-// ("Применить" is one) shared out in equal thirds.
+.date-range-row
+  display: flex
+  align-items: center
+  gap: $small
+  margin-bottom: $small
+
+.date-label
+  width: 30px
+  font-size: $secondary-font-size
+  color: $text-muted
+
+.date-input
+  flex: 1
+  min-width: 0
+
 .date-presets
   display: flex
   gap: $small
@@ -237,8 +222,6 @@ function handleClear() {
   min-width: 0
   +button
 
-// The calendar of the range, between the fields it fills and the button that
-// applies them.
 .date-calendar
   margin: $tiny 0 $small
 

@@ -13,21 +13,11 @@ namespace DM.Infrastructure.Core.Extensions;
 /// The assembly scan every module builds its registrations on.
 /// </summary>
 /// <remarks>
-/// Ported from the Autofac scan with its semantics kept on purpose. The scan
-/// only fills gaps and never replaces explicit wiring: MS.DI hands a single
-/// resolution to the last descriptor of a service type, so a blanket scan
-/// registering over AddDbContextPool or a typed HttpClient factory would
-/// silently win - the same class of bug PreserveExistingDefaults closed on the
-/// Autofac side. A service type registered before the scans stays theirs;
-/// service types the scans themselves introduce stay open, so a second assembly
-/// still adds its implementations of a shared contract to the same enumerable
-/// (both S3 client providers must survive, which is also why this is not
-/// Scrutor: its skip strategy silences by service type alone).
-///
-/// Interfaces forward to the self registration rather than name the type twice:
-/// when a module pins the implementation type to a lifetime of its own, a
-/// resolution through the interface follows that registration instead of
-/// constructing a rogue per-dependency copy.
+/// The scan only fills gaps: MS.DI resolves the last descriptor, so registering over
+/// explicit wiring would silently win. Service types the scans introduce stay open,
+/// so another assembly adds its implementations of a shared contract (not Scrutor,
+/// which skips by service type alone). Interfaces forward to the self registration,
+/// so a lifetime a module pins on the type holds through the interface.
 /// </remarks>
 public static class DefaultTypesRegistrationExtensions
 {
@@ -122,12 +112,7 @@ public static class DefaultTypesRegistrationExtensions
     /// Whether any public constructor could ever be satisfied by a container.
     /// </summary>
     /// <remarks>
-    /// The scan sweeps up types nobody resolves - positional records, results,
-    /// tokens - whose constructors take strings and value types no container
-    /// supplies. Under Autofac those registrations sat inert; under
-    /// ValidateOnBuild every one is a startup failure. A type none of whose
-    /// constructors could be satisfied is excluded: resolving it failed under
-    /// Autofac too, this only moves the refusal out of the container.
+    /// Records and results whose constructors take strings would fail ValidateOnBuild.
     /// </remarks>
     private static bool HasActivatableConstructor(Type type) =>
         type.GetConstructors(BindingFlags.Instance | BindingFlags.Public)

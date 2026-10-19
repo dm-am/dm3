@@ -1,19 +1,10 @@
 #!/bin/bash
 set -euo pipefail
 
-# The installer installs; it does not update.
-#
-# Run a second time it reached `git clone` into a directory that already had a
-# tree in it, and died there - under `set -e`, after having installed packages
-# and restarted the docker daemon on a running stand. The failure was correct
-# and the order was not: whoever ran it looking for an update got a bounced
-# daemon and a message about a non-empty directory.
-#
-# Checked first, then, and with the answer to the question actually being asked.
-#
-# Deliberately not a fetch-and-merge: the tree on a server carries the operator's
-# own edits - the environment file, the edge credentials, local configuration -
-# and a checkout would take them away without a word.
+# The installer installs and does not update. Run again, it used to reach `git clone` into
+# a non-empty directory after apt and a docker restart on a live stand. Checked first.
+# Deliberately not a fetch-and-merge: the server tree carries the operator's own edits (the
+# environment file, the edge credentials), and a checkout would take them away.
 
 INSTALL_DIR="${1:-/opt/dm3}"
 

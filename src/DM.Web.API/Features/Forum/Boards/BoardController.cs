@@ -14,36 +14,20 @@ namespace DM.Web.API.Features.Forum.Boards;
 /// <summary>
 /// Board management endpoints
 /// </summary>
-/// <remarks>
-/// Provides access to individual forum boards and their content.
-/// Each board is a thematic section containing topics and comments.
-///
-/// ## Available Operations
-/// - Get all boards or a specific board
-/// - Mark all comments on a board as read
-/// - Get board moderators list
-///
-/// ## Access Control
-/// Board visibility and topic creation permissions are controlled by board-level policies.
-/// Some operations require authentication.
-/// </remarks>
 [ApiController]
 [Route("v1/boards")]
 [ApiExplorerSettings(GroupName = "Forum")]
 [Tags("Forum Boards")]
 public class BoardController : ControllerBase
 {
-    private readonly IBoardApiService _boardApiService;
-    private readonly IForumCommentApiService _commentApiService;
-    private readonly IBoardModeratorsApiService _moderatorsApiService;
+    private readonly BoardApiService _boardApiService;
+    private readonly ForumCommentApiService _commentApiService;
+    private readonly BoardModeratorsApiService _moderatorsApiService;
 
-    /// <summary>
-    /// Creates a new instance of BoardController
-    /// </summary>
     public BoardController(
-        IBoardApiService boardApiService,
-        IForumCommentApiService commentApiService,
-        IBoardModeratorsApiService moderatorsApiService)
+        BoardApiService boardApiService,
+        ForumCommentApiService commentApiService,
+        BoardModeratorsApiService moderatorsApiService)
     {
         _boardApiService = boardApiService;
         _commentApiService = commentApiService;
@@ -53,37 +37,15 @@ public class BoardController : ControllerBase
     /// <summary>
     /// Get list of all boards
     /// </summary>
-    /// <remarks>
-    /// Returns all forum boards with their statistics:
-    /// - Total topics and comments count
-    /// - Unread topics and comments count (for authenticated users)
-    /// - Last activity information
-    ///
-    /// Response is cached for 60 seconds.
-    /// </remarks>
     /// <response code="200">List of all boards with statistics</response>
     [HttpGet(Name = nameof(GetBoards))]
     [ProducesResponseType(typeof(ListEnvelope<Board>), StatusCodes.Status200OK)]
-    // No cache policy at all. The response carries per-user unread counters, and
-    // a minute of browser-side freshness on those is a badge that does not clear
-    // after DELETE /v1/boards/{id}/comments/unread — the very action whose whole
-    // point is that it clears. "private" only moves the stale copy one hop
-    // closer to the reader; it does not make it less stale.
-    public async Task<IActionResult> GetBoards()
-    {
-        return Ok(await _boardApiService.GetBoards());
-    }
+    // No cache policy: a cached copy of the per-user unread counters would outlive "mark as read".
+    public async Task<IActionResult> GetBoards() => Ok(await _boardApiService.GetBoards());
 
     /// <summary>
     /// Get board details
     /// </summary>
-    /// <remarks>
-    /// Returns detailed information about a specific board including:
-    /// - Board title and description
-    /// - Topic and comment counts
-    /// - Unread counts (for authenticated users)
-    /// - Board moderators
-    /// </remarks>
     /// <param name="id">Board identifier (GUID or URL slug)</param>
     /// <response code="200">Board details</response>
     /// <response code="404">Board not found</response>
@@ -110,7 +72,7 @@ public class BoardController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReadBoardComments(string id)
     {
-        await _commentApiService.MarkAsRead(id);
+        await _commentApiService.MarkBoardAsRead(id);
         return NoContent();
     }
 

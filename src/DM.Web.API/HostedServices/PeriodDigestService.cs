@@ -15,15 +15,9 @@ namespace DM.Web.API.HostedServices;
 /// stays idempotent belong to <see cref="IPeriodDigestProcessor" />; this only
 /// decides how often to ask.
 /// </remarks>
-internal class PeriodDigestService : PeriodicHostedService
+internal class PeriodDigestService(IServiceProvider serviceProvider, ILogger<PeriodDigestService> logger)
+    : PeriodicHostedService(serviceProvider, logger)
 {
-    private readonly ILogger<PeriodDigestService> _logger;
-
-    public PeriodDigestService(
-        IServiceProvider serviceProvider,
-        ILogger<PeriodDigestService> logger)
-        : base(serviceProvider, logger) => _logger = logger;
-
     /// <inheritdoc />
     protected override string Tag => "[Period Digest]";
 
@@ -43,7 +37,7 @@ internal class PeriodDigestService : PeriodicHostedService
 
         foreach (var title in created)
         {
-            _logger.LogInformation("[Period Digest] Created digest topic \"{Title}\"", title);
+            Logger.LogInformation("{Tag} Created digest topic \"{Title}\"", Tag, title);
         }
     }
 }

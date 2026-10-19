@@ -5,10 +5,7 @@ using DM.Domain.Core.Authorization;
 namespace DM.Infrastructure.Core.Parsing;
 
 /// <summary>
-/// Everything the renderer needs to produce permission-correct HTML/text
-/// for a single BBCode string. Immutable; constructed by mapping layer
-/// at the boundary that knows the content provenance, then threaded
-/// into the visitor.
+/// What the visibility filter needs to render one BBCode string.
 /// </summary>
 public sealed record RenderContext
 {
@@ -20,10 +17,8 @@ public sealed record RenderContext
     /// content. Null when the reader is anonymous.
     /// </summary>
     /// <remarks>
-    /// The only id the filtering rules may read. Taking
-    /// <see cref="IAuthorizationSubject.UserId"/> straight off the viewer hands
-    /// the rules the empty id for a guest, and the empty id is what every field
-    /// nobody filled in also holds - see <see cref="AnonymousIdentity"/>.
+    /// The only id the rules may read: a guest carries the empty id, as does every
+    /// field nobody filled in (<see cref="AnonymousIdentity"/>).
     /// </remarks>
     public Guid? ViewerUserId => AnonymousIdentity.Of(Viewer);
 
@@ -36,20 +31,17 @@ public sealed record RenderContext
 
     /// <summary>Author of the containing post (for [private] author-forever rule).</summary>
     /// <remarks>
-    /// The empty id arrives here as null. A caller who leaves the author unset
-    /// is saying the content has no known author, and the rule that compares a
-    /// reader against it must find nothing to compare with rather than match
-    /// every anonymous reader.
+    /// The empty id is stored as null, so it matches no anonymous reader.
     /// </remarks>
     public Guid? PostAuthorUserId
     {
-        get => postAuthorUserId;
-        init => postAuthorUserId = value is { } author && !AnonymousIdentity.Is(author)
+        get => _postAuthorUserId;
+        init => _postAuthorUserId = value is { } author && !AnonymousIdentity.Is(author)
             ? author
             : null;
     }
 
-    private readonly Guid? postAuthorUserId;
+    private readonly Guid? _postAuthorUserId;
 
     /// <summary>Game the post belongs to (for lead resolution and scoping).</summary>
     public Guid? GameId { get; init; }
@@ -69,15 +61,9 @@ public sealed record RenderContext
     /// recipients it carries. Key = raw tag attribute value, the same key the
     /// owner ids are held under.</summary>
     /// <remarks>
-    /// The recipients name who reads the block, and the only record of that is
-    /// the snapshot. Composed from the tag attribute instead - which is what it used
-    /// to be - it names whoever answers to that name today, and after a rename
-    /// that is somebody who never saw the block.
-    ///
-    /// A key is absent when the snapshot cannot name every addressee under it,
-    /// which is the whole of an old snapshot and any block that resolved to
-    /// nobody. The renderer then falls back to the author's own text, which is
-    /// what it has always named.
+    /// The attribute names whoever answers to the name today, the snapshot the one
+    /// who reads the block. A key is absent when the snapshot cannot name every
+    /// addressee, and the author's text is shown instead.
     /// </remarks>
     public IReadOnlyDictionary<string, IReadOnlyList<string>> PrivateAddresseeNamesByAttribute
     {
@@ -87,36 +73,47 @@ public sealed record RenderContext
 
     /// <summary>Game leads (master + assistants). Mentors are NOT included.</summary>
     /// <remarks>
-    /// The empty id is dropped on the way in. A lead sees every [private] block
-    /// in the game, so an unfilled master id sitting in this list is the widest
-    /// permission the renderer has, handed to the one reader whose own id is
-    /// also empty.
+    /// The empty id is dropped, or a guest would read every [private] block as a lead.
     /// </remarks>
     public IReadOnlyCollection<Guid> GameLeadUserIds
     {
-        get => gameLeadUserIds;
-        init => gameLeadUserIds = AnonymousIdentity.WithoutAnonymous(value);
+        get => _gameLeadUserIds;
+        init => _gameLeadUserIds = AnonymousIdentity.WithoutAnonymous(value);
     }
 
-    private readonly IReadOnlyCollection<Guid> gameLeadUserIds = Array.Empty<Guid>();
+    private readonly IReadOnlyCollection<Guid> _gameLeadUserIds = Array.Empty<Guid>();
 
-    /// <summary>Per-post override: when true, [private] blocks are visible to
-    /// every viewer who can read the post's room.</summary>
-    public bool PostSharePrivateWithAll { get; init; }
+    /// <summary>Per-game override, "Показывать всем скрытые блоки": when true,
+    /// the addressed [private] blocks of every post of the game are visible to
+    /// every reader of its room.</summary>
+    public bool GameShowPrivateMessages { get; init; }
 
     /// <summary>Per-room override: when true, [private] blocks in any post of
     /// the room are visible to every room reader.</summary>
     public bool RoomViewPrivateText { get; init; }
 
-    /// <summary>Context for an author editing their own content. Endpoint-level
-    /// authorization must have confirmed authorship before this is used.</summary>
-    public static RenderContext ForAuthorEdit(IAuthorizationSubject author, BbSurface surface) => new()
-    {
-        Viewer = author,
-        Audience = RenderAudience.AuthorEdit,
-        Surface = surface,
-        PostAuthorUserId = author.UserId
-    };
+    /// <summary>
+    /// Files of the post the viewer does not read: an [img] or a [link] whose
+    /// address names one is cut out, without trace, as a block he does not read.
+    /// </summary>
+    /// <remarks>
+    /// The page shows nothing where the picture stood, rather than a broken one
+    /// that says a file is there and is not his.
+    /// </remarks>
+    public IReadOnlySet<Guid> WithheldUploadIds { get; init; } = new HashSet<Guid>();
+
+    /// <summary>
+    /// Whether every [img] and [link] whose address holds an identifier is cut out,
+    /// for a reader nobody knows: the text of the search index, written once for
+    /// every reader.
+    /// </summary>
+    /// <remarks>
+    /// Which files a reader does not read is decided by the reader, and the index
+    /// has none, so it keeps the address of no file at all. An identifier in an
+    /// address of another site loses its picture or link from the index with it,
+    /// which costs a search by address and nothing else.
+    /// </remarks>
+    public bool WithholdsEveryUpload { get; init; }
 
     /// <summary>Context for a plain-text channel (email, notification digest).
     /// Privacy tags are unconditionally stripped regardless of other fields.</summary>

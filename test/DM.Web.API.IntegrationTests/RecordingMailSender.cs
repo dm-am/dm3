@@ -7,20 +7,8 @@ namespace DM.Web.API.IntegrationTests;
 /// The letters the host sent, kept where a test can read them.
 /// </summary>
 /// <remarks>
-/// A letter leaves through a fanout exchange the mail worker consumes, and that
-/// worker is a separate process which does not run here. Nothing is bound to the
-/// exchange inside the suite, so the broker drops every message: a decision that
-/// mails its owner and one that silently does not looked exactly alike from in
-/// here, and there was no surface on which to assert the difference.
-///
-/// A decorator and not a substitute. The real sender stays underneath and still
-/// validates the letter and waits for the broker to confirm it, so the half of
-/// the path the suite already exercised is exercised still; what is added is the
-/// copy kept here.
-///
-/// Static, for the reason <see cref="InMemoryObjectStorage" /> is static: the
-/// host is shared across the whole collection, and a test has no handle on the
-/// instance that served its request.
+/// The mail worker does not run here, so the broker drops every letter. A decorator: the real sender still
+/// validates and waits for the confirm. Static, as <see cref="InMemoryObjectStorage" /> is.
 /// </remarks>
 public sealed class RecordingMailSender : IMailSender, IDisposable
 {
@@ -31,11 +19,7 @@ public sealed class RecordingMailSender : IMailSender, IDisposable
     public RecordingMailSender(IMailSender inner) => _inner = inner;
 
     /// <summary>What was sent to one address, in the order it was sent.</summary>
-    /// <remarks>
-    /// By address rather than by the whole log, because the suite shares one host:
-    /// a registration in the next test over puts its own letter in this queue, and
-    /// an assertion over everything would be answering about somebody else's mail.
-    /// </remarks>
+    /// <remarks>By address: the suite shares one host.</remarks>
     public static IReadOnlyList<EmailLetter> To(string email) => Letters
         .Where(letter => string.Equals(letter.Address, email, StringComparison.OrdinalIgnoreCase))
         .ToList();
@@ -53,9 +37,6 @@ public sealed class RecordingMailSender : IMailSender, IDisposable
     /// <summary>
     /// Closes the sender underneath, which nothing else will.
     /// </summary>
-    /// <remarks>
-    /// It holds an open channel and is built by hand rather than resolved, so the
-    /// container never learned about it and disposes this wrapper alone.
-    /// </remarks>
+    /// <remarks>Built by hand, so the container disposes this wrapper alone.</remarks>
     public void Dispose() => (_inner as IDisposable)?.Dispose();
 }

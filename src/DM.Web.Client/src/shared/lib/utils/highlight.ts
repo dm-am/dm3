@@ -1,11 +1,4 @@
-/**
- * Utility for highlighting search matches in text.
- * Escapes HTML and wraps matched portions in <mark> tags.
- */
-
-/**
- * Escape HTML special characters to prevent XSS
- */
+/** Escape HTML special characters to prevent XSS */
 function escapeHtml(text: string): string {
   return text
     .replace(/&/g, "&amp;")
@@ -15,9 +8,13 @@ function escapeHtml(text: string): string {
     .replace(/'/g, "&#39;");
 }
 
+/** A search query as a case-insensitive pattern that captures each match. */
+function matchesOf(query: string): RegExp {
+  return new RegExp(`(${query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")})`, "gi");
+}
+
 /**
  * Highlight matching portions of text by wrapping them in <mark> tags.
- * Returns HTML string with highlighted matches.
  *
  * @param text - The text to search in
  * @param query - The search query to highlight
@@ -28,14 +25,7 @@ export function highlightMatch(text: string, query: string): string {
     return escapeHtml(text || "");
   }
 
-  // Escape special regex characters in query
-  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-  // Case-insensitive match
-  const regex = new RegExp(`(${escapedQuery})`, "gi");
-
-  // Split text into matched and unmatched parts
-  const parts = text.split(regex);
+  const parts = text.split(matchesOf(query));
 
   return parts
     .map((part) => {
@@ -48,28 +38,22 @@ export function highlightMatch(text: string, query: string): string {
 }
 
 /**
- * Highlight search matches in already-rendered DOM content.
- * Walks text nodes and wraps matches in <mark class="search-highlight">.
- * Safe for BBCode/HTML content — operates on text nodes only.
- *
- * Call `clearDomHighlight(el)` before re-highlighting to remove previous marks.
+ * Highlights matches in rendered content, text nodes only, so it is safe for
+ * BBCode. Call `clearDomHighlight(el)` before highlighting again.
  */
 export function highlightDom(el: HTMLElement, query: string): void {
   if (!query) return;
 
-  const escapedQuery = query.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-  const regex = new RegExp(`(${escapedQuery})`, "gi");
+  const regex = matchesOf(query);
   const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT);
 
   const matches: { node: Text; index: number; length: number }[] = [];
 
-  // Collect matches first (can't modify DOM during walk)
+  // Collected first: the DOM cannot change during the walk. A .bb-private node
+  // in the DOM is one the server let the viewer see.
   let node: Text | null;
   while ((node = walker.nextNode() as Text | null)) {
-    // Skip nodes inside <mark> (already highlighted)
     if (node.parentElement?.classList.contains("search-highlight")) continue;
-    // NOTE: .bb-private nodes are NOT skipped — if present in DOM, the server
-    // already confirmed the viewer has access, so highlighting is correct.
 
     let match: RegExpExecArray | null;
     regex.lastIndex = 0;
@@ -78,9 +62,8 @@ export function highlightDom(el: HTMLElement, query: string): void {
     }
   }
 
-  // Apply highlights in reverse order to preserve indices.
-  // try/catch guards against HierarchyRequestError if a range
-  // crosses an element boundary (rare in practice with BBCode).
+  // In reverse to keep the indices; a range across an element boundary throws
+  // HierarchyRequestError and is skipped.
   for (let i = matches.length - 1; i >= 0; i--) {
     try {
       const { node: textNode, index, length } = matches[i];
@@ -96,10 +79,7 @@ export function highlightDom(el: HTMLElement, query: string): void {
   }
 }
 
-/**
- * Remove all search highlights from a DOM element.
- * Unwraps <mark class="search-highlight"> back to plain text.
- */
+/** Unwraps every <mark class="search-highlight"> back to plain text. */
 export function clearDomHighlight(el: HTMLElement): void {
   const marks = el.querySelectorAll("mark.search-highlight");
   marks.forEach((mark) => {

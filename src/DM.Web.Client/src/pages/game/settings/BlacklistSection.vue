@@ -1,13 +1,8 @@
 <script setup lang="ts">
 /**
- * BlacklistSection — the game blacklist: users who may not comment in the
- * game's discussion or apply to it, and do everything else as anybody does
- * (GameRoleExtensions.IsBlacklisted). The list is the shared BlacklistEditor;
- * this owns the game store and api wiring, the line that says what the list
- * does, and who the field does not suggest: the people who run the game and
- * the players in it, whom the server sends to the game's own tools
- * (GameBlacklistService.Add). The server hands the list oldest first, so a
- * name put on is the last row, over the field.
+ * The game's blacklist in the shared editor. The field does not suggest the
+ * people of the game, whom the server sends to the game's own tools
+ * (GameBlacklistService.Add).
  */
 import { computed, onMounted } from "vue";
 import { storeToRefs } from "pinia";
@@ -41,7 +36,7 @@ const inTheGame = computed(() => {
 
 function reload(): Promise<void> {
   return game.value
-    ? store.loadBlacklist(game.value.publicId ?? game.value.id)
+    ? store.loadBlacklist(game.value.publicId)
     : Promise.resolve();
 }
 
@@ -50,11 +45,8 @@ onMounted(reload);
 async function add(username: string): Promise<GeneralError | null> {
   if (!game.value) return null;
   const { error } = await gameApi.addToBlacklist(game.value.id, username);
-  // The field says a refusal under itself, with the name kept in it.
   if (error) return error;
-  // Awaited, so the field empties onto the list that already holds the new
-  // row: "Добавить" waits shut until `add` settles. Left unawaited, the name
-  // left the field before it was in the list, a round trip early.
+  // Awaited, so the field empties onto a list that already holds the name.
   await reload();
   return null;
 }
@@ -62,7 +54,6 @@ async function add(username: string): Promise<GeneralError | null> {
 async function remove(username: string): Promise<GeneralError | null> {
   if (!game.value) return null;
   const { error } = await gameApi.removeFromBlacklist(game.value.id, username);
-  // The editor says a refusal under the row of the name.
   if (error) return error;
   reload();
   return null;

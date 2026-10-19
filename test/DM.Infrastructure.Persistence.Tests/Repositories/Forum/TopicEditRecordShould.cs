@@ -8,7 +8,6 @@ using DM.Infrastructure.Persistence.Repositories.Forum;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Diagnostics;
-using Microsoft.EntityFrameworkCore.InMemory.Internal;
 using NSubstitute;
 using Xunit;
 using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
@@ -21,20 +20,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 /// Who changed a topic, and whether anything changed at all.
 /// </summary>
 /// <remarks>
-/// A topic row carries its author and no editor, so "who changed this" has exactly
-/// one home in the schema: the TopicEdits history. It was declared from the first
-/// migration and written by nobody, which is why the ChangedTopic notification went
-/// out with no actor and reached the subscribers who had blocked the person making
-/// the change — while the mirror-image edit of a blog publication, which does keep
-/// a ModifiedByUserId column, was filtered.
-///
-/// The second fact is the same fact. A PATCH that hands back the values the topic
-/// already holds is answered, but it is not an edit: it writes no history row, and
-/// therefore it must announce nothing either, or the announcement would be
-/// attributed to whoever edited the topic last — somebody who did nothing this
-/// time, and whose blacklist the delivery is then filtered against. Both are read
-/// off the change tracker here, which is what makes them the same fact rather than
-/// two rules that can drift apart.
+/// TopicEdits is the one home of who changed a topic. A PATCH with the values held writes no history and
+/// announces nothing; both are read off the change tracker.
 /// </remarks>
 public class TopicEditRecordShould
 {
@@ -51,10 +38,7 @@ public class TopicEditRecordShould
 
     private static DmDbContext Seeded()
     {
-        // The repository writes the topic and the board summary inside one
-        // transaction, and the in-memory store has none: unsuppressed, the warning
-        // it raises about ignoring the transaction is thrown as an error. What this
-        // class asserts is which rows appear, and that is the same either way.
+        // The in-memory store has no transaction, so its warning about ignoring one is suppressed.
         var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
             .UseInMemoryDatabase(Guid.NewGuid().ToString())
             .ConfigureWarnings(w => w.Ignore(InMemoryEventId.TransactionIgnoredWarning))
@@ -127,12 +111,7 @@ public class TopicEditRecordShould
     /// <summary>
     /// A save that changes nothing leaves nothing behind, and says so.
     /// </summary>
-    /// <remarks>
-    /// The client PATCHes the fields it holds, so the same values come back on every
-    /// save the reader cancels out of. Recording those would turn the history into a
-    /// request log; announcing them would hand the notification an actor for a change
-    /// nobody made.
-    /// </remarks>
+    /// <remarks>The client PATCHes the fields it holds on every save, cancelled ones included.</remarks>
     [Fact]
     public async Task LeaveNoRecordWhenTheValuesAreTheOnesTheTopicAlreadyHolds()
     {

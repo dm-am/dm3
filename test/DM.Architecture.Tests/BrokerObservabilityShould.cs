@@ -1,5 +1,4 @@
 using System;
-using System.IO;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Xunit;
@@ -10,17 +9,8 @@ namespace DM.Architecture.Tests;
 /// The state of the bus is measured, not inferred from the processes on it.
 /// </summary>
 /// <remarks>
-/// The consumers dashboard showed the request rate of the workers - traffic of
-/// their own health probes - their GC heap, and whether their process answered.
-/// All of that is equally true of a worker that has silently stopped consuming,
-/// and none of it says anything about a queue. Nothing scraped the broker at
-/// all, so a message stuck in a queue, a dead-letter queue filling up and a
-/// queue left with no consumer were three states indistinguishable from an idle
-/// Saturday, and the way any of them got found was a reader saying a
-/// notification never came.
-///
-/// Asserted on the configuration files, because the whole of this lives outside
-/// the solution: a plugin, a scrape target, a rule file and a dashboard.
+/// A worker that stopped consuming looks the same as an idle one from its process, so the broker
+/// is scraped. Asserted on the configuration files, which live outside the solution.
 /// </remarks>
 public class BrokerObservabilityShould
 {
@@ -36,18 +26,8 @@ public class BrokerObservabilityShould
     /// A trace does not end at the broker.
     /// </summary>
     /// <remarks>
-    /// The context travels in the message headers, and the lines that make a
-    /// consumer continue the trace rather than start a new one are the
-    /// subscriptions to the client's two activity sources: the publisher side
-    /// injects the context and the subscriber side parents the deliver span to
-    /// it. Removed, nothing fails: every worker keeps producing traces, and each
-    /// of them is a root with no parent — so the request that caused the work
-    /// and the work itself stop being one story, which is visible only to
-    /// somebody already looking for the missing half.
-    ///
-    /// Asserted on the composition rather than by running a message through: the
-    /// test host removes the one registered consumer, and a listener of the test's
-    /// own would go on reporting spans after the line was gone.
+    /// Without the subscriptions to the client's activity sources every consumer trace is a root.
+    /// Asserted on the composition: the test host removes the consumer.
     /// </remarks>
     [Fact]
     public void KeepTheTraceOfARequestAcrossTheBroker()
@@ -68,20 +48,20 @@ public class BrokerObservabilityShould
     [Fact]
     public void ScrapeTheBrokerItself()
     {
-        Read(Plugins).Should().Contain("rabbitmq_prometheus",
+        RepositoryFiles.Read(Plugins).Should().Contain("rabbitmq_prometheus",
             "the metrics endpoint is a plugin, and an image without it enabled answers " +
             "nothing on the metrics port");
-        Read(BrokerConfiguration).Should().Contain("return_per_object_metrics",
+        RepositoryFiles.Read(BrokerConfiguration).Should().Contain("return_per_object_metrics",
             "the default endpoint aggregates across every queue, and an aggregate cannot " +
             "name the queue that is backing up");
 
-        var compose = Read(Compose);
+        var compose = RepositoryFiles.Read(Compose);
         compose.Should().Contain("enabled_plugins",
             "the plugin list has to reach the container");
         compose.Should().Contain(MetricsPort,
             "a port nothing publishes is unreachable from the scraper");
 
-        Read(Scrapes).Should().Contain(MetricsPort,
+        RepositoryFiles.Read(Scrapes).Should().Contain(MetricsPort,
             "without a target every rule below evaluates over an empty series and stays " +
             "silent for the same reason it would if everything were healthy");
     }
@@ -89,7 +69,7 @@ public class BrokerObservabilityShould
     [Fact]
     public void AlertOnTheQueuesRatherThanOnlyOnTheProcesses()
     {
-        var alerts = Read(Alerts);
+        var alerts = RepositoryFiles.Read(Alerts);
 
         alerts.Should().Contain("rabbitmq_queue_messages_ready",
             "a queue growing without bound is the shape of a consumer that stopped, and " +
@@ -103,28 +83,14 @@ public class BrokerObservabilityShould
     /// The queue realtime push is delivered over is a queue too.
     /// </summary>
     /// <remarks>
-    /// The rule about queues without a consumer named the two work queues and
-    /// stopped there, so the one the API subscribes to sat outside every rule in
-    /// the file: both workers answered, both named queues had their consumers, and
-    /// pushes were dropped at the broker with nothing anywhere saying so.
-    ///
-    /// The name is read out of the consumer instead of being repeated here, and it
-    /// is required as a prefix, because the broker does not report this queue under
-    /// the name the code configures - it appends a suffix that is new on every
-    /// subscription. Which is why an exact matcher is not coverage but its
-    /// opposite: it selects no series at any time, so `== 0` never fires and
-    /// absent() always holds, and a rule built on it is either mute or permanently
-    /// firing.
-    ///
-    /// Backslashes are dropped before the search, so escaping the dots of the
-    /// regex - which changes nothing about what it matches here - does not turn
-    /// this red.
+    /// Matched as a prefix, read out of the consumer: the broker appends a suffix per subscription,
+    /// so an exact matcher selects no series. Backslashes are dropped before the search.
     /// </remarks>
     [Fact]
     public void AlertOnTheQueueRealtimePushIsDeliveredOver()
     {
         var queue = PushQueueName();
-        var alerts = Read(Alerts).Replace("\\", string.Empty, StringComparison.Ordinal);
+        var alerts = RepositoryFiles.Read(Alerts).Replace("\\", string.Empty, StringComparison.Ordinal);
 
         alerts.Should().Contain($"{queue}.*",
             "the broker reports this queue under the configured name plus a suffix that is " +
@@ -135,15 +101,10 @@ public class BrokerObservabilityShould
     }
 
     /// <summary>The queue the API subscribes to, as its consumer declares it.</summary>
-    /// <remarks>
-    /// Read from the constant rather than from the argument of the parameters:
-    /// the consumer passes the name by that constant, so a rule matching a
-    /// literal in the call finds nothing and fails on its own reading rather
-    /// than on the thing it is about.
-    /// </remarks>
+    /// <remarks>Read from the constant: the consumer passes the name by it.</remarks>
     private static string PushQueueName()
     {
-        var declaration = Regex.Match(Read(PushConsumer),
+        var declaration = Regex.Match(RepositoryFiles.Read(PushConsumer),
             @"const\s+string\s+QueueName\s*=\s*""([^""]+)""");
 
         declaration.Success.Should().BeTrue(
@@ -155,7 +116,7 @@ public class BrokerObservabilityShould
     [Fact]
     public void MeasureMessagesOnTheConsumerDashboard()
     {
-        var dashboard = Read(Dashboard);
+        var dashboard = RepositoryFiles.Read(Dashboard);
 
         dashboard.Should().Contain("rabbitmq_queue_",
             "the board is named after the consumers and has to answer whether they are " +
@@ -168,15 +129,4 @@ public class BrokerObservabilityShould
             "the workers serve nothing but their own health probe, so their request rate " +
             "is the scrape interval drawn as a line");
     }
-
-    private static string Read(string relative)
-    {
-        var path = Path.Combine(
-            RepositoryRoot, relative.Replace('/', Path.DirectorySeparatorChar));
-
-        File.Exists(path).Should().BeTrue($"{relative} must exist at {path}");
-        return File.ReadAllText(path);
-    }
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

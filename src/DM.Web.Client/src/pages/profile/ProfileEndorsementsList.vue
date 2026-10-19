@@ -1,25 +1,9 @@
 <script setup lang="ts">
 /**
- * ProfileEndorsementsList — the endorsements flavor of
- * `ProfileTestimonialsFrame`. Used by both pages: "Полученные рекомендации"
- * and "Написанные рекомендации".
- *
- * What is local here:
- *  - endpoint: `getUserEndorsements` (received) vs
- *    `getWrittenUserEndorsements` (written);
- *  - the card: `<TestimonialCard>` (the same component as on
- *    /about/testimonials — a single visual unit for all "testimonial-like"
- *    entities); both modes hand it the same `about` (the endorsement
- *    recipient — the server sends targetUser either way), so both pages read
- *    "<автор> о <получатель>" and the footer line is composed in exactly one
- *    place, inside the card;
- *  - the texts, including the "written" relabel of the "Автор" sort option to
- *    "Получатель": every item's author there IS the profile owner, so
- *    sorting/searching "by author" is meaningless, and the backend already
- *    silently sorts this scope by the counterparty (see
- *    UserEndorsementFilter.cs). Only the label, the hint and the search
- *    placeholder change; the sortBy value sent stays "author".
- * Everything else — filter, fetch, states, paging — is the frame.
+ * The recommendations of a profile on ProfileTestimonialsFrame, received or
+ * written, on TestimonialCard. In "written" every author is the owner, so the
+ * "Автор" sort is relabelled "Получатель"; the server sorts that scope by the
+ * recipient and the value sent stays "author".
  */
 import { computed } from "vue";
 import { userApi, type EndorsementsQuery } from "@/entities/user";
@@ -33,15 +17,9 @@ import ProfileTestimonialsFrame from "./ProfileTestimonialsFrame.vue";
 
 const props = defineProps<{
   username: string;
-  /**
-   * "received" — endorsements received by this user (they are the recipient).
-   * "written"  — endorsements written by this user (they are the author).
-   * Determines which of userApi.getUserEndorsements /
-   * getWrittenUserEndorsements is called, and (via `routeName` below)
-   * where the pagination links lead.
-   */
+  /** Received: recommendations about this user; written: the ones he wrote. */
   mode: "received" | "written";
-  /** The current page's route name — for Paging.to. */
+  /** The route of the page, for the paging links. */
   routeName: "received-endorsements" | "given-endorsements";
 }>();
 
@@ -67,14 +45,11 @@ const searchPlaceholder = computed(() =>
   props.mode === "written" ? "Поиск по тексту или получателю" : undefined,
 );
 
-/**
- * UserEndorsement and WebsiteTestimonial are structurally compatible
- * (id / author / text / createdUtc / modifiedUtc). `<TestimonialCard>`
- * reads only these fields — we project at the boundary instead of duplicating
- * the visuals.
- */
-function asTestimonial(e: UserEndorsement): WebsiteTestimonial {
-  return e as unknown as WebsiteTestimonial;
+/** The card of a review of the site names its author, whom a removed account leaves out. */
+function signed(
+  e: UserEndorsement,
+): e is UserEndorsement & Pick<WebsiteTestimonial, "author"> {
+  return !!e.author;
 }
 </script>
 
@@ -92,7 +67,8 @@ function asTestimonial(e: UserEndorsement): WebsiteTestimonial {
   >
     <template #item="{ item, searchQuery }">
       <TestimonialCard
-        :testimonial="asTestimonial(item)"
+        v-if="signed(item)"
+        :testimonial="item"
         :search-query="searchQuery"
         :about="item.targetUser"
       />

@@ -2,51 +2,31 @@ using DM.Web.API.Shared.Authentication;
 using DM.Domain.Core.Comments;
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Forum.Features.Comments;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Forum.Likes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Comment = DM.Web.API.Shared.Dto.Comment;
-using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
+using CommentRequest = DM.Web.API.Shared.Dto.CommentRequest;
 
 namespace DM.Web.API.Features.Forum.Comments;
 
 /// <summary>
 /// Topic comment management endpoints
 /// </summary>
-/// <remarks>
-/// Provides CRUD operations for comments within forum topics.
-/// Comments are replies to topics and form the discussion thread.
-///
-/// ## Available Operations
-/// - List comments in a topic (with pagination)
-/// - Create, read, update, delete comments
-/// - Like/unlike comments
-///
-/// ## Access Control
-/// - Viewing: Same as parent topic's board ViewPolicy
-/// - Creating: Authenticated users (if topic is not closed)
-/// - Editing: Author or moderators
-/// - Deleting: Author or moderators
-/// - Liking: Authenticated users (cannot like own comments)
-/// </remarks>
 [ApiController]
 [Route("v1/forum/comments")]
 [ApiExplorerSettings(GroupName = "Forum")]
 [Tags("Comments")]
 public class TopicCommentController : ControllerBase
 {
-    private readonly ITopicCommentApiService _commentApiService;
-    private readonly ITopicLikeApiService _likeApiService;
+    private readonly TopicCommentApiService _commentApiService;
+    private readonly TopicLikeApiService _likeApiService;
 
-    /// <summary>
-    /// Creates a new instance of TopicCommentController
-    /// </summary>
     public TopicCommentController(
-        ITopicCommentApiService commentApiService,
-        ITopicLikeApiService likeApiService)
+        TopicCommentApiService commentApiService,
+        TopicLikeApiService likeApiService)
     {
         _commentApiService = commentApiService;
         _likeApiService = likeApiService;
@@ -59,16 +39,6 @@ public class TopicCommentController : ControllerBase
     /// Returns paginated list of comments in the specified topic.
     /// Supports filtering by author usernames, text search, date range and sorting.
     /// Marks comments as read for authenticated users.
-    ///
-    /// ## Query Parameters
-    /// - **skip**: Number of items to skip (pagination)
-    /// - **take**: Number of items to return (max 100, default 20)
-    /// - **search**: Text search in comment content (case-insensitive)
-    /// - **authorUsernames**: Filter by author usernames, repeated per author (`authorUsernames=alice&amp;authorUsernames=bob`), OR logic
-    /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
-    /// - **createdToUtc**: Filter by creation date end (ISO 8601)
-    /// - **sortBy**: Sort field - "created" (default) or "likes"
-    /// - **sortOrder**: Sort direction - "asc" (default for created) or "desc"
     /// </remarks>
     /// <param name="id">Topic identifier (GUID)</param>
     /// <param name="q">Query parameters with filtering, sorting and pagination</param>
@@ -77,11 +47,8 @@ public class TopicCommentController : ControllerBase
     [HttpGet("~/v1/topics/{id}/comments", Name = nameof(GetTopicComments))]
     [ProducesResponseType(typeof(ListEnvelope<Comment>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetTopicComments(Guid id, [FromQuery] CommentsQuery q)
-    {
-        var (comments, paging) = await _commentApiService.Get(id, q);
-        return Ok(new ListEnvelope<Comment>(comments, paging));
-    }
+    public async Task<IActionResult> GetTopicComments(Guid id, [FromQuery] CommentsQuery q) =>
+        Ok(await _commentApiService.Get(id, q));
 
     /// <summary>
     /// Create new comment in topic
@@ -104,7 +71,7 @@ public class TopicCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostTopicComment(Guid id, [FromBody] CreateCommentRequest request)
+    public async Task<IActionResult> PostTopicComment(Guid id, [FromBody] CommentRequest request)
     {
         var result = await _commentApiService.Create(id, request);
         return CreatedAtRoute(nameof(GetTopicComment), new { id = result.Resource.Id }, result);
@@ -114,12 +81,6 @@ public class TopicCommentController : ControllerBase
     /// <summary>
     /// Get topic comment
     /// </summary>
-    /// <remarks>
-    /// Returns detailed information about a specific comment including:
-    /// - Comment text and author
-    /// - Creation and last edit timestamps
-    /// - Like count
-    /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="200">Comment details</response>
     /// <response code="404">Comment not found, or it is not a comment of a topic the user may open</response>
@@ -150,7 +111,7 @@ public class TopicCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchTopicComment(Guid id, [FromBody] UpdateCommentRequest request) =>
+    public async Task<IActionResult> PatchTopicComment(Guid id, [FromBody] CommentRequest request) =>
         Ok(await _commentApiService.Update(id, request));
 
     /// <summary>

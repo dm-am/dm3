@@ -22,13 +22,5 @@ public interface IBlogSubscriptionService
     /// </summary>
     Task UnsubscribeAsync(Guid blogId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get readers (subscribers) of a blog
-    /// </summary>
     Task<IEnumerable<UserReference>> GetReadersAsync(Guid blogId, CancellationToken ct = default);
-
-    /// <summary>
-    /// Check if a user is subscribed to a blog
-    /// </summary>
-    Task<bool> IsSubscribedAsync(Guid userId, Guid blogId, CancellationToken ct = default);
 }

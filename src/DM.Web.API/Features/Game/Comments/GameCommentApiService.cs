@@ -8,19 +8,17 @@ using DM.Domain.Game.Features.Comments;
 using DM.Web.API.Shared.Comments;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
-using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
+using CommentRequest = DM.Web.API.Shared.Dto.CommentRequest;
 
 namespace DM.Web.API.Features.Game.Comments;
 
-/// <inheritdoc />
-internal class GameCommentApiService : IGameCommentApiService
+public class GameCommentApiService
 {
     private readonly IGameCommentService _commentService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly CommentMapper _mapper;
 
-    /// <inheritdoc />
     public GameCommentApiService(
         IGameCommentService commentService,
         IIdentityProvider identityProvider,
@@ -33,7 +31,6 @@ internal class GameCommentApiService : IGameCommentApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Comment>> Get(Guid gameId, CommentsQuery query)
     {
         var excludeUserIds = await CommentReading.HiddenAuthorsAsync(
@@ -42,8 +39,7 @@ internal class GameCommentApiService : IGameCommentApiService
         return new ListEnvelope<Comment>(comments.Select(_mapper.ToComment), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
-    public async Task<Envelope<Comment>> Create(Guid gameId, CreateCommentRequest request)
+    public async Task<Envelope<Comment>> Create(Guid gameId, CommentRequest request)
     {
         var createComment = _mapper.ToCreateComment(request);
         createComment.EntityId = gameId;
@@ -51,15 +47,13 @@ internal class GameCommentApiService : IGameCommentApiService
         return new Envelope<Comment>(_mapper.ToComment(createdComment));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Comment>> Get(Guid commentId)
     {
         var comment = await _commentService.GetAsync(commentId);
         return new Envelope<Comment>(_mapper.ToComment(comment));
     }
 
-    /// <inheritdoc />
-    public async Task<Envelope<Comment>> Update(Guid commentId, UpdateCommentRequest request)
+    public async Task<Envelope<Comment>> Update(Guid commentId, CommentRequest request)
     {
         var updateComment = _mapper.ToUpdateComment(request);
         updateComment.CommentId = commentId;
@@ -67,9 +61,7 @@ internal class GameCommentApiService : IGameCommentApiService
         return new Envelope<Comment>(_mapper.ToComment(updatedComment));
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid commentId) => _commentService.DeleteAsync(commentId);
 
-    /// <inheritdoc />
     public Task MarkAsRead(Guid gameId) => _commentService.MarkAsReadAsync(gameId);
 }

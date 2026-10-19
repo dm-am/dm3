@@ -8,8 +8,6 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
 import type { DropdownItemProps } from "../types";
 
-defineOptions({ name: "FilterDropdownItem" });
-
 withDefaults(defineProps<DropdownItemProps>(), {
   hint: undefined,
   avatarUrl: undefined,
@@ -22,14 +20,6 @@ const emit = defineEmits<{
   "item-select": [];
   mouseenter: [];
 }>();
-
-function handleClick() {
-  emit("item-select");
-}
-
-function handleMouseEnter() {
-  emit("mouseenter");
-}
 </script>
 
 <template>
@@ -37,8 +27,8 @@ function handleMouseEnter() {
     type="button"
     class="dropdown-item"
     :class="{ highlighted, indented: indent }"
-    @click.stop="handleClick"
-    @mouseenter="handleMouseEnter"
+    @click.stop="emit('item-select')"
+    @mouseenter="emit('mouseenter')"
   >
     <img v-if="avatarUrl" :src="avatarUrl" alt="" class="item-avatar" />
     <span class="item-content">
@@ -86,10 +76,7 @@ function handleMouseEnter() {
 .item-content
   display: flex
   flex-direction: column
-  gap: 1px
-
-.item-label
-  color: $text
+  gap: $tiny
 
 .item-hint
   font-size: $tertiary-font-size

@@ -11,7 +11,7 @@
  * direct width/height on the root svg.
  */
 import { computed } from "vue";
-import { GAME_ICONS, isGameIcon, type GameIconName } from "./gameIcons";
+import { GAME_ICONS, isGameIcon } from "./gameIcons";
 
 const props = defineProps<{
   /** Icon name (kebab-case as on game-icons.net). */
@@ -19,7 +19,7 @@ const props = defineProps<{
 }>();
 
 const entry = computed(() =>
-  isGameIcon(props.name) ? GAME_ICONS[props.name as GameIconName] : null,
+  isGameIcon(props.name) ? GAME_ICONS[props.name] : null,
 );
 </script>
 

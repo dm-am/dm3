@@ -1,4 +1,6 @@
 import { test, expect, SECONDARY_STORAGE_STATE } from "../../fixtures/auth";
+import { settle } from "../../fixtures/window";
+import { SECONDARY_GAME } from "../../fixtures/seed";
 
 /**
  * The table of the attributes of a sheet keeps all six of its columns at 1366
@@ -6,7 +8,7 @@ import { test, expect, SECONDARY_STORAGE_STATE } from "../../fixtures/auth";
  * and the settings of a game (610). Its cells are 4 apart at their sides for
  * that; at 8 the least width of the six is 626 and the table scrolls.
  *
- * Read as TestUser, the master of the game "aaaam" in the seed. Nothing is
+ * Read as TestUser, the master of SECONDARY_GAME in the seed. Nothing is
  * written: the pages are only opened.
  */
 
@@ -26,7 +28,7 @@ const HEADERS = [
 
 for (const [name, path] of [
   ["в форме новой игры", "/games/create"],
-  ["в настройках игры", "/game/aaaam/settings"],
+  ["в настройках игры", `/game/${SECONDARY_GAME}/settings`],
 ] as const) {
   test(`на 1366 ${name} у схемы атрибутов стоят все шесть столбцов без прокрутки`, async ({
     page,
@@ -36,7 +38,7 @@ for (const [name, path] of [
     await expect(table.locator("tbody tr.attr-row").first()).toBeVisible({
       timeout: 60_000,
     });
-    await page.evaluate(() => document.fonts.ready);
+    await settle(page);
 
     const headers = table.locator("thead th");
     await expect(headers).toHaveCount(HEADERS.length);

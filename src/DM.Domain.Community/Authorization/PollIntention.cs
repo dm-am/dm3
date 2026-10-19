@@ -5,9 +5,6 @@ namespace DM.Domain.Community.Authorization;
 /// </summary>
 public enum PollIntention
 {
-    /// <summary>
-    /// Create new polls
-    /// </summary>
     Create = 0,
 
     /// <summary>
@@ -20,13 +17,7 @@ public enum PollIntention
     /// </summary>
     Unvote = 2,
 
-    /// <summary>
-    /// Edit existing poll
-    /// </summary>
     Edit = 3,
 
-    /// <summary>
-    /// Delete existing poll
-    /// </summary>
     Delete = 4
 }

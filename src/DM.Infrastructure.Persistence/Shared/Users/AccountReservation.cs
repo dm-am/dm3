@@ -9,7 +9,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DM.Infrastructure.Persistence.Shared.Users;
 
 /// <summary>
-/// SSOT for the question "is this address or this login already held by an account".
+/// The one answer to "is this address or this login already held by an account".
 /// </summary>
 /// <remarks>
 /// An account holds its address and its login for as long as its row exists, deactivation
@@ -40,7 +40,7 @@ internal static class AccountReservation
         CancellationToken ct = default) =>
         users
             .IgnoreQueryFilters()
-            .AnyAsync(u => u.Email.ToLower() == email.ToLower(), ct);
+            .AnyAsync(AccountNames.EmailIs(email), ct);
 
     /// <summary>
     /// The login is held by an account, deactivated accounts included.
@@ -71,6 +71,6 @@ internal static class AccountReservation
             query = query.Where(u => u.UserId != exceptUserId.Value);
         }
 
-        return query.AnyAsync(u => u.Username.ToLower() == username.ToLower(), ct);
+        return query.AnyAsync(AccountNames.UsernameIs(username), ct);
     }
 }

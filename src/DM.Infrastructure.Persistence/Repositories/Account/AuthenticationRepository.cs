@@ -6,10 +6,9 @@ using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Infrastructure.Persistence.Entities.Account;
-using Microsoft.EntityFrameworkCore;
-using Session = DM.Domain.Core.Identity.Session;
-
+using DM.Infrastructure.Persistence.Repositories.Personal;
 using DM.Infrastructure.Persistence.Shared.Users;
+using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
@@ -18,7 +17,6 @@ internal class AuthenticationRepository : IAuthenticationRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public AuthenticationRepository(
         DmDbContext dbContext)
     {
@@ -27,19 +25,15 @@ internal class AuthenticationRepository : IAuthenticationRepository
 
     /// <inheritdoc />
     /// <remarks>
-    /// Past the global filter on purpose. A removed account has to be found for
-    /// the sign-in to refuse it as removed after a proven password, which is
-    /// the one place the site tells the owner what became of the account
-    /// (SECURITY.md). Under the filter the row did not exist, the answer was
-    /// "wrong email or password" to the right password, and the whole removed
-    /// branch of the sign-in was unreachable.
+    /// Past the global filter: the sign-in refuses a removed account as removed after
+    /// a proven password (SECURITY.md).
     /// </remarks>
     public async Task<(bool Success, AuthenticatedUser? User)> TryFindUserByEmail(string email)
     {
         var result = await _dbContext.Users
             .IgnoreQueryFilters()
             .TagWith("DM.Authentication.TryFindUserByEmail")
-            .Where(u => u.Email.ToLower() == email.ToLower())
+            .Where(AccountNames.EmailIs(email))
             .ProjectToAuthenticatedUser()
             .FirstOrDefaultAsync();
         return (result != null, result);
@@ -79,33 +73,12 @@ internal class AuthenticationRepository : IAuthenticationRepository
     /// <inheritdoc />
     public async Task<UserSettings> FindUserSettings(Guid userId)
     {
-        // Absence of the row is the ordinary state of a user who never saved
-        // settings, and it means the defaults. A partial row does not exist:
-        // every paging column is NOT NULL, which is what buried the
-        // null-Paging repair branch this method used to carry.
+        // No row means the user never saved settings: the defaults.
         var dbSettings = await _dbContext.UserSettings
             .TagWith("DM.Authentication.FindUserSettings")
             .FirstOrDefaultAsync(s => s.UserId == userId);
 
-        if (dbSettings == null)
-            return UserSettings.Default;
-
-        return new UserSettings
-        {
-            Id = dbSettings.UserId,
-            Theme = dbSettings.Theme,
-            // Carried on the identity because the letter about a login is written
-            // while that login is being decided, and there is no second read.
-            TimeZoneId = dbSettings.TimeZoneId,
-            Paging = new PagingSettings
-            {
-                PostsPerPage = dbSettings.PostsPerPage,
-                CommentsPerPage = dbSettings.CommentsPerPage,
-                MessagesPerPage = dbSettings.MessagesPerPage,
-                TopicsPerPage = dbSettings.TopicsPerPage,
-                EntitiesPerPage = dbSettings.EntitiesPerPage
-            }
-        };
+        return dbSettings == null ? UserSettings.Default : dbSettings.ToUserSettings();
     }
 
     /// <inheritdoc />
@@ -131,9 +104,9 @@ internal class AuthenticationRepository : IAuthenticationRepository
         {
             SessionId = session.Id,
             UserId = userId,
-            ExpirationUtc = new DateTimeOffset(session.ExpirationUtc, TimeSpan.Zero),
+            ExpirationUtc = session.ExpirationUtc,
             Persistent = session.Persistent,
-            CreatedUtc = new DateTimeOffset(session.CreatedUtc, TimeSpan.Zero),
+            CreatedUtc = session.CreatedUtc,
             IpAddress = session.IpAddress,
             UserAgent = session.UserAgent,
             DeviceInfo = session.DeviceInfo
@@ -202,8 +175,6 @@ internal class AuthenticationRepository : IAuthenticationRepository
     public async Task<SessionPurgeResult> PurgeExpiredSessions(
         DateTimeOffset now, CancellationToken cancellationToken = default)
     {
-        // One DELETE: a session is a row now, and the notion of "a document
-        // emptied of its sessions" is gone with the document.
         var removed = await _dbContext.UserSessions
             .Where(s => s.ExpirationUtc < now)
             .ExecuteDeleteAsync(cancellationToken);

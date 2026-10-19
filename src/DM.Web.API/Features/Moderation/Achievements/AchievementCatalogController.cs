@@ -27,10 +27,9 @@ namespace DM.Web.API.Features.Moderation.Achievements;
 [RequireRole(UserRole.SeniorModerator)]
 public class AchievementCatalogController : ControllerBase
 {
-    private readonly IAchievementCatalogApiService _achievementCatalogApiService;
+    private readonly AchievementCatalogApiService _achievementCatalogApiService;
 
-    /// <inheritdoc />
-    public AchievementCatalogController(IAchievementCatalogApiService achievementCatalogApiService)
+    public AchievementCatalogController(AchievementCatalogApiService achievementCatalogApiService)
     {
         _achievementCatalogApiService = achievementCatalogApiService;
     }

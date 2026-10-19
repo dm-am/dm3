@@ -26,27 +26,14 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// the write it stands for is refused.
 /// </summary>
 /// <remarks>
-/// The owner, 05.10: what the user may not do is not offered, rather than
-/// refused after it was typed. The forum gave every member the button in the
-/// news and the contests and refused the topic after, the reviews page gave the
-/// form to a newbie and to whoever had no post in the game, and a post opened
-/// its rating to a reader who had rated in the same game two days before.
-///
-/// Every row reads the flag where the page reads it and then sends what the
-/// form would send, as the same viewer, so the two answers are compared rather
-/// than each taken on trust. The expected value is asserted too: a flag and a
-/// write that both went wrong the same way would agree with each other.
-///
-/// Each case makes its own records and its own people and takes everything but
-/// the people back out.
+/// What the user may not do is not offered. Every row reads the flag where the page reads it and sends what the
+/// form would, as the same viewer, against an expected value.
 /// </remarks>
 public class TopicAndReviewFlagShould : IntegrationTestBase
 {
     public TopicAndReviewFlagShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
-
-    // ═══ "СОЗДАТЬ ТОПИК" ═══
 
     /// <summary>Who stands on the board.</summary>
     public enum Visitor
@@ -146,8 +133,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         }
     }
 
-    // ═══ THE REVIEW OF A GAME ═══
-
     /// <summary>Who reads the game and writes the review.</summary>
     public enum Reviewer
     {
@@ -171,7 +156,7 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         RemovedReview
     }
 
-    private sealed record GameCase(Reviewer Reviewer, GameReviewBefore Before, bool Expected);
+    private sealed record GameCase(Reviewer Reviewer, GameReviewBefore Before, bool Expected, bool Going = false);
 
     private static readonly Dictionary<string, GameCase> GameTable = new()
     {
@@ -181,6 +166,7 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         ["a newbie with a post"] = new(Reviewer.Newbie, GameReviewBefore.Nothing, false),
         ["a player whose review is there"] = new(Reviewer.Player, GameReviewBefore.Review, false),
         ["a player whose review was removed"] = new(Reviewer.Player, GameReviewBefore.RemovedReview, true),
+        ["a player with a post in a game still going"] = new(Reviewer.Player, GameReviewBefore.Nothing, false, true),
     };
 
     public static TheoryData<string> GameCases() => new(GameTable.Keys);
@@ -190,7 +176,7 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
     public async Task OfferTheGameReviewExactlyWhenTheReviewIsTaken(string name)
     {
         var @case = GameTable[name];
-        var seed = await SeedAsync();
+        var seed = await SeedAsync(@case.Going ? ModuleStatus.Active : ModuleStatus.Closed);
         try
         {
             var viewer = ReviewerOf(seed, @case.Reviewer);
@@ -230,8 +216,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
             await DropAsync(seed);
         }
     }
-
-    // ═══ THE RATING OF A POST ═══
 
     /// <summary>What the stranger rated before, and when.</summary>
     public enum RatedBefore
@@ -340,10 +324,7 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A rating closes the game for three days: the page that offered the form
-    /// under the other posts of the game learns it from the next read, and the
-    /// write that raced it is told the rule in its own words, as a conflict and
-    /// not as a rate limit.
+    /// A rating closes the game for three days: the next read says so, and the racing write is a conflict.
     /// </summary>
     [Fact]
     public async Task CloseTheGameForThreeDaysWithARatingAndSayWhyToTheRace()
@@ -376,9 +357,7 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Every answer that carries posts carries the flag: the rated feed of the
-    /// pulse and of the home page offers the rating under its posts as the room
-    /// does, and a post it shows with no flag would lose the form there.
+    /// Every answer that carries posts carries the flag, the rated feed included.
     /// </summary>
     [Fact]
     public async Task AnswerTheRatedFeedWithTheFlagOfEveryPost()
@@ -417,8 +396,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         }
     }
 
-    // ═══ SEEDING ═══
-
     /// <summary>
     /// The records of a case and the people around them: two boards, each with a
     /// topic; a game with an open room and posts of the master, a player and a
@@ -445,7 +422,7 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         public Guid OtherGamePostId { get; } = Guid.NewGuid();
     }
 
-    private async Task<Seed> SeedAsync()
+    private async Task<Seed> SeedAsync(ModuleStatus gameStatus = ModuleStatus.Active)
     {
         var past = ProbationPolicy.NewbiePostThreshold * 2;
         var seed = new Seed(
@@ -464,13 +441,13 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         AddTopic(db, seed.OpenTopicId, seed.OpenBoardId, seed.Master.UserId);
         AddTopic(db, seed.ModerationTopicId, seed.ModerationBoardId, seed.Moderator.UserId);
 
-        AddGame(db, seed.GameId, seed.Master.UserId);
+        AddGame(db, seed.GameId, seed.Master.UserId, gameStatus);
         AddRoom(db, seed.RoomId, seed.GameId);
         AddPost(db, seed.MasterPostId, seed.RoomId, seed.Master.UserId, now.AddHours(-3));
         AddPost(db, seed.PlayerPostId, seed.RoomId, seed.Player.UserId, now.AddHours(-2));
         AddPost(db, seed.NewbiePostId, seed.RoomId, seed.Newbie.UserId, now.AddHours(-1));
 
-        AddGame(db, seed.OtherGameId, seed.Master.UserId);
+        AddGame(db, seed.OtherGameId, seed.Master.UserId, ModuleStatus.Active);
         AddRoom(db, seed.OtherRoomId, seed.OtherGameId);
         AddPost(db, seed.OtherGamePostId, seed.OtherRoomId, seed.Master.UserId, now.AddHours(-1));
 
@@ -514,7 +491,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
             Title = $"Topic flag board {boardId:N}",
             Alias = $"trf-{boardId:N}"[..20],
             Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = createTopic
         });
 
@@ -530,7 +506,7 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
             CreatedUtc = DateTimeOffset.UtcNow.AddHours(-1)
         });
 
-    private static void AddGame(Infrastructure.Persistence.DmDbContext db, Guid gameId, Guid masterId)
+    private static void AddGame(Infrastructure.Persistence.DmDbContext db, Guid gameId, Guid masterId, ModuleStatus status)
     {
         db.Set<DbGame>().Add(new DbGame
         {
@@ -540,7 +516,7 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
             MasterId = masterId,
             CreatedUtc = DateTimeOffset.UtcNow.AddDays(-10),
             ActivatedUtc = DateTimeOffset.UtcNow.AddDays(-9),
-            Status = ModuleStatus.Active,
+            Status = status,
             PremoderationStatus = PremoderationStatus.Approved,
             CommentsAccessMode = CommentsAccessMode.Public
         });
@@ -598,8 +574,6 @@ public class TopicAndReviewFlagShould : IntegrationTestBase
         await db.Set<DbTopic>().IgnoreQueryFilters().Where(t => boards.Contains(t.BoardId)).ExecuteDeleteAsync();
         await db.Set<DbBoard>().Where(b => boards.Contains(b.BoardId)).ExecuteDeleteAsync();
     }
-
-    // ═══ REQUESTS ═══
 
     /// <summary>A request as the viewer, under an ordinary ban when asked; a guest sends none.</summary>
     private Task<HttpResponseMessage> Send(

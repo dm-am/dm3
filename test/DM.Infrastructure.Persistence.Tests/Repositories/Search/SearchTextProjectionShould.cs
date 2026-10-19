@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using DM.Infrastructure.Core.Parsing;
 using DM.Infrastructure.Persistence.Repositories.Search;
@@ -9,16 +10,7 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Search;
 /// <summary>
 /// The visible text of a body, which is what gets indexed and what gets previewed.
 /// </summary>
-/// <remarks>
-/// Both used to read the raw body. The index tokenised markup, so a tag name was
-/// a word one could search for; the preview cut the raw string at a fixed length,
-/// so what the reader saw in the results was a fragment of BBCode, sometimes
-/// ending mid-tag.
-///
-/// The surface is the part that has to be right rather than merely present: the
-/// tag set differs between surfaces. [private] is a node on every one of them and
-/// is dropped from the text on every one.
-/// </remarks>
+/// <remarks>The tag set differs between surfaces; [private] is a node on every one and dropped on every one.</remarks>
 public class SearchTextProjectionShould
 {
     [Fact]
@@ -49,16 +41,7 @@ public class SearchTextProjectionShould
     /// <summary>
     /// And it stays dropped when an unclosed tag above it reaches over the block.
     /// </summary>
-    /// <remarks>
-    /// This is what the column held on live data. The [img] content pattern ran to
-    /// the next [/img] anywhere in the body, so an image the author never closed
-    /// joined up with the closing tag of the following one and everything between
-    /// them — the whole private block — was filed as that image's URL before the
-    /// parse. Filed there it is not a node, the visibility filter is never asked
-    /// about it, and the text walk hands it back verbatim: the private line went
-    /// into this column word for word, and from there into the window ts_headline
-    /// opens around any other match in the same body.
-    /// </remarks>
+    /// <remarks>Text swallowed into an image URL before the parse would never be a node the filter is asked about.</remarks>
     [Fact]
     public void DropItAlsoWhenAnUnclosedImageTagReachesOverTheBlock()
     {
@@ -82,15 +65,8 @@ public class SearchTextProjectionShould
     /// closed.
     /// </summary>
     /// <remarks>
-    /// [code="x"] used to open a block shown as written, value and all, so the
-    /// private block inside it was an example, printed to the room and projected
-    /// into this column word for word, while the save path saw an ordinary block
-    /// and let the post through. A block with a value is a broken tag now, and
-    /// what stands inside it is read like anything else; a [noparse] nobody
-    /// closed is no example either, and what follows it is read the same way.
-    /// [code] is no example at all, closed or not: it changes the font, as on
-    /// DM2, so the hidden block inside it is a hidden block. Every spelling of
-    /// the hidden block counts, since every one of them is a block on the page.
+    /// A block with a value is a broken tag and an unclosed [noparse] no example, so what stands inside is read
+    /// as text; [code] only changes the font. Every spelling of the hidden block counts.
     /// </remarks>
     [Theory]
     [InlineData("до [code=\"x\"][private=\"Гончая\"]ловушка[/private][/code] после")]
@@ -102,7 +78,7 @@ public class SearchTextProjectionShould
     [InlineData("до [noparse][private to=\"Гончая\"]ловушка")]
     [InlineData("до [private to=\"Гончая\"]ловушка[/private] после")]
     [InlineData("до [PRIVATE]ловушка[/private] после")]
-    public void DropItUnderACodeBlockThatIsNotOne_AndInEverySpelling(string body)
+    public void DropItUnderACodeBlockThatIsNotOneAndInEverySpelling(string body)
     {
         var projected = SearchTextProjection.Of(body, BbSurface.GamePost);
 
@@ -113,11 +89,7 @@ public class SearchTextProjectionShould
     /// <summary>
     /// The characters a reader sees, not the entities of a page.
     /// </summary>
-    /// <remarks>
-    /// Indexed as the page spells it, a body reading "a &lt; b" is "a &amp;lt; b":
-    /// nobody can search for it and nobody would recognise it. What the author
-    /// typed as an entity stays the entity, since that is what the reader sees.
-    /// </remarks>
+    /// <remarks>"a &lt; b" indexed as the page spells it could not be searched for; a typed entity stays.</remarks>
     [Fact]
     public void ReadBackTheEntitiesTheRendererWrote()
     {
@@ -130,19 +102,14 @@ public class SearchTextProjectionShould
     /// A tag nobody closed is the text it is, and a hidden block under it is
     /// still dropped.
     /// </summary>
-    /// <remarks>
-    /// The page prints an unclosed tag as it was typed and reads what follows it
-    /// as any other text, [code] and [noparse] included, so the hidden block
-    /// under one is a hidden block. The words after the block are public and
-    /// searchable; the block is neither.
-    /// </remarks>
+    /// <remarks>The page reads what follows an unclosed tag as text, so the block under it is hidden.</remarks>
     [Theory]
     [InlineData("до [b]пример [private=\"Гончая\"]ловушка[/private] после", "до [b]пример после")]
     [InlineData("до [code]пример [private=\"Гончая\"]ловушка[/private] после", "до [code]пример после")]
     [InlineData("до [noparse][private]ловушка[/private] после", "до [noparse] после")]
     [InlineData("до [quote]пример [PRIVATE]ловушка[/PRIVATE] после", "до [quote]пример после")]
     [InlineData("до [spoiler][private=\"Гончая\"]ловушка", "до [spoiler]")]
-    public void KeepAnUnclosedTagAsText_AndTheHiddenBlockUnderItOut(string body, string expected)
+    public void KeepAnUnclosedTagAsTextAndTheHiddenBlockUnderItOut(string body, string expected)
     {
         SearchTextProjection.Of(body, BbSurface.GamePost).Should().Be(expected);
     }
@@ -165,15 +132,8 @@ public class SearchTextProjectionShould
     /// open a hidden block, read in the text the parser would have read.
     /// </summary>
     /// <remarks>
-    /// The parser removes control characters and the characters that reverse the
-    /// text before it reads anything, and the removal joins what stood around
-    /// them: "[pri" U+0001 "vate]" is a hidden block on the page. Read as it is
-    /// stored it matched nothing, and the block went into the index word for
-    /// word. Nested past the depth guard, the body takes the fallback path.
-    ///
-    /// Nothing after that point is indexed, the words after the block
-    /// included: without the tree nothing says where a block ends
-    /// (IndexNothingAfterABlockTheFallbackCannotEnd).
+    /// The parser removes controls and reordering characters first, which joins what stood around them.
+    /// Without the tree nothing says where a block ends (IndexNothingAfterABlockTheFallbackCannotEnd).
     /// </remarks>
     [Theory]
     [InlineData(0x0001)]
@@ -194,13 +154,7 @@ public class SearchTextProjectionShould
     /// A body the parser refuses leaks no word of a block the pattern of the
     /// second lock would end too soon.
     /// </summary>
-    /// <remarks>
-    /// Found by the generated checks (SearchTextProjectionPropertiesShould). The
-    /// fallback used to cut blocks out with that pattern, which ends a block at
-    /// the first [/private] it meets: the end of a block inside the block, or a
-    /// [/private] written as an example inside [noparse]. Everything the outer
-    /// block held after that point went into the index.
-    /// </remarks>
+    /// <remarks>The second lock's pattern ends a block at the first [/private], nested or quoted as an example.</remarks>
     [Theory]
     [InlineData("[private]раз [private]два[/private] ловушка[/private]")]
     [InlineData("[private]раз [noparse][/private][/noparse] ловушка[/private]")]
@@ -224,20 +178,13 @@ public class SearchTextProjectionShould
     /// Control characters out: the preview marks a match with two of them.
     /// </summary>
     /// <remarks>
-    /// They now come out one step earlier, in BbParser.Parse, which normalises
-    /// its input for every consumer instead of leaving each to clean up after
-    /// it. That is why the two words join rather than being separated by the
-    /// space this used to expect: the parser removes the character, and removing
-    /// it is what keeps the projected text equal to the rendered page - a C0
-    /// control between two words is drawn as nothing, so a reader saw the words
-    /// joined all along while the index held them apart. The local pass in
-    /// Collapse stays as the second lock: it is also what runs on the fallback
-    /// path, where the parser refused the body and the raw source is projected.
+    /// BbParser.Parse removes them for every consumer, so the words join as the page draws them; Collapse keeps
+    /// the second lock for the fallback path.
     /// </remarks>
     [Fact]
     public void KeepControlCharactersOutOfTheProjection()
     {
-        var projected = SearchTextProjection.Of("допосле", BbSurface.GlobalChatMessage);
+        var projected = SearchTextProjection.Of("до\u0011после", BbSurface.GlobalChatMessage);
 
         projected.Should().Be("допосле");
     }
@@ -247,5 +194,35 @@ public class SearchTextProjectionShould
     {
         SearchTextProjection.Of(null, BbSurface.Comment).Should().BeEmpty();
         SearchTextProjection.Of("   ", BbSurface.Comment).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// The text is one for every reader, and which files a reader may open is his question: no picture
+    /// or link that names a file is indexed, in either spelling of its identifier, whoever it is for.
+    /// A link elsewhere stays.
+    /// </summary>
+    [Theory]
+    [InlineData("[img]https://dm.am/v1/uploads/{0:D}/content[/img]")]
+    [InlineData("[IMG]/v1/uploads/{0:N}/content[/IMG]")]
+    [InlineData("[link]https://dm.am/v1/uploads/{0:D}/content[/link]")]
+    public void IndexNoPictureOrLinkOfAFile(string tag)
+    {
+        var id = Guid.NewGuid();
+        var projected = SearchTextProjection.Of(
+            $"Карта {string.Format(tag, id)} и [link]https://example.com/map[/link]", BbSurface.GamePost);
+
+        projected.Should().Be("Карта и https://example.com/map");
+    }
+
+    /// <summary>And in a text the parser refuses, nothing from the first identifier on.</summary>
+    [Fact]
+    public void IndexNoFileOfATextTooDeepToParse()
+    {
+        var id = Guid.NewGuid();
+        var body = $"до [img]/v1/uploads/{id:D}/content[/img] " + string.Concat(Enumerable.Repeat("[b]", 600)) + " после";
+
+        var projected = SearchTextProjection.Of(body, BbSurface.GamePost);
+
+        projected.Should().StartWith("до").And.NotContain(id.ToString("D")[..8]);
     }
 }

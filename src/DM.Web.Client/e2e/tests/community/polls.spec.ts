@@ -6,15 +6,14 @@ import {
 } from "../../fixtures/auth";
 
 /**
- * ".polls-list" exists; ".poll-item", ".the-poll", ".sidebar-poll",
- * ".poll-option", ".poll-answer", ".poll-results" and ".voted" do not. A poll
- * is a `.poll` card — `.poll-card` on /polls, straight inside
- * `#sidebar-list-ActivePolls` in the sidebar — whose rows are
- * `.poll-option-row` and whose vote control is `.poll-option-vote`. Both
- * bodies sat behind `isVisible()` on a locator that could never match, so
- * neither ever ran.
+ * A poll is a `.poll` card (`.poll-card` on /polls, straight inside
+ * `#sidebar-list-ActivePolls` in the sidebar) whose rows are `.poll-option-row`.
  */
 test.describe("Polls", () => {
+  // In order: while it lives, the poll the form creates is one the sidebar
+  // offers to vote in, and its cleanup would take it from under the vote test.
+  test.describe.configure({ mode: "default" });
+
   test("should display polls page", async ({ page }) => {
     await page.goto("/polls");
     // exact, because the sidebar block "Активные опросы" is a heading too and
@@ -26,36 +25,18 @@ test.describe("Polls", () => {
     await expect(page.locator(".poll-card").first()).toBeVisible();
   });
 
-  test("should show poll on sidebar", async ({ page }) => {
-    await page.goto("/");
-    const poll = page.locator("#sidebar-list-ActivePolls .poll").first();
-
-    await expect(poll).toBeVisible({ timeout: 10000 });
-    await expect(poll.locator(".poll-option-row").first()).toBeVisible();
-  });
-
-  // Runs, and gives the vote back. A vote is a write against the shared seed,
-  // and the card carries its own undo ("Отменить голос"), so the test casts the
-  // vote, checks it landed, retracts it and checks the retraction. A tier that
-  // cannot press its one write control is a tier that does not cover voting.
-  //
-  // It was off with the note that the sidebar draws no vote control for an
-  // open poll the API reports unvoted. On the stand the block does draw it, for
-  // both open polls of the seed; what failed was the test's handle on the card,
-  // see below.
+  // A vote is a write against the shared seed, and the card carries its own
+  // undo ("Отменить голос"), so the test casts the vote, checks it landed,
+  // retracts it and checks the retraction.
   test("votes in a poll and takes the vote back", async ({
     authenticatedPage,
   }) => {
     await authenticatedPage.goto("/");
 
-    // A card that offers the vote, not simply the first one: the block lists
-    // closed and pending polls too, and a poll the viewer has already voted in
-    // offers the retraction instead. Addressed by the accessible name and not
-    // by the class, because .poll-option-vote is on both buttons - filtering
-    // by it picked the already-voted poll and the first click cancelled a vote
-    // rather than casting one.
-    // The name carries the option after it - "Проголосовать за: ..." - so the
-    // match is by prefix.
+    // A card that offers the vote: the block lists closed and pending polls
+    // too, and a voted poll offers the retraction instead. Addressed by the
+    // accessible name ("Проголосовать за: ..."), because .poll-option-vote is
+    // on both buttons.
     const voteControl = authenticatedPage.getByRole("button", {
       name: /^Проголосовать за:/,
     });
@@ -65,11 +46,8 @@ test.describe("Polls", () => {
       .first();
     await expect(offering).toBeVisible({ timeout: 10000 });
 
-    // The card is held by its title from here on. A locator is read again on
-    // every use, and "the first card that offers the vote" stops being this
-    // card the moment the vote lands: it no longer offers one, so the same
-    // locator moved to the next open poll and looked there for the vote just
-    // cast.
+    // The card is held by its title from here on: once the vote lands it no
+    // longer offers one, and the locator above would move to the next poll.
     const title = (await offering.locator(".poll-title").innerText()).trim();
     const poll = authenticatedPage
       .locator("#sidebar-list-ActivePolls .poll")
@@ -107,6 +85,53 @@ test.describe("Polls", () => {
       );
       if (cast)
         await cleanup.delete(`${API_BASE_URL}/v1/polls/${cast.id}/vote`);
+      await cleanup.dispose();
+    }
+  });
+
+  // Creating takes a senior moderator or above; the primary account is the
+  // seed's administrator. The start is left as the form offers it, now.
+  test("creates a poll through the form, and the list shows it", async ({
+    authenticatedPage,
+  }, testInfo) => {
+    const title = `Опрос из формы ${testInfo.project.name} ${Date.now()}`;
+    await authenticatedPage.goto("/polls");
+    // The list is loaded before the form sends: the new poll is put on top of it.
+    await expect(
+      authenticatedPage.locator(".polls-list .poll-title").first(),
+    ).toBeVisible({ timeout: 10000 });
+
+    await authenticatedPage
+      .getByRole("button", { name: "+ Создать опрос" })
+      .click();
+    await authenticatedPage.locator("#poll-title").fill(title);
+    await authenticatedPage
+      .getByRole("textbox", { name: "Вариант 1", exact: true })
+      .fill("Да");
+    await authenticatedPage
+      .getByRole("textbox", { name: "Вариант 2", exact: true })
+      .fill("Нет");
+
+    try {
+      await authenticatedPage
+        .getByRole("button", { name: "Создать опрос", exact: true })
+        .click();
+      await expect(
+        authenticatedPage.locator(".polls-list .poll-title", {
+          hasText: title,
+        }),
+      ).toBeVisible({ timeout: 5000 });
+    } finally {
+      // A poll is a write against the shared seed: the one made here is
+      // removed through the API, also after a failure above.
+      const cleanup = await authenticatedContext();
+      const found = await cleanup.get(
+        `${API_BASE_URL}/v1/polls?search=${encodeURIComponent(title)}`,
+      );
+      const made: { id: string; title: string }[] =
+        (await found.json()).resources ?? [];
+      for (const poll of made.filter((one) => one.title === title))
+        await cleanup.delete(`${API_BASE_URL}/v1/polls/${poll.id}`);
       await cleanup.dispose();
     }
   });

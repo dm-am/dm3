@@ -2,16 +2,7 @@
  * @vitest-environment node
  */
 
-/**
- * The bell debounces because pushes arrive in bursts and each one only means
- * "the count changed" - one request for a burst is the whole point of it. What
- * a plain trailing debounce also does is postpone that request for as long as
- * the burst lasts: every deferred call restarted the wait, so an evening in a
- * busy discussion held the number still exactly while there was most to report,
- * and released it once nothing was happening any more. So the wait has a
- * ceiling, and the ceiling is what this covers - the debounce itself is the
- * easy half and stands here to keep the fix from turning into no debounce.
- */
+// The ceiling of the debounce is what this covers; the debounce itself keeps it from being none.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 
@@ -23,8 +14,7 @@ vi.mock("../api", () => ({
   notificationApi: { getUnreadCount },
 }));
 
-// Only the viewer is read out of the session, and the count is not fetched at
-// all without one; a stub keeps the persisted copy and the ui store out.
+// A stub keeps the persisted session and the ui store out.
 vi.mock("@/shared/stores", async () => {
   const { ref } = await import("vue");
   return { useAuthStore: () => ({ user: ref({ id: "u1" }) }) };

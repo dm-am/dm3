@@ -1,15 +1,5 @@
 <script setup lang="ts">
-/**
- * Skeleton loading rows for DataTable.
- *
- * Renders actual <tr>/<td> elements (Vue 3 fragment) that slot directly
- * into a <tbody>, inheriting the parent table's column widths via
- * table-layout: fixed. Each column gets a shimmer bar whose width varies
- * per row for a realistic ragged appearance.
- *
- * Props mirror DataTable's column model so the skeleton matches the real
- * table pixel-for-pixel — no layout shift on data arrival.
- */
+// Real rows in the parent's <tbody>, so the skeleton takes the table's own column widths.
 import type { Column } from "./types";
 
 withDefaults(
@@ -27,9 +17,7 @@ withDefaults(
   },
 );
 
-// Varying width factors for realistic ragged-right appearance.
-// The factor multiplies per-column to produce different bar widths
-// across rows. Narrow columns (≤10%) get a fixed short bar instead.
+// Per-row factors for a ragged right edge; narrow columns get a fixed short bar.
 const widthFactors = [0.6, 0.45, 0.7, 0.5, 0.55, 0.65, 0.4, 0.75];
 
 function getBarWidth(
@@ -37,7 +25,6 @@ function getBarWidth(
   colIndex: number,
   column: Column,
 ): string {
-  // Narrow columns (counters, percentages) — short fixed bar
   const widthNum = column.width ? parseInt(column.width) : 0;
   if (widthNum > 0 && widthNum <= 10) {
     return "60%";
@@ -69,15 +56,14 @@ function getBarWidth(
 
 <style scoped lang="sass">
 @use "@/assets/styles/Skeleton" as *
+@use "@/assets/styles/Tables" as *
 
-// Rows inherit table-layout: fixed column widths from the parent <table>.
-// No need to set widths here — the <thead> defines them.
 .skeleton-row
   td
     background-color: $bg-element
 
 .skeleton-td
-  padding: $small 12px  // matches DataTable td padding
+  padding: $table-cell-padding-v $table-cell-padding-h
   vertical-align: middle
 
   &.col-number

@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
 using System.Globalization;
-using System.Linq;
 using System.Text;
 
 namespace DM.Domain.Core.Extensions;
@@ -29,7 +26,6 @@ public static class ReadableGuidHelper
     /// <summary>
     /// Decode guid from readable format
     /// </summary>
-    /// <param name="encodedGuid">Encoded guid</param>
     /// <returns>Guid</returns>
     public static Guid DecodeFromReadableGuid(this string encodedGuid)
     {

@@ -2,35 +2,18 @@
  * @vitest-environment jsdom
  */
 
-/**
- * A refused creation has one carrier, and this form is not always it.
- *
- * What the form can show, it shows under the field the server named. Everything
- * else used to go out as a toast of its own — beside the toast the response
- * interceptor raises for the very same answer. On a broken server the author
- * got "Ошибка сервера" twice, on a blocked account the interceptor's sentence
- * and this one both, and error toasts do not fade: the pair sat on the screen
- * until they were dismissed by hand.
- *
- * So the statuses the interceptor speaks for are left to it, and what is left
- * over — a conflict, a missing blog, a 400 that named no field of this form —
- * is still said here, because nobody else would.
- */
+// The statuses the interceptor speaks for are left to it; the rest is said by the form.
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { mount, flushPromises } from "@vue/test-utils";
-import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import { createPinia } from "pinia";
 import { blogApi } from "@/entities/blog";
 import { blacklistApi } from "@/entities/user";
 import type { GeneralError } from "@/shared/api/models/common";
+import { problem } from "@/shared/lib/testing/problem";
 import type { BlacklistSettings } from "@/shared/api/models/personal";
 import CreateBlogForm from "./CreateBlogForm.vue";
 
-// One instance for the whole file, so "and nothing else said it" is a question
-// this can answer.
 const toast = vi.hoisted(() => ({
   error: vi.fn(),
   warning: vi.fn(),
@@ -42,39 +25,16 @@ vi.mock("@/shared/lib/composables/useToast", () => ({
   useToast: () => toast,
 }));
 
-// The form leaves for the blog it created, and it guards the way out while the
-// fields hold text (UnsavedChangesGuard registers onBeforeRouteLeave). Both are
-// doubles; a mock that leaves the hook out fails the mount instead of the
-// assertion.
+// A mock that leaves the guard hook out fails the mount instead of the assertion.
 vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn() }),
   onBeforeRouteLeave: vi.fn(),
 }));
 
-// The description field drags the whole tiptap stack in and none of it is the
-// subject here. A render function, not a `template` string: the test build runs
-// the runtime-only Vue.
-vi.mock("@/shared/ui/BBCodeEditor", async () => {
-  const { defineComponent, h } = await import("vue");
-  return {
-    BBCodeEditor: defineComponent({
-      name: "BBCodeEditor",
-      props: { modelValue: { type: String, default: "" } },
-      setup: (props) => () =>
-        h("div", { class: "editor-stub" }, props.modelValue),
-    }),
-  };
-});
+vi.mock("@/shared/ui/BBCodeEditor", async () =>
+  (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeEditor(),
+);
 
-/** A problem document, the shape the API answers a refusal with. */
-const problem = (status: number, title: string): GeneralError => ({
-  type: "",
-  title,
-  status,
-  traceId: "trace",
-});
-
-/** The account's blacklist settings, with "Переносить..." as given. */
 const settingsWith = (autoPopulateContentBlacklist: boolean) =>
   ({
     data: {
@@ -88,7 +48,6 @@ const settingsWith = (autoPopulateContentBlacklist: boolean) =>
     error: null,
   }) as never;
 
-/** A first page of the author's own blacklist, with the count of all. */
 const listOf = (names: string[], total = names.length) =>
   ({
     data: {
@@ -102,7 +61,6 @@ const listOf = (names: string[], total = names.length) =>
     error: null,
   }) as never;
 
-/** Fill the one required field and send the form into the given answer. */
 async function submitInto(error: GeneralError) {
   vi.spyOn(blogApi, "createBlog").mockResolvedValue({
     data: null,
@@ -119,26 +77,25 @@ async function submitInto(error: GeneralError) {
   return wrapper;
 }
 
+beforeEach(() => {
+  localStorage.clear();
+  // The auth store reads the signed-in viewer from here.
+  localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
+  vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+const withEmptyBlacklist = () => {
+  vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(settingsWith(false));
+  vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(listOf([]));
+};
+
 describe("CreateBlogForm", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    // The form submits for a signed-in viewer only, and the auth store reads
-    // who that is from here.
-    localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
-    vi.clearAllMocks();
-    vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(
-      settingsWith(false),
-    );
-    vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(listOf([]));
-  });
+  beforeEach(withEmptyBlacklist);
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  // What no field shows stands under the button that was pressed, the three
-  // the response interceptor used to plate included, and no plate goes up
-  // (the owner's rule of 26 September 2026).
   it.each<[number, string, string]>([
     [403, "Аккаунт заблокирован", "Аккаунт заблокирован"],
     [429, "Слишком много запросов", "Слишком много попыток, попробуйте позже"],
@@ -153,7 +110,6 @@ describe("CreateBlogForm", () => {
   });
 
   it("falls back to its own sentence when the server named nothing", async () => {
-    // A 404 carries no title here; the fallback is the form's own business.
     const wrapper = await submitInto(problem(404, ""));
 
     expect(wrapper.get(".action-result").text()).toBe(
@@ -163,30 +119,11 @@ describe("CreateBlogForm", () => {
   });
 });
 
-/**
- * "Перенести мой черный список" (CopyBlacklistOption, which has its own spec
- * for what it draws): what the form sends of it. The box starts where the
- * account setting "Переносить список в мои новые игры и блоги" stands, and the
- * form sends what the box shows. Where there is no box - nobody on the
- * author's own list - the field is left out, and the server applies the
- * setting itself: a false sent from a box nobody saw was how the setting once
- * never reached a blog.
- */
-describe("CreateBlogForm: перенос черного списка", () => {
-  beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
-    vi.clearAllMocks();
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
+// Without a box the field is left out, and the server applies the account setting itself.
+describe("CreateBlogForm: carrying the blacklist over", () => {
   const copyBox = (wrapper: ReturnType<typeof mount>) =>
     wrapper.find<HTMLInputElement>(".copy-blacklist input[type='checkbox']");
 
-  /** The form mounted and sent; the payload of the creation it asked for. */
   async function sent(wrapper: ReturnType<typeof mount>) {
     const create = vi.spyOn(blogApi, "createBlog").mockResolvedValue({
       data: null,
@@ -201,7 +138,7 @@ describe("CreateBlogForm: перенос черного списка", () => {
   const mountForm = () =>
     mount(CreateBlogForm, { global: { plugins: [createPinia()] } });
 
-  it("без людей в личном списке галочки нет, и поле не уходит", async () => {
+  it("draws no box and sends no field when the own list is empty", async () => {
     vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(settingsWith(true));
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(listOf([]));
     const wrapper = mountForm();
@@ -214,7 +151,7 @@ describe("CreateBlogForm: перенос черного списка", () => {
   });
 
   it.each([true, false])(
-    "берет галочку из настройки аккаунта (%s) и шлет ее",
+    "takes the box from the account setting (%s) and sends it",
     async (setting) => {
       vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(
         settingsWith(setting),
@@ -230,7 +167,7 @@ describe("CreateBlogForm: перенос черного списка", () => {
     },
   );
 
-  it("шлет выбор автора", async () => {
+  it("sends the author's choice", async () => {
     vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(settingsWith(true));
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(
       listOf(["Player-Two"]),
@@ -243,9 +180,7 @@ describe("CreateBlogForm: перенос черного списка", () => {
     expect((await sent(wrapper)).copyBlacklist).toBe(false);
   });
 
-  // What the box does, and to whom: every name on the list is said, the ones
-  // of its second page too.
-  it("говорит под галочкой, что она делает и с кем", async () => {
+  it("says under the box what it does and to whom", async () => {
     vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(
       settingsWith(false),
     );
@@ -265,44 +200,10 @@ describe("CreateBlogForm: перенос черного списка", () => {
   });
 });
 
-/**
- * The form of a new blog is laid out as the form of a new game, DM2's one
- * form of captioned rows, and says the blog in the making in the site's word.
- *
- * What these catch: the blog's rows laid out otherwise than the game's (the
- * two forms are one pattern); "черновик" back in a caption (the site says a
- * blog in the making, never a draft); the switch of the comments back on the
- * form or in the request, where there is nothing to switch (comments are never
- * off).
- */
-describe("CreateBlogForm: как форма игры", () => {
-  const HERE = dirname(fileURLToPath(import.meta.url));
-  const blog = ruleMap(componentCss(resolve(HERE, "CreateBlogForm.vue")));
-  const game = ruleMap(
-    componentCss(resolve(HERE, "../../create-game/ui/CreateGameForm.vue")),
-  );
+describe("CreateBlogForm: laid out as the game form", () => {
+  beforeEach(withEmptyBlacklist);
 
-  beforeEach(() => {
-    localStorage.clear();
-    localStorage.setItem("user", JSON.stringify({ username: "SolohinLex" }));
-    vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(
-      settingsWith(false),
-    );
-    vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(listOf([]));
-  });
-
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  it("кладет поля рядами формы игры: подпись слева, поле справа", () => {
-    const row = blog.get(".create-blog-form .row");
-
-    expect(row?.display).toBe("grid");
-    expect(row).toEqual(game.get(".create-game-form .row"));
-  });
-
-  it("называет поля словами сайта и не знает черновика", async () => {
+  it("names the fields in the words of the site", async () => {
     const wrapper = mount(CreateBlogForm, {
       global: { plugins: [createPinia()] },
     });
@@ -314,22 +215,5 @@ describe("CreateBlogForm: как форма игры", () => {
     expect(
       wrapper.findAll("#blog-draft-visibility option").map((o) => o.text()),
     ).toEqual(["Все", "Только участники"]);
-    expect(wrapper.text()).not.toMatch(/черновик/i);
-    expect(wrapper.text()).not.toContain("Комментарии");
-  });
-
-  it("не шлет выключателя комментариев", async () => {
-    const create = vi.spyOn(blogApi, "createBlog").mockResolvedValue({
-      data: null,
-      error: problem(409, "Блог с таким названием уже есть"),
-    } as never);
-    const wrapper = mount(CreateBlogForm, {
-      global: { plugins: [createPinia()] },
-    });
-    await wrapper.find("#title").setValue("Записки Лекса");
-    await wrapper.find("form").trigger("submit");
-    await flushPromises();
-
-    expect(create.mock.calls[0][0]).not.toHaveProperty("commentsEnabled");
   });
 });

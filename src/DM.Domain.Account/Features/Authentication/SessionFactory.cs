@@ -1,6 +1,5 @@
 using DM.Domain.Account.Configuration;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Identity;
 using DM.Domain.Core.Parsing;
 using Microsoft.Extensions.Options;
 
@@ -13,7 +12,6 @@ internal class SessionFactory : ISessionFactory
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly AuthenticationConfiguration _config;
 
-    /// <inheritdoc />
     public SessionFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
@@ -27,7 +25,7 @@ internal class SessionFactory : ISessionFactory
     /// <inheritdoc />
     public CreateSession Create(bool persistent, SessionContext? context = null)
     {
-        var rightNow = _dateTimeProvider.Now.UtcDateTime;
+        var rightNow = _dateTimeProvider.Now;
         return new CreateSession
         {
             Id = _guidFactory.Create(),

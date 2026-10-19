@@ -2,13 +2,12 @@ using System;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.RoomAccesses;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.RoomAccesses;
 
-public class UpdateRoomAccessValidatorShould : UnitTestBase
+public class UpdateRoomAccessValidatorShould
 {
     private readonly UpdateRoomAccessValidator validator = new();
 

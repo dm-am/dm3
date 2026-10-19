@@ -11,27 +11,9 @@ namespace DM.Testing.Markup;
 /// it can and reports that one.
 /// </summary>
 /// <remarks>
-/// <para>
-/// Deterministic: each case is generated from a seed of its own, derived from
-/// the name of the check and the number of the case, so a run fails on the same
-/// text every time and on every machine. The report names the seed of the case
-/// and the text it was made smaller to.
-/// </para>
-/// <para>
-/// Three environment variables steer a run, and none is set in CI:
-/// DM_MARKUP_SEED runs the one case of that seed, the way a report says to;
-/// DM_MARKUP_RUNS sets how many cases each check runs; DM_MARKUP_SALT mixes a
-/// word into the seeds, for a search over cases no default run has tried.
-/// docs/guides/TESTING.md, section "Генеративные проверки разметки", has the
-/// commands.
-/// </para>
-/// <para>
-/// A text is made smaller a piece at a time: runs of pieces are taken out,
-/// halving the run until it is a single piece, for as long as the text still
-/// fails; then a piece written many times in a row is written fewer times. What
-/// is reported still fails, and nothing more can be taken out of it piece by
-/// piece.
-/// </para>
+/// Each case has a seed of its own from the check's name and number. DM_MARKUP_SEED, DM_MARKUP_RUNS and
+/// DM_MARKUP_SALT steer a run (docs/guides/TESTING.md, section "Генеративные проверки разметки").
+/// A failing text is shrunk a piece at a time.
 /// </remarks>
 public static class MarkupProperty
 {

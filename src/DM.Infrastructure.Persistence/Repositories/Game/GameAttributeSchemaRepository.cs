@@ -7,7 +7,8 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using DtoGameAttributeSchema = DM.Domain.Game.Features.Games.GameAttributeSchema;
+using DbSpecification = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.AttributeSpecification;
+using DtoGameAttributeSchema = DM.Domain.Game.Features.GameAttributeSchemas.GameAttributeSchema;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -81,23 +82,9 @@ internal class GameAttributeSchemaRepository : IGameAttributeSchemaRepository
                 .FirstAsync(cancellation);
 
             var seenVersion = replace.Version;
-            var known = stored.Select(s => s.Id).ToHashSet();
-            var document = AttributeSpecificationDocument.ToDocument(
-                replace.Specifications,
-                specification => specification.Id.HasValue && known.Contains(specification.Id.Value)
-                    ? specification.Id.Value
-                    : _guidFactory.Create());
+            var document = BuildDocument(replace, stored);
 
-            var updatedUtc = _dateTimeProvider.Now;
-
-            var written = await _dbContext.GameAttributeSchemas
-                .Where(s => s.GameId == replace.GameId && s.Version == seenVersion)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(x => x.Specifications, document)
-                    .SetProperty(x => x.Version, x => x.Version + 1)
-                    .SetProperty(x => x.UpdatedUtc, updatedUtc), cancellation);
-
-            if (written == 0)
+            if (!await WriteIfVersion(replace, seenVersion, document, cancellation))
             {
                 // The stored version is not the one the caller read, and this is
                 // the only way this method comes back empty-handed: the sheet is
@@ -110,29 +97,77 @@ internal class GameAttributeSchemaRepository : IGameAttributeSchemaRepository
             // matches no row, which is why this side of the branch has one.
             var version = seenVersion!.Value + 1;
 
-            // Everything the new set no longer names, and not the difference of
-            // the two sets: a value written against an identifier that was never
-            // in the sheet is as unreadable as one whose specification was just
-            // dropped. Soft-deleted characters included - their rows are as
-            // unreachable as anyone else's, and leaving them would keep exactly
-            // the debt this delete exists to pay.
-            var characterIds = _dbContext.Characters
-                .IgnoreQueryFilters()
-                .Where(c => c.GameId == replace.GameId)
-                .Select(c => c.CharacterId);
-
-            var keptIds = document.Select(s => s.Id).ToArray();
-
-            await _dbContext.CharacterAttributes
-                .IgnoreQueryFilters()
-                .Where(a => characterIds.Contains(a.CharacterId) && !keptIds.Contains(a.AttributeId))
-                .ExecuteDeleteAsync(cancellation);
+            await DropOrphanValues(replace, document, cancellation);
 
             await transaction.CommitAsync(cancellation);
             result = ToSchema(document, version);
         }, ct);
 
         return result;
+    }
+
+    /// <summary>
+    /// The new set as it is stored, each specification with the identifier it
+    /// survives with: its own when the stored set still holds it, a new one
+    /// otherwise.
+    /// </summary>
+    private List<DbSpecification> BuildDocument(
+        ReplaceGameAttributeSchema replace, IEnumerable<DbSpecification> stored)
+    {
+        var known = stored.Select(s => s.Id).ToHashSet();
+        return AttributeSpecificationDocument.ToDocument(
+            replace.Specifications,
+            specification => specification.Id.HasValue && known.Contains(specification.Id.Value)
+                ? specification.Id.Value
+                : _guidFactory.Create());
+    }
+
+    /// <summary>
+    /// Writes the new set over the sheet the caller read, and answers whether
+    /// the sheet was still at that version.
+    /// </summary>
+    private async Task<bool> WriteIfVersion(
+        ReplaceGameAttributeSchema replace, int? seenVersion, List<DbSpecification> document,
+        CancellationToken cancellation)
+    {
+        var updatedUtc = _dateTimeProvider.Now;
+
+        var written = await _dbContext.GameAttributeSchemas
+            .Where(s => s.GameId == replace.GameId && s.Version == seenVersion)
+            .ExecuteUpdateAsync(s => s
+                .SetProperty(x => x.Specifications, document)
+                .SetProperty(x => x.Version, x => x.Version + 1)
+                .SetProperty(x => x.UpdatedUtc, updatedUtc), cancellation);
+
+        return written != 0;
+    }
+
+    /// <summary>
+    /// Deletes the attribute values of the game's characters that the new set
+    /// no longer names.
+    /// </summary>
+    /// <remarks>
+    /// Everything the new set no longer names, and not the difference of the two
+    /// sets: a value written against an identifier that was never in the sheet
+    /// is as unreadable as one whose specification was just dropped.
+    /// Soft-deleted characters included - their rows are as unreachable as
+    /// anyone else's, and leaving them would keep exactly the debt this delete
+    /// exists to pay.
+    /// </remarks>
+    private async Task DropOrphanValues(
+        ReplaceGameAttributeSchema replace, List<DbSpecification> document, CancellationToken cancellation)
+    {
+        var characterIds = _dbContext.Characters
+            .IgnoreQueryFilters()
+            .Where(c => c.GameId == replace.GameId)
+            .Select(c => c.CharacterId);
+
+        var keptIds = document.Select(s => s.Id).ToArray();
+
+        await _dbContext.CharacterAttributes
+            .IgnoreQueryFilters()
+            .Where(a => characterIds.Contains(a.CharacterId) && !keptIds.Contains(a.AttributeId))
+            .ExecuteDeleteAsync(cancellation);
     }
 
     private static DtoGameAttributeSchema ToSchema(

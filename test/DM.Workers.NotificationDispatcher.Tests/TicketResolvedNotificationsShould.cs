@@ -17,11 +17,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// Who is told that moderation closed a ticket, what he is told, and where it
 /// leads him.
 /// </summary>
-/// <remarks>
-/// The row names two people at most - the author and the moderator who closed
-/// it - and only the first is the reader. A guest is nobody to the inbox: his
-/// tracking page carries the closing instead.
-/// </remarks>
+/// <remarks>Only the author is the reader; a guest's tracking page carries the closing instead.</remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class TicketResolvedNotificationsShould
 {
@@ -80,14 +76,6 @@ public class TicketResolvedNotificationsShould
         return produced.ToArray();
     }
 
-    /// <summary>Reads a field off the anonymous metadata object.</summary>
-    private static object? Field(CreateNotification notification, string name)
-    {
-        var property = notification.Metadata.GetType().GetProperty(name);
-        property.Should().NotBeNull($"the metadata carries {name}");
-        return property!.GetValue(notification.Metadata);
-    }
-
     [Fact]
     public async Task TellTheAuthorOfTheTicket()
     {
@@ -103,9 +91,9 @@ public class TicketResolvedNotificationsShould
     {
         var notification = (await Resolved(AnsweredTicketId)).Single();
 
-        Field(notification, "TicketId").Should().Be(AnsweredTicketId,
+        TicketSeed.Field(notification, "TicketId").Should().Be(AnsweredTicketId,
             "the page of the ticket is built out of this field alone");
-        Field(notification, "ModeratorUsername").Should().Be(NotificationSeed.MasterUsername,
+        TicketSeed.Field(notification, "ModeratorUsername").Should().Be(NotificationSeed.MasterUsername,
             "the letter names the moderator who closed the ticket");
     }
 

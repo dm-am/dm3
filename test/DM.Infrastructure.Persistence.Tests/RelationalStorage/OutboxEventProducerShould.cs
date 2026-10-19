@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
@@ -19,11 +18,8 @@ namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 /// SendAsync survives the change word for word.
 /// </summary>
 /// <remarks>
-/// The successor of EventPublishingShould, over rows instead of a transport
-/// mock. What the old suite held - a refusal is swallowed, logged and counted,
-/// and every publication leaves with a fresh identity of its own - still holds
-/// here; what is new is the row itself: every field the relay will need has to
-/// be in it, because the wire message is reconstructed from the row alone.
+/// A refusal is swallowed, logged and counted, every publication has an identity of its own, and the row
+/// holds every field the relay rebuilds the message from.
 /// </remarks>
 public class OutboxEventProducerShould
 {
@@ -120,9 +116,9 @@ public class OutboxEventProducerShould
         out FixedClock clock,
         out RecordingLogger<OutboxEventProducer> logger)
     {
-        clock = new FixedClock();
+        clock = new FixedClock(new DateTimeOffset(2026, 8, 25, 12, 0, 0, TimeSpan.Zero));
         logger = new RecordingLogger<OutboxEventProducer>();
-        return new OutboxEventProducer(context, new SequentialGuids(), clock, logger);
+        return new OutboxEventProducer(context, new RandomGuids(), clock, logger);
     }
 
     private static CountingDbContext Context(bool failing = false) => new(
@@ -154,12 +150,7 @@ public class OutboxEventProducerShould
         }
     }
 
-    private sealed class FixedClock : IDateTimeProvider
-    {
-        public DateTimeOffset Now { get; } = new(2026, 8, 25, 12, 0, 0, TimeSpan.Zero);
-    }
-
-    private sealed class SequentialGuids : IGuidFactory
+    private sealed class RandomGuids : IGuidFactory
     {
         public Guid Create() => Guid.NewGuid();
     }

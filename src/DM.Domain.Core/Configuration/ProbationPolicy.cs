@@ -4,16 +4,8 @@ namespace DM.Domain.Core.Configuration;
 /// Probation: the single definition of a newbie.
 /// </summary>
 /// <remarks>
-/// A constant and not a setting. The same rule is compiled into a stored computed
-/// column on Users, which no value read at runtime can move, so the setting and the
-/// schema could not agree: lowering it moved game premoderation, reviews and
-/// endorsements while the badge on the profile, the user filter and the assistant
-/// lists stayed on the column's hundred. The whole mechanism guarding that was a
-/// warning line written at warm-up, after which the site started anyway.
-///
-/// The number is a product rule, so it moves by a code change and a schema rebuild
-/// together, and an architecture test compares this constant with the migration and
-/// both model snapshots.
+/// A constant and not a setting: the same rule is a stored computed column on Users,
+/// and an architecture test compares it with the migration and both model snapshots.
 /// </remarks>
 public static class ProbationPolicy
 {

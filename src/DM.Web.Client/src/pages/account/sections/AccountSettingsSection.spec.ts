@@ -3,111 +3,81 @@
  */
 
 /**
- * The settings block of the account page, and the only question it is hard to
- * answer on this screen: did the save go through?
- *
- * Nothing here moves when it does. The theme, the zone and the five page sizes
- * stay in the fields the reader chose them in, and the server answers with the
- * same values. A plate in the corner used to say it; the button says it now,
- * and these are the ways the button can lie.
- *
- * It can claim a save that never happened - on arrival, before the reader has
- * pressed anything. It can go on claiming one over a field that has changed
- * since, which is what a snapshot taken by reference rather than by value does.
- * And it can unsay a save that did happen: `fetchUser` refills this form from
- * the account, and the five paging numbers come back in whatever order the
- * answer spells them, so a form compared as it stands rather than as it is sent
- * would read as edited the instant the server's own answer landed in it.
- *
- * The last one is worth the mount: it needs the save, the refresh and the
- * watcher that refills the form, and none of the three would show it alone.
+ * "Личные настройки" of the account page: three values read from the server
+ * and saved with one button. The form is drawn only once they are read, so no
+ * default stands as if saved; the theme saved here is the start of a new
+ * device and leaves this one's alone; the button is what says the save went
+ * through, so the tests press on how it could lie.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { personalApi } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
-import { Theme, type Paging } from "@/shared/api/models/personal";
+import { Theme, type Preferences } from "@/shared/api/models/personal";
+import { useUiStore } from "@/shared/stores/ui";
 import {
   accountTimeZone,
   setAccountTimeZone,
 } from "@/shared/lib/utils/timeZone";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import {
-  compileSass,
-  sassBlocks,
-  styleRules,
-} from "@/shared/lib/testing/styles";
 import AccountSettingsSection from "./AccountSettingsSection.vue";
 
-/**
- * The account refresh after a save is a session call with a store behind it,
- * and what it brings back reaches this section as a prop. The prop is what the
- * tests below hand over, so the call itself is stubbed.
- */
+/** The account refresh is stubbed: the lists read the size off the viewer it brings. */
 const fetchUser = vi.hoisted(() => vi.fn());
 vi.mock("@/entities/user/lib/session", () => ({
   fetchUser,
-  register: vi.fn(),
   signIn: vi.fn(),
   completeSecondFactor: vi.fn(),
   signOut: vi.fn(),
   signOutAll: vi.fn(),
 }));
 
-const paging = (over: Partial<Paging> = {}): Paging => ({
-  postsPerPage: 20,
-  commentsPerPage: 20,
-  topicsPerPage: 20,
-  messagesPerPage: 20,
-  entitiesPerPage: 20,
-  ...over,
-});
-
-/** The account the section is drawn for. */
-const reader = (sizes: Paging) =>
-  ({ username: "reader", settings: { paging: sizes } }) as never;
-
-/**
- * The same five numbers an answer might spell in another order. JSON is what
- * the saved copy is compared by, so an order is a difference unless the form is
- * read through the request it sends.
- */
-const inAnotherOrder = (sizes: Paging) => ({
-  entitiesPerPage: sizes.entitiesPerPage,
-  messagesPerPage: sizes.messagesPerPage,
-  topicsPerPage: sizes.topicsPerPage,
-  commentsPerPage: sizes.commentsPerPage,
-  postsPerPage: sizes.postsPerPage,
-});
-
 const ZONE = "Europe/Moscow";
 
-async function render() {
+/** What the server holds for the account, none of it the default. */
+const SAVED: Preferences = {
+  theme: Theme.Dark,
+  pageSize: 50,
+  timeZoneId: ZONE,
+};
+
+type Read = { data: unknown; error: unknown };
+
+const answered = (preferences: Preferences = SAVED): Read => ({
+  data: { resource: preferences },
+  error: null,
+});
+
+const failed = (): Read => ({
+  data: null,
+  error: { status: 500, title: "Ошибка сервера", type: "", traceId: "" },
+});
+
+/** Mounts the block, the read answering with `reads` in turn. */
+async function render(...reads: Read[]) {
   const pinia = createPinia();
   setActivePinia(pinia);
 
-  vi.spyOn(personalApi, "getMyPreferences").mockResolvedValue({
-    data: {
-      resource: { theme: Theme.Light, paging: paging(), timeZoneId: ZONE },
-    },
-    error: null,
-  } as never);
+  const read = vi.spyOn(personalApi, "getMyPreferences");
+  for (const answer of reads.length ? reads : [answered()])
+    read.mockResolvedValueOnce(answer as never);
   const update = vi
     .spyOn(personalApi, "updateMyPreferences")
     .mockResolvedValue({ data: {}, error: null } as never);
 
   const wrapper = mount(AccountSettingsSection, {
-    props: { user: reader(paging()) },
     global: { plugins: [pinia] },
   });
   await flushPromises();
-  return { wrapper, update };
+  return { wrapper, update, read };
 }
 
 /** The control the form is saved with. */
 const saveButton = (wrapper: VueWrapper) => wrapper.get("button.save-button");
+
+/** The value a select of the form stands at. */
+const valueOf = (wrapper: VueWrapper, id: string) =>
+  (wrapper.get(`#${id}`).element as HTMLSelectElement).value;
 
 /** What the corner of the screen says, if anything. */
 const plates = () => useToast().toasts.value.map((toast) => toast.message);
@@ -118,13 +88,90 @@ async function press(wrapper: VueWrapper) {
   await flushPromises();
 }
 
-describe("the account settings block", () => {
-  beforeEach(() => {
-    const { toasts, dismiss } = useToast();
-    for (const toast of [...toasts.value]) dismiss(toast.id);
-    vi.restoreAllMocks();
+beforeEach(() => {
+  const { toasts, dismiss } = useToast();
+  for (const toast of [...toasts.value]) dismiss(toast.id);
+  vi.restoreAllMocks();
+  fetchUser.mockReset();
+  localStorage.clear();
+});
+
+describe("the fields of the personal settings", () => {
+  it("are titled and captioned as the reader reads them", async () => {
+    const { wrapper } = await render();
+
+    expect(wrapper.get("h2").text()).toBe("Личные настройки");
+    expect(
+      wrapper.findAll(".form-field-label label").map((label) => label.text()),
+    ).toEqual([
+      "Сколько показывать на странице",
+      "Часовой пояс",
+      "Тема на новом устройстве",
+    ]);
+    expect(
+      wrapper.findAll(".form-field-hint").map((hint) => hint.text()),
+    ).toEqual([
+      "Посты в комнате, комментарии, топики, сообщения в переписке и строки списков: игры, блоги, пользователи, пульс, уведомления",
+      "По нему показываются даты и время на сайте и в письмах",
+      "Тема этого устройства, верстка и перенос слов меняются в настройках сайта у шестеренки",
+    ]);
+    // The participation in the rating is the profile's: what others see of the owner.
+    expect(wrapper.text()).not.toContain("Участие в рейтинге");
+    expect(wrapper.find('input[type="checkbox"]').exists()).toBe(false);
+    expect(wrapper.text()).not.toContain("Цветовая схема");
+    expect(wrapper.text()).not.toContain("Размер страниц");
   });
 
+  it("offers the page sizes the server takes", async () => {
+    const { wrapper } = await render();
+
+    expect(
+      wrapper
+        .findAll("#account-page-size option")
+        .map((option) => option.text()),
+    ).toEqual(["5", "10", "20", "30", "40", "50", "100", "200"]);
+  });
+
+  it("stand at what the server holds", async () => {
+    const { wrapper } = await render();
+
+    expect(valueOf(wrapper, "account-page-size")).toBe("50");
+    expect(valueOf(wrapper, "account-time-zone")).toBe(ZONE);
+    expect(valueOf(wrapper, "account-theme")).toBe(Theme.Dark);
+  });
+});
+
+describe("the read of the personal settings", () => {
+  it("draws no field and no save until the server answers", async () => {
+    setActivePinia(createPinia());
+    vi.spyOn(personalApi, "getMyPreferences").mockReturnValue(
+      new Promise(() => {}) as never,
+    );
+
+    const wrapper = mount(AccountSettingsSection);
+    await flushPromises();
+
+    expect(wrapper.find(".account-skeleton").exists()).toBe(true);
+    expect(wrapper.find("select").exists()).toBe(false);
+    expect(wrapper.find("button.save-button").exists()).toBe(false);
+  });
+
+  it("says a failed read instead of the form, and reads again on Повторить", async () => {
+    const { wrapper, read } = await render(failed(), answered());
+
+    expect(wrapper.find("select").exists()).toBe(false);
+    expect(wrapper.get(".error-state").text()).toContain("Ошибка сервера");
+
+    await wrapper.get(".error-retry").trigger("click");
+    await flushPromises();
+
+    expect(read).toHaveBeenCalledTimes(2);
+    expect(wrapper.find(".error-state").exists()).toBe(false);
+    expect(valueOf(wrapper, "account-page-size")).toBe("50");
+  });
+});
+
+describe("the save of the personal settings", () => {
   it("offers a save while nothing has been saved yet", async () => {
     const { wrapper } = await render();
 
@@ -132,24 +179,45 @@ describe("the account settings block", () => {
     expect(saveButton(wrapper).attributes("disabled")).toBeUndefined();
   });
 
-  it("says the save worked on the button and nowhere else", async () => {
+  it("sends the three values and says it worked on the button and nowhere else", async () => {
     const { wrapper, update } = await render();
 
-    await wrapper.get("#account-posts-per-page").setValue("50");
+    await wrapper.get("#account-page-size").setValue("10");
     await press(wrapper);
 
     expect(update).toHaveBeenCalledWith({
-      theme: Theme.Light,
-      paging: paging({ postsPerPage: 50 }),
+      theme: Theme.Dark,
+      pageSize: 10,
       timeZoneId: ZONE,
     });
     expect(saveButton(wrapper).text()).toBe("Сохранено");
     expect(plates()).toEqual([]);
   });
 
+  it("reads the viewer again, so the lists open with the new size", async () => {
+    const { wrapper } = await render();
+
+    await wrapper.get("#account-page-size").setValue("10");
+    await press(wrapper);
+
+    expect(fetchUser).toHaveBeenCalledTimes(1);
+  });
+
+  // The theme of this device changes at the gear; the account's is only where
+  // a new device starts.
+  it("leaves the theme of this device as it is", async () => {
+    const { wrapper } = await render();
+    useUiStore().updateTheme(Theme.Light);
+
+    await wrapper.get("#account-theme").setValue(Theme.Dark);
+    await press(wrapper);
+
+    expect(useUiStore().theme).toBe(Theme.Light);
+  });
+
   it("takes no further press while it reads Сохранено", async () => {
     const { wrapper, update } = await render();
-    await wrapper.get("#account-posts-per-page").setValue("50");
+    await wrapper.get("#account-page-size").setValue("10");
     await press(wrapper);
 
     await press(wrapper);
@@ -160,10 +228,10 @@ describe("the account settings block", () => {
 
   it("offers the save again as soon as a field changes", async () => {
     const { wrapper, update } = await render();
-    await wrapper.get("#account-posts-per-page").setValue("50");
+    await wrapper.get("#account-page-size").setValue("10");
     await press(wrapper);
 
-    await wrapper.get("#account-topics-per-page").setValue("50");
+    await wrapper.get("#account-theme").setValue(Theme.Light);
 
     expect(saveButton(wrapper).text()).toBe("Сохранить");
     expect(saveButton(wrapper).attributes("disabled")).toBeUndefined();
@@ -172,78 +240,44 @@ describe("the account settings block", () => {
     expect(update).toHaveBeenCalledTimes(2);
   });
 
-  // The account comes back through `fetchUser` and refills the form. Same
-  // values, so the button has nothing to take back.
-  it("holds the claim when the refreshed account refills the form", async () => {
-    const { wrapper } = await render();
-    await wrapper.get("#account-posts-per-page").setValue("50");
-    await press(wrapper);
-
-    await wrapper.setProps({
-      user: reader(inAnotherOrder(paging({ postsPerPage: 50 })) as Paging),
-    });
-    await flushPromises();
-
-    expect(saveButton(wrapper).text()).toBe("Сохранено");
-    expect(saveButton(wrapper).attributes("disabled")).toBeDefined();
-  });
-
   it("keeps offering the save when the server refused it", async () => {
     const { wrapper, update } = await render();
     update.mockResolvedValue({
       data: null,
-      error: { status: 400, title: "Недопустимый размер страницы" },
+      error: { status: 400, title: "Недопустимое число на странице" },
     } as never);
 
-    await wrapper.get("#account-posts-per-page").setValue("50");
+    await wrapper.get("#account-page-size").setValue("10");
     await press(wrapper);
 
     expect(saveButton(wrapper).text()).toBe("Сохранить");
     expect(saveButton(wrapper).attributes("disabled")).toBeUndefined();
-    expect(wrapper.get(".error-text").text()).toBe(
-      "Недопустимый размер страницы",
+    expect(wrapper.get(".action-result").text()).toBe(
+      "Недопустимое число на странице",
     );
+    expect(fetchUser).not.toHaveBeenCalled();
   });
 
-  /**
-   * A refusal has one carrier, and it is the line beside the button. The
-   * response interceptor used to answer a 403, a 429 and a 5xx with a plate of
-   * its own while this line kept quiet; now the line says them and the plate
-   * is taken down (refusalHere; the owner's rule of 26 September 2026). The
-   * fields stay exactly as they were typed and the button is back on
-   * "Сохранить", so the screen still says the save did not happen.
-   */
-  it.each([
-    [403, "Ошибка сервера"],
-    [429, "Слишком много попыток, попробуйте позже"],
-    [500, "Ошибка сервера"],
-  ])("says a %i beside the button", async (status, line) => {
+  /** A refusal is said in the line beside the button, which offers the save again. */
+  it("says a 500 beside the button", async () => {
     const { wrapper, update } = await render();
     update.mockResolvedValue({
       data: null,
-      error: { status, title: "Ошибка сервера" },
+      error: { status: 500, title: "Ошибка сервера" },
     } as never);
 
-    await wrapper.get("#account-posts-per-page").setValue("50");
+    await wrapper.get("#account-page-size").setValue("10");
     await press(wrapper);
 
-    expect(wrapper.get(".error-text").text()).toBe(line);
-    // Refused all the same: nothing was applied and the press is on offer again.
+    expect(wrapper.get(".action-result").text()).toBe("Ошибка сервера");
     expect(saveButton(wrapper).text()).toBe("Сохранить");
     expect(saveButton(wrapper).attributes("disabled")).toBeUndefined();
   });
 });
 
-/**
- * The zone of the account is what every date on the site is drawn by for a
- * signed-in reader, and the page holds it as the account stood when the page
- * read it. A save that did not hand the new zone over left the site on the old
- * one until the next visit: the reader chose Tokyo, read "Сохранено", and went
- * on seeing Moscow times everywhere.
- */
+/** The zone draws every date of the site, so a save hands it over at once. */
 describe("the zone of the account", () => {
   beforeEach(() => {
-    vi.restoreAllMocks();
     setAccountTimeZone(ZONE);
   });
 
@@ -267,25 +301,5 @@ describe("the zone of the account", () => {
     await press(wrapper);
 
     expect(accountTimeZone.value).toBe(ZONE);
-  });
-});
-
-// The fields of the page sizes stand in the grid of the full version at any
-// width: a phone shows them side by side as well, and the reader zooms in.
-describe("the grid of the page sizes", () => {
-  it("has no form of its own for a narrow screen", () => {
-    const file = join(
-      dirname(fileURLToPath(import.meta.url)),
-      "AccountSettingsSection.vue",
-    );
-    const compiled = compileSass(sassBlocks(file), file);
-    expect(compiled).not.toContain("@media");
-    expect(compiled).not.toContain("@container");
-    const grid = styleRules(compiled).find(
-      ({ selector }) => selector === ".pagination-grid",
-    );
-    expect(grid?.declarations["grid-template-columns"]).toBe(
-      "repeat(auto-fit, minmax(200px, 1fr))",
-    );
   });
 });

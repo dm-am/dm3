@@ -10,17 +10,8 @@ namespace DM.Tools.Seeder.Seeding;
 /// around, and the seed its randomness is drawn from.
 /// </summary>
 /// <remarks>
-/// One object, because a second reader of either value is a second default, and a
-/// fixture with two defaults is reproducible on one machine only. Both are read
-/// from configuration and both fail loudly on an unparseable value: a typo that
-/// quietly fell back would look like a determinism bug in whatever consumed the
-/// seed rather than like the typo it is.
-///
-/// This is also the only file in the tool allowed to read a clock or to build a
-/// generator, and SeedDeterminismShould holds it to that. The point is not
-/// tidiness: a screenshot baseline is worth exactly as much as the fixture under
-/// it is repeatable, and a single stray clock read is enough to make two runs
-/// disagree on every date they carry.
+/// The only file of the tool allowed a clock or a generator, which SeedDeterminismShould holds:
+/// a stray clock read makes two runs disagree on every date. An unparseable value fails loudly.
 /// </remarks>
 internal sealed class SeedDeterminism
 {
@@ -37,8 +28,7 @@ internal sealed class SeedDeterminism
     public const string RandomSeedKey = "SeedRandomSeed";
 
     /// <summary>
-    /// Seed used when the key is unset. Arbitrary value, fixed forever: what
-    /// matters is that it never changes, not what it is.
+    /// Seed used when the key is unset. Arbitrary, and fixed forever.
     /// </summary>
     private const int DefaultRandomSeed = 20260730;
 
@@ -56,12 +46,8 @@ internal sealed class SeedDeterminism
     /// The instant every seeded timestamp is offset from.
     /// </summary>
     /// <remarks>
-    /// Resolved once so that a single run is internally consistent, and
-    /// overridable through <see cref="EpochKey"/> so that a run can be pinned to
-    /// a chosen moment. It defaults to the real clock on purpose: a hardcoded
-    /// past epoch would empty every surface built around recency - the
-    /// current-month leaderboards, "activated N days ago", the new-games block.
-    /// Pinning is what a pixel baseline needs, and only it.
+    /// The real clock by default: a fixed past epoch would empty every surface built around recency.
+    /// <see cref="EpochKey"/> pins it, for a pixel baseline.
     /// </remarks>
     public DateTimeOffset Epoch { get; }
 
@@ -74,27 +60,14 @@ internal sealed class SeedDeterminism
     /// The only source of randomness in the content of the seed, and a seeded one.
     /// </summary>
     /// <remarks>
-    /// Every draw here reaches something a reader sees: which accounts play which
-    /// game, who wrote a comment and what it says, view and like counts, review
-    /// verdicts, list order. On <c>Random.Shared</c> that made the fixture
-    /// different on every run, so an assertion about a count or a name held or
-    /// failed by luck and nothing could be measured twice. Seeded, the same
-    /// command produces the same fixture on any machine.
-    ///
-    /// Not thread-safe, and does not need to be: the seed runs one aggregate
-    /// after another on a single scope, because a shared <c>DmDbContext</c>
-    /// cannot be used concurrently either.
+    /// Not thread-safe: the seed runs one aggregate after another on a single DmDbContext.
     /// </remarks>
     public Random Random { get; }
 
     /// <summary>
     /// Reads the pinned epoch, falling back to the clock.
     /// </summary>
-    /// <exception cref="FormatException">
-    /// The key was set to something unparseable. Thrown rather than ignored: a
-    /// typo that silently reverted to the clock would look like a determinism
-    /// bug in whatever consumed the seed.
-    /// </exception>
+    /// <exception cref="FormatException">The key was set to something unparseable.</exception>
     private static DateTimeOffset ResolveEpoch(
         IConfiguration configuration, IDateTimeProvider dateTimeProvider)
     {
@@ -113,11 +86,7 @@ internal sealed class SeedDeterminism
     /// <summary>
     /// Reads the pinned seed, falling back to <see cref="DefaultRandomSeed"/>.
     /// </summary>
-    /// <exception cref="FormatException">
-    /// The key was set to something that is not an integer. Thrown for the same
-    /// reason the epoch is: a run that quietly used a different seed than the one
-    /// asked for produces a different fixture and reports success.
-    /// </exception>
+    /// <exception cref="FormatException">The key was set to something that is not an integer.</exception>
     private static int ResolveRandomSeed(IConfiguration configuration)
     {
         var configured = configuration[RandomSeedKey];
@@ -131,22 +100,8 @@ internal sealed class SeedDeterminism
 /// Identifiers drawn from the seed instead of from the operating system.
 /// </summary>
 /// <remarks>
-/// The infrastructure factory is <c>Guid.NewGuid()</c>, which is exactly what a
-/// fixture must not have. The ten-character public identifier of a blog notepad
-/// and of a game chat is cut straight out of one, so on every run the same page
-/// lived at a different address: a route could not be written down, let alone
-/// screenshotted. Registered over the infrastructure default in the seeder's
-/// container only - nothing else resolves this type, and the tool is never part
-/// of a running site.
-///
-/// Its own generator rather than a share of <see cref="SeedDeterminism.Random"/>,
-/// built from the same configured seed: the two streams are consumed differently
-/// (whole objects here, bounded draws there), and keeping them apart is what lets
-/// an identifier be added to the seed without shifting every content choice made
-/// after it.
-///
-/// Not thread-safe, like the generator it wraps, and for the same reason: the
-/// seed runs one aggregate after another on a single scope.
+/// A public identifier is cut out of a Guid, so with Guid.NewGuid() a page moved every run.
+/// Its own generator: a new identifier then shifts no content choice. Not thread-safe.
 /// </remarks>
 internal sealed class SeededGuidFactory : IGuidFactory
 {

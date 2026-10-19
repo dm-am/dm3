@@ -11,17 +11,14 @@ using Microsoft.EntityFrameworkCore;
 namespace DM.Workers.NotificationDispatcher.Notifiers.Subscriptions;
 
 /// <summary>
-/// Generates "new blog from subscribed author" notifications at blog-creation
-/// time — but only for blogs whose draft visibility is <see cref="DraftVisibility.Public"/>.
-/// Private drafts are invisible to non-team users; the activation generator
-/// covers them later when the blog becomes Active.
+/// Generates "new blog from subscribed author" notifications at blog creation, only for a
+/// <see cref="DraftVisibility.Public"/> draft; the activation generator covers the others.
 /// </summary>
 internal class NewBlogFromSubscribedAuthorNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public NewBlogFromSubscribedAuthorNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -68,13 +65,13 @@ internal class NewBlogFromSubscribedAuthorNotificationGenerator : BaseNotificati
         yield return new CreateNotification
         {
             EventType = EventType.NewBlogFromSubscribedAuthor,
-            UsersInterested = usersInterested.ToArray(),
+            UsersInterested = usersInterested,
             ActorId = blogData.AuthorId,
             Metadata = new
             {
                 BlogId = blogData.BlogId.EncodeToReadable(blogData.Title),
                 BlogTitle = blogData.Title,
-                AuthorUsername = blogData.AuthorUsername
+                blogData.AuthorUsername
             }
         };
     }

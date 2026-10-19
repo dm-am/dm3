@@ -12,14 +12,13 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Moderation.Moderators;
 
-/// <inheritdoc />
 /// <remarks>
 /// Composes existing domain services (same aggregation pattern as other
 /// api-layer services): users by role from the community profile service,
 /// board assignments from the forum board service (Board.ModeratorIds), and
 /// game/blog curation zones from the mentorship service.
 /// </remarks>
-internal class ModeratorsApiService : IModeratorsApiService
+public class ModeratorsApiService
 {
     /// <summary>
     /// Roles shown on the moderation team page, highest first. System (robot)
@@ -37,7 +36,6 @@ internal class ModeratorsApiService : IModeratorsApiService
     private readonly IMentorshipService _mentorshipService;
     private readonly UserMapper _mapper;
 
-    /// <inheritdoc />
     public ModeratorsApiService(
         ICommunityProfileService profileService,
         IBoardService boardService,
@@ -50,7 +48,6 @@ internal class ModeratorsApiService : IModeratorsApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<ModeratorOverview>> GetModerators()
     {
         // Sequential awaits: the scoped DbContext must not be used concurrently.

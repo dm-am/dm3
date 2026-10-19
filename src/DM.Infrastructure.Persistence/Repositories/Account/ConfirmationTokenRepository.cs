@@ -38,7 +38,7 @@ internal class ConfirmationTokenRepository : IConfirmationTokenRepository
 
             await _dbContext.Tokens
                 .Where(t => t.UserId == userId && t.Type == tokenDto.Type && !t.IsRemoved)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true), cancellationToken);
+                .Retire(cancellationToken);
 
             _dbContext.Tokens.Add(tokenEntity);
             await _dbContext.SaveChangesAsync(cancellationToken);
@@ -47,11 +47,10 @@ internal class ConfirmationTokenRepository : IConfirmationTokenRepository
     }
 
     /// <inheritdoc />
-    /// <inheritdoc />
     public Task RevokeTokens(Guid userId, TokenType type, CancellationToken cancellationToken = default) =>
         _dbContext.Tokens
             .Where(t => t.UserId == userId && t.Type == type && !t.IsRemoved)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true), cancellationToken);
+            .Retire(cancellationToken);
 
     /// <inheritdoc />
     public async Task<Guid?> RedeemToken(
@@ -63,7 +62,7 @@ internal class ConfirmationTokenRepository : IConfirmationTokenRepository
         var hash = ConfirmationSecret.Hash(secret);
 
         var candidate = await _dbContext.Tokens
-            .Where(t => t.Type == type && !t.IsRemoved && t.SecretHash != null && t.SecretHash == hash)
+            .Where(t => t.Type == type && !t.IsRemoved && t.SecretHash == hash)
             .Where(t => liveSince == null || t.CreatedUtc >= liveSince)
             .Select(t => new { t.TokenId, t.UserId })
             .FirstOrDefaultAsync(cancellationToken);
@@ -77,7 +76,7 @@ internal class ConfirmationTokenRepository : IConfirmationTokenRepository
         // opened by a mail scanner and then by its reader, spends once.
         var spent = await _dbContext.Tokens
             .Where(t => t.TokenId == candidate.TokenId && !t.IsRemoved)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true), cancellationToken);
+            .Retire(cancellationToken);
 
         return spent == 1 ? candidate.UserId : null;
     }

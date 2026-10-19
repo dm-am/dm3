@@ -1,22 +1,9 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
-import { authenticatedContext } from "../../fixtures/auth";
-
-const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
-
-let authContext: APIRequestContext;
-
-test.beforeAll(async () => {
-  authContext = await authenticatedContext();
-});
-
-test.afterAll(async () => {
-  if (authContext) await authContext.dispose();
-});
+import { test, expect, API_BASE_URL } from "../../fixtures/auth";
 
 test.describe("Invitations API", () => {
-  test("should get my invitations", async () => {
+  test("should get my invitations", async ({ authContext }) => {
     const response = await authContext.get(
-      `${API_URL}/v1/users/me/invitations`,
+      `${API_BASE_URL}/v1/users/me/invitations`,
     );
 
     expect(response.ok()).toBeTruthy();
@@ -25,26 +12,28 @@ test.describe("Invitations API", () => {
     expect(Array.isArray(data.resources)).toBeTruthy();
   });
 
-  test("should reject non-existent invitation", async () => {
+  test("should reject non-existent invitation", async ({ authContext }) => {
     const fakeId = "00000000-0000-0000-0000-000000000000";
     const response = await authContext.post(
-      `${API_URL}/v1/users/me/invitations/${fakeId}/reject`,
+      `${API_BASE_URL}/v1/users/me/invitations/${fakeId}/reject`,
     );
 
     expect(response.status()).toBe(404);
   });
 
-  test("should accept non-existent invitation", async () => {
+  test("should accept non-existent invitation", async ({ authContext }) => {
     const fakeId = "00000000-0000-0000-0000-000000000000";
     const response = await authContext.post(
-      `${API_URL}/v1/users/me/invitations/${fakeId}/accept`,
+      `${API_BASE_URL}/v1/users/me/invitations/${fakeId}/accept`,
     );
 
     expect(response.status()).toBe(404);
   });
 
   test("should require authentication", async ({ request }) => {
-    const response = await request.get(`${API_URL}/v1/users/me/invitations`);
+    const response = await request.get(
+      `${API_BASE_URL}/v1/users/me/invitations`,
+    );
     expect(response.status()).toBe(401);
   });
 });

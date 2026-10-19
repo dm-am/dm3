@@ -3,15 +3,12 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Repositories.Game;
-using DM.Testing;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbGameAssistant = DM.Infrastructure.Persistence.Entities.Game.Links.GameAssistant;
 using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 
@@ -19,19 +16,10 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Game;
 /// The roster is a list of roles, and one of them is deduplicated.
 /// </summary>
 /// <remarks>
-/// Four places used to derive "what is this user to this game", and the roster
-/// query is the one nothing checked. It deduplicates readers against everyone
-/// already on the list and deduplicates nobody else, which reads like an
-/// oversight and is a decision: a subscription is implied by every other role, so
-/// a second row for it would say nothing, while an assistant who plays holds two
-/// roles and his character hangs off the second one. Collapsing those two rows
-/// would have to drop either the staff role or the character.
-///
-/// Written against the query rather than against the service because that is
-/// where both halves live, and neither of them is visible to the architecture
-/// rules: they see types and references, not a Where.
+/// Readers are deduplicated against everyone on the list, nobody else is: an assistant who plays holds two
+/// roles and his character hangs off the second. Against the query, where both halves live.
 /// </remarks>
-public class GameRosterQueryShould : UnitTestBase
+public class GameRosterQueryShould
 {
     private static readonly DateTimeOffset Created = new(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
 
@@ -43,18 +31,7 @@ public class GameRosterQueryShould : UnitTestBase
 
     private readonly string _databaseName = Guid.NewGuid().ToString();
 
-    private DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
-        .UseInMemoryDatabase(_databaseName)
-        .Options);
-
-    private static DbUser NewUser(Guid id, string username) => new()
-    {
-        UserId = id,
-        Username = username,
-        Email = $"{username}@test.local",
-        Salt = "",
-        PasswordHash = "",
-    };
+    private DmDbContext Context() => InMemoryStore.Open(_databaseName);
 
     private static DbCharacter NewCharacter(Guid authorId, string name) => new()
     {
@@ -74,10 +51,10 @@ public class GameRosterQueryShould : UnitTestBase
     {
         var context = Context();
         context.Users.AddRange(
-            NewUser(MasterId, "master"),
-            NewUser(AssistantId, "assistant"),
-            NewUser(PlayerId, "player"),
-            NewUser(ReaderId, "reader"));
+            InMemoryStore.User(MasterId, "master"),
+            InMemoryStore.User(AssistantId, "assistant"),
+            InMemoryStore.User(PlayerId, "player"),
+            InMemoryStore.User(ReaderId, "reader"));
         context.Games.Add(new DbGame
         {
             GameId = GameId,

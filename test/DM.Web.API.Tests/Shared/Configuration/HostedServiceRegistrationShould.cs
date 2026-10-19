@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using DM.Web.API.Shared.Configuration;
 using AwesomeAssertions;
@@ -12,15 +11,8 @@ namespace DM.Web.API.Tests.Shared.Configuration;
 /// Every background service the API host declares is started by it.
 /// </summary>
 /// <remarks>
-/// The services are registered by hand, one line each, and the list has to stay
-/// explicit: the migration container runs the same host and must start none of
-/// them. A service written and left out of the list compiles, passes every test
-/// of its own, and never runs; a nightly cleanup that never runs looks exactly
-/// like a night with nothing to clean.
-///
-/// Only the types of this assembly are compared: the list also starts services
-/// of the infrastructure modules, which declare their own and are started by
-/// whichever host needs them.
+/// The list is explicit: the migration container runs the same host and starts none. Only the types of
+/// this assembly are compared.
 /// </remarks>
 public class HostedServiceRegistrationShould
 {

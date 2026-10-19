@@ -19,22 +19,20 @@ public class TotpCalculatorShould
     private static readonly byte[] Secret = Base32Encoding.ToBytes("JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP");
     private static readonly DateTimeOffset Moment = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly TotpCalculator _calculator = new();
-
     private static string CodeAt(DateTimeOffset moment) =>
         new Totp(Secret, TotpCalculator.StepSeconds, OtpHashMode.Sha1, TotpCalculator.Digits)
             .ComputeTotp(moment.UtcDateTime);
 
     [Fact]
     public void AcceptTheCodeOfTheCurrentStep() =>
-        _calculator.Match(Secret, CodeAt(Moment), Moment, windowSteps: 1)
+        TotpCalculator.Match(Secret, CodeAt(Moment), Moment, windowSteps: 1)
             .Should().NotBeNull();
 
     [Theory]
     [InlineData(-30)]
     [InlineData(30)]
     public void AcceptACodeOneStepEitherSide(int offsetSeconds) =>
-        _calculator
+        TotpCalculator
             .Match(Secret, CodeAt(Moment.AddSeconds(offsetSeconds)), Moment, windowSteps: 1)
             .Should().NotBeNull(
                 "a step back is for a slow connection and slow typing, a step forward for a " +
@@ -44,7 +42,7 @@ public class TotpCalculatorShould
     [InlineData(-60)]
     [InlineData(60)]
     public void RefuseACodeTwoStepsAway(int offsetSeconds) =>
-        _calculator
+        TotpCalculator
             .Match(Secret, CodeAt(Moment.AddSeconds(offsetSeconds)), Moment, windowSteps: 1)
             .Should().BeNull("the window is one step either side and nothing wider");
 
@@ -61,7 +59,7 @@ public class TotpCalculatorShould
     {
         var expected = Moment.ToUnixTimeSeconds() / TotpCalculator.StepSeconds;
 
-        _calculator.Match(Secret, CodeAt(Moment), Moment, windowSteps: 1)
+        TotpCalculator.Match(Secret, CodeAt(Moment), Moment, windowSteps: 1)
             .Should().Be(expected);
     }
 
@@ -71,7 +69,7 @@ public class TotpCalculatorShould
     [InlineData("000000")]
     [InlineData("not a code")]
     public void RefuseAnythingThatIsNotTheCode(string value) =>
-        _calculator.Match(Secret, value, Moment, windowSteps: 1).Should().BeNull();
+        TotpCalculator.Match(Secret, value, Moment, windowSteps: 1).Should().BeNull();
 
     /// <summary>
     /// The form the secret is stored and shown in survives a round trip.
@@ -82,5 +80,5 @@ public class TotpCalculatorShould
     /// </remarks>
     [Fact]
     public void CarryTheSecretThroughBase32AndBack() =>
-        _calculator.FromBase32(_calculator.ToBase32(Secret)).Should().Equal(Secret);
+        TotpCalculator.FromBase32(TotpCalculator.ToBase32(Secret)).Should().Equal(Secret);
 }

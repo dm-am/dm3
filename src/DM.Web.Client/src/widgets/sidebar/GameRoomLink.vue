@@ -1,22 +1,5 @@
 <script setup lang="ts">
-// Sidebar row for a single game room, used by both the active and the
-// archived room lists in GamePanel. Layout, as the old site writes its rooms:
-//
-//   - {lock?} {title} ({unread}) {star?}     a room the viewer may open
-//   - {lock} {title} - {writers}             a closed room he may not
-//
-// Affordances:
-//   - lock: shown only for closed rooms, in the colour of the viewer's access:
-//     green where he may open the room, a pale grey where he may not.
-//   - writers: after the title of a room the viewer may not open, " - " and
-//     the characters who write in it, as the old site writes "[Лес] - Густав,
-//     Эодор". The server names them for such a room and nothing else of it;
-//     a room nobody writes in is its title alone.
-//   - unread: "(N)" muted counter, zero included, on a room the viewer may
-//     open. A room he may not open counts nothing for him, and the server
-//     sends it nothing to count.
-//   - star: red, only when a pendency in this room awaits the current user.
-//     Rooms carry no tooltip, the star's aria-label is the whole affordance.
+// A room row of GamePanel, as the old site writes rooms: lock, title, unread or writers, star.
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { RoomType, RoomAccessType, type Room } from "@/entities/game";
@@ -43,10 +26,7 @@ const to = computed(() => ({
 
 const isPrivate = computed(() => props.room.access === RoomAccessType.Private);
 
-// Whether this viewer may open the room is the server's answer, given by the
-// same filter that guards the room page itself, so the row and the page
-// behind it cannot disagree. Reads that return a room at all return one the
-// viewer may open, and those omit the flag.
+// The server's answer, from the filter that guards the room page; absent means yes.
 const canView = computed(() => props.room.canView !== false);
 
 const unread = computed(() => props.room.unreadPostsCount ?? 0);
@@ -55,8 +35,7 @@ const writers = computed(() =>
   canView.value ? "" : (props.room.characterNames ?? []).join(", "),
 );
 
-// Only unfulfilled expectations count: a pendency stays in the payload after
-// the post that answered it has landed.
+// A pendency stays in the payload after the post that answered it: only open ones count.
 const myPendencies = computed(() =>
   (props.room.pendencies ?? []).filter(
     (p) => !p.fulfilledUtc && p.waitingFor?.username === user.value?.username,
@@ -96,17 +75,7 @@ const STAR = "*";
 .link
   display: block
 
-.muted
-  color: $text-muted
-
-// The glyph is rendered for every room and hidden on the open ones, the way
-// the old site does it, so the titles of a list start at one x whatever the
-// access of each room. Dropping the element instead (v-if) pulled the open
-// rooms left and left the column ragged.
-// The gap is a space: the original writes one between the glyph and the link,
-// and a space at the sidebar's size measures 4.28 pixels, which $grid-step is.
-// Closed to the viewer, the glyph is the pale grey of the old site's
-// (gainsboro there), the lightest grey of the theme: the frame of a field.
+// Drawn for every room and hidden on the open ones, so the titles start at one x.
 .lock
   color: $border
   vertical-align: -0.1em
@@ -118,15 +87,13 @@ const STAR = "*";
   &.public
     visibility: hidden
 
-// A room the viewer may not open is not a link and must not look like one:
-// the plain text of the column, as the old site writes it, and so are the
-// names after it. The lock beside it already says it is closed.
+// A room the viewer may not open is plain text, as the names after it.
 .no-access,
 .writers
   color: $text
 
 .star
   color: $accent-red
-  margin-left: 4px
+  margin-left: $minor
   cursor: default
 </style>

@@ -4,9 +4,6 @@ using System.Threading.Tasks;
 
 namespace DM.Domain.Personal.Features.ProfileNotes;
 
-/// <summary>
-/// Repository for user profile notes
-/// </summary>
 public interface IUserProfileNoteRepository
 {
     /// <summary>

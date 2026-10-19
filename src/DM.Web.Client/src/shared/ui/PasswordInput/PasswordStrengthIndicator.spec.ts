@@ -1,7 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import PasswordStrengthIndicator from "./PasswordStrengthIndicator.vue";
-import SOURCE from "./PasswordStrengthIndicator.vue?raw";
 
 type Props = {
   password: string;
@@ -90,12 +89,6 @@ describe("PasswordStrengthIndicator", () => {
     expect(verdict.get(".strength-fill").attributes("style")).toContain(
       "--progress",
     );
-
-    // The colour itself is in the stylesheet, which no test runner compiles:
-    // the rule is read where it is written.
-    const rule = SOURCE.split("\n.strength-text\n")[1] ?? "";
-    expect(rule).toContain("color: $text-muted");
-    expect(rule).not.toContain("color-mix");
   });
 
   it("announces the answer of the server, and it alone", () => {

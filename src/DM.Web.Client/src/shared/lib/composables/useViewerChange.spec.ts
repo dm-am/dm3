@@ -2,11 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The case the six hand-written conditions all missed: a second tab signs a
- * different account in, and the username goes from A to B without passing
- * through undefined.
- */
+// A second tab signs another account in: A to B without passing through undefined.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";

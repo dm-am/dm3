@@ -24,7 +24,7 @@ const { mockGetRatedPosts } = vi.hoisted(() => ({
   mockGetRatedPosts: vi.fn(),
 }));
 
-vi.mock("../api/gameApi", () => ({
+vi.mock("../api/postApi", () => ({
   default: { getRatedPosts: mockGetRatedPosts },
 }));
 
@@ -81,12 +81,7 @@ describe("useRatedPostsStore", () => {
     });
   });
 
-  /**
-   * The three blocks used to keep their own answer to "is mine still fresh":
-   * two module-level counters and a `fetchedAt` on every per-user entry. The
-   * bookkeeping is shared now (`shared/lib/utils/keyedCache`), and these hold
-   * what the three questions may not do to each other.
-   */
+  // What the three blocks may not do to each other through the shared cache.
   describe("caching", () => {
     const post = (id: string) => ({ id }) as never;
 
@@ -186,8 +181,7 @@ describe("useRatedPostsStore", () => {
       await store.fetchBestPostOfUser("Alice");
       expect(store.bestPostErrorOf("Alice")).toBeTruthy();
 
-      // Not forced: a cached refusal would leave the block refusing to try
-      // for five minutes, which is what the entry's fetchedAt used to do.
+      // Not forced: a cached refusal would keep the block refusing for five minutes.
       await store.fetchBestPostOfUser("Alice");
 
       expect(mockGetRatedPosts).toHaveBeenCalledTimes(2);

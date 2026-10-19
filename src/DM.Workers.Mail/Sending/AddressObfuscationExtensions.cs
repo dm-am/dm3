@@ -10,7 +10,6 @@ public static class AddressObfuscationExtensions
     /// <summary>
     /// Obfuscate email address for logs
     /// </summary>
-    /// <param name="emailAddress"></param>
     /// <returns>Obfuscated email address</returns>
     public static string Obfuscate(this string emailAddress) =>
         string.Join('@',
@@ -25,14 +24,7 @@ public static class AddressObfuscationExtensions
 
     private static string CropMiddle(string input)
     {
-        // A part this short is answered with itself, because the crop hides nothing
-        // when it can be built and cannot be built when there is nothing to hide. It
-        // reads the last character of the input, which the empty local part of an
-        // address like "@host" does not have - and this runs on the way into the line
-        // the worker logs about a letter, before anything has parsed the address it
-        // was complaining about, so the throw came out of the logging rather than out
-        // of the delivery. A single character it used to answer with "a..a": longer
-        // than what it was given, and a repetition of the one character it hid.
+        // Nothing to hide, and an empty part such as in "@host" has no last character.
         if (input.Length <= Kept)
         {
             return input;

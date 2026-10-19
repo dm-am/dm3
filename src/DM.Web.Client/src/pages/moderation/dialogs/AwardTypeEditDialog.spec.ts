@@ -2,45 +2,23 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Editing a catalogue entry of award types, and where the refusal to that edit
- * is written.
- *
- * The window runs the save itself (Dialog `action`), so a refusal is printed in
- * the window over its buttons and the window stays open with everything typed
- * into it. That covers the refusals the response interceptor used to say in a
- * plate over the dialog as well - a 403, a 429, a 5xx - because the request
- * carries the flags that keep the interceptor quiet. Only a request that never
- * arrived stays the interceptor's, and a 401 closes the window.
- *
- * The library tier under the window is reduced to a box that draws the card:
- * the window decides every closing itself, and that is what is read here.
- */
+// The window runs the save: a refusal is printed in it and it stays open with
+// everything typed; the request carries the flags that keep the interceptor quiet.
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
-import { defineComponent, h } from "vue";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { setScrollContainer } from "@/shared/lib/scroll";
 import AwardTypeEditDialog from "./AwardTypeEditDialog.vue";
 
 const updateAwardType = vi.hoisted(() => vi.fn());
 
-vi.mock("@/entities/achievement", () => ({
+vi.mock("@/entities/achievement", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/entities/achievement")>()),
   achievementApi: { updateAwardType },
 }));
 
-vi.mock("vue-final-modal", () => ({
-  VueFinalModal: defineComponent({
-    props: { contentClass: { type: String, default: "" } },
-    setup:
-      (props, { slots }) =>
-      () =>
-        h(
-          "div",
-          { class: ["vfm-content", props.contentClass] },
-          slots.default?.(),
-        ),
-  }),
-}));
+vi.mock("vue-final-modal", async () =>
+  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+);
 
 const AWARD_TYPE = {
   id: "at-1",
@@ -112,7 +90,7 @@ describe("the award type dialog", () => {
     expect(wrapper.find(".form-refusal").exists()).toBe(false);
   });
 
-  /** A name already taken, and the refusals the interceptor used to say. */
+  /** A name already taken, and the refusals the window takes over from the interceptor. */
   it.each([
     [409, "Такое название уже занято"],
     [403, "Недостаточно прав"],
@@ -152,5 +130,52 @@ describe("the award type dialog", () => {
 
     expect(wrapper.find(".form-refusal").exists()).toBe(false);
     expect(shut).not.toHaveBeenCalled();
+  });
+});
+
+/** The fields of the window, by their label: the words on screen and the bounds. */
+describe("the fields of the award type dialog", () => {
+  const field = (
+    wrapper: ReturnType<typeof render>["wrapper"],
+    label: string,
+  ) =>
+    wrapper
+      .findAll(".form-field")
+      .find((f) => f.find(".form-field-label label").text() === label)!;
+
+  it("names its fields in Russian, with the icon set and the scale under them", () => {
+    const { wrapper } = render();
+    const labels = wrapper
+      .findAll(".form-field-label label")
+      .map((l) => l.text());
+    expect(labels).toEqual([
+      "Название",
+      "Описание",
+      "Имя иконки",
+      "Тир",
+      "Порядок сортировки",
+    ]);
+    expect(field(wrapper, "Имя иконки").get(".form-field-hint").text()).toBe(
+      "Из набора иконок",
+    );
+    expect(field(wrapper, "Тир").get(".form-field-hint").text()).toBe(
+      "1 золото, 2 серебро, 3 бронза, 5 платина",
+    );
+  });
+
+  it("takes the tier on the scale of the server and the lengths of its columns", () => {
+    const { wrapper } = render();
+    const tier = wrapper.get("#award-type-tier");
+    expect([tier.attributes("min"), tier.attributes("max")]).toEqual([
+      "1",
+      "5",
+    ]);
+    expect(wrapper.get("#award-type-title").attributes("maxlength")).toBe(
+      "200",
+    );
+    expect(wrapper.get("#award-type-description").attributes("maxlength")).toBe(
+      "1000",
+    );
+    expect(wrapper.get("#award-type-icon").attributes("maxlength")).toBe("80");
   });
 });

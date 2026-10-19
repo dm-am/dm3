@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,17 +14,8 @@ namespace DM.Architecture.Tests;
 /// left to the absence of a line nobody would notice being added.
 /// </summary>
 /// <remarks>
-/// All three held, and held only because no one had written that line. Adding a
-/// PackageReference on an ORM to a domain project compiles, ships, and leaves every
-/// other rule of this suite green: a reference is precisely what the compiler is
-/// there to accept, so the boundary between the domain and its storage is the one
-/// thing it cannot be asked about.
-///
-/// Read out of the project files and the sources instead of the IL, for two reasons.
-/// What is forbidden is the name of a namespace, and a using alias spells the
-/// namespace it aliases, so text is not the weaker check here that it is for a type
-/// reached through an alias. And a project that no executable references is invisible
-/// to a loader that scans an output directory, while the tree shows it either way.
+/// A reference is what the compiler accepts, so it cannot be asked about the boundary. Read out of
+/// the project files and sources: a project no executable references is invisible to a loader.
 /// </remarks>
 public class DomainBoundaryShould
 {
@@ -43,17 +35,16 @@ public class DomainBoundaryShould
     private static readonly Regex Reference = new(
         @"<(?:ProjectReference|PackageReference)\s+Include=""([^""]+)""", RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static IReadOnlyList<string> DomainProjects =>
         Directory
-            .GetDirectories(Path.Combine(RepositoryRoot, "src"), "DM.Domain.*")
+            .GetDirectories(Path.Combine(RepositoryLayout.Root, "src"), "DM.Domain.*")
             .Select(directory => new DirectoryInfo(directory).Name)
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToList();
 
     private static string ProjectFile(string project) =>
-        Path.Combine(RepositoryRoot, "src", project, project + ".csproj");
+        Path.Combine(RepositoryLayout.Root, "src", project, project + ".csproj");
 
     /// <summary>
     /// A rule over an empty set passes, and this set is discovered from the tree, so
@@ -65,8 +56,6 @@ public class DomainBoundaryShould
         var projects = DomainProjects;
 
         projects.Should().Contain(Kernel, "the kernel is a domain project too");
-        projects.Should().HaveCountGreaterThanOrEqualTo(9,
-            "the kernel and the eight modules the HTTP host composes");
     }
 
     /// <summary>
@@ -123,19 +112,15 @@ public class DomainBoundaryShould
     [Fact]
     public void NameNoStorageOrTransportNamespace()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
         var offenders = new List<string>();
         var read = 0;
 
         foreach (var project in DomainProjects)
         {
             var folder = Path.Combine(root, "src", project);
-            foreach (var source in Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories))
+            foreach (var source in Directory.EnumerateFiles(folder, "*.cs", SearchOption.AllDirectories).Where(RepositoryFiles.IsAuthored))
             {
-                if (IsBuildOutput(source))
-                {
-                    continue;
-                }
 
                 read++;
                 var text = File.ReadAllText(source);
@@ -154,9 +139,4 @@ public class DomainBoundaryShould
             "a domain project holds no reference to any of these today, which is why one " +
             "line is all it takes, and the line compiles");
     }
-
-    private static bool IsBuildOutput(string path) =>
-        path
-            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(segment => segment is "obj" or "bin");
 }

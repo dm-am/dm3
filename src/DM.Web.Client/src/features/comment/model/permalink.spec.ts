@@ -3,12 +3,6 @@ import { createRouter, createWebHistory } from "vue-router";
 import { permalinkOrigin } from "@/shared/config/site";
 import { commentPermalink } from "./permalink";
 
-/**
- * Where the number of a comment in the moderator's warning window leads. It
- * has to open the view of the list the moderator was on: from a filtered or
- * re-sorted list the page number alone opens that page of the whole list,
- * where the comment usually is not.
- */
 describe("commentPermalink", () => {
   afterEach(() => window.history.replaceState(null, "", "/"));
 
@@ -28,8 +22,6 @@ describe("commentPermalink", () => {
   });
 
   it("opens the address the number of the comment links to", async () => {
-    // The number is a router link to the same query and the anchor
-    // (CommentItem, numberTo); its address is what the router resolves.
     const router = createRouter({
       history: createWebHistory(),
       routes: [{ path: "/:rest(.*)*", component: { render: () => null } }],
@@ -46,8 +38,7 @@ describe("commentPermalink", () => {
     const query = router.currentRoute.value.query;
     const numberHref = router.resolve({ query, hash: "#comment-c1" }).href;
 
-    // Compared as the browser reads them: a letter written as a letter and
-    // the same letter written as its escapes are one address.
+    // Compared as the browser reads them: a letter and its escapes are one address.
     expect(new URL(commentPermalink("c1", query)).href).toBe(
       new URL(permalinkOrigin() + numberHref).href,
     );

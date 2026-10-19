@@ -6,13 +6,13 @@ using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using DbPublication = DM.Infrastructure.Persistence.Entities.Blog.Publication;
 
 using DM.Infrastructure.Persistence.Shared.Likes;
-using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
 
@@ -22,7 +22,6 @@ internal class PublicationRepository : IPublicationRepository
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public PublicationRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
@@ -31,58 +30,39 @@ internal class PublicationRepository : IPublicationRepository
         _dateTimeProvider = dateTimeProvider;
     }
 
-    // ═══ READ ═══
-
     /// <inheritdoc />
-    public async Task<int> CountPublications(Guid blogId, Guid? rubricId, Guid viewerId, bool everyUnpublished,
-        CancellationToken ct = default)
-    {
-        var query = _dbContext.Publications
-            .TagWith("DM.Blog.CountPublications")
-            .Where(p => !p.IsRemoved && p.BlogId == blogId);
-
-        if (!everyUnpublished)
-        {
-            query = query.Where(p => p.IsPublished || p.AuthorId == viewerId);
-        }
-
-        if (rubricId.HasValue)
-        {
-            query = query.Where(p => p.RubricId == rubricId);
-        }
-
-        return await query.CountAsync(ct);
-    }
+    public Task<int> CountPublications(Guid blogId, Guid? rubricId, CancellationToken ct = default) =>
+        OfBlog(_dbContext.Publications.TagWith("DM.Blog.CountPublications"), blogId, rubricId).CountAsync(ct);
 
     /// <inheritdoc />
     public async Task<IEnumerable<Publication>> GetPublications(
-        Guid blogId, Guid? rubricId, Guid viewerId, bool everyUnpublished, PagingData paging, CancellationToken ct = default)
+        Guid blogId, Guid? rubricId, PagingData paging, CancellationToken ct = default)
     {
-        // No Include: the query ends in ProjectTo, which builds its own Select and makes
-        // EF drop every Include with a warning. Author and rubric come from the mapping
-        // expression.
-        var query = _dbContext.Publications
-            .TagWith("DM.Blog.ListPublications")
-            .Where(p => !p.IsRemoved && p.BlogId == blogId);
-
-        if (!everyUnpublished)
-        {
-            query = query.Where(p => p.IsPublished || p.AuthorId == viewerId);
-        }
-
-        if (rubricId.HasValue)
-        {
-            query = query.Where(p => p.RubricId == rubricId);
-        }
-
-        var publications = await query
-            .OrderByDescending(p => p.PublishedUtc ?? p.CreatedUtc)
+        // No Include: the query ends in a projection, which makes EF drop every Include.
+        var publications = await OfBlog(_dbContext.Publications.TagWith("DM.Blog.ListPublications"), blogId, rubricId)
+            .OrderByDescending(p => p.CreatedUtc)
             .Page(paging)
             .ProjectToPublication()
             .ToListAsync(ct);
 
         await FillLikes(publications, ct);
         return publications;
+    }
+
+    /// <summary>
+    /// The publications of a blog, of one rubric when it is given.
+    /// </summary>
+    private static IQueryable<DbPublication> OfBlog(IQueryable<DbPublication> publications,
+        Guid blogId, Guid? rubricId)
+    {
+        var query = publications.Where(p => !p.IsRemoved && p.BlogId == blogId);
+
+        if (rubricId.HasValue)
+        {
+            query = query.Where(p => p.RubricId == rubricId);
+        }
+
+        return query;
     }
 
     /// <inheritdoc />
@@ -103,27 +83,24 @@ internal class PublicationRepository : IPublicationRepository
     {
         // Single-query "best" lookup: sort by the same likes subquery
         // pattern used by topics/comments, take the top row, project to
-        // the API DTO. Soft-deleted + unpublished entries are filtered
-        // out so the profile widget can never surface drafts.
+        // the API DTO. Soft-deleted entries are filtered out.
         var publication = await _dbContext.Publications
             .TagWith("DM.Blog.GetBestUserPublication")
-            .Where(p => !p.IsRemoved && p.IsPublished && authorIds.Contains(p.AuthorId))
+            .Where(p => !p.IsRemoved && authorIds.Contains(p.AuthorId))
             .OrderByDescending(p => _dbContext.Likes.Count(l =>
                 !l.IsRemoved &&
                 l.EntityId == p.PublicationId &&
-                l.EntityType == Domain.Core.Enums.LikeEntityType.Publication))
+                l.EntityType == LikeEntityType.Publication))
             // Tie-breaker: newer-first so two zero-like publications still
             // produce a deterministic result rather than relying on the
             // server's insertion order.
-            .ThenByDescending(p => p.PublishedUtc ?? p.CreatedUtc)
+            .ThenByDescending(p => p.CreatedUtc)
             .ProjectToPublication()
             .FirstOrDefaultAsync(ct);
 
         await FillLikes(publication, ct);
         return publication;
     }
-
-    // ═══ WRITE ═══
 
     /// <inheritdoc />
     public async Task<Publication> CreatePublication(CreatePublicationEntity entity, CancellationToken ct = default)
@@ -137,8 +114,6 @@ internal class PublicationRepository : IPublicationRepository
             Title = entity.Title,
             Content = entity.Content,
             Preview = entity.Preview ?? "",
-            IsPublished = entity.PublishImmediately,
-            PublishedUtc = entity.PublishImmediately ? entity.CreatedUtc : null,
             CreatedUtc = entity.CreatedUtc,
             IsRemoved = false
         };
@@ -200,17 +175,7 @@ internal class PublicationRepository : IPublicationRepository
         if (!string.IsNullOrWhiteSpace(entity.Preview))
             publication.Preview = entity.Preview;
 
-        if (entity.IsPublished.HasValue)
-        {
-            var wasPublished = publication.IsPublished;
-            publication.IsPublished = entity.IsPublished.Value;
-            if (!wasPublished && publication.IsPublished)
-            {
-                publication.PublishedUtc = entity.UpdatedUtc;
-            }
-        }
-
-        publication.ModifiedUtc = entity.UpdatedUtc;
+        publication.ModifiedUtc = entity.ModifiedUtc;
         publication.ModifiedByUserId = entity.ModifiedByUserId;
         await _dbContext.SaveChangesAsync(ct);
 
@@ -232,12 +197,9 @@ internal class PublicationRepository : IPublicationRepository
             // with nothing that recomputes the column and no row left to say what the
             // right number was.
             var now = _dateTimeProvider.Now;
-            var marked = await _dbContext.Publications
-                .Where(p => p.PublicationId == publicationId && !p.IsRemoved)
-                .ExecuteUpdateAsync(p => p
-                    .SetProperty(x => x.IsRemoved, true)
-                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
-                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now), cancellation);
+            var marked = await SoftDelete.MarkWhere(
+                _dbContext.Publications.Where(p => p.PublicationId == publicationId && !p.IsRemoved),
+                deletedByUserId, now, cancellation);
 
             if (marked == 1)
             {
@@ -251,21 +213,16 @@ internal class PublicationRepository : IPublicationRepository
                     .Select(p => p.BlogId)
                     .FirstAsync(cancellation);
 
-                // Floored at zero rather than trusted: the column is stored and nothing
-                // recomputes it, so a count that has already drifted below the blog
-                // must not go negative and stay there.
                 await _dbContext.Blogs
                     .Where(b => b.BlogId == blogId)
                     .ExecuteUpdateAsync(b => b.SetProperty(
-                        x => x.PublicationCount, x => x.PublicationCount > 0 ? x.PublicationCount - 1 : 0),
+                        x => x.PublicationCount, StoredCounters.Lowered<Entities.Blog.Blog>(x => x.PublicationCount)),
                         cancellation);
             }
 
             await transaction.CommitAsync(cancellation);
         }, ct);
     }
-
-    // ═══ HELPERS ═══
 
     /// <summary>
     /// The number the next publication of this blog takes.
@@ -303,7 +260,7 @@ internal class PublicationRepository : IPublicationRepository
     /// Backfill <see cref="Publication.Likes"/> for a page of publications.
     /// </summary>
     private Task FillLikes(IReadOnlyCollection<Publication> publications, CancellationToken ct) =>
-        LikeBackfill.Fill(_dbContext, publications, Domain.Core.Enums.LikeEntityType.Publication,
+        LikeBackfill.Fill(_dbContext, publications, LikeEntityType.Publication,
             p => p.Id, (p, likes) => p.Likes = likes,
             "DM.Blog.PublicationLikes", "DM.Blog.PublicationLikers", ct);
 }

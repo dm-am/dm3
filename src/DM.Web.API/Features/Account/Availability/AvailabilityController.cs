@@ -1,4 +1,5 @@
 using System.Threading.Tasks;
+using DM.Domain.Account.Features.Availability;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -11,12 +12,7 @@ namespace DM.Web.API.Features.Account.Availability;
 /// Availability checks for usernames and emails
 /// </summary>
 /// <remarks>
-/// Used during registration and credential changes to check if identifiers are available.
-///
-/// These endpoints answer whether an identifier is already registered, which is
-/// their purpose and which makes them an enumeration surface by design. Rate
-/// limiting makes a bulk scan slow, it does not prevent one — see the recorded
-/// exception in docs/conventions/SECURITY.md.
+/// An enumeration surface by design: the recorded exception in docs/conventions/SECURITY.md.
 /// </remarks>
 [ApiController]
 [Route("v1/account")]
@@ -24,14 +20,11 @@ namespace DM.Web.API.Features.Account.Availability;
 [Tags("Availability")]
 public class AvailabilityController : ControllerBase
 {
-    private readonly IAvailabilityApiService _availabilityApiService;
+    private readonly AvailabilityApiService _availabilityApiService;
     private readonly ILogger<AvailabilityController> _logger;
 
-    /// <summary>
-    /// Creates a new instance of AvailabilityController
-    /// </summary>
     public AvailabilityController(
-        IAvailabilityApiService availabilityApiService,
+        AvailabilityApiService availabilityApiService,
         ILogger<AvailabilityController> logger)
     {
         _availabilityApiService = availabilityApiService;
@@ -42,13 +35,6 @@ public class AvailabilityController : ControllerBase
     /// Check email availability
     /// </summary>
     /// <remarks>
-    /// Use this during registration to check if an email can be used.
-    ///
-    /// Possible results:
-    /// - IsAvailable: true - Email can be used for registration
-    /// - IsAvailable: false, Reason: Taken - Email is used by active user
-    /// - IsAvailable: false, Reason: PendingActivation - Email has pending registration
-    ///
     /// An address held by a removed account answers Taken, like a live one (SECURITY.md).
     /// </remarks>
     /// <param name="request">Email to check</param>
@@ -75,14 +61,6 @@ public class AvailabilityController : ControllerBase
     /// <summary>
     /// Check username availability
     /// </summary>
-    /// <remarks>
-    /// Use this during registration or username change to check if a username is available.
-    ///
-    /// Reasons for unavailability:
-    /// - Taken: Username is used by an active user
-    /// - Reserved: Username was used by a former user (in username history)
-    /// - InvalidFormat: Username doesn't match format requirements
-    /// </remarks>
     /// <param name="request">Username to check</param>
     /// <response code="200">Availability status</response>
     /// <response code="400">Username missing</response>

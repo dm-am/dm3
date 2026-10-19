@@ -7,8 +7,7 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.General.Search;
 
-/// <inheritdoc />
-internal class MessageSearchApiService : IMessageSearchApiService
+public class MessageSearchApiService
 {
     private readonly IMessageSearchService _searchService;
 
@@ -17,7 +16,6 @@ internal class MessageSearchApiService : IMessageSearchApiService
         _searchService = searchService;
     }
 
-    /// <inheritdoc />
     public async Task<CursorEnvelope<MessageSearchResult>> SearchAsync(
         string q,
         IReadOnlyList<string> scopes,
@@ -30,7 +28,7 @@ internal class MessageSearchApiService : IMessageSearchApiService
         var request = new MessageSearchRequest
         {
             Query = q,
-            In = scopes ?? Array.Empty<string>(),
+            In = scopes,
             From = from,
             After = after,
             Before = before,
@@ -40,13 +38,7 @@ internal class MessageSearchApiService : IMessageSearchApiService
 
         var result = await _searchService.SearchAsync(request);
 
-        var paging = new CursorPaging
-        {
-            NextCursor = result.NextCursor,
-            PrevCursor = result.PrevCursor,
-            HasNext = result.HasNext,
-            HasPrev = result.HasPrev
-        };
+        var paging = CursorPaging.Of(result);
 
         var rows = result.Data.Select(h => new MessageSearchResult
         {

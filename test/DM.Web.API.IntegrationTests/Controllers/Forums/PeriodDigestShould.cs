@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Forum.Features.Digests;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -16,16 +13,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 /// them, and the board counts what it holds.
 /// </summary>
 /// <remarks>
-/// The period used to be claimed after the topic had been created, so the run
-/// that lost the race was left holding a topic and had to take it back. It could
-/// not: the board points at its last topic through a foreign key that refuses the
-/// delete, and the board's topic count had already been raised for a topic that
-/// was supposed to stop existing. Taking the period first turns the race into a
-/// question asked before anything is written, and the loser writes nothing at all.
-///
-/// Two hosts is the shape this happens in - the digest runs on a schedule in
-/// every instance - and only a live database can be asked which of two writers
-/// won a unique index.
+/// The period is claimed before anything is written, so the loser writes nothing. The digest runs on a schedule
+/// in every instance, and only a live database says which writer won a unique index.
 /// </remarks>
 public class PeriodDigestShould : IntegrationTestBase
 {
@@ -87,14 +76,7 @@ public class PeriodDigestShould : IntegrationTestBase
     /// <summary>
     /// A period whose topic was never written goes back on the shelf.
     /// </summary>
-    /// <remarks>
-    /// The claim is one committed statement of its own, taken before the topic
-    /// exists, so a creation that refuses used to leave the period marked as
-    /// generated with nothing behind the marker: every later pass read it as
-    /// "already there", and a monthly or yearly digest is generated once and never
-    /// again. Only a live database answers whether the release actually frees the
-    /// partial unique index the next claim runs into.
-    /// </remarks>
+    /// <remarks>The claim commits before the topic exists; a live database shows the release frees the partial index.</remarks>
     [Fact]
     public async Task LetThePeriodBeClaimedAgainAfterAReleasedClaim()
     {
@@ -133,14 +115,7 @@ public class PeriodDigestShould : IntegrationTestBase
     /// <summary>
     /// A period whose topic did get written stays claimed, whatever the caller asks.
     /// </summary>
-    /// <remarks>
-    /// Creation commits the topic and then reads it back outside the retry, so a
-    /// refusal can reach the caller with the digest already on the board. Giving
-    /// the period back there would put a second copy of the same digest up on the
-    /// next pass, which is the loss the release exists to prevent, only upside
-    /// down. The condition therefore lives in the delete statement rather than in
-    /// a read before it.
-    /// </remarks>
+    /// <remarks>Creation commits and then reads back outside the retry, so the condition lives in the delete statement.</remarks>
     [Fact]
     public async Task KeepThePeriodClaimedWhenItsTopicWasWrittenAfterAll()
     {
@@ -201,11 +176,7 @@ public class PeriodDigestShould : IntegrationTestBase
     /// <summary>
     /// The markers of these periods and the topics they name, out of the way.
     /// </summary>
-    /// <remarks>
-    /// The board names its last topic through a foreign key, so the reference is
-    /// released before the rows it points at can go - the same order the board
-    /// helpers of this project clean up in.
-    /// </remarks>
+    /// <remarks>The board's last-topic reference is released before the rows it points at.</remarks>
     private async Task DropDigests((int Year, int? Month)[] periods)
     {
         await using var db = DatabaseFixture.CreateDbContext();

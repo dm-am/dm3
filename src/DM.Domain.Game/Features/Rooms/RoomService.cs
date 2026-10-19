@@ -10,15 +10,13 @@ using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Authorization;
+using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Core.Events;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.Rooms;
 
-/// <summary>
-/// Unified service for room CRUD operations
-/// </summary>
 internal class RoomService : IRoomService
 {
     private readonly IGameService _gameService;
@@ -66,7 +64,7 @@ internal class RoomService : IRoomService
         {
             RoomId = roomId,
             GameId = createRoom.GameId,
-            Title = createRoom.Title.Trim(),
+            Title = createRoom.Title,
             Type = createRoom.Type,
             AccessType = createRoom.AccessType,
             ViewPrivateText = createRoom.ViewPrivateText,
@@ -91,16 +89,8 @@ internal class RoomService : IRoomService
     #region Read
 
     /// <summary>
-    /// Whether the reader may pass a premoderation verdict, and so has to be able
-    /// to open the rooms of the game the verdict is pending on.
+    /// As in GameService: the game and its rooms are one page for the premoderation judge.
     /// </summary>
-    /// <remarks>
-    /// The same property GameService keeps, read from the same intention: the game
-    /// and its rooms are one page, and a rank that opens the game but not its room
-    /// list hands the judge nothing to judge. The intention rather than a second
-    /// comparison of roles — PremoderationAccess owns that rank, and a copy of it
-    /// here would be the third place it could drift.
-    /// </remarks>
     private bool MayJudgePremoderation =>
         _intentionManager.IsAllowed(GameIntention.SetStatusModeration);
 
@@ -114,12 +104,8 @@ internal class RoomService : IRoomService
         await _unreadCountersRepository.FillEntityCounters(rooms, currentUserId,
             r => r.Id, r => r.UnreadPostsCount);
 
-        // A room the reader may not open is listed by its name and the names of
-        // the characters let in to write in it, as the game menu writes it:
-        // "[Лес] - Густав, Эодор". Those names are on the character list of
-        // the game already, which everybody who sees the game reads. Who else
-        // is let in, whose turn it is inside and how much of it is unread are
-        // things only its readers get to know.
+        // A closed room shows its name and its writers' names, already public on the character list;
+        // the rest is for its readers.
         foreach (var room in rooms.Where(r => !r.CanView))
         {
             room.CharacterNames = WriterNames(room);
@@ -133,19 +119,16 @@ internal class RoomService : IRoomService
     }
 
     /// <summary>
-    /// The characters let in to write, in the order they joined the game.
-    /// The grant is the whole test, whatever became of the character since:
-    /// the old site goes on naming a dead one in the room he was let into.
-    /// A grant to read is a reader, whoever holds it, and a removed character
-    /// comes back from the grant as nobody.
+    /// The grant is the whole test, whatever became of the character since, as on the old site.
     /// </summary>
     private static string[] WriterNames(Room room) => room.Accesses
         .Where(a => a.TargetType == RoomAccessTargetType.Character
-                    && a.Policy == RoomAccessPolicy.Full
-                    && a.Character != null)
-        .OrderBy(a => a.Character.CreatedUtc)
-        .ThenBy(a => a.Character.Name, StringComparer.Ordinal)
-        .Select(a => a.Character.Name)
+                    && a.Policy == RoomAccessPolicy.Full)
+        .Select(a => a.Character)
+        .OfType<Character>()
+        .OrderBy(c => c.CreatedUtc)
+        .ThenBy(c => c.Name, StringComparer.Ordinal)
+        .Select(c => c.Name)
         .ToArray();
 
     public async Task<Room> GetAsync(Guid roomId)
@@ -184,14 +167,10 @@ internal class RoomService : IRoomService
         GetChatRoomAsync(roomId, RoomIntention.SendMessage);
 
     /// <summary>
-    /// A room of another type, or a chat room with no chat behind it, is absent
-    /// rather than forbidden: the caller asked for a chat and there is none at that
-    /// address, and a refusal would confirm the address exists.
+    /// A room of another type, or without a chat, is absent rather than forbidden.
     /// </summary>
     /// <remarks>
-    /// Read through GetForUpdate because it is the projection that carries the game,
-    /// and every room rule reads the roles of the game. Asked with the plain one the
-    /// check finds no resolver and refuses everybody.
+    /// GetForUpdate carries the game, whose roles every room rule reads.
     /// </remarks>
     private async Task<RoomToUpdate> GetChatRoomAsync(Guid roomId, RoomIntention intention)
     {
@@ -213,18 +192,12 @@ internal class RoomService : IRoomService
     public async Task<Room> UpdateAsync(UpdateRoom updateRoom)
     {
         await _updateValidator.ValidateAndThrowAsync(updateRoom);
-        var currentUserId = _identityProvider.Current.User.UserId;
-        var room = await _repository.GetForUpdate(updateRoom.RoomId, currentUserId);
-        if (room == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
-        }
-
+        var room = await GetWithGameAsync(updateRoom.RoomId);
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
         if (updateRoom.PreviousRoomId?.Value is { } previousRoomId)
         {
-            await ThrowIfNotAPlaceInGame(room, previousRoomId, currentUserId);
+            await ThrowIfNotAPlaceInGame(room, previousRoomId);
         }
 
         var entity = new UpdateRoomEntity
@@ -238,7 +211,6 @@ internal class RoomService : IRoomService
             DiceEnabled = updateRoom.DiceEnabled,
             HiddenWithoutAccess = updateRoom.HiddenWithoutAccess,
             IsArchived = updateRoom.IsArchived,
-            IsRemoved = updateRoom.IsRemoved,
             ShouldReorder = updateRoom.PreviousRoomId != null,
             NewPreviousRoomId = updateRoom.PreviousRoomId?.Value,
             ChatId = updateRoom.ChatId,
@@ -252,14 +224,13 @@ internal class RoomService : IRoomService
     }
 
     /// <summary>
-    /// A room is put after another room of its own game. Any other id is refused
-    /// by name: taken silently, the move would answer 200 and change nothing.
+    /// Any id but a room of the same game is refused: taken silently, the move would change nothing.
     /// </summary>
-    private async Task ThrowIfNotAPlaceInGame(Room room, Guid previousRoomId, Guid currentUserId)
+    private async Task ThrowIfNotAPlaceInGame(Room room, Guid previousRoomId)
     {
         var previous = previousRoomId == room.Id
             ? null
-            : await _repository.GetForUpdate(previousRoomId, currentUserId);
+            : await _repository.GetForUpdate(previousRoomId, _identityProvider.Current.User.UserId);
         if (previous == null || previous.GameId != room.GameId)
         {
             throw new HttpBadRequestException(new Dictionary<string, string>
@@ -275,12 +246,7 @@ internal class RoomService : IRoomService
 
     public async Task DeleteAsync(Guid roomId)
     {
-        var room = await _repository.GetForUpdate(roomId, _identityProvider.Current.User.UserId);
-        if (room == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RoomNotFound);
-        }
-
+        var room = await GetWithGameAsync(roomId);
         _intentionManager.ThrowIfForbidden(GameIntention.Edit, room.Game);
 
         await _repository.Delete(roomId, _identityProvider.Current.User.UserId);

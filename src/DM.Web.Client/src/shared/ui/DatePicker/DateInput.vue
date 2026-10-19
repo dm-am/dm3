@@ -1,58 +1,11 @@
 <script setup lang="ts">
-/**
- * DateInput — text field with a calendar popover for picking a single date.
- *
- * Site-styled replacement for native <input type="date">: manual typing keeps
- * working (DD.MM.YYYY or YYYY-MM-DD, parsed as you type), and the calendar
- * button opens the shared CalendarGrid. Emits YYYY-MM-DD, or null when
- * cleared. A typed date outside [min, max] is not taken, exactly as a date
- * that does not exist is not: the calendar would not let it be picked either.
- *
- * What was typed and not taken stays in the field, and the field says why:
- * leaving it with "31.02.2026" in it emits the reason "Такой даты нет", and a
- * date out of bounds "Не раньше 05.10.2026" or "Не позже 05.10.2026". The
- * field used to wipe such a text without a word, and the reader saw the date
- * they had typed vanish. The reason is the consumer's to show (FormField's
- * `errors`, or a line under a pair of fields): it is a red line of 14 under
- * the field, and the frame stays as it is (the owner's standard of 27
- * September 2026). A reason clears the moment the text makes a date again,
- * and is asked anew when the bounds move under a date already in the field.
- *
- * Digits separate themselves: "14031991" reads "14.03.1991" as it is typed.
- * A phone's numeric keyboard often has no dot at all, and on a desktop the
- * dots were three keystrokes a date that nobody wanted to type. A dot the
- * reader types in a place of their own ("9.5.2025") is left alone.
- *
- * When the field holds a date, a cross before the calendar icon clears it,
- * as the cross of the search field does; a date that must be given
- * (`clearable` off, the dates of a poll) has no cross.
- *
- * The keyboard stays in the field when the calendar opens; the down arrow
- * moves it into the grid, Escape closes the calendar and gives it back.
- *
- * A touch is not a click. On a phone the field opened its calendar and, with
- * the same tap, the numeric keyboard, which rose over the calendar and hid it.
- * Now the first tap opens the calendar with the keyboard down, and a second
- * tap on the field closes the calendar and gives the keyboard, for a reader
- * who would rather type. The mouse and the keyboard are as they were.
- *
- * On a page it is a field of the page: $control-height high, the reader
- * types in the 14 of $control-font-size, as in every field of one line. In a
- * window it is a field of the window, 52 high with the text at 15, as every
- * field FormField draws there. A field of a range (`bare`) has no calendar of its own:
- * DateRangePicker draws one under both fields, and the down arrow asks it for
- * the keyboard.
- *
- * The popover uses position:fixed so it escapes overflow-clipped containers.
- * Coordinates are computed from the field rect, flipped above when there is
- * no room below, clamped to the viewport, and refreshed on scroll/resize and
- * whenever the calendar changes height (a month of four weeks after one of
- * six, the grid of months after the grid of days) while open.
- */
+// Typed text that is not a date the field takes stays, and the field says why (the consumer shows it).
+// The popover is fixed, to escape overflow-clipped containers, and follows the field on scroll, resize and its own height.
 import { ref, watch, onMounted, onUnmounted, nextTick } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { useInDialog } from "@/shared/ui/Layout/dialogContext";
 import CalendarGrid from "./CalendarGrid.vue";
+import { boundReason, reasonSayer, shapeInput } from "./typedField";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { symbols } from "@/shared/lib/utils/icons";
 import { POPOVER_GAP, VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
@@ -162,12 +115,7 @@ function inBounds(value: string): boolean {
 /** Where the dots of "дд.мм.гггг" stand. */
 const DOT_AT = [2, 5];
 
-/**
- * The typed text with its dots put in: "140319" is "14.03.19". Only a run of
- * digits, or one whose dots already stand where these would, is touched;
- * anything else is text the reader shaped themselves. A trailing dot is not
- * added, so backspace deletes a digit and not a dot the field puts back.
- */
+/** Dots put into a run of digits ("140319" is "14.03.19"); text the reader shaped is left alone. */
 function withDots(raw: string): string {
   if (!/^[\d.]*$/.test(raw)) return raw;
   const digits = raw.replace(/\./g, "");
@@ -180,13 +128,6 @@ function withDots(raw: string): string {
     .join(".");
 }
 
-/** The caret position just after the n-th digit of the text. */
-function afterDigits(text: string, count: number): number {
-  if (count === 0) return 0;
-  const nth = [...text.matchAll(/\d/g)][count - 1];
-  return nth?.index === undefined ? text.length : nth.index + 1;
-}
-
 const text = ref(formatForDisplay(props.modelValue));
 
 /** Why the text is not a date the field takes, or null when it is one. */
@@ -195,27 +136,15 @@ function reasonFor(t: string): string | null {
   if (!trimmed) return null;
   const parsed = parseText(trimmed);
   if (!parsed) return "Такой даты нет";
-  if (props.min && parsed < props.min)
-    return `Не раньше ${formatForDisplay(props.min)}`;
-  if (props.max && parsed > props.max)
-    return `Не позже ${formatForDisplay(props.max)}`;
-  return null;
+  return boundReason(parsed, props.min, props.max, formatForDisplay);
 }
 
-/** The reason said last, so each change is said once. */
-const reason = ref<string | null>(null);
-
-function setReason(next: string | null) {
-  if (next === reason.value) return;
-  reason.value = next;
-  emit("reason", next);
-}
+const setReason = reasonSayer((next) => emit("reason", next));
 
 watch(
   () => props.modelValue,
   (val) => {
-    // Don't clobber in-progress typing that already parses to this value
-    // (keeps the caret position; the text is normalized on blur anyway)
+    // Typing that already parses to this value keeps its caret.
     if (parseText(text.value) !== (val || null)) {
       text.value = formatForDisplay(val);
       setReason(reasonFor(text.value));
@@ -223,9 +152,7 @@ watch(
   },
 );
 
-// The bounds move under a date already in the field (the end of a period
-// whose start moved past it): the field says so at once. A field being typed
-// into is only ever cleared here; what is half typed is judged on leaving it.
+// Bounds moving under a date already in the field are said at once; half-typed text waits for blur.
 watch([() => props.min, () => props.max], () => {
   const next = reasonFor(text.value);
   if (next === null || document.activeElement !== inputRef.value)
@@ -245,29 +172,14 @@ function commit(t: string) {
 }
 
 function onInput(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const raw = input.value;
-  const shaped = withDots(raw);
-  if (shaped !== raw) {
-    // The caret keeps its place among the digits, wherever the dots moved.
-    const caret = input.selectionStart ?? raw.length;
-    const digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
-    input.value = shaped;
-    const at = afterDigits(shaped, digitsBefore);
-    input.setSelectionRange(at, at);
-  }
+  const shaped = shapeInput(e.target as HTMLInputElement, withDots);
   text.value = shaped;
   commit(shaped);
-  // A reason goes the moment the text is right again; a new one waits for
-  // the reader to leave the field, and is not said of a date half typed.
+  // A reason goes as soon as the text is right; a new one waits for the reader to leave.
   if (reasonFor(shaped) === null) setReason(null);
 }
 
-/**
- * The reader is done with the text: a date it takes is written out in full
- * ("9.5.2025" reads "09.05.2025"), and a text it does not take stays as it
- * was typed, with the reason said.
- */
+/** On leaving: a taken date is written out in full, a refused text stays with its reason. */
 function settleText() {
   const next = reasonFor(text.value);
   setReason(next);
@@ -281,14 +193,9 @@ function clear() {
   inputRef.value?.focus();
 }
 
-// ---------------------------------------------------------------------------
-// Popover open/close + fixed positioning
-// ---------------------------------------------------------------------------
-
 const popoverStyle = ref<Record<string, string>>({});
 
-// Fallback size for the first frame, before the popover is measurable: the
-// panel's outer width ($calendar-width) and about five weeks of days.
+// The first frame's size, before the popover is measurable; the width is $calendar-width (_calendar.sass).
 const FALLBACK_WIDTH = 266;
 const FALLBACK_HEIGHT = 290;
 
@@ -303,10 +210,6 @@ function updatePosition() {
   const el = popoverEl();
   const width = el?.offsetWidth || FALLBACK_WIDTH;
   const height = el?.offsetHeight || FALLBACK_HEIGHT;
-  // Both from the shared scale rather than written here: the comment that used
-  // to say "matches $tiny offset of other dropdowns" was true only until $tiny
-  // moved, and the eight below was the same number the tooltip keeps under a
-  // name of its own.
   const gap = POPOVER_GAP;
   const edge = VIEWPORT_EDGE;
   const vw = document.documentElement.clientWidth;
@@ -341,28 +244,22 @@ function toggle() {
   else open();
 }
 
+function stopTracking() {
+  document.removeEventListener("scroll", updatePosition, { capture: true });
+  window.removeEventListener("resize", updatePosition);
+}
+
 watch(isOpen, (opened) => {
-  // Track any scrolling container (capture phase) while the popover is open
-  if (opened) {
-    // Passive: updatePosition only READS geometry (getBoundingClientRect,
-    // offsetWidth), and a non-passive scroll listener makes the browser wait
-    // for it before every frame — a forced layout on the scroll path, felt as
-    // stutter while the popover is open. The same options the tooltip's
-    // listener in this same layer already carries.
-    document.addEventListener("scroll", updatePosition, {
-      passive: true,
-      capture: true,
-    });
-    window.addEventListener("resize", updatePosition);
-  } else {
-    document.removeEventListener("scroll", updatePosition, { capture: true });
-    window.removeEventListener("resize", updatePosition);
-  }
+  if (!opened) return stopTracking();
+  // Passive: updatePosition only reads geometry, and a blocking scroll listener stutters.
+  document.addEventListener("scroll", updatePosition, {
+    passive: true,
+    capture: true,
+  });
+  window.addEventListener("resize", updatePosition);
 });
 
-// The calendar changes height with the month and with the grid on view. Placed
-// above the field, a panel that grew would cover the field and one that shrank
-// would float off it, so the position follows the panel's own size.
+// Placed above the field, the panel has to follow its own height.
 let resizeObserver: ResizeObserver | null = null;
 
 watch(
@@ -387,50 +284,7 @@ function onPick(value: string) {
   inputRef.value?.focus();
 }
 
-// ---------------------------------------------------------------------------
-// Touch: the calendar first, the keyboard on a second tap
-// ---------------------------------------------------------------------------
-
-/**
- * The keyboard is held down: the calendar was opened by a touch. "none" is
- * the input mode that keeps a phone's keyboard from rising on focus; the
- * field is still focused, the caret stands in it, and a second tap gives the
- * numeric keyboard back.
- */
-const keyboardDown = ref(false);
-
-/** The press in progress is a finger or a pen, and not a mouse. */
-let touchPress = false;
-/** The calendar was open when that press began. */
-let openAtPress = false;
-
-function holdKeyboard(down: boolean) {
-  keyboardDown.value = down;
-  // Set on the node at once and not on the next render: the focus that the
-  // same tap brings comes before Vue patches, and it reads the mode it finds.
-  if (inputRef.value) inputRef.value.inputMode = down ? "none" : "numeric";
-}
-
-function onInputPointerdown(e: PointerEvent) {
-  touchPress =
-    !props.bare && (e.pointerType === "touch" || e.pointerType === "pen");
-  if (!touchPress) {
-    if (keyboardDown.value) holdKeyboard(false);
-    return;
-  }
-  openAtPress = isOpen.value;
-  holdKeyboard(!openAtPress);
-}
-
 function onInputClick() {
-  if (touchPress && openAtPress) {
-    // The second tap: the reader wants to type, and the calendar would
-    // stand under the keyboard.
-    touchPress = false;
-    close();
-    return;
-  }
-  touchPress = false;
   open();
 }
 
@@ -444,8 +298,7 @@ function onInputKeydown(e: KeyboardEvent) {
     open();
     nextTick(() => popoverRef.value?.focusGrid());
   } else if (e.key === "Enter") {
-    // The field's own Enter: take what is typed and close. Only here, and
-    // not on the root: on a day of the grid, Enter is the pick.
+    // Only here, not on the root: on a day of the grid Enter is the pick.
     e.preventDefault();
     settleText();
     close();
@@ -454,8 +307,7 @@ function onInputKeydown(e: KeyboardEvent) {
 
 function onRootKeydown(e: KeyboardEvent) {
   if (e.key === "Escape" && isOpen.value) {
-    // Swallow the event: Esc with an open calendar must not also close
-    // the surrounding filter dropdown or window
+    // Esc with an open calendar must not also close the filter or window around it.
     e.stopPropagation();
     const fromGrid = !!popoverEl()?.contains(document.activeElement);
     close();
@@ -480,8 +332,7 @@ onMounted(() => {
 });
 onUnmounted(() => {
   document.removeEventListener("click", onDocClick);
-  document.removeEventListener("scroll", updatePosition, true);
-  window.removeEventListener("resize", updatePosition);
+  stopTracking();
   resizeObserver?.disconnect();
 });
 </script>
@@ -504,14 +355,13 @@ onUnmounted(() => {
         :value="text"
         type="text"
         class="di-input"
-        :inputmode="keyboardDown ? 'none' : 'numeric'"
+        inputmode="numeric"
         autocomplete="off"
         :placeholder="placeholder"
         :aria-label="ariaLabel"
         @input="onInput"
         @keydown="onInputKeydown"
         @blur="settleText"
-        @pointerdown="onInputPointerdown"
         @click="onInputClick"
       />
       <button
@@ -604,25 +454,7 @@ onUnmounted(() => {
   &::placeholder
     color: $text-muted
 
-// The cross of the search field, in the box of the calendar icon beside it.
-.di-clear
-  display: flex
-  align-items: center
-  justify-content: center
-  align-self: stretch
-  width: 26px
-  padding: 0
-  flex-shrink: 0
-  border: none
-  background: none
-  font-family: inherit
-  font-size: $font-size
-  color: $text-muted
-  cursor: pointer
-
-  &:hover
-    color: $text
-
+.di-clear,
 .di-toggle
   display: flex
   align-items: center
@@ -634,8 +466,18 @@ onUnmounted(() => {
   border: none
   background: none
   color: $text-muted
-  opacity: $muted-opacity
   cursor: pointer
+
+// The cross of the search field, in the box of the calendar icon beside it.
+.di-clear
+  font-family: inherit
+  font-size: $font-size
+
+  &:hover
+    color: $text
+
+.di-toggle
+  opacity: $muted-opacity
 
   &:hover,
   &.active

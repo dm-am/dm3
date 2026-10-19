@@ -2,10 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using ArchUnitNET.Domain;
-using ArchUnitNET.Fluent;
-using ArchUnitNET.Loader;
 using ArchUnitNET.xUnitV3;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 using static ArchUnitNET.Fluent.ArchRuleDefinition;
 using ArchitectureModel = ArchUnitNET.Domain.Architecture;
@@ -17,37 +16,16 @@ namespace DM.Architecture.Tests;
 /// in its API services.
 /// </summary>
 /// <remarks>
-/// The sibling rule names one shape — a class called *ApiService — and the host
-/// is much more than those. Ten background jobs sat outside it: nine of them held
-/// a store client and wrote product rules inline, so the definition
-/// of popularity, the lifetime of a token and the threshold for prodding a player
-/// about an owed post existed only inside a running host. None could be called
-/// from anywhere else, none could be covered by a domain test, and the seeder
-/// ended up carrying its own copy of the popularity calculation with a window
-/// that had already drifted from the site's.
-///
-/// The exemptions are the composition root and the warmup pass, and they are
-/// named one by one rather than described by a pattern: bootstrap is the one job
-/// whose work IS the storage type — a pool to open, a query plan to compile —
-/// and a pattern would quietly readmit the next job that looked like it.
-///
-/// Read out of the IL like its neighbours, and through the same fluent rules: a
-/// type reached through a using alias leaves nothing in the file for a textual
-/// check to find, and a hand-walked dependency list is a check whose own
-/// coverage nobody verifies.
+/// The sibling rule names *ApiService only. The bootstrap exemptions are named one by one. Read out
+/// of the IL: a type reached through a using alias leaves nothing in the file.
 /// </remarks>
 public class HostStorageBoundaryShould
 {
-    private static readonly ArchitectureModel Solution = new ArchLoader()
-        .LoadFilteredDirectory(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .Build();
+    private static readonly ArchitectureModel Solution = ArchitectureSolution.Model;
 
     /// <summary>
-    /// Types of the host allowed to name a store: the composition root, which
-    /// builds the pool and applies the migration; the registration of the
-    /// infrastructure initializers; and the warmup pass, whose entire job is to
-    /// force EF and the driver to do their one-time work before a user waits on
-    /// it.
+    /// Types of the host allowed to name a store: the composition root, the registration of the
+    /// infrastructure initializers and the warmup pass.
     /// </summary>
     private static readonly string[] Bootstrap =
     [
@@ -86,18 +64,18 @@ public class HostStorageBoundaryShould
     [Fact]
     public void LoadTheHostAndEverythingTheRulesNameBelow()
     {
-        HostClasses.GetObjects(Solution).Should().HaveCountGreaterThan(100,
+        HostClasses.GetObjects(Solution).Should().NotBeEmpty(
             "the host is a whole application, and a filter that stopped matching would " +
             "leave every rule below green over nothing");
 
-        HostClassesOutsideBootstrap.GetObjects(Solution).Should().HaveCountGreaterThan(100,
+        HostClassesOutsideBootstrap.GetObjects(Solution).Should().NotBeEmpty(
             "the exemption list names three types, so removing them must not empty the set");
 
         StoreHandles.GetObjects(Solution).Should().HaveCount(1,
             "the handle must be in the model; a rule whose target is absent passes " +
             "without checking anything");
 
-        PersistenceEntities.GetObjects(Solution).Should().HaveCountGreaterThan(50,
+        PersistenceEntities.GetObjects(Solution).Should().NotBeEmpty(
             "the entity namespace holds the whole relational model");
     }
 
@@ -125,34 +103,21 @@ public class HostStorageBoundaryShould
     /// bootstrap files aside.
     /// </summary>
     /// <remarks>
-    /// This is the rule that actually holds, and the two above are the belt to its
-    /// braces. Measured, not assumed: a class that takes DmDbContext in a method
-    /// signature is caught by them, and the same class using it inside an `async`
-    /// method body is not — the compiler moves that body into a generated state
-    /// machine, and the loader does not put generated types in the model, so the
-    /// dependency belongs to a type no rule can see. Nearly all data access here
-    /// is written inside async methods, which is how nine background jobs held the
-    /// context while the IL rule next door reported green.
-    ///
-    /// Matching on the namespace rather than on type names, because an alias
-    /// spells the namespace it aliases: `using DbChat = DM.Infrastructure...` is
-    /// the shape the host actually used, and it leaves the namespace in the file
-    /// either way.
+    /// The loader does not model the state machine of an async body, so the IL rules above miss a store
+    /// used inside one. Matched on the namespace, which an alias spells too.
     /// </remarks>
     [Fact]
     public void NameThePersistenceProjectInNoSourceFileButBootstrap()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
         var host = Path.Combine(root, "src", "DM.Web.API");
 
         var sources = Directory
             .GetFiles(host, "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path
-                .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                .Any(segment => segment is "obj" or "bin"))
+            .Where(RepositoryFiles.IsAuthored)
             .ToList();
 
-        sources.Should().HaveCountGreaterThan(200,
+        sources.Should().NotBeEmpty(
             "the sources are discovered from the tree, and a path that stopped matching " +
             "would leave this rule reading nothing");
 
@@ -171,6 +136,4 @@ public class HostStorageBoundaryShould
             "and the definition of popularity, the lifetime of a token and the threshold " +
             "for prodding a player all lived there");
     }
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

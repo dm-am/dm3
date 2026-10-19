@@ -5,10 +5,9 @@
  * Used for enum/status filters with optional hierarchical navigation.
  */
 import { computed } from "vue";
+import { NOTHING_FOUND } from "@/shared/lib/constants/copy";
 import { FilterDropdownItem } from "../primitives";
 import type { ListOption, OptionsListProps } from "../types";
-
-defineOptions({ name: "OptionsList" });
 
 const props = withDefaults(defineProps<OptionsListProps>(), {
   highlightedIndex: -1,
@@ -39,7 +38,7 @@ function handleSelect(option: ListOption) {
 <template>
   <div class="options-list">
     <div v-if="filteredOptions.length === 0" class="dropdown-empty">
-      Ничего не найдено
+      {{ NOTHING_FOUND }}
     </div>
     <FilterDropdownItem
       v-for="(option, index) in filteredOptions"

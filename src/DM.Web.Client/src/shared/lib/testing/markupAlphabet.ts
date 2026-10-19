@@ -1,50 +1,24 @@
 /**
- * What the generated markup is made of, for both sides.
+ * What generated markup is made of, for both sides: the server's generator
+ * (test/DM.Testing/Markup) and markupGenerator.ts read this one list
+ * (docs/guides/TESTING.md, "Генеративные проверки разметки").
  *
- * The grammar table (bbcodeGrammar.cases.ts) holds the spellings somebody
- * thought of. The property checks hold the rest: texts assembled at random from
- * the pieces below, on the server by the generator in test/DM.Testing/Markup and
- * here by the arbitraries of markupFuzz.ts. Both read this one list, so a piece
- * added here is a piece both sides are tried on. How the checks work and how a
- * failure is reproduced is written in docs/guides/TESTING.md, section
- * "Генеративные проверки разметки".
+ * The server parses the object between the two marker comments as strict JSON
+ * (System.Text.Json, as BbGrammarTable): quoted keys, no trailing comma, hence
+ * prettier-ignore; a look-alike character is a \u escape.
  *
- * How the server reads it. The object below is strict JSON between the two
- * marker comments: the server takes the text between them and parses it with
- * System.Text.Json, the way BbGrammarTable reads the grammar table. Keys stay
- * quoted and there is no trailing comma, which is why the declaration carries
- * prettier-ignore. A character the eye does not tell from another is written as
- * a \u escape.
+ * - pairs: tags written around content, now and then left open; "{names}" is
+ *   one of names, "{high-surrogate}"/"{low-surrogate}" a lone surrogate.
+ * - pieces: everything else, broken tags, controls, reordering characters,
+ *   other spaces, addresses good and refused.
+ * - names: the addressees of [private]; "Вася" and "Петя" are the room's two.
+ * - leaves and addresses: tags of one address or login and what goes between
+ *   them; .NET's Uri and the browser's URL read addresses differently.
+ * - repeats: pieces whose cost grows with length, and nesting past the limit.
+ * - valid: markup the grammar accepts whole, for the checks of what is right.
  *
- * Fields:
- * - pairs: an opening and a closing tag, written around generated content, and
- *   now and then left without the closing one. "{names}" in an opening stands
- *   for one of names, and "{high-surrogate}" and "{low-surrogate}" for a
- *   surrogate with no partner, which System.Text.Json refuses to read as an
- *   escape.
- * - pieces: everything else, one piece at a time: tags alone, tags broken in
- *   every way the grammar names, brackets, quotes, line breaks, the control
- *   characters and the characters that reorder text, which both sides take out
- *   before reading, spaces of other kinds, addresses good and refused.
- * - names: what an addressee list of [private] is made of. "Вася" and "Петя" are
- *   the two characters of the room the checks read a post in.
- * - leaves: the tags that hold one address or one login, and addresses: what
- *   is put between them, whole, now and then. Both sides read an address by
- *   the parser of their own language (Uri in .NET, URL in the browser), and
- *   what one takes and the other refuses is a link on one side and text on
- *   the other.
- * - repeats: a piece and how many times it is written in a row: the shapes
- *   whose cost grows with their length, and a nesting deeper than the
- *   renderer takes.
- * - valid: markup the grammar accepts whole, for the checks that hold what is
- *   right: the editor's markup check stays silent on it and the save path
- *   takes it. Its pairs close always; lists hold items; [mod] goes only where
- *   the surface has it and [private] only into a game post, one level deep;
- *   [noparse] holds pieces, whatever they are, less its own closing tag.
- *
- * Words are not listed: both generators write a word as the letter Q, four
- * digits and the letter Q again, each one different, so a check can tell which
- * word of the input reached which reader.
+ * Words are "Q", four digits and "Q", each different, so a check can tell
+ * which word reached which reader.
  */
 
 export interface MarkupAlphabet {

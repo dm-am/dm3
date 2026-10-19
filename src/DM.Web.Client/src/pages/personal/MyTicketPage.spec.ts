@@ -2,26 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * One of the member's own tickets, at /my-tickets/<id>.
- *
- * The page of a ticket works as a topic with answers and looks like one: the
- * block of the ticket with its author in the caption, the answers of the
- * author and of moderation under it, and the form at their foot while the
- * ticket is open. The support form leads its signed-in author here after the
- * press, the notifications of the ticket lead him here later; until somebody
- * answers, the place of the answer says what will come, so he need not watch
- * the page. A ticket that waits for his answer has the red "*" after its
- * state.
- *
- * His answer is the author's: it hands the turn to moderation. The server
- * answers with the ticket as it stands after it, and the page shows that: the
- * answer at the end of the conversation under the next number, and the state
- * the server set. The unsent text of the form is kept per ticket. The ticket
- * is read through the endpoint that hands an author his own and anybody else
- * a 404, so a ticket that is not the reader's is "not found", the same as one
- * that never existed.
- */
+// One of the member's tickets: block, conversation, form. His answer hands the
+// turn to moderation and the page shows the ticket the server answers with.
+// Somebody else's ticket is "not found".
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   enableAutoUnmount,
@@ -46,18 +29,10 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
-// A heavy tiptap component. What the page owes the form is read off what it
-// hands the editor: the text and the key of its draft.
-vi.mock("@/shared/ui/BBCodeEditor", () => ({
-  BBCodeEditor: {
-    name: "BBCodeEditor",
-    props: ["modelValue", "maxLength", "draftKey", "disabled"],
-    emits: ["update:modelValue", "submit"],
-    methods: { clear() {} },
-    template:
-      "<textarea class='editor-stub' :value='modelValue' @input='$emit(\"update:modelValue\", $event.target.value)' />",
-  },
-}));
+// A heavy tiptap component; the page owes the editor the text and the draft key.
+vi.mock("@/shared/ui/BBCodeEditor", async () =>
+  (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeAnswer(),
+);
 
 const PENDING =
   "Когда модерация ответит, здесь появится ответ, а вам придет уведомление";
@@ -89,7 +64,6 @@ const mine = (over: Partial<TicketDetails> = {}): TicketDetails => ({
   subtype: "Bug",
   createdUtc: "2026-10-05T18:20:00Z",
   description: "Не грузится аватар",
-  descriptionHtml: "Не грузится аватар",
   comment: "",
   commentsCount: 1,
   comments: [asked],
@@ -155,8 +129,7 @@ describe("the page of one of my tickets", () => {
     });
   });
 
-  // The ticket waits for its author: the star is his, and only while it waits
-  // for him.
+  // The ticket waits for its author: the star is his, only while it waits.
   it.each([
     ["WaitingForUser", true],
     ["WaitingForModeration", false],
@@ -191,7 +164,6 @@ describe("the page of one of my tickets", () => {
     expect(wrapper.find(".ticket-answer-form").exists()).toBe(true);
     // The author chooses no status: his answer hands the ticket to moderation.
     expect(wrapper.find(".ticket-answer-form select").exists()).toBe(false);
-    // The block first, the conversation after it.
     const block = wrapper.get(".ticket-thread").element;
     expect(
       block.compareDocumentPosition(conversation.element) &
@@ -216,7 +188,7 @@ describe("the page of one of my tickets", () => {
     const wrapper = await render();
 
     expect(wrapper.text()).toContain(PENDING);
-    // Said once, in the place of the answer, and not by a line of the page.
+    // Said once, in the place of the answer.
     expect(wrapper.find(".pending").exists()).toBe(false);
   });
 

@@ -2,24 +2,12 @@ using System;
 
 namespace DM.Domain.Moderation.Features.Tags;
 
-/// <summary>
-/// Domain model for tag group
-/// </summary>
 public class TagGroup
 {
-    /// <summary>
-    /// Tag group ID
-    /// </summary>
     public Guid Id { get; set; }
 
-    /// <summary>
-    /// Title
-    /// </summary>
     public string Title { get; set; } = string.Empty;
 
-    /// <summary>
-    /// Description
-    /// </summary>
     public string? Description { get; set; }
 
     /// <summary>

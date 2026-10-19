@@ -23,87 +23,36 @@ internal class MentorshipService : IMentorshipService
         _identityProvider = identityProvider;
     }
 
-    /// <inheritdoc />
-    public async Task AssignGameMentor(Guid gameId, CancellationToken ct = default)
-    {
-        EnsureMentorRole();
+    /// <summary>
+    /// What a game or a blog differs by under curation: its reads, its write and its refusals.
+    /// </summary>
+    private sealed record Curated(
+        Func<Guid, CancellationToken, Task<bool>> Exists,
+        Func<Guid, CancellationToken, Task<Guid?>> GetMentorId,
+        Func<Guid, Guid?, CancellationToken, Task> SetMentor,
+        string NotFound,
+        string AlreadyCurated,
+        string NotYours);
 
-        if (!await _repository.GameExists(gameId, ct))
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
-        }
+    private Curated Game => new(
+        _repository.GameExists, _repository.GetGameMentorId, _repository.SetGameMentor,
+        RefusalMessage.GameNotFound, "У игры уже есть наставник", "Вы не наставник этой игры");
 
-        var currentMentor = await _repository.GetGameMentorId(gameId, ct);
-        if (currentMentor.HasValue)
-        {
-            throw new HttpException(HttpStatusCode.Conflict, "У игры уже есть наставник");
-        }
-
-        var userId = _identityProvider.Current.User.UserId;
-        await _repository.SetGameMentor(gameId, userId, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task RemoveGameMentor(Guid gameId, CancellationToken ct = default)
-    {
-        EnsureMentorRole();
-
-        if (!await _repository.GameExists(gameId, ct))
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
-        }
-
-        var userId = _identityProvider.Current.User.UserId;
-        var currentMentor = await _repository.GetGameMentorId(gameId, ct);
-
-        if (!currentMentor.HasValue || currentMentor.Value != userId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Вы не наставник этой игры");
-        }
-
-        await _repository.SetGameMentor(gameId, null, ct);
-    }
+    private Curated Blog => new(
+        _repository.BlogExists, _repository.GetBlogMentorId, _repository.SetBlogMentor,
+        RefusalMessage.BlogNotFound, "У блога уже есть наставник", "Вы не наставник этого блога");
 
     /// <inheritdoc />
-    public async Task AssignBlogMentor(Guid blogId, CancellationToken ct = default)
-    {
-        EnsureMentorRole();
-
-        if (!await _repository.BlogExists(blogId, ct))
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
-        }
-
-        var currentMentor = await _repository.GetBlogMentorId(blogId, ct);
-        if (currentMentor.HasValue)
-        {
-            throw new HttpException(HttpStatusCode.Conflict, "У блога уже есть наставник");
-        }
-
-        var userId = _identityProvider.Current.User.UserId;
-        await _repository.SetBlogMentor(blogId, userId, ct);
-    }
+    public Task AssignGameMentor(Guid gameId, CancellationToken ct = default) => Assign(Game, gameId, ct);
 
     /// <inheritdoc />
-    public async Task RemoveBlogMentor(Guid blogId, CancellationToken ct = default)
-    {
-        EnsureMentorRole();
+    public Task RemoveGameMentor(Guid gameId, CancellationToken ct = default) => Remove(Game, gameId, ct);
 
-        if (!await _repository.BlogExists(blogId, ct))
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
-        }
+    /// <inheritdoc />
+    public Task AssignBlogMentor(Guid blogId, CancellationToken ct = default) => Assign(Blog, blogId, ct);
 
-        var userId = _identityProvider.Current.User.UserId;
-        var currentMentor = await _repository.GetBlogMentorId(blogId, ct);
-
-        if (!currentMentor.HasValue || currentMentor.Value != userId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Вы не наставник этого блога");
-        }
-
-        await _repository.SetBlogMentor(blogId, null, ct);
-    }
+    /// <inheritdoc />
+    public Task RemoveBlogMentor(Guid blogId, CancellationToken ct = default) => Remove(Blog, blogId, ct);
 
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<MentorshipAssignment>> GetGameMentorships(
@@ -131,6 +80,45 @@ internal class MentorshipService : IMentorshipService
         return await _repository.GetBlogMentorships(mentorIds, ct);
     }
 
+    private async Task Assign(Curated target, Guid targetId, CancellationToken ct)
+    {
+        EnsureMentorRole();
+        await ThrowIfMissing(target, targetId, ct);
+
+        var currentMentor = await target.GetMentorId(targetId, ct);
+        if (currentMentor.HasValue)
+        {
+            throw new HttpException(HttpStatusCode.Conflict, target.AlreadyCurated);
+        }
+
+        var userId = _identityProvider.Current.User.UserId;
+        await target.SetMentor(targetId, userId, ct);
+    }
+
+    private async Task Remove(Curated target, Guid targetId, CancellationToken ct)
+    {
+        EnsureMentorRole();
+        await ThrowIfMissing(target, targetId, ct);
+
+        var userId = _identityProvider.Current.User.UserId;
+        var currentMentor = await target.GetMentorId(targetId, ct);
+
+        if (currentMentor != userId)
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, target.NotYours);
+        }
+
+        await target.SetMentor(targetId, null, ct);
+    }
+
+    private static async Task ThrowIfMissing(Curated target, Guid targetId, CancellationToken ct)
+    {
+        if (!await target.Exists(targetId, ct))
+        {
+            throw new HttpException(HttpStatusCode.NotFound, target.NotFound);
+        }
+    }
+
     private void EnsureMentorRole()
     {
         var userRole = _identityProvider.Current.User.Role;
@@ -141,8 +129,8 @@ internal class MentorshipService : IMentorshipService
     }
 
     /// <summary>
-    /// Cross-mentor listings expose curation zones of OTHER users, so they
-    /// require the moderation overview role, not just Mentor.
+    /// Cross-mentor listings expose the curation of other users, so they need the
+    /// moderation overview role, not just Mentor.
     /// </summary>
     private void EnsureModeratorRole()
     {

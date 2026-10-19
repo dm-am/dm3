@@ -16,8 +16,8 @@ groups:
         labels:
           severity: watchdog
         annotations:
-          summary: "The alerting contour is alive"
-          description: "Sent on a schedule while rules are evaluated and delivery works. Stop receiving it and the contour is broken, whatever the dashboards say."
+          summary: "Контур оповещений работает"
+          description: "Это письмо приходит по расписанию, пока правила вычисляются и доставка работает. Если письма перестали приходить, контур сломан, что бы ни показывали дашборды. Смотреть docker logs dm-prometheus и dm-alertmanager."
 
       # The receiver every other rule in this file is posted to. Firing this one
       # cannot deliver a letter either - it travels the same broken road - so what
@@ -34,8 +34,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Nothing is delivering alerts"
-          description: "Rules keep being evaluated and none of them can reach anybody. Whoever watches for the Watchdog going missing is the only one who finds out before the receiver comes back."
+          summary: "Оповещения никому не доставляются"
+          description: "Alertmanager недоступен: правила вычисляются, но их письма никуда не уходят. Об этом узнает только тот, кто заметит, что письма Watchdog перестали приходить. Смотреть docker logs dm-alertmanager и страницу Targets в Prometheus."
 
   - name: dm-api
     rules:
@@ -45,8 +45,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "DM API is down"
-          description: "dm-api has been unreachable for more than 1 minute."
+          summary: "API DM не отвечает"
+          description: "Prometheus больше минуты не может опросить dm-api, сайт, скорее всего, недоступен. Запросы пользователей заканчиваются ошибкой или не доходят. Смотреть docker ps и docker logs dm-api."
 
       - alert: HighErrorRate
         expr: |
@@ -58,8 +58,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High 5xx error rate"
-          description: "More than 5% of requests are returning 5xx errors for 5 minutes."
+          summary: "Много ответов 5xx"
+          description: "Больше 5% запросов к API пять минут подряд заканчиваются ошибкой сервера. Пользователи видят сообщения об ошибке на разных страницах. Смотреть docker logs dm-api и логи в Grafana."
 
       - alert: HighLatency
         expr: |
@@ -69,8 +69,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High request latency"
-          description: "p95 latency is above 2 seconds for 5 minutes."
+          summary: "API отвечает медленно"
+          description: "Пять минут подряд самые медленные 5% запросов к API идут дольше 2 секунд. Ошибок при этом может не быть. Смотреть трассы в Jaeger и нагрузку на PostgreSQL."
 
   # Authorization refusing because it could not answer, which is the same answer it
   # gives when the rules mean it. Nothing else tells the two apart, and the reader is
@@ -83,8 +83,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "An authorization question reached no resolver"
-          description: "{{ $labels.intention }} on {{ $labels.target }} is being refused because nothing answers it, not because the rules say no. Whoever hits this path is told they may not do something they may."
+          summary: "Вопрос о правах не дошел до обработчика"
+          description: "{{ $labels.intention }} для {{ $labels.target }} отклоняется потому, что на вопрос о правах никто не отвечает, а не потому, что правила запрещают. Пользователь видит отказ в том, что ему разрешено. Смотреть docker logs dm-api."
 
   - name: dm-consumers
     rules:
@@ -94,8 +94,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Consumer {{ $labels.job }} is down"
-          description: "{{ $labels.job }} has been unreachable for more than 2 minutes."
+          summary: "Обработчик {{ $labels.job }} не работает"
+          description: "{{ $labels.job }} больше 2 минут не отвечает на опрос. Письма и уведомления копятся в очереди и не уходят. Смотреть docker logs {{ $labels.job }}."
 
       # A renamed or removed scrape target produces no `up` series at all, so
       # ConsumerDown stays silent on exactly the change that breaks it.
@@ -107,8 +107,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "A consumer scrape target is not configured"
-          description: "Prometheus has no target for one of the consumers — check the job names against the container names."
+          summary: "Не настроена цель опроса обработчика"
+          description: "В Prometheus нет цели для одного из обработчиков, поэтому ConsumerDown о нем молчит. Скорее всего, задание переименовано. Сверить имена заданий в docker/prometheus.yml с именами контейнеров."
 
   - name: dm-infrastructure
     rules:
@@ -118,8 +118,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "PostgreSQL is down"
-          description: "PostgreSQL exporter reports database is unreachable."
+          summary: "PostgreSQL недоступен"
+          description: "Экспортер сообщает, что база данных не отвечает, и сайт не может читать и писать данные. Это останавливает почти все страницы. Смотреть docker logs dm-pg и dm-pg-exporter."
 
       - alert: HighMemoryUsage
         expr: (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes) > 0.9
@@ -127,8 +127,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "High memory usage"
-          description: "Host memory usage is above 90% for 5 minutes."
+          summary: "Память хоста почти занята"
+          description: "Больше 90% памяти хоста занято пять минут подряд. Дальше система начнет убивать процессы. Смотреть docker stats."
 
       # Severity below the two above on purpose: the console sink writes every
       # event unconditionally, so a dead store loses the searchable copy and not
@@ -144,8 +144,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "The log store is unreachable"
-          description: "Nothing is being indexed. Applications keep writing to the console - `docker logs` still has everything, Grafana has nothing, and the sink reports the rejection only through SelfLog on stderr."
+          summary: "Хранилище логов недоступно"
+          description: "Loki не принимает записи, поэтому поиск логов в Grafana ничего не показывает. Приложения продолжают писать в консоль, и docker logs хранит все. Смотреть docker logs dm-loki."
 
       - alert: DiskSpaceLow
         expr: (1 - node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) > 0.85
@@ -153,8 +153,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Low disk space"
-          description: "Root filesystem usage is above 85% for 10 minutes."
+          summary: "Мало места на диске"
+          description: "Корневая файловая система занята больше чем на 85% десять минут подряд. Когда место кончится, база данных и хранилище файлов перестанут писать. Смотреть df -h и docker system df."
 
       # The site starts without object storage on purpose and keeps answering
       # while it is gone: uploads fail with 500 and pictures with 502, one request
@@ -166,8 +166,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Object storage is down"
-          description: "The metrics endpoint of object storage has been unreachable for more than 1 minute. Uploads fail and avatars and attachments do not load; check docker logs dm-seaweedfs and dm-storage."
+          summary: "Хранилище файлов недоступно"
+          description: "Метрики хранилища больше минуты не отвечают: загрузки файлов падают, аватары и вложения не открываются, остальные страницы работают. Проверки самого сайта этого не показывают. Смотреть docker logs dm-seaweedfs и dm-storage."
 
       # A renamed or removed scrape target produces no `up` series at all, so
       # ObjectStorageDown stays silent on exactly the change that breaks it.
@@ -177,8 +177,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "The object storage scrape target is not configured"
-          description: "Prometheus has no target for object storage - check the storage job in prometheus.yml and the metrics port of dm-storage."
+          summary: "Не настроена цель опроса хранилища файлов"
+          description: "В Prometheus нет цели для хранилища файлов, поэтому ObjectStorageDown о нем молчит. Скорее всего, задание переименовано. Сверить задание storage в docker/prometheus.yml и порт метрик dm-storage."
 
   # The broker is the only place that knows a message exists between the service
   # that sent it and the worker that will act on it. Every rule above is about a
@@ -192,8 +192,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "RabbitMQ is down"
-          description: "The metrics endpoint of the broker has been unreachable for more than 1 minute."
+          summary: "RabbitMQ недоступен"
+          description: "Метрики брокера больше минуты не отвечают, события и письма не доходят до обработчиков. Уведомления и письма не уходят. Смотреть docker logs dm-rmq."
 
       # A renamed or removed scrape target produces no `up` series at all, so
       # BrokerDown stays silent on exactly the change that breaks it.
@@ -203,8 +203,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "The broker scrape target is not configured"
-          description: "Prometheus has no target for the broker - check that rabbitmq_prometheus is enabled and that per-object metrics are on."
+          summary: "Не настроена цель опроса брокера"
+          description: "В Prometheus нет цели для RabbitMQ, поэтому BrokerDown о нем молчит. Скорее всего, задание переименовано или плагин rabbitmq_prometheus выключен. Проверить задание rabbitmq в docker/prometheus.yml."
 
       # Nothing here watches rabbitmq_global_messages_unroutable_returned_total,
       # and a nonzero value of it is not an incident: the bindings are derived
@@ -220,8 +220,8 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "Queue {{ $labels.queue }} has no consumer"
-          description: "Work is accumulating with nobody to process it. The worker process can be up and unsubscribed at the same time."
+          summary: "У очереди {{ $labels.queue }} нет обработчика"
+          description: "Работа копится, а брать ее некому, хотя процесс обработчика может быть жив. Письма или уведомления не уходят. Смотреть docker logs dm-mail-worker и dm-notification-worker, подписки в разделе Queues в RabbitMQ."
 
       # The realtime push queue, a rule of its own rather than another name in the
       # matcher above, for three reasons.
@@ -257,8 +257,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "The realtime push queue has no consumer"
-          description: "The API and the broker are both up and the notification consumer of the API is not subscribed, so every push is dropped at the broker. The consumer retries the subscription forever, at most 30 seconds apart, and logs a warning per attempt: a log carrying those warnings means the attempts are failing, and its exception says why. A log carrying none of them means nobody is trying — the retry loop was never reached, and the line to look for is \"could not be started\", logged once when the consumer gave up before its first attempt. Either way /_health/detail reports realtime-push as Degraded until a subscription opens. Meanwhile the global chat page catches up on its own, and the two badges are re-read only when the application mounts or the socket reconnects."
+          summary: "У очереди живых уведомлений нет обработчика"
+          description: "API и брокер работают, но API не подписано на очередь, поэтому живые уведомления в браузер не приходят. Сами уведомления сохранены и читаются запросом. Смотреть docker logs dm-api и строку realtime-push в /_health/detail."
 
       # Ready plus unacknowledged, not ready alone. A message handed to a consumer
       # stops being ready the moment it is delivered, so a worker that has taken a
@@ -271,8 +271,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Queue {{ $labels.queue }} is backing up"
-          description: "More than 1000 messages have been waiting or in flight for 10 minutes. Both halves count: work a consumer has taken and not finished is a backlog the queue depth alone does not show."
+          summary: "Очередь {{ $labels.queue }} растет"
+          description: "Больше 1000 сообщений ждут или обрабатываются десять минут подряд. Считаются и ожидающие, и взятые обработчиком, но не завершенные. Смотреть очередь в RabbitMQ и docker logs ее обработчика."
 
       - alert: DeadLetteredMessages
         expr: rabbitmq_queue_messages_ready{queue=~".*-dlq"} > 0
@@ -280,8 +280,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Dead-letter queue {{ $labels.queue }} is not empty"
-          description: "A message survived every retry and stopped here. Nothing else will look at it."
+          summary: "Очередь недоставленных {{ $labels.queue }} не пуста"
+          description: "Сообщение исчерпало все повторы и осело в этой очереди. Больше им никто не займется. Смотреть сообщение в RabbitMQ и причину в docker logs обработчика."
 
       # The rules above see the queue; this one sees the outcome. A consumer that
       # takes every message and throws on every message keeps its queue short and
@@ -292,8 +292,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Consumer of {{ $labels.queue }} is failing messages"
-          description: "Messages are leaving the pipeline as exceptions. Where the queue has a dead-letter exchange each one waits there; the realtime push queue has none, and its messages are gone."
+          summary: "Обработчик очереди {{ $labels.queue }} роняет сообщения"
+          description: "Сообщения завершаются исключением. Где у очереди есть очередь недоставленных, они ждут там, у очереди живых уведомлений ее нет, и сообщения пропадают. Смотреть docker logs обработчика."
 
       # Retries rise long before failures do: a queue being processed on the
       # second attempt is a queue about to stop being processed.
@@ -303,8 +303,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Consumer of {{ $labels.queue }} is retrying"
-          description: "Processing keeps failing and succeeding on a later attempt. The dependency behind it is unwell."
+          summary: "Обработчик очереди {{ $labels.queue }} часто повторяет"
+          description: "Обработка то падает, то проходит со второй попытки. Сервис, от которого она зависит, нездоров, и скоро повторы перестанут помогать. Смотреть docker logs обработчика."
 
       # The publishing side of the same trade. SYSTEM.md says an event is not the
       # carrier of the fact, so the producer swallows a refusal rather than turning
@@ -317,8 +317,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Events of type {{ $labels.event }} did not reach the outbox"
-          description: "Since the outbox these are the irrecoverable losses only: an outbox insert refused right after the domain commit, or the login-warning letter. Nothing stored them and nothing will retry them. A broker refusal is not here anymore - that is a delay, watched by OutboxBacklogAging."
+          summary: "События типа {{ $labels.event }} не попали в исходящую очередь"
+          description: "Это безвозвратные потери: запись в исходящую очередь отклонена сразу после сохранения данных, или не ушло письмо о входе. Их никто не хранит и не повторит. Смотреть docker logs dm-api."
 
       # A broker refusal stopped being a loss when the outbox landed: the rows
       # wait, the relay retries every second, and what matters is how long the
@@ -331,8 +331,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Domain events are stuck in the outbox"
-          description: "The oldest unpublished event has waited over 5 minutes. Nothing is lost: the rows stay until published, but no notification, letter or badge goes out for them. Broker down longer than a deploy, or the relay jammed on one row - Attempts and LastError on the oldest rows say which."
+          summary: "События застряли в исходящей очереди"
+          description: "Самое старое неотправленное событие ждет больше 5 минут, уведомления, письма и счетчики по нему не уходят. Ничего не потеряно, записи ждут отправки. Смотреть поля Attempts и LastError у старых записей в базе и docker logs dm-api."
 
       # The gauge above is written by the relay itself, so a stalled relay loop
       # in a live process freezes it at its last value - a zero that masks a
@@ -344,8 +344,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "The outbox relay is not making passes"
-          description: "The API process is up and its relay loop has not completed a pass in 10 minutes, so nothing publishes domain events at all and the lag gauge cannot be trusted - it is only as fresh as the last pass."
+          summary: "Отправка событий из исходящей очереди остановилась"
+          description: "Процесс API жив, но цикл отправки не завершил ни одного прохода за 10 минут, поэтому события не публикуются вовсе. Показатель отставания в это время устарел. Смотреть docker logs dm-api."
 
       # The far end of the same road. The message left the broker, reached a
       # sender, and the channel refused it - a bot token revoked, a relay
@@ -359,8 +359,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Notifications over {{ $labels.channel }} are not being delivered"
-          description: "The channel is refusing what it is handed. Nothing retries these: the message was acknowledged when the sender swallowed the refusal."
+          summary: "Уведомления по каналу {{ $labels.channel }} не доставляются"
+          description: "Канал отклоняет то, что ему передают, и повторов не будет. Остальные правила при этом остаются зелеными. Смотреть docker logs dm-notification-worker и dm-mail-worker."
 
   # A unit of work spans two stores with no transaction over them: the row is
   # committed to PostgreSQL first because it is the fact, and the document that
@@ -377,8 +377,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Writes to {{ $labels.store }} are being dropped by {{ $labels.operation }}"
-          description: "The work these belong to is committed and answered. Nothing retries them, and what they were counting is wrong until the reader resets it by hand."
+          summary: "Записи в {{ $labels.store }} теряются в операции {{ $labels.operation }}"
+          description: "Основная работа сохранена и подтверждена, а вторая запись не удалась. Повторов нет, и счетчик, который она вела, неверен, пока его не сбросят вручную. Смотреть docker logs dm-api."
 
   # The front door. Nothing here is about a component being unwell: the site is
   # perfectly healthy while somebody walks a list of addresses through the login
@@ -397,8 +397,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "Logins are being refused as {{ $labels.reason }}"
-          description: "Sustained refusals of one kind. WrongLogin at this rate is somebody walking a list of addresses; WrongPassword against few addresses is somebody walking a list of passwords; AccountLocked is either of those having gone on long enough to lock real people out."
+          summary: "Отказы входа по причине {{ $labels.reason }}"
+          description: "Отказы одной причины идут быстрее двух в секунду десять минут подряд. WrongLogin похож на перебор адресов, WrongPassword на перебор паролей, AccountLocked на уже запертых людей. Смотреть docker logs dm-api."
 
       # Throttling is counted by status and not by reason: the limiter answers
       # before anything reads a credential, so no code that could count it runs.
@@ -408,8 +408,8 @@ groups:
         labels:
           severity: warning
         annotations:
-          summary: "The login and registration limiter is refusing traffic"
-          description: "Requests are being turned away before a credential is read. Either an automated run is hitting the front door, or the limits are set below what the site's own clients need."
+          summary: "Ограничитель входа и регистрации отклоняет запросы"
+          description: "Запросы отклоняются до проверки пароля: либо идет автоматический перебор, либо пределы ниже нужд самого сайта. Настоящие пользователи при этом тоже получают отказ. Смотреть docker logs dm-api."
 
   - name: dm-backups
     rules:

@@ -11,35 +11,12 @@ namespace BBCodeParser.Nodes
     /// one line break along.
     /// </summary>
     /// <remarks>
-    /// The filter erases a block its reader may not read without a trace (see
-    /// Visibility), and a block the author put on a line of its own used to leave
-    /// that line behind, empty:
-    /// <c>captain.\n[private]...[/private]\nThen</c> gave the reader two breaks
-    /// where the text without the block has one, and the empty line said that
-    /// something had stood there. So the siblings are read as lines - the text
-    /// between two line breaks, CR LF or LF - and a line made of nothing but
-    /// erased nodes is dropped together with one of the breaks around it, which is
-    /// what the text reads like had the author never written the block. A line
-    /// with anything else on it stays as it stands, a space included: the author
-    /// typed that space, and it is on the line without the block too.
-    ///
-    /// The text of the whole input begins and ends lines, so a block at its very
-    /// start or end, next to a line break, is on a line of its own as well. A tag
-    /// does not: [b][private]x[/private]\nmore[/b] can stand in the middle of a
-    /// line of text, and only a line between two breaks inside a tag is known to
-    /// be one - save the last line of a tag nobody closed, which runs to the end
-    /// of the text and ends where the text does.
-    ///
-    /// Which break goes is decided so that the lines left keep one break between
-    /// each two of them: the one before a dropped line when it is still there,
-    /// else the one after. A text node left with nothing is not emitted at all,
-    /// so that it cannot take the place of the text a block that ends its line
-    /// strips (Tag.DropsLineBreakAfter).
-    ///
-    /// And a whole text left with nothing but white space once its blocks are
-    /// erased is drawn as nothing, the way the parser reads a text that is white
-    /// space alone: blank lines around a block the reader does not read would
-    /// otherwise be all that is on the page, and say the same thing.
+    /// An erased block left on a line of its own would leave an empty line that
+    /// says something stood there. The siblings are read as lines between CR LF or
+    /// LF breaks, and a line of nothing but erased nodes goes with the break before
+    /// it, else the one after. The whole text starts and ends lines, a tag does not,
+    /// except the last line of a tag nobody closed. A text left with nothing but
+    /// white space is drawn as nothing, as the parser reads white space alone.
     /// </remarks>
     internal static class ErasedLines
     {
@@ -60,9 +37,6 @@ namespace BBCodeParser.Nodes
             var atTextStart = parent is NodeTree;
             var atTextEnd = parent.ReachesTextEnd();
 
-            // A text of nothing but white space is read as no text at all (see
-            // BbParser.Parse), and so is a text left with nothing else once the
-            // blocks are gone: its line breaks and spaces are not drawn either.
             if (atTextStart && atTextEnd && IsOnlyWhiteSpaceAround(children, shown))
             {
                 var nothing = new Dictionary<int, TextNode>();
@@ -77,15 +51,14 @@ namespace BBCodeParser.Nodes
                 return nothing;
             }
 
-            // The line breaks, as (child, index, length), and for each line whether
-            // it holds anything that is drawn and whether it holds something erased.
+            // For each line: whether it holds anything drawn and anything erased.
             var breaks = new List<(int Child, int At, int Length)>();
             var content = new List<bool> { false };
             var erased = new List<bool> { false };
 
             for (var i = 0; i < children.Count; i++)
             {
-                if (!(children[i] is TextNode text))
+                if (children[i] is not TextNode text)
                 {
                     if (shown[i])
                     {
@@ -102,11 +75,12 @@ namespace BBCodeParser.Nodes
                 var value = text.Text;
                 for (var at = 0; at < value.Length; at++)
                 {
-                    var length = value[at] == '\n'
-                        ? 1
-                        : value[at] == '\r' && at + 1 < value.Length && value[at + 1] == '\n'
-                            ? 2
-                            : 0;
+                    var length = value[at] switch
+                    {
+                        '\n' => 1,
+                        '\r' when at + 1 < value.Length && value[at + 1] == '\n' => 2,
+                        _ => 0
+                    };
                     if (length == 0)
                     {
                         content[content.Count - 1] = true;
@@ -131,8 +105,6 @@ namespace BBCodeParser.Nodes
                     continue;
                 }
 
-                // The break before the line, else the one after it: never both,
-                // and never one another dropped line has taken already.
                 var before = line - 1;
                 var after = line;
                 if (before >= 0 && !dropped[before])
@@ -177,6 +149,7 @@ namespace BBCodeParser.Nodes
                 var value = ((TextNode)children[entry.Key]).Text;
                 var (text, from) = entry.Value;
                 text.Append(value, from, value.Length - from);
+                // Not emitted, so that it cannot stand in for the text DropsLineBreakAfter strips.
                 trimmed[entry.Key] = text.Length == 0 ? null : new TextNode(text.ToString());
             }
 
@@ -193,17 +166,9 @@ namespace BBCodeParser.Nodes
                     continue;
                 }
 
-                if (!(children[i] is TextNode text))
+                if (children[i] is not TextNode text || !string.IsNullOrWhiteSpace(text.Text))
                 {
                     return false;
-                }
-
-                foreach (var character in text.Text)
-                {
-                    if (!char.IsWhiteSpace(character))
-                    {
-                        return false;
-                    }
                 }
             }
 

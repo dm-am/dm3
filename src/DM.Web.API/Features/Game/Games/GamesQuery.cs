@@ -48,12 +48,6 @@ public class GamesQuery : PagingQuery
     /// <summary>
     /// Filter by host usernames - master OR assistant (case-insensitive, OR logic)
     /// </summary>
-    /// <remarks>
-    /// Same name as on /v1/blogs, where the owner-or-assistant filter has always
-    /// been <c>hostUsernames</c>. It was <c>authorUsernames</c> here, which is the
-    /// name the comment and topic lists use for who wrote the item — one name for
-    /// two filters, and two names for this one.
-    /// </remarks>
     public IReadOnlyCollection<string>? HostUsernames { get; set; }
 
     /// <summary>

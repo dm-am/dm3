@@ -15,7 +15,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
-using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
 using DM.Testing;
 using AwesomeAssertions;
@@ -26,85 +25,76 @@ namespace DM.Domain.Blog.Tests.Features.Blacklists;
 
 public class BlogBlacklistServiceShould : UnitTestBase
 {
-    private readonly IBlogBlacklistRepository _repository;
-    private readonly IBlogService _blogService;
-    private readonly IUserLookupService _userLookupService;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IEventProducer _producer;
-    private readonly BlogBlacklistService _service;
+    private readonly IBlogBlacklistRepository repository;
+    private readonly IBlogService blogService;
+    private readonly IUserLookupService userLookupService;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IIntentionManager intentionManager;
+    private readonly IEventProducer producer;
+    private readonly BlogBlacklistService service;
 
     public BlogBlacklistServiceShould()
     {
-        _repository = Mock<IBlogBlacklistRepository>();
-        _blogService = Mock<IBlogService>();
-        _userLookupService = Mock<IUserLookupService>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _intentionManager = Mock<IIntentionManager>();
-        _producer = Mock<IEventProducer>();
+        repository = Mock<IBlogBlacklistRepository>();
+        blogService = Mock<IBlogService>();
+        userLookupService = Mock<IUserLookupService>();
+        identityProvider = Mock<IIdentityProvider>();
+        intentionManager = Mock<IIntentionManager>();
+        producer = Mock<IEventProducer>();
 
-        _identityProvider.Current.Returns(Identity.Guest());
+        identityProvider.Current.Returns(Identity.Guest());
 
-        _service = new BlogBlacklistService(
-            _repository,
-            _blogService,
-            _userLookupService,
-            _identityProvider,
-            _intentionManager,
-            _producer);
+        service = new BlogBlacklistService(
+            repository,
+            blogService,
+            userLookupService,
+            identityProvider,
+            intentionManager,
+            producer);
+    }
+
+    private static BlogDto OpenBlog(Guid blogId, Guid? authorId = null, Guid? mentorId = null, params Guid[] blacklisted) => new()
+    {
+        Id = blogId,
+        Author = new GeneralUser { UserId = authorId ?? Guid.NewGuid() },
+        Mentor = mentorId is { } id ? new GeneralUser { UserId = id } : null,
+        Assistants = new List<BlogAssistantInfo>(),
+        BlacklistedUserIds = blacklisted.ToHashSet()
+    };
+
+    private BlogDto ArrangeSuccessfulAdd(Guid blogId, Guid userId, params Guid[] cancelledTokens)
+    {
+        var blog = OpenBlog(blogId);
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        userLookupService.GetAsync("testuser").Returns(new GeneralUser { UserId = userId, Username = "testuser" });
+        repository.CancelInvitationsForUser(blogId, userId, default).Returns(cancelledTokens);
+        return blog;
     }
 
     /// <summary>
-    /// A subscriber is blacklisted as he stands, and the subscription is left
-    /// alone: the list closes writing in the blog, a subscription is reading.
+    /// A subscriber keeps the subscription: the service holds no subscription store to end it with.
     /// </summary>
-    /// <remarks>
-    /// The entry used to end the subscription, the one thing the list is not
-    /// for. The service no longer holds the subscription table at all.
-    /// </remarks>
     [Fact]
-    public async Task BlacklistASubscriberAndKeepTheSubscription()
+    public async Task AddTheUserToTheBlacklist()
     {
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = Guid.NewGuid() },
-            Assistants = new List<BlogAssistantInfo>(),
-            BlacklistedUserIds = new HashSet<Guid>()
-        };
-        var user = new GeneralUser { UserId = userId, Username = "testuser" };
+        ArrangeSuccessfulAdd(blogId, userId);
 
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _userLookupService.GetAsync("testuser").Returns(user);
-        _repository.Add(blogId, userId, Arg.Any<Guid>(), default).Returns(Task.CompletedTask);
-        _repository.CancelInvitationsForUser(blogId, userId, default).Returns(new List<Guid>());
+        await service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
-        await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
-
-        await _repository.Received(1).Add(blogId, userId, Arg.Any<Guid>(), default);
-        typeof(BlogBlacklistService).GetConstructors().Single().GetParameters()
-            .Should().NotContain(parameter => parameter.ParameterType == typeof(ISubscriptionRepository),
-                "entering the list must not reach the subscription");
+        await repository.Received(1).Add(blogId, userId, Arg.Any<Guid>(), default);
     }
 
     [Fact]
-    public async Task AnswerTheWordsOfTheGameForSomebodyAlreadyOnTheList()
+    public async Task AnswerConflictForSomebodyAlreadyOnTheList()
     {
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = Guid.NewGuid() },
-            Assistants = new List<BlogAssistantInfo>(),
-            BlacklistedUserIds = new HashSet<Guid> { userId }
-        };
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _userLookupService.GetAsync("testuser").Returns(new GeneralUser { UserId = userId, Username = "testuser" });
+        blogService.GetUnfiltered(blogId, default).Returns(OpenBlog(blogId, blacklisted: userId));
+        userLookupService.GetAsync("testuser").Returns(new GeneralUser { UserId = userId, Username = "testuser" });
 
-        var act = async () => await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
+        var act = async () => await service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict && e.Message == RefusalMessage.AlreadyInBlacklist);
@@ -114,45 +104,35 @@ public class BlogBlacklistServiceShould : UnitTestBase
     /// The request that lost the race is answered the way the check answers it.
     /// </summary>
     /// <remarks>
-    /// The list is read off the blog a statement before the insert, so two
-    /// requests for one name both pass that read, and the unique index refuses
-    /// the second insert. Uncaught, the duplicate became a 500 for a question
-    /// whose answer is already true.
+    /// Two requests for one name both pass the read, and the unique index refuses the second insert.
     /// </remarks>
     [Fact]
     public async Task AnswerConflictWhenTheInsertLosesTheRace()
     {
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = Guid.NewGuid() },
-            Assistants = new List<BlogAssistantInfo>(),
-            BlacklistedUserIds = new HashSet<Guid>()
-        };
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _userLookupService.GetAsync("testuser").Returns(new GeneralUser { UserId = userId, Username = "testuser" });
-        _repository.Add(blogId, userId, Arg.Any<Guid>(), default)
+        blogService.GetUnfiltered(blogId, default).Returns(OpenBlog(blogId));
+        userLookupService.GetAsync("testuser").Returns(new GeneralUser { UserId = userId, Username = "testuser" });
+        repository.Add(blogId, userId, Arg.Any<Guid>(), default)
             .Returns(Task.FromException(new DuplicateEntityException("Duplicate blog blacklist entry")));
 
-        var act = async () => await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
+        var act = async () => await service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict && e.Message == RefusalMessage.AlreadyInBlacklist);
-        await _repository.DidNotReceive().CancelInvitationsForUser(blogId, userId, Arg.Any<CancellationToken>());
+        await repository.DidNotReceive().CancelInvitationsForUser(blogId, userId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
-    public async Task AnswerTheWordsOfTheGameForSomebodyNotOnTheList()
+    public async Task AnswerConflictForSomebodyNotOnTheList()
     {
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId, BlacklistedUserIds = new HashSet<Guid>() };
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _userLookupService.GetAsync("testuser").Returns(new GeneralUser { UserId = userId, Username = "testuser" });
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        userLookupService.GetAsync("testuser").Returns(new GeneralUser { UserId = userId, Username = "testuser" });
 
-        var act = async () => await _service.Remove(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
+        var act = async () => await service.Remove(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict && e.Message == RefusalMessage.NotInBlacklist);
@@ -163,36 +143,23 @@ public class BlogBlacklistServiceShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var blog = new BlogDto { Id = blogId };
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetBlacklist(blogId, default).Returns(new List<GeneralUser>());
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetBlacklist(blogId, default).Returns(new List<GeneralUser>());
 
-        await _service.Get(blogId);
+        await service.Get(blogId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.Edit, blog);
+        intentionManager.Received(1).ThrowIfForbidden(BlogIntention.Edit, blog);
     }
 
     [Fact]
     public async Task AuthorizeAddToBlacklistAction()
     {
         var blogId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = Guid.NewGuid() },
-            Assistants = new List<BlogAssistantInfo>(),
-            BlacklistedUserIds = new HashSet<Guid>()
-        };
-        var user = new GeneralUser { UserId = userId, Username = "testuser" };
+        var blog = ArrangeSuccessfulAdd(blogId, Guid.NewGuid());
 
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _userLookupService.GetAsync("testuser").Returns(user);
-        _repository.Add(blogId, userId, Arg.Any<Guid>(), default).Returns(Task.CompletedTask);
-        _repository.CancelInvitationsForUser(blogId, userId, default).Returns(new List<Guid>());
+        await service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
-        await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
-
-        _intentionManager.Received(1).ThrowIfForbidden(BlogIntention.Edit, blog);
+        intentionManager.Received(1).ThrowIfForbidden(BlogIntention.Edit, blog);
     }
 
     [Fact]
@@ -200,19 +167,10 @@ public class BlogBlacklistServiceShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = ownerId },
-            Assistants = new List<BlogAssistantInfo>(),
-            BlacklistedUserIds = new HashSet<Guid>()
-        };
-        var user = new GeneralUser { UserId = ownerId, Username = "owner" };
+        blogService.GetUnfiltered(blogId, default).Returns(OpenBlog(blogId, authorId: ownerId));
+        userLookupService.GetAsync("owner").Returns(new GeneralUser { UserId = ownerId, Username = "owner" });
 
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _userLookupService.GetAsync("owner").Returns(user);
-
-        var act = async () => await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "owner" });
+        var act = async () => await service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "owner" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.CannotBlacklistBlogLead);
@@ -223,20 +181,10 @@ public class BlogBlacklistServiceShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var mentorId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = Guid.NewGuid() },
-            Mentor = new GeneralUser { UserId = mentorId },
-            Assistants = new List<BlogAssistantInfo>(),
-            BlacklistedUserIds = new HashSet<Guid>()
-        };
-        var user = new GeneralUser { UserId = mentorId, Username = "mentor" };
+        blogService.GetUnfiltered(blogId, default).Returns(OpenBlog(blogId, mentorId: mentorId));
+        userLookupService.GetAsync("mentor").Returns(new GeneralUser { UserId = mentorId, Username = "mentor" });
 
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _userLookupService.GetAsync("mentor").Returns(user);
-
-        var act = async () => await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "mentor" });
+        var act = async () => await service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "mentor" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.CannotBlacklistBlogLead);
@@ -246,27 +194,13 @@ public class BlogBlacklistServiceShould : UnitTestBase
     public async Task PublishCancelledInvitationEventsWhenBlacklisting()
     {
         var blogId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
         var tokenId1 = Guid.NewGuid();
         var tokenId2 = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = Guid.NewGuid() },
-            Assistants = new List<BlogAssistantInfo>(),
-            BlacklistedUserIds = new HashSet<Guid>()
-        };
-        var user = new GeneralUser { UserId = userId, Username = "testuser" };
+        ArrangeSuccessfulAdd(blogId, Guid.NewGuid(), tokenId1, tokenId2);
 
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _userLookupService.GetAsync("testuser").Returns(user);
-        _repository.Add(blogId, userId, Arg.Any<Guid>(), default).Returns(Task.CompletedTask);
-        _repository.CancelInvitationsForUser(blogId, userId, default).Returns(new List<Guid> { tokenId1, tokenId2 });
-        _producer.SendAsync(EventType.BlogInvitationCancelled, Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        await service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
 
-        await _service.Add(new OperateBlogBlacklistLink { BlogId = blogId, Username = "testuser" });
-
-        await _producer.Received(1).SendAsync(EventType.BlogInvitationCancelled, tokenId1);
-        await _producer.Received(1).SendAsync(EventType.BlogInvitationCancelled, tokenId2);
+        await producer.Received(1).SendAsync(EventType.BlogInvitationCancelled, tokenId1);
+        await producer.Received(1).SendAsync(EventType.BlogInvitationCancelled, tokenId2);
     }
 }

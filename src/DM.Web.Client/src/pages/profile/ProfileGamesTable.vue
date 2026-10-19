@@ -1,19 +1,9 @@
 <script setup lang="ts">
 /**
- * ProfileGamesTable — the user's games as a forum-style table (search +
- * sort + paging) with a "Ведущий" / "Игрок" role toggle. Profile-scoped:
- * the author is pinned to this profile's username, so it cannot reuse the
- * URL-bound GamesDataTable widget (that one writes the global /games filter
- * state to the route query). Instead it drives the same `gameApi.searchGames`
- * endpoint with `hostUsernames=[username]` (host) or `playerUsername` +
- * `playerParticipation=Any` (player), keeping the table UI/columns visually
- * aligned with /games without duplicating its filter machinery. The Any
- * scope is profile-specific: the profile is a dossier, so it also lists
- * games where the user only has retired characters or a pending
- * application — unlike the public /games player filter (active-only).
- *
- * Four states: loading skeleton (DataTable) → error line → empty
- * (two-state) → content.
+ * The user's games as a table with a "Ведущий" / "Игрок" toggle, on the
+ * endpoint of /games with the author pinned: GamesDataTable writes the global
+ * filter into the address. The player scope is Any, as befits a dossier: games
+ * with only retired characters or a pending application are listed too.
  */
 import { computed, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
@@ -25,17 +15,25 @@ import { FilterSearchInput, SortButton } from "@/shared/ui/Filters";
 import { SegmentedControl } from "@/shared/ui/SegmentedControl";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import {
-  gameApi,
+  characterStatusLabel,
+  gameCatalogApi,
   GameStatusBadge,
   GameStatus,
   useGameDisplay,
+  type Character,
   type Game,
   type PlayerCharacterInfo,
 } from "@/entities/game";
 import { RemovedAccountLink, UserLink } from "@/entities/user";
+import {
+  GAME_COLUMNS,
+  GAME_COLUMN_WIDTHS_WITHOUT_TAGS,
+} from "@/widgets/games-table";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
+import { parsePageNumber } from "@/shared/lib/filters";
+import { usePaging } from "@/shared/lib/composables/usePaging";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
@@ -55,27 +53,19 @@ const {
   getUnreadComments,
   formatUnreadPostsTooltip,
   formatUnreadCommentsTooltip,
-  isNew,
+  isNewHighlight,
   formatSlots,
   buildSlotsTooltip,
   buildAssistantTooltip,
 } = useGameDisplay();
 
-// Title-link colour convention (same as GameLink): closed games are muted
-// grey; the green "new" highlight excludes closed (muted takes priority).
+// Closed games are muted, and the "new" green leaves them out.
 function isClosedGame(game: Game): boolean {
   return game.status === GameStatus.Closed;
 }
-function isNewHighlight(game: Game): boolean {
-  return !isClosedGame(game) && isNew(game);
-}
 
 const role = ref<RoleScope>("host");
-// Tracks whether the user has manually touched the role toggle — gates the
-// one-time auto-switch below so it never fights a deliberate click.
-const roleTouchedManually = ref(false);
-// `searchInput` is the immediate v-model; `search` is the debounced value
-// that actually drives the request (avoids a fetch per keystroke).
+// `search` is the debounced `searchInput`, one fetch per pause.
 const searchInput = ref("");
 const search = ref("");
 const sortBy = ref<"created" | "title">("created");
@@ -89,14 +79,10 @@ watch(searchInput, (value) => {
   }, 300);
 });
 
-const PAGE_SIZE = 20;
+// A page as long as the reader's lists (account settings).
+const { pageSize } = usePaging();
 
-const pageNumber = computed(() => {
-  const raw = route.query.number;
-  if (!raw) return 1;
-  const n = parseInt(String(raw), 10);
-  return !isNaN(n) && n > 0 ? n : 1;
-});
+const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 const apiParams = computed(() => {
   const base = {
@@ -104,50 +90,31 @@ const apiParams = computed(() => {
     sortBy: sortBy.value,
     sortOrder: sortOrder.value,
     number: pageNumber.value,
-    size: PAGE_SIZE,
+    size: pageSize.value,
   };
   return role.value === "host"
     ? { ...base, hostUsernames: [props.username] }
     : {
         ...base,
         playerUsername: props.username,
-        // Dossier scope: include games with only retired characters or a
-        // pending application, not just active participation.
+        // Retired characters and pending applications included.
         playerParticipation: "Any" as const,
       };
 });
 
 const envelope = ref<ListEnvelope<Game> | null>(null);
 
-// clearErrorOnStart: what this table did before the composable — the error line
-// goes away while the next page loads.
+// The error line goes while the next page loads.
 const { loading, error, run } = useGuardedRequest({
   message: "Не удалось загрузить игры",
   clearErrorOnStart: true,
 });
 
 function fetchGames() {
-  const roleAtRequest = role.value;
   return run(
-    () => gameApi.searchGames(apiParams.value),
+    () => gameCatalogApi.searchGames(apiParams.value),
     (data) => {
       envelope.value = data;
-
-      // Self-contained auto-switch: if the *initial default* "Ведущий"
-      // fetch comes back empty and the user hasn't touched the toggle yet, flip
-      // once to "Игрок" so a profile with no hosted games doesn't land on a
-      // dead tab. Restricted to the unfiltered first load (no search typed
-      // yet) — an empty search result for "host" must not trigger this, only
-      // a genuinely empty default fetch. Any later manual toggle, or an empty
-      // "player" result, must NOT bounce back.
-      if (
-        roleAtRequest === "host" &&
-        !roleTouchedManually.value &&
-        !search.value &&
-        (data?.paging?.total ?? 0) === 0
-      ) {
-        role.value = "player";
-      }
     },
   );
 }
@@ -164,29 +131,8 @@ const emptyText = computed(() => {
     : "Пользователь не играет ни в одной игре";
 });
 
-// Reset pagination when the search term changes — page 3 of an old query
-// is meaningless for a new one and would render a fake-empty table.
-watch(search, () => {
-  if (route.query.number) {
-    const query = { ...route.query };
-    delete query.number;
-    router.replace({ query });
-  }
-});
-
-// Re-fetch whenever the effective query changes. Stringify dedupes
-// adjacent identical states.
-const paramsKey = computed(() => JSON.stringify(apiParams.value));
-watch(paramsKey, () => fetchGames(), { immediate: true });
-
-function setRole(next: RoleScope) {
-  // Any explicit click — even re-clicking the already-active role — counts
-  // as a manual choice and permanently disarms the auto-switch.
-  roleTouchedManually.value = true;
-  if (role.value === next) return;
-  role.value = next;
-  // Reset pagination — the other role likely has a different page count,
-  // so keeping `number` could land on an out-of-range (fake-empty) page.
+/** Back to the first page: a page of the list being left means nothing for the next. */
+function resetPage() {
   if (route.query.number) {
     const query = { ...route.query };
     delete query.number;
@@ -194,16 +140,27 @@ function setRole(next: RoleScope) {
   }
 }
 
-// aria-sort only announces columns the table actually renders: "created"
-// has no column here (same as /games), so sort state maps to "title" only.
+watch(search, resetPage);
+
+// Refetch on every change of the query; the string dedupes identical ones.
+const paramsKey = computed(() => JSON.stringify(apiParams.value));
+watch(paramsKey, () => fetchGames(), { immediate: true });
+
+function setRole(next: RoleScope) {
+  if (role.value === next) return;
+  role.value = next;
+  // The other role likely has a different page count.
+  resetPage();
+}
+
+// aria-sort for drawn columns only: "created" has none, so the sort maps to "title".
 const currentSort = computed<SortState | undefined>(() =>
   sortBy.value === "title"
     ? { key: "title", direction: sortOrder.value }
     : undefined,
 );
 
-// Sorting is driven by the SortButton (same control as the /games page),
-// not by clicking column headers.
+// Sorted by the SortButton, as /games, not by the headers.
 const sortOptions = [
   {
     value: "created",
@@ -222,66 +179,51 @@ function handleSortOrder(order: "asc" | "desc") {
   sortOrder.value = order;
 }
 
-// Column sets mirror /games (GamesDataTable): same keys, order, widths and
-// cell formats, minus the tags column (profile-specific decision). In
-// "Игрок" mode the tags' slot is taken by the profile-only "Статус
-// персонажа" column (the backend fills `playerCharacters` solely when the
-// request carries the playerUsername filter, so in "Ведущий" mode there is
-// nothing to show there); in "Ведущий" mode that slot is folded back into
-// title/master/status. "Название" takes what the others leave.
+// The columns of /games without the tags; in "Игрок" mode their place is the
+// character status, which the server fills only for the player filter.
 const columns = computed<Column[]>(() =>
   role.value === "player"
     ? [
-        { key: "title", label: "Название", align: "left" },
-        { key: "master", label: "Ведущие", width: "17.4%", align: "left" },
-        { key: "status", label: "Статус игры", width: "15.9%", align: "left" },
+        GAME_COLUMNS.title,
+        GAME_COLUMNS.master,
+        GAME_COLUMNS.status,
         {
           key: "character",
           label: "Статус персонажа",
-          width: "19.2%",
+          width: GAME_COLUMNS.tags.width,
           align: "left",
         },
-        {
-          key: "reviews",
-          label: "Рецензии",
-          width: "8.5%",
-          align: "center",
-        },
-        { key: "readers", label: "Читатели", width: "7.9%", align: "center" },
+        GAME_COLUMNS.reviews,
+        GAME_COLUMNS.readers,
       ]
     : [
-        { key: "title", label: "Название", align: "left" },
-        { key: "master", label: "Ведущие", width: "22.2%", align: "left" },
-        { key: "status", label: "Статус игры", width: "20.7%", align: "left" },
+        GAME_COLUMNS.title,
         {
-          key: "reviews",
-          label: "Рецензии",
-          width: "8.6%",
-          align: "center",
+          ...GAME_COLUMNS.master,
+          width: GAME_COLUMN_WIDTHS_WITHOUT_TAGS.master,
         },
-        { key: "readers", label: "Читатели", width: "8%", align: "center" },
+        {
+          ...GAME_COLUMNS.status,
+          width: GAME_COLUMN_WIDTHS_WITHOUT_TAGS.status,
+        },
+        {
+          ...GAME_COLUMNS.reviews,
+          width: GAME_COLUMN_WIDTHS_WITHOUT_TAGS.reviews,
+        },
+        {
+          ...GAME_COLUMNS.readers,
+          width: GAME_COLUMN_WIDTHS_WITHOUT_TAGS.readers,
+        },
       ],
 );
 
-// Character status wording — the captions of the CharacterCard badge (CharacterStatus
-// refined by the "out of game" flags). Standalone cell value, so it is
-// capitalized; no color coding.
-function characterStatusLabel(ch: PlayerCharacterInfo): string {
-  switch (ch.status) {
-    case "Active":
-      return "В игре";
-    case "Retired":
-      if (ch.isDead) return "Персонаж мертв";
-      if (ch.isPlayerExiled) return "Выведен из игры";
-      return "Покинул игру";
-    case "UnderReview":
-      return "Заявка на рассмотрении";
-    default:
-      return "";
-  }
+// The CharacterCard caption, "В игре" where it has none (declined applications are not sent).
+// The caption reads only the status and its flags, all a row's character carries.
+function characterStatus(character: PlayerCharacterInfo): string {
+  return characterStatusLabel(character as Character) ?? "В игре";
 }
 
-// Paging scrolls the games table back into view (not the page top)
+// Paging scrolls the table back into view, not the page top.
 const tableRef = ref<{ $el: HTMLElement } | null>(null);
 function pagingAnchor(): HTMLElement | null {
   return tableRef.value?.$el ?? null;
@@ -290,9 +232,7 @@ function pagingAnchor(): HTMLElement | null {
 
 <template>
   <div class="profile-games-table">
-    <!-- The field takes the line; where the sort and the toggle do not fit
-         beside it, they go under it together, side by side or one under the
-         other, the sort with its words, the toggle with both segments. -->
+    <!-- What does not fit beside the field goes under it, the sort and the toggle together. -->
     <div class="controls">
       <FilterSearchInput
         v-model="searchInput"
@@ -335,7 +275,7 @@ function pagingAnchor(): HTMLElement | null {
       :sort="currentSort"
       :empty-text="emptyText"
     >
-      <!-- Title column: Title (unread/comments), same format as /games -->
+      <!-- Title, unread and comments, as /games. -->
       <template #cell-title="{ row }">
         <router-link
           :to="{ name: 'game', params: { id: row.publicId || row.id } }"
@@ -371,19 +311,17 @@ function pagingAnchor(): HTMLElement | null {
           hide-badge
         /><RemovedAccountLink v-else /><template v-if="row.assistants?.length"
           >{{ " "
-          }}<Tooltip :text="buildAssistantTooltip(row.assistants)">
+          }}<Tooltip :text="buildAssistantTooltip(row.assistants)" focusable>
             <span class="assistant-count">[+{{ row.assistants.length }}]</span>
           </Tooltip></template
         >
       </template>
 
-      <!-- Character status column ("Игрок" mode): just the status word (no
-           color, no tooltip). Extra characters show as a plain "[+N]" count;
-           the details live on the game page. Inline flow copies as one line. -->
+      <!-- The status word alone; extra characters as "[+N]", the details on the game page. -->
       <template #cell-character="{ row }">
         <template v-if="row.playerCharacters?.length">
           <span class="character-status">{{
-            characterStatusLabel(row.playerCharacters[0])
+            characterStatus(row.playerCharacters[0])
           }}</span
           ><span v-if="row.playerCharacters.length > 1" class="character-extra"
             >{{ " " }}[+{{ row.playerCharacters.length - 1 }}]</span
@@ -408,7 +346,7 @@ function pagingAnchor(): HTMLElement | null {
         </Tooltip>
       </template>
 
-      <!-- Reviews column, same format as /games -->
+      <!-- Reviews, as /games. -->
       <template #cell-reviews="{ row }">
         <router-link
           :to="{
@@ -441,16 +379,13 @@ function pagingAnchor(): HTMLElement | null {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 
 .profile-games-table
   display: flex
   flex-direction: column
   gap: $medium
 
-// As before 5 October 2026, without the sideways scroll the toggle had on a
-// phone (owner, 12 October 2026): what does not fit beside the field goes to
-// the next line whole, and nothing gives up its words.
+// What does not fit beside the field goes to the next line whole; nothing gives up its words.
 .controls
   display: flex
   flex-wrap: wrap
@@ -458,15 +393,12 @@ function pagingAnchor(): HTMLElement | null {
   gap: $small
   margin-bottom: 0
 
-// Search fills all free space on the left (same as the /games filter bar,
-// where the search input is flex: 1); sort + role toggle sit to its right.
+// The search takes the free space, as on /games.
 .search
   flex: 1
-  min-width: 200px
+  min-width: $search-field-min-width
 
-// The sort and the toggle go to the next line as one: never the sort beside
-// the field and the toggle alone under it. There they stand side by side, or
-// one under the other where the two do not fit.
+// The sort and the toggle go down as one, side by side or one under the other.
 .controls-pair
   display: flex
   flex-wrap: wrap
@@ -478,9 +410,6 @@ function pagingAnchor(): HTMLElement | null {
   flex: none
 
 .game-link
-  color: $link
-  &:hover
-    color: $link-hover
   &.new-item
     color: $accent-green
     &:hover
@@ -489,7 +418,6 @@ function pagingAnchor(): HTMLElement | null {
     color: $text-muted
     &:hover
       color: $link-hover
-  // .search-highlight styled globally in Reset.sass
 
 .status-wrapper
   cursor: help
@@ -498,8 +426,7 @@ function pagingAnchor(): HTMLElement | null {
   color: $text-muted
   cursor: help
 
-// "[+N]" suffix for extra characters — a plain muted count (no tooltip;
-// the character details live on the game page).
+// A plain muted count.
 .character-extra
   color: $text-muted
 
@@ -512,11 +439,6 @@ function pagingAnchor(): HTMLElement | null {
   color: $text-muted
   cursor: help
   white-space: nowrap
-
-.review-link
-  color: $link
-  &:hover
-    color: $link-hover
 
 .readers-count
   cursor: help

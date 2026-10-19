@@ -13,9 +13,8 @@ const stack = () => [...document.body.querySelectorAll(".toast-item")];
 const toastNamed = (text: string) =>
   stack().find((item) => item.textContent?.includes(text)) as HTMLElement;
 
-const progressOf = (item: Element) =>
-  (item.querySelector(".toast-progress") as HTMLElement | null)?.style.width ??
-  null;
+const barOf = (item: Element) =>
+  item.querySelector(".toast-progress") as HTMLElement | null;
 
 let toast: ReturnType<typeof useToast>;
 let container: VueWrapper;
@@ -107,17 +106,32 @@ describe("ToastContainer", () => {
     );
   });
 
-  it("draws the time left as a bar that shrinks, and none for an error", async () => {
+  it("runs a bar down over the message's time, and none for an error", async () => {
     toast.success("Сохранено");
     toast.error("Не удалось сохранить");
     await nextTick();
-    expect(progressOf(toastNamed("Сохранено"))).toBe("100%");
-    expect(progressOf(toastNamed("Не удалось сохранить"))).toBeNull();
+    expect(barOf(toastNamed("Сохранено"))?.style.animationDuration).toBe(
+      "3000ms",
+    );
+    expect(barOf(toastNamed("Не удалось сохранить"))).toBeNull();
+  });
 
-    vi.advanceTimersByTime(1500);
+  it("starts the time and the bar over when the same message comes again", async () => {
+    toast.success("Сохранено");
     await nextTick();
+    const first = barOf(toastNamed("Сохранено"));
 
-    expect(progressOf(toastNamed("Сохранено"))).toBe("50%");
+    vi.advanceTimersByTime(2000);
+    toast.success("Сохранено");
+    await nextTick();
+    expect(barOf(toastNamed("Сохранено"))).not.toBe(first);
+
+    vi.advanceTimersByTime(2000);
+    await nextTick();
+    expect(stack()).toHaveLength(1);
+    vi.advanceTimersByTime(1000);
+    await nextTick();
+    expect(stack()).toHaveLength(0);
   });
 
   it("goes away by itself when its time is out, an error never", async () => {
@@ -133,19 +147,38 @@ describe("ToastContainer", () => {
     ]);
   });
 
-  it("holds the time while the pointer is over the message", async () => {
+  it("holds the time and the bar while the pointer is over the message", async () => {
     toast.success("Сохранено");
     await nextTick();
     const item = toastNamed("Сохранено");
 
+    vi.advanceTimersByTime(1000);
     item.dispatchEvent(new MouseEvent("mouseenter"));
     vi.advanceTimersByTime(5000);
     await nextTick();
-    expect(progressOf(toastNamed("Сохранено"))).toBe("100%");
+    expect(stack()).toHaveLength(1);
+    expect(barOf(item)?.classList.contains("toast-progress--held")).toBe(true);
 
+    // The two seconds left, not the whole three again.
     item.dispatchEvent(new MouseEvent("mouseleave"));
-    vi.advanceTimersByTime(3000);
+    await nextTick();
+    expect(barOf(item)?.classList.contains("toast-progress--held")).toBe(false);
+    vi.advanceTimersByTime(1999);
+    await nextTick();
+    expect(stack()).toHaveLength(1);
+    vi.advanceTimersByTime(1);
     await nextTick();
     expect(stack()).toHaveLength(0);
+  });
+
+  it("sets one timeout a message and no tick", async () => {
+    const tick = vi.spyOn(globalThis, "setInterval");
+    const timeout = vi.spyOn(globalThis, "setTimeout");
+    toast.success("Сохранено");
+    toast.info("Ссылка скопирована");
+    await nextTick();
+    vi.advanceTimersByTime(1000);
+    expect(tick).not.toHaveBeenCalled();
+    expect(timeout).toHaveBeenCalledTimes(2);
   });
 });

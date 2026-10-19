@@ -10,10 +10,8 @@ using Xunit;
 namespace DM.Web.API.Tests.Shared;
 
 /// <summary>
-/// The health endpoints answer without authentication of their own, so whoever
-/// reaches the port reads the report. What it must never carry is the message of
-/// the exception a failed check caught: those come from the drivers and spell out
-/// host, port, database and user.
+/// Whoever reaches the port reads the health report, so it never carries the message of an exception a
+/// check caught: drivers spell out host, port, database and user.
 /// </summary>
 public class HealthReportWriterShould
 {

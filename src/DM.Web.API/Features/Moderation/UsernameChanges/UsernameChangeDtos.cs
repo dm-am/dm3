@@ -66,20 +66,6 @@ public class UsernameChangeRequest
 }
 
 /// <summary>
-/// Request to create a username change request
-/// </summary>
-public class CreateUsernameChangeRequest
-{
-    /// <summary>
-    /// Reason for the change (new username is chosen after moderator approval)
-    /// </summary>
-    [Required(ErrorMessage = "Укажите причину смены имени")]
-    [MinLength(10, ErrorMessage = "Причина должна быть не менее 10 символов")]
-    [MaxLength(500, ErrorMessage = "Причина должна быть не более 500 символов")]
-    public string Reason { get; set; } = string.Empty;
-}
-
-/// <summary>
 /// API DTO for resolving (approving/rejecting) a username change request
 /// </summary>
 public class ResolveUsernameChangeRequest
@@ -93,42 +79,8 @@ public class ResolveUsernameChangeRequest
     /// Optional comment from moderator
     /// </summary>
     /// <remarks>
-    /// Bounded by the same five hundred as the column behind it. Without the
-    /// attribute the check happened at the insert, where over-length is a
-    /// database error and the moderator gets a 500 for a typed-too-much
-    /// comment instead of the ordinary validation answer.
+    /// Bounded by the column behind it, so over-length is a validation answer, not a 500.
     /// </remarks>
     [MaxLength(500, ErrorMessage = "Комментарий должен быть не более 500 символов")]
     public string? Comment { get; set; }
-}
-
-/// <summary>
-/// API DTO for a username history entry
-/// </summary>
-public class UsernameHistoryEntry
-{
-    /// <summary>
-    /// Record identifier
-    /// </summary>
-    public Guid Id { get; set; }
-
-    /// <summary>
-    /// Username before the change
-    /// </summary>
-    public string OldUsername { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Username after the change
-    /// </summary>
-    public string NewUsername { get; set; } = string.Empty;
-
-    /// <summary>
-    /// When the change was made (UTC)
-    /// </summary>
-    public DateTimeOffset ChangedUtc { get; set; }
-
-    /// <summary>
-    /// Who approved the change (moderator username)
-    /// </summary>
-    public string? ApprovedByUsername { get; set; }
 }

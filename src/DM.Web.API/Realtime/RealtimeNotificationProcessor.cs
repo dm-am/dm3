@@ -22,14 +22,8 @@ internal class RealtimeNotificationProcessor(
     /// The events of the global chat itself, which go to every open connection.
     /// </summary>
     /// <remarks>
-    /// Global chat is public: these carry no stored recipient list and reach
-    /// every connection, including anonymous (guest) ones. Guests are never
-    /// registered in the user connection map, so this broadcast path is the only
-    /// event they can ever receive. Besides a new message it carries the start
-    /// and the end of a chat event: both change what the strip above the feed
-    /// says, for reader and participant alike, and neither is addressed to
-    /// anybody in particular. Addressing them through the map would deliver them
-    /// to nobody at all.
+    /// Global chat is public and addressed to nobody in particular, so these reach
+    /// guests too; through the connection map they would reach nobody at all.
     /// </remarks>
     private static readonly HashSet<EventType> Broadcast =
     [
@@ -41,8 +35,7 @@ internal class RealtimeNotificationProcessor(
     public async Task<ProcessResult> Process(
         string key, RealtimeNotification message, CancellationToken cancellationToken)
     {
-        // The DTO the list writes, through the same mapper, so the open tab reads
-        // one shape from both transports. Unread: this is the moment it appears.
+        // The mapper of the list, so the open tab reads one shape from both transports.
         var notification = NotificationMapper.ToNotification(message, isRead: false);
 
         if (Broadcast.Contains(message.EventType))
@@ -51,9 +44,6 @@ internal class RealtimeNotificationProcessor(
         }
         else
         {
-            // Per-user events are resolved strictly through the connection
-            // map, which only ever contains authenticated connections —
-            // an anonymous connection cannot appear here by construction
             var connectedUsers = connectionService.GetConnectedUsers();
             var connectionIds = message.RecipientIds
                 .Where(connectedUsers.ContainsKey)

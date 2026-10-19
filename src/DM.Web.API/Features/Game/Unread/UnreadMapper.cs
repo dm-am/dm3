@@ -9,7 +9,7 @@ namespace DM.Web.API.Features.Game.Unread;
 /// Compile-time mapper for first-unread lookups
 /// </summary>
 [Mapper]
-internal partial class UnreadMapper
+public partial class UnreadMapper
 {
     /// <summary>
     /// Domain first-unread post lookup to its response DTO

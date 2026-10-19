@@ -2,30 +2,16 @@
  * @vitest-environment jsdom
  */
 
-/**
- * One ticket, drawn once for every reader: the block over its conversation.
- *
- * A ticket works as a topic with answers and looks like one, and "Разбирает"
- * is not needed, any senior may take a ticket, nor green and red where nothing
- * is good or punished. So the block is the topic's: the reason as its
- * heading, the text the author wrote and nothing beside it, and under it the
- * caption of a topic, "Автор: имя [online], дата | Ответы (N) | состояние",
- * the number of answers a link as the number of comments of a topic is. All
- * of it grey but the idioms of every name on the site, the letter of the role
- * and [online], and one mark: the red "*" after the state of a ticket that
- * waits for the reader's answer, the star of a room that waits for his move.
- *
- * Checked here: the caption made of parts and who signs it (an account, a
- * removed account, a guest), the four states in the words they had before
- * 5 October and in no colour, the star, the link of the number of answers,
- * nothing drawn beside the text, nothing left of the assignment, the fold of
- * a ticket in a list, the address of a complaint as a link and the text set
- * as the text of a comment.
- */
+/** One ticket, drawn once for every reader: a topic's block, its caption and its marks. */
 import { describe, it, expect } from "vitest";
 import { mount, RouterLinkStub } from "@vue/test-utils";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { componentCss, styleRules } from "@/shared/lib/testing/styles";
+import {
+  captionBadgeOutline,
+  markupOutline,
+} from "@/shared/lib/testing/markupOutline";
+import { Tooltip } from "@/shared/ui/Tooltip";
 import { removedAccountRoute } from "@/entities/user";
 import type {
   Ticket,
@@ -58,8 +44,6 @@ const complaint = (over: Partial<Ticket> = {}): Ticket =>
     subtype: "UserComplaint",
     createdUtc: CREATED,
     description:
-      "Оскорбляет [b]участников[/b]\n\nНарушитель: LongestLoginPossible",
-    descriptionHtml:
       "Оскорбляет <strong>участников</strong><br /><br />Нарушитель: LongestLoginPossible",
     comment: "",
     commentsCount: 2,
@@ -71,7 +55,6 @@ const tracked = (over: Partial<TrackedTicket> = {}): TrackedTicket => ({
   subtype: "AccessRecovery",
   subject: "",
   description: "Не могу войти",
-  descriptionHtml: "Не могу войти",
   createdUtc: CREATED,
   resolvedUtc: null,
   resolvedByUsername: null,
@@ -146,8 +129,8 @@ describe("the block of a ticket", () => {
 /**
  * The caption of a topic (TopicCard): the author with the letter of his role
  * and his presence, a comma, the date to the minute, the number of comments
- * and the state in a word. A phone breaks the line after the comma and keeps
- * the date whole, as a topic's does.
+ * and the state in a word. A narrow column breaks the line after the comma and
+ * keeps the date whole, as a topic's does.
  */
 describe("the caption of a ticket", () => {
   it("names the author, the date, the comments and the state, in that order", () => {
@@ -171,8 +154,9 @@ describe("the caption of a ticket", () => {
     expect(link?.text()).toBe("Experienced");
   });
 
-  it("writes the letter of a staff author's role, as the caption of a topic does", () => {
-    const wrapper = render(
+  /** The ticket of a moderator not seen for a while. */
+  const byModerator = () =>
+    render(
       complaint({
         reporter: {
           username: "TestModerator",
@@ -182,7 +166,33 @@ describe("the caption of a ticket", () => {
       }),
     );
 
-    expect(parts(wrapper)[0]).toBe("Автор: TestModerator [M] [offline],");
+  it("writes the letter of a staff author's role, as the caption of a topic does", () => {
+    expect(parts(byModerator())[0]).toBe("Автор: TestModerator [M] [offline],");
+  });
+
+  // Node by node, with the styles each is drawn in: the badge of a topic's caption.
+  it("draws the letter of the role as a topic's caption does, its brackets the line's text", () => {
+    const wrapper = byModerator();
+
+    expect(
+      markupOutline(wrapper, ".record-block__caption .caption-line__part"),
+    ).toEqual([
+      "span.caption-line__part { display: inline-block; max-width: 100% }",
+      "  span.caption-part",
+      '    "Автор: "',
+      "    a.author-link",
+      '      "TestModerator"',
+      ...captionBadgeOutline("M", 2),
+      '    " ["',
+      "    span.offline { color: var(--text-muted) }",
+      '      "offline"',
+      '    "]"',
+      '  span.caption-line__mark[aria-hidden="true"]',
+      '    ","',
+    ]);
+    expect(
+      wrapper.findAllComponents(Tooltip).map((tip) => tip.props("text")),
+    ).toEqual(["Модератор"]);
   });
 
   // A removed account and a guest both arrive without a reporter; the flag of
@@ -197,10 +207,7 @@ describe("the caption of a ticket", () => {
     expect(link?.props("to")).toEqual(removedAccountRoute);
   });
 
-  // The word the guest signs his comments with under the block (CommentItem),
-  // written as a name is, as "Аккаунт удален" is in the same place: on the
-  // guest's page in the compact layout "Автор: гость" over "Автор: Гость"
-  // read as a slip (review C6a, 3).
+  // The word the guest signs his answers with, written as a name is.
   it("signs the ticket of a guest with a word and no link", () => {
     const wrapper = render(
       complaint({
@@ -274,11 +281,7 @@ describe("the caption of a ticket", () => {
   });
 });
 
-/**
- * The words the states had before 5 October: "Ждет ответа" without saying
- * whose turn it is lies once both sides write, and "В работе" was the
- * assignment, which is gone. None of them has a colour of its own.
- */
+/** The four states in words that say whose turn it is, in no colour of their own. */
 describe("the state of a ticket", () => {
   it.each([
     ["WaitingForModeration", "Ожидает ответа модерации"],
@@ -296,8 +299,8 @@ describe("the state of a ticket", () => {
   });
 
   // The two colours of the site that are not grey stand only where every name
-  // of the site has them, the letter of the role and [online], and the red of
-  // the star by a room that waits for the reader's move.
+  // of the site has them, [online] here and the letter of the role in its
+  // badge, and the red of the star by a room that waits for the reader's move.
   it("is coloured nowhere but by a name and by the star", () => {
     const rules = styleRules(componentCss(resolve(HERE, "TicketThread.vue")));
     const coloured = rules
@@ -307,7 +310,6 @@ describe("the state of a ticket", () => {
       .map((rule) => [rule.selector, rule.declarations.color]);
 
     expect(coloured).toEqual([
-      [expect.stringMatching(/\.role-letter/), "var(--accent-green)"],
       [expect.stringMatching(/\.online/), "var(--accent-green)"],
       [expect.stringMatching(/\.star/), "var(--accent-red)"],
     ]);
@@ -400,7 +402,7 @@ describe("what a ticket says", () => {
       isGuest: true,
       guestEmail: "guest@example.com",
       subtype: "AccessRecovery",
-      descriptionHtml:
+      description:
         "Не могу войти<br /><br />Контакт для ответа: guest@example.com",
     });
     const body = render(guest).get(".ticket-body");
@@ -460,8 +462,6 @@ describe("the text of a ticket", () => {
     const wrapper = render(
       complaint({
         description:
-          "Оскорбляет участников.\n\nСсылка на нарушение: /games/example",
-        descriptionHtml:
           "Оскорбляет участников.<br /><br />Ссылка на нарушение: /games/example",
       }),
     );

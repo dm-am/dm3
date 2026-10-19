@@ -2,16 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Who is offered "Редактировать" is the server's decision, and this file is
- * where the client's copy of it is held to it. WebsiteTestimonialIntentionResolver
- * admits Edit to the named author or to SeniorModerator and above; a moderator
- * one rank below is refused, and an offer the site has no right to make ends in
- * a 403 after the reader has already retyped their text.
- *
- * The ladder is walked whole rather than sampled, because what it guards
- * against is exactly an off-by-one rank.
- */
+// The rank ladder is walked whole: the bug it guards against is an off-by-one rank.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
@@ -46,11 +37,7 @@ const testimonial = {
 const viewer = (id: string, role: UserRole) =>
   ({ id, username: id, role }) as unknown as User;
 
-/**
- * The card is stubbed down to its #actions slot, the corner of the bubble the
- * pencil stands in: this file is about the control, and the real card drags in
- * the bubble, the avatar and the router.
- */
+// The card is stubbed down to its #actions slot, where the pencil stands.
 const render = () =>
   mount(TestimonialEditable, {
     props: { testimonial },
@@ -68,7 +55,6 @@ const render = () =>
     },
   });
 
-/** The pencil: an icon button, found by the name a screen reader reads. */
 const PENCIL = 'button[aria-label="Редактировать"]';
 
 const offered = () => render().find(PENCIL).exists();
@@ -93,8 +79,7 @@ describe("TestimonialEditable access", () => {
   );
 
   it("offers the control to the named author", () => {
-    // The server names the author as its own branch of Edit, so an ordinary
-    // participant whose name is on the entry may rewrite it.
+    // The server names the author as its own branch of Edit.
     useAuthStore().user = viewer(AUTHOR_ID, UserRole.RegularUser);
     expect(offered()).toBe(true);
   });
@@ -131,13 +116,15 @@ describe("TestimonialEditable editing", () => {
     );
 
     await field.setValue("Переписано");
-    await wrapper.find("button.save-btn").trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Сохранить")!
+      .trigger("click");
     await flushPromises();
 
     expect(mockUpdateTestimonial).toHaveBeenCalledWith("t-1", {
       text: "Переписано",
     });
-    // Back to the card once the server took it.
     expect(wrapper.find("textarea").exists()).toBe(false);
   });
 
@@ -147,7 +134,10 @@ describe("TestimonialEditable editing", () => {
     const wrapper = render();
     await wrapper.find(PENCIL).trigger("click");
     await wrapper.find("textarea").setValue("Передумал");
-    await wrapper.findAll("button.action-btn").at(-1)!.trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Отмена")!
+      .trigger("click");
 
     expect(mockUpdateTestimonial).not.toHaveBeenCalled();
     expect(wrapper.find("textarea").exists()).toBe(false);

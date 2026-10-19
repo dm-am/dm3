@@ -11,11 +11,7 @@ namespace DM.Testing.Markup;
 /// A stream of numbers that is the same for the same seed on every machine and
 /// every runtime: SplitMix64.
 /// </summary>
-/// <remarks>
-/// System.Random promises no such thing across versions, and the corpus the
-/// client is checked against is written from these numbers, so a runtime that
-/// drew them differently would read as a renderer that changed.
-/// </remarks>
+/// <remarks>System.Random promises no such thing across versions, and the client corpus is written from these.</remarks>
 public sealed class MarkupRandom(ulong seed)
 {
     private ulong _state = seed;
@@ -57,11 +53,7 @@ public sealed class MarkupRandom(ulong seed)
 /// <summary>
 /// One generated text, as the pieces it was assembled from.
 /// </summary>
-/// <remarks>
-/// Kept in pieces so that a failing text can be made smaller a piece at a time
-/// (see MarkupProperty) rather than a character at a time, which would cut tags
-/// in half and report a text the generator never makes.
-/// </remarks>
+/// <remarks>Kept in pieces, so a failing text shrinks a piece at a time without cutting tags in half.</remarks>
 public sealed class MarkupSample(IReadOnlyList<string> atoms)
 {
     /// <summary>The pieces in order.</summary>
@@ -78,13 +70,8 @@ public sealed class MarkupSample(IReadOnlyList<string> atoms)
 /// Texts assembled at random from the shared alphabet (markupAlphabet.ts).
 /// </summary>
 /// <remarks>
-/// Two kinds. A soup is anything: tags in pairs around what they hold, now and
-/// then left open, among pieces of every kind, broken ones included. A valid
-/// text is markup the grammar accepts whole on the surface it is written for,
-/// which the editor's check must pass in silence and the save path must take.
-///
-/// Every word is the letter Q, four digits and Q again, each one different
-/// within a text: the checks follow each word to the readers it reaches.
+/// A soup is anything; a valid text is markup the grammar accepts whole on its surface. Every word is
+/// Q, four digits and Q, distinct within a text, so it can be followed to its readers.
 /// </remarks>
 public sealed class MarkupGenerator
 {
@@ -268,16 +255,10 @@ public sealed class MarkupGenerator
 public static class MarkupText
 {
     /// <summary>
-    /// The text without what both sides take out before reading it: the C0 and
-    /// C1 control characters other than tab, line feed and carriage return, and
-    /// the characters that reorder text for display, U+202A..U+202E and
-    /// U+2066..U+2069; a surrogate with no partner becomes U+FFFD.
+    /// The text without what both sides take out: C0 and C1 controls other than tab, LF and CR, the
+    /// reordering characters U+202A..U+202E and U+2066..U+2069; a lone surrogate becomes U+FFFD.
     /// </summary>
-    /// <remarks>
-    /// Written out from BBCODE_RENDERING.md, section "Символы направления текста",
-    /// rather than borrowed from the parser: a range the parser got wrong would
-    /// otherwise be a range the checks got wrong with it.
-    /// </remarks>
+    /// <remarks>Written out from BBCODE_RENDERING.md, section "Символы направления текста", not borrowed from the parser.</remarks>
     public static string AsBothSidesRead(string text)
     {
         var builder = new StringBuilder(text.Length);

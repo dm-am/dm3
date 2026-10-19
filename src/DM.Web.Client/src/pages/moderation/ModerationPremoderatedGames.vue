@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * ModerationPremoderatedGames — "Премодерируемые игры" (doc 4.2.3.8.2).
- * Games with premoderation status != Approved, oldest first. The queue itself
- * (filter, merge, sort, table) is PremoderatedQueue; this page is what a game
- * queue calls its columns, where a row leads and how it is loaded.
- */
 import { moderationApi, type PremoderatedGame } from "@/entities/moderation";
 import type { Column } from "@/shared/ui/DataTable";
 import PremoderatedQueue from "./PremoderatedQueue.vue";
@@ -19,7 +13,6 @@ const columns: Column[] = [
 
 <template>
   <PremoderatedQueue
-    root-class="premoderated-games"
     title="Премодерируемые игры"
     :columns="columns"
     owner-key="master"

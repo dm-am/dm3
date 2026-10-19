@@ -3,7 +3,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Game.Links;
@@ -113,11 +112,6 @@ public class Game : ISoftDeletable
     public int PopularityScore { get; set; }
 
     /// <summary>
-    /// When the popularity score was last recalculated (UTC)
-    /// </summary>
-    public DateTimeOffset? PopularityScoreUpdatedUtc { get; set; }
-
-    /// <summary>
     /// Game master (GM) identifier
     /// </summary>
     public Guid MasterId { get; set; }
@@ -127,9 +121,6 @@ public class Game : ISoftDeletable
     /// </summary>
     public Guid? MentorId { get; set; }
 
-    /// <summary>
-    /// Title
-    /// </summary>
     public string Title { get; set; } = null!;
 
     /// <summary>
@@ -214,33 +205,18 @@ public class Game : ISoftDeletable
     /// Blacklist links
     /// </summary>
     [InverseProperty(nameof(GameBlacklist.Game))]
-    public virtual ICollection<GameBlacklist> BlackList { get; set; } = [];
+    public virtual ICollection<GameBlacklist> Blacklist { get; set; } = [];
 
-    /// <summary>
-    /// Game tags
-    /// </summary>
     [InverseProperty(nameof(GameTag.Game))]
     public virtual ICollection<GameTag> GameTags { get; set; } = [];
 
-    /// <summary>
-    /// Characters
-    /// </summary>
     [InverseProperty(nameof(Character.Game))]
     public virtual ICollection<Character> Characters { get; set; } = [];
 
-    /// <summary>
-    /// Rooms
-    /// </summary>
     [InverseProperty(nameof(Room.Game))]
     public virtual ICollection<Room> Rooms { get; set; } = [];
 
-    /// <summary>
-    /// comments (polymorphic - loaded manually via EntityId)
-    /// </summary>
-    [NotMapped]
-    public virtual ICollection<Comment> Comments { get; set; } = [];
 
-    // NOTE: Pictures navigation removed - Upload.EntityId is polymorphic without FK constraints
 
     /// <summary>
     /// Game authorization tokens

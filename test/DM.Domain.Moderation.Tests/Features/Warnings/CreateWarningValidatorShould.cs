@@ -1,21 +1,14 @@
-using System;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Warnings;
-using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
-public class CreateWarningValidatorShould : UnitTestBase
+public class CreateWarningValidatorShould
 {
-    private readonly CreateWarningValidator validator;
-
-    public CreateWarningValidatorShould()
-    {
-        validator = new CreateWarningValidator();
-    }
+    private readonly CreateWarningValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -76,22 +69,23 @@ public class CreateWarningValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    [Fact]
-    public void PassForAllValidPointValues()
+    /// <summary>
+    /// A verbal warning without points and the heaviest single warning.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(WarningPolicy.MaxPointsPerWarning)]
+    public void PassForTheBoundsOfThePoints(int points)
     {
-        // 0 = verbal warning without points, 6 = maximum single-warning severity
-        for (int points = 0; points <= 6; points++)
+        var input = new CreateWarning
         {
-            var input = new CreateWarning
-            {
-                Username = "testuser",
-                Points = points,
-                Reason = "Valid reason"
-            };
+            Username = "testuser",
+            Points = points,
+            Reason = "Valid reason"
+        };
 
-            var result = validator.TestValidate(input);
-            result.ShouldNotHaveAnyValidationErrors();
-        }
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact]
@@ -153,5 +147,24 @@ public class CreateWarningValidatorShould : UnitTestBase
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.EntityType)
             .WithErrorMessage(ValidationError.Long);
+    }
+
+    /// <summary>
+    /// The reason is rendered on the Comment surface, where [private] hides nothing, and is refused as every text
+    /// outside a game post is.
+    /// </summary>
+    [Fact]
+    public void FailWhenTheReasonCarriesAHiddenBlock()
+    {
+        var input = new CreateWarning
+        {
+            Username = "testuser",
+            Points = 2,
+            Reason = "Флуд [private]только для модераторов[/private]"
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(x => x.Reason)
+            .WithErrorMessage(PrivateBlockMarkup.DescribeSurfaceRefusal(input.Reason));
     }
 }

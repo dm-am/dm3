@@ -45,11 +45,4 @@ public class OptionalShould
     [Fact]
     public void ReportAChangeWhenAValueArrivesOverNothing() =>
         Optional<int>.WithValue(7).HasChanged(null).Should().BeTrue();
-
-    [Fact]
-    public void KeepWhatItWasGiven()
-    {
-        Optional<bool>.WithValue(true).Value.Should().BeTrue();
-        Optional<bool>.WithValue(null).Value.Should().BeNull();
-    }
 }

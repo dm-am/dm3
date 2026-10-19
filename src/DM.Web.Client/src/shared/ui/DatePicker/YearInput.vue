@@ -1,25 +1,9 @@
 <script setup lang="ts">
-/**
- * YearInput — a field for a year, four digits.
- *
- * The site's own field in place of <input type="number">, which drew the
- * browser's arrows up and down beside the year and took "e" and a minus for a
- * number. Only digits go in, four at most; on a phone the numeric keyboard
- * opens. No grid of years: a year is four digits, and the one place that asks
- * for one (a new series of a contest) is filled by an administrator who knows
- * it.
- *
- * Emits the year as a number once four digits stand between `min` and `max`,
- * null when emptied. Anything else stays in the field, and leaving the field
- * emits the reason for the consumer to show under it: "Год из четырех цифр",
- * "Не раньше 2000", "Не позже 2100". The reason clears as soon as the year is
- * right.
- *
- * The one element is the <input>, so the caller's class and id reach it, and
- * FormField sets it at the window's 52 and 15 as it sets any field.
- */
+// Digits only, four at most: <input type="number"> drew arrows and took "e" and a minus.
+// The one element is the <input>, so the caller's class and id reach it.
 import { ref, watch } from "vue";
 import { useInDialog } from "@/shared/ui/Layout/dialogContext";
+import { boundReason, reasonSayer } from "./typedField";
 
 const props = withDefaults(
   defineProps<{
@@ -57,22 +41,10 @@ const text = ref(props.modelValue === null ? "" : String(props.modelValue));
 function reasonFor(t: string): string | null {
   if (!t) return null;
   if (!/^\d{4}$/.test(t)) return "Год из четырех цифр";
-  const year = +t;
-  if (props.min !== undefined && year < props.min)
-    return `Не раньше ${props.min}`;
-  if (props.max !== undefined && year > props.max)
-    return `Не позже ${props.max}`;
-  return null;
+  return boundReason(+t, props.min, props.max, String);
 }
 
-/** The reason said last, so each change is said once. */
-const reason = ref<string | null>(null);
-
-function setReason(next: string | null) {
-  if (next === reason.value) return;
-  reason.value = next;
-  emit("reason", next);
-}
+const setReason = reasonSayer((next) => emit("reason", next));
 
 watch(
   () => props.modelValue,
@@ -130,14 +102,8 @@ function onEnter(e: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/DialogSurface" as *
+@use "@/shared/ui/DatePicker/calendar" as *
 
-// In a window, the window's field: 52 high, its text at 15 and 14 in from the
-// frame, as FormField sets a field of one line there. Said here as well, for
-// the field that does not stand right in the row of a FormField (the time
-// beside a date).
 .year-input--dialog
-  height: $dialog-control-height
-  padding: 0 $dialog-field-inset
-  font-size: $dialog-field-font-size
+  +window-field
 </style>

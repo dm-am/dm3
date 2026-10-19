@@ -20,13 +20,8 @@ namespace DM.Architecture.Tests;
 /// own, a link to the page the seed wrote, a place for "Где" and a person for "Кто".
 /// </summary>
 /// <remarks>
-/// The seed writes its payloads by hand, the way the generators of the dispatcher
-/// write theirs, and nothing on the way to the reader fails on a payload of another
-/// shape: the title stays, the link is simply not built, a field under a name the
-/// mapper does not know goes out under that name, and the columns of the list stay
-/// empty. The checks of the layout open that list on a fresh stand, so each payload
-/// is put through the mapper the list is answered with and held to the generator it
-/// copies.
+/// Nothing fails on a payload of another shape: the link is not built and the columns stay empty. Each
+/// payload goes through the list's mapper and is held to the generator it copies.
 /// </remarks>
 public class SeededNotificationsShould
 {
@@ -76,11 +71,11 @@ public class SeededNotificationsShould
         [EventType.NewBlogFromSubscribedAuthor] = new(
             "/blogs/", BlogId, "Блог: Записки мастера", "Автор: TestHonorary", []),
         [EventType.LikedTopicComment] = new(
-            "/forum-topic/", LikedTopicId, "Топик: Обсуждение", "Лайк от: Ян", []),
+            "/forum-topic/", LikedTopicId, "Топик: Обсуждение", "Отметил: Ян", []),
         [EventType.NewGameFromSubscribedAuthor] = new(
             "/game/", NewGameId, "Игра: Сага о Викингах", "Автор: Игрок_Один", []),
         [EventType.LikedGameComment] = new(
-            "/game/", LikedGameId, "Игра: Пески Времени", "Лайк от: Тест Елки", []),
+            "/game/", LikedGameId, "Игра: Пески Времени", "Отметил: Тест Елки", []),
     };
 
     /// <summary>The titles the list sorts into "Где" (parts.ts, PLACES).</summary>
@@ -91,12 +86,7 @@ public class SeededNotificationsShould
     /// Each row reads as the list shows it: a title of its own, a link to the
     /// seeded page, and exactly a place, a person and nothing else unaccounted for.
     /// </summary>
-    /// <remarks>
-    /// Read in the order the seed wrote the payload and in the reverse one. The
-    /// store keeps the column as jsonb, which does not keep the order of keys, and
-    /// the list pairs every detail with its field by walking both in order, so a
-    /// row that reads right in one order only is a row that reads right by luck.
-    /// </remarks>
+    /// <remarks>Read in both key orders: jsonb does not keep the order the list pairs details by.</remarks>
     [Fact]
     public void ReadAsTheRowsOfTheList()
     {
@@ -145,24 +135,63 @@ public class SeededNotificationsShould
         seeded.TakeWhile(n => !n.IsRead).Should().HaveCount(4,
             "the unread are the newest, as in a list nobody has opened for a day");
 
-        // A character of the reader and a liked comment of his are a draw of the
-        // seed; a topic with somebody's comment, a game and a blog of somebody
-        // else are written for every run.
+        // The reader's character and his liked comment are a draw of the seed.
         var drawn = Everything with { AcceptedCharacter = null, TopicCommentLike = null, GameCommentLike = null };
         DataSeeder.NotificationsAbout(drawn, Epoch).Count(n => !n.IsRead).Should().Be(3,
             "the facts a fixture may lack cost their rows and not the line of what is unread");
     }
 
     /// <summary>
+    /// Under the seven, the read rows of the weeks before: enough for the list to run past a page of
+    /// twenty, each a row of its own, older than the seven and carrying what its generator writes.
+    /// </summary>
+    [Fact]
+    public void RunPastAPageOfTwentyWithTheEarlierRows()
+    {
+        var comments = Enumerable.Range(1, DataSeeder.EarlierNotificationCount)
+            .Select(n => new DataSeeder.CommentFact(
+                Guid.Parse($"40000000-0000-0000-0000-{n:x12}"), Guid.Parse($"50000000-0000-0000-0000-{n:x12}"),
+                $"Топик {n}", "Ян"))
+            .ToList();
+        var newest = DataSeeder.NotificationsAbout(Everything, Epoch);
+        var earlier = DataSeeder.EarlierNotificationsAbout(comments, Epoch);
+
+        newest.Concat(earlier).Should().HaveCountGreaterThan(20,
+            "the list then takes two pages at twenty rows a page, so the size of its page shows on the stand");
+        earlier.Should().OnlyContain(n => n.IsRead, "the line of what is unread stays the seven's");
+        earlier.Should().OnlyContain(n => n.CreatedUtc < newest.Min(x => x.CreatedUtc),
+            "the list stands newest first, and these stand under the seven");
+        earlier.Should().BeInDescendingOrder(n => n.CreatedUtc);
+
+        var generated = GeneratorPayloads(EventType.NewCommentInSubscribedTopic);
+        foreach (var (notification, comment) in earlier.Zip(comments))
+        {
+            var row = AsListed(notification, notification.Metadata);
+            var because = $"the row about \"{comment.TopicTitle}\"";
+
+            row.Title.Should().NotBeNullOrEmpty(because).And.NotBe(Untitled, because);
+            row.Url.Should().StartWith("/forum-topic/", because);
+            Uri.UnescapeDataString(row.Url!["/forum-topic/".Length..]).DecodeFromReadableGuid()
+                .Should().Be(comment.TopicId, "the title leads to the topic the comment stands in: " + because);
+
+            var (places, people, rest) = Columns(row);
+            places.Should().Equal(new[] { $"Топик: {comment.TopicTitle}" }, because);
+            people.Should().Equal(new[] { "Автор: Ян" }, because);
+            rest.Should().BeEmpty(because);
+
+            using var payload = JsonDocument.Parse(notification.Metadata);
+            var keys = payload.RootElement.EnumerateObject().Select(p => p.Name.ToLowerInvariant());
+            foreach (var generatorKeys in generated)
+            {
+                keys.Should().BeEquivalentTo(generatorKeys.Select(k => k.ToLowerInvariant()), because);
+            }
+        }
+    }
+
+    /// <summary>
     /// Each payload carries the fields its generator writes, no more and no fewer.
     /// </summary>
-    /// <remarks>
-    /// The mapper above proves the payload reads; this proves it reads like the
-    /// notifications the site writes, so a field renamed in a generator leaves the
-    /// seed behind loudly rather than leaving the stand showing a row no real
-    /// notification looks like. Every generator that writes the event is asked:
-    /// a new game reaches the subscribers of its master from two of them.
-    /// </remarks>
+    /// <remarks>Every generator that writes the event is asked: a new game reaches the subscribers from two.</remarks>
     [Fact]
     public void CarryThePayloadItsGeneratorWrites()
     {
@@ -206,11 +235,7 @@ public class SeededNotificationsShould
 
     /// <summary>
     /// The details of a row sorted into the columns of the list, the way
-    /// src/DM.Web.Client/src/entities/notification/lib/parts.ts sorts them: each
-    /// detail is paired with the payload field it was written from by walking both
-    /// in order, a field ending in "Username" other than the addressee's own is a
-    /// person, and the title of a game, room, topic, board, blog or publication is
-    /// a place.
+    /// src/DM.Web.Client/src/entities/notification/lib/parts.ts sorts them.
     /// </summary>
     private static (List<string> Places, List<string> People, List<string> Others) Columns(Notification row)
     {

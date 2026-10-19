@@ -1,5 +1,3 @@
-using System;
-
 namespace DM.Domain.Core.Comments;
 
 /// <summary>
@@ -13,7 +11,7 @@ public class CreateComment
     public Guid EntityId { get; set; }
 
     /// <summary>
-    /// Comment text (BBCode or markdown)
+    /// Comment text (BBCode)
     /// </summary>
     public string Text { get; set; } = null!;
 }

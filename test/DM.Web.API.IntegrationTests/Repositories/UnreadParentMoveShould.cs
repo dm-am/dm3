@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.UnreadCounters;
 using DM.Infrastructure.Persistence;
@@ -16,15 +13,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// A topic moved to another board takes its own unread markers and no others.
 /// </summary>
 /// <remarks>
-/// A marker names the entity it belongs to and the container it is counted
-/// under. Moving one used to select by the container, so moving a single topic
-/// re-parented every marker of the board it left: the board a reader was on
-/// stopped counting anything, and the board it moved to started counting topics
-/// that were never there. Nothing said so - the write answered without an error
-/// and the numbers were simply wrong from then on.
-///
-/// Run against the container Postgres because the write is a set-based
-/// ExecuteUpdate: the statement it produces is what decides which rows move.
+/// A marker names its entity and its container, and the move selects by the entity. Against the container Postgres:
+/// the set-based ExecuteUpdate decides which rows move.
 /// </remarks>
 public class UnreadParentMoveShould : IntegrationTestBase
 {

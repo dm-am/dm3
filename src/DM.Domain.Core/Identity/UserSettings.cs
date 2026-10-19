@@ -1,12 +1,8 @@
-using System;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Identity;
 
-/// <summary>
-/// User settings
-/// </summary>
 public class UserSettings
 {
     /// <summary>
@@ -20,22 +16,17 @@ public class UserSettings
     public Theme Theme { get; set; }
 
     /// <summary>
-    /// Paging settings
+    /// How many rows, posts, comments or messages a page of every paged list holds
     /// </summary>
-    public PagingSettings Paging { get; set; } = null!;
+    /// <remarks>One number for every list, as on DM2: the choices are PagingPolicy.AllowedPageSizes.</remarks>
+    public int PageSize { get; set; }
 
     /// <summary>
     /// IANA name of the reader's time zone ("Europe/Moscow"), for the letters.
     /// </summary>
     /// <remarks>
-    /// The site formats a date in the browser, which knows where its reader is.
-    /// A letter has no browser, so this is where the zone comes from. Null means
-    /// UTC, which is what every account had before there was a zone to keep.
-    ///
-    /// Written at registration, and after that only when the reader says so -
-    /// never by a login. A login that moves it is a login the account owner did
-    /// not necessarily make, and the letter warning them about it would then be
-    /// stamped in the hours of whoever it warns about.
+    /// Null means UTC. Never written by a login: the letter warning about a login
+    /// would then be stamped in the hours of whoever it warns about.
     /// </remarks>
     public string? TimeZoneId { get; set; }
 
@@ -44,20 +35,13 @@ public class UserSettings
     /// </summary>
     /// <remarks>
     /// A fresh instance per call, not a shared one: this object is handed to real
-    /// request identities whenever a user has no settings document, and both it and
-    /// its <see cref="PagingSettings"/> are mutable — one request writing to it would
-    /// change the defaults every other request sees.
+    /// request identities whenever a user has no settings document, and it is
+    /// mutable: one request writing to it would change the defaults every other
+    /// request sees.
     /// </remarks>
     public static UserSettings Default => new()
     {
-        Paging = new PagingSettings
-        {
-            TopicsPerPage = PagingPolicy.DefaultPageSize,
-            CommentsPerPage = PagingPolicy.DefaultPageSize,
-            PostsPerPage = PagingPolicy.DefaultPageSize,
-            MessagesPerPage = PagingPolicy.DefaultPageSize,
-            EntitiesPerPage = PagingPolicy.DefaultPageSize
-        },
+        PageSize = PagingPolicy.DefaultPageSize,
         Theme = Theme.Light
     };
 }

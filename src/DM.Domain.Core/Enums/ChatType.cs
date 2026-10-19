@@ -1,8 +1,5 @@
 namespace DM.Domain.Core.Enums;
 
-/// <summary>
-/// Chat type
-/// </summary>
 public enum ChatType
 {
     /// <summary>

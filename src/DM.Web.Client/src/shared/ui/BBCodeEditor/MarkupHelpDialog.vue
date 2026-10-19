@@ -1,29 +1,17 @@
 <script setup lang="ts">
-/**
- * The help of the markup editor, opened by its "help" button: a window of the
- * site with the table DM2 kept in TagHelp.aspx. A row to a tag, in the order of
- * the toolbar: the tag, what the author types and what a reader gets for it,
- * and the keys. The typed half is text as the grammar reads it; the other half
- * is the page's own markup, drawn and opened the way a post is (markupHelp.ts).
- *
- * The rows are the tags of the surface the editor writes for: [private] in a
- * game post only, [mod] for a moderator where the surface reads it. The "load"
- * row and the line about Ctrl+Enter are there only where the editor keeps a
- * draft and where a parent sends on that chord.
- */
-import { ref, watch } from "vue";
+// DM2's TagHelp.aspx: the typed half is text as the grammar reads it, the shown half the server's markup.
+import { computed, ref, watch } from "vue";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
-import {
-  cleanupBbcodeInteractive,
-  initBbcodeInteractive,
-} from "@/shared/lib/utils/bbcodeInteractive";
+import { cleanupBbcodeInteractive } from "@/shared/lib/utils/bbcodeCleanup";
+import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
 import {
   HELP_ENTRIES,
   chordLabel,
   typedPieces,
   type HelpEntry,
 } from "./lib/markupHelp";
+import { DRAFT_KEPT_FOR } from "./lib/editorDraft";
 
 const props = defineProps<{
   modelValue: boolean;
@@ -39,22 +27,15 @@ const emit = defineEmits<{
   (e: "update:modelValue", open: boolean): void;
 }>();
 
-const entries = (): HelpEntry[] =>
-  HELP_ENTRIES.filter((entry) => props.tags.includes(entry.tag));
+const entries = computed<HelpEntry[]>(() =>
+  HELP_ENTRIES.filter((entry) => props.tags.includes(entry.tag)),
+);
 
-/**
- * Whether the note of an entry goes under this example: under the last one,
- * in its own cell, so every row keeps the four cells of the table.
- */
+/** The note goes in the cell of the last example, so every row keeps its four cells. */
 const notedAt = (entry: HelpEntry, index: number): boolean =>
   Boolean(entry.note) && index === entry.examples.length - 1;
 
-/**
- * An example is not a destination. Its links point at made-up addresses and a
- * made-up profile, and one followed from here would take the reader off the
- * text being written; so a click on one does nothing and Tab passes it by. The
- * heads of a spoiler and of 18+ content stay live: opening them is the point.
- */
+/** Example links point at made-up addresses: a click does nothing. Spoiler and 18+ heads stay live. */
 function holdExampleLinks(event: MouseEvent) {
   const anchor = (event.target as Element | null)?.closest?.("a[href]");
   if (anchor && !anchor.matches(".spoiler-head, .nsfw-head")) {
@@ -64,9 +45,7 @@ function holdExampleLinks(event: MouseEvent) {
 
 const table = ref<HTMLTableElement | null>(null);
 
-// The table is in the window's content, which exists only while the window
-// is open. It is wired when it appears and let go when it leaves: a spoiler
-// head registers with the page's "Развернуть все" and has to unregister.
+// Wired while the table is there: a spoiler head registers with "Развернуть все" and has to unregister.
 watch(
   table,
   (element, previous) => {
@@ -88,9 +67,7 @@ watch(
 </script>
 
 <template>
-  <!-- The measure of the editor's window (920): the typed markup and the
-       result stand side by side, and at 580 either the widest example or its
-       result had to break into scraps. -->
+  <!-- The editor's window (920): at 580 the widest example broke into scraps. -->
   <Dialog
     editor
     :model-value="modelValue"
@@ -112,7 +89,7 @@ watch(
         </tr>
       </thead>
       <tbody
-        v-for="entry in entries()"
+        v-for="entry in entries"
         :key="entry.tag"
         class="help-entry"
         :data-tag="entry.tag"
@@ -156,7 +133,8 @@ watch(
           <td class="help-example">
             <p class="help-note help-note--alone">
               Кнопка на панели, а не тег. Возвращает в поле черновик, который
-              редактор сам сохраняет в этом браузере и хранит неделю.
+              редактор сам сохраняет в этом браузере и хранит
+              {{ DRAFT_KEPT_FOR }}.
             </p>
           </td>
           <td class="help-shown"></td>
@@ -173,14 +151,7 @@ watch(
 <style scoped lang="sass">
 @use "@/assets/styles/Tables" as *
 
-// The table of DM2's help, in the site's own: the rule of a table round every
-// cell, the cells in the fill of an element, the heading row one step darker.
-// A tag is named in the colour and the capitals of a heading, as DM2 named it.
-// Every row has its four cells, each closed by its own rules: an example is a
-// row, the typed markup beside what a reader gets for it, and a note stands in
-// the cell of the example it follows. A note laid across two columns ended the
-// rule between them halfway, and its text ran over the line of the cells above.
-
+// A note stands in the cell of its example: laid across two columns, it broke the rule between them.
 .help-lead
   margin: 0 0 $medium
   font-size: $secondary-font-size
@@ -207,13 +178,11 @@ watch(
     font-weight: 700
     white-space: nowrap
 
-// The typed and the shown halves share the width the tag and the keys leave
-// them. Sized by their content, the half that carries the notes took most of
-// it, and a result as short as the line of a hidden block's readers broke into
-// three.
+// Sized by content, the half with the notes took most of the width.
 .help-half
   width: 50%
 
+// Set as the headings of the site are (PageTitle): uppercase, bold, 0.5px apart.
 .help-tag
   font-weight: 700
   text-transform: uppercase
@@ -223,18 +192,11 @@ watch(
   .help-table &
     color: $heading
 
-// The markup as the author types it and sees it in the [bbcode] mode, in the
-// text's own face, line breaks kept. Courier New set the Cyrillic of every
-// example thin and wide, and the column read worse than the one beside it. It
-// breaks between two tags first; a piece wider than a narrow window's column
-// breaks where it has to rather than push the table out of the window.
+// The text's own face: Courier New set the Cyrillic thin and wide. Breaks anywhere rather than push the table out.
 .help-typed
   white-space: pre-wrap
   overflow-wrap: anywhere
 
-// What the examples do not show by themselves, under the last of them, in the
-// muted colour of a hint. The draft button has no example, and its word about
-// it is the whole cell, in the colour of the text.
 .help-note
   margin: $minor 0 0
   color: $text-muted
@@ -249,9 +211,7 @@ watch(
 kbd
   font: inherit
 
-// The spacing of a result is its own: the first block of a spoiler or a quote
-// starts with the margin it has in a post, and here it would push the result
-// under the line of its example.
+// A result's first block would keep the margin it has in a post and sink under its example.
 .help-shown
   > :deep(:first-child)
     margin-top: 0
@@ -266,75 +226,4 @@ kbd
 
   kbd
     color: $text
-
-// A window narrower than a tablet's has no room for four columns: at 700px
-// the halves were 180px wide and an address broke inside its closing tag. An
-// entry is then a box of lines, its tag and keys on the first, then each
-// example, typed over its result, and the note under the last result. The
-// heading row goes: the typed and the shown halves say what they are by their
-// faces.
-@media (max-width: $bp-tablet)
-  .help-table
-    &,
-    tbody,
-    tr,
-    th,
-    td
-      display: block
-
-    thead
-      display: none
-
-    tbody
-      padding: $small $table-cell-padding-h
-      border: 1px solid $border
-      background-color: $bg-element
-
-      & + tbody
-        border-top: 0
-
-    tr
-      display: flex
-      flex-wrap: wrap
-      align-items: baseline
-      column-gap: $small
-
-      & + tr
-        margin-top: $small
-
-    th,
-    td
-      padding: 0
-      border: 0
-
-    // The cell of an example gives its typed markup and its note to the line
-    // of the entry, so the result can stand between them.
-    .help-example
-      display: contents
-
-    .help-tag
-      flex: 1 1 auto
-
-    .help-keys
-      order: 1
-
-    .help-typed,
-    .help-note--alone
-      order: 2
-      flex: 0 0 100%
-
-    .help-shown
-      order: 3
-      flex: 0 0 100%
-      margin-top: $tiny
-
-      &:empty
-        display: none
-
-    .help-note
-      order: 4
-      flex: 0 0 100%
-
-    .help-note--alone
-      order: 2
 </style>

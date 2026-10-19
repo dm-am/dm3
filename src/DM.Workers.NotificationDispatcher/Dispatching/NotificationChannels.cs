@@ -7,9 +7,7 @@ namespace DM.Workers.NotificationDispatcher.Dispatching;
 /// Whether one channel of one reader carries one category.
 /// </summary>
 /// <remarks>
-/// A reader with no settings row is a reader on the defaults, and every channel
-/// the dispatcher sends through is opt-in, which is why an absent preference
-/// answers no rather than yes.
+/// Every channel is opt-in, so an absent preference answers no.
 /// </remarks>
 internal static class NotificationChannels
 {

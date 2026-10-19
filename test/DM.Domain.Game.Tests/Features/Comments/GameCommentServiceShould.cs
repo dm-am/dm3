@@ -15,10 +15,11 @@ using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Blacklists;
 using GameDto = DM.Domain.Game.Features.Games.Game;
+using DM.Domain.Game.Tests.Dsl;
 using DM.Testing.Dsl;
 using DM.Testing;
-using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
@@ -29,14 +30,14 @@ namespace DM.Domain.Game.Tests.Features.Comments;
 
 public class GameCommentServiceShould : UnitTestBase
 {
-    private readonly IGameService _gameService;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGameCommentRepository _repository;
-    private readonly IUnreadCountersRepository _countersRepository;
-    private readonly IEventProducer _producer;
-    private readonly GameCommentService _service;
-    private readonly Guid _currentUserId;
+    private readonly IGameService gameService;
+    private readonly IIntentionManager intentionManager;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IGameCommentRepository repository;
+    private readonly IUnreadCountersRepository countersRepository;
+    private readonly IEventProducer producer;
+    private readonly GameCommentService service;
+    private readonly Guid currentUserId;
 
     public GameCommentServiceShould()
     {
@@ -48,12 +49,12 @@ public class GameCommentServiceShould : UnitTestBase
         updateValidator.ValidateAsync(Arg.Any<ValidationContext<UpdateComment>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
 
-        _gameService = Mock<IGameService>();
-        _intentionManager = Mock<IIntentionManager>();
+        gameService = Mock<IGameService>();
+        intentionManager = Mock<IIntentionManager>();
 
-        _currentUserId = Guid.NewGuid();
-        _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
+        currentUserId = Guid.NewGuid();
+        identityProvider = Mock<IIdentityProvider>();
+        identityProvider.Current.Returns(Identities.User(currentUserId, UserRole.RegularUser));
 
         var dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
@@ -61,25 +62,24 @@ public class GameCommentServiceShould : UnitTestBase
         var guidFactory = Mock<IGuidFactory>();
         guidFactory.Create().Returns(Guid.NewGuid());
 
-        _repository = Mock<IGameCommentRepository>();
-        _countersRepository = Mock<IUnreadCountersRepository>();
-        _countersRepository.IncrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>()).Returns(Task.CompletedTask);
+        repository = Mock<IGameCommentRepository>();
+        countersRepository = Mock<IUnreadCountersRepository>();
+        countersRepository.IncrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>()).Returns(Task.CompletedTask);
 
-        _producer = Mock<IEventProducer>();
-        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        producer = Mock<IEventProducer>();
+        producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
-        _service = new GameCommentService(
+        service = new GameCommentService(
             createValidator,
             updateValidator,
-            _gameService,
-            _intentionManager,
-            _identityProvider,
+            gameService,
+            intentionManager,
+            identityProvider,
             dateTimeProvider,
             guidFactory,
-            _repository,
-            _countersRepository,
-            _producer,
-            new TagNamesAsTyped());
+            repository,
+            countersRepository,
+            producer);
     }
 
     /// <summary>
@@ -90,17 +90,17 @@ public class GameCommentServiceShould : UnitTestBase
     public async Task RefuseABlacklistedUserInTheWordsOfTheList()
     {
         var gameId = Guid.NewGuid();
-        _gameService.GetAsync(gameId).Returns(BlacklistingGame(gameId, _currentUserId));
-        _intentionManager
+        gameService.GetAsync(gameId).Returns(BlacklistingGame(gameId, currentUserId));
+        intentionManager
             .When(manager => manager.ThrowIfForbidden(GameIntention.CreateComment, Arg.Any<GameDto>()))
             .Do(_ => throw new IntentionManagerException(
-                Identities.User(_currentUserId).User, GameIntention.CreateComment));
+                Identities.User(currentUserId).User, GameIntention.CreateComment));
 
-        var act = async () => await _service.CreateAsync(new CreateComment { EntityId = gameId, Text = "Test comment" });
+        var act = async () => await service.CreateAsync(new CreateComment { EntityId = gameId, Text = "Test comment" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromGame);
-        await _repository.DidNotReceive().Create(Arg.Any<CreateGameCommentEntity>());
+        await repository.DidNotReceive().Create(Arg.Any<CreateGameCommentEntity>());
     }
 
     /// <summary>
@@ -115,16 +115,16 @@ public class GameCommentServiceShould : UnitTestBase
             Id = Guid.NewGuid(),
             EntityId = gameId,
             Text = "Original text",
-            Author = new GeneralUser { UserId = _currentUserId }
+            Author = new GeneralUser { UserId = currentUserId }
         };
-        _repository.Get(comment.Id).Returns(comment);
-        _gameService.GetAsync(gameId).Returns(BlacklistingGame(gameId, _currentUserId));
+        repository.Get(comment.Id).Returns(comment);
+        gameService.GetAsync(gameId).Returns(BlacklistingGame(gameId, currentUserId));
 
-        var act = async () => await _service.UpdateAsync(new UpdateComment { CommentId = comment.Id, Text = "Updated" });
+        var act = async () => await service.UpdateAsync(new UpdateComment { CommentId = comment.Id, Text = "Updated" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromGame);
-        await _repository.DidNotReceive().Update(Arg.Any<UpdateGameCommentEntity>());
+        await repository.DidNotReceive().Update(Arg.Any<UpdateGameCommentEntity>());
     }
 
     /// <summary>
@@ -143,13 +143,13 @@ public class GameCommentServiceShould : UnitTestBase
             Text = "Original text",
             Author = new GeneralUser { UserId = authorId }
         };
-        _repository.Get(comment.Id).Returns(comment);
-        _repository.Update(Arg.Any<UpdateGameCommentEntity>()).Returns(comment);
-        _gameService.GetAsync(gameId).Returns(BlacklistingGame(gameId, authorId));
+        repository.Get(comment.Id).Returns(comment);
+        repository.Update(Arg.Any<UpdateGameCommentEntity>()).Returns(comment);
+        gameService.GetAsync(gameId).Returns(BlacklistingGame(gameId, authorId));
 
-        await _service.UpdateAsync(new UpdateComment { CommentId = comment.Id, Text = "Updated" });
+        await service.UpdateAsync(new UpdateComment { CommentId = comment.Id, Text = "Updated" });
 
-        await _repository.Received(1).Update(Arg.Any<UpdateGameCommentEntity>());
+        await repository.Received(1).Update(Arg.Any<UpdateGameCommentEntity>());
     }
 
     private static GameDto BlacklistingGame(Guid gameId, Guid userId) => new()
@@ -164,18 +164,13 @@ public class GameCommentServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var createComment = new CreateComment { EntityId = gameId, Text = "Test comment" };
-        var game = new GameDto
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
-            BlacklistedUsers = Array.Empty<BlacklistedUser>()
-        };
-        _gameService.GetAsync(gameId).Returns(game);
-        _repository.Create(Arg.Any<CreateGameCommentEntity>()).Returns(new Comment { Id = Guid.NewGuid() });
+        var game = GameBuilder.Bare(gameId);
+        gameService.GetAsync(gameId).Returns(game);
+        repository.Create(Arg.Any<CreateGameCommentEntity>()).Returns(new Comment { Id = Guid.NewGuid() });
 
-        await _service.CreateAsync(createComment);
+        await service.CreateAsync(createComment);
 
-        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.CreateComment, game);
+        intentionManager.Received(1).ThrowIfForbidden(GameIntention.CreateComment, game);
     }
 
     [Fact]
@@ -184,18 +179,13 @@ public class GameCommentServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var createComment = new CreateComment { EntityId = gameId, Text = "Test comment" };
-        var game = new GameDto
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
-            BlacklistedUsers = Array.Empty<BlacklistedUser>()
-        };
-        _gameService.GetAsync(gameId).Returns(game);
-        _repository.Create(Arg.Any<CreateGameCommentEntity>()).Returns(new Comment { Id = commentId });
+        var game = GameBuilder.Bare(gameId);
+        gameService.GetAsync(gameId).Returns(game);
+        repository.Create(Arg.Any<CreateGameCommentEntity>()).Returns(new Comment { Id = commentId });
 
-        await _service.CreateAsync(createComment);
+        await service.CreateAsync(createComment);
 
-        await _producer.Received(1).SendAsync(EventType.NewGameComment, Arg.Any<Guid>());
+        await producer.Received(1).SendAsync(EventType.NewGameComment, Arg.Any<Guid>());
     }
 
     /// <summary>
@@ -207,20 +197,16 @@ public class GameCommentServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var query = new CommentsQuery { Skip = 0 };
-        var game = new GameDto
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" }
-        };
-        _gameService.GetAsync(gameId).Returns(game);
-        _repository.Count(gameId, Arg.Any<CommentsQuery>(), Arg.Any<IReadOnlyCollection<Guid>?>()).Returns(0);
-        _repository.Get(gameId, Arg.Any<CommentsQuery>(), Arg.Any<PagingData>(), Arg.Any<IReadOnlyCollection<Guid>?>())
+        var game = GameBuilder.Bare(gameId);
+        gameService.GetAsync(gameId).Returns(game);
+        repository.Count(gameId, Arg.Any<CommentsQuery>(), Arg.Any<IReadOnlyCollection<Guid>?>()).Returns(0);
+        repository.Get(gameId, Arg.Any<CommentsQuery>(), Arg.Any<PagingData>(), Arg.Any<IReadOnlyCollection<Guid>?>())
             .Returns(Array.Empty<Comment>());
 
-        await _service.GetAsync(gameId, query);
+        await service.GetAsync(gameId, query);
 
-        await _gameService.Received(1).GetAsync(gameId);
-        _intentionManager.ReceivedCalls().Should().BeEmpty();
+        await gameService.Received(1).GetAsync(gameId);
+        intentionManager.ReceivedCalls().Should().BeEmpty();
     }
 
     [Fact]
@@ -229,29 +215,27 @@ public class GameCommentServiceShould : UnitTestBase
         var commentId = Guid.NewGuid();
         var updateComment = new UpdateComment { CommentId = commentId, Text = "Updated comment" };
         var comment = new Comment { Id = commentId, Text = "Original comment" };
-        _repository.Get(commentId).Returns(comment);
-        _repository.Update(Arg.Any<UpdateGameCommentEntity>()).Returns(comment);
+        repository.Get(commentId).Returns(comment);
+        repository.Update(Arg.Any<UpdateGameCommentEntity>()).Returns(comment);
 
-        await _service.UpdateAsync(updateComment);
+        await service.UpdateAsync(updateComment);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Edit, comment);
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Edit, comment);
     }
 
     /// <summary>
     /// Reading and deleting a comment that is not there answer with the same
-    /// code. They used to disagree inside this one service: Gone on the read and
-    /// NotFound on the delete, which made the status a property of the verb
-    /// instead of a property of the resource.
+    /// code: the status is a property of the resource, not of the verb.
     /// </summary>
     [Fact]
     public async Task AnswerNotFoundForAMissingCommentOnBothReadAndDelete()
     {
         var commentId = Guid.NewGuid();
-        _repository.Get(commentId).Returns((Comment?)null);
-        _repository.GetForDelete(commentId).Returns((GameCommentToDelete?)null);
+        repository.Get(commentId).Returns((Comment?)null);
+        repository.GetForDelete(commentId).Returns((GameCommentToDelete?)null);
 
-        var read = async () => await _service.GetAsync(commentId);
-        var delete = async () => await _service.DeleteAsync(commentId);
+        var read = async () => await service.GetAsync(commentId);
+        var delete = async () => await service.DeleteAsync(commentId);
 
         await read.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -264,17 +248,17 @@ public class GameCommentServiceShould : UnitTestBase
     {
         var commentId = Guid.NewGuid();
         var comment = new GameCommentToDelete { Id = commentId, EntityId = Guid.NewGuid() };
-        _repository.GetForDelete(commentId).Returns(comment);
+        repository.GetForDelete(commentId).Returns(comment);
         DeleteGameCommentEntity? deleted = null;
-        _repository.Delete(Arg.Do<DeleteGameCommentEntity>(entity => deleted = entity))
+        repository.Delete(Arg.Do<DeleteGameCommentEntity>(entity => deleted = entity))
             .Returns(true);
 
-        await _service.DeleteAsync(commentId);
+        await service.DeleteAsync(commentId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Delete, Arg.Any<Comment>());
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Delete, Arg.Any<Comment>());
         // The author of the removal travels with it: Comment is ISoftDeletable and the
         // column stays empty unless the service hands the identity over.
-        deleted!.DeletedByUserId.Should().Be(_currentUserId);
+        deleted!.DeletedByUserId.Should().Be(currentUserId);
         deleted.DeletedUtc.Should().NotBe(default);
     }
 
@@ -287,19 +271,19 @@ public class GameCommentServiceShould : UnitTestBase
         var commentId = Guid.NewGuid();
         var gameId = Guid.NewGuid();
         var createdUtc = DateTimeOffset.UtcNow.AddHours(-2);
-        _repository.GetForDelete(commentId).Returns(new GameCommentToDelete
+        repository.GetForDelete(commentId).Returns(new GameCommentToDelete
         {
             Id = commentId,
             EntityId = gameId,
             CreatedUtc = createdUtc
         });
-        _repository.Delete(Arg.Any<DeleteGameCommentEntity>()).Returns(true);
+        repository.Delete(Arg.Any<DeleteGameCommentEntity>()).Returns(true);
 
-        await _service.DeleteAsync(commentId);
+        await service.DeleteAsync(commentId);
 
-        await _countersRepository.Received(1).DecrementAsync(
+        await countersRepository.Received(1).DecrementAsync(
             gameId, UnreadEntryType.Message, createdUtc);
-        await _producer.Received(1).SendAsync(EventType.DeletedGameComment, commentId);
+        await producer.Received(1).SendAsync(EventType.DeletedGameComment, commentId);
     }
 
     /// <summary>
@@ -315,18 +299,18 @@ public class GameCommentServiceShould : UnitTestBase
     public async Task LeaveTheCountersToTheRemovalThatTookTheComment()
     {
         var commentId = Guid.NewGuid();
-        _repository.GetForDelete(commentId).Returns(new GameCommentToDelete
+        repository.GetForDelete(commentId).Returns(new GameCommentToDelete
         {
             Id = commentId,
             EntityId = Guid.NewGuid(),
             CreatedUtc = DateTimeOffset.UtcNow
         });
-        _repository.Delete(Arg.Any<DeleteGameCommentEntity>()).Returns(false);
+        repository.Delete(Arg.Any<DeleteGameCommentEntity>()).Returns(false);
 
-        await _service.DeleteAsync(commentId);
+        await service.DeleteAsync(commentId);
 
-        await _countersRepository.DidNotReceive().DecrementAsync(
+        await countersRepository.DidNotReceive().DecrementAsync(
             Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<DateTimeOffset>());
-        await _producer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
+        await producer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 }

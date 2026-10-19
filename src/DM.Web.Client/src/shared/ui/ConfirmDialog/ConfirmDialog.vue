@@ -1,36 +1,6 @@
 <script setup lang="ts">
-/**
- * ConfirmDialog — the window that asks before an action the reader cannot take
- * back: a question for a heading, one sentence naming the consequence, and the
- * two ways out standing side by side.
- *
- * It is drawn as a guest card, because a confirmation is the same kind of
- * object as the login dialog: a short card standing over a dimmed page, with
- * the page's own fill, no frame, no shadow and a cross in the corner. The card,
- * the cross, the heading and the row of buttons are the window surface of
- * _DialogSurface.sass, which the window with a form (Layout/Dialog.vue) draws
- * too, so the two windows of the site cannot drift apart.
- *
- * Nothing in the window is red but a refusal. The danger is carried by the
- * words — the heading asks with the verb of the button, the sentence says what
- * is lost — and not by a fill, a border or a caption, so the reader has to read
- * the question rather than recognise a colour. Owner's call, 21 September 2026.
- *
- * The buttons are the site's own: the main action is the primary of
- * shared/ui/Button, the way out is a plain one, and the row is two equal
- * halves at the window's control height. Order follows Form.vue, the action
- * first and "Отмена" after it. The caret starts on "Отмена", the step that
- * loses nothing: a reader who presses Enter without reading has taken the way
- * out, not the action.
- *
- * Handed an `action`, the window runs it (useDialogAction): it stays open until
- * the answer and is shut while it waits, a refusal stands in a line over the
- * row, and it closes on success alone. Without one it only says `confirm`,
- * and the caller closes it: the guard of unsaved input sends no request.
- *
- * A minimal focus trap keeps Tab within the dialog while it is open and
- * restores focus to the previously-focused element on close (useDialogShell).
- */
+// Nothing in the window is red but a refusal: the danger is in the words, read rather than recognised.
+// The caret starts on "Отмена": Enter pressed without reading takes the way out.
 import { computed, ref, watch } from "vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import { useDialogShell } from "@/shared/lib/composables/useDialogShell";
@@ -46,7 +16,6 @@ const props = withDefaults(
     title: string;
     message?: string;
     confirmLabel?: string;
-    cancelLabel?: string;
     /**
      * What the main button does: a request that resolves to the client's
      * `{ data, error }`, or a function that asks no server. The window runs
@@ -58,25 +27,14 @@ const props = withDefaults(
      * ("Не удалось удалить файл"). The server's own sentence wins over it.
      */
     failure?: string;
-    /**
-     * The caller runs a request of its own after `confirm`: the window is shut
-     * the way it is shut while its own action runs.
-     */
-    loading?: boolean;
-    /**
-     * Drawn where it is written and not carried to <body>: the question over a
-     * window of the vue-final-modal tier, whose focus trap keeps the caret
-     * inside that window and would take it back from a card outside it.
-     */
+    /** Not carried to <body>: over a vue-final-modal window, whose focus trap would take the caret back. */
     inline?: boolean;
   }>(),
   {
     message: "",
     confirmLabel: "Подтвердить",
-    cancelLabel: "Отмена",
     action: undefined,
     failure: undefined,
-    loading: false,
     inline: false,
   },
 );
@@ -110,21 +68,15 @@ const request = useDialogAction({
   failure: () => props.failure,
   spare: () => cross.value,
 });
-const { refusal, waiting } = request;
-
-/** Every way out is shut, and the main button is busy. */
-const busy = computed(() => request.busy.value || props.loading);
+const { busy, refusal, waiting } = request;
 
 const shell = useDialogShell({
   show: computed(() => props.show),
   container,
-  // "Отмена" is found inside the container rather than held in a template ref,
-  // because the row is drawn by the site's Button component and a ref on a
-  // component is the instance, not the element.
+  // Found by class: a ref on the Button component is the instance, not the element.
   initialFocus: () =>
     container.value?.querySelector<HTMLButtonElement>(".dialog-btn-cancel"),
   onDismiss: () => handleCancel(),
-  holdPage: true,
 });
 
 // A window that opens again starts from a clean slate: the refusal of the
@@ -159,17 +111,8 @@ function handleCancel() {
         @click="shell.handleBackdropClick"
         @keydown="shell.handleKeydown"
       >
-        <!-- tabindex="-1" is not decoration. The Escape listener sits on the
-             backdrop, and a click on the dialog's own heading or sentence moves
-             the document focus to <body>; the keydown then fires on body, which
-             is the backdrop's ANCESTOR, and never reaches the listener — so
-             Escape stopped closing the dialog the reader was looking at. A
-             container that can hold focus itself takes that click instead, and
-             the event has a path back down.
-
-             role="alertdialog" and not "dialog": this window interrupts the
-             page to state a consequence and take a decision, which is the role
-             a screen reader announces together with the text inside it. -->
+        <!-- tabindex="-1": a click on the text would move focus to <body>, above the backdrop's Escape
+             listener. alertdialog: the window interrupts to state a consequence and take a decision. -->
         <div
           ref="container"
           class="dialog-container"
@@ -178,8 +121,6 @@ function handleCancel() {
           aria-modal="true"
           :aria-label="title"
         >
-          <!-- Empty on purpose: the two bars of the cross are drawn by the
-               stylesheet, and a glyph inside would stand behind them. -->
           <button
             ref="cross"
             type="button"
@@ -212,7 +153,7 @@ function handleCancel() {
               :disabled="busy"
               @click="handleCancel"
             >
-              {{ cancelLabel }}
+              Отмена
             </Button>
           </div>
         </div>
@@ -225,15 +166,9 @@ function handleCancel() {
 @use "@/assets/styles/ZIndex" as *
 @use "@/assets/styles/DialogSurface" as *
 
-// The dimmed page under the window, in the token the guest dialogs dim with
-// (.vfm__overlay.dialog-overlay, ThemeVariables.css) and with no blur, for the
-// same reason they have none: the question is about something the reader was
-// just looking at, and a blur takes it away while he decides.
-//
-// It is also the frame that scrolls a card taller than the screen, the way the
-// window with a form scrolls: the card centres itself with `margin: auto`,
-// which starts one that does not fit at the top instead of cutting it at both
-// ends, and the padding is the edge the card keeps from the screen.
+$confirm-step: $dialog-gutter * .5
+
+// No blur: the question is about what the reader was just looking at. margin: auto starts a tall card at the top.
 .dialog-backdrop
   position: fixed
   inset: 0
@@ -245,19 +180,13 @@ function handleCancel() {
   overscroll-behavior: contain
   background-color: $overlay-bg
 
-// The card of the window surface at the compact measure, the only one this
-// window has: what it holds is a question and a single sentence, so there is
-// nothing for a second width to do.
 .dialog-container
   +dialog-card
   display: flex
   flex-direction: column
-  // The rhythm of the card: this gap between the question and the sentence
-  // under it, and this gap plus the row's own margin before the buttons.
-  // Written as a gap rather than as margins on the blocks, so a window with no
-  // sentence in it keeps the same distance from the question to the row
-  // instead of growing a strip of nothing where the sentence would have been.
-  gap: 12px
+  // A gap, not margins: a window with no sentence keeps the same distance to the row. Half the card's
+  // gutter: the parts of a confirmation stand closer to each other than to its edge.
+  gap: $confirm-step
   width: $dialog-width-compact
   margin: auto
   text-align: center
@@ -265,34 +194,27 @@ function handleCancel() {
 .dialog-close
   +dialog-close
 
-// The question, in the heading style of the surface and centred, as the
-// sentence under it is. The reserve is taken on both sides, so the centring
-// stays honest against the cross and a long question wraps before it runs
-// under it.
+// The reserve on both sides keeps the centring honest against the cross.
 .dialog-title
   +dialog-title
-  padding: 0 $dialog-close-reserve
+  padding: 0 $dialog-gutter
 
-// One sentence, naming what the action costs.
 .dialog-message
   margin: 0
   color: $text
   line-height: 1.5
 
-// The refusal, one more line of the card's rhythm and centred with the rest.
 .dialog-refusal
   +dialog-refusal
 
 .dialog-actions
   +dialog-actions
-  margin-top: 12px
+  margin-top: $confirm-step
 
-// The window fades in and out and does nothing else. A card that also scaled
-// drew attention to its own arrival, which is the one thing a question about
-// losing something does not need.
+// Fades only: a card that also scaled drew attention to its own arrival.
 .dialog-enter-active,
 .dialog-leave-active
-  transition: opacity 0.2s ease
+  transition: opacity $transition-slow
   @media (prefers-reduced-motion: reduce)
     transition: none
 

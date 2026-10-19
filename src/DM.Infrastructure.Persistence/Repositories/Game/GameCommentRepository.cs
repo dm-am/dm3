@@ -5,13 +5,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Comments;
-using DM.Domain.Game.Features.Games;
-using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Comments;
 using Microsoft.EntityFrameworkCore;
-using CommentDal = DM.Infrastructure.Persistence.Entities.Shared.Comment;
+using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -68,7 +65,7 @@ internal class GameCommentRepository : IGameCommentRepository
             g => g.GameId == createComment.GameId,
             g => g.CommentCount,
             createComment.GameId,
-            new CommentDal
+            new DbComment
             {
                 CommentId = createComment.CommentId,
                 EntityId = createComment.GameId,

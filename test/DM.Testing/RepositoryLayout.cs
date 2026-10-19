@@ -6,25 +6,7 @@ namespace DM.Testing;
 /// <summary>
 /// The checkout the tests read the tree out of.
 /// </summary>
-/// <remarks>
-/// Whole tiers of this suite assert about the tree itself: sources, documents,
-/// workflows, compose files, package manifests, the agent configuration. None of
-/// that is copied next to the test binary, and copying it would let a test pass
-/// against a snapshot the tree had already moved on from, so those tests walk up
-/// from the binary to find the checkout instead.
-///
-/// The walk used to be written at every one of those sites, once per file, with
-/// the marker picked separately each time: "src" and "test" together, or "docs",
-/// or "scripts", or "docker", or ".claude". A copy per site is a place per site
-/// to fix when the layout moves, and a directory name is a weaker marker than it
-/// looks, since the first ancestor that happens to hold a "src" is not by
-/// definition this repository.
-///
-/// The marker here is the solution file: it names this repository, it sits at
-/// its root, and it is not something an ancestor directory carries by accident.
-/// The walk runs once per test process, because its answer cannot change while
-/// one runs.
-/// </remarks>
+/// <remarks>The marker is the solution file, which no ancestor carries by accident; found once per process.</remarks>
 public static class RepositoryLayout
 {
     private const string SolutionFile = "DM.sln";

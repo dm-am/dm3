@@ -1,19 +1,15 @@
 <script setup lang="ts">
+import { ClosedReason } from "@/shared/api/models/common";
 import { computed } from "vue";
-import { GameStatus, ClosedReason } from "../model/types";
+import { GameStatus } from "../model/gameTypes";
 
 const props = defineProps<{
-  /** Game status */
   status: GameStatus | string;
-  /** Whether game is recruiting players */
   isRecruiting?: boolean;
-  /** Whether this is a subsequent recruitment ("донабор") */
   isSubsequent?: boolean;
-  /** Closed reason (for Closed status) */
   closedReason?: ClosedReason | string;
 }>();
 
-// Status checks
 const isDraft = computed(
   () => props.status === GameStatus.Draft || props.status === "Draft",
 );
@@ -34,7 +30,6 @@ const isFrozen = computed(
     props.closedReason === "Frozen",
 );
 
-// Status display text
 const statusDisplay = computed<string>(() => {
   if (isDraft.value) return "Оформляется";
   if (isActive.value) {
@@ -60,7 +55,5 @@ const statusDisplay = computed<string>(() => {
 
 <style scoped lang="sass">
 .game-status
-  display: inline
-  word-wrap: break-word
+  overflow-wrap: break-word
 </style>
-<!-- SVG icons moved to shared/lib/utils/icons.ts: gameFinished, gameFrozen -->

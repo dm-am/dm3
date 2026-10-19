@@ -56,65 +56,21 @@ public class ActivationRequestValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Empty);
     }
 
-    [Fact]
-    public async Task FailWhenUsernameContainsForbiddenCharacters()
+    /// <summary>
+    /// Forbidden characters, one letter, twenty-one letters, a space at either end.
+    /// </summary>
+    [Theory]
+    [InlineData("User<Script>")]
+    [InlineData("U")]
+    [InlineData("Abcdefghijklmnopqrstu")]
+    [InlineData(" Username")]
+    [InlineData("Username ")]
+    public async Task FailWhenUsernameBreaksThePolicy(string username)
     {
         var input = new ActivationRequest
         {
             Token = Guid.NewGuid(),
-            Username = "User<Script>"
-        };
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.Username)
-            .WithErrorMessage(ValidationError.Invalid);
-    }
-
-    [Fact]
-    public async Task FailWhenUsernameIsTooShort()
-    {
-        var input = new ActivationRequest
-        {
-            Token = Guid.NewGuid(),
-            Username = "U"
-        };
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.Username)
-            .WithErrorMessage(ValidationError.Invalid);
-    }
-
-    [Fact]
-    public async Task FailWhenUsernameIsTooLong()
-    {
-        var input = new ActivationRequest
-        {
-            Token = Guid.NewGuid(),
-            Username = new string('a', 21)
-        };
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.Username)
-            .WithErrorMessage(ValidationError.Invalid);
-    }
-
-    [Fact]
-    public async Task FailWhenUsernameStartsWithWhitespace()
-    {
-        var input = new ActivationRequest
-        {
-            Token = Guid.NewGuid(),
-            Username = " Username"
-        };
-        var result = await validator.TestValidateAsync(input);
-        result.ShouldHaveValidationErrorFor(x => x.Username)
-            .WithErrorMessage(ValidationError.Invalid);
-    }
-
-    [Fact]
-    public async Task FailWhenUsernameEndsWithWhitespace()
-    {
-        var input = new ActivationRequest
-        {
-            Token = Guid.NewGuid(),
-            Username = "Username "
+            Username = username
         };
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Username)

@@ -3,10 +3,6 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Community.Features.Polls;
-using DM.Domain.Core.Identity;
-using DM.Infrastructure.Persistence.Entities.Game.Characters;
-using DM.Infrastructure.Persistence.Entities.Game.Posts;
-using Microsoft.Extensions.Options;
 using DbPollVote = DM.Infrastructure.Persistence.Entities.Community.PollVote;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
@@ -18,24 +14,15 @@ internal sealed partial class DataSeeder
     /// Everyone except the account the stand is looked at through.
     /// </summary>
     private static IEnumerable<DbUser> OtherThanPrimary(IEnumerable<DbUser> users) =>
-        users.Where(u => u.Username != "SolohinLex");
+        users.Where(u => u.Username != PrimaryLogin);
 
     /// <summary>
     /// Casts the seeded votes of one poll, handing the ballot round the voters
     /// in turn unless <paramref name="choice"/> says otherwise.
     /// </summary>
     /// <remarks>
-    /// Written through the context rather than through <c>IPollRepository.Vote</c>,
-    /// which stamps the moment from the clock: that one column was the whole of
-    /// what kept two runs of the seeder from matching, and the repository has no
-    /// parameter to hand a moment to. Here the vote is placed against the poll it
-    /// belongs to - an hour apart per voter, counted from that poll's own start -
-    /// so it is an offset from the resolved epoch like every other seeded date,
-    /// and it lands inside the voting window of every poll below.
-    ///
-    /// The rule the repository enforces on a live site, one voter one option,
-    /// holds here by construction: every voter list below is a slice of distinct
-    /// accounts, and the primary key of PollVotes refuses a repeat regardless.
+    /// Through the context: <c>IPollRepository.Vote</c> stamps the moment from the clock. One voter, one option
+    /// holds by construction, every voter list being distinct accounts.
     /// </remarks>
     private async Task Vote(
         CreatePollEntity poll,
@@ -57,419 +44,233 @@ internal sealed partial class DataSeeder
         await _dbContext.SaveChangesAsync();
     }
 
-    private async Task CreatePolls(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    /// <summary>
+    /// A poll ready to be created: its identifier first, then one per option in
+    /// the order given, which is the order the seed draws them in.
+    /// </summary>
+    private CreatePollEntity NewPoll(
+        DateTimeOffset startsUtc, DateTimeOffset endsUtc, string title, params string[] options) => new()
+        {
+            Id = _guidFactory.Create(),
+            StartsUtc = startsUtc.UtcDateTime,
+            EndsUtc = endsUtc.UtcDateTime,
+            Title = title,
+            Options = options
+            .Select(text => new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = text })
+            .ToArray(),
+        };
+
+    /// <summary>Creates a poll and counts it.</summary>
+    private async Task CreatePoll(CreatePollEntity poll, ComprehensiveSeedResult result)
     {
-        // Polls live in the same database as their voters now, and every vote
-        // carries a foreign key to the user it belongs to: a reset takes polls
-        // and votes together, so a ghost vote is unrepresentable and the
-        // self-healing block this method used to open with is gone.
+        await _pollRepository.Create(poll);
+        result.PollsCreated++;
+    }
+
+    private async Task CreatePolls(List<DbUser> users, ComprehensiveSeedResult result)
+    {
         var existingPollsCount = await _pollRepository.Count(new PollsQuery());
         if (existingPollsCount > 0)
         {
-            result.Skipped++;
             result.Details.Add($"Polls already exist ({existingPollsCount}), skipping");
             return;
         }
 
-        // ═══════════════════════════════════════════════════════════════════
-        // PENDING POLLS (2) - start in future
-        // ═══════════════════════════════════════════════════════════════════
+        await SeedPendingPolls(result);
+        await SeedActivePolls(users, result);
+        await SeedEndedPolls(users, result);
+        await SeedPastPolls(users, result);
+        await SeedLongRunningPoll(users, result);
 
-        // Pending poll 1 - New Year event setting
-        var pendingPoll1 = new CreatePollEntity
+        result.Details.Add($"Created {result.PollsCreated} polls");
+    }
+
+    /// <summary>
+    /// The poll that runs ten years from the epoch, with the one vote of TestSeniorMod.
+    /// </summary>
+    /// <remarks>
+    /// The server reads the status of a poll by its own clock, so on a stand seeded on a pinned past epoch
+    /// (scripts/visual/rebuild.mjs) the polls of a few weeks are over, and the retraction of a vote has no
+    /// poll to be shown on (the senior-poll-cancel-vote state of the frames stand in scripts/visual/states.ts). Fixed
+    /// identifiers, for the reason of <see cref="BanListCaseIds"/>.
+    /// </remarks>
+    private async Task SeedLongRunningPoll(List<DbUser> users, ComprehensiveSeedResult result)
+    {
+        var seniorModerator = users.FirstOrDefault(u => u.Username == "TestSeniorMod");
+        if (seniorModerator == null)
         {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(3).UtcDateTime,
-            EndsUtc = now.AddDays(17).UtcDateTime,
-            Title = "Сеттинг для новогоднего ваншота",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Зимняя сказка" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Хоррор" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Киберпанк" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Советский ретро" },
-            }
-        };
-        await _pollRepository.Create(pendingPoll1);
-        result.PollsCreated++;
+            result.Details.Add("Long-running poll skipped: no TestSeniorMod");
+            return;
+        }
 
-        // Pending poll 2 - Anniversary celebration format
-        var pendingPoll2 = new CreatePollEntity
+        var poll = new CreatePollEntity
         {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(7).UtcDateTime,
-            EndsUtc = now.AddDays(21).UtcDateTime,
-            Title = "Как отметим юбилей сайта?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Конкурс постов" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Ретроспектива игр" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Марафон ваншотов" },
-            }
+            Id = FixedGuid(0xe0, 1),
+            StartsUtc = _now.AddDays(-10).UtcDateTime,
+            EndsUtc = _now.AddYears(10).UtcDateTime,
+            Title = "Откуда вы узнали о сайте?",
+            Options = new[] { "От друзей", "Из поиска", "Из соцсетей", "Не помню" }
+                .Select((text, i) => new CreatePollOptionEntity { Id = FixedGuid(0xe1, i + 1), Text = text })
+                .ToArray(),
         };
-        await _pollRepository.Create(pendingPoll2);
-        result.PollsCreated++;
+        await CreatePoll(poll, result);
 
-        // ═══════════════════════════════════════════════════════════════════
-        // ACTIVE POLLS (2)
-        // ═══════════════════════════════════════════════════════════════════
+        await Vote(poll, [seniorModerator]);
+    }
 
-        // Closed poll - RPG systems preference
-        var closedPoll6 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-30).UtcDateTime,
-            EndsUtc = now.AddDays(-1).UtcDateTime,
-            Title = "Ваша любимая система правил?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "D&D 5e" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Pathfinder" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Savage Worlds" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "GURPS" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Словеска" },
-            }
-        };
-        await _pollRepository.Create(closedPoll6);
-        result.PollsCreated++;
+    /// <summary>The two polls that start in the future.</summary>
+    private async Task SeedPendingPolls(ComprehensiveSeedResult result)
+    {
+        // Pending: New Year event setting
+        var newYearPoll = NewPoll(_now.AddDays(3), _now.AddDays(17), "Сеттинг для новогоднего ваншота",
+            "Зимняя сказка", "Хоррор", "Киберпанк", "Советский ретро");
+        await CreatePoll(newYearPoll, result);
 
-        // Add votes to closed poll 6
-        await Vote(closedPoll6, users.Take(Math.Min(6, users.Count)).ToList());
+        // Pending: anniversary celebration format
+        var anniversaryPoll = NewPoll(_now.AddDays(7), _now.AddDays(21), "Как отметим юбилей сайта?",
+            "Конкурс постов", "Ретроспектива игр", "Марафон ваншотов");
+        await CreatePoll(anniversaryPoll, result);
+    }
 
-        // Active poll 2 - Site improvements priority
-        var activePoll2 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-1).UtcDateTime,
-            EndsUtc = now.AddDays(21).UtcDateTime,
-            Title = "Что улучшить на сайте?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Мобильную версию" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Редактор постов" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Поиск игр" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Уведомления" },
-            }
-        };
-        await _pollRepository.Create(activePoll2);
-        result.PollsCreated++;
+    /// <summary>
+    /// The two running polls, and ahead of them the one on rule systems that
+    /// ended yesterday.
+    /// </summary>
+    private async Task SeedActivePolls(List<DbUser> users, ComprehensiveSeedResult result)
+    {
+        // Closed: RPG systems preference
+        var systemsPoll = NewPoll(_now.AddDays(-30), _now.AddDays(-1), "Ваша любимая система правил?",
+            "D&D 5e", "Pathfinder", "Savage Worlds", "GURPS", "Словеска");
+        await CreatePoll(systemsPoll, result);
 
-        // Add votes to active poll 2. Never the primary account: an open poll
-        // it has already voted in shows the retraction and not the vote, and
-        // that account is the one every developer and the browser tier log in
-        // as - so the control the block exists for was on no screen at all.
-        // By name rather than by position: the list is ordered by role and then
-        // by username, and Skip(n) stopped excluding it the moment another
-        // account sorted above it.
-        await Vote(activePoll2, OtherThanPrimary(users).Take(4).ToList());
+        await Vote(systemsPoll, users.Take(Math.Min(6, users.Count)).ToList());
 
-        // Active poll 3 - Weekly one-shot time. PUBLIC (not anonymous):
-        // scheduling polls naturally show who votes for which slot, and the
-        // right sidebar needs one public active poll so the per-option
-        // voters tooltip is demonstrable.
-        var activePoll3 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-5).UtcDateTime,
-            EndsUtc = now.AddDays(9).UtcDateTime,
-            Title = "Время для еженедельных ваншотов",
-            Details = "По субботам, время по МСК",
-            IsAnonymous = false,
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "14:00" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "16:00" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "18:00" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "20:00" },
-            }
-        };
-        await _pollRepository.Create(activePoll3);
-        result.PollsCreated++;
+        // Active: site improvements priority
+        var improvementsPoll = NewPoll(_now.AddDays(-1), _now.AddDays(21), "Что улучшить на сайте?",
+            "Мобильную версию", "Редактор постов", "Поиск игр", "Уведомления");
+        await CreatePoll(improvementsPoll, result);
 
-        await Vote(activePoll3, OtherThanPrimary(users).Take(5).ToList());
+        // Never the primary account, by name: having voted, it would show the retraction and not the vote.
+        await Vote(improvementsPoll, OtherThanPrimary(users).Take(4).ToList());
 
-        // ═══════════════════════════════════════════════════════════════════
-        // ENDED POLLS (5)
-        // ═══════════════════════════════════════════════════════════════════
+        // Active: weekly one-shot time. Public, so the right sidebar shows the per-option voters tooltip.
+        var oneShotTimePoll = NewPoll(_now.AddDays(-5), _now.AddDays(9), "Время для еженедельных ваншотов",
+            "14:00", "16:00", "18:00", "20:00");
+        oneShotTimePoll.Details = "По субботам, время по МСК";
+        oneShotTimePoll.IsAnonymous = false;
+        await CreatePoll(oneShotTimePoll, result);
 
-        // Ended poll 1 - Favorite genre
-        var endedPoll1 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-30).UtcDateTime,
-            EndsUtc = now.AddDays(7).UtcDateTime,
-            Title = "Ваш любимый жанр?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Фэнтези" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Sci-Fi" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Хоррор" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Современность" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Исторический" },
-            }
-        };
-        await _pollRepository.Create(endedPoll1);
+        await Vote(oneShotTimePoll, OtherThanPrimary(users).Take(5).ToList());
+    }
 
-        await Vote(endedPoll1, users.Skip(1).Take(Math.Min(8, users.Count - 1)).ToList());
-        await _pollRepository.Update(endedPoll1.Id, null, null, null, now.AddDays(-1), null);
-        result.PollsCreated++;
+    /// <summary>
+    /// The five polls with votes that were ended ahead of the date they opened
+    /// with.
+    /// </summary>
+    private async Task SeedEndedPolls(List<DbUser> users, ComprehensiveSeedResult result)
+    {
+        // Ended: favorite genre
+        var genrePoll = NewPoll(_now.AddDays(-30), _now.AddDays(7), "Ваш любимый жанр?",
+            "Фэнтези", "Sci-Fi", "Хоррор", "Современность", "Исторический");
+        await CreatePoll(genrePoll, result);
 
-        // Ended poll 2 - Post frequency
-        var endedPoll2 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-45).UtcDateTime,
-            EndsUtc = now.AddDays(7).UtcDateTime,
-            Title = "Как часто вы пишете посты?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Каждый день" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Несколько раз в неделю" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Раз в неделю" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Реже" },
-            }
-        };
-        await _pollRepository.Create(endedPoll2);
+        await Vote(genrePoll, users.Skip(1).Take(Math.Min(8, users.Count - 1)).ToList());
+        await _pollRepository.Update(genrePoll.Id, null, null, null, _now.AddDays(-1), null);
 
-        await Vote(endedPoll2, users.Take(Math.Min(6, users.Count)).ToList());
-        await _pollRepository.Update(endedPoll2.Id, null, null, null, now.AddDays(-7), null);
-        result.PollsCreated++;
+        // Ended: post frequency
+        var postFrequencyPoll = NewPoll(_now.AddDays(-45), _now.AddDays(7), "Как часто вы пишете посты?",
+            "Каждый день", "Несколько раз в неделю", "Раз в неделю", "Реже");
+        await CreatePoll(postFrequencyPoll, result);
 
-        // Ended poll 3 - Preferred game length
-        var endedPoll3 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-90).UtcDateTime,
-            EndsUtc = now.AddDays(7).UtcDateTime,
-            Title = "Предпочтительная длина игры?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Ваншот (1-2 недели)" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Короткая (1-3 месяца)" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Средняя (до года)" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Долгая (год+)" },
-            }
-        };
-        await _pollRepository.Create(endedPoll3);
+        await Vote(postFrequencyPoll, users.Take(Math.Min(6, users.Count)).ToList());
+        await _pollRepository.Update(postFrequencyPoll.Id, null, null, null, _now.AddDays(-7), null);
 
-        await Vote(endedPoll3, users.Skip(3).Take(Math.Min(3, users.Count - 3)).ToList());
-        await _pollRepository.Update(endedPoll3.Id, null, null, null, now.AddDays(-30), null);
-        result.PollsCreated++;
+        // Ended: preferred game length
+        var gameLengthPoll = NewPoll(_now.AddDays(-90), _now.AddDays(7), "Предпочтительная длина игры?",
+            "Ваншот (1-2 недели)", "Короткая (1-3 месяца)", "Средняя (до года)", "Долгая (год+)");
+        await CreatePoll(gameLengthPoll, result);
 
-        // Ended poll 4 - Dark theme request
-        var endedPoll4 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-60).UtcDateTime,
-            EndsUtc = now.AddDays(7).UtcDateTime,
-            Title = "Нужна ли темная тема?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Да" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Было бы неплохо" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Все равно" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Нет" },
-            }
-        };
-        await _pollRepository.Create(endedPoll4);
+        await Vote(gameLengthPoll, users.Skip(3).Take(Math.Min(3, users.Count - 3)).ToList());
+        await _pollRepository.Update(gameLengthPoll.Id, null, null, null, _now.AddDays(-30), null);
 
-        // Most users vote for first option (dark theme wanted)
-        await Vote(endedPoll4, users.Take(Math.Min(7, users.Count)).ToList(), i => i < 5 ? 0 : i);
-        await _pollRepository.Update(endedPoll4.Id, null, null, null, now.AddDays(-14), null);
-        result.PollsCreated++;
+        // Ended: dark theme request
+        var darkThemePoll = NewPoll(_now.AddDays(-60), _now.AddDays(7), "Нужна ли темная тема?",
+            "Да", "Было бы неплохо", "Все равно", "Нет");
+        await CreatePoll(darkThemePoll, result);
 
-        // Ended poll 5 - Dice rolling (no details, simple question)
-        var endedPoll5 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-120).UtcDateTime,
-            EndsUtc = now.AddDays(7).UtcDateTime,
-            Title = "Нужны ли кубики на сайте?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Да, встроенные" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Да, через бота" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Нет, хватает внешних" },
-            }
-        };
-        await _pollRepository.Create(endedPoll5);
+        // Most users want the dark theme
+        await Vote(darkThemePoll, users.Take(Math.Min(7, users.Count)).ToList(), i => i < 5 ? 0 : i);
+        await _pollRepository.Update(darkThemePoll.Id, null, null, null, _now.AddDays(-14), null);
 
-        await Vote(endedPoll5, users.Skip(2).Take(Math.Min(4, users.Count - 2)).ToList());
-        await _pollRepository.Update(endedPoll5.Id, null, null, null, now.AddDays(-60), null);
-        result.PollsCreated++;
+        // Ended: dice rolling, without details
+        var dicePoll = NewPoll(_now.AddDays(-120), _now.AddDays(7), "Нужны ли кубики на сайте?",
+            "Да, встроенные", "Да, через бота", "Нет, хватает внешних");
+        await CreatePoll(dicePoll, result);
 
-        // Ended poll 6 - Character creation preference
-        var endedPoll6 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-100).UtcDateTime,
-            EndsUtc = now.AddDays(-70).UtcDateTime,
-            Title = "Как вы создаете персонажей?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Начинаю с концепта" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Начинаю с механики" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "По ситуации" },
-            }
-        };
-        await _pollRepository.Create(endedPoll6);
-        result.PollsCreated++;
+        await Vote(dicePoll, users.Skip(2).Take(Math.Min(4, users.Count - 2)).ToList());
+        await _pollRepository.Update(dicePoll.Id, null, null, null, _now.AddDays(-60), null);
+    }
 
-        // Ended poll 7 - PvP attitude
-        var endedPoll7 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-110).UtcDateTime,
-            EndsUtc = now.AddDays(-80).UtcDateTime,
-            Title = "Ваше отношение к PvP?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Люблю PvP" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Иногда интересно" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Предпочитаю кооператив" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Не люблю PvP" },
-            }
-        };
-        await _pollRepository.Create(endedPoll7);
-        result.PollsCreated++;
+    /// <summary>
+    /// The polls that opened and ended months ago, a long title and long details
+    /// among them, and after them the public one with its voters.
+    /// </summary>
+    private async Task SeedPastPolls(List<DbUser> users, ComprehensiveSeedResult result)
+    {
+        // Ended: character creation preference
+        var characterCreationPoll = NewPoll(_now.AddDays(-100), _now.AddDays(-70), "Как вы создаете персонажей?",
+            "Начинаю с концепта", "Начинаю с механики", "По ситуации");
+        await CreatePoll(characterCreationPoll, result);
 
-        // Ended poll 8 - Session frequency
-        var endedPoll8 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-150).UtcDateTime,
-            EndsUtc = now.AddDays(-120).UtcDateTime,
-            Title = "Сколько игр вы ведете одновременно?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Одну" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "2-3" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "4-5" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Больше 5" },
-            }
-        };
-        await _pollRepository.Create(endedPoll8);
-        result.PollsCreated++;
+        // Ended: PvP attitude
+        var pvpPoll = NewPoll(_now.AddDays(-110), _now.AddDays(-80), "Ваше отношение к PvP?",
+            "Люблю PvP", "Иногда интересно", "Предпочитаю кооператив", "Не люблю PvP");
+        await CreatePoll(pvpPoll, result);
 
-        // Ended poll 9 - Communication preference
-        var endedPoll9 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-180).UtcDateTime,
-            EndsUtc = now.AddDays(-150).UtcDateTime,
-            Title = "Где обсуждаете игру с мастером?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "В личных сообщениях на сайте" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "В Discord/Telegram" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "В комментариях игры" },
-            }
-        };
-        await _pollRepository.Create(endedPoll9);
-        result.PollsCreated++;
+        // Ended: games run at once
+        var gamesAtOncePoll = NewPoll(_now.AddDays(-150), _now.AddDays(-120), "Сколько игр вы ведете одновременно?",
+            "Одну", "2-3", "4-5", "Больше 5");
+        await CreatePoll(gamesAtOncePoll, result);
 
-        // Ended poll 10 - Combat preference
-        var endedPoll10 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-200).UtcDateTime,
-            EndsUtc = now.AddDays(-170).UtcDateTime,
-            Title = "Что важнее в бою?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Тактика и механика" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Нарратив и описания" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Баланс того и другого" },
-            }
-        };
-        await _pollRepository.Create(endedPoll10);
-        result.PollsCreated++;
+        // Ended: communication preference
+        var communicationPoll = NewPoll(_now.AddDays(-180), _now.AddDays(-150), "Где обсуждаете игру с мастером?",
+            "В личных сообщениях на сайте", "В Discord/Telegram", "В комментариях игры");
+        await CreatePoll(communicationPoll, result);
 
-        // Ended poll 11 - Worldbuilding preference
-        var endedPoll11 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-220).UtcDateTime,
-            EndsUtc = now.AddDays(-190).UtcDateTime,
-            Title = "Какой сеттинг предпочитаете?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Готовые миры (Forgotten Realms, etc.)" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Авторские сеттинги" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Совместное создание мира" },
-            }
-        };
-        await _pollRepository.Create(endedPoll11);
-        result.PollsCreated++;
+        // Ended: combat preference
+        var combatPoll = NewPoll(_now.AddDays(-200), _now.AddDays(-170), "Что важнее в бою?",
+            "Тактика и механика", "Нарратив и описания", "Баланс того и другого");
+        await CreatePoll(combatPoll, result);
 
-        // Ended poll 12 - Long title test
-        var endedPoll12 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-240).UtcDateTime,
-            EndsUtc = now.AddDays(-210).UtcDateTime,
-            Title = "Как вы относитесь к длинным описаниям персонажей, которые включают подробную предысторию, характер, мотивацию и внешность?",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Чем подробнее, тем лучше" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Предпочитаю краткость" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Зависит от игры" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Раскрываю персонажа по ходу игры" },
-            }
-        };
-        await _pollRepository.Create(endedPoll12);
-        result.PollsCreated++;
+        // Ended: worldbuilding preference
+        var settingPoll = NewPoll(_now.AddDays(-220), _now.AddDays(-190), "Какой сеттинг предпочитаете?",
+            "Готовые миры (Forgotten Realms, etc.)", "Авторские сеттинги", "Совместное создание мира");
+        await CreatePoll(settingPoll, result);
 
-        // Ended poll 13 - Long details test
-        var endedPoll13 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-260).UtcDateTime,
-            EndsUtc = now.AddDays(-230).UtcDateTime,
-            Title = "Формат постов в играх",
-            Details = "Мы хотим понять, какой формат постов предпочитает наше сообщество. " +
-                      "Это поможет нам лучше настроить редактор и подсказки для новых игроков. " +
-                      "Под \"коротким постом\" мы понимаем 2-5 предложений, под \"средним\" — 1-3 абзаца, " +
-                      "под \"длинным\" — развернутые описания на несколько экранов. " +
-                      "Учитывайте свой обычный стиль игры, а не идеальные пожелания.",
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Короткие посты (2-5 предложений)" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Средние посты (1-3 абзаца)" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Длинные посты (развернутые описания)" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Адаптируюсь под партию" },
-            }
-        };
-        await _pollRepository.Create(endedPoll13);
-        result.PollsCreated++;
+        // Ended: long title
+        var longTitlePoll = NewPoll(_now.AddDays(-240), _now.AddDays(-210),
+            "Как вы относитесь к длинным описаниям персонажей, которые включают подробную предысторию, характер, мотивацию и внешность?",
+            "Чем подробнее, тем лучше", "Предпочитаю краткость", "Зависит от игры", "Раскрываю персонажа по ходу игры");
+        await CreatePoll(longTitlePoll, result);
 
-        // ═══════════════════════════════════════════════════════════════════
-        // PUBLIC POLLS (voters visible)
-        // ═══════════════════════════════════════════════════════════════════
+        // Ended: long details
+        var longDetailsPoll = NewPoll(_now.AddDays(-260), _now.AddDays(-230), "Формат постов в играх",
+            "Короткие посты (2-5 предложений)", "Средние посты (1-3 абзаца)",
+            "Длинные посты (развернутые описания)", "Адаптируюсь под партию");
+        longDetailsPoll.Details = "Мы хотим понять, какой формат постов предпочитает наше сообщество. " +
+                              "Это поможет нам лучше настроить редактор и подсказки для новых игроков. " +
+                              "Под \"коротким постом\" мы понимаем 2-5 предложений, под \"средним\" — 1-3 абзаца, " +
+                              "под \"длинным\" — развернутые описания на несколько экранов. " +
+                              "Учитывайте свой обычный стиль игры, а не идеальные пожелания.";
+        await CreatePoll(longDetailsPoll, result);
 
-        // Public poll - Ended, with votes
-        var publicPoll2 = new CreatePollEntity
-        {
-            Id = _guidFactory.Create(),
-            StartsUtc = now.AddDays(-20).UtcDateTime,
-            EndsUtc = now.AddDays(-10).UtcDateTime,
-            Title = "Оцените прошедшее мероприятие",
-            Details = "Открытый опрос для участников ивента.",
-            IsAnonymous = false,
-            Options = new[]
-            {
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Отлично!" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Хорошо" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Могло быть лучше" },
-                new CreatePollOptionEntity { Id = _guidFactory.Create(), Text = "Не участвовал" },
-            }
-        };
-        await _pollRepository.Create(publicPoll2);
+        // Public, ended, with votes
+        var eventFeedbackPoll = NewPoll(_now.AddDays(-20), _now.AddDays(-10), "Оцените прошедшее мероприятие",
+            "Отлично!", "Хорошо", "Могло быть лучше", "Не участвовал");
+        eventFeedbackPoll.Details = "Открытый опрос для участников ивента.";
+        eventFeedbackPoll.IsAnonymous = false;
+        await CreatePoll(eventFeedbackPoll, result);
 
-        // Add votes to public poll 2
-        await Vote(publicPoll2, users.Skip(3).Take(Math.Min(18, users.Count - 3)).ToList());
-        result.PollsCreated++;
-
-        result.Details.Add($"Created {result.PollsCreated} polls (2 pending, 2 active, 15 closed; 2 public)");
+        await Vote(eventFeedbackPoll, users.Skip(3).Take(Math.Min(18, users.Count - 3)).ToList());
     }
 }

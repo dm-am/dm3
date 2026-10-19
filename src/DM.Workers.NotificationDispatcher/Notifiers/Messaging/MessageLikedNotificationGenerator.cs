@@ -8,14 +8,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Messaging;
 
-/// <summary>
-/// Generates notifications when a message is liked
-/// </summary>
 internal class MessageLikedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public MessageLikedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -52,8 +48,8 @@ internal class MessageLikedNotificationGenerator : BaseNotificationGenerator
             ActorId = likedMessageData.LikerId,
             Metadata = new
             {
-                LikerUsername = likedMessageData.LikerUsername,
-                ChatId = likedMessageData.ChatId
+                likedMessageData.LikerUsername,
+                likedMessageData.ChatId
             }
         };
     }

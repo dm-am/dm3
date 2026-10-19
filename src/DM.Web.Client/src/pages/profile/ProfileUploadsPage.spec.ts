@@ -3,11 +3,8 @@
  */
 
 /**
- * Who has the page of somebody's uploaded files: the owner of the files and
- * the administrators. Anybody else, a guest included, gets the site's own "not
- * found" at its address, with no refusal drawn and no files asked for, and the
- * decision waits for the answer about the session the start of the page asks
- * for: a session the browser kept no copy of is named by that answer alone.
+ * Who has the page of somebody's uploads: the owner and the administrators.
+ * Anybody else gets the site's "not found", decided after the answer about the session.
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { computed, ref } from "vue";
@@ -35,11 +32,12 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ replace }),
 }));
 
-vi.mock("@/entities/user", () => ({
+vi.mock("@/entities/user", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/entities/user")>()),
   restoreSession: () => session.settled,
 }));
 
-// The owner of the page is resolved by the subpage helper; here he exists.
+// The owner of the page exists.
 vi.mock("./useProfileSubpage", () => ({
   useProfileSubpage: () => ({
     username: computed(() => OWNER),
@@ -109,6 +107,19 @@ describe("ProfileUploadsPage — who has the page", () => {
     expect(replace).not.toHaveBeenCalled();
     expect(wrapper.find(".profile-uploads-page").exists()).toBe(true);
     expect(getUploads).toHaveBeenCalled();
+  });
+
+  it("pages as many files as the owner asked for lists", async () => {
+    render({
+      username: OWNER,
+      role: UserRole.RegularUser,
+      settings: { pageSize: 50 },
+    } as never);
+    await flushPromises();
+
+    expect(getUploads).toHaveBeenCalledWith(
+      expect.objectContaining({ size: 50 }),
+    );
   });
 
   it("keeps an administrator on it", async () => {

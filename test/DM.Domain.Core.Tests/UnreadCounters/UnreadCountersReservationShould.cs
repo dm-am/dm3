@@ -12,17 +12,7 @@ namespace DM.Domain.Core.Tests.UnreadCounters;
 /// Markers written ahead of a relational row that never lands do not survive it.
 /// </summary>
 /// <remarks>
-/// The order is the one thing a feature spread over two stores owes, and it was
-/// right in one of the six places that needed it. Written after the insert, a
-/// refused write to the document store left a committed entity whose counters do
-/// not exist and never will — its badge reads zero for everybody, forever, and
-/// nothing recreates them. Written first, the same refusal loses an entity nobody
-/// has seen yet, and the caller may simply try again.
-///
-/// Which makes taking them back part of the write path rather than a habit of each
-/// caller, and puts its contract here: what happens with no commit, what happens
-/// with one, what happens when taking back fails as well, and what happens when the
-/// markers themselves are refused halfway through.
+/// Written first, a refused marker loses an entity nobody has seen yet, and the caller may try again.
 /// </remarks>
 public class UnreadCountersReservationShould
 {

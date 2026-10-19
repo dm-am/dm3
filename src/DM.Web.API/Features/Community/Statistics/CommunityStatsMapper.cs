@@ -8,14 +8,11 @@ namespace DM.Web.API.Features.Community.Statistics;
 /// Compile-time mapper for community statistics
 /// </summary>
 [Mapper]
-internal partial class CommunityStatsMapper
+public partial class CommunityStatsMapper
 {
     /// <summary>
-    /// Domain live stats to the API DTO. LastReviewedPost has never had a
-    /// producer: the block shows the week's best post, and the field stays in
-    /// the contract as a null the client already tolerates.
+    /// Domain live stats to the API DTO
     /// </summary>
-    [MapperIgnoreTarget(nameof(LiveStats.LastReviewedPost))]
     public partial LiveStats ToLiveStats(DomainLiveStats liveStats);
 
     /// <summary>

@@ -8,9 +8,7 @@ namespace DM.Web.API.Features.Game.Rooms;
 /// <remarks>
 /// The character is the whole of what the caller says. Who waits is the caller,
 /// read from the session; who is waited for is the player of that character,
-/// read from the room. The body used to be the response DTO, which asked for
-/// both as nested users: the site sent the character alone, the binding refused
-/// it for a missing author, and the button never created anything.
+/// read from the room.
 /// </remarks>
 public class CreatePostPendencyRequest
 {

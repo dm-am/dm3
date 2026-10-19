@@ -8,49 +8,22 @@
 
 import { Node, mergeAttributes } from "@tiptap/core";
 
-export interface BbTabOptions {
-  HTMLAttributes: Record<string, unknown>;
-}
-
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     bbTab: {
-      /**
-       * Insert a tab
-       */
       insertTab: () => ReturnType;
     };
   }
 }
 
-export const BbTab = Node.create<BbTabOptions>({
+export const BbTab = Node.create({
   name: "bbTab",
-
-  addOptions() {
-    return {
-      HTMLAttributes: {},
-    };
-  },
 
   group: "inline",
 
   inline: true,
 
   atom: true, // Cannot be edited inside
-
-  selectable: true,
-
-  draggable: false,
-
-  addAttributes() {
-    return {
-      "data-bb-tag": {
-        default: "tab",
-        parseHTML: () => "tab",
-        renderHTML: () => ({ "data-bb-tag": "tab" }),
-      },
-    };
-  },
 
   parseHTML() {
     return [
@@ -66,9 +39,8 @@ export const BbTab = Node.create<BbTabOptions>({
   renderHTML({ HTMLAttributes }) {
     return [
       "span",
-      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+      mergeAttributes({ "data-bb-tag": "tab" }, HTMLAttributes, {
         class: "bb-tab",
-        "data-bb-tag": "tab",
       }),
       "\u00A0\u00A0\u00A0", // 3 non-breaking spaces, as on the server
     ];
@@ -78,11 +50,8 @@ export const BbTab = Node.create<BbTabOptions>({
     return {
       insertTab:
         () =>
-        ({ commands }) => {
-          return commands.insertContent({
-            type: this.name,
-          });
-        },
+        ({ commands }) =>
+          commands.insertContent({ type: this.name }),
     };
   },
 
@@ -93,5 +62,3 @@ export const BbTab = Node.create<BbTabOptions>({
     };
   },
 });
-
-export default BbTab;

@@ -1,36 +1,12 @@
 <script setup lang="ts">
-/**
- * PrivacyPolicyPage — the "Политика конфиденциальности" page.
- * This page is the single source of truth for the privacy policy text.
- * `sections` is the single source of truth for section ids/titles feeding
- * the `<section>` headings below.
- */
 import { supportFor } from "@/entities/ticket";
-import LegalDocument, { type LegalSection } from "./LegalDocument.vue";
-
-const sections: LegalSection[] = [
-  { id: "general", title: "1. Общие положения" },
-  { id: "terms", title: "2. Термины и определения" },
-  { id: "purposes", title: "3. Цели обработки персональных данных" },
-  { id: "data-categories", title: "4. Категории обрабатываемых данных" },
-  { id: "storage", title: "5. Хранение и защита данных" },
-  { id: "transfer", title: "6. Передача персональных данных" },
-  { id: "rights", title: "7. Права пользователей" },
-  { id: "cookies", title: "8. Файлы cookies" },
-  { id: "age", title: "9. Возрастные ограничения" },
-  { id: "changes", title: "10. Изменение Политики" },
-  { id: "contacts", title: "11. Контакты" },
-];
+import LegalDocument from "./LegalDocument.vue";
 </script>
 
 <template>
-  <legal-document
-    title="Политика конфиденциальности"
-    revision-date="31 марта 2026 года"
-    publication-date="31 марта 2026 года"
-  >
-    <section :id="sections[0].id">
-      <h2>{{ sections[0].title }}</h2>
+  <legal-document title="Политика конфиденциальности">
+    <section id="general">
+      <h2>1. Общие положения</h2>
       <p>
         1.1. Настоящая Политика конфиденциальности определяет, как платформа
         Dungeon Master обрабатывает и защищает персональные данные
@@ -58,8 +34,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[1].id">
-      <h2>{{ sections[1].title }}</h2>
+    <section id="terms">
+      <h2>2. Термины и определения</h2>
       <dl class="term-list">
         <div class="term-item">
           <dt>Персональные данные</dt>
@@ -89,8 +65,8 @@ const sections: LegalSection[] = [
       </dl>
     </section>
 
-    <section :id="sections[2].id">
-      <h2>{{ sections[2].title }}</h2>
+    <section id="purposes">
+      <h2>3. Цели обработки персональных данных</h2>
       <ul>
         <li>
           Регистрация и идентификация — создание учетной записи и вход на
@@ -106,8 +82,8 @@ const sections: LegalSection[] = [
       </ul>
     </section>
 
-    <section :id="sections[3].id">
-      <h2>{{ sections[3].title }}</h2>
+    <section id="data-categories">
+      <h2>4. Категории обрабатываемых данных</h2>
 
       <h3>Данные при регистрации:</h3>
       <ul>
@@ -137,15 +113,15 @@ const sections: LegalSection[] = [
 
       <h3>Пользовательский контент:</h3>
       <ul>
-        <li>Публикации, комментарии, сообщения</li>
+        <li>Посты, топики, публикации в блогах, комментарии, сообщения</li>
         <li>Описания персонажей и игр</li>
         <li>Изображения (аватары, иллюстрации)</li>
         <li>Личные заметки</li>
       </ul>
     </section>
 
-    <section :id="sections[4].id">
-      <h2>{{ sections[4].title }}</h2>
+    <section id="storage">
+      <h2>5. Хранение и защита данных</h2>
       <p>
         Персональные данные хранятся на серверах на территории Российской
         Федерации, как того требует статья 18 Федерального закона № 152-ФЗ.
@@ -159,8 +135,8 @@ const sections: LegalSection[] = [
       </ul>
     </section>
 
-    <section :id="sections[5].id">
-      <h2>{{ sections[5].title }}</h2>
+    <section id="transfer">
+      <h2>6. Передача персональных данных</h2>
       <p>
         Оператор не передает персональные данные третьим лицам, кроме случаев,
         когда:
@@ -173,8 +149,8 @@ const sections: LegalSection[] = [
       <p>Персональные данные не передаются за пределы Российской Федерации.</p>
     </section>
 
-    <section :id="sections[6].id">
-      <h2>{{ sections[6].title }}</h2>
+    <section id="rights">
+      <h2>7. Права пользователей</h2>
       <p>Пользователь имеет право:</p>
       <ul>
         <li>Получить информацию об обработке своих данных</li>
@@ -199,8 +175,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[7].id">
-      <h2>{{ sections[7].title }}</h2>
+    <section id="cookies">
+      <h2>8. Файлы cookies</h2>
       <p>Платформа использует cookies трех видов:</p>
       <ul>
         <li>Технические: аутентификация, сессия, безопасность (до 30 дней)</li>
@@ -213,16 +189,16 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[8].id">
-      <h2>{{ sections[8].title }}</h2>
+    <section id="age">
+      <h2>9. Возрастные ограничения</h2>
       <p>
         Платформа предназначена для лиц, достигших возраста 18 лет. Оператор не
         ведет целенаправленный сбор данных несовершеннолетних.
       </p>
     </section>
 
-    <section :id="sections[9].id">
-      <h2>{{ sections[9].title }}</h2>
+    <section id="changes">
+      <h2>10. Изменение Политики</h2>
       <p>
         Оператор вправе вносить изменения в настоящую Политику. О существенных
         изменениях Пользователи уведомляются через Платформу или по электронной
@@ -230,8 +206,8 @@ const sections: LegalSection[] = [
       </p>
     </section>
 
-    <section :id="sections[10].id">
-      <h2>{{ sections[10].title }}</h2>
+    <section id="contacts">
+      <h2>11. Контакты</h2>
       <p>
         По вопросам обработки персональных данных, включая запросы о реализации
         прав, обращайтесь через

@@ -2,16 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The block used to show every news topic younger than seven days, so its card
- * count — and its height — moved with the calendar. The owner's rule is at most
- * two at a time.
- *
- * The cap is asserted against a response that ignores it: the request already
- * carries `take` (forumApi.spec), and this pins the other half, that the block
- * itself never renders a third card whatever comes back. The empty-window
- * fallback is asserted too, because a naive slice would have dropped it.
- */
+// At most two news cards whatever the response holds, and the latest one when none is recent.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";

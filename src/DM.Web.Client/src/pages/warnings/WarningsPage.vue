@@ -1,28 +1,14 @@
 <script setup lang="ts">
 /**
- * The open log of warnings the moderation team has issued.
- *
- * The rules page has always linked here as the proof that moderation is done
- * in the open, and the page answered "В разработке". It now shows what the
- * link promised: who was warned, for how many points, why, by whom and when,
- * newest first and a page at a time.
- *
- * Every warning ever issued is here, including the ones whose points were
- * later taken off: a warning is the record of a decision and is never
- * withdrawn. What a correction adds is the second decision the card draws
- * under the first — who changed the points, when and why — and it is public
- * along with the warning, because a verdict corrected to nothing that is shown
- * with only the first signature reads as a verdict that still stands.
- *
- * The row shows the text the warning was issued for, as DM2's log did, always
- * (the owner, 05.10: "Всегда показывай"), a hidden block erased from it for
- * everybody; the place links to the text where a guest could follow it, and
- * the server decides where that is.
+ * The open log of warnings, newest first. A warning whose points were later
+ * taken off stays, with the correction under it: a verdict corrected to
+ * nothing shown with the first signature only reads as one that still stands.
+ * The row shows the text the warning was issued for, as DM2's log did.
  */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import {
-  moderationApi,
+  warningApi,
   WarningCard,
   RecordSkeleton,
   type WarningLogEntry,
@@ -31,20 +17,22 @@ import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { PageTitle, LeadText, SecondaryText } from "@/shared/ui/Layout";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { parsePageNumber } from "@/shared/lib/filters";
+import {
+  parsePageNumber,
+  parseStringFromUrl,
+  toQueryValue,
+} from "@/shared/lib/filters";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const route = useRoute();
-const { entitiesPerPage } = usePaging();
+const { pageSize } = usePaging();
 
 const warnings = ref<WarningLogEntry[]>([]);
 const paging = ref<PagingModel | null>(null);
 
-// A page number and a name both come from the address and both can change under
-// the reader, so two answers can be on the wire at once; the guard drops the one
-// the reader has already left instead of letting whichever lands last decide
-// what the list shows.
+// The number and the name both come from the address, so two answers can be
+// on the wire; the guard drops the one the reader has already left.
 const {
   loading,
   error: loadError,
@@ -54,19 +42,17 @@ const {
 const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
 /** The one filter the log takes; an unknown name is an empty page, not an error. */
-const username = computed(() => {
-  const value = route.query.username;
-  const name = Array.isArray(value) ? value[0] : value;
-  return name ? String(name) : undefined;
-});
+const username = computed(
+  () => parseStringFromUrl(toQueryValue(route.query.username)) || undefined,
+);
 
-function fetch() {
+function loadWarnings() {
   return run(
     () =>
-      moderationApi.getWarningLog({
+      warningApi.getWarningLog({
         username: username.value,
-        skip: (pageNumber.value - 1) * entitiesPerPage.value,
-        take: entitiesPerPage.value,
+        skip: (pageNumber.value - 1) * pageSize.value,
+        take: pageSize.value,
       }),
     (data) => {
       warnings.value = data?.resources ?? [];
@@ -75,15 +61,11 @@ function fetch() {
   );
 }
 
-watch([pageNumber, username], fetch, { immediate: true });
+watch([pageNumber, username], loadWarnings, { immediate: true });
 
 const isEmpty = computed(() => !loading.value && warnings.value.length === 0);
 
-/**
- * A page number past the end of a log that is not empty: a stale link, or a
- * name the log has no rows for. The reader is told and offered the way back
- * rather than moved without asking.
- */
+/** A page number past the end of a log that is not empty; the reader is offered the way back. */
 const isPastEnd = computed(
   () => isEmpty.value && (paging.value?.total ?? 0) > 0,
 );
@@ -101,15 +83,12 @@ const firstPageQuery = computed(() => {
     <PageTitle v-if="username">Лог предупреждений: {{ username }}</PageTitle>
     <PageTitle v-else>Лог предупреждений</PageTitle>
 
-    <!-- Narrowed to one person, the heading says whose warnings these are and
-         the lead is the way back to everybody's. It carries no sentence around
-         the link: the name is already in the heading, and every row names its
-         own user, so there is nothing left for a lead-in to explain. -->
+    <!-- Narrowed to one person, the lead is the way back to everybody's. -->
     <LeadText v-if="username">
       <router-link :to="{ name: 'warnings' }">Лог предупреждений</router-link>
     </LeadText>
 
-    <ErrorState v-if="loadError" :message="loadError" :retry="fetch" />
+    <ErrorState v-if="loadError" :message="loadError" :retry="loadWarnings" />
 
     <RecordSkeleton v-else-if="loading && !warnings.length" :count="5" />
 

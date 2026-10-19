@@ -1,6 +1,4 @@
-using System;
 using System.Net;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -23,13 +21,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// the three can be seen answering as one.
 /// </summary>
 /// <remarks>
-/// The scope hands a premoderated game to its leads, its invitees and its
-/// assigned curator. A game in AwaitingEdits has no curator recorded — the status
-/// every newbie's game is created in — so every rank that may pass the verdict,
-/// the mentor included, was answered 404 on the very games the moderation queue
-/// links to, and the verdict buttons were drawn inside a page that never
-/// rendered. The rank arm has to open exactly these games and nothing else,
-/// which is why a private draft and a removed game are asserted beside them.
+/// A game in AwaitingEdits has no curator recorded, so the rank arm opens exactly these games; a private draft
+/// and a removed game are asserted beside them.
 /// </remarks>
 public class GamePremoderationVisibilityShould : IntegrationTestBase
 {
@@ -101,9 +94,7 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The master of the game is admitted by their own role, not by the rank, and
-    /// that has to keep working: the arm is an addition to the scope and not a
-    /// replacement of it.
+    /// The master is admitted by their own role: the arm adds to the scope.
     /// </summary>
     [Fact]
     public async Task KeepAPremoderatedGameOpenToItsOwnMaster()
@@ -116,9 +107,7 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A private draft is hidden by its author's choice and not by premoderation.
-    /// The rank is keyed on the premoderation status alone, so it must not reach
-    /// the draft — an arm keyed on "the game is hidden" would.
+    /// A private draft is hidden by its author, and the rank keyed on the premoderation status does not reach it.
     /// </summary>
     [Theory]
     [InlineData(UserRole.Mentor)]
@@ -172,9 +161,7 @@ public class GamePremoderationVisibilityShould : IntegrationTestBase
         string RemovedPublicId);
 
     /// <summary>
-    /// Four games of one master, differing only in what hides them, plus a player
-    /// of an unrelated game. Fresh identifiers every time: the fixture database is
-    /// shared and its usernames and public ids are uniquely indexed.
+    /// Four games of one master, differing in what hides them, plus a player of an unrelated game; fresh identifiers.
     /// </summary>
     private async Task<SeededGames> SeedAsync()
     {

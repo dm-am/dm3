@@ -125,13 +125,7 @@ describe("createFreshness", () => {
     vi.useRealTimers();
   });
 
-  /**
-   * The question a caller actually asks is "may I skip this read", and isStale
-   * cannot answer it: it says false for something fresh and false again for
-   * something never read at all. A caller reading that as "leave it alone"
-   * never makes the first read; one reading it as "go and read" makes a second
-   * read a moment after the first. So the two are separate answers.
-   */
+  // "May I skip this read" is not !isStale: that is false for never read too.
   it("tells fresh apart from never recorded", () => {
     vi.useFakeTimers();
     const freshness = createFreshness(1000);
@@ -171,12 +165,7 @@ describe("createFreshness", () => {
   });
 });
 
-/**
- * The callers that measure elapsed time without keeping an answer: a debounce
- * that may not be postponed past a ceiling, and a retry loop reporting how long
- * it has been trying. Both used to subtract a `Date.now()` of their own from
- * the clock, which is the arithmetic this module exists to hold once.
- */
+// Elapsed time with no answer kept: a debounce ceiling and a retry loop.
 describe("startStopwatch", () => {
   afterEach(() => {
     vi.useRealTimers();

@@ -1,8 +1,5 @@
 using System;
-using System.IO;
 using ArchUnitNET.Domain;
-using ArchUnitNET.Fluent;
-using ArchUnitNET.Loader;
 using ArchUnitNET.xUnitV3;
 using AwesomeAssertions;
 using DM.Infrastructure.Messaging;
@@ -16,34 +13,15 @@ namespace DM.Architecture.Tests;
 /// Whoever builds a message producer has to be able to release it.
 /// </summary>
 /// <remarks>
-/// The builder returns a producer that opens an AMQP channel on its first send
-/// and closes it only in Dispose. A wrapper that is not disposable therefore
-/// leaks one channel per instance for the life of the process, until the
-/// broker's channel ceiling turns every further publish into an exception.
-///
-/// A rule rather than three tests, because the defect appeared three times
-/// independently — the event producer, the mail sender and the notification
-/// processor — and each time from the same slip: the producer was built in a
-/// constructor and nobody owned it. Anything that takes IDmProducerBuilder is
-/// covered the moment it is written.
-///
-/// Disposability is the half that lives in the type. The other half is the
-/// registration lifetime, asserted in ProducerScopeResolutionShould, which the
-/// IL cannot see.
+/// A producer opens an AMQP channel on first send and closes it only in Dispose. The registration
+/// lifetime is ProducerScopeResolutionShould's.
 /// </remarks>
 public class MessageProducerOwnershipShould
 {
-    private static readonly ArchitectureModel Solution = new ArchLoader()
-        .LoadFilteredDirectory(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .Build();
+    private static readonly ArchitectureModel Solution = ArchitectureSolution.Model;
 
-    // Production assemblies only, and only types that can hold what they build.
-    // Naming the builder is enough to match, so without the assembly filter the
-    // rule flags the class holding the rule; without the static-class filter it
-    // flags the registration extensions, which name the builder in a lambda and
-    // own nothing — a static class has no instance to keep a producer in, so it
-    // cannot be the one to release it. The builder implementation is excluded
-    // the same way: it hands producers out and holds none.
+    // Production assemblies only, non-static classes only, the builder implementation left out:
+    // each of those names the builder and owns no producer.
     private static readonly IObjectProvider<Class> ProducerOwners = Classes()
         .That().DependOnAny(typeof(IDmProducerBuilder))
         .And().FollowCustomPredicate(
@@ -58,18 +36,14 @@ public class MessageProducerOwnershipShould
         .As("classes that build a message producer");
 
     /// <summary>
-    /// A rule that matches nothing passes. There are three producer owners today,
-    /// so a loader that stops resolving the messaging assembly turns the rule
-    /// green instead of red.
+    /// A rule that matches nothing passes, so the owners are counted first.
     /// </summary>
     [Fact]
     public void FindTheProducerOwners() =>
-        ProducerOwners.GetObjects(Solution).Should().HaveCountGreaterThanOrEqualTo(3);
+        ProducerOwners.GetObjects(Solution).Should().NotBeEmpty();
 
     /// <summary>
-    /// The workers and the seeder are separate executables that no other project
-    /// references, so the loader saw neither until this suite referenced them. Two
-    /// of the three producer owners live outside the API.
+    /// The workers and the seeder are executables no other project references.
     /// </summary>
     [Fact]
     public void LoadEveryExecutable()

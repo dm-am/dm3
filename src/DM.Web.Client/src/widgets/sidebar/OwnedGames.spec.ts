@@ -2,16 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * "Мои игры" is the panel a player watches, and it was the one panel that never
- * said which of his games was waiting for him: the mentor's list of curated
- * games has carried the star from the start, the room rows carry it, and the
- * player's own list carried nothing. The marker is the server's answer now
- * (GameRef.awaitsViewerTurn), so the panel's whole job is to draw it on the
- * right row and on no other.
- */
-import { describe, it, expect, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+/** "Мои игры" stars the game that waits for the viewer (GameRef.awaitsViewerTurn), and no other. */
+import { describe, it, expect, beforeEach, vi } from "vitest";
+import { mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import OwnedGames from "./OwnedGames.vue";
 import {
@@ -19,12 +12,10 @@ import {
   useGamesStore,
   type GameRef,
 } from "@/entities/game";
+import { useAuthStore } from "@/entities/user";
 
 const stubs = {
-  "router-link": {
-    template: '<a class="router-link"><slot /></a>',
-    props: ["to"],
-  },
+  RouterLink: RouterLinkStub,
   Tooltip: {
     template: "<span class='tooltip'><slot /></span>",
     props: ["text"],
@@ -52,8 +43,12 @@ const game = (id: string, title: string, awaiting: string[] | null): GameRef =>
 
 function mountPanel(games: GameRef[]) {
   const store = useGamesStore();
-  // Written straight into the store: the panel fetches only for a signed-in
-  // viewer, and this test is about what it draws, not about how it loads.
+  // The block is the signed-in viewer's.
+  useAuthStore().user = { username: "viewer" } as never;
+  // Straight into the store, the read answered by nothing.
+  vi.spyOn(store, "fetchParticipatingGames").mockResolvedValue(
+    undefined as never,
+  );
   store.participatingGames = games;
   return mount(OwnedGames, { global: { stubs } });
 }

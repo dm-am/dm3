@@ -11,7 +11,6 @@ internal class MemoryCache : ICache
 {
     private readonly IMemoryCache _memoryCache;
 
-    /// <inheritdoc />
     public MemoryCache(
         IMemoryCache memoryCache)
     {
@@ -25,9 +24,7 @@ internal class MemoryCache : ICache
     /// <inheritdoc />
     public async Task<TEntry> GetOrCreateAsync<TEntry>(object key, Func<Task<TEntry>> create, TimeSpan absoluteExpiration)
     {
-        // The factory runs only when there was nothing to return, so whether it
-        // ran is the whole of what "hit" means here. Read after the call rather
-        // than inside it: the closure is what sets it.
+        // The factory runs only on a miss.
         var miss = false;
         var entry = (await _memoryCache.GetOrCreateAsync(key, async e =>
         {
@@ -41,8 +38,7 @@ internal class MemoryCache : ICache
     }
 
     /// <summary>
-    /// The label of a cached shape: the type name without the arity a generic
-    /// carries, so that a tuple of pages does not read as "ValueTuple`2".
+    /// The type name without the arity of a generic, not "ValueTuple`2".
     /// </summary>
     private static string EntryName<TEntry>()
     {

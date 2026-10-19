@@ -7,11 +7,7 @@ import { mount } from "@vue/test-utils";
 import { defineComponent, nextTick, ref } from "vue";
 import { useAnchoredPosition } from "./useAnchoredPosition";
 
-/**
- * Where a panel dropped from an anchor stands, in numbers. jsdom lays out
- * nothing: the anchor's rectangle, the panel's size and the window are given
- * by hand. The anchor is 38 high and 120 wide, the panel 240 by 180.
- */
+// jsdom lays out nothing: the anchor is 38 by 120, the panel 240 by 180, given by hand.
 const html = document.documentElement;
 const restores: Array<() => void> = [];
 const box = { left: 0, top: 0 };

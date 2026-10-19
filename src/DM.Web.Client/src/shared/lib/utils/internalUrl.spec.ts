@@ -1,12 +1,6 @@
 /**
- * The utility answers two questions about a moderator-entered URL, and the
- * award popover renders whichever answer it gets: a router path, an anchor, or
- * the label with no link at all. Nothing validates the field on the way in -
- * the grant stores it trimmed and nothing else - so both answers are asserted
- * against values a moderator can really store.
- *
- * The origin is read from the same window the code reads rather than written
- * out, so the file does not depend on the address jsdom happens to serve.
+ * Both answers about a moderator-entered URL, against values a moderator can
+ * store; the origin is the window's, not jsdom's address written out.
  */
 import { describe, expect, it } from "vitest";
 import { toExternalHref, toInternalPath } from "./internalUrl";

@@ -8,21 +8,16 @@ using Microsoft.Extensions.Options;
 namespace DM.Domain.Account.Features.Deactivation;
 
 /// <inheritdoc cref="IAccountRestorationMailSender" />
-internal class AccountRestorationMailSender : AccountMailSender, IAccountRestorationMailSender
+internal class AccountRestorationMailSender(
+    ITemplateRenderer renderer,
+    IMailSender mailSender,
+    IEmailAssetsProvider emailAssetsProvider,
+    IOptions<SiteAddressConfiguration> siteAddresses)
+    : AccountMailSender(renderer, mailSender, emailAssetsProvider, siteAddresses), IAccountRestorationMailSender
 {
-    public AccountRestorationMailSender(
-        ITemplateRenderer renderer,
-        IMailSender mailSender,
-        IEmailAssetsProvider emailAssetsProvider,
-        IOptions<SiteAddressConfiguration> siteAddresses)
-        : base(renderer, mailSender, emailAssetsProvider, siteAddresses)
-    {
-    }
-
     /// <inheritdoc />
     public Task SendRestored(string email)
     {
-        const string subject = "Dungeon Master: аккаунт восстановлен";
-        return Send(email, subject, new AccountRestoredViewModel(SiteLink("?action=login")));
+        return Deliver(email, "аккаунт восстановлен", new AccountRestoredViewModel(SiteLink("?action=login")));
     }
 }

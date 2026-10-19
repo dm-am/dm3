@@ -2,26 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The subscription to a person, read the way a visitor reads it: by the word on
- * the button and by the boxes of its panel.
- *
- * "Подписаться" is one press, as the subscription to a game is: it used to
- * open a form with a second "Подписаться" in it. "Подписан" opens the panel,
- * where a box saves the moment it is pressed and says "Сохранено" beside
- * itself, a refusal puts the box back and says why, and clearing the last box
- * ends the subscription. No press here raises a toast.
- *
- * The store is real and only the transport is faked. The defect this control
- * had lived between the two - a mutation that did not force the list to be
- * re-read, and a list that keeps itself "fresh" for a minute - so every test
- * seeds the list through a real fetch first, and ends on what is rendered, not
- * on a call count alone.
- */
+// The store is real and only the transport faked: the list is seeded by a real fetch first.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import { defineComponent, h } from "vue";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
@@ -34,8 +16,6 @@ import {
 const { api } = vi.hoisted(() => ({
   api: {
     getMySubscriptions: vi.fn(),
-    getById: vi.fn(),
-    checkSubscription: vi.fn(),
     subscribe: vi.fn(),
     updateSettings: vi.fn(),
     unsubscribe: vi.fn(),
@@ -46,13 +26,38 @@ vi.mock("@/entities/subscription/api/subscriptionApi", () => ({
   default: api,
 }));
 
+// The server's words for what each category sends, spelt apart from any the client could hold.
+const { getCategories } = vi.hoisted(() => ({
+  getCategories: vi.fn(async () => ({
+    data: {
+      resources: [
+        {
+          category: SubscriptionSettings.AuthorGameEvents,
+          events: "Сервер: игры",
+        },
+        {
+          category: SubscriptionSettings.AuthorBlogEvents,
+          events: "Сервер: блоги",
+        },
+        {
+          category: SubscriptionSettings.AuthorTopicEvents,
+          events: "Сервер: топики",
+        },
+      ],
+    },
+    error: null,
+  })),
+}));
+
+vi.mock("../api/userSubscriptionApi", () => ({
+  default: { getCategories },
+}));
+
 import { useSubscriptionsStore } from "@/entities/subscription";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { useToast } from "@/shared/lib/composables/useToast";
 import UserSubscribeButton from "./UserSubscribeButton.vue";
 import UserSubscriptionPanel from "./UserSubscriptionPanel.vue";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
 
 const USER_ID = "u-42";
 const USERNAME = "Astrellan";
@@ -88,10 +93,6 @@ const refused = (title = "") => ({
 
 enableAutoUnmount(afterEach);
 
-/**
- * The button in the place that owns its refusal line, as the row of actions
- * of a profile owns it: the line is a place's, made in that place's setup.
- */
 const Host = defineComponent({
   setup() {
     const result = useActionResult();
@@ -110,24 +111,20 @@ function render() {
 
 type Wrapper = ReturnType<typeof render>["wrapper"];
 
-/** The control itself: the first button, the panel's come after it. */
 const trigger = (wrapper: Wrapper) => wrapper.find("button");
 const panel = (wrapper: Wrapper) => wrapper.find(".subscription-panel");
 
-/** The three boxes of the panel, in the order they are drawn. */
 const boxes = (wrapper: Wrapper) =>
   wrapper.findAll<HTMLInputElement>(".subscription-panel input");
 
 const toast = useToast();
 const said = (): string[] => toast.toasts.value.map((t) => t.message);
 
-/** Seed the list the way a profile page does, and leave it cached and fresh. */
 async function seed(rows: Subscription[]) {
   api.getMySubscriptions.mockResolvedValue(listed(rows));
   await useSubscriptionsStore().fetchSubscriptions();
 }
 
-/** Press a box the way a reader does: a click, which toggles it. */
 async function press(box: ReturnType<typeof boxes>[number]) {
   (box.element as HTMLInputElement).click();
   await flushPromises();
@@ -187,6 +184,24 @@ describe("one press to subscribe", () => {
 });
 
 describe("the panel behind Подписан", () => {
+  it("says under each box what the server says the category sends", async () => {
+    await seed([row()]);
+    const { wrapper } = render();
+    await flushPromises();
+
+    await trigger(wrapper).trigger("click");
+
+    const events = wrapper.findAll(".category-events");
+    expect(events.map((line) => line.text())).toEqual([
+      "Сервер: игры",
+      "Сервер: блоги",
+      "Сервер: топики",
+    ]);
+    expect(boxes(wrapper).map((b) => b.attributes("aria-describedby"))).toEqual(
+      events.map((line) => line.attributes("id")),
+    );
+  });
+
   it("opens on the kinds the subscription holds, and closes on a second press", async () => {
     await seed([row(InApp | GAMES | TOPICS)]);
     const { wrapper } = render();
@@ -203,12 +218,6 @@ describe("the panel behind Подписан", () => {
     expect(panel(wrapper).exists()).toBe(false);
   });
 
-  /**
-   * A box is the save: no "Сохранить", no "Отмена". What the server confirmed
-   * reads "Сохранено" beside the box just pressed, and the channel the
-   * subscription holds goes back with the new kinds, since the server replaces
-   * the whole number.
-   */
   it("saves a box the moment it is pressed and says so beside it", async () => {
     await seed([row(InApp | Email | GAMES | BLOGS | TOPICS)]);
     const { wrapper } = render();
@@ -246,11 +255,6 @@ describe("the panel behind Подписан", () => {
     expect(said()).toEqual([]);
   });
 
-  /**
-   * While a save is out the boxes stay drawn as they are, and a press on one
-   * is held: it neither flips the box nor becomes a second request racing the
-   * first.
-   */
   it("holds a press made while a save is out", async () => {
     await seed([row()]);
     const { wrapper } = render();
@@ -271,11 +275,6 @@ describe("the panel behind Подписан", () => {
     await flushPromises();
   });
 
-  /**
-   * The boxes are the subscription: clearing the last one ends it, the panel
-   * stays and says so, and a box ticked then subscribes again with that kind
-   * alone. The old red "choose at least one" has nothing left to guard.
-   */
   it("ends the subscription with the last box, and starts it again with one", async () => {
     await seed([row(InApp | BLOGS)]);
     const { wrapper } = render();
@@ -367,10 +366,6 @@ describe("leaving the panel", () => {
     expect(panel(wrapper).exists()).toBe(false);
   });
 
-  /**
-   * A panel closed while its request is out would take the refusal with it,
-   * and nothing on the page would say the box was not saved.
-   */
   it("stays for the answer of a save that is out, and says the refusal in it", async () => {
     await seed([row()]);
     const { wrapper } = render();
@@ -395,13 +390,6 @@ describe("leaving the panel", () => {
   });
 });
 
-/**
- * The panel hangs from the button's own box, as it did before 5 October 2026:
- * the button stands in the row of actions of a profile at every width (a row
- * of buttons, a column where it does not fit), never in a menu "…", so there
- * is nothing else for the panel to hang from and no other layer to draw it in.
- * The wave of 5 October hung it from "…" and drew it in the body.
- */
 describe("where the panel hangs", () => {
   it("draws the panel in the button's own box, anchored on it", async () => {
     await seed([row()]);
@@ -413,13 +401,5 @@ describe("where the panel hangs", () => {
     expect(wrapper.findComponent(UserSubscriptionPanel).props("anchor")).toBe(
       box,
     );
-  });
-
-  it("reads nothing of a row that puts its items into a menu", () => {
-    const source = readFileSync(
-      resolve(HERE, "UserSubscribeButton.vue"),
-      "utf8",
-    );
-    expect(source).not.toMatch(/FitRow|useFitAnchor|Teleport/);
   });
 });

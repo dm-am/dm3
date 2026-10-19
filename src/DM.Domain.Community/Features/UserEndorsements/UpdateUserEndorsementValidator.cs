@@ -1,21 +1,20 @@
+using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
 namespace DM.Domain.Community.Features.UserEndorsements;
 
-/// <summary>
-/// Validator for UpdateUserEndorsement
-/// </summary>
+/// <inheritdoc />
 internal class UpdateUserEndorsementValidator : AbstractValidator<UpdateUserEndorsement>
 {
     public UpdateUserEndorsementValidator()
     {
         RuleFor(x => x.EndorsementId)
-            .NotEmpty()
-            .WithMessage("Укажите рекомендацию");
+            .NotEmpty().WithMessage(ValidationError.Empty);
 
+        // Omitted keeps the stored text; present and blank is refused, as on create.
         RuleFor(x => x.Text)
-            .MaximumLength(UserEndorsementFieldLimits.TextMaxLength)
-            .When(x => !string.IsNullOrEmpty(x.Text))
-            .WithMessage("Рекомендация не длиннее 5000 символов");
+            .NotEmpty().WithMessage(ValidationError.Empty)
+            .MaximumLength(UserEndorsementFieldLimits.TextMaxLength).WithMessage(ValidationError.Long)
+            .When(x => x.Text != null);
     }
 }

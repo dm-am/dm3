@@ -1,2 +1,2 @@
 export { useTopicsFilter } from "./useTopicsFilter";
-export { SORT_OPTIONS, DEFAULT_SORT, type SortByValue } from "./types";
+export { SORT_OPTIONS } from "./types";

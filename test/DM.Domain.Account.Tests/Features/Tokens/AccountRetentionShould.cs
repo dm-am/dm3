@@ -18,27 +18,18 @@ namespace DM.Domain.Account.Tests.Features.Tokens;
 /// How long the account area keeps what has served its purpose.
 /// </summary>
 /// <remarks>
-/// Four windows, and every one of them used to be a literal inside a background
-/// job of the HTTP host: seven days of token retention, seven days of a pending
-/// registration holding an email address, seven days for a moderator to look at
-/// a name change, and the approval a requester never used. Nothing outside a
-/// running host could read them, call them or test them, and the middle one is
-/// not a cleanup detail at all — until it passes, the address is not free for
-/// anybody else to register.
-///
-/// Each processor is asked for one pass and the cutoff it hands the store is
-/// what is checked, against the clock it was given rather than the machine's.
+/// Each processor is asked for one pass, and the cutoff it hands the store is checked against the clock it was given.
 /// </remarks>
 public class AccountRetentionShould : UnitTestBase
 {
     private static readonly DateTimeOffset Now = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
 
-    private readonly IDateTimeProvider _clock;
+    private readonly IDateTimeProvider clock;
 
     public AccountRetentionShould()
     {
-        _clock = Mock<IDateTimeProvider>();
-        _clock.Now.Returns(Now);
+        clock = Mock<IDateTimeProvider>();
+        clock.Now.Returns(Now);
     }
 
     [Fact]
@@ -48,11 +39,11 @@ public class AccountRetentionShould : UnitTestBase
         repository
             .DeleteWithdrawnOrIssuedBefore(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(3);
 
-        var deleted = await new TokenCleanupProcessor(repository, _clock).DeleteStaleAsync();
+        var deleted = await new TokenCleanupProcessor(repository, clock).DeleteStaleAsync();
 
         deleted.Should().Be(3);
         await repository.Received(1).DeleteWithdrawnOrIssuedBefore(
-            Now - AccountRetentionPolicy.TokenRetention, Arg.Any<CancellationToken>());
+            Now.AddDays(-7), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -62,12 +53,12 @@ public class AccountRetentionShould : UnitTestBase
         repository
             .DeletePendingStartedBefore(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(2);
 
-        var deleted = await new PendingRegistrationCleanupProcessor(repository, _clock)
+        var deleted = await new PendingRegistrationCleanupProcessor(repository, clock)
             .DeleteExpiredAsync();
 
         deleted.Should().Be(2);
         await repository.Received(1).DeletePendingStartedBefore(
-            Now - AccountRetentionPolicy.PendingRegistrationLifetime, Arg.Any<CancellationToken>());
+            Now.AddDays(-7), Arg.Any<CancellationToken>());
     }
 
     [Fact]
@@ -79,10 +70,10 @@ public class AccountRetentionShould : UnitTestBase
                 Arg.Any<DateTimeOffset>(), Arg.Any<DateTimeOffset>(), Arg.Any<string>(),
                 Arg.Any<CancellationToken>()).Returns(1);
 
-        await new UsernameChangeExpiryProcessor(repository, _clock).ExpireUnreviewedAsync();
+        await new UsernameChangeExpiryProcessor(repository, clock).ExpireUnreviewedAsync();
 
         await repository.Received(1).ExpireUnreviewedRequests(
-            Now - AccountRetentionPolicy.UsernameChangeReviewWindow,
+            Now.AddDays(-7),
             Now,
             Arg.Is<string>(comment => comment.Contains("срок ожидания модерации")),
             Arg.Any<CancellationToken>());
@@ -100,7 +91,7 @@ public class AccountRetentionShould : UnitTestBase
             .ExpireApprovalTokens(
                 Arg.Any<DateTimeOffset>(), Arg.Any<string>(), Arg.Any<CancellationToken>()).Returns(1);
 
-        await new UsernameChangeExpiryProcessor(repository, _clock).ExpireApprovalTokensAsync();
+        await new UsernameChangeExpiryProcessor(repository, clock).ExpireApprovalTokensAsync();
 
         // The reason travels without a separator glued to it: approving takes no
         // comment, so it is normally the whole text the requester reads.
@@ -118,7 +109,7 @@ public class AccountRetentionShould : UnitTestBase
             .PurgeExpiredSessions(Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(new SessionPurgeResult(4));
 
-        var purged = await new SessionCleanupProcessor(repository, _clock).PurgeExpiredAsync();
+        var purged = await new SessionCleanupProcessor(repository, clock).PurgeExpiredAsync();
 
         purged.SessionsRemoved.Should().Be(4);
         await repository.Received(1).PurgeExpiredSessions(Now, Arg.Any<CancellationToken>());

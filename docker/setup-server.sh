@@ -8,20 +8,13 @@ set -euo pipefail
 # tree that is cloned are then the same thing by construction.
 
 INSTALL_DIR="/opt/dm3"
-# What to install from, and with it the tag of the images this stand runs:
-# latest is published only from main, so a stand cloned from dev has to ask for
-# the dev images or it runs main's containers against dev's compose files.
-#
-# A tag is the intended value. A branch moves: two operators running the same
-# command a day apart get two different stands, and neither can say which. The
-# name is DM_REF and not DM_BRANCH because a tag is not a branch; the old name
-# still works so a recorded command keeps running.
-DM_REF="${DM_REF:-${DM_BRANCH:-dev}}"
-DM_BRANCH="$DM_REF"
+# What to install from, and with it the tag of the images this stand runs: latest is
+# published only from main, so a stand cloned from dev has to ask for the dev images. A
+# tag is the intended value, since a branch moves and two runs a day apart give two stands.
+DM_REF="${DM_REF:-dev}"
 
-# Before anything is installed or restarted. Asked here rather than left to the
-# clone below, which is where a repeat run used to die - after apt and after a
-# restart of the docker daemon on a live stand.
+# Asked before anything is installed: a repeat run used to die at the clone, after apt and
+# a docker restart on a live stand.
 bash "$(dirname "$0")/scripts/require-empty-install-dir.sh" "$INSTALL_DIR"
 
 echo "=== Установка Docker ==="
@@ -32,17 +25,9 @@ echo "=== Настройка Docker для текущего пользовате
 sudo usermod -aG docker "$USER"
 
 echo "=== Ротация журналов Docker ==="
-# The default json-file driver keeps every line forever, and Serilog writes to
-# the console beside Loki - so each line is stored twice, once under Loki's own
-# retention and once in a file that grows until the disk is full. On a
-# preview-class VPS the first service to die on a full disk is Postgres.
-#
-# Given to the daemon rather than to each compose service: the daemon also
-# covers the one-off containers the backup script and the credential generator
-# start, and this is already the layer the installer owns - it writes the
-# firewall rules, the unit, the crontab and a logrotate policy for the backup
-# log. Log options apply to containers created after they are set, and nothing
-# has been started yet.
+# The default json-file driver keeps every line forever and Serilog also writes to the
+# console, so a full disk kills Postgres first. Set on the daemon, which also covers the
+# one-off containers, and it applies to containers created after it.
 DOCKER_DAEMON_CONFIG=/etc/docker/daemon.json
 if [ -f "$DOCKER_DAEMON_CONFIG" ]; then
     echo "$DOCKER_DAEMON_CONFIG уже существует, ротацию журналов проверить вручную:"
@@ -66,9 +51,7 @@ sudo mkdir -p "$INSTALL_DIR"
 sudo chown "$USER:$USER" "$INSTALL_DIR"
 git clone --branch "$DM_REF" https://github.com/dm-am/dm3.git "$INSTALL_DIR"
 
-# Which commit this stand actually is. A ref that turns out to be a branch is
-# said out loud: the operator piped a script into sudo from a moving target, and
-# the only honest thing the installer can do is name what arrived.
+# Which commit this stand is; a ref that turns out to be a branch is said out loud.
 INSTALLED_COMMIT="$(git -C "$INSTALL_DIR" rev-parse --short HEAD)"
 if git -C "$INSTALL_DIR" show-ref --verify --quiet "refs/tags/$DM_REF"; then
     echo "Установлено из тега $DM_REF ($INSTALLED_COMMIT)."
@@ -79,12 +62,9 @@ else
 fi
 
 echo "=== Подготовка docker/.env ==="
-# Everything below needs this file: the backup scripts source it, and the
-# compose files declare the encryption key and the object storage
-# accounts through ${...:?}, which stops interpolation before the first
-# container. Nothing created it, so the installer died on its last line with the
-# unit and the nightly jobs already enabled.
-bash "$INSTALL_DIR/docker/scripts/init-env.sh" server "$DM_BRANCH"
+# Everything below needs this file: the backup scripts source it and compose stops at
+# ${...:?} without it.
+bash "$INSTALL_DIR/docker/scripts/init-env.sh" server "$DM_REF"
 
 echo "=== Открытие портов (firewall) ==="
 sudo iptables -I INPUT -p tcp --dport 80 -j ACCEPT
@@ -92,9 +72,8 @@ sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
 sudo netfilter-persistent save
 
 echo "=== Настройка preview-пароля ==="
-# A clone carries no credentials: the file is generated here, on the server, and
-# the check for an unset password lives in the generator so that the operator
-# changing the password later gets the same one.
+# A clone carries no credentials: the file is generated here, and the generator holds the
+# unset-password check so a later change of the password gets the same one.
 bash "$INSTALL_DIR/docker/scripts/init-htpasswd.sh"
 
 echo "=== Установка systemd-сервиса ==="
@@ -107,26 +86,19 @@ sudo bash "$INSTALL_DIR/docker/scripts/install-cron.sh" "$INSTALL_DIR"
 
 echo "=== Запуск приложения ==="
 cd "$INSTALL_DIR/docker"
-# The object store first and with --wait. The site starts without it, so on the
-# empty volume of a first start this is the one step a bucket the server failed
-# to create stops, instead of every upload answering 500 behind a green health.
+# The object store first and with --wait: the site starts without it, so this is the one
+# step a failed bucket creation stops, instead of every upload answering 500.
 sudo docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d --wait storage seaweedfs
-# No --build: CI builds the four images and pushes them, the server pulls them.
-# Building the solution here costs gigabytes of disk and peak memory on a
-# preview-class VPS, and it leaves a locally built image under the tag the
-# registry publishes - which no later "up" refreshes, so the published images
-# were consumed by nobody. The production profile adds watchtower, the updater
-# the guides name; without a profile it was declared and never started.
+# No --build: CI builds the four images and the server pulls them; building here costs
+# gigabytes of disk and memory on a small VPS. The production profile adds watchtower.
 sudo docker compose --profile production -f docker-compose.yml -f docker-compose.preview.yml up -d
 
 echo ""
 echo "=== Готово! ==="
 echo "Приложение доступно по адресу: http://$(curl -s ifconfig.me)"
 echo "Логин: preview"
-# Пароль здесь не печатается: его задал оператор минуту назад, а напечатанный
-# остается в терминале, в истории сессии и в логе установки, если она шла через
-# tee. Вдобавок под set -u эта строка роняла установщик на последнем шаге, если
-# пароль вводили в промпт init-htpasswd.sh, а не экспортировали.
+# The password is not printed: it would stay in the terminal, the session history and the
+# install log, and under set -u it crashed this step when typed at the init-htpasswd.sh prompt.
 echo ""
 echo "Стенд отвечает по http: сертификата пока нет, самоподписанного не будет —"
 echo "предупреждение браузера учит кликать сквозь предупреждения."

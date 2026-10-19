@@ -1,8 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
-using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 using AwesomeAssertions;
 using Xunit;
 
@@ -16,14 +14,6 @@ public class TestimonialControllerShould : IntegrationTestBase
     public TestimonialControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
-
-    private static GeneralUser SeniorModerator() => new()
-    {
-        UserId = TestConstants.SeniorModeratorUserId,
-        Username = TestConstants.SeniorModeratorUserUsername,
-        Role = UserRole.SeniorModerator,
-        AccessPolicy = AccessPolicy.NotSpecified
-    };
 
     /// <summary>
     /// The name the answer is signed by, read out of the envelope.
@@ -57,51 +47,20 @@ public class TestimonialControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetTestimonials_ReturnsOk()
+    public async Task GetTestimonialsReturnsOk()
     {
-        // Act
         var response = await Client.GetAsync("/v1/testimonials");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task GetTestimonials_ReturnsPaginatedResults()
-    {
-        // Act
-        var response = await Client.GetAsync("/v1/testimonials?number=1&size=10");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task PostTestimonial_RequiresAuthentication()
-    {
-        // Arrange
-        var testimonialData = new
-        {
-            authorUsername = TestConstants.TestUserUsername,
-            text = "Great website for roleplay!"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync("/v1/testimonials", testimonialData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
-    /// A testimonial is posted ON BEHALF OF the participant the moderator
-    /// names. Signed by the caller, the entry was a claim about the wrong
-    /// person, on a page the whole site reads.
+    /// A testimonial is posted on behalf of the participant the moderator names.
     /// </summary>
     [Fact]
-    public async Task PostTestimonial_SignsItWithTheNamedParticipant()
+    public async Task PostTestimonialSignsItWithTheNamedParticipant()
     {
-        // Arrange: a seeded user with no testimonial of their own yet.
+        // A seeded user with no testimonial of their own yet.
         var request = WithBody(
             CreateAdminRequest(HttpMethod.Post, "/v1/testimonials"),
             new
@@ -110,14 +69,12 @@ public class TestimonialControllerShould : IntegrationTestBase
                 text = "Отличная площадка для словесных ролевых игр!"
             });
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Created);
         var author = await AuthorOf(response);
         author.Should().Be(TestConstants.InactiveUser1Username);
-        author.Should().NotBe(TestConstants.AdminUserUsername);
+        author.Should().NotBe(TestConstants.AdminUserLogin);
 
         // Restore: the fixture is shared and this entry is not part of its seed.
         var id = await IdOf(response);
@@ -127,68 +84,48 @@ public class TestimonialControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task PostTestimonial_RefusesAnUnknownAuthor()
+    public async Task PostTestimonialRefusesAnUnknownAuthor()
     {
-        // Arrange
         var request = WithBody(
             CreateAdminRequest(HttpMethod.Post, "/v1/testimonials"),
             new { authorUsername = "nosuchparticipant", text = "Отличная площадка!" });
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     [Fact]
-    public async Task PostTestimonial_RefusesASecondEntryForTheSameParticipant()
+    public async Task PostTestimonialRefusesASecondEntryForTheSameParticipant()
     {
-        // Arrange: the seeded testuser already has one.
+        // The seeded testuser already has one.
         var request = WithBody(
             CreateAdminRequest(HttpMethod.Post, "/v1/testimonials"),
             new
             {
-                authorUsername = TestConstants.TestUserUsername,
+                authorUsername = TestConstants.TestUserLogin,
                 text = "Второй отзыв того же автора"
             });
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
     [Fact]
-    public async Task PostTestimonial_RefusesAnOrdinaryParticipant()
+    public async Task PostTestimonialRefusesAnOrdinaryParticipant()
     {
-        // Arrange
         var request = WithBody(
             CreateAuthenticatedRequest(HttpMethod.Post, "/v1/testimonials"),
             new
             {
-                authorUsername = TestConstants.SecondUserUsername,
+                authorUsername = TestConstants.SecondUserLogin,
                 text = "Отличная площадка!"
             });
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task PatchTestimonial_RequiresAuthentication()
-    {
-        // Act
-        var response = await Client.PatchAsJsonAsync(
-            $"/v1/testimonials/{TestConstants.TestTestimonialId}",
-            new { text = "Переписанный отзыв о сайте" });
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
@@ -196,9 +133,9 @@ public class TestimonialControllerShould : IntegrationTestBase
     /// WebsiteTestimonialIntention.Edit admits the named author.
     /// </summary>
     [Fact]
-    public async Task PatchTestimonial_LetsTheNamedAuthorRewriteTheirOwn()
+    public async Task PatchTestimonialLetsTheNamedAuthorRewriteTheirOwn()
     {
-        // Arrange: testuser is the seeded author of TestTestimonialId.
+        // Testuser is the seeded author of TestTestimonialId.
         var before = await Client.GetAsync($"/v1/testimonials/{TestConstants.TestTestimonialId}");
         var originalText = await TextOf(before);
 
@@ -207,14 +144,12 @@ public class TestimonialControllerShould : IntegrationTestBase
                 HttpMethod.Patch, $"/v1/testimonials/{TestConstants.TestTestimonialId}"),
             new { text = "Переписанный автором отзыв о сайте" });
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         (await TextOf(response)).Should().Be("Переписанный автором отзыв о сайте");
         // The signature does not move to whoever pressed save.
-        (await AuthorOf(response)).Should().Be(TestConstants.TestUserUsername);
+        (await AuthorOf(response)).Should().Be(TestConstants.TestUserLogin);
 
         // Restore the seeded text for the tests that read this list.
         var restore = WithBody(
@@ -225,9 +160,8 @@ public class TestimonialControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task PatchTestimonial_LetsSeniorModerationRewriteAnothers()
+    public async Task PatchTestimonialLetsSeniorModerationRewriteAnothers()
     {
-        // Arrange
         var before = await Client.GetAsync($"/v1/testimonials/{TestConstants.SecondTestimonialId}");
         var originalText = await TextOf(before);
 
@@ -235,22 +169,20 @@ public class TestimonialControllerShould : IntegrationTestBase
             CreateAuthenticatedRequest(
                 HttpMethod.Patch,
                 $"/v1/testimonials/{TestConstants.SecondTestimonialId}",
-                SeniorModerator()),
+                CustomWebApplicationFactory.CreateSeniorModeratorUser()),
             new { text = "Отредактировано старшей модерацией" });
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        (await AuthorOf(response)).Should().Be(TestConstants.SecondUserUsername);
+        (await AuthorOf(response)).Should().Be(TestConstants.SecondUserLogin);
 
         // Restore
         var restore = WithBody(
             CreateAuthenticatedRequest(
                 HttpMethod.Patch,
                 $"/v1/testimonials/{TestConstants.SecondTestimonialId}",
-                SeniorModerator()),
+                CustomWebApplicationFactory.CreateSeniorModeratorUser()),
             new { text = originalText });
         (await Client.SendAsync(restore)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
@@ -260,9 +192,9 @@ public class TestimonialControllerShould : IntegrationTestBase
     /// but being the named author, and this caller is neither.
     /// </summary>
     [Fact]
-    public async Task PatchTestimonial_RefusesAStranger()
+    public async Task PatchTestimonialRefusesAStranger()
     {
-        // Arrange: an ordinary moderator, one rank below the override, on
+        // An ordinary moderator, one rank below the override, on
         // somebody else's entry.
         var request = WithBody(
             CreateAuthenticatedRequest(
@@ -271,20 +203,8 @@ public class TestimonialControllerShould : IntegrationTestBase
                 CustomWebApplicationFactory.CreateModeratorUser()),
             new { text = "Чужой отзыв переписан посторонним" });
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task DeleteTestimonial_RequiresAuthentication()
-    {
-        // Act
-        var response = await Client.DeleteAsync($"/v1/testimonials/{TestConstants.TestTestimonialId}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

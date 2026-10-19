@@ -1,26 +1,18 @@
 using System;
+using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Moderation.Features.Warnings;
 
-/// <summary>
-/// Output DTO for warning
-/// </summary>
 public class Warning
 {
-    /// <summary>
-    /// Warning identifier
-    /// </summary>
     public Guid WarningId { get; set; }
 
-    /// <summary>
-    /// Target user
-    /// </summary>
     public GeneralUser TargetUser { get; set; } = null!;
 
     /// <summary>
-    /// Warning author (moderator)
+    /// The moderator who issued the warning, null for a removed account
     /// </summary>
     public GeneralUser Author { get; set; } = null!;
 
@@ -29,23 +21,17 @@ public class Warning
     /// </summary>
     public Guid EntityId { get; set; }
 
-    /// <summary>
-    /// Entity type that caused the warning
-    /// </summary>
     public WarningEntityType EntityType { get; set; }
 
-    /// <summary>
-    /// Creation time
-    /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Warning text/reason
+    /// Why the warning was issued
     /// </summary>
     public string Text { get; set; } = "";
 
     /// <summary>
-    /// Warning points as they stand now (0-6, 0 = verbal warning without points)
+    /// Warning points as they stand now, 0 being a verbal warning
     /// </summary>
     public int Points { get; set; }
 
@@ -111,121 +97,31 @@ public class Warning
     /// <summary>
     /// Why a guest could not follow the link to the offending text, null when he
     /// could. Derived on read, from what a guest could read at that place right
-    /// now; the text itself is shown in the open log whatever this says.
+    /// now.
     /// </summary>
     public WarningLogClosure? LogClosure { get; set; }
-}
-
-/// <summary>
-/// What a profile showed everybody when a warning was issued on it: the avatar,
-/// the status and "О себе"
-/// </summary>
-/// <remarks>
-/// The personal fields of the profile (the name, the place, the contacts, the
-/// birthday) are not part of it, and neither is the login: they are the
-/// person's to erase later, and the open log would keep them for good.
-/// </remarks>
-public class WarningProfile
-{
-    /// <summary>
-    /// The status, null when the profile had none
-    /// </summary>
-    public string? Status { get; set; }
 
     /// <summary>
-    /// "О себе" as written, null when the profile had none
+    /// The place a guest may not read, whose reading the open log asks of its
+    /// viewer. Derived on read.
     /// </summary>
-    public string? Info { get; set; }
+    public ReadablePlace? ClosedPlace { get; set; }
 
     /// <summary>
-    /// The avatar the profile carried, null when it had none or when moderation
-    /// has since deleted the picture
+    /// The closure for a viewer who reads <see cref="ClosedPlace" />. Derived on read.
     /// </summary>
-    public AvatarPicture? Picture { get; set; }
-}
-
-/// <summary>
-/// The profile of the warned user as the warning takes it: read at issue time
-/// and stored once
-/// </summary>
-public class ProfileCapture
-{
-    /// <summary>
-    /// The status, null when there is none
-    /// </summary>
-    public string? Status { get; set; }
+    public WarningLogClosure? ClosureForReader { get; set; }
 
     /// <summary>
-    /// "О себе", null when there is none
+    /// Whether the open log gives the copy of the text and the title of its place.
     /// </summary>
-    public string? Info { get; set; }
-
-    /// <summary>
-    /// The upload the avatar is, null when there is no avatar
-    /// </summary>
-    public Guid? AvatarUploadId { get; set; }
-}
-
-/// <summary>
-/// Entity DTO for creating a warning (repository level)
-/// </summary>
-public class CreateWarningEntity
-{
-    /// <summary>
-    /// Warning identifier
-    /// </summary>
-    public Guid WarningId { get; set; }
-
-    /// <summary>
-    /// Target user identifier
-    /// </summary>
-    public Guid TargetUserId { get; set; }
-
-    /// <summary>
-    /// Author identifier
-    /// </summary>
-    public Guid AuthorId { get; set; }
-
-    /// <summary>
-    /// Entity ID that caused the warning
-    /// </summary>
-    public Guid EntityId { get; set; }
-
-    /// <summary>
-    /// Entity type
-    /// </summary>
-    public WarningEntityType EntityType { get; set; }
-
-    /// <summary>
-    /// Warning points
-    /// </summary>
-    public int Points { get; set; }
-
-    /// <summary>
-    /// Warning text
-    /// </summary>
-    public string Text { get; set; } = "";
-
-    /// <summary>
-    /// Copy of the offending text as it stood when the warning was issued
-    /// </summary>
-    public string? EntitySnapshot { get; set; }
-
-    /// <summary>
-    /// The status of the warned profile when the warning was issued, for a
-    /// warning on a profile
-    /// </summary>
-    public string? ProfileStatusSnapshot { get; set; }
-
-    /// <summary>
-    /// The upload the avatar of the warned profile was when the warning was
-    /// issued, for a warning on a profile. The warning keeps the picture for as
-    /// long as moderation does not delete it.
-    /// </summary>
-    public Guid? ProfileAvatarUploadId { get; set; }
-
-    /// <summary>
-    /// Creation timestamp
-    /// </summary>
-    public DateTimeOffset CreatedUtc { get; set; }
+    /// <remarks>
+    /// Not where the place is closed to a guest, and not where nothing tells where
+    /// the text stood, so whether a guest could read it there has no answer: the
+    /// log is read by everybody, and a closed place is read by its own people alone.
+    /// A text gone from an open place is still shown, as the one the warning was
+    /// given for.
+    /// </remarks>
+    public bool LogShowsText => LogClosure is not (
+        WarningLogClosure.NotFound or WarningLogClosure.PlaceNotPublic);
 }

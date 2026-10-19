@@ -10,19 +10,9 @@ namespace DM.Infrastructure.Persistence.Entities.Moderation;
 /// moderation's answer
 /// </summary>
 /// <remarks>
-/// A table of its own and not a row of Comments, the table of the discussions of
-/// the site. That table feeds what the whole site reads - the count of comments
-/// behind an achievement, the snapshot a warning takes of the text it names, the
-/// open log that shows that snapshot to strangers - and a conversation with
-/// moderation, about access recovery or personal data, belongs in none of them.
-/// Kept apart here it is out of every one of those reads by construction, rather
-/// than by a condition each of them would have to remember. The ticket repository
-/// and the notifications about tickets are its only readers.
-///
-/// A comment is not edited and not deleted: the conversation is the record of how
-/// the ticket was settled. It goes with its ticket (cascade), and the account of
-/// its author cannot go from under it (restrict): an account is removed softly,
-/// and a comment of a removed account stays, signed by nobody.
+/// Not a row of Comments, so a conversation with moderation stays out of every
+/// site-wide read of comments by construction. Never edited or deleted: it is the
+/// record of how the ticket was settled.
 /// </remarks>
 [Table("TicketComments")]
 public class TicketComment
@@ -56,9 +46,6 @@ public class TicketComment
 
     #region Navigation Properties
 
-    /// <summary>
-    /// The ticket
-    /// </summary>
     [ForeignKey(nameof(TicketId))]
     public virtual Ticket Ticket { get; set; } = null!;
 

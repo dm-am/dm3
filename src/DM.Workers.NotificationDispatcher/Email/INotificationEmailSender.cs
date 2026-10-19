@@ -1,4 +1,3 @@
-using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Personal.Features.Notifications;
@@ -17,5 +16,5 @@ public interface INotificationEmailSender
     /// <param name="notification">Created notification</param>
     /// <param name="eventType">Event type for category mapping</param>
     /// <param name="ct">Cancellation token</param>
-    Task SendIfEnabled(CreateNotification notification, EventType eventType, CancellationToken ct = default);
+    Task SendIfEnabled(CreateNotification notification, EventType eventType, CancellationToken ct);
 }

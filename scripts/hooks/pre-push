@@ -1,70 +1,63 @@
 #!/bin/sh
 #
-# Гоняет на пуше ветки гейты CI, которые имеет смысл гонять локально.
+# Runs the cheap, exact gates of CI on a push of a branch; the rest only on request.
 #
-# В dev изменения попадают только слиянием PR, а PR сливается только при
-# зеленом CI: это держит защита ветки. Хук дает тот же ответ раньше, о красном
-# говорит пуш ветки, а не страница PR через полчаса. Пуш прямо в dev или main
-# хук отвергает до всех гейтов.
+# Changes reach dev only through a merged PR, and a PR merges only on a green CI, which runs
+# everything. The hook answers earlier on the gates that answer in minutes: a red result
+# comes with the push, not half an hour later on the PR page. A push straight to dev or main
+# is rejected before any gate.
 #
-# Набор e2e на ветке не идет: его гонит джоба e2e на PR, против стека,
-# поднятого в ней самой. Локально он шел бы против стенда, а стенд перед
-# каждым пушем ветки пришлось бы пересобирать под нее. Набор по своей воле,
-# против своего стенда, дает DM_GATES_FULL=1 (ниже).
+# The branch set: tests of the hooks themselves, the path map, lock file, code comparison
+# test, client gates in src/gates, knip, lint with prettier, types, format and Release build
+# of the solution, architecture tests. Client unit tests, solution tests, coverage
+# thresholds, client build, vulnerable packages, e2e and the docker steps are CI's on a PR;
+# the hook holds them too but runs them only with DM_GATES_FULL=1. Which gate is in which
+# set: AgentToolingShould.RunOnABranchOnlyTheGatesThatAnswerFirst.
 #
-# Джобы обоих воркфлоу: "+" хук гоняет ее гейты, "-" не гоняет ни одного и
-# говорит почему. Цена тут часть контракта: гейт на двадцать минут перестают
-# запускать, а обойденный гейт не защищает ни от чего.
-#
-# Маркер "-" значит именно ноль: пока compose-topology стояла "-" целиком,
-# внутри нее сидел shellcheck, которому нужен только docker, и его первым
-# читателем становился красный CI. Строка на джобу прячет шаг ценой в секунды
-# за ценой шага в минуты, поэтому шаги считаются поштучно —
+# Jobs of both workflows: "+" means the hook holds the gates of the job, "-" means it holds
+# none, with the reason. Cost is part of the contract: a gate that takes twenty minutes
+# stops being run, and a bypassed gate protects nothing. "-" means exactly zero, so steps are
+# counted one by one, not per job:
 # AgentToolingShould.RunEveryGateTheWorkflowRunsThatBelongsOnThisMachine.
-#   changes           +  карта путей scripts/ci-paths.json: решает, какие
-#                        гейты ниже нужны этому пушу, и печатает почему
-#   docs              +  архитектурные тесты и юнит-тесты клиента, когда
-#                        build не нужен: оба читают документы
-#   build             +  форматирование, сборка и тесты решения в Release,
-#                        порог покрытия. Сбор покрытия удлиняет прогон тестов,
-#                        и это плата за то, чтобы порог не падал впервые в CI
-#   frontend          +  синхронность lock-файла, линт, типы, юнит-тесты с
-#                        порогом покрытия, сборка
-#   dependency-scan   +  уязвимые пакеты .NET и npm
-#   e2e               +  только с DM_GATES_FULL=1, на ветке его гонит CI на
-#                        PR. Набор на одном профиле браузера и с настройками
-#                        CI (один воркер, два повтора, запрет test.only)
-#                        против поднятого стенда. Стенд хук не поднимает, а
-#                        проверяет первым делом и при отказе печатает
-#                        команду, которая его готовит
-#   compose-topology  +  целиком: разбор скриптов, топология compose,
-#                        конфигурации nginx, установщик сервера, мониторинг.
-#                        Всей джобе нужен только docker, и идет она секунды
-#   deployment-smoke  -  поднимает деплойную пару целиком: docker и минуты
-#   publish           -  пишет образы в реестр по секретам GitHub
-#   publish-frontend  -  то же
-#   promote-images    -  двигает подвижные имена по дайджесту, в реестре
-#   security          -  вызов security.yml из графа сборки; сам ничего не
-#                        считает, ждет двух джоб ниже
-#   codeql            -  анализ выполняется на стороне GitHub
-#   zap-scan          -  сканирует поднятый стенд: docker и минуты
+#   changes           +  the path map scripts/ci-paths.json: decides which gates below this
+#                        push needs, and prints why
+#   docs              +  architecture tests and src/gates when build is not needed: both read
+#                        documents. Client unit tests only with DM_GATES_FULL=1
+#   build             +  format, Release build, architecture tests. Solution tests and the
+#                        coverage threshold only with DM_GATES_FULL=1
+#   frontend          +  lock file sync, code comparison test, src/gates, knip, lint, types.
+#                        Unit tests with the coverage threshold and the build only with
+#                        DM_GATES_FULL=1
+#   dependency-scan   +  only with DM_GATES_FULL=1: vulnerable .NET and npm packages, an
+#                        answer of the network and not of the tree
+#   e2e               +  only with DM_GATES_FULL=1. One browser profile with the CI settings
+#                        (one worker, two retries, test.only banned) against a stand that is
+#                        up. The hook starts no stand: it checks first and on refusal prints
+#                        the command that prepares it
+#   compose-topology  +  only with DM_GATES_FULL=1, the whole job: script lint, compose
+#                        topology, nginx configurations, server installer, monitoring. The
+#                        whole job needs docker
+#   deployment-smoke  -  starts the deployed pair whole: docker and minutes
+#   publish           -  pushes images to the registry with GitHub secrets
+#   publish-frontend  -  the same
+#   promote-images    -  moves the moving names by digest, in the registry
+#   security          -  a call of security.yml from the build graph; it counts nothing
+#                        itself and waits for the two jobs below
+#   codeql            -  the analysis runs on the GitHub side
+#   zap-scan          -  scans a running stand: docker and minutes
 #
-# Установка (один раз на клон):
+# Install (once per clone):
 #   git config core.hooksPath scripts/hooks
-# Отключение:
+# Disable:
 #   git config --unset core.hooksPath
-# Разовый обход, когда он осознан:
+# Deliberate bypass:
 #   git push --no-verify
 #
-# Порядок гейтов — от самого дешевого к самому дорогому, чтобы падать раньше.
-#
-# Гейты идут не все, а те, что нужны изменениям пуша: git diff origin/dev...HEAD
-# раскладывается по группам путей карты scripts/ci-paths.json, и карта решает,
-# какие джобы CI нужны, тем же скриптом, что и джоба changes воркфлоу. Карта у
-# них одна (AgentToolingShould.ReadOneMapOfPaths), и база та же, что у CI на PR:
-# база слияния ветки с dev. Путь, которого карта не знает, и diff, который git
-# не смог построить, дают полный набор. Полный набор по своей воле, e2e в том
-# числе:
+# Gates run from the cheapest to the dearest, to fail early, and only those the push needs:
+# git diff origin/dev...HEAD is mapped by scripts/ci-paths.json to the CI jobs it needs, by
+# the same script as the changes job, against the same base as CI on a PR
+# (AgentToolingShould.ReadOneMapOfPaths). A path the map does not know and a diff git cannot
+# build give all jobs, but a branch still runs only its set. The full set, e2e included:
 #   DM_GATES_FULL=1 git push
 
 set -e
@@ -74,10 +67,9 @@ CLIENT="$ROOT/src/DM.Web.Client"
 
 say() { printf '\n\033[36m==> %s\033[0m\n' "$1"; }
 
-# Куда уходит пуш, git подает на stdin, строкой на ссылку: "<локальная ссылка>
-# <sha> <удаленная ссылка> <sha>". dev и main принимают только слияния PR, и
-# пуш в них отвергается раньше любого гейта: защита ветки отвергнет его тоже,
-# но уже после того, как гейты отработали впустую.
+# Where the push goes arrives on stdin, a line per ref: "<local ref> <sha> <remote ref> <sha>".
+# dev and main take PR merges only, so a push to them is rejected before any gate: branch
+# protection would reject it too, but after the gates ran for nothing.
 while read -r _ _ remote_ref _; do
   case "$remote_ref" in
     refs/heads/dev | refs/heads/main)
@@ -87,11 +79,8 @@ while read -r _ _ remote_ref _; do
   esac
 done
 
-# Первым и не из воркфлоу: этот хук — единственное, что стоит между запрещенной
-# командой и потерянной работой, а его собственный тест до сих пор не гонял
-# никто, ни локально, ни в CI. Проверка идет в обе стороны — каждая опасная
-# форма блокируется, каждая безопасная проходит, — и стоит доли секунды, так
-# что дешевле ее в списке нет.
+# First and not from a workflow: this hook is the only thing between a forbidden command and
+# lost work, and its own test ran nowhere. Checked both ways, in a fraction of a second.
 say "Хуки: защита от разрушительных команд git"
 node "$ROOT/.claude/hooks/block-dangerous-git.test.js"
 
@@ -101,40 +90,97 @@ node "$ROOT/.claude/hooks/block-new-migrations.test.js"
 say "Хуки: разбор пути для линта правки"
 node "$ROOT/.claude/hooks/lint-edited-file.test.js"
 
-# Решение карты: строка "<джоба>=true|false" на каждую джобу. Отчет о группах
-# и о том, что пропущено и почему, скрипт печатает в stderr, то есть сюда же.
+# The map's verdict: a "<job>=true|false" line per job. The report of groups and skipped jobs
+# goes to stderr, i.e. here.
 say "Пути: какие гейты нужны этому пушу"
 SELECTION=$(node "$ROOT/scripts/ci-paths.mjs" --diff origin/dev...HEAD)
 
 wants() { printf '%s\n' "$SELECTION" | grep -qx "$1=true"; }
 
-# Набор e2e и проверка стенда под него идут только по своей воле. На ветке
-# набор гонит джоба e2e на PR, против стека, поднятого в ней самой. Локально
-# он шел бы против стенда, а проверка стенда сверяет коммит его API с пушем,
-# так что ради каждого пуша ветки стенд пришлось бы пересобирать. Пуш в dev и
-# main сюда не доходит, его отвергла проверка ссылок выше. Непустая
-# DM_GATES_FULL зовет набор, как зовет и все джобы карты.
-e2e_requested() { [ -n "${DM_GATES_FULL:-}" ]; }
+# Gates that take tens of minutes or need docker and a network run only on request: CI runs
+# them on a PR and is the merge gate, and an e2e run would face a stand rebuilt for every
+# push. A push to dev or main never gets here. A non-empty DM_GATES_FULL calls the full set,
+# as it calls all jobs of the map.
+full_requested() { [ -n "${DM_GATES_FULL:-}" ]; }
 
-# Стенд для e2e проверяется здесь, а сам набор идет последним. Набор самый
-# дорогой из гейтов, и узнать, что ему не на чем бежать, надо за секунду, а не
-# после двадцати минут остальных. Скрипт ничего не поднимает: при отказе он
-# называет команду, которая готовит стенд (dm.ps1 e2e или dm.sh e2e выключают
-# лимит запросов так же, как оверлей джобы e2e в CI).
-if wants e2e && e2e_requested; then
+# The stand for e2e is checked here and the suite runs last, to learn that it has nowhere to
+# run before twenty minutes of the other gates. The script starts nothing; on refusal it
+# names the command that prepares the stand (dm.ps1 e2e or dm.sh e2e switch the request
+# limit off as the overlay of the e2e job does).
+if wants e2e && full_requested; then
   say "e2e: стенд"
   bash "$ROOT/scripts/check-e2e-stand.sh"
-elif wants e2e; then
-  say "e2e: на ветке его гонит CI на PR, здесь только с DM_GATES_FULL=1"
 fi
 
-# Джоба compose-topology целиком. Всей ей нужен только docker, и вся она идет
-# двадцать две секунды, поэтому оставлять тут ее дешевую часть смысла нет:
-# правка файлов развертывания все равно красила бы пуш на той половине, что
-# осталась в CI. Так и прятался разбор скриптов: цикл по одному элементу в
-# scripts/verify-seed-reproducibility.sh уехал в origin и остановил джобу, от
-# которой зависит вся публикация.
-if wants compose-topology; then
+# npm ci, not npm install, since CI installs only that way and it fails when package-lock.json
+# diverged from package.json, which the gates below, running on the node_modules in place,
+# cannot see. --dry-run installs nothing and checks exactly what made CI reject the lock file.
+if wants frontend; then
+  say "Фронтенд: синхронность lock-файла"
+  (cd "$CLIENT" && npm ci --dry-run)
+fi
+
+# Code comparison test of the frame stand: both sides of the comment comparison and the
+# command itself, on copies of real files. A broken lexer would say "same code" about any
+# change. The lexers come from the client's node_modules, hence the frontend job.
+if wants frontend; then
+  say "Стенд кадров: тест сравнения кода"
+  node "$ROOT/scripts/visual/compare-code.test.mjs"
+fi
+
+# Gates in src/gates: tree rules that read sources as text (size and duplication ratchets,
+# code style, the style system and others). Part of the client unit tests, and they answer in
+# minutes. Some read documents, so they run for a push of documents alone too (the docs job).
+# CI runs the specs of the rest of the tree on a PR.
+if wants frontend || wants docs; then
+  say "Фронтенд: гейты в src/gates"
+  (cd "$CLIENT" && npm run test:conventions)
+fi
+
+# Dead client code: unused files, exports, types and packages. A finding fails the step, and
+# a false one gets a @public tag at the export or an entry in knip.json with the reason.
+if wants frontend; then
+  say "Фронтенд: мертвый код (knip)"
+  (cd "$CLIENT" && npm run knip)
+fi
+
+# The client format is checked by lint: prettier/prettier in eslint.config.js, and
+# --max-warnings 0 turns its warning into a failure.
+if wants frontend; then
+  say "Фронтенд: линт и формат"
+  (cd "$CLIENT" && npm run lint:ci)
+
+  say "Фронтенд: типы"
+  (cd "$CLIENT" && npm run type-check)
+fi
+
+# The docs job: architecture tests alone. The map calls it only when build is not needed,
+# and build runs the same tests in its own block below.
+if wants docs; then
+  say "Документы: архитектурные тесты Release"
+  dotnet test "$ROOT/test/DM.Architecture.Tests" -c Release --nologo
+fi
+
+if wants build; then
+  say "Бэкенд: форматирование"
+  dotnet format "$ROOT/DM.sln" whitespace --verify-no-changes
+
+  say "Бэкенд: сборка Release"
+  dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
+
+  # --no-build: the solution was built on the line above, and without it the test would check
+  # a build the build gate never saw.
+  say "Бэкенд: архитектурные тесты Release"
+  dotnet test "$ROOT/test/DM.Architecture.Tests" --no-build -c Release --nologo
+fi
+
+# The full set follows, every gate behind full_requested. It runs the src/gates gates and the
+# architecture tests again, within the client unit tests and the solution tests, as CI does.
+
+# The whole compose-topology job: it needs only docker and takes twenty-two seconds, so it
+# is not split, and a fix to a deployment file would otherwise turn the full run red on the
+# half left in CI.
+if full_requested && wants compose-topology; then
   say "Скрипты оболочки: shellcheck"
   bash "$ROOT/scripts/check-shell-scripts.sh"
 
@@ -151,43 +197,24 @@ if wants compose-topology; then
   bash "$ROOT/scripts/deployment/check-monitoring.sh"
 fi
 
-# npm ci, а не npm install: CI ставит пакеты только так, и эта форма падает,
-# когда package-lock.json разошелся с package.json. Гейты ниже гоняются по уже
-# разложенному node_modules и рассинхрона не видят вовсе — им все равно, чем и
-# когда он был разложен. --dry-run ничего не ставит и не трогает дерево:
-# проверяется ровно то, из-за чего CI отверг lock-файл.
-if wants frontend; then
-  say "Фронтенд: синхронность lock-файла"
-  (cd "$CLIENT" && npm ci --dry-run)
-
-  say "Фронтенд: линт"
-  (cd "$CLIENT" && npm run lint:ci)
-
-  say "Фронтенд: типы"
-  (cd "$CLIENT" && npm run type-check)
-fi
-
-# Юнит-тесты клиента читают документы: имена файлов в комментариях проверяются
-# по дереву, SURFACES.md и BBCODE_RENDERING.md разбираются как данные. Поэтому
-# они идут и тогда, когда пуш правит одни документы (джоба docs).
-if wants frontend || wants docs; then
+# The client unit tests read documents (file names in comments are checked against the tree,
+# BBCODE_RENDERING/grammar.md and UI_STANDARDS.md are parsed as data), so the docs job calls
+# them too. Through npm run test:coverage, not npx vitest run: the thresholds are declared in
+# coverage.thresholds (vite.config.ts) and apply only with --coverage.
+if full_requested && { wants frontend || wants docs; }; then
   say "Фронтенд: юнит-тесты"
-# Через npm run test:coverage, а не npx vitest run: пороги покрытия объявлены в
-# блоке coverage.thresholds (vite.config.ts) и применяются только при --coverage.
-# Голой командой хук гонял те же тесты и не проверял тот же порог.
   (cd "$CLIENT" && npm run test:coverage)
 fi
 
-if wants frontend; then
+if full_requested && wants frontend; then
   say "Фронтенд: сборка"
   (cd "$CLIENT" && npm run build)
 fi
 
-# Джоба dependency-scan стоит в needs у обеих джоб публикации, поэтому ее
-# падение останавливает выкладку целиком, а уязвимые пакеты в истории проекта
-# доезжали до origin дважды. npm ci, в отличие от CI, тут не нужен: на клоне
-# node_modules уже стоят, а audit читает package-lock.json.
-if wants dependency-scan; then
+# The dependency-scan job is in needs of both publish jobs, so its failure stops the whole
+# release. npm ci is not needed here, unlike in CI: node_modules are on the clone and audit
+# reads package-lock.json.
+if full_requested && wants dependency-scan; then
   say "Зависимости: пакеты npm"
   (cd "$CLIENT" && npm audit --omit=dev --audit-level=high)
 
@@ -195,60 +222,44 @@ if wants dependency-scan; then
   bash "$ROOT/scripts/check-vulnerable-packages.sh"
 fi
 
-# Джоба docs: архитектурные тесты без остального решения. Карта зовет ее только
-# тогда, когда build не нужен, а build гоняет эти же тесты в составе решения.
-if wants docs; then
-  say "Документы: архитектурные тесты Release"
-  dotnet test "$ROOT/test/DM.Architecture.Tests" -c Release --nologo
-fi
-
-if wants build; then
-  say "Бэкенд: форматирование"
-  dotnet format "$ROOT/DM.sln" whitespace --verify-no-changes
-
-  say "Бэкенд: сборка Release"
-  dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
-
-  # Интеграционные тесты поднимают Testcontainers: нужен docker. Если демон не
-  # отвечает, это не повод пропустить гейт молча.
+if full_requested && wants build; then
+  # The integration tests start Testcontainers and need docker; a daemon that does not answer
+  # is no reason to skip the gate silently.
   #
-  # --no-build: решение собрано строкой выше. С -c Debug, который стоял здесь
-  # раньше, хук компилировал решение второй раз и проверял не те бинари, что
-  # прошли гейт сборки.
+  # --no-build: the build gate built the solution, and the tests check the same binaries.
   #
-  # Покрытие собирается этим же прогоном — так его получает CI: шаг Test в
-  # .github/workflows/dotnet.yml пишет по отчету cobertura на тестовый проект в
-  # --results-directory, а шаг Coverage threshold читает оттуда же. Каталог
-  # отдается пустым: у CI чекаут чистый, а тут TestResults копится прогонами, и
-  # отчет, слитый из нескольких состояний кода, не описывает ни одно из них.
+  # Coverage is collected by the same run, as CI gets it: the cobertura report per test
+  # project goes to --results-directory and the coverage threshold step reads it from there.
+  # The directory is emptied first, since a report merged from several states of the code
+  # describes none of them.
   say "Бэкенд: тесты Release"
   rm -rf "$ROOT/TestResults"
   dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo --results-directory "$ROOT/TestResults" --collect:"XPlat Code Coverage"
 
-  # Порог покрытия решения. Стоял только в CI, и это ровно тот случай, ради
-  # которого хук существует: узнать о падении на двадцатой минуте прогона, уже
-  # после пуша.
   say "Бэкенд: покрытие"
   bash "$ROOT/scripts/check-coverage.sh"
 fi
 
-# Тот же test:e2e:fast, что зовет джоба e2e: один профиль браузера, весь набор.
-# Бандл конфиг собирает и поднимает сам, от стенда нужен только API. Открывать
-# отчет HTML запрещено явно: после падения Playwright открывает его, когда видит
-# терминал, и прогон стоит на сервере отчета до Ctrl+C.
+# The same test:e2e:fast as the e2e job: one browser profile, the whole suite. The bundle
+# config builds and starts itself, so the stand needs only the API. Opening the HTML report
+# is forbidden: after a failure Playwright opens it when it sees a terminal, and the run
+# would sit on the report server until Ctrl+C.
 #
-# CI=1 дает набору те же настройки, что в джобе e2e: playwright.config.ts
-# включает по этой переменной один воркер, два повтора и запрет test.only. Без
-# нее набор шел параллельно и без повторов, то есть не тем прогоном, который
-# проходит или падает в CI. Общий таймаут стоит вместо timeout-minutes джобы:
-# тест, повисший на закрытии браузера, иначе держал бы пуш без конца.
+# CI=1 gives the suite the settings of the e2e job (playwright.config.ts turns on one worker,
+# two retries and the test.only ban); without it the suite ran in parallel and without
+# retries, which is not the run that passes or fails in CI. The global timeout stands for the
+# timeout-minutes of the job, so a test hanging on browser close cannot hold the push forever.
 #
-# Код возврата у набора честный. Строка "1 did not run" в итоге значит тест из
-# группы, чей beforeAll упал: сам он не запускался, а падение хука засчитано
-# тесту, в котором хук выполнялся, и стоит в строке "N failed" выше по выводу.
-if wants e2e && e2e_requested; then
+# The exit code is honest. A "1 did not run" line in the summary is a test of a group whose
+# beforeAll failed: it did not start, and the hook failure is counted against the test in
+# which the hook ran and shown in the "N failed" line above.
+if full_requested && wants e2e; then
   say "e2e: набор на одном профиле"
   (cd "$CLIENT" && CI=1 PLAYWRIGHT_HTML_OPEN=never npm run test:e2e:fast -- --global-timeout=1800000)
 fi
 
-say "Все нужные гейты зеленые"
+if full_requested; then
+  say "Все нужные гейты зеленые"
+else
+  say "Гейты ветки зеленые. Юнит-тесты клиента, тесты решения, покрытие, e2e и docker гонит CI на PR, здесь они идут с DM_GATES_FULL=1"
+fi

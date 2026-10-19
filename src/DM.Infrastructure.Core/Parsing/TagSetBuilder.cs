@@ -10,7 +10,6 @@ internal class TagSetBuilder
 {
     private readonly List<Tag> _set;
 
-    /// <inheritdoc />
     public TagSetBuilder(IEnumerable<Tag> defaultSet)
     {
         _set = new List<Tag>(defaultSet);
@@ -28,7 +27,6 @@ internal class TagSetBuilder
     /// <summary>
     /// Add tags to set
     /// </summary>
-    /// <param name="tags">Tags</param>
     /// <returns>Self</returns>
     public TagSetBuilder With(params Tag[] tags)
     {

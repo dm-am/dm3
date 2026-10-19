@@ -1,9 +1,6 @@
-using System.Collections.Generic;
 using DM.Domain.Core.Tokens;
-using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Security;
-using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Abstractions;
 using FluentValidation;
 
@@ -45,23 +42,13 @@ internal class RegistrationService : IRegistrationService
     public async Task Register(UserRegistration registration)
     {
         await _validator.ValidateAndThrowAsync(registration);
-
-        // NIST SP 800-63B: Check if password has been compromised in data breaches
-        if (await _compromisedPasswordChecker.IsCompromisedAsync(registration.Password))
-        {
-            throw new HttpBadRequestException(new Dictionary<string, string>
-            {
-                [nameof(registration.Password)] = RefusalMessage.PasswordBreached
-            });
-        }
+        await _compromisedPasswordChecker.ThrowIfCompromised(registration.Password, nameof(registration.Password));
 
         var (hash, salt) = _securityManager.GeneratePassword(registration.Password);
         var now = _dateTimeProvider.Now;
 
-        // The letter carries the secret; the row keeps its hash — see
-        // ConfirmationSecret for why a confirmation link is stored like a password.
-        // The row identifier is drawn first, keeping the order the deterministic
-        // factory of the seeding tool is read in.
+        // The letter carries the secret, the row its hash (see ConfirmationSecret).
+        // The row identifier is drawn first: a deterministic IGuidFactory reads the order.
         var pendingId = _guidFactory.Create();
         var secret = _guidFactory.Create();
         var pending = new PendingRegistration
@@ -77,15 +64,9 @@ internal class RegistrationService : IRegistrationService
             AcceptedRules = registration.AcceptedRules
         };
 
-        // One write, whether or not the address already has a pending row: AddPending
-        // replaces whatever is there. Asking first and branching on the answer is a
-        // read that stops being true the moment it returns - two submissions of the
-        // form arriving together both heard "nothing pending", both inserted, and the
-        // one that lost was answered with a failure of the storage engine on the very
-        // first screen of the site.
+        // One write that replaces any pending row, so two submissions cannot race.
         await _repository.AddPending(pending);
 
-        // Send confirmation email (no username yet)
         await _mailSender.Send(registration.Email, pending.Secret);
     }
 }

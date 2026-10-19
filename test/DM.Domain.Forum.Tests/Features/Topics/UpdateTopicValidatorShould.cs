@@ -1,21 +1,15 @@
 using System;
+using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Forum.Features.Topics;
-using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Forum.Tests.Features.Topics;
 
-public class UpdateTopicValidatorShould : UnitTestBase
+public class UpdateTopicValidatorShould
 {
-    private readonly UpdateTopicValidator validator;
-
-    public UpdateTopicValidatorShould()
-    {
-        validator = new UpdateTopicValidator();
-    }
+    private readonly UpdateTopicValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -77,7 +71,7 @@ public class UpdateTopicValidatorShould : UnitTestBase
         var input = new UpdateTopic
         {
             TopicId = Guid.NewGuid(),
-            Title = new string('x', 131)
+            Title = new string('x', TopicPolicy.TitleMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
@@ -91,7 +85,7 @@ public class UpdateTopicValidatorShould : UnitTestBase
         var input = new UpdateTopic
         {
             TopicId = Guid.NewGuid(),
-            Title = new string('x', 130)
+            Title = new string('x', TopicPolicy.TitleMaxLength)
         };
 
         var result = validator.TestValidate(input);
@@ -101,13 +95,6 @@ public class UpdateTopicValidatorShould : UnitTestBase
     /// <summary>
     /// Hiding markup on a surface that does not declare it.
     /// </summary>
-    /// <remarks>
-    /// The tag is not markup here, so it hides nothing: the line the author
-    /// wrote for one reader is published with the tag still around it. Refused
-    /// at the save path rather than erased, because a draft is not an attack
-    /// and a paragraph that vanished without a word is looked for instead of
-    /// rewritten.
-    /// </remarks>
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {

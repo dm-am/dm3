@@ -1,0 +1,123 @@
+// The controls of a guest card: the main button, the segments, the secondary
+// action, the check line, the footnote.
+@use "Themes" as *
+@use "Variables" as *
+@use "Inputs" as *
+@use "Buttons" as *
+@use "Links" as *
+@use "AuthTokens" as *
+
+/// The one filled control of a guest screen, across the whole card. Its
+/// colours are +button-primary's, shared with the main action of a page.
+.auth-surface .auth-button
+  display: flex
+  align-items: center
+  justify-content: center
+  box-sizing: border-box
+  width: 100%
+  height: $auth-control-height
+  padding: 0
+  font-family: inherit
+  // guestTitleFits.spec.ts measures the longest caption at this size.
+  font-size: $font-size
+  line-height: 1
+  // The width and style of the frame; its colour is the mixin's transparent.
+  border: 1px solid transparent
+  border-radius: $border-radius
+  cursor: pointer
+  +button-primary
+  +disabled-hatch
+
+/// After a sentence rather than a field: three steps, as no strip is held for
+/// a message here.
+.auth-surface .auth-button--spaced
+  margin-top: $medium + $small
+
+/// The site's SegmentedControl across the card in two equal halves. Three
+/// class levels deep, to outrank the component's scoped rules instead of tying
+/// with them.
+.auth-surface .auth-card .auth-segmented
+  display: block
+  margin: 0 0 1rem
+
+  .segment
+    // Nothing resets the box model, and the width is a share of a padded
+    // control.
+    box-sizing: border-box
+    width: 50%
+    padding: 0 $small
+
+/// The secondary action: a <button>, as it names no destination
+/// (linkDestinations.spec.ts), dressed as a link.
+.auth-surface .auth-action
+  +inline-link-button
+  // The bare & keeps these after the mixin's declarations, whose font: inherit
+  // would take the weight back.
+  &
+    font-weight: 700
+    // On the line of the words around it, not where the UA puts a control.
+    vertical-align: baseline
+
+/// In a label row it takes the label's size: two sizes on one line read as a
+/// typesetting fault.
+.auth-surface .auth-label-row .auth-action
+  font-size: $auth-font-size
+
+// The gap after the box of a check line; the box is the site's checkbox.
+$auth-check-gap: .55rem
+
+/// A checkbox and its words in one line box with a hanging indent, and not a
+/// flex row, whose item copies as a line of its own. No .copy-space: the box
+/// puts no character on the screen.
+.auth-surface .auth-checkline
+  display: block
+  padding-left: calc(#{$checkbox-size} + #{$auth-check-gap})
+  text-indent: calc(-#{$checkbox-size} - #{$auth-check-gap})
+  // The two parts carry the line height; the row's own strut would add to it.
+  line-height: 0
+  margin: 0 0 1rem
+  font-size: $secondary-font-size
+
+  input[type="checkbox"]
+    vertical-align: middle
+    margin-right: $auth-check-gap
+
+  label
+    font-weight: 400
+    line-height: 1.45
+    vertical-align: middle
+
+/// A check line between a field's strip and the button (the login card). The
+/// margins are fractional so the gaps measure the registration's 17.3px, with
+/// the strip empty and with a refusal in it; keyed on the refusal, since a
+/// strip of whitespace is not reliably :empty.
+.auth-surface .auth-message + .auth-checkline
+  margin-top: -15.7px
+  margin-bottom: 1rem
+
+.auth-surface .auth-message--error + .auth-checkline
+  margin-top: 5.3px
+  margin-bottom: 1rem
+
+/// The consent wraps to two lines: the box aligns with the first.
+.auth-surface .auth-checkline--top
+  input[type="checkbox"]
+    vertical-align: top
+    margin-top: $tiny
+
+  label
+    vertical-align: baseline
+
+/// The last line of a card, behind a rule: the consents, the way to the
+/// recovery code, the offer of support.
+.auth-surface .auth-footnote
+  margin: 24px 0 0
+  padding-top: $medium
+  font-size: $secondary-font-size
+  color: $text-muted
+  text-align: center
+  border-top: 1px solid $border
+
+  // The name of a document does not break.
+  a
+    white-space: nowrap

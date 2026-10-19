@@ -1,36 +1,14 @@
-/**
- * BBCode Constants
- *
- * Centralized constants for BBCode-related strings.
- * These are used across bbcode.ts, bbcodeInteractive.ts, and Tiptap extensions.
- *
- * Note: This project is Russian-only. These strings are not meant for i18n,
- * but are centralized here to avoid duplication and ensure consistency.
- */
+// The BBCode strings shared by the converters, the interactive blocks and the
+// Tiptap extensions.
 
-// ============================================================================
-// LINK CONSTANTS
-// ============================================================================
-
-/**
- * Default display text for links without custom text.
- * Used when [link]URL[/link] format is used (URL as content, no custom text).
- */
+/** The text of a [link]URL[/link] with no custom text. */
 export const DEFAULT_LINK_TEXT = "ссылка";
-
-// ============================================================================
-// SPOILER CONSTANTS
-// ============================================================================
 
 /** Text shown when spoiler content is hidden */
 export const SPOILER_SHOW_TEXT = "Показать содержимое";
 
 /** Text shown when spoiler content is visible */
 export const SPOILER_HIDE_TEXT = "Скрыть содержимое";
-
-// ============================================================================
-// NSFW CONSTANTS
-// ============================================================================
 
 /** Text shown when NSFW content is hidden */
 export const NSFW_SHOW_TEXT = "Показать шокирующий контент";

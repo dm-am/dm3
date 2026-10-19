@@ -1,5 +1,3 @@
-using System;
-
 namespace DM.Domain.Core.Comments;
 
 /// <summary>
@@ -13,7 +11,7 @@ public class UpdateComment
     public Guid CommentId { get; set; }
 
     /// <summary>
-    /// Updated comment text (BBCode or markdown)
+    /// Updated comment text (BBCode)
     /// </summary>
     public string? Text { get; set; }
 }

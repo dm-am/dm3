@@ -5,37 +5,6 @@ using DM.Domain.Core.Dto;
 namespace DM.Domain.Messaging.Features.Search;
 
 /// <summary>
-/// Source kind a search scope refers to.
-/// </summary>
-public enum SearchSourceType
-{
-    /// <summary>Global chat.</summary>
-    Global,
-
-    /// <summary>A specific direct/group chat.</summary>
-    Chat,
-
-    /// <summary>A specific game (its readable posts).</summary>
-    Game
-}
-
-/// <summary>
-/// A single parsed "in:" scope. Access is always re-validated by the reused
-/// access predicates, so an unresolvable/forged id simply yields no rows.
-/// </summary>
-public class SearchScope
-{
-    /// <summary>Scope kind.</summary>
-    public SearchSourceType Type { get; set; }
-
-    /// <summary>Resolved container id, when the token was a Guid.</summary>
-    public Guid? Id { get; set; }
-
-    /// <summary>Raw token (public id / slug) when not a Guid; resolved in the repository.</summary>
-    public string? RawId { get; set; }
-}
-
-/// <summary>
 /// Fully-parsed unified message/post search query consumed by the repository.
 /// Operator tokens (from:/before:/after:/during:/in:) are already extracted.
 /// </summary>
@@ -58,14 +27,11 @@ public class MessageSearchQuery
     /// <summary>
     /// Requested scopes. Empty means "all sources the caller can access".
     /// </summary>
-    public IReadOnlyList<SearchScope> Scopes { get; set; } = new List<SearchScope>();
+    public IReadOnlyList<SearchScope> Scopes { get; set; } = [];
 
     /// <summary>
-    /// Authors whose general chat messages are left out of the results. Not a
-    /// filter the caller chooses: the service fills it from the reader's personal
-    /// blacklist when the reader switched on "Скрывать сообщения в чате"
-    /// (HideMessages), the same set the general chat itself leaves out
-    /// (CursorQuery.HiddenAuthorIds). Null when nothing is hidden.
+    /// Authors whose general chat messages are left out, as the general chat itself
+    /// leaves them out: filled by the service, null when nothing is hidden.
     /// </summary>
     public IReadOnlyCollection<Guid>? HiddenAuthorIds { get; set; }
 

@@ -12,7 +12,6 @@ internal class UserProfileNoteRepository : IUserProfileNoteRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public UserProfileNoteRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;

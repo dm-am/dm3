@@ -4,6 +4,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Features.ProfileNotes;
 using DM.Domain.Moderation.Features.Tickets;
 using DM.Domain.Moderation.Features.Warnings;
+using DM.Domain.Moderation.Features.Bans;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
 using DbWarning = DM.Infrastructure.Persistence.Entities.Moderation.Warning;

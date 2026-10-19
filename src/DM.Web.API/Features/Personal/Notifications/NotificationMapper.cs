@@ -8,14 +8,9 @@ namespace DM.Web.API.Features.Personal.Notifications;
 /// push over the hub.
 /// </summary>
 /// <remarks>
-/// The two used to build the DTO each on their own, field by field, and a field
-/// added to one and not the other reaches the open tab as a value from one
-/// transport and as undefined from the other, with nothing failing.
-/// NotificationWireShould in DM.Architecture.Tests holds the push to this method.
-///
-/// The words, the path and the details come from the tables the letter and the bots
-/// are written from, so the list says what the letter says. The path is left
-/// relative: the page resolves it against the site it is on.
+/// One builder, so both transports carry the same fields (NotificationWireShould
+/// in DM.Architecture.Tests holds the push to it). The words, the path and the
+/// details come from the tables the letter is written from; the path is relative.
 /// </remarks>
 internal static class NotificationMapper
 {
@@ -32,12 +27,14 @@ internal static class NotificationMapper
         IsRead = isRead,
         Title = NotificationWording.GetTitle(notification.EventType),
         Url = NotificationDestination.GetPath(notification.EventType, notification.Metadata),
-        Details = NotificationWording.ReadDetails(notification.Metadata)
+        Details = NotificationWording.ReadDetails(
+                notification.Metadata, NotificationDestination.PlaceFieldOf(notification.EventType))
             .Select(detail => new NotificationDetail
             {
                 Label = detail.Label,
                 Value = detail.Value,
-                IsMoment = detail.IsMoment
+                IsMoment = detail.IsMoment,
+                IsDestination = detail.IsDestination
             })
             .ToArray(),
         Payload = notification.Metadata

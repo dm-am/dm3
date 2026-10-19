@@ -1,8 +1,5 @@
 import type { Router } from "vue-router";
 
-/**
- * Configuration for filter dispatcher
- */
 export interface FilterDispatcherConfig<State> {
   /** Build URL query from state (only non-default values) */
   buildQuery: (state: State) => Record<string, string>;
@@ -10,16 +7,13 @@ export interface FilterDispatcherConfig<State> {
   name: string;
 }
 
+/** Batches rapid actions into a single navigation. */
+export const DEBOUNCE_MS = 50;
+
 /**
- * Dispatch infrastructure for URL-synced filters.
- *
- * This is a factory that creates module-level state for each filter type.
- * Call it once per filter module (at module level, not inside composable).
- *
- * Architecture:
- * - Actions are applied immediately to pendingState via reducer
- * - URL update is debounced - rapid actions batch into single navigation
- * - Once URL updates, filterState computed refreshes automatically
+ * Dispatch for URL-synced filters, created once per filter module at module
+ * level: actions apply to the pending state at once, and the address is
+ * written after a debounce; filterState follows the address.
  *
  * @example
  * ```typescript
@@ -40,76 +34,50 @@ export interface FilterDispatcherConfig<State> {
 export function createFilterDispatcher<State, Action>(
   config: FilterDispatcherConfig<State>,
 ) {
-  /** Debounce delay for URL updates. Batches rapid clicks into single navigation. */
-  const DEBOUNCE_MS = 50;
-
-  // Module-level state (created once per filter type)
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
   let pendingState: State | null = null;
   let isNavigating = false;
   let routerInstance: Router | null = null;
 
-  /**
-   * Set router instance. Must be called from composable on each use.
-   */
+  /** Called by the composable on each use. */
   function setRouter(router: Router): void {
     routerInstance = router;
   }
 
-  /**
-   * Get current pending state (for stacking rapid actions)
-   */
-  function getPendingState(): State | null {
-    return pendingState;
-  }
-
-  /**
-   * Dispatch an action - applies it to pending state and schedules URL update.
-   * This is the ONLY way to modify filter state.
-   */
+  /** The only way to modify filter state. */
   function dispatch(
     action: Action,
     reducer: (state: State, action: Action) => State,
     getCurrentState: () => State,
   ): void {
-    // Apply action to pending state (or current state if no pending)
     const baseState = pendingState ?? getCurrentState();
     const newState = reducer(baseState, action);
 
-    // Reducer can return same reference if nothing changed (optimization)
+    // The reducer returns the same reference when nothing changed.
     if (newState === baseState) return;
 
     pendingState = newState;
 
-    // The page this filter change belongs to. The dispatcher lives for the whole
-    // tab, so by the time the timer fires the user may already be somewhere else
-    // — and `replace({ name, query })` inherits the missing params from the NEW
-    // route, which would stamp this page's query onto that one and drop its page
-    // number. Only the path distinguishes them: the route name is shared by every
-    // board.
+    // The dispatcher outlives the page: by the time the timer fires the reader
+    // may be elsewhere, and replace({ name, query }) would stamp this query on
+    // that page. The route name is shared by every board, so the path decides.
     const scheduledPath = routerInstance?.currentRoute.value.path ?? null;
 
-    // Clear existing debounce timer
     if (debounceTimer) clearTimeout(debounceTimer);
 
-    // Schedule URL update
     const applyPendingState = async () => {
       debounceTimer = null;
 
       if (!pendingState || !routerInstance) return;
-      // A navigation of our own is in flight. Re-arm rather than drop: an early
-      // return here left pendingState orphaned, and the filter change with it.
+      // Re-armed rather than dropped, or the change would be lost.
       if (isNavigating) {
         debounceTimer = setTimeout(applyPendingState, DEBOUNCE_MS);
         return;
       }
 
-      // Use synchronous access to current route (avoid stale closure)
       const currentRoute = routerInstance.currentRoute.value;
 
-      // Left the page the change was made on: the change no longer has a target.
-      // Our own replace only ever changes the query, so this never fires on a
-      // legitimate sequence.
+      // Our own replace only changes the query, so this is a page left.
       if (scheduledPath !== null && currentRoute.path !== scheduledPath) {
         pendingState = null;
         return;
@@ -120,7 +88,6 @@ export function createFilterDispatcher<State, Action>(
 
       const currentQuery = currentRoute.query;
 
-      // Skip if query unchanged
       const queryKeys = Object.keys(query);
       const currentKeys = Object.keys(currentQuery).filter(
         (k) => currentQuery[k] !== undefined && currentQuery[k] !== "",
@@ -137,8 +104,7 @@ export function createFilterDispatcher<State, Action>(
         if (same) return;
       }
 
-      // Use route NAME (not path) to ensure Vue Router recognizes same route
-      // This prevents component recreation during query-only changes
+      // By name, not path, so a query-only change keeps the component.
       isNavigating = true;
       try {
         await routerInstance.replace({
@@ -146,11 +112,8 @@ export function createFilterDispatcher<State, Action>(
           query,
         });
       } catch (err: unknown) {
-        const error = err as { name?: string };
-        if (
-          error?.name !== "NavigationDuplicated" &&
-          error?.name !== "NavigationCancelled"
-        ) {
+        const name = err instanceof Error ? err.name : undefined;
+        if (name !== "NavigationDuplicated" && name !== "NavigationCancelled") {
           console.error(`[${config.name}] Navigation error:`, err);
         }
       } finally {
@@ -164,10 +127,5 @@ export function createFilterDispatcher<State, Action>(
   return {
     setRouter,
     dispatch,
-    getPendingState,
   };
 }
-
-export type FilterDispatcher<State, Action> = ReturnType<
-  typeof createFilterDispatcher<State, Action>
->;

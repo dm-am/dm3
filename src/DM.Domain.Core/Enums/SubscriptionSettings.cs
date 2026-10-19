@@ -1,5 +1,3 @@
-using System;
-
 namespace DM.Domain.Core.Enums;
 
 /// <summary>
@@ -34,7 +32,7 @@ public enum SubscriptionSettings
     /// </summary>
     None = 0,
 
-    #region Per-entity content flags (Game / Blog / Topic targets)
+    // Per-entity content flags (Game / Blog / Topic targets)
 
     /// <summary>
     /// Notify about new posts in subscribed game.
@@ -66,15 +64,9 @@ public enum SubscriptionSettings
     /// </summary>
     CharacterUpdates = 1 << 5,
 
-    // Bit 1 << 6 is vacant: it held the AuthorNewContent catch-all, now split
-    // into the three category flags below (AuthorGameEvents / AuthorBlogEvents /
-    // AuthorTopicEvents). It stays vacant instead of being recycled — a bit
-    // that once meant something else is the one way this layout could end up
-    // needing the target type to be read.
+    // Bit 1 << 6 is vacant.
 
-    #endregion
-
-    #region Notification channels
+    // Notification channels
 
     /// <summary>
     /// Send in-app notifications.
@@ -86,9 +78,7 @@ public enum SubscriptionSettings
     /// </summary>
     Email = 1 << 8,
 
-    #endregion
-
-    #region Per-author-category flags (User target only)
+    // Per-author-category flags (User target only)
 
     /// <summary>
     /// Game-related events from the subscribed author:
@@ -108,9 +98,7 @@ public enum SubscriptionSettings
     /// </summary>
     AuthorTopicEvents = 1 << 11,
 
-    #endregion
-
-    #region Common presets
+    // Common presets
 
     /// <summary>
     /// Default settings for game reader subscription.
@@ -138,6 +126,20 @@ public enum SubscriptionSettings
     /// flags via the subscribe popover.
     /// </summary>
     UserSubscriptionDefault = AuthorGameEvents | AuthorBlogEvents | AuthorTopicEvents | InApp,
+}
 
-    #endregion
+/// <summary>
+/// The categories of a subscription to a user, in the order of the subscribe panel, each with what
+/// the notification dispatcher sends under its bit, in the panel's words.
+/// </summary>
+/// <remarks>UserSubscriptionCategoriesShould holds every event named here to a generator that sends under the bit.</remarks>
+public static class UserSubscriptionCategories
+{
+    /// <summary>The bit of each category and its events, comma-separated.</summary>
+    public static readonly IReadOnlyList<(SubscriptionSettings Category, string Events)> All =
+    [
+        (SubscriptionSettings.AuthorGameEvents, "Новая игра, начало игры, набор игроков"),
+        (SubscriptionSettings.AuthorBlogEvents, "Новый блог, открытие блога"),
+        (SubscriptionSettings.AuthorTopicEvents, "Новый топик на форуме"),
+    ];
 }

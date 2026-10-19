@@ -6,10 +6,7 @@ namespace DM.Domain.Core.Statuses;
 /// BadRequest.
 /// </summary>
 /// <remarks>
-/// One vocabulary for a game and a blog, because it is one machine. Each module
-/// used to declare a member-for-member copy of this enum beside a copy of the
-/// rules that read it. The numbering and the member names are kept from those
-/// copies: the name is what travels on the wire.
+/// One vocabulary for a game and a blog; the member name is what travels on the wire.
 /// </remarks>
 public enum ModuleStatusTransition
 {
@@ -46,12 +43,7 @@ public enum ModuleStatusTransition
 /// for that verdict.
 /// </summary>
 /// <remarks>
-/// The pair of moves this enum used to name — a mentor taking a module in and
-/// then releasing it — described a machine the module never entered: nothing
-/// wrote a premoderation status at creation, so every module was born approved
-/// and the only way into premoderation was a mentor putting it there by hand.
-/// The rule the three below implement starts the other way round: a newbie's
-/// module is born AwaitingEdits and the author is the one who moves it on.
+/// A newbie's module is born AwaitingEdits and the author is the one who moves it on.
 /// </remarks>
 public enum ModulePremoderationTransition
 {

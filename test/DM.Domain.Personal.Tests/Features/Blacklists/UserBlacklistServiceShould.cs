@@ -2,7 +2,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
@@ -18,54 +17,54 @@ namespace DM.Domain.Personal.Tests.Features.Blacklists;
 
 public class UserBlacklistServiceShould : UnitTestBase
 {
-    private readonly IUserBlacklistRepository _repository;
-    private readonly IUserRepository _userRepository;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly UserBlacklistService _service;
-    private readonly Guid _currentUserId = Guid.NewGuid();
-    private readonly Guid _targetUserId = Guid.NewGuid();
-    private readonly Guid _entryId = Guid.NewGuid();
-    private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private readonly IUserBlacklistRepository repository;
+    private readonly IUserRepository userRepository;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly UserBlacklistService service;
+    private readonly Guid currentUserId = Guid.NewGuid();
+    private readonly Guid targetUserId = Guid.NewGuid();
+    private readonly Guid entryId = Guid.NewGuid();
+    private readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
     public UserBlacklistServiceShould()
     {
-        _repository = Mock<IUserBlacklistRepository>();
-        _userRepository = Mock<IUserRepository>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        repository = Mock<IUserBlacklistRepository>();
+        userRepository = Mock<IUserRepository>();
+        identityProvider = Mock<IIdentityProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
-        _identityProvider.Current.Returns(identity);
-        _dateTimeProvider.Now.Returns(_now);
-        _guidFactory.Create().Returns(_entryId);
+        var identity = Identities.User(currentUserId, "CurrentUser", UserRole.RegularUser);
+        identityProvider.Current.Returns(identity);
+        dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(entryId);
 
-        _service = new UserBlacklistService(
-            _repository,
-            _userRepository,
-            _identityProvider,
-            _guidFactory,
-            _dateTimeProvider);
+        service = new UserBlacklistService(
+            repository,
+            userRepository,
+            identityProvider,
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
     public async Task GetMyBlacklistForCurrentUser()
     {
-        _repository.GetBlacklist(_currentUserId, Arg.Any<CancellationToken>()).Returns([]);
+        repository.GetBlacklist(currentUserId, Arg.Any<CancellationToken>()).Returns([]);
 
-        await _service.GetMyBlacklist();
+        await service.GetMyBlacklist();
 
-        await _repository.Received(1).GetBlacklist(_currentUserId, Arg.Any<CancellationToken>());
+        await repository.Received(1).GetBlacklist(currentUserId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ThrowWhenBlockingNonexistentUser()
     {
-        _userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
+        userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
 
-        var act = () => _service.Block(new OperateUserBlacklistLink { Username = "Unknown" });
+        var act = () => service.Block(new OperateUserBlacklistLink { Username = "Unknown" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("не найден"));
@@ -74,12 +73,12 @@ public class UserBlacklistServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenUserTriesToBlockThemselves()
     {
-        _userRepository.FindUserIdAsync("CurrentUser").Returns(_currentUserId);
+        userRepository.FindUserIdAsync("CurrentUser").Returns(currentUserId);
 
-        var act = () => _service.Block(new OperateUserBlacklistLink { Username = "CurrentUser" });
+        var act = () => service.Block(new OperateUserBlacklistLink { Username = "CurrentUser" });
 
         await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.Message.Contains("Нельзя заблокировать самого себя"));
+            .Where(e => e.Message == "Нельзя внести себя в черный список");
     }
 
     [Fact]
@@ -87,59 +86,54 @@ public class UserBlacklistServiceShould : UnitTestBase
     {
         var existingEntry = new BlacklistEntry { Id = Guid.NewGuid() };
 
-        _userRepository.FindUserIdAsync("Target").Returns(_targetUserId);
-        _repository.Find(_currentUserId, _targetUserId, Arg.Any<CancellationToken>()).Returns(existingEntry);
+        userRepository.FindUserIdAsync("Target").Returns(targetUserId);
+        repository.Find(currentUserId, targetUserId, Arg.Any<CancellationToken>()).Returns(existingEntry);
 
-        var result = await _service.Block(new OperateUserBlacklistLink { Username = "Target" });
+        var result = await service.Block(new OperateUserBlacklistLink { Username = "Target" });
 
         result.Should().Be(existingEntry);
-        await _repository.DidNotReceive().Create(Arg.Any<CreateBlacklistEntryEntity>(), Arg.Any<CancellationToken>());
+        await repository.DidNotReceive().Create(Arg.Any<CreateBlacklistEntryEntity>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task CreateNewBlacklistEntry()
     {
-        _userRepository.FindUserIdAsync("Target").Returns(_targetUserId);
-        _repository.Find(_currentUserId, _targetUserId, Arg.Any<CancellationToken>()).Returns((BlacklistEntry?)null);
+        userRepository.FindUserIdAsync("Target").Returns(targetUserId);
+        repository.Find(currentUserId, targetUserId, Arg.Any<CancellationToken>()).Returns((BlacklistEntry?)null);
 
         CreateBlacklistEntryEntity? capturedEntity = null;
-        _repository.Create(Arg.Any<CreateBlacklistEntryEntity>(), Arg.Any<CancellationToken>())
-            .Returns(new BlacklistEntry())
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<CreateBlacklistEntryEntity>(0);
-                capturedEntity = e;
-            });
+        repository.Create(Arg.Do<CreateBlacklistEntryEntity>(e => capturedEntity = e), Arg.Any<CancellationToken>())
+            .Returns(new BlacklistEntry());
 
-        await _service.Block(new OperateUserBlacklistLink { Username = "Target" });
+        await service.Block(new OperateUserBlacklistLink { Username = "Target" });
 
         capturedEntity.Should().NotBeNull();
-        capturedEntity!.EntryId.Should().Be(_entryId);
-        capturedEntity.OwnerId.Should().Be(_currentUserId);
-        capturedEntity.BlockedUserId.Should().Be(_targetUserId);
-        capturedEntity.CreatedUtc.Should().Be(_now);
+        capturedEntity!.EntryId.Should().Be(entryId);
+        capturedEntity.OwnerId.Should().Be(currentUserId);
+        capturedEntity.BlockedUserId.Should().Be(targetUserId);
+        capturedEntity.CreatedUtc.Should().Be(now);
     }
 
     [Fact]
     public async Task UnblockUserSuccessfully()
     {
-        var existingEntry = new BlacklistEntry { Id = _entryId };
+        var existingEntry = new BlacklistEntry { Id = entryId };
 
-        _userRepository.FindUserIdAsync("Target").Returns(_targetUserId);
-        _repository.Find(_currentUserId, _targetUserId, Arg.Any<CancellationToken>()).Returns(existingEntry);
+        userRepository.FindUserIdAsync("Target").Returns(targetUserId);
+        repository.Find(currentUserId, targetUserId, Arg.Any<CancellationToken>()).Returns(existingEntry);
 
-        await _service.Unblock(new OperateUserBlacklistLink { Username = "Target" });
+        await service.Unblock(new OperateUserBlacklistLink { Username = "Target" });
 
-        await _repository.Received(1).Delete(_entryId, Arg.Any<CancellationToken>());
+        await repository.Received(1).Delete(entryId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task DoNothingWhenUnblockingNonexistentUser()
     {
-        _userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
+        userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
 
-        await _service.Unblock(new OperateUserBlacklistLink { Username = "Unknown" });
+        await service.Unblock(new OperateUserBlacklistLink { Username = "Unknown" });
 
-        await _repository.DidNotReceive().Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await repository.DidNotReceive().Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }

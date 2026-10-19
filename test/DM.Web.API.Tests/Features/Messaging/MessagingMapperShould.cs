@@ -1,6 +1,5 @@
 using System;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Messaging;
@@ -14,13 +13,11 @@ namespace DM.Web.API.Tests.Features.Messaging;
 
 public class MessagingMapperShould : UnitTestBase
 {
-    private MessagingMapper CreateMapper() =>
-        new(new UserMapper(Mock<IImgproxyUrlBuilder>()));
+    private static MessagingMapper CreateMapper() =>
+        new(new UserMapper());
 
     /// <summary>
-    /// PATCH carries "not sent" as null and the write model must keep saying
-    /// it: an empty participant list here would read as "remove everybody",
-    /// so a mapper that defaults the collections re-introduces exactly that.
+    /// PATCH carries "not sent" as null and the write model keeps saying it: an empty list removes everybody.
     /// </summary>
     [Fact]
     public void KeepUnsentParticipantListsNull()

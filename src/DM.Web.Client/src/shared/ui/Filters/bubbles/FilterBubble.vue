@@ -5,13 +5,11 @@
  * Displays a filter value with optional prefix and remove button.
  */
 import { symbols } from "@/shared/lib/utils/icons";
-import type { FilterBubbleProps } from "../types";
-
-defineOptions({ name: "FilterBubble" });
-
-withDefaults(defineProps<FilterBubbleProps>(), {
-  prefix: undefined,
-});
+defineProps<{
+  /** Prefix text (e.g., "Статус:") */
+  prefix?: string;
+  value: string;
+}>();
 
 const emit = defineEmits<{
   remove: [];
@@ -38,7 +36,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Filters" as *
+@use "@/assets/styles/FilterBubbles" as *
 
 +filter-bubbles
 </style>

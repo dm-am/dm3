@@ -1,5 +1,4 @@
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Account.Features.Registration;
 
@@ -28,8 +27,6 @@ internal class UserFactory : IUserFactory
             Username = username.Trim(),
             Email = pending.Email, // Already lowercase
             CreatedUtc = _dateTimeProvider.Now,
-            Role = UserRole.RegularUser,
-            AccessPolicy = AccessPolicy.NotSpecified,
             Salt = pending.Salt,
             PasswordHash = pending.PasswordHash,
             PasswordHashVersion = pending.PasswordHashVersion

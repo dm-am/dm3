@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -12,18 +11,7 @@ namespace DM.Architecture.Tests;
 /// The two validators, the request contract and both forms stop a topic title
 /// at the same character.
 /// </summary>
-/// <remarks>
-/// The limit lived in four places and two of them disagreed: the validators
-/// refused a title over a hundred and thirty and the edit form stopped the
-/// typing there, while the create form and the request contract promised two
-/// hundred. A title in between was typed in full, accepted by the form, and
-/// then refused by the save with a message that named no number.
-///
-/// Read out of the sources rather than out of running code: a data annotation
-/// is a compile-time constant no runtime check would reach, and the client
-/// cannot be asked from here at all. A number is compared rather than a phrase,
-/// so a failure says which of the four moved.
-/// </remarks>
+/// <remarks>Read out of the sources: a data annotation is a compile-time constant, and the client cannot be asked.</remarks>
 public class TopicTitleLimitShould
 {
     private static readonly Regex ClientLimit =
@@ -33,17 +21,12 @@ public class TopicTitleLimitShould
     private static readonly Regex LiteralMaxLength =
         new("maxlength=\"\\d", RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    private static string Read(params string[] parts) =>
-        File.ReadAllText(Path.Combine(RepositoryRoot, Path.Combine(parts)));
-
     [Fact]
     public void BeSpelledOnceForBothValidators()
     {
         foreach (var validator in new[] { "CreateTopicValidator.cs", "UpdateTopicValidator.cs" })
         {
-            var source = Read("src", "DM.Domain.Forum", "Features", "Topics", validator);
+            var source = RepositoryFiles.Read("src", "DM.Domain.Forum", "Features", "Topics", validator);
 
             source.Should().Contain("MaximumLength(TopicPolicy.TitleMaxLength)",
                 $"{validator} answers the save, and the number it answers with belongs to the policy");
@@ -56,21 +39,22 @@ public class TopicTitleLimitShould
     [Fact]
     public void BeTheNumberTheRequestContractPromises()
     {
-        var source = Read("src", "DM.Web.API", "Features", "Forum", "Topics", "CreateTopicRequest.cs");
+        var source = RepositoryFiles.Read("src", "DM.Web.API", "Features", "Forum", "Topics", "CreateTopicRequest.cs");
 
         source.Should().Contain("StringLength(TopicPolicy.TitleMaxLength",
             "the contract is checked before the validator is reached, and a wider one lets through " +
             "a title the save then refuses");
         Regex.IsMatch(source, @"StringLength\(\d").Should().BeFalse(
             "a length spelled out in the contract is a second decision");
-        source.Should().Contain($"до {TopicPolicy.TitleMaxLength} символов",
-            "the message a person reads names the number the request is measured against");
+        source.Should().Contain("до {1} символов",
+            "the message a person reads takes the number the request is measured against from the " +
+            "attribute, so the number is not spelled a second time");
     }
 
     [Fact]
     public void BeTheNumberBothFormsStopTypingAt()
     {
-        var declared = ClientLimit.Match(Read(
+        var declared = ClientLimit.Match(RepositoryFiles.Read(
             "src", "DM.Web.Client", "src", "shared", "lib", "constants", "forum.ts"));
 
         declared.Success.Should().BeTrue(
@@ -81,13 +65,13 @@ public class TopicTitleLimitShould
 
         var forms = new[]
         {
-            Path.Combine("src", "DM.Web.Client", "src", "pages", "forum", "TopicsList.vue"),
+            Path.Combine("src", "DM.Web.Client", "src", "pages", "forum", "TopicCreateForm.vue"),
             Path.Combine("src", "DM.Web.Client", "src", "features", "topic", "ui", "TopicView.vue")
         };
 
         foreach (var form in forms)
         {
-            var source = Read(form);
+            var source = RepositoryFiles.Read(form);
 
             source.Should().Contain(":maxlength=\"TOPIC_TITLE_MAX_LENGTH\"",
                 $"{form} is one of the two forms that write a topic title");

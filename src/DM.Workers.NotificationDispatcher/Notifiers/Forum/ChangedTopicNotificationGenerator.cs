@@ -19,7 +19,6 @@ internal class ChangedTopicNotificationGenerator : BaseNotificationGenerator
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public ChangedTopicNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -52,7 +51,6 @@ internal class ChangedTopicNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        // Find all users subscribed to this topic
         var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Topic,
             topicData.TopicId,
@@ -68,13 +66,7 @@ internal class ChangedTopicNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        // The actor is the last editor, and the update path records it
-        // (TopicService.UpdateAsync writes a TopicEdits row). The author is
-        // deliberately not substituted for a missing value: TopicIntention.Edit
-        // is open to moderators and administrators too, and filling the field
-        // from AuthorId would hold the notification against the wrong person's
-        // blacklist. Null until an edit happens is the honest answer, and it
-        // means the notification is delivered rather than filtered.
+        // Not filled from AuthorId: a moderator or an administrator may be the editor.
         var lastEditorId = await _dbContext.TopicEdits
             .Where(e => e.TopicId == topicData.TopicId)
             .OrderByDescending(e => e.EditedUtc)
@@ -90,8 +82,8 @@ internal class ChangedTopicNotificationGenerator : BaseNotificationGenerator
                 TopicId = topicData.TopicId.EncodeToReadable(topicData.Title),
                 TopicTitle = topicData.Title,
                 BoardId = topicData.BoardId.EncodeToReadable(topicData.BoardTitle),
-                BoardTitle = topicData.BoardTitle,
-                AuthorUsername = topicData.AuthorUsername
+                topicData.BoardTitle,
+                topicData.AuthorUsername
             }
         };
     }

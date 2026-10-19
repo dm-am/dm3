@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using DM.Domain.Core.Site;
 
 namespace DM.Domain.Core.Configuration;
@@ -9,16 +6,8 @@ namespace DM.Domain.Core.Configuration;
 /// The addresses this site answers on
 /// </summary>
 /// <remarks>
-/// What this deployment is, and only that. PublicUrl differs from stand to stand
-/// and AdditionalOrigins exists for the development server of the client, so both
-/// belong here. The list of addresses the site answers on does not differ between
-/// deployments and therefore is not here — it is a fact of the product and lives
-/// in <see cref="SiteAddresses" />. Kept here it was a list every deployment had
-/// to fill in and none ever did.
-///
-/// There is no separate address for the API. The site and its API answer on one
-/// origin, and the client asks for a path relative to wherever it loaded, so an
-/// entry here is a site address and nothing else.
+/// Only what differs between deployments: the addresses of the product live in
+/// <see cref="SiteAddresses" />, and the site and its API share one origin.
 /// </remarks>
 public class SiteAddressConfiguration
 {
@@ -36,16 +25,8 @@ public class SiteAddressConfiguration
     /// Origins that are not addresses of this site
     /// </summary>
     /// <remarks>
-    /// The development server of the client is the whole of this list, and a
-    /// deployment leaves it empty: everything the site answers on is declared
-    /// below and derived from there, so nothing has to be written twice.
-    ///
-    /// It was written twice, and that is what this replaces. No path of any
-    /// deployment ever put the public address of the stand into the list of
-    /// allowed origins - not the installer, not the environment file, not the
-    /// guide - so the first request to the first stand was refused at the door by
-    /// the origin check, with the list it was compared against sitting two lines
-    /// away in the same file.
+    /// Only the development server of the client: the site's own origins are
+    /// derived below.
     /// </remarks>
     public string[] AdditionalOrigins { get; set; } = [];
 
@@ -62,8 +43,7 @@ public class SiteAddressConfiguration
         .Prepend(PublicUrl)
         .Concat(AdditionalOrigins)
         .Select(OriginOf)
-        .Where(origin => origin != null)
-        .Select(origin => origin!)
+        .OfType<string>()
         .Distinct(StringComparer.Ordinal)
         .ToList();
 

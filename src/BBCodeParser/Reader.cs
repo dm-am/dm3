@@ -5,67 +5,22 @@
 
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using BBCodeParser.Tags;
 
 namespace BBCodeParser
 {
-    // DM3 change against the original: the reader is a scanner written by hand,
-    // and it is the grammar of the markup. The original read tags with one
-    // regular expression,
+    // DM3 change against the original: a scanner written by hand instead of one
+    // regular expression. It is the grammar of the markup, written down in
+    // docs/architecture/BBCODE_RENDERING/grammar.md and held to the shared cases
+    // by BbGrammarShould.
     //
-    //     \[(?<closing>\/)?(?<tag>\w+)(\=\"(?<value>.*?)\")?\]
+    // Names fold only A-Z onto a-z: a wider "ignore case" folds differently in
+    // .NET and in the browser, and the server and the editor would read one text
+    // two ways.
     //
-    // which knew one attribute per tag, compared names in whatever casing the
-    // tag set happened to use, and read a spelling it did not know as text -
-    // including the spelling of a block that hides its content, which then
-    // reached every reader. The rules below are the ones written down in
-    // docs/architecture/BBCODE_RENDERING.md, section "Грамматика разметки", and
-    // held to the rows of bbcodeGrammar.cases.ts by BbGrammarShould.
-    //
-    // A tag token is an opening bracket, an optional slash and a name made of
-    // ASCII letters, followed by "]", "=", a whitespace character or the end of
-    // the text. Anything else is a word in prose.
-    //
-    // Names of tags and of parameters are compared without regard to case, and
-    // only A-Z folds onto a-z (see AsciiLower). [B] is [b], [/PRIVATE] closes
-    // [private], WIDTH= is width=. The comparisons a language offers "ignoring
-    // case" can fold more than that, and each side folds differently: in .NET
-    // ToLowerInvariant and a regular expression ignoring case take the Kelvin
-    // sign U+212A for k, a browser regular expression without the u flag does
-    // not, and the two halves of this grammar - the server and the editor -
-    // would then read one text two ways. A name is read from ASCII letters only,
-    // so a letter of another alphabet makes the word prose on both sides.
-    //
-    // An opening tag is one of:
-    //   [name]                       every tag;
-    //   [name="value"]               a tag declaring the DM2 attribute; the value
-    //                                runs to the first quote followed by "]";
-    //   [name a="1" b="2"]           a tag declaring named parameters; names are
-    //                                ASCII letters in any case, values are always
-    //                                quoted, pairs are separated by one space or
-    //                                more, each name at most once whatever its
-    //                                case, in any order, and a value ends at a
-    //                                quote followed by "]" or by spaces and the
-    //                                next name=.
-    // No value carries an opening bracket or a line break: a bracket starts the
-    // next tag, and a value that reached one was never closed. There is no
-    // escaping, and no other whitespace belongs in a tag.
-    //
-    // A token that names a tag and does not match its grammar is a broken tag.
-    // It still becomes a node - the node renders as the text that was typed, and
-    // its content renders normally (see TagNode) - and the text of its opening
-    // runs to the first "]" when that comes before the next "[" (and, for a tag
-    // that does not hide, before a line break); otherwise it is the name alone
-    // and reading resumes right after it. A closing tag is exactly [/name] with
-    // nothing else in it, and anything else that starts with "[/" is text.
-    //
-    // Linear time. Every scan below stops at the next opening bracket at the
-    // latest, and the text after a token is read starting where the token ends,
-    // so no character is looked at more than a small constant number of times.
-    // The one scan that runs further, the search for the closing tag of a block
-    // shown as written, remembers its answer per name (FindClosing). The shapes
-    // that used to cost the square of the input are held by BbParserCostShould: a
-    // name followed by thousands of spaces, many pairs, many quotes.
+    // Linear time: every scan stops at the next opening bracket, and the one
+    // that runs further remembers its answer per name (FindClosing).
     public class Reader
     {
         private readonly string input;
@@ -149,12 +104,6 @@ namespace BBCodeParser
         /// just opened: everything up to the block's own closing tag, none of it
         /// markup. False, with nothing read, when no such closing tag follows.
         /// </summary>
-        /// <remarks>
-        /// Only the closing tag makes the block an example. A block the author
-        /// never closed states nothing, and the caller reads what follows its
-        /// opening as it reads any other text - hiding markup included, which
-        /// then hides.
-        /// </remarks>
         internal bool TryReadVerbatim(Tag tag, out TagResult content, out string closer)
         {
             var name = AsciiLower(tag.Name);
@@ -178,12 +127,8 @@ namespace BBCodeParser
         /// case, or -1.
         /// </summary>
         /// <remarks>
-        /// Remembered per name, because every opening of a block nobody closed
-        /// asks again, from further on in the same text, and a text of such
-        /// openings would otherwise be scanned to its end once per opening. An
-        /// answer of "nowhere" stays true for every later start, and one that
-        /// found the tag stays true for every start up to it, so the text is
-        /// scanned about once per name.
+        /// Remembered per name, or a text of unclosed openings would be scanned to
+        /// its end once per opening.
         /// </remarks>
         private int FindClosing(string name, int from)
         {
@@ -387,7 +332,7 @@ namespace BBCodeParser
                 }
 
                 var parameterStart = index;
-                while (index < input.Length && IsParameterLetter(input[index]))
+                while (index < input.Length && char.IsAsciiLetter(input[index]))
                 {
                     index++;
                 }
@@ -461,7 +406,7 @@ namespace BBCodeParser
             }
 
             var nameStart = index;
-            while (index < input.Length && IsParameterLetter(input[index]))
+            while (index < input.Length && char.IsAsciiLetter(input[index]))
             {
                 index++;
             }
@@ -485,24 +430,20 @@ namespace BBCodeParser
             return true;
         }
 
-        /// <summary>1 to 9999, digits only, no leading zero.</summary>
+        /// <summary>1 to <see cref="ParameterLimits.MaxPixels" />, digits only, no leading zero.</summary>
         private static bool IsSize(string value)
         {
-            if (value.Length == 0 || value.Length > 4 || value[0] == '0')
+            // Longer than the bound in digits is past it, and past what an int holds.
+            if (value.Length == 0 || value.Length > MaxPixelDigits || value[0] == '0')
             {
                 return false;
             }
 
-            foreach (var character in value)
-            {
-                if (character < '0' || character > '9')
-                {
-                    return false;
-                }
-            }
-
-            return true;
+            return !value.AsSpan().ContainsAnyExceptInRange('0', '9') &&
+                   int.Parse(value, CultureInfo.InvariantCulture) <= ParameterLimits.MaxPixels;
         }
+
+        private static readonly int MaxPixelDigits = ParameterLimits.MaxPixels.ToString(CultureInfo.InvariantCulture).Length;
 
         /// <summary>
         /// Where the text of a broken opening tag ends: at the first "]" that
@@ -533,7 +474,7 @@ namespace BBCodeParser
         {
             foreach (var character in name)
             {
-                if (character >= 'A' && character <= 'Z')
+                if (char.IsAsciiLetterUpper(character))
                 {
                     return string.Create(name.Length, name, static (span, source) =>
                     {
@@ -549,11 +490,11 @@ namespace BBCodeParser
         }
 
         private static char AsciiLower(char character) =>
-            character >= 'A' && character <= 'Z' ? (char)(character + ('a' - 'A')) : character;
+            char.IsAsciiLetterUpper(character) ? (char)(character + ('a' - 'A')) : character;
 
         private int LettersEnd(int index)
         {
-            while (index < input.Length && IsNameLetter(input[index]))
+            while (index < input.Length && char.IsAsciiLetter(input[index]))
             {
                 index++;
             }
@@ -569,11 +510,6 @@ namespace BBCodeParser
             TagType = TagType.NoResult,
             Text = input.Substring(start, end - start)
         };
-
-        private static bool IsNameLetter(char character) =>
-            (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z');
-
-        private static bool IsParameterLetter(char character) => IsNameLetter(character);
 
         private static bool IsValueStop(char character) =>
             character == '[' || character == '\n' || character == '\r';

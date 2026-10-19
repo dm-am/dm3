@@ -16,20 +16,9 @@ namespace DM.Infrastructure.Core.Geo;
 /// server: downloads it when there is none, then once a week.
 /// </summary>
 /// <remarks>
-/// A new copy replaces the old one only once it has been checked: its size is
-/// within reason and it reads as a table with at least one range. It is written
-/// next to the file in use and renamed over it, so the file on disk is always a
-/// whole table, and the copy that replaced it in memory is the one that will be
-/// read after a restart. A download that fails or a file that does not pass
-/// changes nothing: the table in use stays, the failure goes to the log, and the
-/// next attempt comes an hour later.
-///
-/// The schedule follows the file, not the process. A restart a day after the
-/// last download waits out the rest of the week instead of downloading again,
-/// and a server that was down for a fortnight downloads as soon as it is up.
-///
-/// The request carries nothing about any reader: it asks for the same file
-/// every time. Addresses are looked up in the local copy only.
+/// A copy replaces the old one only once checked, renamed over it so the file on
+/// disk is always a whole table; a failure changes nothing and is retried. The
+/// schedule follows the age of the file, not the process.
 /// </remarks>
 internal sealed class CountryTableRefresher : BackgroundService
 {
@@ -40,16 +29,13 @@ internal sealed class CountryTableRefresher : BackgroundService
     internal static readonly TimeSpan RetryDelay = TimeSpan.FromHours(1);
 
     /// <summary>
-    /// The table is tens of megabytes. An error page, a redirect body or a cut
-    /// answer is kilobytes, and none of them is a table.
+    /// An error page or a cut answer is kilobytes; the table is tens of megabytes.
     /// </summary>
     internal const long MinimumBytes = 1L << 20;
 
     /// <summary>
-    /// About two and a half times the table of 2026, a file of 26 MB that takes
-    /// some 36 MB once read. A replacement holds the old table and the new one
-    /// at once, so a file far past this would cost the API its memory, and it is
-    /// not the file this expects anyway.
+    /// A replacement holds the old table and the new one at once, so a file far past
+    /// the expected one would cost the API its memory.
     /// </summary>
     internal const long MaximumBytes = 64L << 20;
 
@@ -80,10 +66,8 @@ internal sealed class CountryTableRefresher : BackgroundService
         _path = configuration.Value.CountryDatabasePath;
         _url = configuration.Value.CountryDatabaseUrl;
 
-        // Https only: the table decides what a letter about a sign-in tells the
-        // reader, and a copy that anyone on the path could rewrite would let them
-        // decide it instead. Checked here without throwing, so a bad value turns
-        // the refresh off with a log line rather than stopping the host.
+        // Https only, or anyone on the path decides what the letter says. Without
+        // throwing: a bad value turns the refresh off, not the host.
         _source = Uri.TryCreate(_url, UriKind.Absolute, out var source) &&
                   source.Scheme == Uri.UriSchemeHttps
             ? source
@@ -117,8 +101,7 @@ internal sealed class CountryTableRefresher : BackgroundService
         }
         catch (Exception e) when (e is IOException or UnauthorizedAccessException)
         {
-            // A file that cannot be read is treated as no file. Letting this out
-            // of ExecuteAsync would stop the whole host over one line of a letter.
+            // Treated as no file: an exception here would stop the host.
             _logger.LogError(e, "Could not read the country table at {Path}; downloading a new one", _path);
             wait = TimeSpan.Zero;
         }
@@ -152,9 +135,7 @@ internal sealed class CountryTableRefresher : BackgroundService
         var age = _clock.Now.UtcDateTime - File.GetLastWriteTimeUtc(_path);
         if (age >= RefreshInterval) return TimeSpan.Zero;
 
-        // Reads the file into the lookup, which the letter would do anyway on its
-        // first question. A file nothing can be read from is downloaded over now
-        // rather than at the end of the week.
+        // A file nothing can be read from is downloaded over now.
         if (!_lookup.HoldsRanges) return TimeSpan.Zero;
 
         // A clock set back, or a file dated in the future, still waits one interval at most.
@@ -179,8 +160,7 @@ internal sealed class CountryTableRefresher : BackgroundService
             var table = IpCountryLookup.Read(download, out var skipped)
                 ?? throw new InvalidDataException("The downloaded file holds no usable range");
 
-            // Renamed within one directory, so the file at the path is the old
-            // table or the new one and never half of either.
+            // Within one directory, so the file is never half of either table.
             File.Move(download, _path, overwrite: true);
             _lookup.Use(table);
 

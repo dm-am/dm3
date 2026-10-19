@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Likes;
@@ -33,7 +31,7 @@ public class Comment : ILikable
     public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
-    /// Comment text (raw BBCode or markdown)
+    /// Comment text (raw BBCode)
     /// </summary>
     public string Text { get; set; } = null!;
 

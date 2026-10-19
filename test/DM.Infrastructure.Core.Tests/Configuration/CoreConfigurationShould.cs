@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Configuration;
 using DM.Infrastructure.Core.Configuration;
 using AwesomeAssertions;
 using Microsoft.Extensions.Configuration;
@@ -12,30 +13,9 @@ namespace DM.Infrastructure.Core.Tests.Configuration;
 /// <summary>
 /// A host is refused what it cannot work with, and asked for nothing else.
 /// </summary>
-/// <remarks>
-/// The shared call demanded both connection strings from every host, so the mail
-/// worker - which reads a queue and speaks SMTP - could not start without a Postgres
-/// and a store it never opens, and the next host would have been pushed into writing
-/// a fake value, which is what empties the check for the hosts that need it. The
-/// imgproxy pair had the opposite problem: nothing validated it, a non-hex value
-/// threw on the first page with a thumbnail, and a key with no salt turned every
-/// thumbnail into a 403 with no line in any log.
-///
-/// Validation runs where the host runs it, through the startup validator, because
-/// binding alone never fails.
-/// </remarks>
+/// <remarks>Validation runs through the startup validator, as the host runs it: binding alone never fails.</remarks>
 public class CoreConfigurationShould
 {
-    private static readonly Dictionary<string, string?> Storage = new()
-    {
-        ["ConnectionStrings:Rdb"] = "Host=localhost;Database=dm3",
-        ["CdnConfiguration:Url"] = "http://localhost:9000",
-        ["CdnConfiguration:BucketName"] = "dm-uploads",
-        ["CdnConfiguration:AccessKey"] = "key",
-        ["CdnConfiguration:SecretKey"] = "secret",
-        ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173",
-    };
-
     [Fact]
     public void AskNoStoreOfAHostThatDeclaresNone() =>
         Validate(new Dictionary<string, string?> { ["SiteAddressConfiguration:PublicUrl"] = "http://localhost:5173" })
@@ -62,33 +42,23 @@ public class CoreConfigurationShould
             .Should().Contain("CdnConfiguration");
 
     [Fact]
-    public void AcceptAnUnsignedImageProxy() =>
-        Validate(Storage).Should().BeNull(
-            "an empty key and an empty salt together are the local setup imgproxy runs " +
-            "with insecure URLs enabled");
-
-    [Fact]
-    public void RefuseASigningKeyThatIsNotHex() =>
-        Validate(With("ImageProxyConfiguration:Key", "not-hex-at-all", "ImageProxyConfiguration:Salt", "ab12"))
-            .Should().Contain("ImageProxyConfiguration",
-                "the builder converts it from hex in its constructor, so a base64 value " +
-                "throws on the first page with an avatar rather than at startup");
-
-    [Fact]
-    public void RefuseAKeyWithoutASalt() =>
-        Validate(With("ImageProxyConfiguration:Key", "ab12", "ImageProxyConfiguration:Salt", ""))
-            .Should().Contain("ImageProxyConfiguration",
-                "half a pair signs nothing: the application emits /insecure/ URLs and an " +
-                "imgproxy holding a key answers 403 to every one of them");
-
-    private static Dictionary<string, string?> With(string firstKey, string firstValue, string secondKey, string secondValue)
+    public void BindTheSectionsTheModuleReads()
     {
-        var settings = new Dictionary<string, string?>(Storage)
+        var configuration = new ConfigurationBuilder().AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [firstKey] = firstValue,
-            [secondKey] = secondValue,
-        };
-        return settings;
+            ["CdnConfiguration:PublicUrl"] = "https://cdn.example",
+            ["GeoLocationConfiguration:CountryDatabasePath"] = "/data/country.csv",
+            ["BotConfiguration:TelegramBotToken"] = "token",
+        }).Build();
+
+        using var provider = new ServiceCollection().AddDmCoreConfiguration(configuration).BuildServiceProvider();
+
+        provider.GetRequiredService<IOptions<CdnConfiguration>>().Value.PublicUrl
+            .Should().Be("https://cdn.example");
+        provider.GetRequiredService<IOptions<GeoLocationConfiguration>>().Value.CountryDatabasePath
+            .Should().Be("/data/country.csv");
+        provider.GetRequiredService<IOptions<BotConfiguration>>().Value.TelegramBotToken
+            .Should().Be("token");
     }
 
     /// <summary>The message of the first failure, or null when the host would start.</summary>
@@ -103,7 +73,8 @@ public class CoreConfigurationShould
         using var provider = services.BuildServiceProvider();
         try
         {
-            provider.GetRequiredService<IStartupValidator>().Validate();
+            // Registered by the first ValidateOnStart: a host that declares nothing has nothing to refuse.
+            provider.GetService<IStartupValidator>()?.Validate();
             return null;
         }
         catch (OptionsValidationException exception)

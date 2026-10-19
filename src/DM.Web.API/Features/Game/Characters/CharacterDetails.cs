@@ -1,6 +1,4 @@
 using System.Collections.Generic;
-using DM.Domain.Core.Enums;
-using DM.Web.API.Shared.BbRendering;
 
 namespace DM.Web.API.Features.Game.Characters;
 

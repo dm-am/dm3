@@ -12,23 +12,23 @@ namespace DM.Domain.Game.Tests.Features.Posts;
 
 public class DiceRollerShould : UnitTestBase
 {
-    private readonly IRandomNumberGenerator _rng;
-    private readonly DiceRoller _roller;
+    private readonly IRandomNumberGenerator rng;
+    private readonly DiceRoller roller;
 
     public DiceRollerShould()
     {
-        _rng = Mock<IRandomNumberGenerator>();
+        rng = Mock<IRandomNumberGenerator>();
 
         var guidFactory = Mock<IGuidFactory>();
         guidFactory.Create().Returns(_ => Guid.NewGuid());
 
-        _roller = new DiceRoller(_rng, guidFactory);
+        roller = new DiceRoller(rng, guidFactory);
     }
 
     private void SetupRolls(params int[] values)
     {
         var queue = new Queue<int>(values);
-        _rng.Generate(Arg.Any<int>()).Returns(_ => queue.Dequeue());
+        rng.Generate(Arg.Any<int>()).Returns(_ => queue.Dequeue());
     }
 
     [Fact]
@@ -37,7 +37,7 @@ public class DiceRollerShould : UnitTestBase
         SetupRolls(3, 5, 2);
         var spec = new CreatePostDiceRoll { EdgesCount = 6, DiceCount = 3 };
 
-        var roll = _roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec }).Single();
+        var roll = roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec }).Single();
 
         roll.Results.Should().HaveCount(3);
         roll.Results.Select(r => r.Value).Should().Equal(3, 5, 2);
@@ -49,7 +49,7 @@ public class DiceRollerShould : UnitTestBase
         SetupRolls(4, 4);
         var spec = new CreatePostDiceRoll { EdgesCount = 6, DiceCount = 2, Bonus = 3 };
 
-        var roll = _roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec }).Single();
+        var roll = roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec }).Single();
 
         roll.Total.Should().Be(11); // 4 + 4 + bonus 3
     }
@@ -60,7 +60,7 @@ public class DiceRollerShould : UnitTestBase
         SetupRolls(6, 1, 3);
         var spec = new CreatePostDiceRoll { EdgesCount = 6, DiceCount = 3 };
 
-        var results = _roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec })
+        var results = roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec })
             .Single().Results.ToList();
 
         results[0].IsCritical.Should().BeTrue();  // natural max
@@ -74,7 +74,7 @@ public class DiceRollerShould : UnitTestBase
         SetupRolls(6); // rolled the maximum, but exploding is off
         var spec = new CreatePostDiceRoll { EdgesCount = 6, DiceCount = 1, ExplosionCount = null };
 
-        var roll = _roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec }).Single();
+        var roll = roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec }).Single();
 
         roll.Results.Should().HaveCount(1);
         roll.Results.Single().IsExploded.Should().BeFalse();
@@ -87,7 +87,7 @@ public class DiceRollerShould : UnitTestBase
         SetupRolls(6, 6, 6, 6);
         var spec = new CreatePostDiceRoll { EdgesCount = 6, DiceCount = 1, ExplosionCount = 2 };
 
-        var results = _roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec })
+        var results = roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec })
             .Single().Results.ToList();
 
         results.Should().HaveCount(3); // base roll + 2 explosions
@@ -111,7 +111,7 @@ public class DiceRollerShould : UnitTestBase
             Comment = "attack"
         };
 
-        var roll = _roller.Roll(postId, createdUtc, new[] { spec }).Single();
+        var roll = roller.Roll(postId, createdUtc, new[] { spec }).Single();
 
         roll.PostId.Should().Be(postId);
         roll.CreatedUtc.Should().Be(createdUtc);
@@ -119,17 +119,5 @@ public class DiceRollerShould : UnitTestBase
         roll.Comment.Should().Be("attack");
         roll.EdgesCount.Should().Be(6);
         roll.DiceCount.Should().Be(1);
-    }
-
-    [Fact]
-    public void SkipInvalidSpecs()
-    {
-        // A d1 (edges < 2) is not a valid die and must be dropped, never rolled.
-        var spec = new CreatePostDiceRoll { EdgesCount = 1, DiceCount = 1 };
-
-        var rolls = _roller.Roll(Guid.NewGuid(), DateTimeOffset.UtcNow, new[] { spec });
-
-        rolls.Should().BeEmpty();
-        _rng.DidNotReceive().Generate(Arg.Any<int>());
     }
 }

@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Dto;
@@ -17,13 +14,10 @@ public class AuthenticatedUser : GeneralUser, IAuthorizationSubject
     /// </summary>
     public string Salt { get; set; } = null!;
 
-    /// <summary>
-    /// Password hash
-    /// </summary>
     public string PasswordHash { get; set; } = null!;
 
     /// <summary>
-    /// Password hash algorithm version (4 = Argon2id)
+    /// Password hash algorithm version
     /// </summary>
     public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
@@ -42,13 +36,9 @@ public class AuthenticatedUser : GeneralUser, IAuthorizationSubject
     /// restriction plus every ban in force right now.
     /// </summary>
     /// <remarks>
-    /// This must be folded into <see cref="GeneralUser.AccessPolicy" /> once, when
-    /// the identity is built, because that is the property every authorization
-    /// resolver reads and resolvers have no clock. Bans live in their own table
-    /// and nothing ever writes the user's own column, so reading the column
-    /// without this fold means no ban has any effect whatsoever.
+    /// Folded into <see cref="GeneralUser.AccessPolicy" /> when the identity is
+    /// built, because resolvers read that property and have no clock.
     /// </remarks>
-    /// <param name="moment">Current moment</param>
     public AccessPolicy EffectiveAccessPolicyAt(DateTimeOffset moment) =>
         AccessRestrictions
             .Where(restriction => restriction.IsInForceAt(moment))
@@ -66,7 +56,6 @@ public class AuthenticatedUser : GeneralUser, IAuthorizationSubject
     /// for, and not on the identity of a refused sign-in, which carries the
     /// guest and no restrictions at all.
     /// </remarks>
-    /// <param name="moment">Current moment</param>
     public DateTimeOffset? BanEndsAt(DateTimeOffset moment)
     {
         var end = AccessRestrictions

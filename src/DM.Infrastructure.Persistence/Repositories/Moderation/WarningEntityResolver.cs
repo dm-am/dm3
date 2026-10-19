@@ -6,45 +6,28 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Features.Warnings;
+using DM.Domain.Core.Chats;
 using Microsoft.EntityFrameworkCore;
-using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
 
 namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 
 /// <inheritdoc />
 /// <remarks>
-/// Three kinds are answered here: forum topics, comments of any discussion (a
-/// topic, a game, a blog, a publication), and chat messages. Game posts and game
-/// room chat are not among them and must not be added — game content is outside
-/// moderation, so no warning names it.
-///
-/// Every address is site-relative and spelled the way the client router spells
-/// it. The client builds the same permalinks from its own routes; this is the
-/// one place the server needs them, and a warning whose object cannot be
-/// addressed answers with no address rather than with a broken one.
-///
-/// The reads lift the soft-delete filter and state every deletion they care
-/// about by hand. A warning outlives the text it was issued for, and the log
-/// still names where that text stood and when it was written: behind the filter
-/// a deleted comment answered with nothing at all. Lifting it lifts it for the
-/// owners too, so the topic, the game, the blog and the publication are asked
-/// about their own deletion explicitly, and no user row is read by them, so the
-/// filter over removed accounts has nothing to guard. The one user row read here
-/// is the profile a warning is issued on (CaptureProfile), under the filter.
-///
-/// Whether a guest could read the text where it stood, which decides whether the
-/// open log links to it, is answered with the rules that answer it everywhere
-/// else, not with a copy of them: the visibility of a module is
-/// <see cref="ModuleVisibility.IsPubliclyVisible" /> over the three fields read
-/// here, the discussion of a game is read by whoever sees the game, and a board
-/// is open to a guest when its view policy carries the guest flag, the
-/// predicate TopicRepository filters the forum by.
+/// Every place of WarningEntityType: forum topics, comments of any discussion,
+/// messages of the global chat, reviews of games and of posts. Nothing of a game
+/// room or a conversation is moderated, and a review of a post is read where its
+/// post is. Addresses are spelled the way the
+/// client router spells them, and an object that cannot be addressed gets none.
+/// The reads lift the soft-delete filter, because a warning outlives its text, and
+/// ask each owner about its own deletion. Guest visibility uses
+/// <see cref="ModuleVisibility.IsPubliclyVisible" /> and the board's guest flag;
+/// a place closed to a guest is named for the open log to ask its viewer about
+/// (<see cref="IPlaceReading" />).
 /// </remarks>
 internal class WarningEntityResolver : IWarningEntityResolver
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public WarningEntityResolver(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -74,8 +57,12 @@ internal class WarningEntityResolver : IWarningEntityResolver
             // as long as the warning lives — so the filter is here and not left
             // to whoever calls with an identifier.
             WarningEntityType.Message => await _dbContext.Messages
-                .Where(m => m.MessageId == entityId && m.ChatId == DbChat.GlobalChatId)
+                .Where(m => m.MessageId == entityId && m.ChatId == WellKnownChats.GlobalChatId)
                 .Select(m => m.Text).FirstOrDefaultAsync(ct),
+            WarningEntityType.GameReview => await _dbContext.GameReviews
+                .Where(r => r.GameReviewId == entityId).Select(r => r.Text).FirstOrDefaultAsync(ct),
+            WarningEntityType.PostReview => await _dbContext.PostReviews
+                .Where(r => r.PostReviewId == entityId).Select(r => r.Text).FirstOrDefaultAsync(ct),
             _ => null
         };
     }
@@ -110,6 +97,8 @@ internal class WarningEntityResolver : IWarningEntityResolver
         await DescribeComments(Of(requests, WarningEntityType.Comment), states, ct);
         await DescribeTopics(Of(requests, WarningEntityType.Topic), states, ct);
         await DescribeMessages(Of(requests, WarningEntityType.Message), states, ct);
+        await DescribeGameReviews(Of(requests, WarningEntityType.GameReview), states, ct);
+        await DescribePostReviews(Of(requests, WarningEntityType.PostReview), states, ct);
         return states;
     }
 
@@ -125,7 +114,20 @@ internal class WarningEntityResolver : IWarningEntityResolver
         WarningPlaceKind? PlaceKind,
         string? PlaceTitle,
         DateTimeOffset? CreatedUtc,
-        WarningLogClosure? LogClosure);
+        WarningLogClosure? LogClosure,
+        ReadablePlace? ClosedPlace = null,
+        WarningLogClosure? ClosureForReader = null);
+
+    /// <summary>
+    /// A text of a module, closed as <see cref="TextClosure" /> says. A place closed to a guest is
+    /// named, and for its reader the text is closed by its deletion alone.
+    /// </summary>
+    private static Described InModule(string? url, WarningPlaceKind placeKind, string? placeTitle,
+        DateTimeOffset? createdUtc, WarningLogClosure? placeClosure, bool removedByModeration, ReadablePlace place) =>
+        new(url, placeKind, placeTitle, createdUtc,
+            TextClosure(placeClosure, removedByModeration),
+            placeClosure == WarningLogClosure.PlaceNotPublic ? place : null,
+            TextClosure(null, removedByModeration));
 
     /// <summary>
     /// Deleted by somebody other than its author, or by nobody the row names:
@@ -137,34 +139,43 @@ internal class WarningEntityResolver : IWarningEntityResolver
 
     /// <summary>
     /// Why a guest may not read what stands in a game or a blog, or null when he
-    /// may. Deletion first: a deleted module is closed whatever else is true.
+    /// may. Closed first: a deleted module that was closed takes the text of the
+    /// open log with it (WarningLogClosure), a deleted open one only the link.
     /// </summary>
     private static WarningLogClosure? ModuleClosure(
         bool isRemoved, ModuleStatus status, PremoderationStatus premoderationStatus, DraftVisibility draftVisibility)
     {
-        if (isRemoved)
+        if (!ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility))
         {
-            return WarningLogClosure.PlaceRemoved;
+            return WarningLogClosure.PlaceNotPublic;
         }
 
-        return ModuleVisibility.IsPubliclyVisible(status, premoderationStatus, draftVisibility)
-            ? null
-            : WarningLogClosure.PlaceNotPublic;
+        return isRemoved ? WarningLogClosure.PlaceRemoved : null;
     }
 
     /// <summary>
-    /// Why a guest may not read what stands in a topic, or null when he may.
+    /// Why a guest may not read what stands in a topic, or null when he may:
+    /// every forum section is open to guests, so only a deleted topic closes it.
     /// </summary>
-    private static WarningLogClosure? TopicClosure(bool topicRemoved, BoardAccessPolicy viewPolicy)
-    {
-        if (topicRemoved)
-        {
-            return WarningLogClosure.PlaceRemoved;
-        }
+    private static WarningLogClosure? TopicClosure(bool topicRemoved) =>
+        topicRemoved ? WarningLogClosure.PlaceRemoved : null;
 
-        return (viewPolicy & BoardAccessPolicy.Guest) != BoardAccessPolicy.None
-            ? null
-            : WarningLogClosure.BoardClosed;
+    /// <summary>
+    /// The closure of a text by its place, and failing that by its deletion: a
+    /// text moderation took out of a closed place is closed all the same.
+    /// </summary>
+    private static WarningLogClosure? TextClosure(WarningLogClosure? placeClosure, bool removedByModeration) =>
+        placeClosure ?? (removedByModeration ? WarningLogClosure.RemovedByModeration : null);
+
+    /// <summary>
+    /// A comment of the page, read for what its place is told by.
+    /// </summary>
+    private sealed record CommentRow(
+        Guid CommentId, Guid OwnerId, Guid AuthorId, DateTimeOffset CreatedUtc, bool IsRemoved, Guid? DeletedByUserId)
+    {
+        public string Anchor => $"#comment-{CommentId}";
+
+        public bool ByModeration => RemovedByModeration(IsRemoved, DeletedByUserId, AuthorId);
     }
 
     private async Task DescribeComments(
@@ -185,25 +196,58 @@ internal class WarningEntityResolver : IWarningEntityResolver
         var comments = await _dbContext.Comments
             .IgnoreQueryFilters()
             .Where(c => ids.Contains(c.CommentId))
-            .Select(c => new
-            {
-                c.CommentId,
-                OwnerId = c.EntityId,
-                c.AuthorId,
-                c.CreatedUtc,
-                c.IsRemoved,
-                c.DeletedByUserId
-            })
+            .Select(c => new CommentRow(
+                c.CommentId, c.EntityId, c.AuthorId, c.CreatedUtc, c.IsRemoved, c.DeletedByUserId))
             .ToListAsync(ct);
 
         var owners = comments.Select(c => c.OwnerId).Distinct().ToList();
 
-        var topicOwners = await _dbContext.Topics
+        // The four tables are asked in this order, and the first that owns a
+        // comment places it.
+        var described = new Dictionary<Guid, Described>();
+        await CommentsInTopics(comments, owners, described, ct);
+        await CommentsInBlogs(comments, owners, described, ct);
+        await CommentsInGames(comments, owners, described, ct);
+        await CommentsInPublications(comments, owners, described, ct);
+
+        // An owner that is gone altogether: no place to name and nowhere to
+        // link, the text still shown as the one the warning was given for.
+        foreach (var comment in comments)
+        {
+            described.TryAdd(comment.CommentId, new Described(
+                null, null, null, comment.CreatedUtc, WarningLogClosure.NotFound));
+        }
+
+        Fill(requests, states, described);
+    }
+
+    /// <summary>
+    /// Places the comments of a forum topic at the topic.
+    /// </summary>
+    private async Task CommentsInTopics(
+        List<CommentRow> comments, List<Guid> owners, Dictionary<Guid, Described> described, CancellationToken ct)
+    {
+        var topics = await _dbContext.Topics
             .IgnoreQueryFilters()
             .Where(t => owners.Contains(t.TopicId))
-            .Select(t => new { t.TopicId, t.Title, t.Board.Alias, t.TopicNumber, t.IsRemoved, t.Board.ViewPolicy })
+            .Select(t => new { t.TopicId, t.Title, t.Board.Alias, t.TopicNumber, t.IsRemoved })
             .ToListAsync(ct);
-        var blogOwners = await _dbContext.Blogs
+
+        Place(comments, topics.ToDictionary(t => t.TopicId), described, (comment, topic) => new Described(
+            comment.IsRemoved || topic.IsRemoved ? null : $"/forum/{topic.Alias}/{topic.TopicNumber}{comment.Anchor}",
+            WarningPlaceKind.Topic,
+            topic.Title,
+            comment.CreatedUtc,
+            TextClosure(TopicClosure(topic.IsRemoved), comment.ByModeration)));
+    }
+
+    /// <summary>
+    /// Places the comments of a blog discussion at the blog.
+    /// </summary>
+    private async Task CommentsInBlogs(
+        List<CommentRow> comments, List<Guid> owners, Dictionary<Guid, Described> described, CancellationToken ct)
+    {
+        var blogs = await _dbContext.Blogs
             .IgnoreQueryFilters()
             .Where(b => owners.Contains(b.BlogId))
             .Select(b => new
@@ -217,7 +261,24 @@ internal class WarningEntityResolver : IWarningEntityResolver
                 b.DraftVisibility
             })
             .ToListAsync(ct);
-        var gameOwners = await _dbContext.Games
+
+        Place(comments, blogs.ToDictionary(b => b.BlogId), described, (comment, blog) => InModule(
+            comment.IsRemoved || blog.IsRemoved ? null : $"/blogs/{blog.PublicId}/comments{comment.Anchor}",
+            WarningPlaceKind.Blog,
+            blog.Title,
+            comment.CreatedUtc,
+            ModuleClosure(blog.IsRemoved, blog.Status, blog.PremoderationStatus, blog.DraftVisibility),
+            comment.ByModeration,
+            new ReadablePlace(ReadablePlaceKind.Blog, blog.BlogId)));
+    }
+
+    /// <summary>
+    /// Places the comments of a game discussion at the game.
+    /// </summary>
+    private async Task CommentsInGames(
+        List<CommentRow> comments, List<Guid> owners, Dictionary<Guid, Described> described, CancellationToken ct)
+    {
+        var games = await _dbContext.Games
             .IgnoreQueryFilters()
             .Where(g => owners.Contains(g.GameId))
             .Select(g => new
@@ -231,7 +292,43 @@ internal class WarningEntityResolver : IWarningEntityResolver
                 g.DraftVisibility
             })
             .ToListAsync(ct);
-        var publicationOwners = await _dbContext.Publications
+
+        Place(comments, games.ToDictionary(g => g.GameId), described, (comment, game) => InModule(
+            comment.IsRemoved || game.IsRemoved ? null : $"/game/{game.PublicId}/comments{comment.Anchor}",
+            WarningPlaceKind.Game,
+            game.Title,
+            comment.CreatedUtc,
+            ModuleClosure(game.IsRemoved, game.Status, game.PremoderationStatus, game.DraftVisibility),
+            comment.ByModeration,
+            new ReadablePlace(ReadablePlaceKind.Game, game.GameId)));
+    }
+
+    /// <summary>
+    /// Describes each comment whose owner is among <paramref name="owners" />, unless a
+    /// table asked before it placed the comment already.
+    /// </summary>
+    private static void Place<TOwner>(
+        List<CommentRow> comments,
+        Dictionary<Guid, TOwner> owners,
+        Dictionary<Guid, Described> described,
+        Func<CommentRow, TOwner, Described> describe)
+    {
+        foreach (var comment in comments)
+        {
+            if (owners.TryGetValue(comment.OwnerId, out var owner))
+            {
+                described.TryAdd(comment.CommentId, describe(comment, owner));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Places the comments under a publication at the publication.
+    /// </summary>
+    private async Task CommentsInPublications(
+        List<CommentRow> comments, List<Guid> owners, Dictionary<Guid, Described> described, CancellationToken ct)
+    {
+        var publications = await _dbContext.Publications
             .IgnoreQueryFilters()
             .Where(p => owners.Contains(p.PublicationId))
             .Select(p => new
@@ -239,7 +336,6 @@ internal class WarningEntityResolver : IWarningEntityResolver
                 p.PublicationId,
                 p.Title,
                 p.IsRemoved,
-                p.IsPublished,
                 BlogPublicId = p.Blog.PublicId,
                 BlogRemoved = p.Blog.IsRemoved,
                 p.Blog.Status,
@@ -248,89 +344,30 @@ internal class WarningEntityResolver : IWarningEntityResolver
             })
             .ToListAsync(ct);
 
-        var described = new Dictionary<Guid, Described>();
         foreach (var comment in comments)
         {
-            var anchor = $"#comment-{comment.CommentId}";
-            var byModeration = RemovedByModeration(comment.IsRemoved, comment.DeletedByUserId, comment.AuthorId);
-
-            var topic = topicOwners.FirstOrDefault(t => t.TopicId == comment.OwnerId);
-            if (topic != null)
+            var publication = publications.FirstOrDefault(p => p.PublicationId == comment.OwnerId);
+            if (publication == null)
             {
-                described[comment.CommentId] = new Described(
-                    comment.IsRemoved || topic.IsRemoved ? null : $"/forum/{topic.Alias}/{topic.TopicNumber}{anchor}",
-                    WarningPlaceKind.Topic,
-                    topic.Title,
-                    comment.CreatedUtc,
-                    byModeration ? WarningLogClosure.RemovedByModeration : TopicClosure(topic.IsRemoved, topic.ViewPolicy));
                 continue;
             }
 
-            var blog = blogOwners.FirstOrDefault(b => b.BlogId == comment.OwnerId);
-            if (blog != null)
-            {
-                described[comment.CommentId] = new Described(
-                    comment.IsRemoved || blog.IsRemoved ? null : $"/blogs/{blog.PublicId}/comments{anchor}",
-                    WarningPlaceKind.Blog,
-                    blog.Title,
-                    comment.CreatedUtc,
-                    byModeration
-                        ? WarningLogClosure.RemovedByModeration
-                        : ModuleClosure(blog.IsRemoved, blog.Status, blog.PremoderationStatus, blog.DraftVisibility));
-                continue;
-            }
+            // The publication is the place, under the title its readers know
+            // it by. A guest reads it where the blog is open to him.
+            var placeClosure = ModuleClosure(publication.BlogRemoved || publication.IsRemoved, publication.Status,
+                publication.PremoderationStatus, publication.DraftVisibility);
 
-            var game = gameOwners.FirstOrDefault(g => g.GameId == comment.OwnerId);
-            if (game != null)
-            {
-                var closure = byModeration
-                    ? WarningLogClosure.RemovedByModeration
-                    : ModuleClosure(game.IsRemoved, game.Status, game.PremoderationStatus, game.DraftVisibility);
-
-                described[comment.CommentId] = new Described(
-                    comment.IsRemoved || game.IsRemoved ? null : $"/game/{game.PublicId}/comments{anchor}",
-                    WarningPlaceKind.Game,
-                    game.Title,
-                    comment.CreatedUtc,
-                    closure);
-                continue;
-            }
-
-            var publication = publicationOwners.FirstOrDefault(p => p.PublicationId == comment.OwnerId);
-            if (publication != null)
-            {
-                // The publication is the place, under the title its readers know
-                // it by. A guest reads it where the blog is open to him and the
-                // publication is out; an unpublished one is a draft of its author.
-                var closure = byModeration
-                    ? WarningLogClosure.RemovedByModeration
-                    : publication.IsRemoved
-                        ? WarningLogClosure.PlaceRemoved
-                        : ModuleClosure(publication.BlogRemoved, publication.Status,
-                            publication.PremoderationStatus, publication.DraftVisibility);
-                if (closure == null && !publication.IsPublished)
-                {
-                    closure = WarningLogClosure.PlaceNotPublic;
-                }
-
-                described[comment.CommentId] = new Described(
-                    comment.IsRemoved || publication.IsRemoved || publication.BlogRemoved
-                        ? null
-                        : $"/blogs/{publication.BlogPublicId}/feed/{publication.PublicationId}{anchor}",
-                    WarningPlaceKind.Publication,
-                    publication.Title,
-                    comment.CreatedUtc,
-                    closure);
-                continue;
-            }
-
-            // An owner that is gone altogether: no place to name and nowhere to
-            // link, the text still shown as the one the warning was given for.
-            described[comment.CommentId] = new Described(
-                null, null, null, comment.CreatedUtc, WarningLogClosure.NotFound);
+            described.TryAdd(comment.CommentId, InModule(
+                comment.IsRemoved || publication.IsRemoved || publication.BlogRemoved
+                    ? null
+                    : $"/blogs/{publication.BlogPublicId}/feed/{publication.PublicationId}{comment.Anchor}",
+                WarningPlaceKind.Publication,
+                publication.Title,
+                comment.CreatedUtc,
+                placeClosure,
+                comment.ByModeration,
+                new ReadablePlace(ReadablePlaceKind.Publication, publication.PublicationId)));
         }
-
-        Fill(requests, states, described);
     }
 
     private async Task DescribeTopics(
@@ -355,8 +392,7 @@ internal class WarningEntityResolver : IWarningEntityResolver
                 t.AuthorId,
                 t.CreatedUtc,
                 t.IsRemoved,
-                t.DeletedByUserId,
-                t.Board.ViewPolicy
+                t.DeletedByUserId
             })
             .ToListAsync(ct);
 
@@ -369,9 +405,7 @@ internal class WarningEntityResolver : IWarningEntityResolver
                 WarningPlaceKind.Topic,
                 t.Title,
                 t.CreatedUtc,
-                RemovedByModeration(t.IsRemoved, t.DeletedByUserId, t.AuthorId)
-                    ? WarningLogClosure.RemovedByModeration
-                    : TopicClosure(false, t.ViewPolicy)));
+                TextClosure(null, RemovedByModeration(t.IsRemoved, t.DeletedByUserId, t.AuthorId))));
 
         Fill(requests, states, described);
     }
@@ -398,7 +432,7 @@ internal class WarningEntityResolver : IWarningEntityResolver
         // no place, no address and nothing for the open log.
         var described = messages.ToDictionary(
             m => m.MessageId,
-            m => m.ChatId == DbChat.GlobalChatId
+            m => m.ChatId == WellKnownChats.GlobalChatId
                 ? new Described(
                     m.IsRemoved ? null : $"/global-chat#msg-{m.MessageId}",
                     WarningPlaceKind.GlobalChat,
@@ -410,6 +444,125 @@ internal class WarningEntityResolver : IWarningEntityResolver
                 : new Described(null, null, null, null, WarningLogClosure.NotFound));
 
         Fill(requests, states, described);
+    }
+
+    /// <summary>
+    /// A game as a place: what its address and title are, and whether a guest reads it.
+    /// </summary>
+    private sealed record GamePlace(
+        string PublicId,
+        string Title,
+        bool IsRemoved,
+        ModuleStatus Status,
+        PremoderationStatus PremoderationStatus,
+        DraftVisibility DraftVisibility)
+    {
+        /// <summary>Why a guest may not read what stands in the game, by the rules of a module.</summary>
+        public WarningLogClosure? Closure(bool contentRemoved = false) =>
+            ModuleClosure(IsRemoved || contentRemoved, Status, PremoderationStatus, DraftVisibility);
+    }
+
+    /// <summary>The games the reviews of a page stand at, read once for the page.</summary>
+    private async Task<Dictionary<Guid, GamePlace>> GamePlaces(IEnumerable<Guid> gameIds, CancellationToken ct)
+    {
+        var ids = gameIds.Distinct().ToList();
+        return await _dbContext.Games
+            .IgnoreQueryFilters()
+            .Where(g => ids.Contains(g.GameId))
+            .Select(g => new
+            {
+                g.GameId,
+                Place = new GamePlace(g.PublicId, g.Title, g.IsRemoved, g.Status, g.PremoderationStatus, g.DraftVisibility)
+            })
+            .ToDictionaryAsync(g => g.GameId, g => g.Place, ct);
+    }
+
+    /// <summary>
+    /// A review of a game, placed at the game and read by its rules.
+    /// </summary>
+    private async Task DescribeGameReviews(
+        List<WarningEntityRequest> requests, Dictionary<Guid, WarningEntityState> states, CancellationToken ct)
+    {
+        if (requests.Count == 0)
+        {
+            return;
+        }
+
+        var ids = requests.Select(r => r.EntityId).Distinct().ToList();
+        var reviews = await _dbContext.GameReviews
+            .IgnoreQueryFilters()
+            .Where(r => ids.Contains(r.GameReviewId))
+            .Select(r => new { r.GameReviewId, r.GameId, r.AuthorId, r.CreatedUtc, r.IsRemoved, r.DeletedByUserId })
+            .ToListAsync(ct);
+        var games = await GamePlaces(reviews.Select(r => r.GameId), ct);
+
+        // A review whose game is gone altogether is left out, and the log answers it as one nothing found.
+        Fill(requests, states, reviews.Where(r => games.ContainsKey(r.GameId)).ToDictionary(
+            r => r.GameReviewId,
+            r =>
+            {
+                var game = games[r.GameId];
+                return InModule(
+                    r.IsRemoved || game.IsRemoved ? null : $"/game/{game.PublicId}/reviews",
+                    WarningPlaceKind.Game,
+                    game.Title,
+                    r.CreatedUtc,
+                    game.Closure(),
+                    RemovedByModeration(r.IsRemoved, r.DeletedByUserId, r.AuthorId),
+                    new ReadablePlace(ReadablePlaceKind.Game, r.GameId));
+            }));
+    }
+
+    /// <summary>
+    /// The review of a post, placed at its game and read where its post is: a post of a
+    /// room closed to a guest closes the review with it.
+    /// </summary>
+    private async Task DescribePostReviews(
+        List<WarningEntityRequest> requests, Dictionary<Guid, WarningEntityState> states, CancellationToken ct)
+    {
+        if (requests.Count == 0)
+        {
+            return;
+        }
+
+        var ids = requests.Select(r => r.EntityId).Distinct().ToList();
+        var reviews = await _dbContext.PostReviews
+            .IgnoreQueryFilters()
+            .Where(r => ids.Contains(r.PostReviewId))
+            .Select(r => new
+            {
+                r.PostReviewId,
+                r.PostId,
+                r.GameId,
+                r.AuthorId,
+                r.CreatedUtc,
+                r.IsRemoved,
+                r.DeletedByUserId,
+                PostRemoved = r.Post.IsRemoved || r.Post.Room.IsRemoved,
+                RoomOpen = r.Post.Room.AccessType == RoomAccessType.Open
+            })
+            .ToListAsync(ct);
+        var games = await GamePlaces(reviews.Select(r => r.GameId), ct);
+
+        // A review whose game is gone altogether is left out, and the log answers it as one nothing found.
+        Fill(requests, states, reviews.Where(r => games.ContainsKey(r.GameId)).ToDictionary(
+            r => r.PostReviewId,
+            r =>
+            {
+                var game = games[r.GameId];
+                var placeClosure = r.RoomOpen ? game.Closure(r.PostRemoved) : WarningLogClosure.PlaceNotPublic;
+                // Read where its post is, so the post is the place a viewer is asked about.
+                return InModule(
+                    r.IsRemoved || r.PostRemoved || game.IsRemoved
+                        ? null
+                        : $"/game/{game.PublicId}/post-reviews#review-{r.PostReviewId}",
+                    WarningPlaceKind.Game,
+                    game.Title,
+                    r.CreatedUtc,
+                    placeClosure,
+                    RemovedByModeration(r.IsRemoved, r.DeletedByUserId, r.AuthorId),
+                    new ReadablePlace(ReadablePlaceKind.Post, r.PostId));
+            }));
     }
 
     /// <summary>
@@ -425,14 +578,16 @@ internal class WarningEntityResolver : IWarningEntityResolver
     {
         foreach (var request in requests)
         {
-            var found = described.TryGetValue(request.EntityId, out var entity);
+            described.TryGetValue(request.EntityId, out var entity);
             states[request.WarningId] = new WarningEntityState
             {
-                Url = found ? entity!.Url : null,
-                PlaceKind = found ? entity!.PlaceKind : null,
-                PlaceTitle = found ? entity!.PlaceTitle : null,
-                CreatedUtc = found ? entity!.CreatedUtc : null,
-                LogClosure = found ? entity!.LogClosure : WarningLogClosure.NotFound
+                Url = entity?.Url,
+                PlaceKind = entity?.PlaceKind,
+                PlaceTitle = entity?.PlaceTitle,
+                CreatedUtc = entity?.CreatedUtc,
+                LogClosure = entity is null ? WarningLogClosure.NotFound : entity.LogClosure,
+                ClosedPlace = entity?.ClosedPlace,
+                ClosureForReader = entity?.ClosureForReader
             };
         }
     }

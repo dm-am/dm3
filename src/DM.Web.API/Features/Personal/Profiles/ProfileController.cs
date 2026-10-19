@@ -1,6 +1,5 @@
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
@@ -24,10 +23,9 @@ namespace DM.Web.API.Features.Personal.Profiles;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class ProfileController : ControllerBase
 {
-    private readonly IPersonalProfileApiService _profileApiService;
+    private readonly PersonalProfileApiService _profileApiService;
 
-    /// <inheritdoc />
-    public ProfileController(IPersonalProfileApiService profileApiService)
+    public ProfileController(PersonalProfileApiService profileApiService)
     {
         _profileApiService = profileApiService;
     }
@@ -52,17 +50,6 @@ public class ProfileController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Updates profile fields. All fields are optional - PATCH updates only provided fields.
-    ///
-    /// - **status**: User-defined status message
-    /// - **name**: Real name
-    /// - **location**: User location
-    /// - **gender**: Male, Female, Unknown
-    /// - **birthday**: { day, month, year? } or null to remove
-    /// - **info**: Extended info in BB-code
-    /// - **contacts**: Array of { type, value } - replaces all contacts
-    /// - **avatarUploadId**: Upload ID from /v1/uploads, null to remove avatar
-    /// - **visibility**: { showBirthday, showRating }
-    ///
     /// To change username or email, use /v1/account/... endpoints.
     /// </remarks>
     /// <param name="profile">Profile fields to update</param>

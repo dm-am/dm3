@@ -15,7 +15,7 @@ public class CreateSession
     /// <summary>
     /// Expiration moment (UTC)
     /// </summary>
-    public DateTime ExpirationUtc { get; set; }
+    public DateTimeOffset ExpirationUtc { get; set; }
 
     /// <summary>
     /// Persistence flag (remember me)
@@ -25,7 +25,7 @@ public class CreateSession
     /// <summary>
     /// Session creation time (UTC)
     /// </summary>
-    public DateTime CreatedUtc { get; set; }
+    public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
     /// Client IP address at session creation

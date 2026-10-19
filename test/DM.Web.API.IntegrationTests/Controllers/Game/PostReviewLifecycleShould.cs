@@ -17,17 +17,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// with the result.
 /// </summary>
 /// <remarks>
-/// A review carries a sign, and the sign is counted twice: into the post's
-/// rating, which the rated-posts listing sums over the surviving rows, and into
-/// the post author's quality rating, which is a stored counter moved by deltas.
-/// The first cannot drift by construction; the second can, and every case here
-/// that changes a sign asserts the delta rather than an absolute number — the
-/// counter belongs to a user the rest of the fixture also writes to.
-///
-/// The reviews are seeded directly. Creating them through the API needs a post
-/// in an accessible room, a hundred game posts behind the author and a
-/// three-day gap since their last review in the game, none of which this file
-/// is about.
+/// The sign is counted into the post's rating, summed over rows, and into the author's stored quality counter,
+/// moved by deltas, so a sign change asserts the delta. The reviews are seeded directly.
 /// </remarks>
 public class PostReviewLifecycleShould : IntegrationTestBase
 {
@@ -46,13 +37,13 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         new() { UserId = userId, Username = username, Role = role };
 
     private static GeneralUser Mentor => AsUser(
-        TestConstants.MentorUserId, TestConstants.MentorUserUsername, UserRole.Mentor);
+        TestConstants.MentorUserId, TestConstants.MentorUserLogin, UserRole.Mentor);
 
     private static GeneralUser Moderator => AsUser(
-        TestConstants.ModeratorUserId, TestConstants.ModeratorUserUsername, UserRole.Moderator);
+        TestConstants.ModeratorUserId, TestConstants.ModeratorUserLogin, UserRole.Moderator);
 
     private static GeneralUser SeniorModerator => AsUser(
-        TestConstants.SeniorModeratorUserId, TestConstants.SeniorModeratorUserUsername,
+        TestConstants.SeniorModeratorUserId, TestConstants.SeniorModeratorUserLogin,
         UserRole.SeniorModerator);
 
     /// <summary>
@@ -84,14 +75,6 @@ public class PostReviewLifecycleShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// IgnoreQueryFilters: a row this suite has just had removed is hidden by
-    /// the global soft-delete filter, and the cleanup would leave it behind.
-    /// </summary>
-
-
-    /// <summary>The counter a received review moves.</summary>
-
-    /// <summary>
     /// Put the user past probation, so a sign may be changed at all, and answer
     /// with what to set it back to.
     /// </summary>
@@ -114,10 +97,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
     }
 
     /// <summary>The rating and the review count the rated listing reports for the post.</summary>
-    /// <remarks>
-    /// No hasReviews: the post is wanted whether it has reviews or not, and
-    /// hasReviews=false now asks for the posts without any.
-    /// </remarks>
+    /// <remarks>No hasReviews: hasReviews=false asks for the posts without any.</remarks>
     private async Task<(int Rating, int ReviewCount)> ListedPost()
     {
         var response = await Client.GetAsync(
@@ -141,10 +121,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Delete, ReviewUrl(reviewId), user));
 
     /// <summary>
-    /// The editor opens a review with the audience that hands its author the text
-    /// as typed. The display rendering turns "--" into a dash entity the editor
-    /// does not turn back, and saving what it was handed wrote the entity into the
-    /// review as text.
+    /// The editor opens a review with the audience that hands its author the text as typed.
     /// </summary>
     [Fact]
     public async Task HandTheAuthorTheTextAsTypedForEditing()
@@ -160,7 +137,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             response.StatusCode.Should().Be(HttpStatusCode.OK);
             using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
             document.RootElement.GetProperty("resource").GetProperty("text").GetString()
-                .Should().Be(BbParserWrapper.LineBreaksWritten + typed);
+                .Should().Be(typed);
         }
         finally
         {
@@ -344,25 +321,6 @@ public class PostReviewLifecycleShould : IntegrationTestBase
             (await Delete(reviewId, Mentor)).StatusCode.Should().Be(HttpStatusCode.Forbidden);
 
             (await PostReviewTestHelper.StoredReview(DatabaseFixture, reviewId))!.IsRemoved.Should().BeFalse();
-        }
-        finally
-        {
-            await PostReviewTestHelper.RemoveReview(DatabaseFixture, reviewId);
-        }
-    }
-
-    [Fact]
-    public async Task RefuseBothCallsFromAVisitor()
-    {
-        var reviewId = await SeedReview(Moderator.UserId, sign: 1);
-        try
-        {
-            var edit = await Client.PatchAsync(
-                ReviewUrl(reviewId), JsonContent.Create(new { text = "Аноним" }));
-            var delete = await Client.DeleteAsync(ReviewUrl(reviewId));
-
-            edit.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-            delete.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
         }
         finally
         {

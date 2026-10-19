@@ -1,12 +1,9 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.ComponentModel.DataAnnotations;
 
 namespace DM.Web.API.Features.Messaging.Messages;
 
@@ -23,13 +20,10 @@ namespace DM.Web.API.Features.Messaging.Messages;
 [Tags("Messages")]
 public class MessageController : ControllerBase
 {
-    private readonly IMessagingApiService _apiService;
+    private readonly MessagingApiService _apiService;
 
-    /// <summary>
-    /// Creates a new instance of MessageController
-    /// </summary>
     public MessageController(
-        IMessagingApiService apiService)
+        MessagingApiService apiService)
     {
         _apiService = apiService;
     }
@@ -64,7 +58,7 @@ public class MessageController : ControllerBase
         [FromQuery] string? cursor = null,
         [FromQuery] Guid? aroundMessageId = null,
         [FromQuery] DateTimeOffset? nearTimestampUtc = null,
-        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50)
+        [FromQuery][PageSize] int limit = 50)
     {
         var chatId = await _apiService.ResolveChatIdAsync(id);
         return Ok(await _apiService.GetMessagesWithCursorAsync(chatId, cursor, aroundMessageId, nearTimestampUtc, limit));
@@ -87,11 +81,10 @@ public class MessageController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostMessage(string id, [FromBody] CreateMessageInput input)
+    public async Task<IActionResult> PostMessage(string id, [FromBody] MessageInput input)
     {
         var chatId = await _apiService.ResolveChatIdAsync(id);
-        var message = new Message { Text = new CommonBbText { Value = input.Text } };
-        var result = await _apiService.CreateMessageAsync(chatId, message);
+        var result = await _apiService.CreateMessageAsync(chatId, input.Text);
         return CreatedAtRoute(nameof(GetMessage), new { id = result.Resource.Id }, result);
     }
 
@@ -126,11 +119,8 @@ public class MessageController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchMessage(Guid id, [FromBody] UpdateMessageInput input)
-    {
-        var message = new Message { Text = new CommonBbText { Value = input.Text } };
-        return Ok(await _apiService.UpdateMessageAsync(id, message));
-    }
+    public async Task<IActionResult> PatchMessage(Guid id, [FromBody] MessageInput input) =>
+        Ok(await _apiService.UpdateMessageAsync(id, input.Text));
 
     /// <summary>
     /// Delete message

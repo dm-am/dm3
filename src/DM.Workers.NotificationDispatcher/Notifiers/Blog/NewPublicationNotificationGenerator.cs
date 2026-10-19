@@ -19,7 +19,6 @@ internal class NewPublicationNotificationGenerator : BaseNotificationGenerator
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public NewPublicationNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -43,17 +42,15 @@ internal class NewPublicationNotificationGenerator : BaseNotificationGenerator
                 p.AuthorId,
                 AuthorUsername = p.Author.Username,
                 p.BlogId,
-                BlogTitle = p.Blog.Title,
-                p.IsPublished
+                BlogTitle = p.Blog.Title
             })
             .FirstOrDefaultAsync();
 
-        if (publicationData == null || !publicationData.IsPublished)
+        if (publicationData == null)
         {
             yield break;
         }
 
-        // Find all users subscribed to this blog with NewPublications setting
         var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Blog,
             publicationData.BlogId,
@@ -78,8 +75,8 @@ internal class NewPublicationNotificationGenerator : BaseNotificationGenerator
                 PublicationId = publicationData.PublicationId.EncodeToReadable(publicationData.Title),
                 PublicationTitle = publicationData.Title,
                 BlogId = publicationData.BlogId.EncodeToReadable(publicationData.BlogTitle),
-                BlogTitle = publicationData.BlogTitle,
-                AuthorUsername = publicationData.AuthorUsername
+                publicationData.BlogTitle,
+                publicationData.AuthorUsername
             }
         };
     }
