@@ -1,4 +1,4 @@
-import { watch, nextTick, type Ref } from "vue";
+import { watch, nextTick, onWatcherCleanup, type Ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
 function reveal(element: Element): void {
@@ -15,10 +15,16 @@ export function markArrival(element: Element): void {
   setTimeout(() => element.classList.remove("highlight-unread"), 2000);
 }
 
-/** After the render, and a moment for avatars and BBCode media to settle. */
-async function settleLayout(): Promise<void> {
+/**
+ * After the render, and a moment for avatars and BBCode media to settle; false
+ * once the watcher's run is cleaned up, by a newer run or by the component
+ * going, and then nothing is touched: the page may be another one by now.
+ */
+async function settleLayout(stopped: () => boolean): Promise<boolean> {
   await nextTick();
+  if (stopped()) return false;
   await new Promise((resolve) => setTimeout(resolve, 100));
+  return !stopped();
 }
 
 /**
@@ -29,11 +35,11 @@ export function useScrollToElement(itemsLoaded: Ref<boolean>) {
   const route = useRoute();
   const router = useRouter();
 
-  async function scrollToTarget() {
+  async function scrollToTarget(stopped: () => boolean) {
     const targetId = String(route.query.scrollTo ?? "");
     if (!targetId) return;
 
-    await settleLayout();
+    if (!(await settleLayout(stopped))) return;
 
     const element = document.querySelector(`[data-id="${targetId}"]`);
     if (element) {
@@ -49,8 +55,10 @@ export function useScrollToElement(itemsLoaded: Ref<boolean>) {
   watch(
     itemsLoaded,
     (loaded) => {
+      let stopped = false;
+      onWatcherCleanup(() => (stopped = true));
       if (loaded && route.query.scrollTo) {
-        scrollToTarget();
+        scrollToTarget(() => stopped);
       }
     },
     { immediate: true },
@@ -69,12 +77,12 @@ export function useCommentHashScroll(
 ): void {
   const route = useRoute();
 
-  async function scrollToHashComment() {
+  async function scrollToHashComment(stopped: () => boolean) {
     const hash = route.hash;
     if (!hash.startsWith("#comment-")) return;
     if (!comments()?.length) return;
 
-    await settleLayout();
+    if (!(await settleLayout(stopped))) return;
 
     const element = document.getElementById(hash.slice(1));
     if (!element) return;
@@ -83,7 +91,11 @@ export function useCommentHashScroll(
 
   watch(
     () => [comments(), route.hash] as const,
-    () => scrollToHashComment(),
+    () => {
+      let stopped = false;
+      onWatcherCleanup(() => (stopped = true));
+      return scrollToHashComment(() => stopped);
+    },
     { immediate: true, flush: "post" },
   );
 }

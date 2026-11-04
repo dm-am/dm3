@@ -245,4 +245,29 @@ describe("GlobalChatPage, the socket coming back", () => {
     expect(api.getMessages).toHaveBeenCalled();
     expect(api.getEvents).toHaveBeenCalled();
   });
+
+  // Left while the first window is on its way: what the open starts after it,
+  // the poll and the listener of the tab, would outlive the page.
+  it("starts nothing once it is left before its first window comes", async () => {
+    let arrive!: (page: unknown) => void;
+    api.getMessages.mockReturnValueOnce(
+      new Promise((resolve) => {
+        arrive = resolve;
+      }),
+    );
+    const wrapper = mount(GlobalChatPage, {
+      shallow: true,
+      global: { plugins: [pinia], stubs: { ChatFeed: false } },
+    });
+    const poll = vi.spyOn(globalThis, "setInterval");
+
+    wrapper.unmount();
+    arrive(messagePage([1, 2]));
+    await flushPromises();
+    document.dispatchEvent(new Event("visibilitychange"));
+    await flushPromises();
+
+    expect(poll).not.toHaveBeenCalled();
+    expect(api.getMessages).toHaveBeenCalledTimes(1);
+  });
 });

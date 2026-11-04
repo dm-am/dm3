@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from "vue";
+import { ref, computed, onMounted, onUnmounted, reactive } from "vue";
 import { useModal } from "vue-final-modal";
 import {
   gameTagApi,
@@ -156,11 +156,16 @@ function openCreateTagModal() {
 const openFailedTagId = ref<string | null>(null);
 const openResult = useActionResult();
 
+// The page is gone: a tag still on its way opens no window over the next one.
+let gone = false;
+onUnmounted(() => (gone = true));
+
 // The list carries the description rendered; the window opens on it as typed.
 async function openEditTagModal(tag: ModerationTag) {
   openFailedTagId.value = null;
   openResult.clear();
   const { data, error } = await gameTagApi.getTagForEdit(tag.id);
+  if (gone) return;
   if (error) {
     openFailedTagId.value = tag.id;
     openResult.refuse(error, "Не удалось загрузить тег");

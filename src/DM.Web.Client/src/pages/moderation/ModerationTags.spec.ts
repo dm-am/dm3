@@ -6,6 +6,7 @@
 // and the interceptor is told on the request. The 429 title names no number,
 // so the wait is checked apart.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { defineComponent, h, nextTick, ref } from "vue";
 import {
   flushPromises,
   enableAutoUnmount,
@@ -391,5 +392,34 @@ describe("the description of a tag", () => {
       "Не удалось загрузить тег",
     );
     expect(plates()).toEqual([]);
+  });
+
+  // The page left while the tag is on its way: the windows stand in the app,
+  // and this one would open over whatever page took the place of this one.
+  it("opens no window once the page is gone before the tag comes", async () => {
+    let arrive!: (tag: unknown) => void;
+    getTagForEdit.mockReturnValue(
+      new Promise((resolve) => {
+        arrive = resolve;
+      }),
+    );
+    const shown = ref(true);
+    const Shell = defineComponent({
+      setup: () => () => (shown.value ? h(ModerationTags) : null),
+    });
+    const { wrapper } = await mountPage(Shell, "/moderation/tags", {
+      routes: [["moderation-tags", "/moderation/tags"]],
+    });
+    await flushPromises();
+
+    await wrapper
+      .get('button[aria-label="Редактировать тег"]')
+      .trigger("click");
+    shown.value = false;
+    await nextTick();
+    arrive({ data: { ...TAG, description: TYPED }, error: null });
+    await flushPromises();
+
+    expect(windows().find("#tag-description").exists()).toBe(false);
   });
 });

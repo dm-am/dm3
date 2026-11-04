@@ -304,4 +304,17 @@ describe("who reads a hidden block", () => {
 
     expect(bubble()).toBeNull();
   });
+
+  // The text taken off the page while the wait runs: the bubble would open
+  // over the page that comes next, in a corner, with no line to point at.
+  it("opens nothing once the text is cleaned up during the wait", async () => {
+    const container = render();
+    hover(pieceOf(container));
+    cleanupBbcodeInteractive(container);
+    container.remove();
+
+    await vi.advanceTimersByTimeAsync(PRIVATE_HOVER_DELAY * 2);
+
+    expect(bubble()).toBeNull();
+  });
 });

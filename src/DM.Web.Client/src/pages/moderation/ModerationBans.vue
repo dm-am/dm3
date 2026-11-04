@@ -7,7 +7,14 @@
  * because a page number would lose it as newer entries push it down; the
  * server answers with the page that holds it.
  */
-import { computed, nextTick, reactive, ref, watch } from "vue";
+import {
+  computed,
+  nextTick,
+  onWatcherCleanup,
+  reactive,
+  ref,
+  watch,
+} from "vue";
 import { useRoute, useRouter, type LocationQuery } from "vue-router";
 import { useModal } from "vue-final-modal";
 import {
@@ -142,15 +149,21 @@ const SETTLE_MS = 100;
 // pause: the router pulls an anchor to the top a frame after every change. The
 // sources are watched each by itself: a tuple built anew on every change of
 // address fired again when the page itself put its number in the address.
+// A run stops at its next step once a newer one starts or the page is gone:
+// the address alone does not say the page is still there.
 watch(
   [entries, () => route.hash],
   async () => {
+    let stopped = false;
+    onWatcherCleanup(() => (stopped = true));
     const anchor = route.hash?.slice(1);
     if (!anchor?.startsWith(ANCHOR_PREFIX) || !entries.value.length) return;
     await addressSettled;
+    if (stopped) return;
     await nextTick();
+    if (stopped) return;
     await new Promise((resolve) => setTimeout(resolve, SETTLE_MS));
-    if (route.hash?.slice(1) !== anchor) return;
+    if (stopped || route.hash?.slice(1) !== anchor) return;
     const element = document.getElementById(anchor);
     if (!element) return;
     element.scrollIntoView({ behavior: "smooth", block: "center" });
