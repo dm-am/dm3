@@ -112,8 +112,7 @@ public class WebhookController : ControllerBase
                     // Fail closed: without a secret the webhook does not exist.
                     if (string.IsNullOrEmpty(_botConfig.TelegramWebhookSecret))
                     {
-                        _logger.LogWarning(
-                            "Webhook for {Type} received but no secret is configured; rejecting", type);
+                        _logger.LogWarning("Telegram webhook received but no secret is configured; rejecting");
                         return NotFound();
                     }
 
@@ -123,7 +122,7 @@ public class WebhookController : ControllerBase
                     var expected = Encoding.UTF8.GetBytes(_botConfig.TelegramWebhookSecret);
                     if (!CryptographicOperations.FixedTimeEquals(provided, expected))
                     {
-                        _logger.LogWarning("Invalid webhook secret for {Type}", type);
+                        _logger.LogWarning("Invalid Telegram webhook secret");
                         // Thrown: ErrorHandlingMiddleware owns the body of every refusal.
                         throw new HttpException(HttpStatusCode.Forbidden, "Неверный секрет вебхука");
                     }
@@ -135,8 +134,7 @@ public class WebhookController : ControllerBase
                     // Fail closed, as above.
                     if (string.IsNullOrEmpty(_botConfig.DiscordPublicKey))
                     {
-                        _logger.LogWarning(
-                            "Webhook for {Type} received but no public key is configured; rejecting", type);
+                        _logger.LogWarning("Discord webhook received but no public key is configured; rejecting");
                         return NotFound();
                     }
 
@@ -174,7 +172,7 @@ public class WebhookController : ControllerBase
         catch (Exception ex)
         {
             // 200 keeps the provider from retrying a payload we already failed on.
-            _logger.LogError(ex, "Error processing {Type} webhook", type);
+            _logger.LogError(ex, "Error processing {Type} webhook", handler.BotType);
             return Ok();
         }
     }

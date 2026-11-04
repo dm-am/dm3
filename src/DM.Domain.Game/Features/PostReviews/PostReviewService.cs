@@ -209,9 +209,7 @@ internal class PostReviewService : IPostReviewService
         var entity = new UpdatePostReviewEntity(
             review.Id,
             Sign: updateReview.Sign,
-            Text: updateReview.Text == null
-                ? null
-                : ModBlockSanitizer.SanitizeForAuthor(updateReview.Text, currentUser.Role),
+            Text: ModBlockSanitizer.SanitizeForAuthor(updateReview.Text, currentUser.Role),
             ModifiedUtc: _dateTimeProvider.Now,
             ModifiedByUserId: currentUser.UserId);
 

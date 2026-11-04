@@ -71,7 +71,7 @@ public class SizeRatchetShould
         new("src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs", "BuildPageQuery", 101),
         new("src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs", "GetQuery", 106),
         new("src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs", "PopulateProfileCounters", 175),
-        new("src/DM.Web.API/Features/Personal/Webhooks/WebhookController.cs", "HandleWebhook", 87),
+        new("src/DM.Web.API/Features/Personal/Webhooks/WebhookController.cs", "HandleWebhook", 85),
         new("test/DM.Web.API.IntegrationTests/Controllers/General/RemovedAuthorContentShould.cs", "SeedRemovedAuthorAsync", 116),
     ];
 
