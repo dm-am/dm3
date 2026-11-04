@@ -132,6 +132,8 @@ const privateListeners = new WeakSet<HTMLElement>();
 /** The mouse over private text: hover, move, leave and a press that starts a selection. Returns the cleanup. */
 function hearMouse(piece: HTMLElement, text: string): () => void {
   let point = { x: 0, y: 0 };
+  /** The show this block armed; the pending one while recipientsShowTimer is it. */
+  let ownShow: ReturnType<typeof setTimeout> | null = null;
 
   // A mouse button held over the block is a selection being made, begun on
   // the block or dragged into it: the bubble keeps away until the pointer
@@ -154,10 +156,11 @@ function hearMouse(piece: HTMLElement, text: string): () => void {
     }
     if (event.buttons !== 0) return;
     if (recipientsShowTimer) clearTimeout(recipientsShowTimer);
-    recipientsShowTimer = setTimeout(
+    ownShow = setTimeout(
       () => showRecipients(piece, text, point),
       PRIVATE_HOVER_DELAY,
     );
+    recipientsShowTimer = ownShow;
   };
 
   const onMouseMove = (event: MouseEvent): void => {
@@ -189,6 +192,13 @@ function hearMouse(piece: HTMLElement, text: string): () => void {
     piece.removeEventListener("mousemove", onMouseMove);
     piece.removeEventListener("mouseleave", onMouseLeave);
     piece.removeEventListener("mousedown", onMouseDown);
+    // The block leaves the page while its bubble is on the way: shown, the
+    // bubble would stand over the next page in a corner, with no line left to
+    // point at, and hold the listeners of the document.
+    if (ownShow !== null && recipientsShowTimer === ownShow) {
+      clearTimeout(ownShow);
+      recipientsShowTimer = null;
+    }
   };
 }
 

@@ -285,13 +285,18 @@ export function usePostReviews(host: PostReviewsHost) {
     () => reviews.hasReviews.value || viewer.canReview.value,
   );
 
-  // A permalink opens what it points at, once, on arrival.
+  // A permalink opens what it points at, once, on arrival; a post gone before
+  // its reviews came back brings up nothing, whatever has the id by then.
+  let gone = false;
+  onBeforeUnmount(() => (gone = true));
   onMounted(async () => {
     const target = links.anchoredId.value;
     if (!target) return;
     reviews.open.value = true;
     await reviews.load();
+    if (gone) return;
     await nextTick();
+    if (gone) return;
     const marked = document.getElementById(`review-${target}`);
     if (marked) scrollBlockIntoView(marked);
   });

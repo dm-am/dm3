@@ -230,6 +230,9 @@ function stopPolling() {
   }
 }
 
+/** The page is gone: the open, still on its way, starts nothing. */
+let gone = false;
+
 onMounted(async () => {
   // The events, independent of the message load.
   eventsStore.fetchEvents();
@@ -246,6 +249,9 @@ onMounted(async () => {
     scrollToBottom();
     nextTick(() => feed.value?.setupInfiniteScroll());
   }
+  // Left while the first window was on its way: onUnmounted has run, and the
+  // poll, the lease and the listener started now would stay behind it.
+  if (gone) return;
 
   // Everyone gets the push, on this page's lease of the shared connection; the
   // poll runs only while the socket is not connected.
@@ -256,6 +262,7 @@ onMounted(async () => {
 });
 
 onUnmounted(() => {
+  gone = true;
   stopPolling();
   unsubscribeSignalR?.();
   // Releases only this page's lease.
