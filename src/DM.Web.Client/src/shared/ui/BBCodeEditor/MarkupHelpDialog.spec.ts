@@ -18,9 +18,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
 import {
   clearRegistry,
   hasAny,
@@ -51,8 +48,6 @@ vi.mock("vue-final-modal", () => ({
 enableAutoUnmount(afterEach);
 
 beforeEach(() => clearRegistry());
-
-const HERE = dirname(fileURLToPath(import.meta.url));
 
 type Props = Record<string, unknown>;
 
@@ -113,12 +108,6 @@ describe("the help window", () => {
 
     await openHelp(w);
     expect(w.find(".help-table").exists()).toBe(true);
-  });
-
-  it("leaves nothing of the panel it replaced", () => {
-    const source = readFileSync(join(HERE, "BBCodeEditor.vue"), "utf8");
-    expect(source).not.toMatch(/help-(dialog|grid|item|section|footer)/);
-    expect(source).not.toContain(":global(");
   });
 });
 

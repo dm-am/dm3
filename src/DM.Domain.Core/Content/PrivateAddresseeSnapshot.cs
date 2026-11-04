@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
 using DM.Domain.Core.Authorization;
@@ -11,7 +8,7 @@ namespace DM.Domain.Core.Content;
 /// <summary>
 /// A character that a [private] block may name, paired with the user who owns
 /// it. Supplied by the save path from the roster of the room the post is going
-/// into.
+/// into, or read back from the mark of a file that froze it.
 /// </summary>
 /// <param name="CharacterId">
 /// The character itself. A name is not an identity — it can be given up and
@@ -41,13 +38,36 @@ public sealed record PrivateAddresseeSnapshotView(
     IReadOnlyDictionary<string, IReadOnlyList<string>> AddresseeNamesByAttribute);
 
 /// <summary>
+/// The addressees chosen for one file of a post, in the shapes its readers need.
+/// </summary>
+/// <param name="Characters">
+/// The characters chosen, as the choice froze them: the checkboxes of the author, one gone from the
+/// room among them, and what a new mark may keep. An entry stored without its character or its name
+/// has no box to stand in.
+/// </param>
+/// <param name="OwnerUserIds">Their owners frozen at the choice: who reads the file.</param>
+/// <param name="Names">Their names, for the recipients line.</param>
+public sealed record PrivateAddresseeList(
+    IReadOnlyList<PrivateAddressee> Characters,
+    IReadOnlySet<Guid> OwnerUserIds,
+    IReadOnlyList<string> Names)
+{
+    /// <summary>A file marked for nobody: the author and the leads read it.</summary>
+    public static PrivateAddresseeList Nobody { get; } = new([], new HashSet<Guid>(), []);
+
+    /// <summary>Whether the file is addressed to any character, which the overrides of the room ask.</summary>
+    public bool NamesAddressees => OwnerUserIds.Count > 0;
+}
+
+/// <summary>
 /// Writer and reader of the per-post [private] addressee snapshot.
 ///
-/// The visibility rule is addressee-forever (BBCODE_RENDERING.md): the owner of
-/// an addressed character keeps seeing the block even after the character leaves
-/// the game, so the names in the text are resolved to user ids once, at save
-/// time, and frozen. Both ends of that contract live here — the JSON shape and
-/// the key the render path looks blocks up by are one definition, not two.
+/// The visibility rule is addressee-forever (BBCODE_RENDERING.md, "[private]",
+/// condition 2): the owner of an addressed character keeps seeing the block even
+/// after the character leaves the game, so the names in the text are resolved
+/// to user ids once, at save time, and frozen. Both ends of that contract live
+/// here — the JSON shape and the key the render path looks blocks up by are one
+/// definition, not two.
 /// </summary>
 /// <remarks>
 /// Shape:
@@ -56,19 +76,8 @@ public sealed record PrivateAddresseeSnapshotView(
 /// <see cref="PrivateBlockMarkup.ReadAddresseeAttributes"/> reports it, which is
 /// what the parser hands the visibility filter.
 ///
-/// An earlier shape wrote the value as a bare list of owner ids,
-/// <c>{ "AttributeValue": ["guid", ...] }</c>, and those rows are in the
-/// database. They are still read: an element that is a string is an owner whose
-/// character nobody recorded. Such an entry names no addressee and takes part in
-/// no comparison — see <see cref="Build(string,string,IEnumerable{PrivateAddressee})"/>,
-/// where unknown means the frozen entry wins and no refusal is raised. A row
-/// written by the old code therefore keeps working exactly as it did.
-///
-/// Resolution can only ever name someone who already reads the room the post is
-/// in, because the candidate list is that room's roster: a snapshot grants no
-/// access that room membership did not already grant. An unresolvable name
-/// yields no entry, and an absent entry means nobody qualifies through this
-/// rule — the failure direction is closed, not open.
+/// The candidates are the room's roster, so a snapshot grants no access room
+/// membership did not, and an unresolvable name yields no entry (closed, not open).
 /// </remarks>
 public static class PrivateAddresseeSnapshot
 {
@@ -84,18 +93,13 @@ public static class PrivateAddresseeSnapshot
     /// character this post froze it to.
     /// </summary>
     /// <remarks>
-    /// The refusal is the point of the check, so it has to say which name is at
-    /// fault and what to do about it. What it deliberately does not say is who
-    /// holds the name now, or who held it before: the author may address a
-    /// character they are not entitled to be told anything else about, and a
-    /// refusal is not a place to hand out roster facts.
+    /// Names the name at fault, never who holds it now or held it before: a refusal
+    /// is not a place to hand out roster facts.
     /// </remarks>
     /// <param name="attribute">The tag attribute the author wrote.</param>
     public static string DescribeRenameRefusal(string attribute) =>
-        $"Имя \"{attribute}\" в скрытом блоке сейчас принадлежит другому персонажу, " +
-        "не тому, кому этот блок был адресован при сохранении. Кому показывать блок, " +
-        "по имени уже не определить, и сохранение отправило бы текст не тому читателю. " +
-        "Напишите нынешнее имя адресата или уберите блок с этим именем.";
+        $"Имя \"{attribute}\" в скрытом блоке теперь у другого персонажа. " +
+        "Напишите нынешнее имя адресата или уберите блок.";
 
     /// <summary>
     /// Resolve every [private=...] block of freshly written text against the
@@ -120,32 +124,13 @@ public static class PrivateAddresseeSnapshot
     /// the two are different characters. See the remarks.
     /// </exception>
     /// <remarks>
-    /// A block that was resolved before keeps the ids it got then — re-resolving
-    /// it against today's roster is exactly what addressee-forever forbids, and
-    /// would quietly revoke a player whose character has since left the room.
-    /// Blocks the edit introduced resolve now; keys whose block the edit removed
-    /// are dropped, since nothing looks them up any more.
-    ///
-    /// The snapshot is keyed by the name the author wrote, and a name outlives
-    /// nothing: a character can be renamed and its old name taken by another. So
-    /// a key that already exists can address one character in the block it was
-    /// frozen for and a different one in a block written today, and the two are
-    /// indistinguishable — a block carries no mark saying which save wrote it.
-    /// Where the two answers differ the save is refused rather than guessed at:
-    /// the question is who reads a secret, and the author is the one who knows.
-    ///
-    /// Three neighbouring cases are not that and go through:
-    /// the name still resolves to the character it was frozen to; the name
-    /// resolves to nobody today, which is the ordinary shape of addressee-forever
-    /// and keeps the frozen reader; and a name the frozen snapshot has never seen,
-    /// which is a fresh key resolved against today's roster. An old snapshot,
-    /// which recorded owners without their characters, cannot be compared at all
-    /// and is treated as the first of those.
-    ///
-    /// The names of frozen addressees are refreshed from the roster by character
-    /// id whenever the character is still in the room. That moves no access — the
-    /// reader is the frozen owner either way — and it is what keeps the recipients
-    /// of the block naming the addressee as they are called now.
+    /// A block resolved before keeps its ids (addressee-forever), blocks the edit
+    /// introduced resolve now, keys of removed blocks are dropped. A frozen name that
+    /// resolves today to a different character is refused rather than guessed at.
+    /// Not refused: the name still resolves to the frozen character, it resolves to
+    /// nobody, or it is a key the snapshot has never seen; an entry without a
+    /// character cannot be compared and counts as the first. Frozen names are
+    /// refreshed by character id, which moves no access.
     /// </remarks>
     public static string Build(
         string? rawBbCode,
@@ -190,16 +175,9 @@ public static class PrivateAddresseeSnapshot
     }
 
     /// <summary>
-    /// Read a stored snapshot. Anything malformed reads as empty, which denies
-    /// through this rule rather than granting through it.
-    /// </summary>
-    /// <param name="json">Stored snapshot JSON.</param>
-    /// <returns>Owner user ids per tag attribute value.</returns>
-    public static IReadOnlyDictionary<string, IReadOnlySet<Guid>> Parse(string? json) =>
-        Read(json).OwnerUserIdsByAttribute;
-
-    /// <summary>
-    /// Read a stored snapshot in both the shapes the render path needs.
+    /// Read a stored snapshot in both the shapes the render path needs. Anything
+    /// malformed reads as empty, which denies through this rule rather than
+    /// granting through it.
     /// </summary>
     /// <param name="json">Stored snapshot JSON.</param>
     public static PrivateAddresseeSnapshotView Read(string? json)
@@ -238,6 +216,87 @@ public static class PrivateAddresseeSnapshot
         return new PrivateAddresseeSnapshotView(owners, names);
     }
 
+
+    /// <summary>
+    /// The addressees of one file, frozen from the characters the author chose.
+    /// </summary>
+    /// <remarks>
+    /// Shape: the array a block keeps under its attribute,
+    /// <c>[ { "character": "guid", "name": "...", "owner": "guid" }, ... ]</c>.
+    /// The candidates are the roster of the room, as for a block, and what the mark
+    /// being changed already holds, so the choice grants nothing the room or the
+    /// mark did not; a character outside them is refused rather than dropped, since
+    /// the author picked it from a list and dropping it would hide the file from
+    /// somebody he meant it for.
+    /// </remarks>
+    /// <param name="characterIds">The characters chosen; none leaves the file to the author and the leads.</param>
+    /// <param name="addressees">Characters the author could have chosen; the first of a character is the one frozen.</param>
+    /// <exception cref="HttpException">A character chosen is not among the candidates.</exception>
+    public static string BuildList(IEnumerable<Guid> characterIds, IEnumerable<PrivateAddressee> addressees)
+    {
+        var byCharacter = new Dictionary<Guid, PrivateAddressee>();
+        foreach (var addressee in addressees)
+        {
+            if (addressee.CharacterId != Guid.Empty && !AnonymousIdentity.Is(addressee.OwnerUserId))
+                byCharacter.TryAdd(addressee.CharacterId, addressee);
+        }
+
+        var entries = new List<Entry>();
+        foreach (var characterId in characterIds.Distinct())
+        {
+            if (!byCharacter.TryGetValue(characterId, out var addressee))
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.CharacterNotInRoom);
+            entries.Add(new Entry(addressee.CharacterId, addressee.CharacterName?.Trim(), addressee.OwnerUserId));
+        }
+
+        entries.Sort(CompareEntries);
+        using var stream = new System.IO.MemoryStream();
+        using (var writer = new Utf8JsonWriter(stream))
+        {
+            WriteEntries(writer, entries);
+        }
+
+        return System.Text.Encoding.UTF8.GetString(stream.ToArray());
+    }
+
+    /// <summary>
+    /// The addressees of one file, or null for a file every reader of the post reads.
+    /// </summary>
+    /// <remarks>
+    /// Null is the only spelling of "everybody": anything else that is not a list
+    /// of addressees reads as a file marked for nobody, which closes it rather than
+    /// opening it.
+    /// </remarks>
+    /// <param name="json">The stored mark of the file.</param>
+    public static PrivateAddresseeList? ReadList(string? json)
+    {
+        if (json == null) return null;
+
+        var entries = new List<Entry>();
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            if (document.RootElement.ValueKind != JsonValueKind.Array) return PrivateAddresseeList.Nobody;
+
+            foreach (var item in document.RootElement.EnumerateArray())
+            {
+                if (ReadEntry(item) is { } entry && !entries.Contains(entry)) entries.Add(entry);
+            }
+        }
+        catch (JsonException)
+        {
+            return PrivateAddresseeList.Nobody;
+        }
+
+        return new PrivateAddresseeList(
+            entries.Where(e => e.CharacterId.HasValue && !string.IsNullOrEmpty(e.CharacterName))
+                .Select(e => new PrivateAddressee(e.CharacterId!.Value, e.CharacterName!, e.OwnerUserId))
+                .DistinctBy(a => a.CharacterId).ToList(),
+            entries.Select(e => e.OwnerUserId).ToHashSet(),
+            entries.Where(e => !string.IsNullOrEmpty(e.CharacterName)).Select(e => e.CharacterName!)
+                .Distinct().ToList());
+    }
+
     /// <summary>One frozen addressee, as the stored snapshot holds it.</summary>
     /// <param name="CharacterId">
     /// Null when the snapshot predates the field. Unknown, not absent: the
@@ -266,11 +325,7 @@ public static class PrivateAddresseeSnapshot
         var frozenCharacters = new HashSet<Guid>();
         foreach (var entry in frozen)
         {
-            // An entry from an old snapshot carries no character, so the post
-            // cannot say which one the name was frozen to and there is nothing
-            // to compare today's answer against. Reading that as "a different
-            // character" would refuse every edit of every post written before
-            // the field existed.
+            // An entry without a character has nothing to compare today's answer against.
             if (entry.CharacterId is not { } characterId) return;
             frozenCharacters.Add(characterId);
         }
@@ -308,19 +363,8 @@ public static class PrivateAddresseeSnapshot
             writer.WriteStartObject();
             foreach (var (attribute, entries) in resolved)
             {
-                writer.WriteStartArray(attribute);
-                foreach (var entry in entries)
-                {
-                    writer.WriteStartObject();
-                    if (entry.CharacterId is { } characterId)
-                        writer.WriteString(CharacterField, characterId);
-                    if (!string.IsNullOrEmpty(entry.CharacterName))
-                        writer.WriteString(NameField, entry.CharacterName);
-                    writer.WriteString(OwnerField, entry.OwnerUserId);
-                    writer.WriteEndObject();
-                }
-
-                writer.WriteEndArray();
+                writer.WritePropertyName(attribute);
+                WriteEntries(writer, entries);
             }
 
             writer.WriteEndObject();
@@ -329,9 +373,26 @@ public static class PrivateAddresseeSnapshot
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
+    /// <summary>The array of addressees, the one shape a block and a file keep them in.</summary>
+    private static void WriteEntries(Utf8JsonWriter writer, IEnumerable<Entry> entries)
+    {
+        writer.WriteStartArray();
+        foreach (var entry in entries)
+        {
+            writer.WriteStartObject();
+            if (entry.CharacterId is { } characterId)
+                writer.WriteString(CharacterField, characterId);
+            if (!string.IsNullOrEmpty(entry.CharacterName))
+                writer.WriteString(NameField, entry.CharacterName);
+            writer.WriteString(OwnerField, entry.OwnerUserId);
+            writer.WriteEndObject();
+        }
+
+        writer.WriteEndArray();
+    }
+
     /// <summary>
-    /// Stored entries per tag attribute value, in both stored shapes. Anything
-    /// malformed reads as empty.
+    /// Stored entries per tag attribute value. Anything malformed reads as empty.
     /// </summary>
     private static Dictionary<string, List<Entry>> ReadEntries(string? json)
     {
@@ -366,40 +427,27 @@ public static class PrivateAddresseeSnapshot
     }
 
     /// <summary>
-    /// One stored addressee, whichever shape it was written in: an object with
-    /// the character beside the owner, or the bare owner id the earlier format
-    /// wrote.
+    /// One stored addressee: an object with the character beside the owner.
     /// </summary>
     private static Entry? ReadEntry(JsonElement item)
     {
-        switch (item.ValueKind)
-        {
-            case JsonValueKind.String:
-                return ReadOwner(item) is { } legacyOwner
-                    ? new Entry(null, null, legacyOwner)
-                    : null;
+        if (item.ValueKind != JsonValueKind.Object ||
+            !item.TryGetProperty(OwnerField, out var owner) ||
+            ReadOwner(owner) is not { } ownerUserId)
+            return null;
 
-            case JsonValueKind.Object:
-                if (!item.TryGetProperty(OwnerField, out var owner) ||
-                    ReadOwner(owner) is not { } ownerUserId)
-                    return null;
+        var characterId = item.TryGetProperty(CharacterField, out var character) &&
+                          character.ValueKind == JsonValueKind.String &&
+                          Guid.TryParse(character.GetString(), out var parsed)
+            ? parsed
+            : (Guid?)null;
 
-                var characterId = item.TryGetProperty(CharacterField, out var character) &&
-                                  character.ValueKind == JsonValueKind.String &&
-                                  Guid.TryParse(character.GetString(), out var parsed)
-                    ? parsed
-                    : (Guid?)null;
+        var name = item.TryGetProperty(NameField, out var stored) &&
+                   stored.ValueKind == JsonValueKind.String
+            ? stored.GetString()
+            : null;
 
-                var name = item.TryGetProperty(NameField, out var stored) &&
-                           stored.ValueKind == JsonValueKind.String
-                    ? stored.GetString()
-                    : null;
-
-                return new Entry(characterId, string.IsNullOrEmpty(name) ? null : name, ownerUserId);
-
-            default:
-                return null;
-        }
+        return new Entry(characterId, string.IsNullOrEmpty(name) ? null : name, ownerUserId);
     }
 
     /// <summary>

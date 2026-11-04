@@ -15,8 +15,8 @@ namespace DM.Web.API.Features.Moderation.Bans;
 /// </summary>
 /// <remarks>
 /// Provides endpoints for managing user bans.
-/// Viewing ban lists requires Moderator role or higher;
-/// creating and lifting bans requires SeniorModerator role or higher.
+/// The ban list (history) is open to everyone; the list of running bans requires
+/// Moderator role or higher; creating and lifting bans requires SeniorModerator role or higher.
 ///
 /// ## Ban Types
 /// - **Temporary**: Set by moderator with expiration
@@ -24,12 +24,9 @@ namespace DM.Web.API.Features.Moderation.Bans;
 /// - **Voluntary**: Self-requested by user
 ///
 /// ## The automatic ban
-/// The site issues one of its own when a reader's active warning points reach
-/// the threshold (WarningPolicy): the ordinary scope, 48 hours, filed under the
-/// system account. It reads back as Temporary, because that is what it is - the
-/// window exists only to hold the reader at arm's length until a senior
-/// moderator or an administrator looks at the case and either lifts it or issues
-/// a ban of his own. It is never issued over a ban already running.
+/// Issued by the site when active warning points reach the WarningPolicy threshold:
+/// the ordinary scope, filed under the system account, read back as Temporary until
+/// a senior moderator lifts it or issues his own. Never issued over a running ban.
 /// </remarks>
 [ApiController]
 [Route("v1/bans")]
@@ -37,10 +34,9 @@ namespace DM.Web.API.Features.Moderation.Bans;
 [Tags("Bans")]
 public class BanController : ControllerBase
 {
-    private readonly IBanApiService _banApiService;
+    private readonly BanApiService _banApiService;
 
-    /// <inheritdoc />
-    public BanController(IBanApiService banApiService)
+    public BanController(BanApiService banApiService)
     {
         _banApiService = banApiService;
     }
@@ -55,9 +51,7 @@ public class BanController : ControllerBase
     /// </remarks>
     /// <param name="username">Username</param>
     /// <response code="200">User ban status and history</response>
-    // No 404 is declared: a name nobody carries is answered with an empty
-    // history and "not banned", the way the service has always answered it, so
-    // the contract that promised a refusal described one nothing here throws.
+    // No 404: a name nobody carries answers an empty history and "not banned".
     [HttpGet("~/v1/users/{username}/bans", Name = nameof(GetUserBans))]
     [ProducesResponseType(typeof(PublicUserBanStatus), StatusCodes.Status200OK)]
     public async Task<IActionResult> GetUserBans(string username) =>
@@ -82,7 +76,7 @@ public class BanController : ControllerBase
         var ban = await _banApiService.GetActiveBan(username);
         if (ban == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, "Пользователь не забанен");
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.UserNotBanned);
         }
         return Ok(ban);
     }
@@ -106,10 +100,10 @@ public class BanController : ControllerBase
         Ok(await _banApiService.GetAllActiveBans(type));
 
     /// <summary>
-    /// Get the ban list (moderators only)
+    /// Get the ban list
     /// </summary>
     /// <remarks>
-    /// The ban log, written the way DM2's bot wrote it: every issue and every
+    /// Open to everyone, as the warning log is. The ban log, written the way DM2's bot wrote it: every issue and every
     /// lift is an entry of its own (`kind` Issued or Lifted) at the moment it
     /// happened (`occurredUtc`: the start of the ban, or the moment of the lift),
     /// newest first, a lift before an issue of the same moment. Each entry carries
@@ -126,14 +120,9 @@ public class BanController : ControllerBase
     /// <param name="q">Username filter, page bounds and the entry whose page is asked for</param>
     /// <response code="200">Page of the ban list</response>
     /// <response code="400">Invalid filter or pagination parameters</response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">Moderator role required</response>
     [HttpGet("history", Name = nameof(GetBanHistory))]
-    [RequireRole(UserRole.Moderator)]
     [ProducesResponseType(typeof(ListEnvelope<BanLogEntry>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     public async Task<IActionResult> GetBanHistory([FromQuery] BansQuery q) =>
         Ok(await _banApiService.GetBanHistory(q));
 

@@ -1,29 +1,13 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * The card that ends the registration says where the letter went in the same
- * order as the other receipts of the guest contour: what was sent first, the
- * address last. The address is what the reader checks against the mailbox he
- * is about to open, and in the middle of the sentence it was the part a
- * glance skipped.
- */
 import { describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
-import { defineComponent, h } from "vue";
 import RegistrationSuccess from "./RegistrationSuccess.vue";
 
-// The library tier under AuthDialog wants its plugin installed; the card is
-// what is read here, so the modal is a plain box around it.
-vi.mock("vue-final-modal", () => ({
-  VueFinalModal: defineComponent({
-    setup:
-      (_props, { slots }) =>
-      () =>
-        h("div", slots.default?.()),
-  }),
-}));
+vi.mock("vue-final-modal", async () =>
+  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+);
 
 describe("RegistrationSuccess", () => {
   it("names the address at the end of the sentence", () => {
@@ -36,5 +20,24 @@ describe("RegistrationSuccess", () => {
       "Мы отправили письмо со ссылкой для активации на reader@dm.am",
     );
     expect(wrapper.get(".auth-text strong").text()).toBe("reader@dm.am");
+  });
+
+  it("says how long the link lives in the hours the registration's answer named", () => {
+    const wrapper = mount(RegistrationSuccess, {
+      props: { email: "reader@dm.am", hours: 30 },
+    });
+
+    expect(wrapper.get(".auth-note").text()).toBe(
+      "Ссылка действительна 30 часов",
+    );
+  });
+
+  // A number of the client's own could be another link's.
+  it("promises no lifetime the answer did not name", () => {
+    const wrapper = mount(RegistrationSuccess, {
+      props: { email: "reader@dm.am" },
+    });
+
+    expect(wrapper.find(".auth-note").exists()).toBe(false);
   });
 });

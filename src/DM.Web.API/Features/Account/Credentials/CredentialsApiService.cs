@@ -1,16 +1,16 @@
 using System;
 using System.Threading.Tasks;
+using DM.Domain.Account.Configuration;
 using DM.Domain.Core.Identity;
 using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Account.Features.PasswordChange;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Web.API.Features.Community.Users;
-using ServiceCreateUsernameChangeRequest = DM.Domain.Account.Features.UsernameChange.CreateUsernameChangeRequest;
+using Microsoft.Extensions.Options;
 
 namespace DM.Web.API.Features.Account.Credentials;
 
-/// <inheritdoc />
-internal class CredentialsApiService : ICredentialsApiService
+public class CredentialsApiService
 {
     private readonly IPasswordChangeService _passwordChangeService;
     private readonly IEmailChangeService _emailChangeService;
@@ -18,17 +18,16 @@ internal class CredentialsApiService : ICredentialsApiService
     private readonly IIdentityProvider _identityProvider;
     private readonly CredentialsMapper _mapper;
     private readonly UserMapper _userMapper;
+    private readonly TokenConfiguration _tokens;
 
-    /// <summary>
-    /// Creates a new instance of CredentialsApiService
-    /// </summary>
     public CredentialsApiService(
         IPasswordChangeService passwordChangeService,
         IEmailChangeService emailChangeService,
         IUsernameChangeService usernameChangeService,
         IIdentityProvider identityProvider,
         CredentialsMapper mapper,
-        UserMapper userMapper)
+        UserMapper userMapper,
+        IOptions<TokenConfiguration> tokens)
     {
         _passwordChangeService = passwordChangeService;
         _emailChangeService = emailChangeService;
@@ -36,9 +35,9 @@ internal class CredentialsApiService : ICredentialsApiService
         _identityProvider = identityProvider;
         _mapper = mapper;
         _userMapper = userMapper;
+        _tokens = tokens.Value;
     }
 
-    /// <inheritdoc />
     public async Task<User> ChangePassword(PasswordChangeRequest request)
     {
         var passwordChange = new UserPasswordChange
@@ -50,8 +49,7 @@ internal class CredentialsApiService : ICredentialsApiService
         return _userMapper.ToUser(user);
     }
 
-    /// <inheritdoc />
-    public async Task<User> RequestEmailChange(EmailChangeRequest request)
+    public async Task<MailedLink> RequestEmailChange(EmailChangeRequest request)
     {
         var emailChange = new UserEmailChange
         {
@@ -59,14 +57,12 @@ internal class CredentialsApiService : ICredentialsApiService
             Password = request.Password,
             Email = request.Email
         };
-        var user = await _emailChangeService.Change(emailChange);
-        return _userMapper.ToUser(user);
+        await _emailChangeService.Change(emailChange);
+        return new MailedLink { LinkLifetimeHours = _tokens.EmailChangeTokenLifetimeHours };
     }
 
-    /// <inheritdoc />
     public Task ConfirmEmailChange(Guid token) => _emailChangeService.Confirm(token);
 
-    /// <inheritdoc />
     public async Task<UsernameChangeResponse> RequestUsernameChangeAsync(UsernameChangeCreateRequest request)
     {
         var serviceRequest = _mapper.ToCreateRequest(request);
@@ -74,7 +70,6 @@ internal class CredentialsApiService : ICredentialsApiService
         return _mapper.ToResponse(result);
     }
 
-    /// <inheritdoc />
     public async Task<UsernameChangeResponse?> GetUsernameChangeStatusAsync()
     {
         var result = await _usernameChangeService.GetCurrentUserRequestAsync();
@@ -83,7 +78,6 @@ internal class CredentialsApiService : ICredentialsApiService
             : null;
     }
 
-    /// <inheritdoc />
     public async Task<UsernameChangeApprovalInfo?> GetUsernameChangeApprovalAsync(Guid token)
     {
         var result = await _usernameChangeService.GetApprovalInfoAsync(token);
@@ -92,11 +86,11 @@ internal class CredentialsApiService : ICredentialsApiService
             : new UsernameChangeApprovalInfo
             {
                 Status = result.Status,
-                CurrentUsername = result.CurrentUsername
+                CurrentUsername = result.CurrentUsername,
+                LinkLifetimeHours = _tokens.UsernameChangeApprovalTokenLifetimeHours
             };
     }
 
-    /// <inheritdoc />
     public async Task<UsernameChangeResponse> CompleteUsernameChangeAsync(Guid token, UsernameChangeCompletionRequest request)
     {
         var result = await _usernameChangeService.CompleteWithTokenAsync(token, request.Username);

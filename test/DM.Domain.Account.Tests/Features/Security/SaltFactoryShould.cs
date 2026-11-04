@@ -1,3 +1,4 @@
+using System;
 using DM.Domain.Account.Features.Security;
 using AwesomeAssertions;
 using Xunit;
@@ -6,27 +7,12 @@ namespace DM.Domain.Account.Tests.Features.Security;
 
 public class SaltFactoryShould
 {
-    private readonly SaltFactory _factory;
-
-    public SaltFactoryShould()
-    {
-        _factory = new SaltFactory();
-    }
-
-    [Fact]
-    public void CreateNonEmptySalt()
-    {
-        var result = _factory.Create(32);
-
-        result.Should().NotBeNullOrEmpty();
-    }
-
     [Fact]
     public void CreateSaltWithMinimumLength()
     {
         var saltLength = 32;
 
-        var result = _factory.Create(saltLength);
+        var result = SaltFactory.Create(saltLength);
 
         result.Length.Should().BeGreaterThanOrEqualTo(saltLength);
     }
@@ -34,8 +20,8 @@ public class SaltFactoryShould
     [Fact]
     public void CreateDifferentSalts()
     {
-        var salt1 = _factory.Create(32);
-        var salt2 = _factory.Create(32);
+        var salt1 = SaltFactory.Create(32);
+        var salt2 = SaltFactory.Create(32);
 
         salt1.Should().NotBe(salt2);
     }
@@ -43,9 +29,9 @@ public class SaltFactoryShould
     [Fact]
     public void CreateValidBase64String()
     {
-        var result = _factory.Create(32);
+        var result = SaltFactory.Create(32);
 
-        var isValidBase64 = System.Convert.TryFromBase64String(result, new byte[result.Length], out _);
+        var isValidBase64 = Convert.TryFromBase64String(result, new byte[result.Length], out _);
         isValidBase64.Should().BeTrue();
     }
 }

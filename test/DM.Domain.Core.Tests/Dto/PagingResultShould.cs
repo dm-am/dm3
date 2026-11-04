@@ -8,13 +8,6 @@ namespace DM.Domain.Core.Tests.Dto;
 /// Paging arithmetic: which page an entity number falls on, and the floor
 /// under that page.
 /// </summary>
-/// <remarks>
-/// No mock factory base class, and these tests need none: the type under test is
-/// a calculation with no collaborators. The kernel's test project references the
-/// kernel and nothing else, and the base class lives in DM.Testing, which pulls
-/// DM.Infrastructure.Core and DM.Infrastructure.Persistence in behind it — the
-/// one thing this project exists to keep out.
-/// </remarks>
 public class PagingResultShould
 {
     [Theory]

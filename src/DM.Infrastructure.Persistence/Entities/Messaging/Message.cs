@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.Moderation;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
@@ -12,12 +11,8 @@ namespace DM.Infrastructure.Persistence.Entities.Messaging;
 /// DAL model for unified message (both global chat and private chats)
 /// </summary>
 [Table("Messages")]
-public class Message : ISoftDeletable, IHasEditHistory<MessageEdit>
+public class Message : ISoftDeletable
 {
-    /// <summary>
-    /// Well-known ID for global chat
-    /// </summary>
-    public static readonly Guid GlobalChatId = Chat.GlobalChatId;
 
     /// <summary>
     /// Message identifier
@@ -31,7 +26,7 @@ public class Message : ISoftDeletable, IHasEditHistory<MessageEdit>
     public Guid UserId { get; set; }
 
     /// <summary>
-    /// Chat identifier (GlobalChatId for global chat)
+    /// Chat identifier (WellKnownChats.GlobalChatId for global chat)
     /// </summary>
     public Guid ChatId { get; set; }
 
@@ -64,9 +59,6 @@ public class Message : ISoftDeletable, IHasEditHistory<MessageEdit>
     /// </summary>
     public Guid? GlobalChatEventId { get; set; }
 
-    /// <summary>
-    /// Author
-    /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User Author { get; set; } = null!;
 
@@ -76,9 +68,6 @@ public class Message : ISoftDeletable, IHasEditHistory<MessageEdit>
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
 
-    /// <summary>
-    /// Chat
-    /// </summary>
     [ForeignKey(nameof(ChatId))]
     public virtual Chat Chat { get; set; } = null!;
 

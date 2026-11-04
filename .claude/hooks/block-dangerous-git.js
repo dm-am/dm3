@@ -1,47 +1,27 @@
 #!/usr/bin/env node
 /**
- * Hook: блокировка git-команд, которые теряют работу без возможности вернуть.
- * Exit 2 = блокировка с сообщением для Claude.
+ * Hook: blocks git commands that lose work with no way back. Exit 2 blocks and
+ * tells Claude why.
  *
- * Список шире четырех команд из CLAUDE.md: правило запрещает не имена, а потерю
- * несохраненной работы, а у каждой из четырех есть эквивалент с тем же эффектом
- * и другим написанием (`git clean -f`, `git restore <путь>`, `git stash clear`).
- *
- * Точность здесь важнее охвата: хук, который блокирует безопасное, обходят, и
- * тогда он не защищает ничего. Поэтому restore только по индексу, reset --soft и
- * stash без снятия разрешены намеренно.
+ * The rule forbids losing unsaved work, not command names, so equivalents with
+ * the same effect are listed too. Precision beats coverage: a hook that blocks
+ * safe commands gets bypassed, so restore --staged, reset --soft and a plain
+ * stash stay allowed.
  */
 
 /**
- * Правила проверяются В НАЧАЛЕ команды, а не где угодно в тексте.
- *
- * Хук получает всю строку Bash целиком, включая то, что команда лишь передает
- * дальше: коммит-сообщение, аргумент node -e, содержимое документации. Подстрока
- * в любом месте строки блокирует и упоминание: коммит, объясняющий запрет, и
- * тест, где эти строки обязаны быть. Позиция и есть различие между вызовом и
- * упоминанием, поэтому каждое правило привязано к началу, а строка режется по
- * разделителям команд.
- *
- * Цена принята: вызов, спрятанный внутрь `sh -c "..."`, не ловится.
- * Хук защищает от промаха, а не от намеренного обхода; ложное срабатывание на
- * прозе обходят точно так же, только каждый день.
+ * Rules match at the START of a command segment, not anywhere in the text: the
+ * hook receives the whole Bash line, including a commit message or a node -e
+ * argument that only mentions a command. Position separates a call from a mention.
+ * Accepted cost: a call hidden inside `sh -c "..."` is not caught.
  */
 
 /**
- * RULES ниже — источник правды по запрещенным git-командам. Гейт
- * AgentPermissionsShould читает этот массив отсюда и требует на каждое правило
- * строку в deny файла .claude/settings.json, а на каждую git-строку deny правило
- * здесь: иначе settings.json обещает запрет, которого никто не делает. Новое
- * правило поэтому заводится здесь, и гейт красный, пока deny его не назовет.
- *
- * Отсюда требование к форме правила. Гейт читает начало паттерна как текст
- * команды, поэтому паттерн привязан к ^, а до первого флага в нем стоят литералы,
- * \s+ и альтернативы из литералов. Паттерн, начало которого прочитать нельзя,
- * гейт роняет, а не пропускает молча.
- *
- * Правило с отрицательным просмотром (restore) гейт оставляет хуку одному:
- * строка deny совпадает с началом команды, а флаг, снимающий запрет, стоит после
- * него — запретить ровно то же самое она не может, только больше или ничего.
+ * RULES is the source of truth for forbidden git commands. AgentPermissionsShould
+ * reads it and wants a deny line in .claude/settings.json for every rule. It reads
+ * the start of each pattern as command text, so a pattern is anchored with ^ and
+ * holds literals, \s+ and alternations before its first flag. A rule with a
+ * negative lookahead (restore) is left to the hook alone.
  */
 const RULES = [
   {
@@ -53,7 +33,7 @@ const RULES = [
     why: 'git reset --hard / --merge — теряет незакоммиченные изменения (--soft разрешен)',
   },
   {
-    // Любой форсирующий флаг: -f, -fd, -xdf, --force. Без него clean ничего не удаляет.
+    // Any forcing flag: -f, -fd, -xdf, --force. Without one, clean deletes nothing.
     pattern: /^git\s+clean\b.*(?:-[a-zA-Z]*f|--force)/i,
     why: 'git clean с форсирующим флагом — удаляет untracked файлы',
   },
@@ -62,7 +42,7 @@ const RULES = [
     why: 'git stash drop и clear — теряют отложенные изменения',
   },
   {
-    // Без --staged переписывает рабочее дерево; с --staged затрагивает только индекс.
+    // Without --staged it overwrites the working tree; with it only the index.
     pattern: /^git\s+restore\b(?!.*--staged)/i,
     why: 'git restore без --staged — перезаписывает рабочее дерево (--staged разрешен)',
   },
@@ -71,27 +51,18 @@ const RULES = [
     why: 'форсированный push — перезаписывает историю на удаленном репозитории',
   },
   {
-    // Единственное правило без флага регистронезависимости, и это не оплошность:
-    // -D удаляет ветку независимо от слияния, а -d отказывается. При сравнении
-    // без учета регистра безопасная форма попадала под блокировку.
+    // The only case-sensitive rule on purpose: -D deletes an unmerged branch, -d refuses.
     pattern: /^git\s+branch\s+(-D|--delete\s+--force)\b/,
     why: 'git branch -D — удаляет ветку вместе с коммитами, которых нет больше нигде (-d разрешен)',
   },
   {
-    // Висячие коммиты и записи reflog — последний способ вернуть потерянную
-    // работу, и на висячие коммиты ссылаются заметки аудита; --prune/--expire
-    // стирают и то, и другое.
+    // Dangling commits and reflog entries are the last way back to lost work.
     pattern: /^git\s+(gc|prune|reflog\s+expire)\b.*(--prune|--expire)/i,
-    why: 'сборка мусора с --prune/--expire — обрывает коммиты, на которые ссылаются заметки аудита',
+    why: 'сборка мусора с --prune/--expire — стирает висячие коммиты и записи reflog, последний способ вернуть потерянную работу',
   },
 ];
 
-/**
- * Убирает тела heredoc'ов: это данные, которые команда передает дальше, и
- * разбирать их как команды неверно. Привязка к началу строки уже отсекает
- * большую часть таких случаев, но строка внутри heredoc может начинаться со
- * слова git — например, документация, показывающая команду.
- */
+/** Heredoc bodies are data passed on, not commands, even when a line starts with git. */
 function stripHeredocBodies(command) {
   return command.replace(
     /<<-?\s*(['"]?)([A-Za-z_][A-Za-z0-9_]*)\1[\s\S]*?^\s*\2\s*$/gm,
@@ -99,7 +70,7 @@ function stripHeredocBodies(command) {
   );
 }
 
-/** Куски строки, каждый из которых шелл начинает исполнять как команду. */
+/** The pieces of the line the shell starts as commands. */
 function commandSegments(command) {
   return command
     .split(/\n|;|&&|\|\||\||\(|\)|`|\$\(/)
@@ -107,7 +78,7 @@ function commandSegments(command) {
     .filter(Boolean);
 }
 
-/** Правило, которое сработало на этой строке, или null. */
+/** The rule that matched this line, or null. */
 function findViolation(rawCommand) {
   const segments = commandSegments(stripHeredocBodies(rawCommand));
   for (const segment of segments) {
@@ -120,7 +91,7 @@ function findViolation(rawCommand) {
 
 module.exports = { findViolation };
 
-// Как хук: читает JSON на stdin. Как модуль: отдает findViolation тесту.
+// As a hook it reads JSON on stdin; as a module it hands findViolation to the test.
 if (require.main === module) {
   let input = '';
 
@@ -138,7 +109,6 @@ if (require.main === module) {
         console.error('');
         console.error('Что делать вместо:');
         console.error('  отложить: git stash (без drop и clear)');
-        console.error('  снять с индекса: git restore --staged <путь>');
         console.error('  вернуть файл из коммита: git show HEAD:<путь> > <путь>');
         console.error('  во всех остальных случаях — спросить владельца');
         process.exit(2);
@@ -146,9 +116,9 @@ if (require.main === module) {
 
       process.exit(0);
     } catch {
-      // Непарсящийся ввод: хук не может узнать, что за команда. Пропустить и
-      // сказать об этом — единственное поведение, которое не ломает работу и не
-      // делает вид, что проверка прошла.
+      // Unparsable input: the hook cannot tell what the command is. Letting it
+      // through and saying so is the only choice that neither breaks work nor
+      // pretends the check passed.
       console.error('block-dangerous-git: не удалось разобрать ввод хука, команда пропущена');
       process.exit(0);
     }

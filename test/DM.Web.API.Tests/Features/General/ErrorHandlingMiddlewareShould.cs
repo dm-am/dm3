@@ -2,14 +2,13 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Identity;
-using DM.Testing;
 using DM.Web.API.Middleware;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Logging.Abstractions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
@@ -18,14 +17,10 @@ namespace DM.Web.API.Tests.Features.General;
 /// A failure past the point of no return is recorded, not answered.
 /// </summary>
 /// <remarks>
-/// Once the headers are on the wire the status cannot be set: the setter throws, and
-/// that second exception escapes the middleware unhandled. The client gets a reset in
-/// the middle of the JSON, and the branches that do not log - a validation failure, a
-/// mapped HTTP exception - lose the cause entirely. The scenario is reachable: a
-/// listing whose queryable materialises while the response is being written can fault
-/// after the first flush.
+/// Once the headers are on the wire the status setter throws, and that second exception would escape; a
+/// listing can fault after the first flush.
 /// </remarks>
-public class ErrorHandlingMiddlewareShould : UnitTestBase
+public class ErrorHandlingMiddlewareShould
 {
     [Fact]
     public async Task RaiseNothingFurtherWhenTheResponseHasAlreadyStarted()
@@ -49,7 +44,7 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
             context,
             NullLogger<ErrorHandlingMiddleware>.Instance,
             new AnonymousIdentityProvider(),
-            new FixedCorrelationTokenProvider(),
+            new FixedCorrelationToken(Guid.Empty),
             null!);
     }
 
@@ -113,14 +108,5 @@ public class ErrorHandlingMiddlewareShould : UnitTestBase
         // The middleware asks for the identity while answering a request that has
         // none: the provider is the anonymous one, and null is what it holds.
         public IIdentity Current => null!;
-
-        public void Current_set(IIdentity identity)
-        {
-        }
-    }
-
-    private sealed class FixedCorrelationTokenProvider : ICorrelationTokenProvider
-    {
-        public Guid Current { get; } = Guid.Empty;
     }
 }

@@ -3,11 +3,11 @@ using System.Text;
 namespace DM.Domain.Core.Identity;
 
 /// <summary>
-/// Implementation of PublicId encoding/decoding.
+/// Implementation of PublicId encoding.
 /// Uses a 23-character alphabet (a-z minus i/l/o for readability).
 /// Minimum output length is 5 characters, padded with 'a' if needed.
 /// </summary>
-public class PublicIdService : IPublicIdService
+public class PublicIdService
 {
     /// <summary>
     /// Alphabet for encoding (23 chars: a-z without i, l, o to avoid confusion with 1, I, 0, O)
@@ -15,13 +15,13 @@ public class PublicIdService : IPublicIdService
     private const string Alphabet = "abcdefghjkmnpqrstuvwxyz";
 
     /// <summary>
-    /// Minimum length of encoded public ID
+    /// Minimum length of encoded public ID: the first 23^5 = 6 436 343 serials all take five
+    /// letters, so an address keeps its width as the site grows, and a shorter string is no code.
     /// </summary>
     private const int MinLength = 5;
 
     private static readonly int Base = Alphabet.Length; // 23
 
-    /// <inheritdoc />
     public string Encode(int serialNumber)
     {
         if (serialNumber <= 0)
@@ -47,39 +47,6 @@ public class PublicIdService : IPublicIdService
         return result.ToString();
     }
 
-    /// <summary>
-    /// Decodes a public ID back to its serial number.
-    /// </summary>
-    /// <param name="publicId">The public ID to decode</param>
-    /// <returns>The original serial number</returns>
-    /// <exception cref="ArgumentException">If publicId is invalid</exception>
-    public int Decode(string publicId)
-    {
-        if (!IsValid(publicId))
-        {
-            throw new ArgumentException($"Invalid public ID format: {publicId}", nameof(publicId));
-        }
-
-        // Remove leading 'a' padding
-        var trimmed = publicId.TrimStart('a');
-
-        // All 'a's means serial number 1
-        if (string.IsNullOrEmpty(trimmed))
-        {
-            return 1;
-        }
-
-        var result = 0;
-        foreach (var c in trimmed)
-        {
-            var index = Alphabet.IndexOf(c);
-            result = result * Base + index;
-        }
-
-        return result + 1; // Convert back to 1-based
-    }
-
-    /// <inheritdoc />
     public bool IsValid(string publicId)
     {
         if (string.IsNullOrEmpty(publicId) || publicId.Length < MinLength)

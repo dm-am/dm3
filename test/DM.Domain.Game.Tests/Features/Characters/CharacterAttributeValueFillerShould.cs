@@ -1,12 +1,11 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Characters;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using DM.Testing;
 using AwesomeAssertions;
@@ -17,82 +16,99 @@ namespace DM.Domain.Game.Tests.Features.Characters;
 
 public class CharacterAttributeValueFillerShould : UnitTestBase
 {
-    private readonly IGameAttributeSchemaRepository _gameSchemas;
-    private readonly IAttributeValueValidator _validator;
-    private readonly CharacterAttributeValueFiller _filler;
+    private readonly IGameAttributeSchemaRepository gameSchemas;
+    private readonly IAttributeValueValidator validator;
+    private readonly CharacterAttributeValueFiller filler;
 
-    private readonly Guid _gameId = Guid.NewGuid();
-    private readonly Guid _masterId = Guid.NewGuid();
-    private readonly Guid _ownerId = Guid.NewGuid();
-    private readonly Guid _visibleSpecId = Guid.NewGuid();
-    private readonly Guid _hiddenSpecId = Guid.NewGuid();
+    private readonly Guid gameId = Guid.NewGuid();
+    private readonly Guid masterId = Guid.NewGuid();
+    private readonly Guid ownerId = Guid.NewGuid();
+    private readonly Guid visibleSpecId = Guid.NewGuid();
+    private readonly Guid hiddenSpecId = Guid.NewGuid();
 
     public CharacterAttributeValueFillerShould()
     {
-        _gameSchemas = Mock<IGameAttributeSchemaRepository>();
-        _validator = Mock<IAttributeValueValidator>();
-        _validator.Validate(Arg.Any<string>(), Arg.Any<AttributeSpecification>()).Returns((true, (string?)null));
+        gameSchemas = Mock<IGameAttributeSchemaRepository>();
+        validator = Mock<IAttributeValueValidator>();
+        validator.Validate(Arg.Any<string>(), Arg.Any<AttributeSpecification>()).Returns((true, (string?)null));
 
-        _filler = new CharacterAttributeValueFiller(_gameSchemas, _validator);
+        filler = new CharacterAttributeValueFiller(gameSchemas, validator);
     }
 
     private GameDto Game() => new()
     {
-        Id = _gameId,
-        Master = new GeneralUser { UserId = _masterId, Username = "Master" },
+        Id = gameId,
+        Master = new GeneralUser { UserId = masterId, Username = "Master" },
         Assistants = [],
         Players = []
     };
 
     private void SetupSchema(params AttributeSpecification[] specifications) =>
-        _gameSchemas.Get(_gameId)
+        gameSchemas.Get(gameId)
             .Returns(new GameAttributeSchema { Specifications = specifications });
 
     private Character OwnedCharacter(params CharacterAttribute[] attributes) => new()
     {
         Id = Guid.NewGuid(),
-        Author = new GeneralUser { UserId = _ownerId, Username = "Owner" },
+        Author = new GeneralUser { UserId = ownerId, Username = "Owner" },
         Attributes = attributes
     };
+
+    /// <summary>
+    /// A schema whose descriptor is hidden, written around the validator that refuses one,
+    /// and a character that fills it.
+    /// </summary>
+    private Character WithHiddenDescriptor()
+    {
+        SetupSchema(new AttributeSpecification
+        {
+            Id = hiddenSpecId,
+            Title = "Class",
+            Type = AttributeSpecificationType.Text,
+            IsDescriptor = true,
+            IsHidden = true
+        });
+        return OwnedCharacter(new CharacterAttribute { Id = hiddenSpecId, Value = "Assassin" });
+    }
 
     [Fact]
     public async Task RedactHiddenValuesFromStranger()
     {
         SetupSchema(
-            new AttributeSpecification { Id = _visibleSpecId, Title = "Name", Type = AttributeSpecificationType.Text },
-            new AttributeSpecification { Id = _hiddenSpecId, Title = "Secret", Type = AttributeSpecificationType.Text, IsHidden = true });
+            new AttributeSpecification { Id = visibleSpecId, Title = "Name", Type = AttributeSpecificationType.Text },
+            new AttributeSpecification { Id = hiddenSpecId, Title = "Secret", Type = AttributeSpecificationType.Text, IsHidden = true });
         var character = OwnedCharacter(
-            new CharacterAttribute { Id = _visibleSpecId, Value = "Bob" },
-            new CharacterAttribute { Id = _hiddenSpecId, Value = "classified" });
+            new CharacterAttribute { Id = visibleSpecId, Value = "Bob" },
+            new CharacterAttribute { Id = hiddenSpecId, Value = "classified" });
 
-        await _filler.Fill(new[] { character }, Game(), Guid.NewGuid());
+        await filler.Fill(new[] { character }, Game(), Guid.NewGuid());
 
-        character.Attributes.Should().ContainSingle(a => a.Id == _visibleSpecId);
-        character.Attributes.Should().NotContain(a => a.Id == _hiddenSpecId);
+        character.Attributes.Should().ContainSingle(a => a.Id == visibleSpecId);
+        character.Attributes.Should().NotContain(a => a.Id == hiddenSpecId);
     }
 
     [Fact]
     public async Task ShowHiddenValuesToOwner()
     {
         SetupSchema(
-            new AttributeSpecification { Id = _hiddenSpecId, Title = "Secret", Type = AttributeSpecificationType.Text, IsHidden = true });
-        var character = OwnedCharacter(new CharacterAttribute { Id = _hiddenSpecId, Value = "classified" });
+            new AttributeSpecification { Id = hiddenSpecId, Title = "Secret", Type = AttributeSpecificationType.Text, IsHidden = true });
+        var character = OwnedCharacter(new CharacterAttribute { Id = hiddenSpecId, Value = "classified" });
 
-        await _filler.Fill(new[] { character }, Game(), _ownerId);
+        await filler.Fill(new[] { character }, Game(), ownerId);
 
-        character.Attributes.Should().ContainSingle(a => a.Id == _hiddenSpecId && a.Value == "classified");
+        character.Attributes.Should().ContainSingle(a => a.Id == hiddenSpecId && a.Value == "classified");
     }
 
     [Fact]
     public async Task ShowHiddenValuesToMaster()
     {
         SetupSchema(
-            new AttributeSpecification { Id = _hiddenSpecId, Title = "Secret", Type = AttributeSpecificationType.Text, IsHidden = true });
-        var character = OwnedCharacter(new CharacterAttribute { Id = _hiddenSpecId, Value = "classified" });
+            new AttributeSpecification { Id = hiddenSpecId, Title = "Secret", Type = AttributeSpecificationType.Text, IsHidden = true });
+        var character = OwnedCharacter(new CharacterAttribute { Id = hiddenSpecId, Value = "classified" });
 
-        await _filler.Fill(new[] { character }, Game(), _masterId);
+        await filler.Fill(new[] { character }, Game(), masterId);
 
-        character.Attributes.Should().ContainSingle(a => a.Id == _hiddenSpecId && a.Value == "classified");
+        character.Attributes.Should().ContainSingle(a => a.Id == hiddenSpecId && a.Value == "classified");
     }
 
     [Fact]
@@ -102,12 +118,51 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
         var game = Game();
         game.Mentor = new GeneralUser { UserId = mentorId, Username = "Mentor" };
         SetupSchema(
-            new AttributeSpecification { Id = _hiddenSpecId, Title = "Secret", Type = AttributeSpecificationType.Text, IsHidden = true });
-        var character = OwnedCharacter(new CharacterAttribute { Id = _hiddenSpecId, Value = "classified" });
+            new AttributeSpecification { Id = hiddenSpecId, Title = "Secret", Type = AttributeSpecificationType.Text, IsHidden = true });
+        var character = OwnedCharacter(new CharacterAttribute { Id = hiddenSpecId, Value = "classified" });
 
-        await _filler.Fill(new[] { character }, game, mentorId);
+        await filler.Fill(new[] { character }, game, mentorId);
 
-        character.Attributes.Should().NotContain(a => a.Id == _hiddenSpecId);
+        character.Attributes.Should().NotContain(a => a.Id == hiddenSpecId);
+    }
+
+    [Fact]
+    public async Task ShowTheDescriptorToStranger()
+    {
+        SetupSchema(new AttributeSpecification
+        {
+            Id = visibleSpecId,
+            Title = "Class",
+            Type = AttributeSpecificationType.Text,
+            IsDescriptor = true
+        });
+        var character = OwnedCharacter(new CharacterAttribute { Id = visibleSpecId, Value = "Warrior" });
+
+        await filler.Fill(new[] { character }, Game(), Guid.NewGuid());
+
+        character.Descriptor.Should().Be("Warrior");
+    }
+
+    [Fact]
+    public async Task RedactHiddenDescriptorFromStranger()
+    {
+        var character = WithHiddenDescriptor();
+
+        await filler.Fill(new[] { character }, Game(), Guid.NewGuid());
+
+        character.Descriptor.Should().BeNull();
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task ShowHiddenDescriptorToOwnerAndMaster(bool viewerIsOwner)
+    {
+        var character = WithHiddenDescriptor();
+
+        await filler.Fill(new[] { character }, Game(), viewerIsOwner ? ownerId : masterId);
+
+        character.Descriptor.Should().Be("Assassin");
     }
 
     [Fact]
@@ -115,7 +170,7 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
     {
         SetupSchema(new AttributeSpecification
         {
-            Id = _visibleSpecId,
+            Id = visibleSpecId,
             Title = "Strength",
             Type = AttributeSpecificationType.TextNumberList,
             Values = new[]
@@ -124,9 +179,9 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
                 new ListValue { Value = "Strong", Modifier = 3 }
             }
         });
-        var character = OwnedCharacter(new CharacterAttribute { Id = _visibleSpecId, Value = "Strong" });
+        var character = OwnedCharacter(new CharacterAttribute { Id = visibleSpecId, Value = "Strong" });
 
-        await _filler.Fill(new[] { character }, Game(), _masterId);
+        await filler.Fill(new[] { character }, Game(), masterId);
 
         character.Attributes.Single().Modifier.Should().Be(3);
     }
@@ -136,13 +191,13 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
     {
         SetupSchema(new AttributeSpecification
         {
-            Id = _visibleSpecId,
+            Id = visibleSpecId,
             Title = "Biography",
             Type = AttributeSpecificationType.BbCode
         });
-        var character = OwnedCharacter(new CharacterAttribute { Id = _visibleSpecId, Value = "[b]hi[/b]" });
+        var character = OwnedCharacter(new CharacterAttribute { Id = visibleSpecId, Value = "[b]hi[/b]" });
 
-        await _filler.Fill(new[] { character }, Game(), _masterId);
+        await filler.Fill(new[] { character }, Game(), masterId);
 
         var filled = character.Attributes.Single();
         filled.Type.Should().Be(AttributeSpecificationType.BbCode);

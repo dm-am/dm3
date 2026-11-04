@@ -1,24 +1,7 @@
 <script setup lang="ts">
-/**
- * Green speech-bubble skeleton for testimonial loading states.
- *
- * Extracted from the duplicated markup/styles previously in
- * pages/about/TestimonialsPage.vue (.testimonials-skeleton) and
- * pages/home/RandomTestimonials.vue (.testimonial-skeleton) - bubble + 3
- * shimmer lines + footer author/date bars.
- *
- * Skeleton reserves space equal to one collapsed testimonial bubble
- * (3 lines of text @ 16px x 1.5 line-height = 72px of content +
- * 24px padding x 2 + ~24px for the author/date footer ~= 150px).
- * min-height formula below preserves that pixel budget so surrounding
- * content doesn't jump when the real testimonial(s) arrive.
- *
- * The bubble radius uses the shared $bubble-radius token (Variables.sass),
- * matching the real testimonial bubble.
- */
+// The height of one collapsed bubble, so the content does not jump when it arrives.
 withDefaults(
   defineProps<{
-    /** Number of skeleton bubbles to render */
     count?: number;
   }>(),
   { count: 1 },
@@ -49,25 +32,19 @@ withDefaults(
   flex-direction: column
   gap: $medium
 
-// Skeleton bubbles mirror the collapsed testimonial bubble shape
-// (same padding/radius/min-height as the real .bubble, see
-// shared/ui/SpeechBubble). It stands in for a recommendation and for a
-// game review alike — both are drawn by that one bubble.
+// The collapsed bubble of shared/ui/SpeechBubble.
 .skeleton-bubble
   display: flex
   flex-direction: column
   justify-content: center
-  gap: 8px
+  gap: $small
   padding: $medium + $tiny $medium + $small
   margin-bottom: $small
   border-radius: $bubble-radius
   background-color: $bg-highlight-green
   min-height: calc(1.5 * 3 * 1em + ($medium + $tiny) + 26px)
 
-// Uses +skeleton-shimmer for animation/border-radius, then overrides
-// the gradient for the green bubble context: lines are derived from
-// $text-on-green (the bubble's own text color) instead of hardcoded
-// white, so they stay visible in both light and dark themes.
+// Derived from the bubble's text colour, so the lines show in both themes.
 .skeleton-text-line
   height: 14px
   width: 100%
@@ -87,7 +64,8 @@ withDefaults(
   align-items: center
   justify-content: space-between
   gap: $small
-  margin-top: 18px // Clear the real bubble's tail position
+  // Clears the tail of the real bubble.
+  margin-top: 18px
 
 .skeleton-author
   width: 120px

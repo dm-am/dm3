@@ -17,7 +17,6 @@ internal class RealtimeAvatarBroadcaster : IRealtimeAvatarBroadcaster
     private readonly IHubContext<NotificationHub, INotificationHub> _hub;
     private readonly ILogger<RealtimeAvatarBroadcaster> _logger;
 
-    /// <inheritdoc />
     public RealtimeAvatarBroadcaster(
         IUserConnectionService connections,
         IHubContext<NotificationHub, INotificationHub> hub,

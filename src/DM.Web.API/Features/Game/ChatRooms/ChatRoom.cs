@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using DM.Web.API.Features.Game.Characters;
 using DM.Web.API.Features.Community.Users;
 
 namespace DM.Web.API.Features.Game.ChatRooms;
@@ -60,9 +59,4 @@ public class ChatRoomAccess
     /// Target user (for Reader access)
     /// </summary>
     public User? User { get; set; }
-
-    /// <summary>
-    /// Target character (for Character access)
-    /// </summary>
-    public Character? Character { get; set; }
 }

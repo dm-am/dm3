@@ -15,16 +15,8 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// Who is told that the points of a warning moved, and what he is told.
 /// </summary>
 /// <remarks>
-/// A warning is never withdrawn, so the correction of its points is the only
-/// thing that happens to one after it is issued — and it happened in silence:
-/// the person whose scale it changed found out by opening the log himself. The
-/// notification is addressed to him and to nobody else, which is the half a
-/// projection can get wrong without failing: the row names three people, and two
-/// of them are moderators.
-///
-/// The numbers are the other half. Both of them are on the row and neither is
-/// derivable from the other, so a payload carrying one says the points changed
-/// and never says from what.
+/// Addressed to the warned person alone, of three the row names; the payload carries both numbers, neither
+/// derivable from the other.
 /// </remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class WarningPointsChangedNotificationsShould
@@ -44,9 +36,7 @@ public class WarningPointsChangedNotificationsShould
     private const string ChangeReason = "Нарушение оказалось легче";
 
     /// <summary>
-    /// The corrected warning, written once into the shared database. The three
-    /// people it names are the three the seed keeps apart, so a generator
-    /// answering the wrong one of them cannot pass.
+    /// The corrected warning, written once; its three people are the ones the seed keeps apart.
     /// </summary>
     private async Task Seed()
     {
@@ -83,14 +73,6 @@ public class WarningPointsChangedNotificationsShould
         return produced.SingleOrDefault();
     }
 
-    /// <summary>Reads a field off the anonymous metadata object.</summary>
-    private static object? Field(CreateNotification notification, string name)
-    {
-        var property = notification.Metadata.GetType().GetProperty(name);
-        property.Should().NotBeNull($"the metadata carries {name}");
-        return property!.GetValue(notification.Metadata);
-    }
-
     [Fact]
     public async Task TellTheReaderTheWarningWasIssuedTo()
     {
@@ -108,15 +90,15 @@ public class WarningPointsChangedNotificationsShould
         var notification = await Changed(CorrectedWarningId);
 
         notification.Should().NotBeNull();
-        Field(notification!, "OriginalPoints").Should().Be(PointsAtIssue,
+        TicketSeed.Field(notification!, "OriginalPoints").Should().Be(PointsAtIssue,
             "a message that says only what the points are now never says what changed");
-        Field(notification!, "Points").Should().Be(PointsNow);
-        Field(notification!, "PointsChangeText").Should().Be(ChangeReason);
-        Field(notification!, "PointsChangedByUsername").Should().Be("seed-author",
+        TicketSeed.Field(notification!, "Points").Should().Be(PointsNow);
+        TicketSeed.Field(notification!, "PointsChangeText").Should().Be(ChangeReason);
+        TicketSeed.Field(notification!, "PointsChangedByUsername").Should().Be("seed-author",
             "the name shown is the moderator who corrected it, not the one who issued it");
-        Field(notification!, "ModeratorUsername").Should().Be(NotificationSeed.MasterUsername);
-        Field(notification!, "Username").Should().Be("seed-waited-for",
+        TicketSeed.Field(notification!, "ModeratorUsername").Should().Be(NotificationSeed.MasterUsername);
+        TicketSeed.Field(notification!, "Username").Should().Be("seed-waited-for",
             "the way back into his own log is built out of this field alone");
-        Field(notification!, "Reason").Should().Be(Reason);
+        TicketSeed.Field(notification!, "Reason").Should().Be(Reason);
     }
 }

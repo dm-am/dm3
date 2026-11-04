@@ -1,8 +1,8 @@
-using Npgsql;
 using DM.Domain.Core.Exceptions;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading.Tasks;
 using DM.Domain.Community.Features.UserEndorsements;
 using DM.Domain.Core.Abstractions;
@@ -29,34 +29,9 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         _dateTimeProvider = dateTimeProvider;
     }
 
-    // ═══ READ ═══
-
-    /// <inheritdoc />
-    public Task<int> CountAsync(Guid targetUserId) => _dbContext.UserEndorsements
-        .Where(e => e.TargetUserId == targetUserId && !e.IsRemoved)
-        .CountAsync();
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<UserEndorsement>> GetAsync(Guid targetUserId, PagingData paging) =>
-        await _dbContext.UserEndorsements
-            .Where(e => e.TargetUserId == targetUserId && !e.IsRemoved)
-            .OrderByDescending(e => e.CreatedUtc)
-            .ThenByDescending(e => e.UserEndorsementId)
-            .Page(paging)
-            .ProjectToUserEndorsement()
-            .ToArrayAsync();
-
     /// <inheritdoc />
     public Task<UserEndorsement?> GetAsync(Guid id) => _dbContext.UserEndorsements
         .Where(e => !e.IsRemoved && e.UserEndorsementId == id)
-        .ProjectToUserEndorsement()
-        .FirstOrDefaultAsync();
-
-    /// <inheritdoc />
-    public Task<UserEndorsement?> GetByAuthorAsync(Guid targetUserId, Guid authorId) => _dbContext.UserEndorsements
-        .Where(e => e.TargetUserId == targetUserId &&
-                    e.AuthorId == authorId &&
-                    !e.IsRemoved)
         .ProjectToUserEndorsement()
         .FirstOrDefaultAsync();
 
@@ -107,10 +82,8 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
     }
 
     /// <summary>
-    /// List sorting. Supported fields are kept in sync with the FE
-    /// ReviewsFilter SORT_OPTIONS ("created", "author") — adding
-    /// a new option on the FE without a matching case here silently
-    /// falls into the default order, so the SSOT is kept in this switch.
+    /// List sorting by the client's ReviewsFilter SORT_OPTIONS ("created", "author");
+    /// an option without a case here falls into the default order.
     /// For "given" endorsements (AuthorId is fixed by the filter)
     /// "author" means the other side of the pair — we sort by the
     /// recipient's name. Secondary keys (CreatedUtc, then Id) make
@@ -125,25 +98,16 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
 
         if (sortBy == "author")
         {
-            var byRecipient = filter?.AuthorId != null;
-            var ordered = (byRecipient, desc) switch
-            {
-                (true, true) => query.OrderByDescending(e => e.TargetUser.Username),
-                (true, false) => query.OrderBy(e => e.TargetUser.Username),
-                (false, true) => query.OrderByDescending(e => e.Author.Username),
-                (false, false) => query.OrderBy(e => e.Author.Username),
-            };
-            return desc
-                ? ordered.ThenByDescending(e => e.CreatedUtc).ThenByDescending(e => e.UserEndorsementId)
-                : ordered.ThenBy(e => e.CreatedUtc).ThenBy(e => e.UserEndorsementId);
+            Expression<Func<DbUserEndorsement, string>> name = filter?.AuthorId != null
+                ? e => e.TargetUser.Username
+                : e => e.Author.Username;
+            return query.OrderByDirection(name, !desc)
+                .ThenByDirection(e => e.CreatedUtc, !desc)
+                .ThenByDirection(e => e.UserEndorsementId, !desc);
         }
 
-        return desc
-            ? query.OrderByDescending(e => e.CreatedUtc).ThenByDescending(e => e.UserEndorsementId)
-            : query.OrderBy(e => e.CreatedUtc).ThenBy(e => e.UserEndorsementId);
+        return query.OrderByDirection(e => e.CreatedUtc, !desc).ThenByDirection(e => e.UserEndorsementId, !desc);
     }
-
-    // ═══ WRITE ═══
 
     /// <inheritdoc />
     public Task<bool> ExistsAsync(Guid authorId, Guid targetUserId) => _dbContext.UserEndorsements
@@ -169,7 +133,7 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         {
             await _dbContext.SaveChangesAsync();
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // The caller pre-checks for an existing endorsement; this is the race
             // where two concurrent requests both pass that check. Translated here
@@ -196,9 +160,6 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
         if (entity.Text != null)
             dbEndorsement.Text = entity.Text;
         if (entity.IsRemoved == true)
-            // Through the one call that writes the flag and the audit together: this
-            // path wrote ModifiedByUserId and left the deletion columns empty, so a
-            // withdrawn endorsement was the one removal in the table with no author.
             SoftDelete.Mark(dbEndorsement, entity.DeletedByUserId, entity.DeletedUtc ?? _dateTimeProvider.Now);
         else if (entity.IsRemoved == false)
             dbEndorsement.IsRemoved = false;
@@ -209,19 +170,13 @@ internal class UserEndorsementRepository : IUserEndorsementRepository
 
         await _dbContext.SaveChangesAsync();
 
-        // IgnoreQueryFilters, because one of the updates this method serves is the
-        // removal: the global filter drops soft-deleted rows, so reading the row
-        // back through it threw "Sequence contains no elements" on the way out of
-        // every withdrawal. The caller asked for this row by its identifier and has
-        // just written it, so the filter has nothing to protect here.
+        // The update may be the removal, so the read-back lifts the soft-delete filter.
         return await _dbContext.UserEndorsements
             .IgnoreQueryFilters()
             .Where(e => e.UserEndorsementId == entity.EndorsementId)
             .ProjectToUserEndorsement()
             .FirstAsync();
     }
-
-    // ═══ ELIGIBILITY ═══
 
     /// <inheritdoc />
     public async Task<bool> HavePlayedTogetherAsync(Guid userId1, Guid userId2)

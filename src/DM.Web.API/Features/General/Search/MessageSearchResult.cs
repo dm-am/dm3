@@ -41,10 +41,7 @@ public class MessageSearchResult
     /// as a match is where the search found its words.
     /// </summary>
     /// <remarks>
-    /// Segments rather than a marked-up string: the database marks the match, and a
-    /// string carrying those marks would be the one field of this contract a client
-    /// had to render as markup — from a document nobody escaped. [private] blocks
-    /// are never present, so addressee-only content is not exposed here.
+    /// As in <see cref="ForumSearchResult.Snippet" />.
     /// </remarks>
     public IReadOnlyList<SnippetSegment> Snippet { get; set; } = [];
 }

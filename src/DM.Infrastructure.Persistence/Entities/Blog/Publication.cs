@@ -1,8 +1,6 @@
 using System;
-using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Account;
 
@@ -12,7 +10,7 @@ namespace DM.Infrastructure.Persistence.Entities.Blog;
 /// DAL model for blog publication (post)
 /// </summary>
 [Table("Publications")]
-public class Publication : ISoftDeletable, IEditable
+public class Publication : ISoftDeletable
 {
     /// <summary>
     /// Publication identifier
@@ -73,16 +71,6 @@ public class Publication : ISoftDeletable, IEditable
     public Guid? ModifiedByUserId { get; set; }
 
     /// <summary>
-    /// Whether the publication is published (visible) or draft
-    /// </summary>
-    public bool IsPublished { get; set; }
-
-    /// <summary>
-    /// Publication date (when it became visible)
-    /// </summary>
-    public DateTimeOffset? PublishedUtc { get; set; }
-
-    /// <summary>
     /// View count
     /// </summary>
     public int ViewCount { get; set; }
@@ -120,9 +108,6 @@ public class Publication : ISoftDeletable, IEditable
     [ForeignKey(nameof(RubricId))]
     public virtual Rubric? Rubric { get; set; }
 
-    /// <summary>
-    /// Author
-    /// </summary>
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;
 
@@ -138,11 +123,6 @@ public class Publication : ISoftDeletable, IEditable
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
 
-    /// <summary>
-    /// Publication comments (polymorphic - loaded manually via EntityId)
-    /// </summary>
-    [NotMapped]
-    public virtual ICollection<Comment> Comments { get; set; } = [];
 
     #endregion
 }

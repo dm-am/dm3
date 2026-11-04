@@ -1,28 +1,9 @@
 <script setup lang="ts">
-/**
- * TimeInput — a field for a time of day, "чч:мм", typed in digits.
- *
- * The site's own field in place of <input type="time">, whose look, language
- * and twelve-hour "PM" were the browser's. The colon puts itself in, as the
- * dots of a date do: "2330" reads "23:30" as it is typed, so a phone's numeric
- * keyboard, which often has no colon, is enough. A colon the reader typed in a
- * place of their own ("9:30") is left alone, and the text is written out in
- * full ("09:30") when the reader leaves the field.
- *
- * Typed only: no list of times and no icon. A time is four digits, and a list
- * of half hours added a control with a keyboard of its own and nothing a
- * reader could not type faster.
- *
- * Emits "HH:mm", or null when emptied. What does not make a time ("25:00",
- * "23:5") is not taken: it stays in the field, and leaving the field emits the
- * reason "Такого времени нет" for the consumer to show under it, as a date
- * field says "Такой даты нет". The reason clears as soon as the text is right.
- *
- * The one element is the <input>, so the caller's class, id and aria reach it,
- * and FormField sets it at the window's 52 and 15 as it sets any field.
- */
+// The colon puts itself in, as the dots of a date do.
+// The one element is the <input>, so the caller's class, id and aria reach it.
 import { ref, watch } from "vue";
 import { useInDialog } from "@/shared/ui/Layout/dialogContext";
+import { reasonSayer, shapeInput } from "./typedField";
 
 const props = withDefaults(
   defineProps<{
@@ -73,23 +54,9 @@ function withColon(raw: string): string {
     : digits;
 }
 
-/** The caret position just after the n-th digit of the text. */
-function afterDigits(text: string, count: number): number {
-  if (count === 0) return 0;
-  const nth = [...text.matchAll(/\d/g)][count - 1];
-  return nth?.index === undefined ? text.length : nth.index + 1;
-}
-
 const text = ref(props.modelValue ?? "");
 
-/** The reason said last, so each change is said once. */
-const reason = ref<string | null>(null);
-
-function setReason(next: string | null) {
-  if (next === reason.value) return;
-  reason.value = next;
-  emit("reason", next);
-}
+const setReason = reasonSayer((next) => emit("reason", next));
 
 const reasonFor = (t: string): string | null =>
   t.trim() && !parseTime(t) ? "Такого времени нет" : null;
@@ -105,16 +72,7 @@ watch(
 );
 
 function onInput(e: Event) {
-  const input = e.target as HTMLInputElement;
-  const raw = input.value;
-  const shaped = withColon(raw);
-  if (shaped !== raw) {
-    const caret = input.selectionStart ?? raw.length;
-    const digitsBefore = raw.slice(0, caret).replace(/\D/g, "").length;
-    input.value = shaped;
-    const at = afterDigits(shaped, digitsBefore);
-    input.setSelectionRange(at, at);
-  }
+  const shaped = shapeInput(e.target as HTMLInputElement, withColon);
   text.value = shaped;
   if (!shaped.trim()) {
     if (props.modelValue !== null) emit("update:modelValue", null);
@@ -152,14 +110,8 @@ function settleText() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/DialogSurface" as *
+@use "@/shared/ui/DatePicker/calendar" as *
 
-// In a window, the window's field: 52 high, its text at 15 and 14 in from the
-// frame, as FormField sets a field of one line there. Said here as well, for
-// the field that does not stand right in the row of a FormField (the time
-// beside a date).
 .time-input--dialog
-  height: $dialog-control-height
-  padding: 0 $dialog-field-inset
-  font-size: $dialog-field-font-size
+  +window-field
 </style>

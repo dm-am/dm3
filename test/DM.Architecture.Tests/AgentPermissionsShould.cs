@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -14,17 +15,8 @@ namespace DM.Architecture.Tests;
 /// The list that decides what runs without asking stays narrow where it matters.
 /// </summary>
 /// <remarks>
-/// The hook in .claude/hooks refuses the commands that lose uncommitted work, and
-/// it is the one place they are declared: it reads the whole command line, which
-/// is what tells "git restore --staged" apart from "git restore .". A wildcard
-/// entry here is the other side of the same door: it pre-approves every form of a
-/// verb, including the ones nobody thought about when the entry was written, and
-/// the whole list had one for git, one for rm and one for the shell interpreter at
-/// the same time.
-///
-/// Read and build commands stay wide on purpose. They do not write outside the
-/// checkout and do not reach the network, so approving them one by one buys
-/// nothing but interruptions.
+/// A wildcard entry pre-approves every form of a verb, the ones the hook refuses included.
+/// Read and build commands stay wide: they write nothing outside the checkout.
 /// </remarks>
 public class AgentPermissionsShould
 {
@@ -39,11 +31,10 @@ public class AgentPermissionsShould
         "winget", "npm publish", "docker system prune",
     ];
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static IReadOnlyList<string> Entries(string settingsFile, string section)
     {
-        var path = Path.Combine(RepositoryRoot, ".claude", settingsFile);
+        var path = Path.Combine(RepositoryLayout.Root, ".claude", settingsFile);
         if (!File.Exists(path))
         {
             return [];
@@ -94,7 +85,7 @@ public class AgentPermissionsShould
 
     /// <summary>The hook that refuses the commands which lose uncommitted work.</summary>
     private static string HookPath =>
-        Path.Combine(RepositoryRoot, ".claude", "hooks", "block-dangerous-git.js");
+        Path.Combine(RepositoryLayout.Root, ".claude", "hooks", "block-dangerous-git.js");
 
     /// <summary>One rule of the hook: a refusal, and the pattern that spells it.</summary>
     private sealed record HookRule(string Source, Regex Pattern)
@@ -112,13 +103,7 @@ public class AgentPermissionsShould
     /// <summary>
     /// Every rule the hook holds, in file order.
     /// </summary>
-    /// <remarks>
-    /// The patterns are ordinary regex literals, so each one carries over as
-    /// written and only the case-insensitivity flag has to be read off separately.
-    /// It is not decoration: the one rule without it refuses "-D" and lets "-d"
-    /// through, and a comparison that lost the flag would call the safe form
-    /// forbidden.
-    /// </remarks>
+    /// <remarks>The case flag is read separately: one rule refuses "-D" and lets "-d" through.</remarks>
     private static IReadOnlyList<HookRule> HookRules()
     {
         var array = Regex.Match(
@@ -153,10 +138,7 @@ public class AgentPermissionsShould
     /// the first construct that matches more than one text. That position comes
     /// back in <paramref name="stopped"/>.
     /// </summary>
-    /// <remarks>
-    /// "\s+" is a single space: it is how the hook spells the gap between the words
-    /// of a command. "\b" is nothing at all: it separates words without being one.
-    /// </remarks>
+    /// <remarks>"\s+" reads as one space, "\b" as nothing.</remarks>
     private static string LeadingLiteral(string pattern, int start, out int stopped)
     {
         var text = new StringBuilder();
@@ -259,14 +241,7 @@ public class AgentPermissionsShould
     /// literal text the pattern opens with, one name per branch when that text runs
     /// into an alternation of literals.
     /// </summary>
-    /// <remarks>
-    /// Everything from the first construct that is not literal text on is left out,
-    /// because that is where the pattern stops describing the head of a command
-    /// line and starts describing what may stand anywhere in the rest of it: "git
-    /// clean", not the forcing flag the rule actually keys on. A permission entry
-    /// cannot say the second thing at all, because it matches a prefix of the
-    /// command line and nothing else.
-    /// </remarks>
+    /// <remarks>Stops at the first construct that is not literal: a permission entry matches a prefix of the command line only.</remarks>
     private static IReadOnlyList<string> CommandNames(string pattern)
     {
         if (!pattern.StartsWith('^'))
@@ -285,9 +260,7 @@ public class AgentPermissionsShould
             var body = pattern[(stopped + 1)..end];
             body = body.StartsWith("?:", StringComparison.Ordinal) ? body[2..] : body;
 
-            // A group opening with "?" that is not "?:" is a lookaround: it matches
-            // no text of its own, and what follows it is a condition on the rest of
-            // the line rather than the next word of the command.
+            // "(?" other than "(?:" is a lookaround: a condition on the rest of the line, not the next word.
             List<string?> branches = body.StartsWith('?')
                 ? []
                 : body.Split('|').Select(LiteralOf).ToList();
@@ -322,17 +295,8 @@ public class AgentPermissionsShould
     /// Whether a deny entry is the settings side of one of a rule's refusals.
     /// </summary>
     /// <remarks>
-    /// Two shapes pass. The entry may spell a command the rule itself refuses,
-    /// which is how a rule keyed on a flag gets named without the entry reaching
-    /// past it: everything such an entry denies, the hook refuses too. Or it may be
-    /// the bare name, which denies the whole subcommand, more than the rule refuses
-    /// and never less, the way "git clean" is denied here today.
-    ///
-    /// What does not pass is an entry for a form the rule lets through.
-    /// "Bash(git restore --staged:*)" stands for no refusal, because the rule does
-    /// not match it and it is not the name, and a blanket "Bash(git:*)" stands for
-    /// none either. Without that the check would accept an entry forbidding exactly
-    /// what the hook prints as the way out, and report the refusal as written down.
+    /// An entry passes when it spells a command the rule refuses or is the bare subcommand;
+    /// one for a form the rule lets through stands for no refusal.
     /// </remarks>
     private static bool Names(HookRule rule, string name, string denied) =>
         string.Equals(denied, name, StringComparison.Ordinal) ||
@@ -351,27 +315,8 @@ public class AgentPermissionsShould
     /// says, not from what it omits.
     /// </summary>
     /// <remarks>
-    /// Two lists of forbidden commands drift the moment one of them grows, and this
-    /// pair did: the hook refuses restore, force push, branch deletion and garbage
-    /// collection on top of the four commands deny names, and the gate that was
-    /// meant to compare them held the same four names of its own, so it agreed with
-    /// the settings whatever the hook said.
-    ///
-    /// The names are therefore not written here any more. They are read out of the
-    /// hook, which makes it the one place a refusal is declared: a rule added there
-    /// turns this red until deny names it, and the failure spells out which command
-    /// and which rule.
-    ///
-    /// A rule whose refusal a later flag calls off is left to the hook alone, and
-    /// that is a limit of the settings rather than a hole here. A deny entry matches
-    /// the head of a command line, and the flag that clears the refusal stands after
-    /// that head. So an entry for such a rule either stops before the flag and
-    /// forbids the form the hook allows, which for restore is the "--staged" the
-    /// hook itself prints as the way to unstage, or it names the flag and forbids
-    /// nothing the rule refuses.
-    ///
-    /// Only the tracked settings file counts. settings.local.json is gitignored, so
-    /// a refusal living there alone holds on one machine and on no other.
+    /// The names are read out of the hook, the one place a refusal is declared, and only the
+    /// tracked settings file counts. A rule a later flag calls off is left to the hook alone.
     /// </remarks>
     [Fact]
     public void NameTheRefusalsTheHookEnforces()
@@ -399,16 +344,7 @@ public class AgentPermissionsShould
     /// <summary>
     /// A refusal that lives in the settings alone is enforced by nothing.
     /// </summary>
-    /// <remarks>
-    /// This is the same rule read from the other end. The settings are a list a
-    /// reader consults; the hook is what actually runs and stops the command, so a
-    /// git entry here that answers to no rule promises a refusal nobody makes. When
-    /// this goes red the entry is not the thing to delete: the rule it needs is the
-    /// thing to write.
-    ///
-    /// Only git is compared. Other refusals in this file belong to other hooks,
-    /// which hold their own rules in their own files: the migration guard is one.
-    /// </remarks>
+    /// <remarks>Only git is compared: other refusals belong to other hooks.</remarks>
     [Fact]
     public void HoldNoGitRefusalTheHookDoesNot()
     {
@@ -430,13 +366,7 @@ public class AgentPermissionsShould
     /// <summary>
     /// A rule this cannot read is a rule the settings is never compared against.
     /// </summary>
-    /// <remarks>
-    /// The comparison is a read of another language's source, and it fails the two
-    /// ways such a read fails: the array moves and nothing is found at all, or one
-    /// pattern stops opening with the text of a command and that rule leaves the
-    /// comparison alone. In the tests above both look like a settings file that
-    /// covers everything, so they are stated here instead.
-    /// </remarks>
+    /// <remarks>A read of the hook that finds nothing would look like full coverage above.</remarks>
     [Fact]
     public void ReadEveryRuleTheHookHolds()
     {
@@ -468,14 +398,7 @@ public class AgentPermissionsShould
     /// A comparison that cannot reject accepts anything, including the entry that
     /// forbids the way out.
     /// </summary>
-    /// <remarks>
-    /// The check above reads deny against the hook, and the cheap way to satisfy it
-    /// is an entry that names a command near the forbidden one instead of the
-    /// forbidden one: "Bash(git restore --staged:*)" against the restore rule,
-    /// "Bash(git:*)" against all of them. Both would report the refusal as written
-    /// down while forbidding something else, and one of them forbids what the hook
-    /// prints as the way out. None of these may stand for a refusal.
-    /// </remarks>
+    /// <remarks>"Bash(git restore --staged:*)" and "Bash(git:*)" must not stand for a refusal.</remarks>
     [Fact]
     public void AcceptNoEntryThatNamesACommandTheHookAllows()
     {

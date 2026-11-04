@@ -6,7 +6,6 @@ namespace DM.Domain.Game.Features.PostPendencies;
 /// <inheritdoc />
 internal class CreatePostPendencyValidator : AbstractValidator<CreatePostPendency>
 {
-    /// <inheritdoc />
     public CreatePostPendencyValidator()
     {
         RuleFor(e => e.RoomId)

@@ -53,13 +53,8 @@ export type ModerationPermissions = {
   canSetModerationWatch: boolean;
 };
 
-/**
- * Moderated profile extends UserProfile with moderation-specific data.
- * Inherits: id, username, role, rating, picture, status, info, gender,
- * birthday, name, location, contacts, registeredAtUtc, etc.
- */
+/** The profile as the moderation reads it. */
 export type ModeratedProfile = {
-  // Inherited from UserProfile
   id: string;
   username: string;
   role: string;
@@ -74,8 +69,6 @@ export type ModeratedProfile = {
   contacts?: { contactType: string; value: string }[];
   registeredUtc: string;
   isNewbie?: boolean;
-  postReviewsGiven?: number;
-  postReviewsReceived?: number;
 
   // Moderation-specific fields
   email?: string;
@@ -85,10 +78,8 @@ export type ModeratedProfile = {
   moderatorNotes: ModNote[];
   violations: ViolationSummary;
   /**
-   * Moderation is watching what this user creates: while it is on, every game
-   * and blog they start begins in premoderation, the way a newbie's does.
-   * Set and cleared by hand, unlike the violators list, which is recomputed
-   * from active warnings and bans and lapses when they expire.
+   * While on, every game and blog the user starts begins in premoderation. Set
+   * by hand, unlike the violators list, which lapses with the warnings and bans.
    */
   isUnderModerationWatch: boolean;
   permissions: ModerationPermissions;

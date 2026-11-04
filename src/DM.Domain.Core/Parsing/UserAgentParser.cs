@@ -1,13 +1,9 @@
-using System;
-using System.Linq;
-using System.Text.RegularExpressions;
-
 namespace DM.Domain.Core.Parsing;
 
 /// <summary>
 /// Parses User-Agent strings to extract device/browser information
 /// </summary>
-public static partial class UserAgentParser
+public static class UserAgentParser
 {
     /// <summary>
     /// Parses a User-Agent string into a human-readable device description
@@ -60,16 +56,14 @@ public static partial class UserAgentParser
     private static string? DetectOS(string userAgent)
     {
         // Mobile detection first
-        if (IPhoneRegex().IsMatch(userAgent))
+        if (userAgent.Contains("iPhone", StringComparison.OrdinalIgnoreCase))
             return "iPhone";
-        if (IPadRegex().IsMatch(userAgent))
+        if (userAgent.Contains("iPad", StringComparison.OrdinalIgnoreCase))
             return "iPad";
         if (userAgent.Contains("Android", StringComparison.OrdinalIgnoreCase))
-            return DetectAndroidDevice(userAgent);
+            return userAgent.Contains("Mobile", StringComparison.OrdinalIgnoreCase) ? "Android" : "Android-планшет";
 
         // Desktop OS
-        if (userAgent.Contains("Windows NT 10", StringComparison.OrdinalIgnoreCase))
-            return "Windows";
         if (userAgent.Contains("Windows NT", StringComparison.OrdinalIgnoreCase))
             return "Windows";
         if (userAgent.Contains("Mac OS X", StringComparison.OrdinalIgnoreCase))
@@ -79,17 +73,4 @@ public static partial class UserAgentParser
 
         return null;
     }
-
-    private static string DetectAndroidDevice(string userAgent)
-    {
-        if (userAgent.Contains("Mobile", StringComparison.OrdinalIgnoreCase))
-            return "Android";
-        return "Android-планшет";
-    }
-
-    [GeneratedRegex(@"iPhone", RegexOptions.IgnoreCase)]
-    private static partial Regex IPhoneRegex();
-
-    [GeneratedRegex(@"iPad", RegexOptions.IgnoreCase)]
-    private static partial Regex IPadRegex();
 }

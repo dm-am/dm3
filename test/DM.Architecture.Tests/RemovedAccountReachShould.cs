@@ -1,8 +1,5 @@
 using System;
-using System.IO;
 using System.Linq;
-using ArchUnitNET.Domain;
-using ArchUnitNET.Loader;
 using AwesomeAssertions;
 using DM.Domain.Core.Users;
 using Xunit;
@@ -15,22 +12,12 @@ namespace DM.Architecture.Tests;
 /// they read the removed rows.
 /// </summary>
 /// <remarks>
-/// "Аккаунт удален" is no account. The name opens one profile - the sum of every removed
-/// row - and narrows the lists its tabs are made of; everywhere else it is a name nobody
-/// holds, answered with the 404 or the empty list any unknown name gets. The removed rows
-/// behind it are read past the account filter by one scope, and the identifiers that
-/// read returns narrow a list on the server and go nowhere else.
-///
-/// Both halves are easy to widen by accident and neither shows on a page: a new endpoint
-/// that learns the name serves something about removed accounts nobody decided to serve,
-/// and a new caller of the scope is a new read past the filter. So the callers are named
-/// here, and a new one is a decision somebody takes on purpose.
+/// The name opens one profile and narrows its tabs; elsewhere it is unknown. The callers are named
+/// here, so a new reader of the name or of the scope past the filter is a decision.
 /// </remarks>
 public class RemovedAccountReachShould
 {
-    private static readonly ArchitectureModel Solution = new ArchLoader()
-        .LoadFilteredDirectory(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .Build();
+    private static readonly ArchitectureModel Solution = ArchitectureSolution.Model;
 
     /// <summary>
     /// The profile, the host, author and player filters of its tabs, the reservation of
@@ -63,9 +50,8 @@ public class RemovedAccountReachShould
     ];
 
     /// <summary>
-    /// The production types that use <paramref name="fullName" />, each named by the type
-    /// it is declared in: an async method or a lambda compiles into a nested class of its
-    /// own, and it is the declaring type that made the call.
+    /// The production types that use <paramref name="fullName" />, each by its declaring type: async
+    /// methods and lambdas compile into nested classes.
     /// </summary>
     private static string[] DependentsOf(string fullName) => Solution.Classes
         .Where(c => c.Assembly.Name.StartsWith("DM.", StringComparison.Ordinal) &&

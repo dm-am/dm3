@@ -32,8 +32,18 @@ describe("a subscription off the wire", () => {
     expect(targetTypeFromWire(3)).toBe(SubscriptionTargetType.Topic);
   });
 
-  it("leaves a type it does not know as it came", () => {
-    expect(targetTypeFromWire("Board")).toBe("Board");
+  // No page has a place for its target, so the row is not read at all.
+  it("reads no type it does not know, nor a row of one", () => {
+    expect(targetTypeFromWire("Board")).toBeNull();
+    expect(
+      subscriptionFromWire({
+        id: "4cc7e98c-41a0-ac9d-4d6b-aa2bf43e4663",
+        targetType: "Board",
+        targetId: "c55991d1-db32-c255-2519-22089f3409d3",
+        settings: "None",
+        createdUtc: "2026-09-16T00:09:26.612346+00:00",
+      }),
+    ).toBeNull();
   });
 
   it.each([

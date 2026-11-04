@@ -1,39 +1,35 @@
 #!/bin/sh
 #
-# Прогоняет ровно те гейты, что и хук pre-push, в том же порядке.
+# Runs the same gates as the pre-push hook, in the same order, ahead of the push: a red
+# gate is cheaper to learn about while the change is hot, and only the failed step can be
+# repeated. The hook stays the last barrier.
 #
-# Зачем отдельно от хука: пуш с непройденным гейтом стоит полного прогона —
-# около двадцати минут, — и узнать о падении в его конце значит потратить их
-# впустую. Хук остается последней преградой, а эта команда дает тот же ответ
-# заранее и на своих условиях: ее можно запустить, пока правка еще горячая,
-# и повторить только упавший шаг.
+# The list lives in two files because the hook must work in a clone without this script
+# and this script must work on an untouched tree. DM.Architecture.Tests compares their
+# commands with each other, with all steps of both workflows, and checks which gates run on
+# a branch; a step missing here needs a record with a reason in the named register.
 #
-# Почему один и тот же список живет в двух файлах: хук обязан быть
-# самодостаточным (клон без этого скрипта все равно защищен), а скрипт обязан
-# работать на нетронутом дереве. Расхождение ловит DM.Architecture.Tests, и
-# сверок там две: одна сличает команды этих двух файлов между собой, вторая —
-# со ВСЕМИ шагами обоих воркфлоу. Шаг, которого тут нет, обязан стоять в
-# именованном реестре сверки с причиной; молчание — это то, чем оба падения
-# уже оплачены: порог покрытия бэкенда стоял только в воркфлоу, а shellcheck
-# прятался в джобе compose-topology, которую сверка вообще не смотрела.
+#   bash scripts/gates.sh                   the steps this change needs
+#   bash scripts/gates.sh Фронтенд          one step, by substring of its name (case sensitive)
+#   DM_GATES_FULL=1 bash scripts/gates.sh   the full set, e2e included
 #
-# Запуск целиком:
-#   bash scripts/gates.sh
-# Отдельный шаг (подстрока имени):
-#   bash scripts/gates.sh фронтенд
+# A green step prints one line. A red one prints its whole output after that line and stops
+# the run with its own exit status.
 #
-# Без аргумента идут только шаги, нужные изменениям: карта scripts/ci-paths.json
-# раскладывает их по группам путей тем же скриптом, что и хук, и джоба changes
-# воркфлоу. Изменения тут шире, чем у хука: рабочее дерево против общей базы с
-# origin/dev, вместе с неотслеженными файлами, потому что скрипт зовут до
-# коммита. Шаг, названный аргументом, идет всегда: его попросили по имени.
-# Набор e2e, как и в хуке, идет только по своей воле: на ветке его гонит CI на
-# PR. Полный набор по своей воле, e2e в том числе:
-#   DM_GATES_FULL=1 bash scripts/gates.sh
+# Without an argument only the steps the change needs run: scripts/ci-paths.json maps the
+# working tree against the common base with origin/dev (untracked files included, since this
+# runs before the commit) to jobs, with the same script as the hook and the changes job of
+# the workflow. A step named by an argument always runs. The branch set is the lock file, the
+# code comparison test, the client gates in src/gates, lint, types, format and build of the
+# solution, and the architecture tests; client unit tests, solution tests, coverage, client
+# build, vulnerable packages, e2e and the docker steps are CI's on a PR.
 #
-# Прогон занимает машину целиком. Второй тяжелый процесс рядом — параллельный
-# dotnet test, идущий воркфлоу, запущенная съемка — роняет юнит-тесты по
-# таймауту и интеграционные по общей базе, и отказ выглядит как настоящий.
+# The check scripts under scripts/ and scripts/deployment are one command each, called by the
+# workflow, this script and the hook, so a gate has one version of itself everywhere.
+#
+# A full run takes the whole machine: a second heavy process beside it (a parallel dotnet
+# test, a running workflow, a capture) fails unit tests by timeout and integration tests on
+# the shared database, and the failure looks real.
 
 set -e
 
@@ -43,14 +39,35 @@ ONLY=${1:-}
 
 say() { printf '\n\033[36m==> %s\033[0m\n' "$1"; }
 
-# Решение карты: строка "<джоба>=true|false" на каждую джобу, отчет в stderr.
+# A step's output waits here and is shown only when the step fails.
+GATES_TMP=$(mktemp -d)
+trap 'rm -rf "$GATES_TMP"' EXIT
+# An interrupted step still shows what it printed so far.
+trap 'cat "$GATES_TMP/step.log" 2>/dev/null; exit 130' INT TERM
+
+quietly() {
+  name=$1
+  shift
+  printf '\033[36m==> %s\033[0m' "$name"
+  if "$@" >"$GATES_TMP/step.log" 2>&1; then
+    printf ' ok\n'
+  else
+    code=$?
+    printf ' упал, код %s\n' "$code"
+    cat "$GATES_TMP/step.log"
+    exit "$code"
+  fi
+}
+
+# The map's verdict: a "<job>=true|false" line per job, kept apart from the report on stderr.
+choose() { node "$ROOT/scripts/ci-paths.mjs" --worktree origin/dev >"$GATES_TMP/selection"; }
 SELECTION=""
 if [ -z "$ONLY" ]; then
-  say "Пути: какие гейты нужны изменениям"
-  SELECTION=$(node "$ROOT/scripts/ci-paths.mjs" --worktree origin/dev)
+  quietly "Пути: какие гейты нужны изменениям" choose
+  SELECTION=$(cat "$GATES_TMP/selection")
 fi
 
-# Нужна ли хоть одна из джоб списка. "always" значит шаг вне карты.
+# Whether any job of the list is wanted; "always" is a step outside the map.
 wanted() {
   for job in $1; do
     [ "$job" = always ] && return 0
@@ -59,8 +76,8 @@ wanted() {
   return 1
 }
 
-# Шаг выполняется, когда фильтр входит в его имя, а без фильтра, когда карта
-# зовет одну из его джоб.
+# A step runs when the filter is part of its name, and without a filter when the map calls
+# one of its jobs.
 step() {
   jobs=$1
   name=$2
@@ -73,83 +90,77 @@ step() {
   elif ! wanted "$jobs"; then
     return 0
   fi
-  say "$name"
-  "$@"
+  quietly "$name" "$@"
 }
 
+# A function a step calls chains its commands: quietly runs it as the condition of an if,
+# where set -e is off.
 hook_tests() {
-  node "$ROOT/.claude/hooks/block-dangerous-git.test.js"
-  node "$ROOT/.claude/hooks/block-new-migrations.test.js"
-  node "$ROOT/.claude/hooks/lint-edited-file.test.js"
+  node "$ROOT/.claude/hooks/block-dangerous-git.test.js" &&
+    node "$ROOT/.claude/hooks/block-new-migrations.test.js" &&
+    node "$ROOT/.claude/hooks/lint-edited-file.test.js"
 }
 
 in_client() { (cd "$CLIENT" && "$@"); }
 
-# Тесты решения и сбор покрытия одним прогоном — так их получает CI: шаг Test
-# в .github/workflows/dotnet.yml пишет по отчету cobertura на тестовый проект в
-# --results-directory, а следующий шаг читает оттуда же. Порог поэтому идет
-# сразу за тестами и отдельным прогоном ничего не собирает.
-#
-# Каталог отдается пустым. У CI чекаут чистый, а на машине разработчика
-# TestResults копится прогонами, и отчет, слитый из нескольких состояний кода,
-# не описывает ни одно из них: удаленный вчера файл все еще приносит свои
-# строки. Это же требование записано в .gitignore рядом с самим каталогом.
+# Solution tests and coverage in one run, as CI gets them: the cobertura reports go to
+# --results-directory and the next step reads them. The directory is emptied first, since a
+# report merged from several states of the code describes none of them.
 backend_tests() {
-  rm -rf "$ROOT/TestResults"
-  dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo --results-directory "$ROOT/TestResults" --collect:"XPlat Code Coverage"
+  rm -rf "$ROOT/TestResults" &&
+    dotnet test "$ROOT/DM.sln" --no-build -c Release --nologo --results-directory "$ROOT/TestResults" --collect:"XPlat Code Coverage"
 }
 
-# Набор e2e и проверка стенда под него идут только по своей воле, как в хуке и
-# по той же причине: на ветке набор гонит джоба e2e на PR, а локальный шел бы
-# против стенда, который ради каждой ветки пришлось бы пересобирать. Воля тут
-# двух видов: непустая DM_GATES_FULL или имя шага аргументом, и тогда шаги
-# выбирает фильтр по имени.
-e2e_requested() { [ -n "${DM_GATES_FULL:-}" ] || [ -n "$ONLY" ]; }
+# Gates that take tens of minutes or need docker and a network run only on request, as in the
+# hook: CI runs them on a PR and is the merge gate, and an e2e run would face a stand rebuilt
+# for every branch. A request is a non-empty DM_GATES_FULL or a step name argument.
+full_requested() { [ -n "${DM_GATES_FULL:-}" ] || [ -n "$ONLY" ]; }
 
 step always "Хуки: собственные тесты" hook_tests
-# Стенд для e2e проверяется в начале, а набор идет последним: узнать, что
-# набору не на чем бежать, надо до двадцати минут остальных гейтов. Скрипт
-# ничего не поднимает, при отказе он называет команду, которая готовит стенд.
-if e2e_requested; then
+# The stand for e2e is checked first and the suite runs last, to learn that the suite has
+# nowhere to run before twenty minutes of the other gates. The script starts nothing and
+# names the command that prepares the stand.
+if full_requested; then
   step e2e "e2e: стенд" bash "$ROOT/scripts/check-e2e-stand.sh"
-elif wanted e2e; then
-  say "e2e: на ветке его гонит CI на PR, здесь только с DM_GATES_FULL=1 или по имени шага"
 fi
-# Джоба compose-topology целиком: разбор скриптов и четыре проверки
-# развертывания. Ей нужен только docker, а идет она двадцать две секунды при
-# сорока минутах всего прогона, поэтому делить ее на дешевое сюда и дорогое в
-# CI нечего: половина, оставленная там, все равно красила бы пуш на любой
-# правке файлов развертывания. Ровно так до сих пор и прятался разбор скриптов.
-# (Слово shellcheck в начале строки комментария этот же инструмент
-# читает как свою директиву и падает на ней, поэтому оно тут не первое.)
-step compose-topology "Скрипты оболочки: shellcheck" bash "$ROOT/scripts/check-shell-scripts.sh"
-step compose-topology "Развертывание: топология compose" bash "$ROOT/scripts/deployment/check-compose-topology.sh"
-step compose-topology "Развертывание: конфигурации nginx" bash "$ROOT/scripts/deployment/check-nginx-configuration.sh"
-step compose-topology "Развертывание: установщик сервера" bash "$ROOT/scripts/deployment/check-server-installer.sh"
-step compose-topology "Развертывание: мониторинг" bash "$ROOT/scripts/deployment/check-monitoring.sh"
-# --dry-run у npm ci не ставит ничего: гейты ниже гоняются по уже разложенному
-# node_modules, и рассинхрон package-lock.json с package.json — ровно то, чего
-# они не видят.
+# --dry-run installs nothing: the gates below run on the node_modules in place, and a
+# package-lock.json out of sync with package.json is exactly what they do not see.
 step frontend "Фронтенд: синхронность lock-файла" in_client npm ci --dry-run
-step frontend "Фронтенд: линт" in_client npm run lint:ci
+# Code comparison test: both sides of the comment comparison and the command itself, on
+# copies of real files. A broken lexer would say "same code" about any change. The lexers
+# come from the client's node_modules, hence after the lock file.
+step frontend "Стенд кадров: тест сравнения кода" node "$ROOT/scripts/visual/compare-code.test.mjs"
+# Gates in src/gates are tree rules that read sources as text. Dead client code is knip's;
+# the format is checked by lint (prettier/prettier and --max-warnings 0).
+step "frontend docs" "Фронтенд: гейты в src/gates" in_client npm run test:conventions
+step frontend "Фронтенд: мертвый код (knip)" in_client npm run knip
+step frontend "Фронтенд: линт и формат" in_client npm run lint:ci
 step frontend "Фронтенд: типы" in_client npm run type-check
-step "frontend docs" "Фронтенд: юнит-тесты с покрытием" in_client npm run test:coverage
-step frontend "Фронтенд: сборка" in_client npm run build
-step dependency-scan "Зависимости: пакеты npm" in_client npm audit --omit=dev --audit-level=high
-step dependency-scan "Зависимости: пакеты .NET" bash "$ROOT/scripts/check-vulnerable-packages.sh"
-# Джоба docs: архитектурные тесты без остального решения. Карта зовет ее только
-# тогда, когда build не нужен, а build гоняет эти же тесты в составе решения.
+# The docs job: architecture tests alone. The map calls it only when build is not needed,
+# and build runs the same tests below.
 step docs "Документы: архитектурные тесты Release" dotnet test "$ROOT/test/DM.Architecture.Tests" -c Release --nologo
 step build "Бэкенд: форматирование" dotnet format "$ROOT/DM.sln" whitespace --verify-no-changes
 step build "Бэкенд: сборка Release" dotnet build "$ROOT/DM.sln" -c Release --nologo -v q
-step build "Бэкенд: тесты Release" backend_tests
-step build "Бэкенд: покрытие" bash "$ROOT/scripts/check-coverage.sh"
-# Открывать отчет HTML запрещено явно: после падения Playwright открывает его,
-# когда видит терминал, а этот скрипт запускают из терминала, и прогон стоял
-# бы на сервере отчета до Ctrl+C. CI=1 и общий таймаут - как в хуке и по той же
-# причине: настройки джобы e2e и конец прогона, даже если тест повис.
-if e2e_requested; then
+step build "Бэкенд: архитектурные тесты Release" dotnet test "$ROOT/test/DM.Architecture.Tests" --no-build -c Release --nologo
+# The whole compose-topology job: it needs only docker and takes twenty-two seconds, so it
+# is not split.
+if full_requested; then
+  step compose-topology "Скрипты оболочки: shellcheck" bash "$ROOT/scripts/check-shell-scripts.sh"
+  step compose-topology "Развертывание: топология compose" bash "$ROOT/scripts/deployment/check-compose-topology.sh"
+  step compose-topology "Развертывание: конфигурации nginx" bash "$ROOT/scripts/deployment/check-nginx-configuration.sh"
+  step compose-topology "Развертывание: установщик сервера" bash "$ROOT/scripts/deployment/check-server-installer.sh"
+  step compose-topology "Развертывание: мониторинг" bash "$ROOT/scripts/deployment/check-monitoring.sh"
+  step "frontend docs" "Фронтенд: юнит-тесты с покрытием" in_client npm run test:coverage
+  step frontend "Фронтенд: сборка" in_client npm run build
+  step dependency-scan "Зависимости: пакеты npm" in_client npm audit --omit=dev --audit-level=high
+  step dependency-scan "Зависимости: пакеты .NET" bash "$ROOT/scripts/check-vulnerable-packages.sh"
+  step build "Бэкенд: тесты Release" backend_tests
+  step build "Бэкенд: покрытие" bash "$ROOT/scripts/check-coverage.sh"
+  # Opening the HTML report is forbidden: after a failure Playwright opens it when it sees a
+  # terminal, and the run would sit on the report server until Ctrl+C. CI=1 and the global
+  # timeout are the settings of the e2e job, as in the hook.
   step e2e "e2e: набор на одном профиле" in_client env CI=1 PLAYWRIGHT_HTML_OPEN=never npm run test:e2e:fast -- --global-timeout=1800000
+  say "Все нужные гейты зеленые"
+else
+  say "Гейты ветки зеленые. Юнит-тесты клиента, тесты решения, покрытие, e2e и docker гонит CI на PR, здесь они идут с DM_GATES_FULL=1 или по имени шага"
 fi
-
-say "Все нужные гейты зеленые"

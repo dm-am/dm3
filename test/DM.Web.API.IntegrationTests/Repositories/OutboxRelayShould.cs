@@ -11,16 +11,11 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// The claim-and-mark mechanics of the outbox relay processor, against a live
-/// Postgres because the claim is raw SQL with FOR UPDATE SKIP LOCKED and
-/// nothing else executes it.
+/// The claim-and-mark mechanics of the relay processor, against a live Postgres: the claim is raw SQL with FOR
+/// UPDATE SKIP LOCKED.
 /// </summary>
 /// <remarks>
-/// The delegate here is a recorder or a saboteur, never a broker: what these
-/// tests hold is the storage half of at-least-once delivery - the order, the
-/// stop on the first refusal with only the confirmed prefix marked, the
-/// identity a republication carries and the lock that keeps two concurrent
-/// relays off one row (D9). The broker half lives in OutboxDeliveryShould.
+/// The delegate is a recorder or a saboteur; the broker half is OutboxDeliveryShould's.
 /// </remarks>
 public class OutboxRelayShould : IntegrationTestBase
 {
@@ -156,9 +151,7 @@ public class OutboxRelayShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The far end of at-least-once: the unique index of W1.4 is what turns the relay's
-    /// at-least-once into the reader's exactly-one notification, so a duplicate
-    /// write under one (EventId, EventType) has to be refused by the schema.
+    /// The unique index on (EventId, EventType) turns at-least-once into one notification.
     /// </summary>
     [Fact]
     public async Task LeanOnTheIndexThatSwallowsADuplicateDelivery()

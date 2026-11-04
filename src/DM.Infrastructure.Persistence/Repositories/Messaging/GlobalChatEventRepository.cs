@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using DbGlobalChatEvent = DM.Infrastructure.Persistence.Entities.Messaging.GlobalChatEvent;
@@ -18,14 +19,11 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public GlobalChatEventRepository(
         DmDbContext dbContext)
     {
         _dbContext = dbContext;
     }
-
-    // ═══ READ ═══
 
     /// <inheritdoc />
     public Task<GlobalChatEvent?> Get(Guid eventId) => _dbContext.GlobalChatEvents
@@ -39,7 +37,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             .Where(e => statuses.Contains(e.Status))
             .OrderByDescending(e => e.StartsUtc)
             .ProjectToGlobalChatEvent()
-            .ToArrayAsync().ConfigureAwait(false);
+            .ToArrayAsync();
 
     /// <inheritdoc />
     public Task<GlobalChatEvent?> GetActiveEvent() => _dbContext.GlobalChatEvents
@@ -62,8 +60,6 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
     public Task<bool> IsParticipant(Guid eventId, Guid userId) =>
         _dbContext.GlobalChatEventParticipants
             .AnyAsync(p => p.GlobalChatEventId == eventId && p.UserId == userId);
-
-    // ═══ WRITE ═══
 
     /// <inheritdoc />
     public async Task<GlobalChatEvent> Create(
@@ -95,18 +91,18 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
 
         _dbContext.GlobalChatEvents.Add(dbChatEvent);
         _dbContext.GlobalChatEventParticipants.Add(dbParticipant);
-        await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        await _dbContext.SaveChangesAsync(ct);
 
         return await _dbContext.GlobalChatEvents
             .Where(e => e.GlobalChatEventId == chatEvent.GlobalChatEventId)
             .ProjectToGlobalChatEvent()
-            .FirstAsync(ct).ConfigureAwait(false);
+            .FirstAsync(ct);
     }
 
     /// <inheritdoc />
     public async Task Update(UpdateGlobalChatEventEntity update, CancellationToken ct = default)
     {
-        var dbEvent = await _dbContext.GlobalChatEvents.FindAsync(new object[] { update.GlobalChatEventId }, ct);
+        var dbEvent = await _dbContext.GlobalChatEvents.FindAsync([update.GlobalChatEventId], ct);
         if (dbEvent == null)
         {
             throw new InvalidOperationException($"GlobalChatEvent {update.GlobalChatEventId} not found");
@@ -122,14 +118,8 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             dbEvent.Duration = update.Duration.Value;
         if (update.IsOpen.HasValue)
             dbEvent.IsOpen = update.IsOpen.Value;
-        if (update.Status.HasValue)
-            dbEvent.Status = update.Status.Value;
-        if (update.StartedUtc.HasValue)
-            dbEvent.StartedUtc = update.StartedUtc.Value;
-        if (update.EndedUtc.HasValue)
-            dbEvent.EndedUtc = update.EndedUtc.Value;
 
-        await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        await _dbContext.SaveChangesAsync(ct);
     }
 
     /// <inheritdoc />
@@ -138,21 +128,19 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
         // Delete participants first
         var participants = await _dbContext.GlobalChatEventParticipants
             .Where(p => p.GlobalChatEventId == eventId)
-            .ToListAsync(ct).ConfigureAwait(false);
+            .ToListAsync(ct);
         _dbContext.GlobalChatEventParticipants.RemoveRange(participants);
 
         // Then delete the event
         var chatEvent = await _dbContext.GlobalChatEvents
-            .FirstOrDefaultAsync(e => e.GlobalChatEventId == eventId, ct).ConfigureAwait(false);
+            .FirstOrDefaultAsync(e => e.GlobalChatEventId == eventId, ct);
         if (chatEvent != null)
         {
             _dbContext.GlobalChatEvents.Remove(chatEvent);
         }
 
-        await _dbContext.SaveChangesAsync(ct).ConfigureAwait(false);
+        await _dbContext.SaveChangesAsync(ct);
     }
-
-    // ═══ LIFECYCLE ═══
 
     /// <inheritdoc />
     public async Task<GlobalChatEvent?> UpdateStatus(
@@ -180,10 +168,9 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(e => e.Status, status)
                     .SetProperty(e => e.StartedUtc, e => startedAt ?? e.StartedUtc)
-                    .SetProperty(e => e.EndedUtc, e => endedAt ?? e.EndedUtc), ct)
-                .ConfigureAwait(false);
+                    .SetProperty(e => e.EndedUtc, e => endedAt ?? e.EndedUtc), ct);
         }
-        catch (PostgresException ex) when (ex.SqlState == DuplicateKey)
+        catch (PostgresException ex) when (ex.IsDuplicateKey())
         {
             // The partial unique index over the live status: another event went
             // live between the caller's check and this write. Translated here so
@@ -199,10 +186,8 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
         return await _dbContext.GlobalChatEvents
             .Where(e => e.GlobalChatEventId == eventId)
             .ProjectToGlobalChatEvent()
-            .FirstAsync(ct).ConfigureAwait(false);
+            .FirstAsync(ct);
     }
-
-    // ═══ PARTICIPANTS ═══
 
     /// <inheritdoc />
     public async Task<GlobalChatEventParticipant?> AddParticipant(
@@ -219,7 +204,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             VALUES ({participant.GlobalChatEventParticipantId}, {participant.GlobalChatEventId},
                     {participant.UserId}, {participant.IsOrganizer}, {participant.JoinedUtc})
             ON CONFLICT ("GlobalChatEventId", "UserId") DO NOTHING
-            """, ct).ConfigureAwait(false);
+            """, ct);
 
         if (inserted == 0)
         {
@@ -229,7 +214,7 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
         return await _dbContext.GlobalChatEventParticipants
             .Where(p => p.GlobalChatEventParticipantId == participant.GlobalChatEventParticipantId)
             .ProjectToGlobalChatEventParticipant()
-            .FirstAsync(ct).ConfigureAwait(false);
+            .FirstAsync(ct);
     }
 
     /// <inheritdoc />
@@ -239,7 +224,4 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
         _dbContext.GlobalChatEventParticipants
             .Where(p => p.GlobalChatEventId == eventId && p.UserId == userId)
             .ExecuteDeleteAsync(ct);
-
-    /// <summary>The unique violation PostgreSQL answers a broken index with.</summary>
-    private const string DuplicateKey = "23505";
 }

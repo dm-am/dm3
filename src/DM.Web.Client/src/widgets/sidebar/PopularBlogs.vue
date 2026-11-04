@@ -14,11 +14,7 @@
     forward-label="Все популярные блоги"
   >
     <template #item="{ item }">
-      <BlogLink
-        :blog="item"
-        :counters="true"
-        :always-show-counters="!userStore.user"
-      />
+      <BlogLink :blog="item" :always-show-counters="!userStore.user" />
     </template>
   </SidebarEntityList>
 </template>

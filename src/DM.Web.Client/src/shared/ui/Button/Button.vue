@@ -30,13 +30,13 @@ withDefaults(
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
 button
   +button
 
   // The main action of a form: the site's one filled control, whose colours,
-  // states and ring live in +button-primary (Inputs.sass) for this button and
+  // states and ring live in +button-primary (_Buttons.sass) for this button and
   // for the guest card's alike. One per form, on a page and in a window.
   &.primary
     +button-primary

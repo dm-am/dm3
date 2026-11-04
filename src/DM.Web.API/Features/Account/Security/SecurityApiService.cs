@@ -6,30 +6,25 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Account.Security;
 
-/// <inheritdoc />
-internal class SecurityApiService : ISecurityApiService
+public class SecurityApiService
 {
     private readonly ISecurityJournalService _journal;
 
-    /// <summary>
-    /// Creates a new instance of SecurityApiService
-    /// </summary>
     public SecurityApiService(ISecurityJournalService journal)
     {
         _journal = journal;
     }
 
-    /// <inheritdoc />
-    public async Task<IEnumerable<SecurityEvent>> GetSecurityLogs(SecurityLogType? type = null, int limit = 50)
+    public async Task<IEnumerable<SecurityEvent>> GetSecurityLogs(SecurityLogType? type, int take)
     {
-        var events = await _journal.GetOwnAsync(type, limit);
+        var events = await _journal.GetOwnAsync(type, take);
         return events.Select(MapToDto).ToList();
     }
 
     private static SecurityEvent MapToDto(SecurityAuditEntry entry) => new()
     {
         Id = entry.Id,
-        EventType = (SecurityEventType)entry.EventType,
+        EventType = entry.EventType,
         TimestampUtc = entry.TimestampUtc,
         IpAddress = entry.IpAddress,
         DeviceInfo = entry.DeviceInfo,

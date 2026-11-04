@@ -14,20 +14,12 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Moderation;
 /// Notifies the moderators the ticket is moderation's business of.
 /// </summary>
 /// <remarks>
-/// The notification carries the text of the ticket and the name of its author, so
-/// its audience is the audience of the ticket itself, by the one rule the ticket
-/// service and the queue read (TicketVisibility): a moderator whose role reads the
-/// category and who is not the violator it names. Every moderator on duty used to
-/// be told, and so a junior moderator read the text of an access recovery request
-/// he cannot open, and a moderator read a complaint about himself together with
-/// the name of whoever filed it. The author is left out as well: a moderator who
-/// filed a complaint has nothing to learn from its filing.
+/// The notification carries the text of the ticket, so its audience is TicketVisibility's, minus the author.
 /// </remarks>
 internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public TicketCreatedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -59,10 +51,7 @@ internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        // Staff, by the ordinal comparison every other role check in the codebase
-        // uses, and System is excluded because the robot account cannot read. This
-        // only narrows the read: who of the staff is told is TicketVisibility's
-        // answer, asked of each below, and the staff of a site is a handful of rows.
+        // Staff by the ordinal role comparison, without System; TicketVisibility narrows it below.
         var staff = await _dbContext.Users
             .Where(u => !u.IsRemoved)
             .Where(u => u.Role >= UserRole.Moderator && u.Role < UserRole.System)
@@ -83,16 +72,14 @@ internal class TicketCreatedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = moderatorIds,
-            // No ActorId although the ticket author is right there in ticketData.UserId:
-            // the recipients are the moderators on duty, and a report reaching them
-            // cannot depend on whether one of them blacklisted the reporter.
+            // No ActorId: a report reaching the moderators cannot depend on their blacklists.
             Metadata = new
             {
-                TicketId = ticketData.TicketId,
-                Description = ticketData.Description,
-                TargetUsername = ticketData.TargetUsername,
-                AuthorUsername = ticketData.AuthorUsername,
-                CreatedUtc = ticketData.CreatedUtc
+                ticketData.TicketId,
+                ticketData.Description,
+                ticketData.TargetUsername,
+                ticketData.AuthorUsername,
+                ticketData.CreatedUtc
             }
         };
     }

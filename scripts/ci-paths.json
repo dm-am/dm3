@@ -9,13 +9,12 @@
       "name": "client-read-by-server",
       "paths": [
         "src/DM.Web.Client/src/assets/styles/**",
-        "src/DM.Web.Client/src/authorEditRoundTrip.spec.ts",
         "src/DM.Web.Client/src/shared/lib/utils/bbcodeGrammar.cases.ts",
         "src/DM.Web.Client/src/shared/lib/utils/hintMarkup.cases.ts",
         "src/DM.Web.Client/src/shared/lib/testing/markupCorpus.golden.json",
         "src/DM.Web.Client/src/shared/lib/testing/markupAlphabet.ts"
       ],
-      "why": "client files that .NET tests outside DM.Architecture.Tests read as data: EmailThemeShould the styles, the markup tests the grammar, hint, corpus, alphabet and round-trip tables. Ahead of client, which would otherwise claim them without the build job"
+      "why": "client files that .NET tests outside DM.Architecture.Tests read as data: EmailThemeShould the styles, the markup tests the grammar, hint, corpus and alphabet tables. Ahead of client, which would otherwise claim them without the build job"
     },
     {
       "name": "client",
@@ -35,7 +34,7 @@
         "global.json",
         "docs/conventions/API_DESIGN.md"
       ],
-      "why": "the solution and what it builds from; API_DESIGN.md sits here because OpenApiContractShould, an integration test of the build job, reads it"
+      "why": "the solution and what it builds from; API_DESIGN.md sits here because OpenApiParametersShould, an integration test of the build job, reads it"
     },
     {
       "name": "docs",

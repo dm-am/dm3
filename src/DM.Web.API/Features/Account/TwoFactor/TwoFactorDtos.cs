@@ -64,7 +64,7 @@ public class TwoFactorSetupRequest
     /// would be enough to put somebody else's factor on the account.
     /// </remarks>
     [Required(ErrorMessage = "Введите пароль")]
-    [StringLength(128, MinimumLength = 1, ErrorMessage = "Пароль от 1 до 128 символов")]
+    [StringLength(128, ErrorMessage = "Пароль от 1 до 128 символов")]
     public string Password { get; set; } = "";
 }
 
@@ -75,7 +75,7 @@ public class TwoFactorConfirmRequest
 {
     /// <summary>Code from the authenticator app</summary>
     [Required(ErrorMessage = "Введите код")]
-    [StringLength(16, MinimumLength = 1, ErrorMessage = "Код от 1 до 16 символов")]
+    [StringLength(16, ErrorMessage = "Код от 1 до 16 символов")]
     public string Code { get; set; } = "";
 }
 
@@ -91,12 +91,12 @@ public class TwoFactorConfirmedActionRequest
 {
     /// <summary>The account's current password</summary>
     [Required(ErrorMessage = "Введите пароль")]
-    [StringLength(128, MinimumLength = 1, ErrorMessage = "Пароль от 1 до 128 символов")]
+    [StringLength(128, ErrorMessage = "Пароль от 1 до 128 символов")]
     public string Password { get; set; } = "";
 
     /// <summary>Code from the device, or a recovery code</summary>
     [Required(ErrorMessage = "Введите код")]
-    [StringLength(64, MinimumLength = 1, ErrorMessage = "Код от 1 до 64 символов")]
+    [StringLength(64, ErrorMessage = "Код от 1 до 64 символов")]
     public string Code { get; set; } = "";
 }
 

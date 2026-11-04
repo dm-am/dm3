@@ -51,12 +51,12 @@ public class PendingRegistration
     public int PasswordHashVersion { get; set; } = PasswordHashing.CurrentVersion;
 
     /// <summary>
-    /// Original registration time (for cleanup after 7 days)
+    /// Original registration time, the start of AccountRetentionPolicy.PendingRegistrationLifetime
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Current token creation time (for 48h expiry check).
+    /// Current token creation time, the start of the activation token lifetime.
     /// Updated on resend.
     /// </summary>
     public DateTimeOffset TokenCreatedUtc { get; set; }

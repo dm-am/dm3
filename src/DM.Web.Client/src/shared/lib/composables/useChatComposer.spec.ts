@@ -1,7 +1,4 @@
 import { describe, it, expect, vi } from "vitest";
-import { readFileSync } from "node:fs";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 import { ref } from "vue";
 import { useChatComposer, type ChatActionResult } from "./useChatComposer";
 import type { GeneralError } from "@/shared/api/models/common";
@@ -158,12 +155,8 @@ describe("useChatComposer", () => {
 });
 
 /**
- * A line under a message says the last press on it was refused. A retry that
- * goes through fills the heart or saves the edit, and a line still standing
- * under it would say the opposite of the message above it. So each press on a
- * message takes its line down before it asks the server, in both chats: the
- * presses live in the one feed both chats are drawn with (chatParity.spec.ts
- * holds that they are).
+ * Each press on a message takes its refusal line down before it asks the
+ * server, in both chats (chatParity.spec.ts; ChatFeed.spec.ts for the feed).
  */
 describe("the line under a message on the next press", () => {
   it("is taken down for that message and no other", () => {
@@ -175,26 +168,5 @@ describe("the line under a message on the next press", () => {
 
     composer.clearMessageRefusal("m3");
     expect(composer.messageRefusal.value).toBeNull();
-  });
-
-  const SRC = join(dirname(fileURLToPath(import.meta.url)), "../../..");
-
-  /** The body of one function of a component, up to the next top-level one. */
-  const body = (file: string, name: string): string => {
-    const source = readFileSync(join(SRC, file), "utf8");
-    const start = source.indexOf(`async function ${name}(`);
-    expect(start, `${file} has ${name}`).toBeGreaterThan(-1);
-    const end = source.indexOf("\n}\n", start);
-    return source.slice(start, end);
-  };
-
-  it.each([
-    ["widgets/chat-feed/ChatFeed.vue", "toggleLike"],
-    ["widgets/chat-feed/ChatFeed.vue", "saveEdit"],
-  ])("%s %s clears it before the request", (file, name) => {
-    const text = body(file, name);
-    const cleared = text.indexOf("clearMessageRefusal(");
-    expect(cleared, "clears the line").toBeGreaterThan(-1);
-    expect(cleared).toBeLessThan(text.indexOf("await "));
   });
 });

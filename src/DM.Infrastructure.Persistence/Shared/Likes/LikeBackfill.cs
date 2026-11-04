@@ -15,22 +15,13 @@ namespace DM.Infrastructure.Persistence.Shared.Likes;
 /// </summary>
 /// <remarks>
 /// Likes live in the polymorphic Likes table (EntityType + EntityId) with no
-/// navigation to project through, so no projection can carry them and every read
-/// used to answer with an empty list however many likes the row had. What that
-/// cost is not a zero on a card: the like/unlike path asks the very same list
-/// whether the viewer has already liked, so a repeat like was accepted and an
-/// unlike was refused.
+/// navigation to project through. Two batched queries for the whole page: the
+/// (entity, liker) pairs, then one projection of the distinct likers.
 ///
-/// Two batched queries for the whole page instead of a correlated subquery per
-/// row (PERFORMANCE.md -> "Avoid inline aggregations"): the (entity, liker) pairs
-/// first, then one projection of the distinct likers.
+/// The identifier list is a List&lt;Guid&gt;, not Guid[]: EF Core's translator throws
+/// TypeLoadException on a Guid[] (the ReadOnlySpan&lt;Guid&gt; interpreter path).
 ///
-/// The identifier list is a List&lt;Guid&gt;, NOT Guid[] - EF Core's translator
-/// has a Guid[] edge case that throws TypeLoadException on the
-/// ReadOnlySpan&lt;Guid&gt; interpreter path (see TopicRepository).
-///
-/// The query tags stay with the caller: they are what names the module a slow
-/// query came from.
+/// The query tags stay with the caller: they name the module a slow query came from.
 /// </remarks>
 internal static class LikeBackfill
 {

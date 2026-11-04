@@ -15,13 +15,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// A comment read by its identifier answers as the discussion it hangs on does,
 /// and only its own discussion's route hands it out.
 /// </summary>
-/// <remarks>
-/// The four discussions keep their comments in one table, and the single read takes
-/// the row by its id: a game comment asked for through the forum route, which
-/// checks nothing of games, would come back with its text and the names of
-/// everybody who liked it. The listing asks the discussion first, and the single
-/// read is held to the listing's answer.
-/// </remarks>
+/// <remarks>The four discussions share one table, so the single read is held to the listing's answer.</remarks>
 public class SingleCommentAccessShould : IntegrationTestBase
 {
     public SingleCommentAccessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -78,9 +72,7 @@ public class SingleCommentAccessShould : IntegrationTestBase
     };
 
     /// <summary>
-    /// A comment asked for through another discussion's route answers as a comment
-    /// that is not there: that route knows nothing of the discussion it hangs on,
-    /// so it has nothing to check it by.
+    /// A comment asked for through another discussion's route answers as a comment that is not there.
     /// </summary>
     [Theory]
     [MemberData(nameof(ForeignRoutes))]

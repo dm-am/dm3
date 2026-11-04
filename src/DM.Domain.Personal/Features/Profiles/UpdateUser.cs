@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
@@ -17,7 +18,7 @@ public class UpdateUser
     /// <summary>
     /// User defined status
     /// </summary>
-    public string Status { get; set; } = null!;
+    public string? Status { get; set; }
 
     /// <summary>
     /// Rating disability flag
@@ -32,32 +33,31 @@ public class UpdateUser
     /// <summary>
     /// User real name
     /// </summary>
-    public string Name { get; set; } = null!;
+    public string? Name { get; set; }
 
     /// <summary>
     /// User real location
     /// </summary>
-    public string Location { get; set; } = null!;
+    public string? Location { get; set; }
 
     /// <summary>
     /// User-defined extended information
     /// </summary>
-    public string Info { get; set; } = null!;
+    public string? Info { get; set; }
 
     /// <summary>
     /// User contacts: a list replaces the entire contact list, null leaves it
-    /// as it is. Null by default like the fields above, so that an update
-    /// which does not speak of contacts (the preferences) keeps them.
+    /// as it is, like the fields above
     /// </summary>
-    public IReadOnlyCollection<UserContact> Contacts { get; set; } = null!;
+    public IReadOnlyCollection<UserContact>? Contacts { get; set; }
 
     /// <summary>
     /// User settings
     /// </summary>
-    public UserSettings Settings { get; set; } = null!;
+    public UserSettings? Settings { get; set; }
 
     /// <summary>
     /// Upload ID for new avatar (from presigned URL upload flow)
     /// </summary>
-    public System.Guid? AvatarUploadId { get; set; }
+    public Guid? AvatarUploadId { get; set; }
 }

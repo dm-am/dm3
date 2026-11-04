@@ -211,12 +211,9 @@ internal class TopicCommentRepository : ITopicCommentRepository
             // same comment arriving together with this one waits on the row lock and
             // then re-tests the predicate against the committed state, so exactly one
             // of the two matches.
-            var marked = await _dbContext.Comments
-                .Where(c => c.CommentId == deleteComment.CommentId && !c.IsRemoved)
-                .ExecuteUpdateAsync(c => c
-                    .SetProperty(x => x.IsRemoved, true)
-                    .SetProperty(x => x.DeletedByUserId, (Guid?)deleteComment.DeletedByUserId)
-                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)deleteComment.DeletedUtc));
+            var marked = await SoftDelete.MarkWhere(
+                _dbContext.Comments.Where(c => c.CommentId == deleteComment.CommentId && !c.IsRemoved),
+                deleteComment.DeletedByUserId, deleteComment.DeletedUtc);
 
             removed = marked == 1;
             if (removed)

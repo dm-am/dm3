@@ -1,5 +1,4 @@
 using System;
-using DM.Testing;
 using DM.Web.API.Features.Game.AttributeSchemas;
 using AwesomeAssertions;
 using Xunit;
@@ -7,13 +6,10 @@ using Xunit;
 namespace DM.Web.API.Tests.Features.Game;
 
 /// <summary>
-/// A specification the caller has never saved carries no identifier, and the
-/// write path has to keep saying so. On the wire an unsent identifier is a zero
-/// Guid; the domain reads null as "hand me a new one" and an identifier as "keep
-/// this one if the stored set still holds it", so a zero arriving as an
-/// identifier would ask the server to preserve a specification nobody stored.
+/// An unsaved specification carries no identifier: the domain reads null as "a new one", and a zero Guid
+/// from the wire must not arrive as an identifier.
 /// </summary>
-public class AttributeSchemaMapperShould : UnitTestBase
+public class AttributeSchemaMapperShould
 {
     private static readonly AttributeSchemaMapper Mapper = new();
 

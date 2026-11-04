@@ -2,6 +2,7 @@ using System;
 using DM.Domain.Core.Abstractions;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Moderation.Features.Tags;
@@ -17,6 +18,28 @@ namespace DM.Infrastructure.Persistence.Repositories.Moderation;
 /// <inheritdoc />
 internal class TagManagementRepository : ITagManagementRepository
 {
+    private static readonly Expression<Func<DbTagGroup, DtoTagGroup>> GroupProjection = g => new DtoTagGroup
+    {
+        Id = g.TagGroupId,
+        Title = g.Title,
+        Description = g.Description,
+        SortOrder = g.SortOrder,
+        MaxTagsPerGame = g.MaxTagsPerGame,
+        TagsCount = g.Tags.Count
+    };
+
+    private static readonly Expression<Func<DbTag, DtoTag>> TagProjection = t => new DtoTag
+    {
+        Id = t.TagId,
+        ShortId = t.ShortId,
+        GroupId = t.TagGroupId,
+        GroupTitle = t.TagGroup.Title,
+        Title = t.Title,
+        Description = t.Description,
+        SortOrder = t.SortOrder,
+        GamesCount = t.GameTags.Count
+    };
+
     private readonly DmDbContext _dbContext;
     private readonly IGuidFactory _guidFactory;
 
@@ -31,15 +54,7 @@ internal class TagManagementRepository : ITagManagementRepository
     {
         return await _dbContext.TagGroups
             .OrderBy(g => g.SortOrder)
-            .Select(g => new DtoTagGroup
-            {
-                Id = g.TagGroupId,
-                Title = g.Title,
-                Description = g.Description,
-                SortOrder = g.SortOrder,
-                MaxTagsPerGame = g.MaxTagsPerGame,
-                TagsCount = g.Tags.Count
-            })
+            .Select(GroupProjection)
             .ToArrayAsync(ct);
     }
 
@@ -48,15 +63,7 @@ internal class TagManagementRepository : ITagManagementRepository
     {
         return await _dbContext.TagGroups
             .Where(g => g.TagGroupId == groupId)
-            .Select(g => new DtoTagGroup
-            {
-                Id = g.TagGroupId,
-                Title = g.Title,
-                Description = g.Description,
-                SortOrder = g.SortOrder,
-                MaxTagsPerGame = g.MaxTagsPerGame,
-                TagsCount = g.Tags.Count
-            })
+            .Select(GroupProjection)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -125,17 +132,7 @@ internal class TagManagementRepository : ITagManagementRepository
         return await _dbContext.Tags
             .OrderBy(t => t.TagGroup.SortOrder)
             .ThenBy(t => t.SortOrder)
-            .Select(t => new DtoTag
-            {
-                Id = t.TagId,
-                ShortId = t.ShortId,
-                GroupId = t.TagGroupId,
-                GroupTitle = t.TagGroup.Title,
-                Title = t.Title,
-                Description = t.Description,
-                SortOrder = t.SortOrder,
-                GamesCount = t.GameTags.Count
-            })
+            .Select(TagProjection)
             .ToArrayAsync(ct);
     }
 
@@ -145,17 +142,7 @@ internal class TagManagementRepository : ITagManagementRepository
         return await _dbContext.Tags
             .Where(t => t.TagGroupId == groupId)
             .OrderBy(t => t.SortOrder)
-            .Select(t => new DtoTag
-            {
-                Id = t.TagId,
-                ShortId = t.ShortId,
-                GroupId = t.TagGroupId,
-                GroupTitle = t.TagGroup.Title,
-                Title = t.Title,
-                Description = t.Description,
-                SortOrder = t.SortOrder,
-                GamesCount = t.GameTags.Count
-            })
+            .Select(TagProjection)
             .ToArrayAsync(ct);
     }
 
@@ -164,17 +151,7 @@ internal class TagManagementRepository : ITagManagementRepository
     {
         return await _dbContext.Tags
             .Where(t => t.TagId == tagId)
-            .Select(t => new DtoTag
-            {
-                Id = t.TagId,
-                ShortId = t.ShortId,
-                GroupId = t.TagGroupId,
-                GroupTitle = t.TagGroup.Title,
-                Title = t.Title,
-                Description = t.Description,
-                SortOrder = t.SortOrder,
-                GamesCount = t.GameTags.Count
-            })
+            .Select(TagProjection)
             .FirstOrDefaultAsync(ct);
     }
 
@@ -240,11 +217,5 @@ internal class TagManagementRepository : ITagManagementRepository
             _dbContext.Tags.Remove(tag);
             await _dbContext.SaveChangesAsync(ct);
         }
-    }
-
-    /// <inheritdoc />
-    public Task<int> GetTagUsageCount(Guid tagId, CancellationToken ct = default)
-    {
-        return _dbContext.GameTags.CountAsync(gt => gt.TagId == tagId, ct);
     }
 }

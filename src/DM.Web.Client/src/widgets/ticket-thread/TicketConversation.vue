@@ -1,35 +1,8 @@
 <script setup lang="ts">
-/**
- * The conversation of a ticket, under its block (TicketThread): the answers of
- * its author and of moderation, and the form to answer in.
- *
- * A ticket works as a topic with comments and looks like one, so an answer is
- * the site's comment (CommentItem) in its compact look, the look every comment
- * of DM2 has, whatever the reader chose for the discussions. There is no
- * filter and no paging: a conversation is a hundred answers at most and comes
- * whole with the ticket.
- *
- * An answer stands to be read and nothing more. A ticket is the record of how
- * it was settled, so nothing in it is edited, deleted, liked or warned about,
- * by anybody: an answer rewritten after it was read, or a word taken back once
- * the ticket was closed, breaks the record. A mistyped word is set right by
- * the next answer. The guest who filed a ticket signs his answers "Гость".
- *
- * The form (TicketAnswerForm) is there while the reader may write
- * (`canComment`, the server's answer); moderation chooses in it the status the
- * answer moves the ticket to (`canResolve`). Where it is not, one plate says
- * why, as every place the reader may not write in says it (RefusalNote): a
- * closed ticket says when it was closed and by whom, an open one takes no
- * answer past the hundredth and says where the next word goes. Nothing it may
- * not do is offered.
- *
- * It knows nothing of who reads: the author, a moderator and the guest are
- * one block. The page hands it the ticket, the sending, and what to say while
- * nobody has answered yet (the author is told he will be notified; the guest's
- * page says it in its own lead, and a moderator is told nothing).
- */
+/** The conversation of a ticket: read-only answers, the record of how it was settled, and the form. */
 import { computed } from "vue";
-import type { Comment, GeneralError } from "@/shared/api/models/common";
+import type { Comment, SubmitResult } from "@/shared/api/models/common";
+import { asServed } from "@/shared/api/models";
 import { RefusalNote, SecondaryText } from "@/shared/ui/Layout";
 import { useCommentHashScroll } from "@/shared/lib/composables/useScrollToElement";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
@@ -39,15 +12,9 @@ import { CommentItem } from "@/features/comment";
 import TicketAnswerForm from "./TicketAnswerForm.vue";
 import type { ConversationTicket } from "./types";
 
-/** What a mutation answers with: null when the server took the change. */
-type SubmitResult = { error: GeneralError | null };
-
 const props = defineProps<{
   ticket: ConversationTicket;
-  /**
-   * Posts an answer; the result decides whether the draft is dropped. The
-   * page puts what it got back into the ticket it holds.
-   */
+  /** Posts an answer; the page puts what it got back into its ticket. */
   send: (text: string, status?: AnswerStatus) => Promise<SubmitResult>;
   /** The key the form keeps the unsent draft under. */
   draftKey: string;
@@ -61,19 +28,16 @@ const isOpen = computed(
     props.ticket.status === "WaitingForUser",
 );
 
-/**
- * An answer of the conversation in the shape of a comment of the site: never
- * edited, never liked, never removed under the reader.
- */
+/** An answer in the shape of a comment of the site: never edited, liked or removed. */
 function asComment(comment: TicketComment): Comment {
   return {
-    id: comment.id as Comment["id"],
-    author: (comment.author ?? null) as Comment["author"],
-    createdUtc: comment.createdUtc as Comment["createdUtc"],
-    modifiedUtc: null as Comment["modifiedUtc"],
+    id: asServed(comment.id),
+    author: asServed(comment.author ?? null),
+    createdUtc: asServed(comment.createdUtc),
+    modifiedUtc: null,
     text: comment.text,
-    isRemoved: false as Comment["isRemoved"],
-    likes: [] as unknown as Comment["likes"],
+    isRemoved: asServed(false),
+    likes: asServed([]),
   };
 }
 
@@ -84,12 +48,7 @@ const answers = computed(() =>
   })),
 );
 
-/**
- * The line of a closed ticket: when and by whom. "(а)" with no gender, as the
- * records of a ban say "выдал(а)" and "снял(а)": the next screen of
- * moderation, and the same signature of what a moderator did. A closer whose
- * account was removed since is named as every such name is.
- */
+/** The line of a closed ticket: when and by whom, "(а)" with no gender as in the records of a ban. */
 const closedLine = computed(() => {
   if (isOpen.value) return null;
   const t = props.ticket;
@@ -100,8 +59,7 @@ const closedLine = computed(() => {
   return `${how}${when}, закрыл(а) ${who}.`;
 });
 
-// The number of an answer is a link to it, and its address opens the ticket
-// at that answer.
+// The number of an answer links to it, and its address opens the ticket there.
 useCommentHashScroll(() => props.ticket.comments);
 </script>
 
@@ -124,26 +82,18 @@ useCommentHashScroll(() => props.ticket.comments);
     }}</SecondaryText>
 
     <RefusalNote v-if="closedLine">{{ closedLine }}</RefusalNote>
+    <!-- No form for a reader the server does not let write, a full conversation among them -->
     <TicketAnswerForm
       v-else-if="ticket.canComment"
       :send="send"
       :draft-key="draftKey"
       :chooses-status="!!ticket.canResolve"
     />
-    <!-- An open ticket the reader may not write in: the conversation is full
-         (TicketTextLimits.MaxComments on the server). -->
-    <RefusalNote v-else
-      >В обращении 100 ответов, для продолжения подайте новое
-      обращение</RefusalNote
-    >
   </div>
 </template>
 
 <style scoped lang="sass">
-// The steps of the discussion of a topic (DiscussionSection): a $medium one
-// under the block of the ticket and between the answers, the lines and the
-// form, a $small one between two answers. The lines take no inset of their
-// own: they stand where the form would and start where the column starts.
+// The steps of a topic's discussion: $medium between the parts, $small between two answers.
 .ticket-conversation
   display: flex
   flex-direction: column

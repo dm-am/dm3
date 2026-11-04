@@ -1,37 +1,21 @@
 #!/usr/bin/env bash
 # Fails when a server configuration of the deployment does not parse.
 #
-# Nothing compiled the edge: a typo in either nginx.conf was a crash-looping
-# container on the server, which is the whole site. Each configuration is read by
-# the image the deployment runs, so the answer is the one nginx will give there -
-# a directive valid in a newer build is not valid here.
-#
-# Why a script and not the commands in the workflow: they ran in the
-# compose-topology job and nowhere else, so a typo in the edge was first read by
-# a red push. The four container runs take seconds against the forty minutes of
-# the local set. The workflow, scripts/gates.sh and scripts/hooks/pre-push all
-# call this now, so there is one command and one version of the image.
+# Nothing compiled the edge: a typo in either nginx.conf was a crash-looping container,
+# which is the whole site. Each configuration is read by the image the deployment runs, so
+# the answer is the one nginx gives there.
 set -euo pipefail
 
 IMAGE="nginx:1.27-alpine"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=/dev/null
+. "$ROOT/scripts/lib/common.sh"
 cd "$ROOT"
 
-# Git Bash rewrites anything that looks like a Unix path in an argument before a
-# native program sees it, which turns the container side of -v into a directory
-# under the Git installation and -subj into a path. The variable switches that
-# off for everything below, and host() hands docker and openssl - both native
-# programs here - the path they want instead. On Linux and macOS cygpath does not
-# exist and the value passes through unchanged.
+# MSYS_NO_PATHCONV: Git Bash would otherwise rewrite the container side of -v and -subj into
+# paths under the Git installation (host() hands docker and openssl the native path).
 export MSYS_NO_PATHCONV=1
-host() {
-  if command -v cygpath > /dev/null 2>&1; then
-    cygpath -m "$1"
-  else
-    printf '%s' "$1"
-  fi
-}
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
@@ -57,7 +41,7 @@ printf "preview:\$apr1\$syntax\$0123456789abcdefghijk\n" > "$WORK/htpasswd"
 edge() {
   docker run --rm \
     --add-host dmapi:127.0.0.1 --add-host dmfront:127.0.0.1 \
-    --add-host storage:127.0.0.1 --add-host imgproxy:127.0.0.1 \
+    --add-host storage:127.0.0.1 \
     -v "$(host "$ROOT/docker/nginx/nginx.conf"):/etc/nginx/nginx.conf:ro" \
     -v "$(host "$ROOT/docker/nginx/edge-locations.conf"):/etc/nginx/edge-locations.conf:ro" \
     -v "$(host "$WORK/htpasswd"):/etc/nginx/.htpasswd:ro" \

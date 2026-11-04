@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using AwesomeAssertions;
@@ -9,17 +11,7 @@ namespace DM.Domain.Core.Tests;
 /// The rule that decides who may author a [mod] block.
 /// </summary>
 /// <remarks>
-/// [mod] is public on read and restricted on write: an author below Moderator
-/// has the markers stripped and the inner text kept, at save time, with no error
-/// and no data loss. Twenty-six call sites in twelve services lean on that, and
-/// none of them covered it — the sanitizer appeared in the suite only
-/// incidentally, through the rendering visitor. A regex that stopped matching
-/// "[mod=Имя]", or a comparison that let Mentor through, would have surfaced as a
-/// moderator's block on an ordinary user's comment and nowhere else.
-///
-/// The other half of the same rule — filtering on read rather than unwrapping on
-/// write — is PermissionFilteringVisitorShould, and it stays with the parser
-/// wrapper it belongs to.
+/// Below Moderator the markers are stripped at save time and the inner text is kept.
 /// </remarks>
 public class ModBlockSanitizerShould
 {
@@ -70,11 +62,6 @@ public class ModBlockSanitizerShould
     /// A marker taken out joins the text on either side of it, and the join is
     /// not allowed to be a marker.
     /// </summary>
-    /// <remarks>
-    /// One pass over the text used to be all there was, so [[mod]mod] lost its
-    /// inner marker and kept the outer one, and a user below Moderator stored a
-    /// moderator's block by typing the tag inside itself.
-    /// </remarks>
     [Theory]
     [InlineData("[[mod]mod]FAKE[/[mod]mod]", "FAKE")]
     [InlineData("[[[mod]mod]mod]FAKE[/[/mod]mod]", "FAKE")]
@@ -94,10 +81,9 @@ public class ModBlockSanitizerShould
     public void LeaveNoMarkerInAnyJoinOfThePieces()
     {
         string[] pieces = ["[", "]", "/", "mod", "MoD", "=", " ", "x", "[mod]", "[/mod]"];
-        var marker = new System.Text.RegularExpressions.Regex(
-            @"\[/?mod(?:[=\s][^\[\]]*)?\]", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        var marker = new Regex(@"\[/?mod(?:[=\s][^\[\]]*)?\]", RegexOptions.IgnoreCase);
 
-        var survivors = new System.Collections.Generic.List<string>();
+        var survivors = new List<string>();
         foreach (var raw in Joins(pieces, 5))
         {
             var sanitized = ModBlockSanitizer.SanitizeForAuthor(raw, UserRole.RegularUser);
@@ -107,7 +93,7 @@ public class ModBlockSanitizerShould
         survivors.Should().BeEmpty();
     }
 
-    private static System.Collections.Generic.IEnumerable<string> Joins(string[] pieces, int length)
+    private static IEnumerable<string> Joins(string[] pieces, int length)
     {
         if (length == 0)
         {
@@ -128,4 +114,8 @@ public class ModBlockSanitizerShould
     public void ReturnEmptyInputUnchanged() =>
         ModBlockSanitizer.SanitizeForAuthor(string.Empty, UserRole.RegularUser)
             .Should().BeEmpty();
+
+    [Fact]
+    public void LeaveAnAbsentTextAbsent() =>
+        ModBlockSanitizer.SanitizeForAuthor(null, UserRole.RegularUser).Should().BeNull();
 }

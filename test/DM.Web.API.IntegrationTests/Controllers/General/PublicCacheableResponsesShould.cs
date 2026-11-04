@@ -1,13 +1,8 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.RegularExpressions;
-using System.Threading.Tasks;
 using DM.Infrastructure.Core.Parsing;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
@@ -21,19 +16,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// everyone.
 /// </summary>
 /// <remarks>
-/// `Cache-Control: public` on a cookie-authenticated API is a promise about
-/// identity, and nothing was checking it. ResponseCachingMiddleware keys its
-/// entries by method and path; `Vary` is set nowhere in this project, and the
-/// middleware runs above UseAuthentication — so a personalised response stored
-/// under a `public` policy is handed to the next caller whoever they are. The
-/// only thing standing between that and a leak was the reading of five
-/// controllers, done once.
-///
-/// The endpoints are found by their attribute rather than listed, so the check
-/// covers the policy that will be written tomorrow. A new `[ResponseCache]`
-/// with Location.Any on a list that reads the caller — the unread counters on
-/// /v1/boards and /v1/games are the two that already carried one — fails here
-/// instead of on the wire.
+/// The middleware keys by method and path, nothing sets `Vary`, and it runs above UseAuthentication. The
+/// endpoints are found by their attribute, so tomorrow's policy is covered.
 /// </remarks>
 public class PublicCacheableResponsesShould : IntegrationTestBase
 {
@@ -97,16 +81,7 @@ public class PublicCacheableResponsesShould : IntegrationTestBase
     /// Makes the request one ResponseCachingMiddleware answers from the endpoint
     /// rather than from its store.
     /// </summary>
-    /// <remarks>
-    /// Without it this test cannot see the fault it exists for. The entries are
-    /// keyed by method and path, so the first call — the anonymous one — fills
-    /// the store, and every later call on the same path is answered with that
-    /// stored copy whatever identity it carries. The bodies then compare equal
-    /// *because* the response leaked across callers, which is the one outcome
-    /// this test must never read as success. `no-cache` on the request is the
-    /// directive that forbids the middleware to serve from its store, and the
-    /// question here is what the endpoint produces, not what the cache kept.
-    /// </remarks>
+    /// <remarks>`no-cache` keeps the middleware from answering out of its store, which would make leaked bodies compare equal.</remarks>
     private static HttpRequestMessage Uncached(HttpRequestMessage request)
     {
         request.Headers.CacheControl = new CacheControlHeaderValue { NoCache = true };
@@ -124,15 +99,7 @@ public class PublicCacheableResponsesShould : IntegrationTestBase
     /// A publicly cacheable response says the same thing whatever rendering
     /// audience is asked for.
     /// </summary>
-    /// <remarks>
-    /// The second half of the rule in API_DESIGN.md, and the half nothing checked:
-    /// "the same for anonymous, for any user AND for any value of X-Dm-Audience".
-    /// The header is allowed through CORS, no endpoint sets <c>Vary</c>, and
-    /// ResponseCachingMiddleware keys by method and path — so a body that renders
-    /// its text differently per audience is stored under whichever audience asked
-    /// first and handed to everyone else for the length of the policy. That is the
-    /// same leak as the identity one, through a header instead of a cookie.
-    /// </remarks>
+    /// <remarks>X-Dm-Audience passes CORS and no endpoint sets <c>Vary</c>, as API_DESIGN.md requires the body to be the same.</remarks>
     [Fact]
     public async Task BeTheSameBytesForEveryAudience()
     {
@@ -218,17 +185,7 @@ public class PublicCacheableResponsesShould : IntegrationTestBase
     /// <summary>
     /// The policy the attribute declares is the one that reaches the wire.
     /// </summary>
-    /// <remarks>
-    /// A response filter, a middleware or a Set-Cookie on the way out can all
-    /// turn a declared policy into a different header, and the difference is
-    /// invisible until someone reads a capture.
-    ///
-    /// Through <see cref="Uncached" /> like the rest: a plain GET here can be
-    /// answered from the store another test filled, and then the header asserted
-    /// is the stored one rather than the one the endpoint just produced. Harmless
-    /// while only headers are read, and exactly the trap the note on Uncached
-    /// describes — so the request is made the same way everywhere.
-    /// </remarks>
+    /// <remarks>Through <see cref="Uncached" />, so the header asserted is the one the endpoint produced.</remarks>
     [Fact]
     public async Task CarryThePolicyTheyDeclare()
     {

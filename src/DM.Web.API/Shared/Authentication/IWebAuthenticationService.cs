@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Web.API.Shared.Authentication.Credentials;
 using Microsoft.AspNetCore.Http;

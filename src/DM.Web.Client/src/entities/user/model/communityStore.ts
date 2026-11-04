@@ -1,5 +1,3 @@
-// Community store
-
 import { defineStore } from "pinia";
 import { ref } from "vue";
 import type { GeneralError, ListEnvelope } from "@/shared/api/models/common";
@@ -12,14 +10,8 @@ import {
   createKeyedCache,
   stableCacheKey,
 } from "@/shared/lib/utils/keyedCache";
+import { pageSkip } from "@/shared/api/pageSkip";
 
-/**
- * Search parameters for users query (frontend model).
- *
- * Canonical definition — lives in the entity layer so both the store and the
- * `user-filter` feature share a single type (FSD: feature imports from entity,
- * never the reverse).
- */
 export interface UsersSearchParams {
   search?: string;
   activity?: "active" | "inactive" | "all";
@@ -59,11 +51,20 @@ const ACTIVITY_MAP: Record<string, UserActivityFilter> = {
   all: UserActivityFilter.All,
 };
 
-/**
- * Map frontend search params to backend API query params. Single source of
- * truth used by both searchUsers and prefetchPage so the forwarded param set
- * never drifts between them.
- */
+// Sent under their own names; a zero and a false are values.
+const AS_IS = [
+  "isNewbie",
+  "minRating",
+  "maxRating",
+  "minGamesHosting",
+  "maxGamesHosting",
+  "minGamesPlaying",
+  "maxGamesPlaying",
+  "minBlogsHosting",
+  "maxBlogsHosting",
+] as const;
+
+// One mapping for search and prefetch, which share the cache keys.
 function buildApiParams(
   params: UsersSearchParams,
 ): Record<string, string | number | boolean | undefined> {
@@ -73,10 +74,7 @@ function buildApiParams(
     take: pageSize,
   };
 
-  // Convert 1-indexed page number to skip
-  if (pageNumber > 1) {
-    apiParams.skip = (pageNumber - 1) * pageSize;
-  }
+  apiParams.skip = pageSkip(pageNumber, pageSize);
 
   if (params.search) apiParams.search = params.search;
 
@@ -87,21 +85,9 @@ function buildApiParams(
 
   if (params.role && params.role !== "all") apiParams.role = params.role;
   if (params.isOnline === true) apiParams.isOnline = true;
-  if (params.isNewbie !== undefined) apiParams.isNewbie = params.isNewbie;
-  if (params.minRating !== undefined) apiParams.minRating = params.minRating;
-  if (params.maxRating !== undefined) apiParams.maxRating = params.maxRating;
-  if (params.minGamesHosting !== undefined)
-    apiParams.minGamesHosting = params.minGamesHosting;
-  if (params.maxGamesHosting !== undefined)
-    apiParams.maxGamesHosting = params.maxGamesHosting;
-  if (params.minGamesPlaying !== undefined)
-    apiParams.minGamesPlaying = params.minGamesPlaying;
-  if (params.maxGamesPlaying !== undefined)
-    apiParams.maxGamesPlaying = params.maxGamesPlaying;
-  if (params.minBlogsHosting !== undefined)
-    apiParams.minBlogsHosting = params.minBlogsHosting;
-  if (params.maxBlogsHosting !== undefined)
-    apiParams.maxBlogsHosting = params.maxBlogsHosting;
+  for (const key of AS_IS) {
+    if (params[key] !== undefined) apiParams[key] = params[key];
+  }
   if (params.registeredFromUtc)
     apiParams.registeredFromUtc = params.registeredFromUtc;
   if (params.registeredToUtc)
@@ -116,30 +102,20 @@ function buildApiParams(
 }
 
 export const useCommunityStore = defineStore("community", () => {
-  // Search state
   const searchResult = ref<ListEnvelope<User> | null>(null);
   const searchLoading = ref(false);
   const searchError = ref<string | null>(null);
   const lastSearchParams = ref<UsersSearchParams | null>(null);
 
-  // Inside the store and not beside it, the way every other list store here
-  // holds its cache. In the browser the two placements have one lifetime — a
-  // single pinia, created once and never disposed — so no session behaves
-  // differently; what changes is that the cache dies with the store instance,
-  // so a fresh pinia starts empty instead of being cleared by hand.
+  // Inside the store, so a fresh pinia starts with an empty cache.
   const searchCache = createKeyedCache<ListEnvelope<User>>({ ttlMs: 30_000 });
 
-  // Request guard to discard stale out-of-order responses
   const requestGuard = createRequestGuard();
 
-  /**
-   * Search users with caching (stale-while-revalidate)
-   */
   async function searchUsers(params: UsersSearchParams): Promise<void> {
     const requestId = requestGuard.next();
 
-    // Reset error before the cache lookup so a stale error never survives
-    // a cache-hit navigation.
+    // Before the cache lookup, so an old error never survives a cache hit.
     searchError.value = null;
 
     lastSearchParams.value = params;
@@ -152,7 +128,6 @@ export const useCommunityStore = defineStore("community", () => {
       return;
     }
 
-    // Show cached data while revalidating (stale-while-revalidate)
     const stale = searchCache.getStale(cacheKey);
     if (stale) {
       searchResult.value = stale;
@@ -162,7 +137,6 @@ export const useCommunityStore = defineStore("community", () => {
 
     const { data, error } = await userApi.getUsers(buildApiParams(params));
 
-    // Ignore stale responses
     if (!requestGuard.isCurrent(requestId)) {
       return;
     }
@@ -180,24 +154,17 @@ export const useCommunityStore = defineStore("community", () => {
     }
   }
 
-  /**
-   * Clear search cache
-   */
   function clearSearchCache(): void {
     searchCache.clear();
   }
 
-  /**
-   * Prefetch a page in background (for next page optimization)
-   */
   async function prefetchPage(page: number): Promise<void> {
     if (!lastSearchParams.value) return;
 
     const params = { ...lastSearchParams.value, number: page };
     const cacheKey = stableCacheKey(params);
 
-    // Skip only while the entry is fresh: replacing a stale one is the point of
-    // a prefetch.
+    // Replacing a stale entry is the point of a prefetch.
     if (searchCache.get(cacheKey)) return;
 
     const { data } = await userApi.getUsers(buildApiParams(params));
@@ -209,16 +176,10 @@ export const useCommunityStore = defineStore("community", () => {
   const selectedUser = ref<User | null>(null);
   const loadingProfile = ref(false);
 
-  // A guard of its own: the profile page reloads on a change of the route
-  // param, and the answer for the name the reader already left must not land
-  // on the newer one.
+  // The answer for the name the reader already left must not land on the newer one.
   const profileGuard = createRequestGuard();
 
-  /**
-   * Loads the profile. Returns the error instead of a boolean: the caller
-   * needs the status to tell "no such user" from "server is down", and a
-   * boolean forced the profile page into a second request for exactly that.
-   */
+  /** The error, so the caller tells "no such user" from "server is down". */
   async function trySelectProfile(
     username: Username,
   ): Promise<GeneralError | null> {
@@ -226,44 +187,20 @@ export const useCommunityStore = defineStore("community", () => {
     loadingProfile.value = true;
     selectedUser.value = null;
 
-    // Profile page needs the rich UserProfile DTO (status, name, gender,
-    // birthday, location, contacts, info, mediumUrl picture) — not the
-    // truncated User DTO from /v1/users/{username} which is meant for lists.
+    // The profile, not the short user of the lists.
     const { data, error } = await userApi.getUserProfile(username);
 
-    // A superseded answer reports nothing: the newer request owns the spinner,
-    // the profile and the error the page draws.
     if (!profileGuard.isCurrent(requestId)) return null;
 
     loadingProfile.value = false;
 
     if (error) return error;
 
-    // Backend returns a `{ resource: UserProfile }` envelope. The API client
-    // doesn't unwrap automatically (typed lie), so we extract here. Fall
-    // through to `data` if the response is already unwrapped (defensive
-    // against API shape divergence between endpoints). UserProfile is a
-    // structural superset of User, so the User read is safe even when
-    // /profile returns the richer DTO.
     selectedUser.value = unwrapResource<User>(data);
     return null;
   }
 
-  /**
-   * Writes a new picture onto the profile the page is currently drawing.
-   *
-   * `selectedUser` is filled in one place only — `trySelectProfile`, on a
-   * change of route — so anything that changes the profile afterwards has to
-   * be written here or the reader sees it at the next reload and not before.
-   * The avatar overlay is the caller, and it already holds the answer: an
-   * upload gets the re-read profile back from the PATCH, and a reset leaves no
-   * picture at all. Re-reading the profile from the server would spend a
-   * request on what the client has in hand.
-   *
-   * Guarded by id, because an upload can outlive the profile it started on:
-   * the answer for the profile the reader left must not repaint the one they
-   * are looking at now.
-   */
+  // By id: an upload can outlive the profile it started on.
   function applySelectedUserPicture(
     userId: string,
     picture: UserPicture,
@@ -278,7 +215,6 @@ export const useCommunityStore = defineStore("community", () => {
     loadingProfile,
     trySelectProfile,
     applySelectedUserPicture,
-    // Search API
     searchResult,
     searchLoading,
     searchError,
@@ -287,6 +223,3 @@ export const useCommunityStore = defineStore("community", () => {
     clearSearchCache,
   };
 });
-
-// Re-export filter enum for convenience
-export { UserActivityFilter };

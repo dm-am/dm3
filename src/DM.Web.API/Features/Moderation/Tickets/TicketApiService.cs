@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Moderation.Features.Tickets;
@@ -8,20 +9,17 @@ using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Features.Moderation.Tickets;
 
-/// <inheritdoc />
-internal class TicketApiService : ITicketApiService
+public class TicketApiService
 {
     private readonly ITicketService _ticketService;
     private readonly TicketMapper _mapper;
 
-    /// <inheritdoc />
     public TicketApiService(ITicketService ticketService, TicketMapper mapper)
     {
         _ticketService = ticketService;
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Ticket>> GetTickets(PagingQuery query, TicketStatus? status = null,
         TicketSubtype? subtype = null)
     {
@@ -29,7 +27,6 @@ internal class TicketApiService : ITicketApiService
         return new ListEnvelope<Ticket>(tickets.Select(_mapper.ToTicket), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Ticket>> GetMyFiledTickets(PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null)
     {
@@ -37,14 +34,12 @@ internal class TicketApiService : ITicketApiService
         return new ListEnvelope<Ticket>(tickets.Select(_mapper.ToTicket), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<TicketDetails>> GetTicket(Guid ticketId)
     {
         var ticket = await _ticketService.GetTicket(ticketId);
         return new Envelope<TicketDetails>(_mapper.ToTicketDetails(ticket));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Ticket>> CreateTicket(CreateTicketRequest request)
     {
         var createTicket = _mapper.ToCreateTicket(request);
@@ -52,27 +47,21 @@ internal class TicketApiService : ITicketApiService
         return new Envelope<Ticket>(_mapper.ToTicket(ticket));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<TicketDetails>> CreateComment(Guid ticketId, AnswerTicketRequest request)
     {
         var ticket = await _ticketService.CreateComment(ticketId, _mapper.ToCreateTicketComment(request));
         return new Envelope<TicketDetails>(_mapper.ToTicketDetails(ticket));
     }
 
-    /// <inheritdoc />
     public async Task<TicketStats> GetStats()
     {
         var stats = await _ticketService.GetTicketStats();
         return new TicketStats
         {
-            WaitingForModeration = stats.TryGetValue(TicketStatus.WaitingForModeration, out var waitingForModeration)
-                ? waitingForModeration
-                : 0,
-            WaitingForUser = stats.TryGetValue(TicketStatus.WaitingForUser, out var waitingForUser)
-                ? waitingForUser
-                : 0,
-            Closed = stats.TryGetValue(TicketStatus.Closed, out var closed) ? closed : 0,
-            Spam = stats.TryGetValue(TicketStatus.Spam, out var spam) ? spam : 0
+            WaitingForModeration = stats.GetValueOrDefault(TicketStatus.WaitingForModeration),
+            WaitingForUser = stats.GetValueOrDefault(TicketStatus.WaitingForUser),
+            Closed = stats.GetValueOrDefault(TicketStatus.Closed),
+            Spam = stats.GetValueOrDefault(TicketStatus.Spam)
         };
     }
 }

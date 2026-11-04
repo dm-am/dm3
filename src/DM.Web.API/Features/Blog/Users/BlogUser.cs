@@ -1,4 +1,5 @@
 using System;
+using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Blog.Users;
@@ -14,9 +15,9 @@ public class BlogUser
     public UserRef User { get; set; } = null!;
 
     /// <summary>
-    /// Role in the blog: owner, assistant, mentor, reader
+    /// Role in the blog
     /// </summary>
-    public string Role { get; set; } = string.Empty;
+    public BlogRole Role { get; set; }
 
     /// <summary>
     /// When the user joined the blog (null if date unavailable, e.g., for mentors/readers)

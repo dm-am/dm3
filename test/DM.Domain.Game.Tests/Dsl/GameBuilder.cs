@@ -1,13 +1,24 @@
 using System;
-using System.Collections.Generic;
+using System.Linq;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Blacklists;
+using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Tests.Dsl;
 
 public class GameBuilder
 {
+    /// <summary>
+    /// A game with only its id and a master who is not the caller.
+    /// </summary>
+    public static GameDto Bare(Guid gameId = default) => new()
+    {
+        Id = gameId,
+        Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Master" }
+    };
+
     private readonly GameDetails game = new()
     {
         Id = Guid.NewGuid(),
@@ -51,28 +62,20 @@ public class GameBuilder
 
     public GameBuilder WithAssistants(params Guid[] userIds)
     {
-        var assistants = new List<GameAssistantInfo>();
-        foreach (var userId in userIds)
+        game.Assistants = userIds.Select(userId => new GameAssistantInfo
         {
-            assistants.Add(new GameAssistantInfo
-            {
-                UserId = userId,
-                Username = $"Assistant_{userId:N}",
-                JoinedUtc = DateTimeOffset.UtcNow
-            });
-        }
-        game.Assistants = assistants;
+            UserId = userId,
+            Username = $"Assistant_{userId:N}",
+            JoinedUtc = DateTimeOffset.UtcNow
+        }).ToList();
         return this;
     }
 
     public GameBuilder WithPlayers(params Guid[] userIds)
     {
-        var players = new List<GeneralUser>();
-        foreach (var userId in userIds)
-        {
-            players.Add(new GeneralUser { UserId = userId, Username = $"Player_{userId:N}", Role = UserRole.RegularUser });
-        }
-        game.Players = players;
+        game.Players = userIds
+            .Select(userId => new GeneralUser { UserId = userId, Username = $"Player_{userId:N}", Role = UserRole.RegularUser })
+            .ToList();
         return this;
     }
 
@@ -106,12 +109,9 @@ public class GameBuilder
     /// </summary>
     public GameBuilder WithBlacklisted(params Guid[] userIds)
     {
-        var blacklisted = new List<BlacklistedUser>();
-        foreach (var userId in userIds)
-        {
-            blacklisted.Add(new BlacklistedUser { UserId = userId, LinkId = Guid.NewGuid() });
-        }
-        game.BlacklistedUsers = blacklisted;
+        game.BlacklistedUsers = userIds
+            .Select(userId => new BlacklistedUser { UserId = userId, LinkId = Guid.NewGuid() })
+            .ToList();
         return this;
     }
 

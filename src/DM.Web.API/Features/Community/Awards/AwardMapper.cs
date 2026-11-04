@@ -16,7 +16,7 @@ namespace DM.Web.API.Features.Community.Awards;
 /// Compile-time mapper for awards
 /// </summary>
 [Mapper]
-internal partial class AwardMapper
+public partial class AwardMapper
 {
     /// <summary>
     /// Domain award type to its response DTO

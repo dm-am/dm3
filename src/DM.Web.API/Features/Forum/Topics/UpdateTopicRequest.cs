@@ -4,10 +4,7 @@ namespace DM.Web.API.Features.Forum.Topics;
 /// Partial update of a forum topic
 /// </summary>
 /// <remarks>
-/// Every field is optional: an omitted one keeps its current value. The read
-/// model cannot be reused here — its <c>Title</c> initializes to an empty
-/// string, so a request that only pins or closes a topic arrived as "set the
-/// title to empty" and was rejected with 400.
+/// Every field is optional: an omitted one keeps its current value.
 /// </remarks>
 public class UpdateTopicRequest
 {

@@ -1,11 +1,9 @@
 <template>
-  <SidebarBlock token="SupportUs">
-    <template #title>Поддержка проекта</template>
+  <SidebarBlock token="SupportUs" title="Поддержка проекта">
     <SidebarSkeleton v-if="loading && !fundraising" :lines="3" />
     <template v-else>
       <li v-if="fundraising">
-        <!-- What the money is for, above the bar: a bare pair of numbers says
-             how far along the collection is and not what it is a collection for. -->
+        <!-- What the money is for, above the bar -->
         <div class="goal-title">{{ fundraising.title }}</div>
         <ProgressBar
           :current="fundraising.collectedAmount"
@@ -54,8 +52,6 @@ import type { Envelope } from "@/shared/api/models/common";
 
 const userStore = useAuthStore();
 
-// Admin-only edit affordance: guests and regular users never see it,
-// so the guest visual stays unchanged.
 const isAdmin = computed(() => userIsAdmin(userStore.user));
 
 const { data, loading, error, fetch } = useApiResource<Envelope<Fundraising>>(
@@ -65,15 +61,12 @@ const { data, loading, error, fetch } = useApiResource<Envelope<Fundraising>>(
 
 const fundraising = computed(() => data.value?.resource ?? null);
 
-// Fetch synchronously during setup so `loading` is already true on the
-// first render (avoids a flash of the no-progress-bar layout). On error
-// the block renders an inline retry line instead of the progress bar,
-// while the CTA text below still renders.
+// In setup, so loading is already true on the first render.
 void fetch();
 </script>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .goal-title
   font-weight: bold

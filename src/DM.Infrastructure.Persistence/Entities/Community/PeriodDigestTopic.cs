@@ -8,8 +8,7 @@ namespace DM.Infrastructure.Persistence.Entities.Community;
 /// Marker linking a closed statistics period (calendar month or year) to its
 /// auto-created "Итоги …" forum topic. One row per generated digest — the
 /// idempotency record for the digest hosted service (a period whose row
-/// exists is never generated again, even if the topic was later renamed) and
-/// the future lookup for surfacing the digest topic on the home page.
+/// exists is never generated again, even if the topic was later renamed).
 /// A null <see cref="Month"/> means a yearly digest.
 /// </summary>
 [Table("PeriodDigestTopics")]

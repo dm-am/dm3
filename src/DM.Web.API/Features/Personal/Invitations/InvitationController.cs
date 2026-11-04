@@ -25,10 +25,9 @@ namespace DM.Web.API.Features.Personal.Invitations;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class InvitationController : ControllerBase
 {
-    private readonly IPersonalInvitationApiService _invitationApiService;
+    private readonly PersonalInvitationApiService _invitationApiService;
 
-    /// <inheritdoc />
-    public InvitationController(IPersonalInvitationApiService invitationApiService)
+    public InvitationController(PersonalInvitationApiService invitationApiService)
     {
         _invitationApiService = invitationApiService;
     }

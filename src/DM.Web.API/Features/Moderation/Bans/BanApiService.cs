@@ -1,26 +1,23 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Moderation.Features.Warnings;
+using DM.Domain.Moderation.Features.Bans;
 using DM.Web.API.Features.Moderation.Warnings;
 using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Moderation.Bans;
 
-/// <inheritdoc />
-internal class BanApiService : IBanApiService
+public class BanApiService
 {
     private readonly IBanService _banService;
     private readonly WarningMapper _mapper;
 
-    /// <inheritdoc />
     public BanApiService(IBanService banService, WarningMapper mapper)
     {
         _banService = banService;
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<UserBanStatus> GetUserBanStatus(string login)
     {
         var bans = await _banService.GetUserBans(login);
@@ -35,16 +32,9 @@ internal class BanApiService : IBanApiService
         };
     }
 
-    /// <inheritdoc />
     /// <remarks>
-    /// A lifted ban stays in the moderation history (that is the whole point of
-    /// keeping it) and stays out of the public one: it was taken back, and the
-    /// profile counts what the user served. The counter behind the achievement
-    /// chain reads the same rule (UserRepository, bansReceivedCounts), and the
-    /// two have to agree -- when the query stopped hiding lifted bans, this path
-    /// started counting one in "Последний бан: N-й с ...", while the achievement
-    /// went on not counting it, and PublicBan carries no flag with which the
-    /// profile could tell them apart.
+    /// A lifted ban stays out of the public history: the profile counts what the user
+    /// served, by the rule of the achievement counter (UserRepository, bansReceivedCounts).
     /// </remarks>
     public async Task<PublicUserBanStatus> GetPublicUserBanStatus(string login)
     {
@@ -60,22 +50,18 @@ internal class BanApiService : IBanApiService
         };
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<PublicBan>?> GetActiveBan(string login)
     {
         var ban = await _banService.GetActiveBan(login);
         return ban != null ? new Envelope<PublicBan>(_mapper.ToPublicBan(ban)) : null;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Ban>> GetAllActiveBans(BanType? type = null)
     {
         var bans = await _banService.GetAllActiveBans();
         var mapped = bans.Select(_mapper.ToBan);
 
-        // The type is derived during mapping, so the filter runs after it. The
-        // parameter used to be accepted, documented and ignored: ?type=Permanent
-        // answered with every active ban there was.
+        // The type is derived during mapping, so the filter runs after it.
         if (type.HasValue)
         {
             mapped = mapped.Where(b => b.Type == type.Value);
@@ -84,7 +70,6 @@ internal class BanApiService : IBanApiService
         return new ListEnvelope<Ban>(mapped);
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<BanLogEntry>> GetBanHistory(BansQuery query)
     {
         var (entries, totalCount, skip) =
@@ -94,7 +79,6 @@ internal class BanApiService : IBanApiService
             new PagingInfo(skip, query.Take, totalCount));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Ban>> CreateBan(CreateBanRequest request)
     {
         var createBan = new CreateBan
@@ -111,9 +95,5 @@ internal class BanApiService : IBanApiService
         return new Envelope<Ban>(_mapper.ToBan(ban));
     }
 
-    /// <inheritdoc />
-    public Task LiftBan(Guid banId, LiftBanRequest request)
-    {
-        return _banService.LiftBan(banId, request.Reason);
-    }
+    public Task LiftBan(Guid banId, LiftBanRequest request) => _banService.LiftBan(banId, request.Reason);
 }

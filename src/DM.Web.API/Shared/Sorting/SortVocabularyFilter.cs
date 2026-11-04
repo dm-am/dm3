@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using FluentValidation;
@@ -12,22 +11,12 @@ namespace DM.Web.API.Shared.Sorting;
 /// Answers 400 to a sort field the endpoint does not have.
 /// </summary>
 /// <remarks>
-/// The alternative was a validator per list query, eleven of them, each
-/// repeating the same rule and each needing its service to call
-/// ValidateAndThrowAsync — which is how the rule came to exist on exactly one
-/// endpoint. This runs before the action instead, over whatever query object
-/// the action binds, and takes its answer from SortVocabulary.
-///
-/// The failure is a FluentValidation ValidationException so that it comes out
-/// of ErrorHandlingMiddleware in the same problem+json shape, under the same
-/// "SortBy"/"SortOrder" keys, as the one endpoint that already refused —
-/// nothing downstream has to learn a second error format.
+/// One filter over whatever query object the action binds, instead of a validator
+/// per list query. The failure is a FluentValidation ValidationException, so it
+/// leaves ErrorHandlingMiddleware in the problem+json shape of every other one.
 /// </remarks>
 internal class SortVocabularyFilter : IAsyncActionFilter
 {
-    private const string SortByProperty = "SortBy";
-    private const string SortOrderProperty = "SortOrder";
-
     /// <inheritdoc />
     public Task OnActionExecutionAsync(ActionExecutingContext context, ActionExecutionDelegate next)
     {
@@ -50,11 +39,11 @@ internal class SortVocabularyFilter : IAsyncActionFilter
             // type's own, which model binding has already refused if unknown.
             if (fields.Count > 0)
             {
-                Check(argument, SortByProperty, fields,
+                Check(argument, SortVocabulary.SortByProperty, fields,
                     $"SortBy must be one of: {string.Join(", ", fields)}", failures);
             }
 
-            Check(argument, SortOrderProperty, SortVocabulary.SortOrders,
+            Check(argument, SortVocabulary.SortOrderProperty, SortVocabulary.SortOrders,
                 "SortOrder must be 'asc' or 'desc'", failures);
         }
 

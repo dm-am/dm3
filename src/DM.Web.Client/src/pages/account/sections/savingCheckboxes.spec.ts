@@ -3,16 +3,9 @@
  */
 
 /**
- * A setting of the account page is saved the moment its box is pressed, and
- * while that save is in flight the boxes used to go disabled. A disabled box
- * that is ticked is a contradiction on screen: the site's disabled state says
- * the control is not on offer, and the tick says it is on. So the boxes stay
- * drawn as they are for the length of the save.
- *
- * What the disabled attribute did besides the drawing still has to hold: a
- * press made during the save does not toggle anything and does not become a
- * second request racing the first. Both sections that save on press are
- * checked, the black list and the notification channels.
+ * A box of the account page is saved when pressed and stays drawn as it is
+ * while the save is out, and a press meanwhile neither toggles nor sends a
+ * second request: the blacklist and the notification channels.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
@@ -27,19 +20,6 @@ import { accountApi, blacklistApi } from "@/entities/user";
 import AccountBlacklistSection from "./AccountBlacklistSection.vue";
 import AccountNotificationsSection from "./AccountNotificationsSection.vue";
 
-vi.mock("vue-final-modal", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("vue-final-modal")>();
-  return {
-    ...actual,
-    useModal: () => ({
-      open: vi.fn(),
-      close: vi.fn(),
-      patchOptions: vi.fn(),
-      destroy: vi.fn(),
-    }),
-  };
-});
-
 enableAutoUnmount(afterEach);
 
 /** A save the test finishes by hand, so the section can be read mid-flight. */
@@ -50,9 +30,6 @@ const heldSave = () => {
   });
   return { answer, finish };
 };
-
-// A box fires its change only while it stands in a document, as a press on
-// a page does; the sections are mounted into one for that reason.
 
 /** The box a label names, and its label. */
 const boxOf = (wrapper: VueWrapper, label: string) => {

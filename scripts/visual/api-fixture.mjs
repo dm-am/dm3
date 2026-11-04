@@ -249,7 +249,6 @@ export const PARAMETERS = {
   "/v1/testimonials/{id}": (f) => ({ id: f.testimonialId }),
   "/v1/topics/{id}": (f) => ({ id: f.topicId }),
   "/v1/topics/{id}/comments": (f) => ({ id: f.topicId }),
-  "/v1/topics/{id}/discussion": (f) => ({ id: f.topicId }),
   "/v1/uploads/{id}": (f) => ({ id: f.uploadId }),
   "/v1/uploads/{id}/content": (f) => ({ id: f.uploadId }),
   "/v1/users/me/notepad/{id}": (f) => ({ id: f.personalNotepadEntryId }),

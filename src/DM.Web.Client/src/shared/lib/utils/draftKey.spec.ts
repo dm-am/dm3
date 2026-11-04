@@ -1,8 +1,6 @@
 /**
- * The builder makes one promise: two composers that are not the same composer
- * do not get the same key. The cross product below is that promise written
- * out, and the three records keep it honest — a subject or a purpose added to
- * the unions and not to them does not compile.
+ * Two different composers never get one key: the cross product below, kept
+ * whole by the records, which a new subject or purpose fails to compile.
  */
 import { describe, it, expect } from "vitest";
 import {

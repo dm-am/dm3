@@ -2,34 +2,33 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using AwesomeAssertions;
+using Microsoft.EntityFrameworkCore;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Community;
 
-/// <summary>
-/// Integration tests for FundraisingController
-/// </summary>
 public class FundraisingControllerShould : IntegrationTestBase
 {
-    // The single seeded row, field for field (DmDbContext, FundraisingGoal
-    // region). The title belongs here as much as the amounts do: the goal is a
-    // whole resource that PUT replaces, so a restore that omits it either fails
-    // validation or blanks a field the next test reads.
-    private const string SeededTitle = "Хостинг и домен на год";
-    private const decimal SeededGoalAmount = 50000m;
-    private const decimal SeededCollectedAmount = 17000m;
+    // The single seeded row, field for field (CommunityModel, Fundraising): empty,
+    // nothing announced and nothing collected. The title belongs here as much as
+    // the amounts do, since a restore puts the row back whole.
+    private const string SeededTitle = "";
+    private const decimal SeededGoalAmount = 0m;
+    private const decimal SeededCollectedAmount = 0m;
+
+    // A collection an administrator could announce: what the refusals are measured against.
+    private const string AnnouncedTitle = "Хостинг на год";
 
     public FundraisingControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
     [Fact]
-    public async Task GetFundraising_ReturnsOk_WithSeededValues()
+    public async Task GetFundraisingReturnsOkWithSeededValues()
     {
-        // Act - available anonymously
+        // Available anonymously
         var response = await Client.GetAsync("/v1/fundraising");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
         var json = await response.Content.ReadAsStringAsync();
@@ -41,27 +40,8 @@ public class FundraisingControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task PutFundraising_RequiresAuthentication()
+    public async Task PutFundraisingWithAuthRequiresAdminRole()
     {
-        // Arrange
-        var fundraisingData = new
-        {
-            title = "Новый сервер",
-            goalAmount = 60000,
-            collectedAmount = 20000
-        };
-
-        // Act
-        var response = await Client.PutAsJsonAsync("/v1/fundraising", fundraisingData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task PutFundraising_WithAuth_RequiresAdminRole()
-    {
-        // Arrange
         var fundraisingData = new
         {
             title = "Новый сервер",
@@ -71,17 +51,15 @@ public class FundraisingControllerShould : IntegrationTestBase
         var request = CreateAuthenticatedRequest(HttpMethod.Put, "/v1/fundraising");
         request.Content = JsonContent.Create(fundraisingData);
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert - Regular user should be forbidden
+        // Regular user should be forbidden
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
-    public async Task PutFundraising_AsAdmin_UpdatesAndPersistsValues()
+    public async Task PutFundraisingAsAdminUpdatesAndPersistsValues()
     {
-        // Arrange
         const string updatedTitle = "Переезд на новый хостинг";
         var fundraisingData = new
         {
@@ -94,10 +72,9 @@ public class FundraisingControllerShould : IntegrationTestBase
 
         try
         {
-            // Act
             var response = await Client.SendAsync(request);
 
-            // Assert - response carries the updated values
+            // Response carries the updated values
             response.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var json = await response.Content.ReadAsStringAsync();
@@ -109,7 +86,7 @@ public class FundraisingControllerShould : IntegrationTestBase
                 resource.GetProperty("collectedAmount").GetDecimal().Should().Be(31000m);
             }
 
-            // Assert - values are persisted (visible to a subsequent anonymous GET)
+            // Values are persisted (visible to a subsequent anonymous GET)
             var getResponse = await Client.GetAsync("/v1/fundraising");
             getResponse.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -124,62 +101,27 @@ public class FundraisingControllerShould : IntegrationTestBase
         }
         finally
         {
-            // Restore the seeded row whole: the table is single-row and shared by
-            // all tests in the collection, so the seeded-values GET test must not
-            // depend on execution order. Whole means the title too - it is a
-            // required field of the request, so a restore without it is refused
-            // with 400 and restores nothing at all.
-            var restoreRequest = CreateAdminRequest(HttpMethod.Put, "/v1/fundraising");
-            restoreRequest.Content = JsonContent.Create(new
-            {
-                title = SeededTitle,
-                goalAmount = SeededGoalAmount,
-                collectedAmount = SeededCollectedAmount
-            });
-            var restoreResponse = await Client.SendAsync(restoreRequest);
-            restoreResponse.StatusCode.Should().Be(HttpStatusCode.OK);
+            // Restore the seeded row whole, title included: the table is single-row and
+            // shared. Written to the table, since the form refuses an empty goal.
+            await using var db = DatabaseFixture.CreateDbContext();
+            await db.FundraisingGoals.ExecuteUpdateAsync(goal => goal
+                .SetProperty(g => g.Title, SeededTitle)
+                .SetProperty(g => g.GoalAmount, SeededGoalAmount)
+                .SetProperty(g => g.CollectedAmount, SeededCollectedAmount));
         }
     }
 
-    [Fact]
-    public async Task PutFundraising_AsAdmin_WithZeroGoalAmount_ReturnsBadRequest()
+    /// <remarks>The title is valid, so the amount is the only thing the refusal can be about.</remarks>
+    [Theory]
+    [InlineData(0, 1000)]
+    [InlineData(50000, -1)]
+    public async Task RefuseAnAmountOutOfRange(int goalAmount, int collectedAmount)
     {
-        // Arrange - the title is valid, so the zero goal is the only thing the
-        // refusal can be about
-        var fundraisingData = new
-        {
-            title = SeededTitle,
-            goalAmount = 0,
-            collectedAmount = 1000
-        };
         var request = CreateAdminRequest(HttpMethod.Put, "/v1/fundraising");
-        request.Content = JsonContent.Create(fundraisingData);
+        request.Content = JsonContent.Create(new { title = AnnouncedTitle, goalAmount, collectedAmount });
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-    }
-
-    [Fact]
-    public async Task PutFundraising_AsAdmin_WithNegativeCollectedAmount_ReturnsBadRequest()
-    {
-        // Arrange - the title is valid, so the negative amount is the only thing
-        // the refusal can be about
-        var fundraisingData = new
-        {
-            title = SeededTitle,
-            goalAmount = 50000,
-            collectedAmount = -1
-        };
-        var request = CreateAdminRequest(HttpMethod.Put, "/v1/fundraising");
-        request.Content = JsonContent.Create(fundraisingData);
-
-        // Act
-        var response = await Client.SendAsync(request);
-
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 }

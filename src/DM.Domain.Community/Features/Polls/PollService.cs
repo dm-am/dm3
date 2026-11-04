@@ -56,23 +56,15 @@ internal class PollService : IPollService
     }
 
     /// <inheritdoc />
-    public async Task<Poll> GetAsync(Guid pollId)
-    {
-        var poll = await _repository.Get(pollId);
-        if (poll == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, "Опрос не найден");
-        }
-
-        return poll;
-    }
+    public async Task<Poll> GetAsync(Guid pollId) =>
+        await _repository.Get(pollId) ?? throw new HttpException(HttpStatusCode.NotFound, "Опрос не найден");
 
     /// <inheritdoc />
     public async Task<(IEnumerable<Poll> Polls, PagingResult Paging)> GetListAsync(PollsQuery query)
     {
         var totalCount = await _repository.Count(query);
-        var pageSize = _identityProvider.Current.Settings.Paging.EntitiesPerPage;
-        var pagingData = new PagingData(query, pageSize, (int)totalCount);
+        var pageSize = _identityProvider.Current.Settings.PageSize;
+        var pagingData = new PagingData(query, pageSize, totalCount);
         var polls = await _repository.Get(query, pagingData);
         return (polls, pagingData.Result);
     }
@@ -107,10 +99,8 @@ internal class PollService : IPollService
         var poll = await GetAsync(pollId);
         _intentionManager.ThrowIfForbidden(PollIntention.Vote, (poll, optionId));
 
-        // The store answers with nothing when this voter is already on the ballot:
-        // one voter, one option, decided by the write rather than by a check before
-        // it, so two requests arriving together cannot both land. Changing one's
-        // mind is the Unvote endpoint.
+        // Null when this voter is already on the ballot: decided by the write, so two
+        // requests arriving together cannot both land.
         var voted = await _repository.Vote(pollId, optionId, _identityProvider.Current.User.UserId);
         if (voted == null)
         {

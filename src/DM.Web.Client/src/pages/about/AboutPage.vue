@@ -33,7 +33,6 @@ const faqItems: FaqItem[] = [
 <template>
   <page-title v-once>О проекте</page-title>
 
-  <!-- MOTTO (static) -->
   <div class="motto" v-once>
     <!-- Inline SVG (one-off illustration): fill="currentColor" follows theme text color -->
     <svg
@@ -58,7 +57,6 @@ const faqItems: FaqItem[] = [
     </p>
   </div>
 
-  <!-- MAIN CONTENT (static - faqItems is const) -->
   <div class="about-content" v-once>
     <p>
       Dungeon Master — одна из крупнейших русскоязычных площадок для текстовых
@@ -109,8 +107,7 @@ const faqItems: FaqItem[] = [
         <DashSeparator spacing="tiny" />
       </template>
 
-      <!-- Testimonials link: natural home for #26, kept out of faqItems
-           since it needs a router-link (plain data array only holds text) -->
+      <!-- Not in faqItems: this answer holds a router-link, the array holds text -->
       <div class="faq-item">
         <h3 class="faq-question">Что говорят о Dungeon Master игроки?</h3>
         <div class="faq-answer">
@@ -140,25 +137,22 @@ const faqItems: FaqItem[] = [
   gap: $small
   margin-bottom: $big
 
+  // The picture spans a column of the sidebar's width.
   .motto-snake
-    width: 330px
+    width: $sidebar-width
     max-width: 100%
     height: auto
     color: $text
 
   .motto-text
     margin: 0
-    font-size: 1.2em
+    font-size: $title-font-size
     font-style: italic
     color: $text
 
     .quote-mark
       color: $text-muted
-      font-size: 1.4em
 
-// ============================================
-// MAIN CONTENT
-// ============================================
 .about-content
   display: flex
   flex-direction: column
@@ -169,15 +163,6 @@ const faqItems: FaqItem[] = [
   p
     margin: 0 0 $small
 
-  a
-    color: $link
-    &:hover
-      color: $link-hover
-      text-decoration: underline
-
-// ============================================
-// CTA SECTION
-// ============================================
 .cta-links
   margin: $small 0 $medium
   padding-left: $big
@@ -185,9 +170,6 @@ const faqItems: FaqItem[] = [
   li
     margin: $tiny 0
 
-// ============================================
-// FAQ LIST
-// ============================================
 .faq-list
   display: flex
   flex-direction: column

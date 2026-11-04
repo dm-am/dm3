@@ -4,16 +4,8 @@ using System.Threading.Tasks;
 namespace DM.Domain.Personal.Features.Profiles;
 
 /// <summary>
-/// Direct WebSocket push about a user's avatar change (transient UI hint).
-/// Does not go through outbox/RabbitMQ — the event is best-effort, a lost push
-/// is inconsequential (the FE picks up the change on the next page load).
-///
-/// Like presence updates and typing indicators: durability is not needed,
-/// what matters is low delivery latency to open tabs.
-///
-/// The payload contains only userId — the client reloads its own data,
-/// other users' avatars in the DOM update on the next render with new URLs
-/// (keys are never rewritten → browser cache safe).
+/// Direct WebSocket push about a user's avatar change, past the outbox: best-effort,
+/// because a lost push only waits for the next page load.
 /// </summary>
 public interface IRealtimeAvatarBroadcaster
 {

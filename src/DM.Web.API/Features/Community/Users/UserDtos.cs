@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Game.Features.Games;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 
@@ -11,27 +10,14 @@ namespace DM.Web.API.Features.Community.Users;
 /// <summary>
 /// Base user DTO for lists, author references, mentions, and cards
 /// </summary>
-/// <remarks>
-/// This is the minimal user representation used in:
-/// - GET /v1/users (list)
-/// - GET /v1/users/{username}
-/// - post.author, comment.author, etc.
-///
-/// Inherits from UserRef (id, username, lastActivityUtc).
-/// For full profile information, use UserProfile or PersonalProfile.
-/// </remarks>
 public class User : UserRef
 {
-    // Id, Username, LastActivityUtc, Role, IsNewbie inherited from UserRef
-
     /// <summary>
     /// History of username changes
     /// </summary>
     /// <remarks>
-    /// Helps identify "is this the former johnny?". An empty array means the user
-    /// never renamed; an absent field means this response never fetched the
-    /// history, which only the user endpoints do. The two used to be the same
-    /// empty array, and a reader could not tell them apart.
+    /// Empty: the user never renamed. Absent: this response did not fetch the
+    /// history, which only the user endpoints do.
     /// </remarks>
     public IReadOnlyCollection<UsernameHistoryEntry>? UsernameHistory { get; set; }
 
@@ -50,19 +36,9 @@ public class User : UserRef
     public UserPicture Picture { get; set; } = new();
 
 
-    // ========== Statistics, present only where somebody counted them ==========
-    //
-    // This schema travels at two fidelities. Asked for by name it is counted in
-    // full; nested in someone else's resource — the author of a comment, the
-    // people who liked it — it is whatever the query that fetched that resource
-    // filled, and that query counts no bans, no drops and no subscribers.
-    //
-    // So every aggregate below is nullable and the serializer drops nulls: a
-    // number in the response was counted, an absent field was not. They used to
-    // be plain ints, which put an indistinguishable zero on the wire and let a
-    // card report "нарушений: 0" under the name of a user with ten bans.
-    // RegisteredUtc, Rating and Picture stay unconditional — they come off the
-    // user row and every projection has them.
+    // The aggregates below are nullable and an absent one was not counted: nested in
+    // someone else's resource, a user carries only what the query that fetched it
+    // counted, so a zero would say "none" where nobody looked.
 
     /// <summary>
     /// Registration date (UTC)
@@ -169,7 +145,7 @@ public class User : UserRef
     /// <summary>
     /// Total likes received on this user's authored content across
     /// topics, publications, comments and chat messages combined.
-    /// Drives the "лайки" achievement chain. Game posts excluded —
+    /// Drives the "Нравится" achievement chain. Game posts excluded —
     /// they have their own quality signal via "Рейтинг".
     /// </summary>
     public int? LikesReceived { get; set; }
@@ -241,14 +217,6 @@ public class SubscriberRef
 /// <summary>
 /// Public user profile DTO for profile pages
 /// </summary>
-/// <remarks>
-/// Used for: GET /v1/users/{username}/profile
-/// Extends User with additional profile information.
-///
-/// Privacy rules:
-/// - birthday is null if visibility.showBirthday=false
-/// - rating is always present (even if hidden in User lists)
-/// </remarks>
 public class UserProfile : User
 {
     /// <summary>
@@ -289,24 +257,6 @@ public class UserProfile : User
     /// </summary>
     public IReadOnlyCollection<Contact> Contacts { get; set; } = Array.Empty<Contact>();
 
-    // Note: RegisteredUtc is now in base User class
-
-    /// <summary>
-    /// Number of post reviews given to other users
-    /// </summary>
-    /// <remarks>
-    /// The same datum as <see cref="User.ReviewsGiven" /> under the older name,
-    /// and nullable for the same reason: mapping it from a nullable source into
-    /// a non-nullable member would reinstate the silent null-to-zero this schema
-    /// was fixed to stop doing.
-    /// </remarks>
-    public int? PostReviewsGiven { get; set; }
-
-    /// <summary>
-    /// Number of post reviews received from other users
-    /// </summary>
-    public int? PostReviewsReceived { get; set; }
-
     /// <summary>
     /// Caller's personal note about this user (null if none)
     /// </summary>
@@ -321,12 +271,8 @@ public class UserProfile : User
     /// and on the viewer's own profile.
     /// </summary>
     /// <remarks>
-    /// What the profile's "В черный список" button is drawn from. The page used to
-    /// look the name up in the first page of the viewer's list, so to somebody
-    /// with a longer list it offered to block a person already blocked. Only the
-    /// viewer's own list is read: whether this user blocked the viewer is theirs
-    /// to know and is not said here. <see cref="Viewer" /> says no more of it
-    /// than the refusal of a message does.
+    /// Only the viewer's own list is read: whether this user blocked the viewer is
+    /// theirs to know, and <see cref="Viewer" /> says no more than a refused message.
     /// </remarks>
     public bool BlockedByViewer { get; set; }
 
@@ -340,12 +286,6 @@ public class UserProfile : User
     /// <summary>
     /// User profile picture (small + medium URLs in profile view)
     /// </summary>
-    /// <remarks>
-    /// Uses 'new' to hide base User.Picture for different mapping:
-    /// - User: SmallUrl only (for lists)
-    /// - UserProfile: SmallUrl + MediumUrl (for profile page)
-    /// - PersonalProfile uses AccountPicture which includes OriginalUrl
-    /// </remarks>
     public new UserPicture Picture { get; set; } = new();
 }
 
@@ -368,10 +308,6 @@ public class ProfileViewer
 /// <summary>
 /// Rating information
 /// </summary>
-/// <remarks>
-/// Rating can be null in User DTO if user has disabled rating display (showRating=false).
-/// In UserProfile, rating is always present regardless of this setting.
-/// </remarks>
 public class Rating
 {
     /// <summary>
@@ -433,12 +369,12 @@ public class UserPicture
     public Guid? Id { get; set; }
 
     /// <summary>
-    /// Small picture URL (100x100, used in lists)
+    /// Small picture URL (used in lists)
     /// </summary>
     public string? SmallUrl { get; set; }
 
     /// <summary>
-    /// Medium picture URL (200x200, used in profiles)
+    /// Medium picture URL (used in profiles)
     /// </summary>
     public string? MediumUrl { get; set; }
 
@@ -451,12 +387,8 @@ public class UserPicture
     /// Intrinsic width of <see cref="OriginalUrl"/> in pixels.
     /// </summary>
     /// <remarks>
-    /// Only the original needs it: the small and medium variants are square
-    /// crops, so their box follows from the size they are asked for, while the
-    /// original preserves the aspect ratio of whatever was uploaded. A client
-    /// that puts the pair on the img element gets the exact box reserved before
-    /// the picture decodes; null means the upload predates the measurement, and
-    /// the client is on its own guess again.
+    /// Only the original keeps the uploaded aspect ratio; null for an upload older
+    /// than the measurement.
     /// </remarks>
     public int? OriginalWidth { get; set; }
 
@@ -471,10 +403,6 @@ public class UserPicture
 /// <summary>
 /// Entry in username change history
 /// </summary>
-/// <remarks>
-/// Included in User DTO to help identify users who changed their names.
-/// Most users will have an empty history array.
-/// </remarks>
 public class UsernameHistoryEntry
 {
     /// <summary>
@@ -491,19 +419,11 @@ public class UsernameHistoryEntry
 /// <summary>
 /// Query parameters for user list filtering
 /// </summary>
-/// <remarks>
-/// GET /v1/users?search=john&amp;role=Mentor&amp;activity=Active&amp;skip=0&amp;take=20&amp;sortBy=Name
-/// </remarks>
 public class UsersQuery : PagingQuery
 {
     /// <summary>
     /// Search by username prefix
     /// </summary>
-    /// <remarks>
-    /// Named for the query vocabulary in API_DESIGN.md: the free-text filter is
-    /// `search` on every list endpoint. It was `q` here and on
-    /// /v1/search/messages while thirteen neighbours already said `search`.
-    /// </remarks>
     public string? Search { get; set; }
 
     /// <summary>
@@ -515,7 +435,7 @@ public class UsersQuery : PagingQuery
     /// Filter by activity status
     /// </summary>
     /// <remarks>
-    /// Active - online recently, All - all users, Pending - for moderators only.
+    /// Active - online recently, Inactive - not, All - all users.
     /// </remarks>
     public UserActivityFilter Activity { get; set; } = UserActivityFilter.Active;
 
@@ -532,7 +452,7 @@ public class UsersQuery : PagingQuery
     /// Filter by newbie status (users with less than 100 posts)
     /// </summary>
     /// <remarks>
-    /// true = only newbies, false = only experienced (100+ posts), null = all
+    /// true = only newbies, false = only experienced, null = all
     /// </remarks>
     public bool? IsNewbie { get; set; }
 
@@ -589,20 +509,11 @@ public class UsersQuery : PagingQuery
     /// <summary>
     /// Sort field
     /// </summary>
-    /// <remarks>
-    /// Name - alphabetically, Rating - by post review score sum, LastActivity, Registered, etc.
-    /// Spelled `sortBy` like the other thirteen sorted lists; it was `sort` here alone.
-    /// </remarks>
     public UserSort SortBy { get; set; } = UserSort.Name;
 
     /// <summary>
     /// Sort direction: asc or desc
     /// </summary>
-    /// <remarks>
-    /// Default depends on sort field:
-    /// - Name: asc (alphabetical)
-    /// - Others: desc (best/newest first)
-    /// </remarks>
     public string? SortOrder { get; set; }
 }
 

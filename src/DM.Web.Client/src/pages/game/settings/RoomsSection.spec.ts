@@ -2,142 +2,49 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The rooms of a game, managed the way the old site manages them: the form of
- * a new room on top ("Название", "Тип", "Доступ: Закрытая / Открытая",
- * "Создать"), and one table of every room under it, edited in its cells and
- * saved by one button.
- *
- * What these catch, since a table that sends nothing looks perfectly normal on
- * screen:
- *  - a cell that edits a copy and not the draft the save reads;
- *  - a save that sends rooms nothing changed in, or the whole table at once;
- *  - a grant ticked or unticked that never reaches the server, or reaches it
- *    with a policy the server reads as no access at all;
- *  - "Сохранено" over a save that was refused, or kept after a change;
- *  - a room created on the way taking back what was typed in the others;
- *  - a place typed in "Порядок" that moves no room, or moves rooms nobody
- *    renumbered.
- */
+// The table of rooms, edited in its cells and sent by one button: a table that
+// sends nothing looks perfectly normal on screen.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
 import {
-  gameApi,
+  roomApi,
   useGameDetailsStore,
   RoomAccessPolicy,
   RoomAccessType,
   RoomType,
-  type Character,
-  type Game,
-  type Room,
 } from "@/entities/game";
 import { UserAutocomplete } from "@/entities/user";
 import { Select } from "@/shared/ui/Select";
-import { useToast } from "@/shared/lib/composables/useToast";
-import type { GeneralError } from "@/shared/api/models/common";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { ruleMap, scopedComponentCss } from "@/shared/lib/testing/styles";
-import RoomsSection from "./RoomsSection.vue";
-
-const toast = useToast();
-const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
-
-const refusal = (status: number): GeneralError => ({
-  type: "",
-  title: "",
-  status,
-  traceId: "t",
-});
-
-/** A room as the listing sends it, open and settled. */
-function aRoom(id: string, title: string, extra: Partial<Room> = {}): Room {
-  return {
-    id,
-    roomNumber: Number(id.replace(/\D/g, "")) || 1,
-    title,
-    type: RoomType.Default,
-    access: RoomAccessType.Open,
-    isArchived: false,
-    unreadPostsCount: 0,
-    accesses: [],
-    settings: {
-      viewPrivateText: false,
-      viewDiceResults: false,
-      diceEnabled: false,
-      hiddenWithoutAccess: false,
-    },
-    ...extra,
-  } as unknown as Room;
-}
-
-const aCharacter = (id: string, name: string) =>
-  ({ id, name, status: "Active" }) as unknown as Character;
-
-const ELF = aCharacter("c-1", "Эльвира");
-const RANGER = aCharacter("c-2", "Арагорн");
-
-/** The rooms of a game, open in front of its master. */
-function mountSection(rooms: Room[], characters: Character[] = []) {
-  const pinia = createPinia();
-  setActivePinia(pinia);
-  const store = useGameDetailsStore();
-  store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    title: "Игра",
-  } as unknown as Game;
-  store.rooms = rooms;
-  store.characters = characters;
-  // The reads this section fires are not this spec's subject; left real they
-  // would reach for the endpoints.
-  vi.spyOn(store, "loadRooms").mockResolvedValue(undefined);
-  vi.spyOn(store, "loadCharacters").mockResolvedValue(undefined);
-
-  // The confirmation of a delete is the real window, drawn in place.
-  return mount(RoomsSection, {
-    global: { plugins: [pinia], stubs: { Teleport: true } },
-  });
-}
-
-/** The two rows of a room, by its number. */
-const roomOf = (wrapper: VueWrapper, number: number) =>
-  wrapper.get(`tbody[data-room='${number}']`);
-
-const saveButton = (wrapper: VueWrapper) => wrapper.get(".save-all");
-
-/** What the button says, and whether it can still be pressed. */
-const answer = (wrapper: VueWrapper) => ({
-  label: saveButton(wrapper).text(),
-  inert: saveButton(wrapper).attributes("disabled") !== undefined,
-});
-
-async function save(wrapper: VueWrapper) {
-  await saveButton(wrapper).trigger("click");
-  await flushPromises();
-}
-
-/** The box of a character in "Игроки" of a room. */
-const writerBox = (wrapper: VueWrapper, number: number, name: string) =>
-  roomOf(wrapper, number)
-    .findAll(".col-writers label")
-    .find((label) => label.text() === name)!
-    .get("input");
+import {
+  ELF,
+  RANGER,
+  aRoom,
+  answer,
+  dismissPlates,
+  mountSection,
+  refusal,
+  roomOf,
+  saidOutLoud,
+  save,
+  writerBox,
+} from "./RoomsSection.fixtures";
 
 let update: ReturnType<typeof vi.fn>;
 let grant: ReturnType<typeof vi.fn>;
 let revoke: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
-  [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));
+  dismissPlates();
   update = vi.fn().mockResolvedValue({ data: null, error: null });
   grant = vi.fn().mockResolvedValue({ data: null, error: null });
   revoke = vi.fn().mockResolvedValue({ data: null, error: null });
-  vi.spyOn(gameApi, "updateRoom").mockImplementation(update as never);
-  vi.spyOn(gameApi, "createRoomAccess").mockImplementation(grant as never);
-  vi.spyOn(gameApi, "deleteRoomAccess").mockImplementation(revoke as never);
+  vi.spyOn(roomApi, "updateRoom").mockImplementation(update as never);
+  vi.spyOn(roomApi, "createRoomAccess").mockImplementation(grant as never);
+  vi.spyOn(roomApi, "deleteRoomAccess").mockImplementation(revoke as never);
 });
 
 afterEach(() => {
@@ -184,13 +91,22 @@ describe("RoomsSection table", () => {
         select.props("modelValue"),
       );
     expect(activity).toEqual([RoomAccessType.Open, "archived"]);
-    // The activity stands under the lists of the room, captioned as they are.
     expect(
       roomOf(wrapper, 2)
         .findAll(".col-details .grants-caption")
         .map((caption) => caption.text()),
     ).toContain("Активность:");
     expect(roomOf(wrapper, 2).find(".col-activity select").exists()).toBe(true);
+  });
+
+  // RoomFieldLimits.TitleMaxLength, as the field of a new room.
+  it("stops the title of a room at the hundred the server keeps", () => {
+    const wrapper = mountSection([aRoom("r1", "Таверна")]);
+
+    expect(
+      (roomOf(wrapper, 1).get(".col-title input").element as HTMLInputElement)
+        .maxLength,
+    ).toBe(100);
   });
 
   it("lists every character in play under a room, the ones that write in it ticked", () => {
@@ -225,8 +141,7 @@ describe("RoomsSection table", () => {
       aRoom("r3", "Кулуары", { type: RoomType.Chat }),
     ]);
 
-    // The field stands in the row of what it gives: reading a closed room,
-    // writing in an open chat.
+    // In the row of what it gives: reading a closed room, writing in a chat.
     const offers = (number: number) =>
       ["col-writers", "col-readers"].filter((row) =>
         roomOf(wrapper, number)
@@ -243,8 +158,7 @@ describe("RoomsSection table", () => {
     ).toBe("Разрешить писать в чате");
   });
 
-  // A person let into a chat with "Full" writes in it, and one let into a room
-  // of posts reads it whatever the policy: a post is written as a character.
+  // A post is written as a character, so a person let into posts only reads.
   it("lists a person let in by name in the row of what his grant lets him do", () => {
     const people = [
       {
@@ -293,7 +207,7 @@ describe("RoomsSection table", () => {
     expect(settings(1)).toEqual([
       "Поддержка кубика",
       "Показывать всем результаты бросков",
-      "Показывать всем приватные сообщения",
+      "Показывать всем скрытые блоки",
     ]);
     expect(settings(2)).toContain("Скрывать от тех, у кого нет доступа");
   });
@@ -396,14 +310,12 @@ describe("RoomsSection save", () => {
         .findAll(".col-readers label")
         .map((label) => label.text()),
     ).toEqual(["Reader1"]);
-    // In the open chat the person writes, and stands with those who do.
     expect(
       roomOf(wrapper, 2)
         .findAll(".col-writers label")
         .map((label) => label.text()),
     ).toEqual(["Reader2"]);
     expect(roomOf(wrapper, 2).find(".col-readers").exists()).toBe(false);
-    // The field empties once it has taken the name.
     expect(
       roomOf(wrapper, 1).findComponent(UserAutocomplete).props("modelValue"),
     ).toBe("");
@@ -464,7 +376,6 @@ describe("RoomsSection save", () => {
     ).toEqual(["Эльвира"]);
 
     await writerBox(wrapper, 1, "Эльвира").setValue(true);
-    // A character that writes is not listed among the readers as well.
     expect(roomOf(wrapper, 1).findAll(".col-readers label")).toHaveLength(0);
     await save(wrapper);
 
@@ -531,12 +442,7 @@ describe("RoomsSection save", () => {
   });
 });
 
-/**
- * "Порядок" is the old site's field of a number: the place a room stands at,
- * counted from one, typed over to move it. The server takes a move as "put
- * this room right after that one", so a save sends one such move for every
- * room renumbered and none for the rest.
- */
+// One move ("after that room") for every room renumbered, none for the rest.
 describe("RoomsSection order", () => {
   const three = () =>
     mountSection([
@@ -610,57 +516,11 @@ describe("RoomsSection order", () => {
   });
 });
 
-describe("RoomsSection new room", () => {
-  it("starts a room closed, as the old site does, and sends what the form holds", async () => {
-    const wrapper = mountSection([]);
-    const create = vi
-      .spyOn(useGameDetailsStore(), "createRoom")
-      .mockResolvedValue(null);
-
-    expect(
-      (
-        wrapper.get("input[name='new-room-access'][value='Private']")
-          .element as HTMLInputElement
-      ).checked,
-    ).toBe(true);
-
-    await wrapper.get("#new-room-title").setValue("  Склеп  ");
-    await wrapper
-      .get("input[name='new-room-type'][value='Chat']")
-      .setValue(true);
-    await wrapper.get("form").trigger("submit");
-    await flushPromises();
-
-    expect(create).toHaveBeenCalledWith({
-      title: "Склеп",
-      type: RoomType.Chat,
-      accessType: RoomAccessType.Private,
-      viewPrivateText: false,
-      viewDiceResults: false,
-      diceEnabled: false,
-    });
-    expect(
-      (wrapper.get("#new-room-title").element as HTMLInputElement).value,
-    ).toBe("");
-  });
-
-  it("has no table to save while the game has no rooms", () => {
-    const wrapper = mountSection([]);
-
-    expect(wrapper.text()).toContain("Комнат пока нет");
-    expect(wrapper.find(".save-all").exists()).toBe(false);
-  });
-});
-
-/**
- * Deleting a room. The confirmation runs the request itself: it waits for the
- * answer, prints a refusal in itself and closes on success alone, and the
- * request carries the flags that keep the interceptor quiet about it.
- */
+// The confirmation runs the request and prints its own refusal.
 describe("RoomsSection delete", () => {
   async function deleteRoom(reply: unknown) {
     const request = vi
-      .spyOn(gameApi, "deleteRoom")
+      .spyOn(roomApi, "deleteRoom")
       .mockResolvedValue(reply as never);
     const wrapper = mountSection([aRoom("r1", "Таверна")]);
     await roomOf(wrapper, 1).get(".col-actions button").trigger("click");
@@ -687,35 +547,15 @@ describe("RoomsSection delete", () => {
       "Не удалось удалить комнату",
     );
     expect(wrapper.find(".dialog-container").exists()).toBe(true);
+    expect(useGameDetailsStore().loadRooms).not.toHaveBeenCalled();
     expect(saidOutLoud()).toEqual([]);
   });
 });
 
-/**
- * The rows of the form of a new room are laid out as the other forms of a
- * game are (+form-row): the caption as tall as a field, so it stands level
- * with the field beside it. The rule has to reach the caption inside the
- * FormField, and a selector that did not left every caption at the top of
- * its row, over the middle of the radios. Read off the stylesheet as the
- * build scopes it: jsdom lays nothing out.
- */
-describe("RoomsSection new room look", () => {
+describe("RoomsSection look", () => {
   const HERE = dirname(fileURLToPath(import.meta.url));
-  const captionOf = (file: string, scope: string) =>
-    [...ruleMap(scopedComponentCss(join(HERE, file), scope))].find(
-      ([selector]) => selector.endsWith(`.row[${scope}] > .form-field-label`),
-    )?.[1];
 
-  it("stands a caption level with its field, as the settings of the game do", () => {
-    const rooms = captionOf("RoomsSection.vue", "data-v-rooms");
-    expect(rooms, "no rule reaches the caption of a row").toBeDefined();
-    expect(rooms).toEqual(captionOf("GameInfoSection.vue", "data-v-info"));
-    expect(rooms).toHaveProperty("min-height");
-  });
-
-  // The lists of every room start at one line of the table: the column of the
-  // captions does not follow the captions a room happens to have, and
-  // "Активность:" (73 at the caption's size, the longest) fits in it.
+  // Off the stylesheet: jsdom lays nothing out.
   it("starts the lists of every room at one line", () => {
     const grants = [
       ...ruleMap(

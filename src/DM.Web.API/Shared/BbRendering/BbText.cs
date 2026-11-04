@@ -1,3 +1,5 @@
+using System;
+using DM.Domain.Core.Authorization;
 using DM.Infrastructure.Core.Parsing;
 
 namespace DM.Web.API.Shared.BbRendering;
@@ -7,9 +9,8 @@ namespace DM.Web.API.Shared.BbRendering;
 /// constructed by a mapping profile; the JSON converter replaces it with
 /// the rendered output (HTML / plain-text) at serialization time, using
 /// <see cref="Context"/> to determine what the current viewer is allowed
-/// to see. When the converter runs without a context (legacy call sites
-/// that have not been migrated yet) it falls back to a public render with
-/// the BbText's own <see cref="Surface"/>.
+/// to see. A carrier without a context is rendered publicly, with the
+/// BbText's own <see cref="Surface"/>.
 /// </summary>
 public abstract class BbText
 {
@@ -17,11 +18,6 @@ public abstract class BbText
     /// Text
     /// </summary>
     public string Value { get; set; } = null!;
-
-    /// <summary>
-    /// Parse mode
-    /// </summary>
-    public abstract BbParseMode ParseMode { get; }
 
     /// <summary>
     /// Semantic surface the text originates from. Derived classes set this
@@ -41,16 +37,27 @@ public abstract class BbText
     /// Whether the text is rendered for the audience the request asks for
     /// (X-Dm-Audience). A text that is not is rendered for display whatever
     /// is asked. Internal, so the published contract of every carrier stays
-    /// the four properties above.
+    /// the three properties above.
     /// </summary>
     internal virtual bool FollowsAudience => true;
+
+    /// <summary>
+    /// Names the author of the text, who gets its AuthorEdit source, and the check
+    /// that gives it to anybody else who may edit the text
+    /// (<see cref="RenderContextEnvelope.EditableBy" />).
+    /// </summary>
+    internal void BindAuthor(Guid? authorUserId, Func<IIntentionManager, bool>? editableBy = null) =>
+        Context = new RenderContextEnvelope
+        {
+            Surface = Surface,
+            PostAuthorUserId = authorUserId,
+            EditableBy = editableBy
+        };
 }
 
 /// <inheritdoc />
 public class PostBbText : BbText
 {
-    /// <inheritdoc />
-    public override BbParseMode ParseMode => BbParseMode.Post;
     /// <inheritdoc />
     public override BbSurface Surface => BbSurface.GamePost;
 }
@@ -58,8 +65,6 @@ public class PostBbText : BbText
 /// <inheritdoc />
 public class CommonBbText : BbText
 {
-    /// <inheritdoc />
-    public override BbParseMode ParseMode => BbParseMode.Common;
     /// <inheritdoc />
     public override BbSurface Surface => BbSurface.Comment;
 }
@@ -94,8 +99,6 @@ public class DirectMessageBbText : CommonBbText
 public class InfoBbText : BbText
 {
     /// <inheritdoc />
-    public override BbParseMode ParseMode => BbParseMode.Info;
-    /// <inheritdoc />
     public override BbSurface Surface => BbSurface.Profile;
 }
 
@@ -106,8 +109,6 @@ public class InfoBbText : BbText
 /// </summary>
 public class HintBbText : BbText
 {
-    /// <inheritdoc />
-    public override BbParseMode ParseMode => BbParseMode.Hint;
     /// <inheritdoc />
     public override BbSurface Surface => BbSurface.Hint;
 
@@ -120,4 +121,19 @@ public class HintBbText : BbText
     /// it is rendered for display on every request.
     /// </remarks>
     internal override bool FollowsAudience => false;
+}
+
+/// <summary>
+/// The description of a game tag in the moderation catalogue: the hint surface,
+/// rendered for the card of the tag and given as typed to the moderator who
+/// opens it to edit (author_edit), unlike <see cref="HintBbText"/>.
+/// </summary>
+/// <remarks>
+/// It may follow the audience because the catalogue is answered to a senior
+/// moderator alone and is never cached publicly.
+/// </remarks>
+public class TagDescriptionBbText : BbText
+{
+    /// <inheritdoc />
+    public override BbSurface Surface => BbSurface.Hint;
 }

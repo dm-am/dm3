@@ -1,46 +1,36 @@
 <template>
-  <nav :aria-label="label">
+  <nav aria-label="Опросы, игры, блоги и контакты">
     <ul class="blocks">
       <SiteAddresses />
       <ActivePolls />
+      <ContactLinks />
       <PopularGames />
       <PopularBlogs />
       <GameTagCloud />
     </ul>
-    <RightSidebarTail />
-    <!-- On a narrow screen the column slides in over the page, and the
-         documents of the footer, a page away there, close it. -->
-    <ul v-if="narrow" class="blocks">
-      <LegalLinks />
+    <ul class="blocks">
+      <SupportPanel />
+      <PartnersPanel />
+      <SocialsPanel />
     </ul>
   </nav>
 </template>
 
 <script setup lang="ts">
-import { computed, defineAsyncComponent } from "vue";
-import { useShellMode } from "@/shared/lib/composables/useShellMode";
-import RightSidebarTail from "./RightSidebarTail.vue";
+import { defineAsyncComponent } from "vue";
 
-// Critical above-fold components - load synchronously.
-// SiteAddresses leads the column, so deferring it would land it a frame later
-// and push everything under it down after the page has been read. It is a
-// handful of static markup and costs the bundle nothing worth saving.
+// Above the fold, loaded with the page: a block landing later would push the column down.
 import SiteAddresses from "./SiteAddresses.vue";
 import ActivePolls from "./ActivePolls.vue";
 import PopularGames from "./PopularGames.vue";
+import ContactLinks from "./ContactLinks.vue";
 
-// Below-fold components - lazy load to reduce initial bundle
+// Below the fold: loaded after the page.
 const PopularBlogs = defineAsyncComponent(() => import("./PopularBlogs.vue"));
 const GameTagCloud = defineAsyncComponent(() => import("./GameTagCloud.vue"));
-const LegalLinks = defineAsyncComponent(() => import("./LegalLinks.vue"));
-
-const { narrow } = useShellMode();
-
-const label = computed(() =>
-  narrow.value
-    ? "Опросы, игры, блоги, контакты и документы"
-    : "Опросы, игры, блоги и контакты",
-);
+const SupportPanel = defineAsyncComponent(() => import("./SupportPanel.vue"));
+const PartnersPanel = defineAsyncComponent(() => import("./PartnersPanel.vue"));
+const SocialsPanel = defineAsyncComponent(() => import("./SocialsPanel.vue"));
 </script>
 
 <style scoped lang="sass">

@@ -10,25 +10,8 @@ namespace DM.Architecture.Tests;
 /// Source read as text, with the comments taken out.
 /// </summary>
 /// <remarks>
-/// This tier asserts properties that belong to the code and would otherwise need
-/// the whole stack up to observe — the order of the middleware, the absence of a
-/// machine-clock read, the determinism of the seed. Reading the file is the only
-/// way to get at them, and a file is not code: a paragraph explaining why a call
-/// is absent contains the call, and two slashes in front of a line neither move
-/// it nor remove the literal on it.
-///
-/// The order gate is where that stopped being a detail. It compares the
-/// positions of three calls in Startup.cs, and a commented-out pipeline
-/// satisfies every one of those comparisons — a green build over an application
-/// whose per-account rate limits had silently become per-address ones, which is
-/// exactly what its own remarks say nobody would notice otherwise.
-///
-/// One spelling, in one place, because five copies of it existed and the sixth
-/// check copied none of them. It lives in this project rather than in DM.Testing
-/// on purpose: a text helper has no reason to depend on NSubstitute and EF, and a
-/// reference to that project would put NSubstitute in the output directory the ArchUnit
-/// loader scans. It moves to a shared home when a consumer outside this tier
-/// appears, rather than being copied to it.
+/// A comment explaining why a call is absent contains the call, and a commented-out line keeps its
+/// literal. Kept out of DM.Testing: a reference to it would put NSubstitute where the ArchUnit loader scans.
 /// </remarks>
 internal static class SourceText
 {
@@ -38,11 +21,7 @@ internal static class SourceText
     /// <summary>
     /// The file's code, with block and line comments blanked out.
     /// </summary>
-    /// <remarks>
-    /// Replaced with nothing rather than with spaces: every consumer either
-    /// searches for a substring or compares relative positions, and removal
-    /// shifts all of those equally.
-    /// </remarks>
+    /// <remarks>Replaced with nothing: consumers search substrings or compare relative positions.</remarks>
     /// <param name="path">Absolute path of the source file.</param>
     internal static string ReadCode(string path) =>
         Comments.Replace(File.ReadAllText(path), string.Empty);
@@ -50,12 +29,7 @@ internal static class SourceText
     /// <summary>
     /// The slice from one marker up to the next, the opening marker included.
     /// </summary>
-    /// <remarks>
-    /// Both markers are asserted rather than answered around, because the rules
-    /// that ask for a slice are asking about what is inside it: a marker that has
-    /// been renamed away leaves an empty slice, and an empty slice contains
-    /// nothing to complain about.
-    /// </remarks>
+    /// <remarks>Both markers are asserted: an empty slice contains nothing to complain about.</remarks>
     /// <param name="source">Text to slice</param>
     /// <param name="start">Marker the slice opens at</param>
     /// <param name="end">Marker the slice stops before</param>
@@ -76,19 +50,13 @@ internal static class SourceText
         @"(?<sig>(?:public|private|protected|internal)[^;{}()]*?\s(?<name>\w+)\s*\((?<args>[^)]*)\))\s*(?<open>=>|\{)",
         RegexOptions.Compiled | RegexOptions.Singleline);
 
-    /// <summary>One method of a type: what it is called, what it takes, what it does.</summary>
-    internal readonly record struct Member(string Name, string Parameters, string Body);
+    /// <summary>One method of a type: what it is called, what it takes, what it does, the line it starts on.</summary>
+    internal readonly record struct Member(string Name, string Parameters, string Body, int Line);
 
     /// <summary>
     /// The methods a file declares, each with its body.
     /// </summary>
-    /// <remarks>
-    /// One parser, because two of them existed and the second was written by
-    /// copying the first. Brace counting rather than a syntax tree: the rules that
-    /// read this ask where a call sits relative to another call, which survives
-    /// being approximate, and a parser dependency in this tier would put a compiler
-    /// in the directory the ArchUnit loader scans.
-    /// </remarks>
+    /// <remarks>Brace counting: a parser dependency would put a compiler where the ArchUnit loader scans.</remarks>
     internal static IReadOnlyList<Member> Members(string code)
     {
         var members = new List<Member>();
@@ -97,7 +65,8 @@ internal static class SourceText
             members.Add(new Member(
                 match.Groups["name"].Value,
                 match.Groups["args"].Value,
-                BodyAfter(code, match)));
+                BodyAfter(code, match),
+                code.AsSpan(0, match.Index).Count('\n') + 1));
         }
 
         return members;
@@ -132,24 +101,8 @@ internal static class SourceText
     /// the number of lines from there to the end of its body.
     /// </summary>
     /// <remarks>
-    /// A reader of its own rather than the <see cref="Signature"/> of
-    /// <see cref="Members"/>. That one answers where a call sits and can afford to
-    /// miss a declaration; a length limit that misses a declaration is no limit for
-    /// it, and the shapes a pattern misses are common: a generic method, a tuple
-    /// return type, a parenthesis inside the parameters, a constructor calling
-    /// base, a method with no access modifier.
-    ///
-    /// So the file is read the way a type's body is laid out: a run of
-    /// declarations, each ending at a semicolon, at a body, or at an expression
-    /// body's semicolon. A body is a type's when its header names a type, and a
-    /// method's when the header ends in a parameter list; anything else (accessors,
-    /// an initializer) is stepped over. A local function or a lambda is part of
-    /// the method around it, as its reader meets it.
-    ///
-    /// The file is read with its comments and literals blanked rather than removed:
-    /// a comment inside a method is a line the reader of the method reads, and
-    /// taking it out would move every line after it. Literals are blanked because
-    /// one "{" in a string would carry a body on to the end of the file.
+    /// Apart from <see cref="Members"/>, which may miss a declaration; a length limit may not. Comments and
+    /// literals are blanked rather than removed, so lines keep their place and a "{" in a string is no body.
     /// </remarks>
     /// <param name="text">The file as written, comments included.</param>
     internal static IReadOnlyList<Span> MemberSpans(string text)
@@ -179,9 +132,7 @@ internal static class SourceText
             {
                 end = Closing(code, stop);
 
-                // A body that is neither a method's nor a type's, a property's
-                // accessors or an object initializer, is stepped over: what follows
-                // it up to its semicolon reads as a declaration without a body.
+                // Accessors and object initializers are stepped over.
                 if (name is null && TypeHeader.IsMatch(header))
                 {
                     ReadDeclarations(code, stop + 1, end, spans);

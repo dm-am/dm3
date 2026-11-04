@@ -48,25 +48,14 @@ internal class ActivationService : IActivationService
     /// <inheritdoc />
     public async Task<Guid> Activate(ActivationRequest request)
     {
-        // The link first, the name second. The other order let anybody probe a
-        // name with a made-up token: a taken name came back as 400 and a free
-        // one as 410, with nothing written down. A request without a live link
-        // now learns one thing, that the link is dead, whatever name it carries.
-        //
-        // The retry by address that used to live in the dead-link branch is
-        // gone with it. It handed out the account whose address and name were
-        // supplied, on no proof but those two, and only the leak above stood in
-        // its way: with the name checked first, an existing name never reached
-        // it. A click that lands twice is still answered - by RefuseOrRepeat,
-        // after a link that was found.
+        // The link first, the name second, so a made-up token cannot probe names.
         var pending = await _repository.FindPendingByToken(request.Token);
         if (pending == null)
         {
             throw new HttpException(HttpStatusCode.Gone, RefusalMessage.LinkInvalidOrUsed);
         }
 
-        var tokenExpiry = TimeSpan.FromHours(_tokenConfig.ActivationTokenLifetimeHours);
-        if (pending.TokenCreatedUtc + tokenExpiry < _dateTimeProvider.Now)
+        if (IsExpired(pending))
         {
             throw new HttpException(HttpStatusCode.Gone, "Ссылка устарела. Запросите новую.");
         }
@@ -74,7 +63,6 @@ internal class ActivationService : IActivationService
         // Format and availability of the name, for the holder of a live link.
         await _validator.ValidateAndThrowAsync(request);
 
-        // Create User from PendingRegistration
         var user = _userFactory.CreateFromPending(pending, request.Username);
 
         // The zone of the device the account is created on, kept for the letters,
@@ -82,17 +70,13 @@ internal class ActivationService : IActivationService
         // rather than refused: the account keeps UTC and its owner can set another.
         user.TimeZoneId = ReaderTime.IsKnownZone(request.TimeZoneId) ? request.TimeZoneId!.Trim() : null;
 
-        // Atomic: create user, delete pending
         try
         {
             await _repository.CompleteActivation(user, pending.PendingRegistrationId);
         }
         catch (DuplicateEntityException)
         {
-            // The validator found the name free and the address free, and one of
-            // them stopped being so before this write. Which one is established by
-            // reading rather than by the name of the constraint, because the same
-            // collision means three different things to three different people.
+            // The name or the address stopped being free after the validator.
             return await RefuseOrRepeat(pending.Email, request.Username);
         }
 
@@ -153,11 +137,11 @@ internal class ActivationService : IActivationService
             return null;
         }
 
-        var tokenAge = _dateTimeProvider.Now - pending.TokenCreatedUtc;
-        var isExpired = tokenAge > TimeSpan.FromHours(_tokenConfig.ActivationTokenLifetimeHours);
-
-        return isExpired
+        return IsExpired(pending)
             ? PendingInfoResult.Expired(pending.Email)
             : PendingInfoResult.Ready(pending.Email);
     }
+
+    private bool IsExpired(PendingRegistration pending) =>
+        _dateTimeProvider.Now - pending.TokenCreatedUtc > TimeSpan.FromHours(_tokenConfig.ActivationTokenLifetimeHours);
 }

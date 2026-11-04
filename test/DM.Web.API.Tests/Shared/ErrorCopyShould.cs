@@ -12,16 +12,8 @@ namespace DM.Web.API.Tests.Shared;
 /// A validation message is read by a person, and this interface is Russian.
 /// </summary>
 /// <remarks>
-/// One message had been translated halfway — "Title must not exceed 100
-/// символов" — which neither the compiler nor a reviewer reading one attribute
-/// at a time can see.
-///
-/// The rule keys on alphabets rather than on English. An all-English message
-/// belongs to a DTO whose form is not built yet and gets translated with that
-/// form; a message written in two alphabets at once is wrong on any form, and it
-/// is the one a copy-paste reproduces. Latin technical tokens stay allowed,
-/// otherwise "Email обязателен" would have to be rewritten into something nobody
-/// says.
+/// Keyed on alphabets: an all-English message is translated with its form, a message in two alphabets is
+/// wrong on any. Latin technical tokens stay allowed.
 /// </remarks>
 public class ErrorCopyShould
 {

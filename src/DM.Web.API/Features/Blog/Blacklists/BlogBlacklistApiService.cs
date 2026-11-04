@@ -7,8 +7,7 @@ using DM.Web.API.Features.Community.Users;
 
 namespace DM.Web.API.Features.Blog.Blacklists;
 
-/// <inheritdoc />
-internal class BlogBlacklistApiService : IBlogBlacklistApiService
+public class BlogBlacklistApiService
 {
     private readonly IBlogBlacklistService _blacklistService;
     private readonly UserMapper _mapper;
@@ -21,14 +20,12 @@ internal class BlogBlacklistApiService : IBlogBlacklistApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<IEnumerable<User>> Get(Guid blogId)
     {
         var users = await _blacklistService.Get(blogId);
         return users.Select(_mapper.ToUser);
     }
 
-    /// <inheritdoc />
     public async Task<User> Create(Guid blogId, string username)
     {
         var dto = new OperateBlogBlacklistLink { BlogId = blogId, Username = username };
@@ -36,7 +33,6 @@ internal class BlogBlacklistApiService : IBlogBlacklistApiService
         return _mapper.ToUser(user);
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid blogId, string username) =>
         _blacklistService.Remove(new OperateBlogBlacklistLink { BlogId = blogId, Username = username });
 }

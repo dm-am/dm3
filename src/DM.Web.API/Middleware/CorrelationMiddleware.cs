@@ -9,23 +9,17 @@ namespace DM.Web.API.Middleware;
 /// <summary>
 /// Middleware for correlation token provider
 /// </summary>
-public class CorrelationMiddleware
+internal class CorrelationMiddleware
 {
-    private readonly RequestDelegate _next;
-    private const string CorrelationTokenHeader = "X-Dm-Correlation-Token";
+    public const string CorrelationTokenHeader = "X-Dm-Correlation-Token";
 
-    /// <inheritdoc />
+    private readonly RequestDelegate _next;
+
     public CorrelationMiddleware(RequestDelegate next)
     {
         _next = next;
     }
 
-    /// <summary>
-    /// Before request
-    /// </summary>
-    /// <param name="httpContext"></param>
-    /// <param name="setter"></param>
-    /// <param name="guidFactory"></param>
     public async Task InvokeAsync(HttpContext httpContext,
         ICorrelationTokenSetter setter,
         IGuidFactory guidFactory)
@@ -36,10 +30,8 @@ public class CorrelationMiddleware
             : guidFactory.Create();
         setter.Current = correlationToken;
 
-        // The trace and span ids are not pushed here. The sink writes them out of
-        // the event itself, so a copy pushed from the request would name the span
-        // of the request on every line - including lines written inside a nested
-        // span, which are the ones worth linking from.
+        // Trace and span ids are not pushed: the sink writes them from the event,
+        // so a line inside a nested span names that span.
         await _next(httpContext);
     }
 }

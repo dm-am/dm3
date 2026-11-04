@@ -11,9 +11,7 @@ using Microsoft.EntityFrameworkCore;
 namespace DM.Workers.NotificationDispatcher.Notifiers.Blog;
 
 /// <summary>
-/// Notification generator for blog status changes. Mirrors
-/// <c>GameStatusChangedNotificationGenerator</c>:
-/// notifies the author and assistants (always) and blog readers
+/// Notification generator for blog status changes: the author and assistants (always) and blog readers
 /// (if <see cref="SubscriptionSettings.StatusChanges"/> is enabled).
 /// </summary>
 internal class BlogStatusChangedNotificationGenerator : INotificationGenerator
@@ -29,7 +27,6 @@ internal class BlogStatusChangedNotificationGenerator : INotificationGenerator
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public BlogStatusChangedNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -44,7 +41,7 @@ internal class BlogStatusChangedNotificationGenerator : INotificationGenerator
     /// <inheritdoc />
     public async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var data = await _dbContext.Blogs
+        var blogData = await _dbContext.Blogs
             .Where(b => b.BlogId == entityId)
             .Select(b => new
             {
@@ -57,42 +54,31 @@ internal class BlogStatusChangedNotificationGenerator : INotificationGenerator
             })
             .FirstOrDefaultAsync();
 
-        if (data == null)
+        if (blogData == null)
         {
             yield break;
         }
 
-        // Get subscribers (readers) who have StatusChanges enabled
         var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Blog,
             entityId,
             SubscriptionSettings.StatusChanges);
         var readerIds = readerSubscriptions.Select(s => s.SubscriberId);
 
-        // Combine all recipients: Author, Assistants (always), Readers (with StatusChanges)
-        var usersInterested = new HashSet<Guid> { data.AuthorId };
-        usersInterested.UnionWith(data.AssistantIds);
+        var usersInterested = new HashSet<Guid> { blogData.AuthorId };
+        usersInterested.UnionWith(blogData.AssistantIds);
         usersInterested.UnionWith(readerIds);
 
-        if (usersInterested.Count == 0)
-        {
-            yield break;
-        }
-
-        // ActorId stays null: the blog keeps no record of who moved the status. The
-        // transition is made by the author, an assistant or a moderator through
-        // BlogService.ChangeStatusAsync, and none of them is written to the row, so
-        // there is nothing here to filter blacklisted recipients on. AuthorId is not
-        // it: he is a recipient of this one, not necessarily its cause.
+        // No ActorId: the blog does not record who moved the status.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested,
             Metadata = new
             {
-                BlogTitle = data.Title,
-                BlogId = data.BlogId.EncodeToReadable(data.Title),
-                NewStatus = data.Status.ToString(),
-                AuthorUsername = data.AuthorUsername
+                BlogTitle = blogData.Title,
+                BlogId = blogData.BlogId.EncodeToReadable(blogData.Title),
+                NewStatus = blogData.Status.ToString(),
+                blogData.AuthorUsername
             }
         };
     }

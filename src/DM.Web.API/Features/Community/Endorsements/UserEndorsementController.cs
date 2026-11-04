@@ -16,10 +16,9 @@ namespace DM.Web.API.Features.Community.Endorsements;
 [Tags("User Endorsements")]
 public class UserEndorsementController : ControllerBase
 {
-    private readonly IUserEndorsementApiService _endorsementApiService;
+    private readonly UserEndorsementApiService _endorsementApiService;
 
-    /// <inheritdoc />
-    public UserEndorsementController(IUserEndorsementApiService endorsementApiService)
+    public UserEndorsementController(UserEndorsementApiService endorsementApiService)
     {
         _endorsementApiService = endorsementApiService;
     }

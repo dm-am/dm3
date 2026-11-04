@@ -1,11 +1,11 @@
 using System;
 using System.Linq;
 using System.Text.RegularExpressions;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 using DM.Infrastructure.Persistence.Repositories.Personal;
+using DM.Testing;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -17,21 +17,11 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Personal;
 /// The user list counts once per request, not once per registered user.
 /// </summary>
 /// <remarks>
-/// Four sorts and three numeric filters of <c>GET /v1/users</c> read a number that is
-/// not a column of Users. Each used to be a <c>Count()</c> correlated to the user row,
-/// which Postgres runs per row of Users and runs before OFFSET: the page cost a pass
-/// over every registration, and asking for ten rows instead of fifty changed nothing.
-///
-/// The statement is what states this, so the test reads the statement. A correlated
-/// count leaves a SELECT inside the ORDER BY or the WHERE; a counter joined once
-/// leaves a column reference there and the SELECT in a derived table of its own.
+/// A correlated count runs per row of Users before OFFSET. The statement states it: a correlated count
+/// leaves a SELECT inside ORDER BY or WHERE, a joined counter a column reference.
 /// </remarks>
 public class UserListCountedQueryShould
 {
-    private static DmDbContext Probe() => new(new DbContextOptionsBuilder<DmDbContext>()
-        // Statement text only: the connection is never opened.
-        .UseNpgsql("Host=localhost;Database=user-list-probe;Username=probe;Password=probe")
-        .Options);
 
     private static IQueryable<DbUser> Users(DmDbContext context) =>
         context.Users.Where(u => !u.IsRemoved);
@@ -90,7 +80,7 @@ public class UserListCountedQueryShould
     [InlineData(nameof(SortedByPopularity))]
     public void SortByAColumnAndNotByASubquery(string sortName)
     {
-        using var context = Probe();
+        using var context = ProbeContext.Open();
 
         var sql = sortName switch
         {
@@ -112,7 +102,7 @@ public class UserListCountedQueryShould
     [InlineData(nameof(SortedByPopularity))]
     public void CountOnceInADerivedTableOfItsOwn(string sortName)
     {
-        using var context = Probe();
+        using var context = ProbeContext.Open();
 
         var sql = sortName switch
         {
@@ -130,7 +120,7 @@ public class UserListCountedQueryShould
     [Fact]
     public void PageAtTheOutermostLevelSoTheOrderSurvives()
     {
-        using var context = Probe();
+        using var context = ProbeContext.Open();
 
         var sql = SortedByGamesHosting(context);
 
@@ -143,19 +133,10 @@ public class UserListCountedQueryShould
     }
 
     /// <summary>
-    /// The list repository over a probe context. The mapper is the one dependency
-    /// <see cref="UserRepository.BuildPageQuery" /> does not touch — the
-    /// projection happens after — so it is passed as null rather than stood up,
-    /// which is also what makes this test cheap enough to sit in the unit tier
-    /// next to the statement it reads.
+    /// The list repository over a probe context; <see cref="UserRepository.BuildPageQuery" /> never touches the mapper.
     /// </summary>
     private static UserRepository Repository(DmDbContext context) =>
-        new(context, new FixedClock());
-
-    private sealed class FixedClock : IDateTimeProvider
-    {
-        public DateTimeOffset Now => DateTimeOffset.UnixEpoch;
-    }
+        new(context, new FixedClock(DateTimeOffset.UnixEpoch));
 
     private static PagingData FirstPage() => new(new PagingQuery { Skip = 0, Take = 50 }, 50, 1000);
 
@@ -169,24 +150,14 @@ public class UserListCountedQueryShould
     /// <summary>
     /// Filtering and sorting by the same number counts the table once, not twice.
     /// </summary>
-    /// <remarks>
-    /// "At least three games hosted, sorted by games hosted" is the ordinary way that
-    /// filter is used, and it used to build two joins: the range composed one GROUP BY
-    /// over Games and GameAssistants inside the filtered set, and the sort composed
-    /// another over the same two tables outside it. The answer was right and the page
-    /// walked both tables twice.
-    ///
-    /// Read off the repository rather than off a composition rebuilt here: which joins
-    /// a request ends up with is decided by the repository, and a test that composes
-    /// them itself would assert its own arithmetic.
-    /// </remarks>
+    /// <remarks>Read off the repository, which decides the joins a request ends up with.</remarks>
     [Theory]
     [InlineData(UserSort.GamesHosting, "GamesHosting")]
     [InlineData(UserSort.BlogsHosting, "BlogsHosting")]
     [InlineData(UserSort.GamesPlaying, "GamesPlaying")]
     public void CountTheSameTableOnceWhenTheRangeAndTheSortShareIt(UserSort sort, string counter)
     {
-        using var context = Probe();
+        using var context = ProbeContext.Open();
 
         var filter = new UserFilter { Sort = sort, SortAscending = false };
         filter = counter switch
@@ -211,14 +182,11 @@ public class UserListCountedQueryShould
     /// A range over a counter the page is NOT sorted by still gets its own join, and
     /// the sort still gets its own.
     /// </summary>
-    /// <remarks>
-    /// The pairing is by counter, not by "there is a range somewhere": two different
-    /// numbers are two joins, and collapsing them would answer the wrong question.
-    /// </remarks>
+    /// <remarks>Paired by counter: two different numbers are two joins.</remarks>
     [Fact]
     public void KeepTheJoinsApartWhenTheRangeAndTheSortReadDifferentNumbers()
     {
-        using var context = Probe();
+        using var context = ProbeContext.Open();
 
         var sql = Repository(context).BuildPageQuery(FirstPage(), new UserFilter
         {
@@ -233,7 +201,7 @@ public class UserListCountedQueryShould
     [Fact]
     public void FilterByAColumnAndNotByASubquery()
     {
-        using var context = Probe();
+        using var context = ProbeContext.Open();
 
         var sql = UserCountQueries.InRange(
                 UserCountQueries.WithCountSum(Users(context),

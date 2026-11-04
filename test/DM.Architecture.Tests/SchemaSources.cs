@@ -9,17 +9,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The files the schema is built from, found rather than named.
 /// </summary>
-/// <remarks>
-/// The migration carries a timestamp in its file name, and the documented way to
-/// change the schema is to regenerate it — which mints a new timestamp. Spelled
-/// out as a literal, the name made every rule that reads the schema fail with a
-/// missing file the moment somebody followed the documented procedure, and fail
-/// in a way that says nothing about what it was checking.
-///
-/// Found by pattern, and asserted to be one: two migrations matching would mean
-/// the single-migration rule had already been broken, and the reader of a green
-/// run deserves to know which of the two was checked.
-/// </remarks>
+/// <remarks>Regenerating the migration mints a new timestamp, so it is found by pattern and asserted to be one.</remarks>
 internal static class SchemaSources
 {
     private static string MigrationsDirectory => Path.Combine(
@@ -31,11 +21,7 @@ internal static class SchemaSources
     /// <summary>
     /// The two files that describe the model to the tooling, with their names.
     /// </summary>
-    /// <remarks>
-    /// Both, because they are generated from the same model and drift apart
-    /// silently: the snapshot decides what the next migration would contain, and
-    /// the designer decides what this one is understood to have done.
-    /// </remarks>
+    /// <remarks>Both, generated from the same model, drift apart silently.</remarks>
     internal static IEnumerable<(string Name, string Text)> Snapshots =>
         new[]
         {
@@ -53,17 +39,8 @@ internal static class SchemaSources
     /// module.
     /// </summary>
     /// <remarks>
-    /// Found by what they are rather than by the name of the context: a rule that
-    /// reads the model by one file name fails the day the context is cut into a
-    /// file per module, and the failure names a missing declaration instead of
-    /// the rule it holds.
-    ///
-    /// Narrow on purpose, because two rules let these files spell what no other
-    /// file may (the newbie threshold and the ticket conversation). A file
-    /// elsewhere that merely takes a model builder is not the model and does not
-    /// get that licence, and neither do the catalogues of initial data, which
-    /// hand rows to the model rather than declare it. The generated migration
-    /// files are read through <see cref="Migration"/> and <see cref="Snapshots"/>.
+    /// Found by what they are, so cutting the context per module keeps them found. Narrow: two rules let
+    /// these files spell what no other file may.
     /// </remarks>
     internal static IReadOnlyList<string> ModelFiles
     {
@@ -113,11 +90,7 @@ internal static class SchemaSources
     /// <summary>
     /// The one file matching a pattern.
     /// </summary>
-    /// <remarks>
-    /// The pattern for the migration does not catch its designer file: a search
-    /// pattern ending in a three-character extension matches longer ones too, and
-    /// ".cs" is not three characters.
-    /// </remarks>
+    /// <remarks>A search pattern ending in a three-character extension matches longer ones, ".cs" is not three.</remarks>
     private static string Single(string pattern)
     {
         var matches = Directory.GetFiles(MigrationsDirectory, pattern);

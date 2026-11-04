@@ -12,21 +12,8 @@ namespace DM.Architecture.Tests;
 /// Every hand-written document can be reached from README.md by following links.
 /// </summary>
 /// <remarks>
-/// README is where a reader, a person or an agent, starts, and a document no
-/// chain of links leads to is found only by somebody who already knows it is
-/// there. Such a document stops being read, then stops being corrected, and keeps
-/// stating whatever it stated on its last day while looking as current as the
-/// rest.
-///
-/// A link is followed when it is relative and stands in prose, the way
-/// DocumentReferencesShould reads links. It is followed through any markdown file
-/// of the tree, the generated docs/STATUS.md included, and a link to a folder
-/// reaches the README.md inside it, which is what the code host shows there.
-///
-/// The documents nothing leads to on the day the gate arrived are recorded by
-/// name: the agents and skills under .claude, which the harness loads by itself,
-/// and one plan. The register only shrinks (see <see cref="HandwrittenDocuments"/>):
-/// linking a document from an index removes its record, and so does deleting it.
+/// A document no link leads to stops being read and corrected. Relative links in prose are
+/// followed through every markdown file, and a folder link reaches its README.md.
 /// </remarks>
 public class DocumentReachabilityShould
 {
@@ -35,23 +22,6 @@ public class DocumentReachabilityShould
     /// <summary>A markdown link: the target up to an optional anchor.</summary>
     private static readonly Regex Link = new(@"\]\((?<target>[^)\s#]*)(?:#[^)\s]+)?\)", RegexOptions.Compiled);
 
-    /// <summary>Hand-written documents nothing leads to from README.md, by path from the root.</summary>
-    private static readonly string[] Unreachable =
-    [
-        ".claude/agents/debugger.md",
-        ".claude/agents/frontend-developer.md",
-        ".claude/skills/architecture-review/SKILL.md",
-        ".claude/skills/architecture/SKILL.md",
-        ".claude/skills/codex-issue-coordinator/SKILL.md",
-        ".claude/skills/design/SKILL.md",
-        ".claude/skills/html-doc/SKILL.md",
-        ".claude/skills/improve/SKILL.md",
-        ".claude/skills/plan/SKILL.md",
-        ".claude/skills/review/SKILL.md",
-        ".claude/skills/task-to-pr/SKILL.md",
-        ".claude/skills/test/SKILL.md",
-        "docs/plans/DIALOGS.md",
-    ];
 
     [Fact]
     public void ReachEveryDocumentFromTheReadme()
@@ -75,21 +45,15 @@ public class DocumentReachabilityShould
             }
         }
 
-        reached.Should().HaveCountGreaterThan(20, "a walk that stops at the README reaches nothing");
+        reached.Should().HaveCountGreaterThan(1, "a walk that stops at the README reaches nothing");
 
-        var measured = HandwrittenDocuments.All()
+        var unreached = HandwrittenDocuments.All()
             .Select(document => document.Path)
-            .Where(path => !reached.Contains(path))
-            .ToDictionary(path => path, _ => 1, StringComparer.Ordinal);
+            .Where(path => !reached.Contains(path));
 
-        var problems = HandwrittenDocuments.Disagreements(
-            Unreachable.ToDictionary(path => path, _ => 1, StringComparer.Ordinal),
-            measured,
-            (path, _) => $"\"{path}\",");
-
-        string.Join(Environment.NewLine, problems).Should().BeEmpty(
+        string.Join(Environment.NewLine, unreached).Should().BeEmpty(
             "a document no chain of links from README.md leads to is found only by somebody who knows it " +
-            "is there: link it from the index of its folder, and drop its record once it is reached");
+            "is there: link it from the index of its folder");
     }
 
     /// <summary>

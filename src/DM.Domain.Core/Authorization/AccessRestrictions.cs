@@ -46,12 +46,8 @@ public static class AccessRestrictions
     /// surfaces.
     /// </summary>
     /// <remarks>
-    /// The intention resolver cannot answer this one: the resolver of
-    /// CommentIntention is shared by the forum, games, blogs and publications,
-    /// and its target is the comment, which carries neither the game nor the
-    /// blog the own-space exemption is about. The service knows, because it
-    /// loads them. The sentence lives here rather than at those call sites so
-    /// that the four surfaces cannot answer the same refusal differently.
+    /// Not in the intention resolver: the comment target carries neither the game
+    /// nor the blog the own-space exemption is about, the calling service loads them.
     /// </remarks>
     /// <param name="user">Authorization subject</param>
     /// <param name="inOwnSpace">Same question as in <see cref="MaySpeak" /></param>
@@ -67,14 +63,9 @@ public static class AccessRestrictions
     /// What the ban in force actually forbids, said in the reader's own words.
     /// </summary>
     /// <remarks>
-    /// The two scopes forbid different things and cannot share a sentence. One
-    /// sentence for both used to tell a reader under the ordinary ban that
-    /// commenting was closed to him, while his own game and his own blog were
-    /// open the whole time and the screen there showed him the field.
-    ///
-    /// Addressed to the banned reader about his own ban, which he has already
-    /// been told about by notification and can read on his profile, so naming
-    /// the scope discloses nothing.
+    /// The two scopes forbid different things and cannot share a sentence.
+    /// Naming the scope discloses nothing: the reader is told about his own ban,
+    /// already notified and shown on his profile.
     /// </remarks>
     private static string RefusalFor(AccessPolicy policy) =>
         policy.HasFlag(AccessPolicy.FullBan)

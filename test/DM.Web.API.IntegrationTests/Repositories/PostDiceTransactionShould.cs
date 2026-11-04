@@ -1,14 +1,10 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using CreatePostEntity = DM.Domain.Game.Features.Games.CreatePostEntity;
+using CreatePostEntity = DM.Domain.Game.Features.Posts.CreatePostEntity;
 using IPostRepository = DM.Domain.Game.Features.Posts.IPostRepository;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
@@ -17,12 +13,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// A post and its dice rolls are written both or neither.
 /// </summary>
 /// <remarks>
-/// A roll cannot be produced a second time — rolling again answers a different
-/// number — so it must never outlive a post nobody saw or predate one that
-/// never lands. The rolls travel inside CreatePostEntity and the repository
-/// writes them in the post's own transaction; the FK DiceRolls.PostId makes
-/// rolls before the post unrepresentable in principle. Asserted against a live
-/// Postgres because the transaction and the FK are the whole mechanism.
+/// A roll cannot be produced twice. The rolls travel inside CreatePostEntity into the post's transaction, and the FK
+/// DiceRolls.PostId stands behind them.
 /// </remarks>
 public class PostDiceTransactionShould : IntegrationTestBase
 {

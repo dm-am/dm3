@@ -31,7 +31,6 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<UnreadCountersRepository> _logger;
 
-    /// <inheritdoc />
     public UnreadCountersRepository(DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider,
         ILogger<UnreadCountersRepository> logger)
@@ -53,15 +52,7 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
         var rightNow = _dateTimeProvider.Now.UtcDateTime;
         var markers = userIds
             .Distinct()
-            .Select(id => new Entities.Shared.UnreadCounter
-            {
-                UserId = id,
-                EntityId = entityId,
-                ParentId = id,
-                EntryType = entryType,
-                LastReadUtc = rightNow,
-                Counter = 0
-            })
+            .Select(id => Fresh(id, entityId, id, entryType, rightNow))
             .ToArray();
 
         // Nobody to count for is not an error: the callers happen to guard it,
@@ -76,22 +67,9 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
     {
         // Same reason as above: the anonymous marker is addressed by the primary
         // key, so a repeated create resets it instead of failing on it.
-        return UpsertMarkersAsync(new[]
-        {
-            new Entities.Shared.UnreadCounter
-            {
-                UserId = Guid.Empty,
-                EntityId = entityId,
-                ParentId = parentId,
-                EntryType = entryType,
-                LastReadUtc = _dateTimeProvider.Now.UtcDateTime,
-                Counter = 0
-            }
-        });
+        return UpsertMarkersAsync([Fresh(Guid.Empty, entityId, parentId, entryType, _dateTimeProvider.Now.UtcDateTime)]);
     }
 
-    /// <inheritdoc />
-    public Task CreateMarkerAsync(Guid entityId, UnreadEntryType entryType) => CreateMarkerAsync(entityId, entityId, entryType);
 
     /// <inheritdoc />
     public Task IncrementAsync(Guid entityId, UnreadEntryType entryType) =>
@@ -193,7 +171,7 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
                 .Select(g => new { ParentId = g.Key, Counter = g.Count(e => e.Counter > 0) })
                 .ToListAsync())
             .ToDictionary(c => c.ParentId, c => c.Counter);
-        return parentIds.ToDictionary(id => id, id => counters.TryGetValue(id, out var counter) ? counter : 0);
+        return parentIds.ToDictionary(id => id, counters.GetValueOrDefault);
     }
 
     /// <inheritdoc />
@@ -204,7 +182,7 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
                 .Select(g => new { ParentId = g.Key, Counter = g.Sum(e => e.Counter) })
                 .ToListAsync())
             .ToDictionary(c => c.ParentId, c => c.Counter);
-        return parentIds.ToDictionary(id => id, id => counters.TryGetValue(id, out var counter) ? counter : 0);
+        return parentIds.ToDictionary(id => id, counters.GetValueOrDefault);
     }
 
     /// <summary>
@@ -216,7 +194,7 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
     private IQueryable<IGrouping<Guid, EntityAggregate>> AggregateByParents(
         Guid userId, UnreadEntryType entryType, Guid[] parentIds)
     {
-        var userIds = new[] { userId, Guid.Empty }.Distinct().ToArray();
+        var userIds = ReaderAndAnonymous(userId);
         // Grouped by the pair rather than by the entity alone: the rows of one
         // entity in this filtered set share their parent (a topic is parented
         // by its board for the reader and for the anonymous marker alike), and
@@ -236,6 +214,21 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
             .GroupBy(e => e.ParentId);
     }
 
+    /// <summary>The reader's own markers and the anonymous ones, which stand in where the reader has none.</summary>
+    private static Guid[] ReaderAndAnonymous(Guid userId) => new[] { userId, Guid.Empty }.Distinct().ToArray();
+
+    /// <summary>A marker with nothing unread, read at the given moment.</summary>
+    private static Entities.Shared.UnreadCounter Fresh(
+        Guid userId, Guid entityId, Guid parentId, UnreadEntryType entryType, DateTime lastReadUtc) => new()
+        {
+            UserId = userId,
+            EntityId = entityId,
+            ParentId = parentId,
+            EntryType = entryType,
+            LastReadUtc = lastReadUtc,
+            Counter = 0
+        };
+
     private sealed class EntityAggregate
     {
         public Guid ParentId { get; init; }
@@ -246,7 +239,7 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
     public async Task<IDictionary<Guid, int>> SelectByEntitiesAsync(
         Guid userId, UnreadEntryType entryType, params Guid[] entityIds)
     {
-        var userIds = new[] { userId, Guid.Empty }.Distinct().ToArray();
+        var userIds = ReaderAndAnonymous(userId);
         var counters = (await _dbContext.UnreadCounters
                 .TagWith("DM.UnreadCounters.ByEntities")
                 .Where(c => userIds.Contains(c.UserId) &&
@@ -257,7 +250,7 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
                 .Select(g => new { EntityId = g.Key, Counter = g.Min(c => c.Counter) })
                 .ToListAsync())
             .ToDictionary(c => c.EntityId, c => c.Counter);
-        return entityIds.ToDictionary(id => id, id => counters.TryGetValue(id, out var counter) ? counter : 0);
+        return entityIds.ToDictionary(id => id, counters.GetValueOrDefault);
     }
 
     /// <inheritdoc />
@@ -305,18 +298,7 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
             return;
         }
 
-        await UpsertMarkersAsync(new[]
-        {
-            new Entities.Shared.UnreadCounter
-            {
-                UserId = userId,
-                EntityId = entityId,
-                ParentId = counter.ParentId,
-                EntryType = entryType,
-                LastReadUtc = _dateTimeProvider.Now.UtcDateTime,
-                Counter = 0
-            }
-        });
+        await UpsertMarkersAsync([Fresh(userId, entityId, counter.ParentId, entryType, _dateTimeProvider.Now.UtcDateTime)]);
     }
 
     /// <inheritdoc />
@@ -333,15 +315,7 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
 
         var rightNow = _dateTimeProvider.Now.UtcDateTime;
         var markers = entityIds
-            .Select(id => new Entities.Shared.UnreadCounter
-            {
-                UserId = userId,
-                EntityId = id,
-                ParentId = parentId,
-                EntryType = entryType,
-                LastReadUtc = rightNow,
-                Counter = 0
-            })
+            .Select(id => Fresh(userId, id, parentId, entryType, rightNow))
             .ToArray();
 
         // Nothing unread under this parent is the ordinary state of a user who

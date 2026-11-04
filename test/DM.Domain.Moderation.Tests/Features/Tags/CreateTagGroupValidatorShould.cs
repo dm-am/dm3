@@ -1,12 +1,11 @@
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Tags;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tags;
 
-public class CreateTagGroupValidatorShould : UnitTestBase
+public class CreateTagGroupValidatorShould
 {
     private readonly CreateTagGroupValidator validator = new();
 
@@ -37,7 +36,7 @@ public class CreateTagGroupValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenTitleExceedsMaxLength()
     {
-        var input = new CreateTagGroup { Title = new string('a', 101) };
+        var input = new CreateTagGroup { Title = new string('a', TagFieldLimits.TitleMaxLength + 1) };
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(g => g.Title)
@@ -50,7 +49,7 @@ public class CreateTagGroupValidatorShould : UnitTestBase
         var input = new CreateTagGroup
         {
             Title = "Genres",
-            Description = new string('a', 501)
+            Description = new string('a', TagFieldLimits.DescriptionMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);

@@ -12,9 +12,9 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Notepads;
-using DM.Domain.Core.Users;
 using DM.Domain.Core.Dto;
 using DM.Testing;
+using DM.Testing.Dsl;
 using DM.Domain.Account.Features.Authentication;
 using AwesomeAssertions;
 using NSubstitute;
@@ -24,30 +24,30 @@ namespace DM.Domain.Blog.Tests.Features.Notepads;
 
 public class BlogNotepadServiceShould : UnitTestBase
 {
-    private readonly INotepadRepository _repository;
-    private readonly IBlogService _blogService;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly BlogNotepadService _service;
+    private readonly INotepadRepository repository;
+    private readonly IBlogService blogService;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly BlogNotepadService service;
 
     public BlogNotepadServiceShould()
     {
-        _repository = Mock<INotepadRepository>();
-        _blogService = Mock<IBlogService>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        repository = Mock<INotepadRepository>();
+        blogService = Mock<IBlogService>();
+        identityProvider = Mock<IIdentityProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _identityProvider.Current.Returns(Identity.Guest());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        identityProvider.Current.Returns(Identity.Guest());
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _service = new BlogNotepadService(
-            _repository,
-            _blogService,
-            _identityProvider,
-            _guidFactory,
-            _dateTimeProvider);
+        service = new BlogNotepadService(
+            repository,
+            blogService,
+            identityProvider,
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
@@ -55,20 +55,15 @@ public class BlogNotepadServiceShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = userId },
-            Assistants = new List<BlogAssistantInfo>()
-        };
-        var identity = AuthenticatedIdentities.Of(userId);
+        var blog = BlogOf(blogId, userId);
+        var identity = Identities.User(userId, "testuser");
         var entries = new List<NotepadEntry> { new() { Id = Guid.NewGuid() } };
 
-        _identityProvider.Current.Returns(identity);
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetEntriesAsync(NotepadType.Blog, blogId, null, default).Returns(entries);
+        identityProvider.Current.Returns(identity);
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetEntriesAsync(NotepadType.Blog, blogId, null, default).Returns(entries);
 
-        var result = await _service.GetEntries(blogId);
+        var result = await service.GetEntries(blogId);
 
         result.Should().BeEquivalentTo(entries);
     }
@@ -79,20 +74,15 @@ public class BlogNotepadServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = ownerId },
-            Assistants = new List<BlogAssistantInfo> { new() { UserId = assistantId } }
-        };
-        var identity = AuthenticatedIdentities.Of(assistantId);
+        var blog = BlogOf(blogId, ownerId, assistantId);
+        var identity = Identities.User(assistantId, "testuser");
         var entries = new List<NotepadEntry> { new() { Id = Guid.NewGuid() } };
 
-        _identityProvider.Current.Returns(identity);
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetEntriesAsync(NotepadType.Blog, blogId, null, default).Returns(entries);
+        identityProvider.Current.Returns(identity);
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetEntriesAsync(NotepadType.Blog, blogId, null, default).Returns(entries);
 
-        var result = await _service.GetEntries(blogId);
+        var result = await service.GetEntries(blogId);
 
         result.Should().BeEquivalentTo(entries);
     }
@@ -103,19 +93,14 @@ public class BlogNotepadServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var ownerId = Guid.NewGuid();
         var nonParticipantId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = ownerId },
-            Assistants = new List<BlogAssistantInfo>()
-        };
-        var identity = AuthenticatedIdentities.Of(nonParticipantId);
+        var blog = BlogOf(blogId, ownerId);
+        var identity = Identities.User(nonParticipantId, "testuser");
 
-        _identityProvider.Current.Returns(identity);
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _blogService.IsVisibleToViewerAsync(blogId, default).Returns(true);
+        identityProvider.Current.Returns(identity);
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        blogService.IsVisibleToViewerAsync(blogId, default).Returns(true);
 
-        var act = async () => await _service.GetEntries(blogId);
+        var act = async () => await service.GetEntries(blogId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
@@ -129,18 +114,13 @@ public class BlogNotepadServiceShould : UnitTestBase
     public async Task AnswerAStrangerOnTheNotepadOfAHiddenBlogAsOnNoBlogAtAll()
     {
         var blogId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = Guid.NewGuid() },
-            Assistants = new List<BlogAssistantInfo>()
-        };
+        var blog = BlogOf(blogId, Guid.NewGuid());
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(Guid.NewGuid()));
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _blogService.IsVisibleToViewerAsync(blogId, default).Returns(false);
+        identityProvider.Current.Returns(Identities.User(Guid.NewGuid(), "testuser"));
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        blogService.IsVisibleToViewerAsync(blogId, default).Returns(false);
 
-        var act = async () => await _service.GetEntries(blogId);
+        var act = async () => await service.GetEntries(blogId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound && e.Message == RefusalMessage.BlogNotFound);
@@ -150,9 +130,9 @@ public class BlogNotepadServiceShould : UnitTestBase
     public async Task ThrowWhenEntryNotFound()
     {
         var entryId = Guid.NewGuid();
-        _repository.GetEntryAsync(entryId, default).Returns((NotepadEntry?)null);
+        repository.GetEntryAsync(entryId, default).Returns((NotepadEntry?)null);
 
-        var act = async () => await _service.GetEntry(entryId);
+        var act = async () => await service.GetEntry(entryId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -164,9 +144,9 @@ public class BlogNotepadServiceShould : UnitTestBase
         var entryId = Guid.NewGuid();
         var entry = new NotepadEntry { Id = entryId, NotepadType = NotepadType.Player };
 
-        _repository.GetEntryAsync(entryId, default).Returns(entry);
+        repository.GetEntryAsync(entryId, default).Returns(entry);
 
-        var act = async () => await _service.GetEntry(entryId);
+        var act = async () => await service.GetEntry(entryId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
@@ -178,25 +158,20 @@ public class BlogNotepadServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var entryId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var blog = new BlogDto
-        {
-            Id = blogId,
-            Author = new GeneralUser { UserId = userId },
-            Assistants = new List<BlogAssistantInfo>()
-        };
-        var identity = AuthenticatedIdentities.Of(userId);
+        var blog = BlogOf(blogId, userId);
+        var identity = Identities.User(userId, "testuser");
         var createEntry = new CreateNotepadEntry { Title = "Test", Content = "Content" };
         var createdEntry = new NotepadEntry { Id = entryId };
 
-        _identityProvider.Current.Returns(identity);
-        _guidFactory.Create().Returns(entryId);
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.CreateEntryAsync(Arg.Any<CreateNotepadEntryInternal>(), default).Returns(createdEntry);
+        identityProvider.Current.Returns(identity);
+        guidFactory.Create().Returns(entryId);
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.CreateEntryAsync(Arg.Any<CreateNotepadEntryInternal>(), default).Returns(createdEntry);
 
-        var result = await _service.CreateEntry(blogId, createEntry);
+        var result = await service.CreateEntry(blogId, createEntry);
 
         result.Id.Should().Be(entryId);
-        await _repository.Received(1).CreateEntryAsync(
+        await repository.Received(1).CreateEntryAsync(
             Arg.Is<CreateNotepadEntryInternal>(e =>
                 e.NotepadType == NotepadType.Blog &&
                 e.ContainerId == blogId &&
@@ -210,15 +185,15 @@ public class BlogNotepadServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
         var entryId = Guid.NewGuid();
-        var blog = BlogWithAssistant(blogId, Guid.NewGuid(), assistantId);
+        var blog = BlogOf(blogId, Guid.NewGuid(), assistantId);
         var entry = BlogEntry(entryId, blogId, assistantId);
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(assistantId));
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetEntryAsync(entryId, default).Returns(entry);
-        _repository.UpdateEntryAsync(Arg.Any<UpdateNotepadEntryInternal>(), default).Returns(entry);
+        identityProvider.Current.Returns(Identities.User(assistantId, "testuser"));
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetEntryAsync(entryId, default).Returns(entry);
+        repository.UpdateEntryAsync(Arg.Any<UpdateNotepadEntryInternal>(), default).Returns(entry);
 
-        var result = await _service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
+        var result = await service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
 
         result.Should().BeSameAs(entry);
     }
@@ -230,20 +205,20 @@ public class BlogNotepadServiceShould : UnitTestBase
         var ownerId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
         var entryId = Guid.NewGuid();
-        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var blog = BlogOf(blogId, ownerId, assistantId);
         var entry = BlogEntry(entryId, blogId, ownerId);
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(assistantId));
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetEntryAsync(entryId, default).Returns(entry);
+        identityProvider.Current.Returns(Identities.User(assistantId, "testuser"));
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetEntryAsync(entryId, default).Returns(entry);
 
-        var act = async () => await _service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
+        var act = async () => await service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
 
         // The notepad is open to an assistant, the words in it are not theirs to
         // rewrite: the entry would still stand under the owner's name.
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().UpdateEntryAsync(
+        await repository.DidNotReceive().UpdateEntryAsync(
             Arg.Any<UpdateNotepadEntryInternal>(), Arg.Any<CancellationToken>());
     }
 
@@ -254,14 +229,14 @@ public class BlogNotepadServiceShould : UnitTestBase
         var ownerId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
         var entryId = Guid.NewGuid();
-        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var blog = BlogOf(blogId, ownerId, assistantId);
         var entry = BlogEntry(entryId, blogId, assistantId);
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(ownerId));
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetEntryAsync(entryId, default).Returns(entry);
+        identityProvider.Current.Returns(Identities.User(ownerId, "testuser"));
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetEntryAsync(entryId, default).Returns(entry);
 
-        var act = async () => await _service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
+        var act = async () => await service.UpdateEntry(entryId, new UpdateNotepadEntry { Title = "Updated Entry" });
 
         // Owning the blog is the right to remove an entry, not to rewrite one.
         await act.Should().ThrowAsync<HttpException>()
@@ -275,16 +250,16 @@ public class BlogNotepadServiceShould : UnitTestBase
         var ownerId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
         var entryId = Guid.NewGuid();
-        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var blog = BlogOf(blogId, ownerId, assistantId);
         var entry = BlogEntry(entryId, blogId, assistantId);
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(ownerId));
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetEntryAsync(entryId, default).Returns(entry);
+        identityProvider.Current.Returns(Identities.User(ownerId, "testuser"));
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetEntryAsync(entryId, default).Returns(entry);
 
-        await _service.DeleteEntry(entryId);
+        await service.DeleteEntry(entryId);
 
-        await _repository.Received(1).DeleteEntryAsync(entryId, ownerId, default);
+        await repository.Received(1).DeleteEntryAsync(entryId, ownerId, default);
     }
 
     [Fact]
@@ -294,18 +269,18 @@ public class BlogNotepadServiceShould : UnitTestBase
         var ownerId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
         var entryId = Guid.NewGuid();
-        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var blog = BlogOf(blogId, ownerId, assistantId);
         var entry = BlogEntry(entryId, blogId, ownerId);
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(assistantId));
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetEntryAsync(entryId, default).Returns(entry);
+        identityProvider.Current.Returns(Identities.User(assistantId, "testuser"));
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetEntryAsync(entryId, default).Returns(entry);
 
-        var act = async () => await _service.DeleteEntry(entryId);
+        var act = async () => await service.DeleteEntry(entryId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().DeleteEntryAsync(
+        await repository.DidNotReceive().DeleteEntryAsync(
             Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
@@ -316,23 +291,23 @@ public class BlogNotepadServiceShould : UnitTestBase
         var ownerId = Guid.NewGuid();
         var assistantId = Guid.NewGuid();
         var entryId = Guid.NewGuid();
-        var blog = BlogWithAssistant(blogId, ownerId, assistantId);
+        var blog = BlogOf(blogId, ownerId, assistantId);
         var entry = BlogEntry(entryId, blogId, assistantId);
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(assistantId));
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.GetEntryAsync(entryId, default).Returns(entry);
+        identityProvider.Current.Returns(Identities.User(assistantId, "testuser"));
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.GetEntryAsync(entryId, default).Returns(entry);
 
-        await _service.DeleteEntry(entryId);
+        await service.DeleteEntry(entryId);
 
-        await _repository.Received(1).DeleteEntryAsync(entryId, assistantId, default);
+        await repository.Received(1).DeleteEntryAsync(entryId, assistantId, default);
     }
 
-    private static BlogDto BlogWithAssistant(Guid blogId, Guid ownerId, Guid assistantId) => new()
+    private static BlogDto BlogOf(Guid blogId, Guid ownerId, params Guid[] assistantIds) => new()
     {
         Id = blogId,
         Author = new GeneralUser { UserId = ownerId },
-        Assistants = new List<BlogAssistantInfo> { new() { UserId = assistantId } }
+        Assistants = assistantIds.Select(id => new BlogAssistantInfo { UserId = id }).ToList()
     };
 
     private static NotepadEntry BlogEntry(Guid entryId, Guid blogId, Guid authorId) => new()
@@ -342,5 +317,4 @@ public class BlogNotepadServiceShould : UnitTestBase
         ContainerId = blogId,
         AuthorId = authorId
     };
-
 }

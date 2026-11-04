@@ -16,33 +16,22 @@ public static class WarningPolicy
     public const int MaxPointsPerWarning = 6;
 
     /// <summary>
-    /// The total of active points at which the site bans by itself.
+    /// The total of active points at which the site bans by itself, and the
+    /// denominator of the "N/6" the violators table shows.
     /// </summary>
-    /// <remarks>
-    /// Also the denominator of the "N/6" the violators table shows, so the scale
-    /// on the screen and the line the automatic ban is drawn at are one constant.
-    /// </remarks>
     public const int AutoBanPointsThreshold = 6;
 
     /// <summary>
-    /// How long the automatic ban runs.
+    /// How long the automatic ban runs: two days for a senior moderator or an
+    /// administrator to look at the case and lift the ban or issue one of his own.
     /// </summary>
-    /// <remarks>
-    /// Two days, and deliberately short: the automatic ban decides nothing. It
-    /// buys the time in which a senior moderator or an administrator looks at
-    /// what happened and either lifts it or issues a ban of his own.
-    /// </remarks>
     public const int AutoBanDurationHours = 48;
 
     /// <summary>
-    /// The scope the automatic ban is issued with: the ordinary one.
+    /// The scope the automatic ban is issued with: the ordinary one, never
+    /// <see cref="AccessPolicy.FullBan" />, which fails authentication before any human
+    /// has looked at the case.
     /// </summary>
-    /// <remarks>
-    /// Never <see cref="AccessPolicy.FullBan" />. A full ban fails authentication
-    /// itself, and locking a reader out of the site on an arithmetic threshold,
-    /// before any human has looked at the case, is exactly what the two-day window
-    /// exists to avoid.
-    /// </remarks>
     public const AccessPolicy AutoBanPolicy = AccessPolicy.DemocraticBan;
 
     /// <summary>
@@ -52,4 +41,16 @@ public static class WarningPolicy
     /// </summary>
     public const string AutoBanComment =
         "Автоматический бан по сумме предупреждений, до решения старшего модератора";
+
+    /// <summary>
+    /// The longest text of a moderation decision: the reason of a warning, of a change
+    /// of its points, of a ban and of a lift.
+    /// </summary>
+    /// <remarks>
+    /// About a page of text: the reason travels whole in the notification the user
+    /// receives and stands whole in the moderation lists, and an argument longer than
+    /// that belongs in a ticket. The moderation windows hold a copy, compared by
+    /// ClientFieldLimitsShould.
+    /// </remarks>
+    public const int ReasonMaxLength = 2000;
 }

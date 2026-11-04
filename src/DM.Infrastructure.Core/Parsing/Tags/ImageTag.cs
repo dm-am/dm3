@@ -12,9 +12,8 @@ internal enum ImageGate
     None,
 
     /// <summary>
-    /// Behind a spoiler marked <c>data-bb-gate="image"</c>: the client opens it or
-    /// keeps it closed by the reader's own layout, which the server does not know
-    /// (the global chat, see BBCODE_RENDERING.md, "Картинки общего чата").
+    /// Behind a spoiler marked <c>data-bb-gate="image"</c>, which the client opens by
+    /// the reader's layout (BBCODE_RENDERING/grammar.md, "Картинки глобального чата").
     /// </summary>
     ReaderChoice,
 
@@ -27,18 +26,10 @@ internal enum ImageGate
 /// parameters.
 /// </summary>
 /// <remarks>
-/// The markup is shared with the client renderer and the editor node, which is
-/// why its attribute set is frozen by BbParserWrapperShould. Sizing flows through
-/// CSS custom properties on a wrapper <c>span.bb-image-frame</c>, so the classes
-/// of an ancestor can override it through the ordinary cascade; the image itself
-/// carries no inline style. A size is a limit, not a stretch: one side given
-/// scales the other in proportion, both given fit the picture inside the box.
-///
-/// There is no <c>alt</c> parameter. A reader never sees the description, and
-/// text nobody sees on the page is the place for an insult nobody notices; the
-/// grammar reads <c>alt</c> as a parameter the tag does not have, so the tag is
-/// printed as typed. The image carries an empty alt of its own, which tells a
-/// screen reader to pass it by rather than to read its address aloud.
+/// The markup is shared with the client and the editor (BbImageTagShould). A size
+/// is a limit set through CSS properties on the frame, so an ancestor can override
+/// it. No <c>alt</c> parameter: text nobody sees is the place for an insult nobody
+/// notices; the empty alt keeps a screen reader from reading the address.
 /// </remarks>
 internal sealed class ImageTag : ContentTag
 {
@@ -71,9 +62,7 @@ internal sealed class ImageTag : ContentTag
     {
         var encodedUrl = HttpUtility.HtmlAttributeEncode(content);
 
-        // loading/decoding: a page carries up to twenty posts, and images below
-        // the fold cost first paint for nothing. Both attributes are inert for
-        // anything already on screen.
+        // Lazy: images below the fold of a page of posts cost first paint for nothing.
         var image = $"<img src=\"{encodedUrl}\" class=\"bb-image\" " +
                     $"data-bb-tag=\"img\" loading=\"lazy\" decoding=\"async\" " +
                     "referrerpolicy=\"no-referrer\" alt=\"\" />";
@@ -107,18 +96,13 @@ internal sealed class ImageTag : ContentTag
     public override string RenderText(TagNode node, string content) => content;
 
     /// <summary>
-    /// The same markup an ordinary [spoiler] emits, because the client wires one
-    /// behaviour to a .spoiler-head plus the .spoiler next to it, and a second
-    /// shape would need a second implementation of the same toggle.
+    /// The markup of a [spoiler] without a caption, so that the client toggles and
+    /// captions both the same way.
     /// </summary>
     private string Gate(string image) => _gate switch
     {
-        ImageGate.ReaderChoice =>
-            $"<a href=\"#\" class=\"spoiler-head\" data-bb-gate=\"image\">{SpoilerTag.DefaultCaption}</a>" +
-            $"<div class=\"spoiler\" data-bb-gate=\"image\">{image}</div>",
-        ImageGate.Always =>
-            $"<a href=\"#\" class=\"spoiler-head\">{SpoilerTag.DefaultCaption}</a>" +
-            $"<div class=\"spoiler\">{image}</div>",
+        ImageGate.ReaderChoice => $"{SpoilerTag.Open(null, " data-bb-gate=\"image\"")}{image}</div>",
+        ImageGate.Always => $"{SpoilerTag.Open(null)}{image}</div>",
         ImageGate.None => image
     };
 }

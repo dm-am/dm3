@@ -2,21 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The window of the site as it behaves, not as it looks: the look is read off
- * the stylesheets in dialogSurface.spec.ts.
- *
- * What the owner approved on 22 September 2026 is behaviour, and each piece of
- * it had a history of going wrong in one window and not the next. A refusal
- * fell as a plate on a page whose window had already closed. A second press
- * sent a second request. Escape dropped a typed reason without a word. The
- * caret started on the button that deletes. So each rule is asked here of the
- * window itself, through the one form the windows of the site hold.
- *
- * The library tier underneath is reduced to a box that carries the class it is
- * handed and remembers what it was asked to do: the window decides every
- * closing itself, and that is the half under test.
- */
+// The window as it behaves; its look is read off the stylesheets in dialogSurface.spec.ts.
 import { afterEach, describe, it, expect, vi } from "vitest";
 import {
   defineComponent,
@@ -41,6 +27,7 @@ import {
   closeOpenWindows,
   openWindowCount,
 } from "@/shared/lib/composables/useOpenWindows";
+import { deferred } from "@/shared/lib/testing/tasks";
 
 const library = vi.hoisted(() => ({
   props: {} as Record<string, unknown>,
@@ -71,17 +58,6 @@ vi.mock("vue-final-modal", () => ({
       },
   }),
 }));
-
-/** A promise the test settles when it wants the answer to arrive. */
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  let reject!: (reason: unknown) => void;
-  const promise = new Promise<T>((yes, no) => {
-    resolve = yes;
-    reject = no;
-  });
-  return { promise, resolve, reject };
-}
 
 const problem = (
   status: number,
@@ -709,12 +685,7 @@ describe("the page under a window", () => {
   });
 });
 
-/**
- * The owner's word: the windows close when the site learns the session is
- * over (sessionExpiry.ts calls closeOpenWindows). What typed text there is
- * cannot be sent any more, so nothing is asked. The guest card stays: it is
- * how the reader signs in again, and the end of the session is what opens it.
- */
+/** The windows close when the session ends (closeOpenWindows); the guest card stays: it signs the reader in. */
 describe("the end of the session", () => {
   it("closes an open window without asking about typed text", async () => {
     const w = open({ modelValue: true, dirty: true });

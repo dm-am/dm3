@@ -4,13 +4,7 @@ import {
 } from "@/shared/api/models/achievements";
 import { pluralize } from "@/shared/lib/utils/pluralize";
 
-/**
- * Display-unit number for a metric value. Most metrics are raw counts shown
- * as-is; DaysSinceRegistration is stored in days but shown in years, so it is
- * converted. SSOT used by BOTH the goal number (formatThreshold) and the
- * current-progress number — so "current из goal" never mixes units
- * (e.g. never "4054 из 15 лет", always "11 из 15 лет").
- */
+/** A metric value in its display unit: registration days are shown as years. */
 export function metricDisplayNumber(
   metric: AchievementMetric,
   value: number,
@@ -23,60 +17,62 @@ export function metricDisplayNumber(
   return value;
 }
 
-/**
- * Human-readable threshold for a tier. SSOT for every place thresholds
- * are shown (tile numbers under the bar, the popover tier table).
- *
- * The metric description lives on the category; here only the number format
- * for the metric's unit of measure (posts / years / likes / etc).
- *
- * When adding a new metric, this changes + the paired case in
- * `getMetricValue` (it computes the metric value for a specific user).
- */
+type UnitWords = [one: string, few: string, many: string];
+
+const GAMES: UnitWords = ["игра", "игры", "игр"];
+
+/** The unit word of a counted metric, in its three forms. */
+const UNIT_WORDS: Partial<Record<AchievementMetric, UnitWords>> = {
+  [AchievementMetric.GamePostsAuthored]: ["пост", "поста", "постов"],
+  [AchievementMetric.GamesHosted]: GAMES,
+  [AchievementMetric.GamesPlayed]: GAMES,
+  [AchievementMetric.GameDrops]: GAMES,
+  [AchievementMetric.BlogsHosted]: ["блог", "блога", "блогов"],
+  [AchievementMetric.PublicationsAuthored]: [
+    "публикация",
+    "публикации",
+    "публикаций",
+  ],
+  [AchievementMetric.TopicsAuthored]: ["топик", "топика", "топиков"],
+  [AchievementMetric.CommentsAuthored]: [
+    "комментарий",
+    "комментария",
+    "комментариев",
+  ],
+  [AchievementMetric.GlobalChatMessages]: [
+    "сообщение",
+    "сообщения",
+    "сообщений",
+  ],
+  [AchievementMetric.LikesReceived]: [
+    "отметка Нравится",
+    "отметки Нравится",
+    "отметок Нравится",
+  ],
+  [AchievementMetric.BansReceived]: ["бан", "бана", "банов"],
+};
+
+/** A tier's threshold with its unit word; a new metric changes getMetricValue too. */
 export function formatThreshold(
   metric: AchievementMetric,
   threshold: number,
 ): string {
-  switch (metric) {
-    case AchievementMetric.GamePostsAuthored:
-      return `${threshold} ${pluralize(threshold, "пост", "поста", "постов")}`;
-    case AchievementMetric.DaysSinceRegistration: {
-      const years = metricDisplayNumber(metric, threshold);
-      return `${years} ${pluralize(years, "год", "года", "лет")}`;
-    }
-    case AchievementMetric.PostReviewScoreSum:
-      // No "+" sign: the progress line composes "X из <threshold>", and a
-      // signed goal reads broken ("350 из +500"). Unit word instead.
-      return `${threshold} рейтинга`;
-    case AchievementMetric.GamesHosted:
-    case AchievementMetric.GamesPlayed:
-    case AchievementMetric.GameDrops:
-      return `${threshold} ${pluralize(threshold, "игра", "игры", "игр")}`;
-    case AchievementMetric.BlogsHosted:
-      return `${threshold} ${pluralize(threshold, "блог", "блога", "блогов")}`;
-    case AchievementMetric.PublicationsAuthored:
-      return `${threshold} ${pluralize(threshold, "публикация", "публикации", "публикаций")}`;
-    case AchievementMetric.TopicsAuthored:
-      return `${threshold} ${pluralize(threshold, "топик", "топика", "топиков")}`;
-    case AchievementMetric.CommentsAuthored:
-      return `${threshold} ${pluralize(threshold, "комментарий", "комментария", "комментариев")}`;
-    case AchievementMetric.GlobalChatMessages:
-      return `${threshold} ${pluralize(threshold, "сообщение", "сообщения", "сообщений")}`;
-    case AchievementMetric.LikesReceived:
-      return `${threshold} ${pluralize(threshold, "лайк", "лайка", "лайков")}`;
-    case AchievementMetric.BansReceived:
-      return `${threshold} ${pluralize(threshold, "бан", "бана", "банов")}`;
-    default:
-      return String(threshold);
+  if (metric === AchievementMetric.DaysSinceRegistration) {
+    const years = metricDisplayNumber(metric, threshold);
+    return `${years} ${pluralize(years, "год", "года", "лет")}`;
   }
+  // No "+" sign: a signed goal reads broken in "350 из +500".
+  if (metric === AchievementMetric.PostReviewScoreSum) {
+    return `${threshold} рейтинга`;
+  }
+  // A metric the server added before this client knew it is shown as the bare number.
+  const words = UNIT_WORDS[metric];
+  return words
+    ? `${threshold} ${pluralize(threshold, ...words)}`
+    : String(threshold);
 }
 
-/**
- * Contest series label for the tile and popover:
- *   "23-й литературный конкурс", "1-й арт-конкурс".
- * Used as the tile title of a placement award (contest_first/second/third)
- * — the placement is read from the tier color, and the "which contest" context is here.
- */
+/** "23-й литературный конкурс": the title of a placement award's tile. */
 export function formatContestSeriesTitle(
   contestType: ContestType,
   number: number,

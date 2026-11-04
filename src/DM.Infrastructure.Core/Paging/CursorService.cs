@@ -1,5 +1,5 @@
 using System;
-using System.Text;
+using System.Diagnostics.CodeAnalysis;
 using System.Text.Json;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
@@ -15,7 +15,7 @@ public class CursorService : ICursorService
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase
     };
 
-    private string Encode(Guid entityId, DateTimeOffset timestampUtc, CursorDirection direction)
+    private static string Encode(Guid entityId, DateTimeOffset timestampUtc, CursorDirection direction)
     {
         var data = new CursorData
         {
@@ -24,12 +24,10 @@ public class CursorService : ICursorService
             Direction = direction
         };
 
-        var json = JsonSerializer.Serialize(data, JsonOptions);
-        var bytes = Encoding.UTF8.GetBytes(json);
-        return Convert.ToBase64String(bytes);
+        return Convert.ToBase64String(JsonSerializer.SerializeToUtf8Bytes(data, JsonOptions));
     }
 
-    private CursorData? Decode(string cursor)
+    private static CursorData? Decode(string cursor)
     {
         if (string.IsNullOrWhiteSpace(cursor))
         {
@@ -38,32 +36,26 @@ public class CursorService : ICursorService
 
         try
         {
-            var bytes = Convert.FromBase64String(cursor);
-            var json = Encoding.UTF8.GetString(bytes);
-            return JsonSerializer.Deserialize<CursorData>(json, JsonOptions);
+            return JsonSerializer.Deserialize<CursorData>(Convert.FromBase64String(cursor), JsonOptions);
         }
-        catch (Exception)
+        catch (Exception e) when (e is FormatException or JsonException)
         {
             return null;
         }
     }
 
     /// <inheritdoc />
-    public bool TryDecode(string cursor, out CursorData data)
+    public bool TryDecode(string cursor, [NotNullWhen(true)] out CursorData? data)
     {
-        data = Decode(cursor)!;
+        data = Decode(cursor);
         return data != null;
     }
 
     /// <inheritdoc />
-    public string CreateAfterCursor(Guid entityId, DateTimeOffset timestampUtc)
-    {
-        return Encode(entityId, timestampUtc, CursorDirection.After);
-    }
+    public string CreateAfterCursor(Guid entityId, DateTimeOffset timestampUtc) =>
+        Encode(entityId, timestampUtc, CursorDirection.After);
 
     /// <inheritdoc />
-    public string CreateBeforeCursor(Guid entityId, DateTimeOffset timestampUtc)
-    {
-        return Encode(entityId, timestampUtc, CursorDirection.Before);
-    }
+    public string CreateBeforeCursor(Guid entityId, DateTimeOffset timestampUtc) =>
+        Encode(entityId, timestampUtc, CursorDirection.Before);
 }

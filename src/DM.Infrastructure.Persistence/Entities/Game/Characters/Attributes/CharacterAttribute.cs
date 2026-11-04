@@ -31,9 +31,6 @@ public class CharacterAttribute
     /// </summary>
     public string Value { get; set; } = null!;
 
-    /// <summary>
-    /// Character
-    /// </summary>
     [ForeignKey(nameof(CharacterId))]
     public virtual Character Character { get; set; } = null!;
 }

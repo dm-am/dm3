@@ -22,11 +22,7 @@ namespace DM.Web.API.Tests.Shared;
 /// The partition key decides whose budget a request spends.
 /// </summary>
 /// <remarks>
-/// Asserted on the key rather than by counting to 429: the limiter itself is
-/// framework code, and the key is the whole of what this project decides. The
-/// middleware is run for real because it is the half that supplies the account —
-/// a partitioner handed a bare context can only answer "address", which is
-/// exactly the failure being kept out.
+/// Asserted on the key: the limiter is framework code. The middleware runs for real, it supplies the account.
 /// </remarks>
 public class RateLimitPartitioningShould : UnitTestBase
 {
@@ -113,9 +109,7 @@ public class RateLimitPartitioningShould : UnitTestBase
     }
 
     /// <summary>
-    /// A token the cipher accepts, carrying the given account. The session half
-    /// is deliberately different every time: the budget belongs to the account,
-    /// not to the browser it was last opened in.
+    /// A token the cipher accepts for the account, its session half different every time.
     /// </summary>
     private string TokenOf(Guid userId)
     {

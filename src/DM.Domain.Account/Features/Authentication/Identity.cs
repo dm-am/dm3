@@ -11,13 +11,13 @@ public class Identity : IIdentity
     }
 
     /// <inheritdoc />
-    public AuthenticatedUser User { get; private init; } = null!;
+    public AuthenticatedUser User { get; private init; } = AuthenticatedUser.Guest;
 
     /// <inheritdoc />
     public Session? Session { get; private init; }
 
     /// <inheritdoc />
-    public UserSettings Settings { get; private init; } = null!;
+    public UserSettings Settings { get; private init; } = UserSettings.Default;
 
     /// <inheritdoc />
     public AuthenticationError Error { get; private init; }
@@ -46,11 +46,7 @@ public class Identity : IIdentity
         AuthenticationError error, int? lockoutSecondsRemaining = null) => new Identity
         {
             Error = error,
-            LockoutSecondsRemaining = lockoutSecondsRemaining,
-            User = AuthenticatedUser.Guest,
-            Settings = UserSettings.Default,
-            AuthenticationToken = null,
-            Session = null
+            LockoutSecondsRemaining = lockoutSecondsRemaining
         };
 
     /// <summary>
@@ -61,11 +57,7 @@ public class Identity : IIdentity
     public static IIdentity Banned(DateTimeOffset? endsUtc) => new Identity
     {
         Error = AuthenticationError.Banned,
-        BanEndsUtc = endsUtc,
-        User = AuthenticatedUser.Guest,
-        Settings = UserSettings.Default,
-        AuthenticationToken = null,
-        Session = null
+        BanEndsUtc = endsUtc
     };
 
     /// <summary>
@@ -91,20 +83,14 @@ public class Identity : IIdentity
     /// challenge is issued, and no session exists.
     /// </summary>
     /// <remarks>
-    /// The guest user and no token, deliberately. Every check in the product
-    /// asks whether the user is authenticated, and the answer here has to be no
-    /// until the second factor is shown - anything else would be a session
-    /// wearing a flag that some surface eventually forgets to read.
+    /// The guest user and no token: every check asks whether the user is
+    /// authenticated, and until the second factor the answer is no.
     /// </remarks>
     /// <param name="challengeId">Identifier of the issued challenge</param>
     /// <returns>Identity of a login that is not finished</returns>
     public static IIdentity SecondFactorRequired(Guid challengeId) => new Identity
     {
         Error = AuthenticationError.NoError,
-        User = AuthenticatedUser.Guest,
-        Settings = UserSettings.Default,
-        AuthenticationToken = null,
-        Session = null,
         TwoFactorChallengeId = challengeId
     };
 
@@ -114,10 +100,6 @@ public class Identity : IIdentity
     /// <returns>Guest user identity</returns>
     public static IIdentity Guest() => new Identity
     {
-        Error = AuthenticationError.NoError,
-        User = AuthenticatedUser.Guest,
-        Settings = UserSettings.Default,
-        AuthenticationToken = null,
-        Session = null
+        Error = AuthenticationError.NoError
     };
 }

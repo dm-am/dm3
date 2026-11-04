@@ -22,7 +22,7 @@ internal class MentorshipRepository : IMentorshipRepository
     public async Task<Guid?> GetGameMentorId(Guid gameId, CancellationToken ct = default)
     {
         return await _dbContext.Games
-            .Where(g => g.GameId == gameId && !g.IsRemoved)
+            .Where(g => g.GameId == gameId)
             .Select(g => g.MentorId)
             .FirstOrDefaultAsync(ct);
     }
@@ -39,14 +39,14 @@ internal class MentorshipRepository : IMentorshipRepository
     public async Task<bool> GameExists(Guid gameId, CancellationToken ct = default)
     {
         return await _dbContext.Games
-            .AnyAsync(g => g.GameId == gameId && !g.IsRemoved, ct);
+            .AnyAsync(g => g.GameId == gameId, ct);
     }
 
     /// <inheritdoc />
     public async Task<Guid?> GetBlogMentorId(Guid blogId, CancellationToken ct = default)
     {
         return await _dbContext.Blogs
-            .Where(b => b.BlogId == blogId && !b.IsRemoved)
+            .Where(b => b.BlogId == blogId)
             .Select(b => b.MentorId)
             .FirstOrDefaultAsync(ct);
     }
@@ -63,7 +63,7 @@ internal class MentorshipRepository : IMentorshipRepository
     public async Task<bool> BlogExists(Guid blogId, CancellationToken ct = default)
     {
         return await _dbContext.Blogs
-            .AnyAsync(b => b.BlogId == blogId && !b.IsRemoved, ct);
+            .AnyAsync(b => b.BlogId == blogId, ct);
     }
 
     /// <inheritdoc />
@@ -71,7 +71,7 @@ internal class MentorshipRepository : IMentorshipRepository
         IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default)
     {
         return await _dbContext.Games
-            .Where(g => !g.IsRemoved && g.MentorId.HasValue && mentorIds.Contains(g.MentorId.Value))
+            .Where(g => g.MentorId.HasValue && mentorIds.Contains(g.MentorId.Value))
             .OrderBy(g => g.Title)
             .Select(g => new MentorshipAssignment
             {
@@ -87,7 +87,7 @@ internal class MentorshipRepository : IMentorshipRepository
         IReadOnlyCollection<Guid> mentorIds, CancellationToken ct = default)
     {
         return await _dbContext.Blogs
-            .Where(b => !b.IsRemoved && b.MentorId.HasValue && mentorIds.Contains(b.MentorId.Value))
+            .Where(b => b.MentorId.HasValue && mentorIds.Contains(b.MentorId.Value))
             .OrderBy(b => b.Title)
             .Select(b => new MentorshipAssignment
             {

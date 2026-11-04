@@ -46,8 +46,6 @@ internal class AwardService : IAwardService
         _updateSeriesValidator = updateSeriesValidator;
     }
 
-    // ---- Award types ----
-
     public Task<IReadOnlyCollection<AwardType>> GetTypesAsync(bool includeInactive = false, CancellationToken ct = default) =>
         _repository.GetTypesAsync(includeInactive, ct);
 
@@ -66,7 +64,11 @@ internal class AwardService : IAwardService
     public async Task<AwardType> UpdateTypeAsync(UpdateAwardType update, CancellationToken ct = default)
     {
         await _updateTypeValidator.ValidateAndThrowAsync(update, ct);
-        if (update.IconName != null) GameIconCatalog.EnsureValid(update.IconName);
+        if (update.IconName != null)
+        {
+            GameIconCatalog.EnsureValid(update.IconName);
+        }
+
         _ = await _repository.GetTypeAsync(update.Id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AwardTypeNotFound);
         return await _repository.UpdateTypeAsync(update, ct);
@@ -79,8 +81,6 @@ internal class AwardService : IAwardService
         await _repository.UpdateTypeAsync(new UpdateAwardType { Id = id, IsActive = false }, ct);
     }
 
-    // ---- Contest series ----
-
     public Task<IReadOnlyCollection<ContestSeries>> GetSeriesAsync(bool includeInactive = false, CancellationToken ct = default) =>
         _repository.GetSeriesAsync(includeInactive, ct);
 
@@ -91,9 +91,7 @@ internal class AwardService : IAwardService
     {
         await _createSeriesValidator.ValidateAndThrowAsync(create, ct);
 
-        // (ContestType, Number) is unique in the schema; without this check the
-        // duplicate surfaced as a DbUpdateException, i.e. a 500 where the endpoint
-        // declares 409.
+        // (ContestType, Number) is unique in the schema: a 409 here, not a DbUpdateException.
         var series = await _repository.GetSeriesAsync(includeInactive: true, ct);
         if (series.Any(s => s.ContestType == create.ContestType && s.Number == create.Number))
         {
@@ -118,8 +116,6 @@ internal class AwardService : IAwardService
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.ContestSeriesNotFound);
         await _repository.UpdateSeriesAsync(new UpdateContestSeries { Id = id, IsActive = false }, ct);
     }
-
-    // ---- Grants ----
 
     public async Task<IReadOnlyCollection<UserAward>> GetUserAwardsAsync(string username, CancellationToken ct = default)
     {
@@ -164,8 +160,7 @@ internal class AwardService : IAwardService
         };
         var granted = await _repository.CreateAsync(create, _identity.Current.User.UserId, ct);
 
-        // Publish notification event — the worker generator turns it into
-        // a UserNotification record for the recipient.
+        // The worker turns the event into the recipient's notification.
         await _eventProducer.SendAsync(EventType.AwardGranted, granted.Id);
 
         return granted;
@@ -174,7 +169,7 @@ internal class AwardService : IAwardService
     public async Task RevokeAsync(Guid awardId, CancellationToken ct = default)
     {
         _ = await _repository.GetAsync(awardId, ct)
-            ?? throw new HttpException(HttpStatusCode.NotFound, "Награда не найдена");
+            ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AwardNotFound);
 
         await _repository.RevokeAsync(awardId, _identity.Current.User.UserId, ct);
     }

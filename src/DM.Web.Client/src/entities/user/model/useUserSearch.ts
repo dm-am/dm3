@@ -3,23 +3,13 @@ import { userApi } from "../api";
 import type { User, UserActivityFilter } from "@/shared/api/models/community";
 
 export interface UseUserSearchOptions {
-  /** Page size requested from the API (default 6) */
   limit?: number;
-  /** Debounce delay in ms before firing the request (default 150) */
   debounceMs?: number;
-  /**
-   * Activity filter. When omitted the request sends no `activity` param and
-   * the backend applies its default Active-only filter.
-   */
+  /** Without it the server shows the active users only. */
   activity?: UserActivityFilter;
 }
 
-/**
- * useUserSearch — debounced username lookup shared by the user pickers
- * (single UserAutocomplete, multi UserMultiSelect). Owns the debounce timer,
- * the raw `User[]` results, and the in-flight `loading` flag; the pickers do
- * their own shaping (mapping / filtering already-selected / slicing) on top.
- */
+// The pickers shape the raw results on top of it themselves.
 export function useUserSearch(options: UseUserSearchOptions = {}) {
   const { limit = 6, debounceMs = 150, activity } = options;
 
@@ -35,20 +25,9 @@ export function useUserSearch(options: UseUserSearchOptions = {}) {
   }
 
   async function run(query: string) {
-    try {
-      // Keep the request to two args when no activity filter is set, so the
-      // backend default (Active-only) applies unchanged.
-      const { data } =
-        activity !== undefined
-          ? await userApi.searchUsers(query, limit, activity)
-          : await userApi.searchUsers(query, limit);
-      results.value = data?.resources ?? [];
-    } catch (error) {
-      console.error("User search failed:", error);
-      results.value = [];
-    } finally {
-      loading.value = false;
-    }
+    const { data } = await userApi.searchUsers(query, limit, activity);
+    results.value = data?.resources ?? [];
+    loading.value = false;
   }
 
   function search(query: string) {
@@ -58,7 +37,7 @@ export function useUserSearch(options: UseUserSearchOptions = {}) {
       loading.value = false;
       return;
     }
-    // Set loading immediately to avoid a "not found" flash before the request.
+    // At once, so "not found" does not flash before the request.
     loading.value = true;
     timer = setTimeout(() => run(query), debounceMs);
   }

@@ -1,41 +1,32 @@
 import { ref, computed, type Ref } from "vue";
-import { pluralize } from "@/shared/lib/utils/pluralize";
+import { EMAIL_INVALID } from "@/shared/lib/errors/validationErrors";
 
-export type ValidationResult = string | null | undefined;
+type ValidationResult = string | null | undefined;
 export type SyncValidator = (value: string) => ValidationResult;
-export type AsyncValidator = (value: string) => Promise<ValidationResult>;
+type AsyncValidator = (value: string) => Promise<ValidationResult>;
 
 export interface UseValidatedFieldOptions {
-  /** Initial value */
   initialValue?: string;
   /** Sync validation (format, required, etc.) */
   validate?: SyncValidator;
   /** Async validation (API check, etc.) */
   asyncValidate?: AsyncValidator;
-  /** Delay before async validation (debounce) */
-  asyncDelay?: number;
 }
 
 export interface ValidatedField {
-  /** Current value */
   value: Ref<string>;
-  /** Current error message (only shown after blur) */
+  /** Shown only after blur. */
   error: Ref<string>;
   /** Whether sync validation passes */
   isValid: Ref<boolean>;
-  /** Whether async validation is in progress */
   isChecking: Ref<boolean>;
-  /** Whether field is ready (sync valid + async checked + no errors) */
+  /** Sync valid, async checked, no errors. */
   isReady: Ref<boolean>;
-  /** Call on input blur */
   onBlur: () => Promise<void>;
-  /** Call on input */
   onInput: () => void;
-  /** Reset field to initial state */
   reset: (newValue?: string) => void;
-  /** Set error manually (e.g., from server) */
+  /** E.g. from the server. */
   setError: (error: string) => void;
-  /** Trigger validation manually */
   validate: () => Promise<boolean>;
 }
 
@@ -44,44 +35,37 @@ export function useValidatedField(
 ): ValidatedField {
   const { initialValue = "", validate: syncValidate, asyncValidate } = options;
 
-  // State
   const value = ref(initialValue);
   const error = ref("");
   const isChecking = ref(false);
-  const touched = ref(false);
   const asyncPassed = ref(false);
   const lastCheckedValue = ref<string | null>(null);
 
-  // Sync validation result (computed, always up-to-date)
-  // Returns string (error message, can be empty) or null (no error)
+  // A message, possibly empty, or null for no error.
   const syncError = computed((): string | null => {
     if (!syncValidate) return null;
     const result = syncValidate(value.value.trim());
     return result === null || result === undefined ? null : result;
   });
 
-  // Field is valid if syncError is null (not just falsy - empty string is still an error)
+  // An empty message is still an error.
   const isValid = computed(() => syncError.value === null);
 
-  // Field is ready when: sync valid + (no async OR async passed)
   const isReady = computed(() => {
     if (!isValid.value) return false;
     if (!asyncValidate) return true;
     return asyncPassed.value && !error.value;
   });
 
-  // Run async validation
   const runAsyncValidation = async (): Promise<string | null> => {
     if (!asyncValidate) return null;
 
     const trimmed = value.value.trim();
 
-    // Skip if empty or sync invalid
     if (!trimmed || syncError.value) {
       return null;
     }
 
-    // Skip if already checked this exact value
     if (lastCheckedValue.value === trimmed && asyncPassed.value) {
       return null;
     }
@@ -107,31 +91,22 @@ export function useValidatedField(
     }
   };
 
-  // Blur handler
   const onBlur = async () => {
-    touched.value = true;
-
-    // Check sync validation first
     if (syncError.value) {
-      if (error.value !== syncError.value) {
-        error.value = syncError.value;
-      }
+      error.value = syncError.value;
       return;
     }
 
-    // Run async validation
     const asyncError = await runAsyncValidation();
-    if (asyncError && error.value !== asyncError) {
+    if (asyncError) {
       error.value = asyncError;
-    } else if (!asyncError && error.value && !syncError.value) {
-      // Clear error if async passed and no sync error
+    } else if (error.value && !syncError.value) {
       error.value = "";
     }
   };
 
-  // Input handler
   const onInput = () => {
-    // Reset async state when value changes
+    // A changed value is checked anew.
     if (
       lastCheckedValue.value !== null &&
       lastCheckedValue.value !== value.value.trim()
@@ -140,32 +115,24 @@ export function useValidatedField(
       lastCheckedValue.value = null;
     }
 
-    // Clear error when typing (if there was one)
     if (error.value) {
       error.value = "";
     }
   };
 
-  // Reset field
   const reset = (newValue?: string) => {
     value.value = newValue ?? initialValue;
     error.value = "";
-    touched.value = false;
     asyncPassed.value = false;
     lastCheckedValue.value = null;
     isChecking.value = false;
   };
 
-  // Set error manually
   const setError = (err: string) => {
     error.value = err;
-    touched.value = true;
   };
 
-  // Manual validation trigger
   const validate = async (): Promise<boolean> => {
-    touched.value = true;
-
     if (syncError.value) {
       error.value = syncError.value;
       return false;
@@ -195,7 +162,18 @@ export function useValidatedField(
   };
 }
 
-// Common validators
+/**
+ * Whether an <input type="email"> takes the text: the browser's own reading of
+ * an address, so the form keeps no pattern of its own; the server has the last
+ * word on the rest.
+ */
+function emailShaped(value: string): boolean {
+  const probe = document.createElement("input");
+  probe.type = "email";
+  probe.value = value;
+  return !probe.validity.typeMismatch;
+}
+
 export const validators = {
   required:
     (message = ""): SyncValidator =>
@@ -203,26 +181,16 @@ export const validators = {
       v.trim() ? null : message,
 
   email:
-    (message = "Неверный формат почты"): SyncValidator =>
+    (message = EMAIL_INVALID): SyncValidator =>
     (v) =>
-      !v || /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-z]{2,}$/i.test(v)
-        ? null
-        : message,
-
-  minLength:
-    (min: number, message?: string): SyncValidator =>
-    (v) =>
-      !v || v.length >= min
-        ? null
-        : message ||
-          `Минимум ${min} ${pluralize(min, "символ", "символа", "символов")}`,
+      !v || emailShaped(v) ? null : message,
 
   combine:
     (...validators: SyncValidator[]): SyncValidator =>
     (v) => {
       for (const validator of validators) {
         const result = validator(v);
-        // Check for non-null result (empty string is still an error)
+        // An empty message is still an error.
         if (result !== null && result !== undefined) return result;
       }
       return null;

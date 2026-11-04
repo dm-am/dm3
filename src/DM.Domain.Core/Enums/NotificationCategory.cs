@@ -6,7 +6,7 @@ namespace DM.Domain.Core.Enums;
 public enum NotificationCategory
 {
     /// <summary>
-    /// Personal messages (NewMessage, LikedMessage)
+    /// Personal messages
     /// </summary>
     Messages = 1,
 

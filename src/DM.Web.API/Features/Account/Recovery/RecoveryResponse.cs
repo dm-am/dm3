@@ -14,6 +14,12 @@ public class RecoveryResponse
     /// Email address that was checked
     /// </summary>
     public string Email { get; set; } = "";
+
+    /// <summary>
+    /// How long the link in the letter lives, in hours; absent when no letter went out
+    /// </summary>
+    /// <example>48</example>
+    public int? LinkLifetimeHours { get; set; }
 }
 
 /// <summary>

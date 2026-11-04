@@ -44,7 +44,6 @@ internal class DiscordWebhookHandler : IWebhookHandler
     private readonly IBotLinkService _botLinkService;
     private readonly ILogger<DiscordWebhookHandler> _logger;
 
-    /// <inheritdoc />
     public DiscordWebhookHandler(
         IBotLinkService botLinkService,
         ILogger<DiscordWebhookHandler> logger)

@@ -1,21 +1,13 @@
-using System;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Tickets;
-using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
-public class CreateTicketValidatorShould : UnitTestBase
+public class CreateTicketValidatorShould
 {
-    private readonly CreateTicketValidator validator;
-
-    public CreateTicketValidatorShould()
-    {
-        validator = new CreateTicketValidator();
-    }
+    private readonly CreateTicketValidator validator = new();
 
     [Fact]
     public void PassForValidInput()

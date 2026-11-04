@@ -22,10 +22,9 @@ namespace DM.Web.API.Features.Community.Users;
 [Tags("Users")]
 public class UserController : ControllerBase
 {
-    private readonly ICommunityUserApiService _userApiService;
+    private readonly CommunityUserApiService _userApiService;
 
-    /// <inheritdoc />
-    public UserController(ICommunityUserApiService userApiService)
+    public UserController(CommunityUserApiService userApiService)
     {
         _userApiService = userApiService;
     }

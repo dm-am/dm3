@@ -2,24 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The blog shell prints the blog's name and nothing else, the way the game
- * shell does. It used to print a status badge, a premoderation badge and a
- * meta line with the author, the assistants and the reader count, all of it
- * repeated by the info table immediately below and repeated in different
- * words: the header counted "Читатели" where the table counted "Подписчиков"
- * off the same field.
- *
- * The loading state is the header's twin. Without it the page drew nothing
- * at all until the blog landed, then pushed everything down by the height of
- * an h1.
- *
- * And a blog the reader may not read, one that is gone and one that never
- * existed are three different answers, drawn by the error page the status
- * chooses. This file was named as the gate for that half and held none of it:
- * removing the ErrorPage branch from the shell left both tests above green,
- * because neither ever asked the shell for a blog it could not get.
- */
+// The shell prints the blog's name only; its loading state is the header's
+// twin; a refused blog is the error page its status chooses.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -90,9 +74,8 @@ describe("BlogPage", () => {
     };
 
     it.each([
-      // Gone reads as "не найден", not as "удален": the endpoint answers Gone for
-      // a deleted blog, for a mistyped address and for one hidden from this
-      // reader alike, so "удален" would state a fact for two of the three.
+      // Gone reads as "не найден": the endpoint answers Gone for a deleted, a
+      // mistyped and a hidden blog alike.
       [410, "404"],
       [403, "403"],
       [404, "404"],
@@ -115,12 +98,8 @@ describe("BlogPage", () => {
       expect(wrapper.find(".error-page").exists()).toBe(false);
     });
 
-    // The reload the shell did not start. Five places outside it call loadBlog
-    // (PublicationCreate, PublicationEdit, BlogInfoSection, RolesSection
-    // twice), and an assistant who takes their own role away is refused by the
-    // very reload that follows. While the shell kept the code in a local ref
-    // this left `blog` null with the code still null, and the zone held the
-    // title skeleton for good instead of drawing the refusal.
+    // A reload outside the shell that is refused nulls `blog`, and the shell must
+    // draw the refusal rather than hold the title skeleton.
     it("answers a refusal from a reload it did not start", async () => {
       mockGetBlog.mockResolvedValue({ data: { resource: blog } });
       const wrapper = mount(BlogPage, { global: { stubs: withErrorPage } });

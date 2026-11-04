@@ -12,13 +12,8 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// Who is told about a pendency, worked out from the rows.
 /// </summary>
 /// <remarks>
-/// Three generators share one recipient rule — the user the pendency names, and
-/// the character's author when it names nobody — and each of the three reads it
-/// off a different projection. Nothing executed any of them: a projection that
-/// stopped selecting the character's author would compile, would answer null, and
-/// would take the worker down on the dereference; a rule that picked the wrong one
-/// of the three people involved would tell the wrong person to write a post. The
-/// seed keeps those three people apart so that neither can pass for the other.
+/// Three generators share one recipient rule over three projections: the user the pendency names, else the
+/// character's author. The seed keeps the three people apart.
 /// </remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class PendencyNotificationsShould
@@ -31,7 +26,7 @@ public class PendencyNotificationsShould
     {
         await using var context = _fixture.CreateContext();
         var produced = await EveryNotificationGeneratorShould.DrainAsync(
-            new GamePendencyReminderNotificationGenerator(
+            new PostPendencyReminderNotificationGenerator(
                 context, EveryNotificationGeneratorShould.ClockAt(DateTimeOffset.UtcNow)),
             pendencyId);
         return produced.SingleOrDefault();
@@ -41,7 +36,7 @@ public class PendencyNotificationsShould
     {
         await using var context = _fixture.CreateContext();
         var produced = await EveryNotificationGeneratorShould.DrainAsync(
-            new GamePendencyCreatedNotificationGenerator(context), pendencyId);
+            new PostPendencyCreatedNotificationGenerator(context), pendencyId);
         return produced.SingleOrDefault();
     }
 
@@ -49,16 +44,8 @@ public class PendencyNotificationsShould
     {
         await using var context = _fixture.CreateContext();
         var produced = await EveryNotificationGeneratorShould.DrainAsync(
-            new GamePendencyFulfilledNotificationGenerator(context), pendencyId);
+            new PostPendencyFulfilledNotificationGenerator(context), pendencyId);
         return produced.SingleOrDefault();
-    }
-
-    /// <summary>Reads a field off the anonymous metadata object.</summary>
-    private static object? Field(CreateNotification notification, string name)
-    {
-        var property = notification.Metadata.GetType().GetProperty(name);
-        property.Should().NotBeNull($"the metadata carries {name}");
-        return property!.GetValue(notification.Metadata);
     }
 
     [Fact]
@@ -96,12 +83,12 @@ public class PendencyNotificationsShould
         var notification = await Reminder(NotificationSeed.PendencyWaitingForUserId);
 
         notification.Should().NotBeNull();
-        Field(notification!, "DaysPending").Should().Be(NotificationSeed.DaysPending,
+        TicketSeed.Field(notification!, "DaysPending").Should().Be(NotificationSeed.DaysPending,
             "the reminder says how long, and the arithmetic is on the pendency's own timestamp");
-        Field(notification!, "RoomTitle").Should().Be(NotificationSeed.RoomTitle);
-        Field(notification!, "GameTitle").Should().Be(NotificationSeed.GameTitle);
-        Field(notification!, "CharacterName").Should().Be(NotificationSeed.CharacterName);
-        Field(notification!, "CreatedByUsername").Should().Be(NotificationSeed.MasterUsername);
+        TicketSeed.Field(notification!, "RoomTitle").Should().Be(NotificationSeed.RoomTitle);
+        TicketSeed.Field(notification!, "GameTitle").Should().Be(NotificationSeed.GameTitle);
+        TicketSeed.Field(notification!, "CharacterName").Should().Be(NotificationSeed.CharacterName);
+        TicketSeed.Field(notification!, "CreatedByUsername").Should().Be(NotificationSeed.MasterUsername);
     }
 
     [Fact]
@@ -139,7 +126,7 @@ public class PendencyNotificationsShould
         notification.Should().NotBeNull();
         notification!.UsersInterested.Should().Equal(new[] { NotificationSeed.MasterId },
             "the person told is the one who was waiting for the post, not the one who wrote it");
-        Field(notification!, "FulfilledByUsername").Should().Be("seed-author",
+        TicketSeed.Field(notification!, "FulfilledByUsername").Should().Be("seed-author",
             "the username shown is read off the character, which is what the post was written as");
     }
 

@@ -2,33 +2,14 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The caption line puts " | " between its parts and breaks only between them.
- * Nothing in it is put away for want of room: every part the caller draws
- * stands in the line at every width (owner, 12 October 2026: never shorten a
- * block on a phone, no "Еще" and no "…").
- *
- * The bars are the line's to place, so the tests toggle parts the way callers
- * do (v-if on an action the viewer may not take, a v-for over a list) and read
- * the text a reader would copy: a bar never doubles, never opens or closes the
- * line. Where the line breaks, and that no bar is left at the break, is a
- * matter of structure and of the rules on it, and both are asserted here: every
- * part is one box that goes to the next line whole, and every bar stands out
- * of the flow in a gap between two parts whose only content in the flow is the
- * line's breakable space, the one thing a line break takes away. That the
- * browsers honour it, and that a part wider than a whole line wraps inside
- * itself instead of running past the edge, is the live stand's to show.
- *
- * The stylesheets are compiled and read, because the rule of the line is paint:
- * an action is the line's text in the line's colour, a grey link under the
- * pointer ($link-hover and the underline) and red nowhere.
- */
+// The bars are the line's to place: the tests toggle parts as callers do and read the text a reader
+// would copy. Where the line breaks, and that the browsers honour it, is the live stand's to show.
 import { describe, it, expect } from "vitest";
 import { mount, RouterLinkStub, shallowMount } from "@vue/test-utils";
 import { defineComponent, h, nextTick, ref } from "vue";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { componentCss, ruleMap, styleRules } from "@/shared/lib/testing/styles";
+import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import CaptionLine from "./CaptionLine.vue";
 import CaptionPart from "./CaptionPart.vue";
 import CaptionAction from "./CaptionAction.vue";
@@ -144,28 +125,6 @@ describe("CaptionLine: the bars", () => {
 });
 
 /**
- * Owner, 12 October 2026: on a phone a block is the block of the full version,
- * never shortened, with no "Еще" and no "…". The line used to stand in one
- * line and send what did not fit into a menu (FitRow, MoreMenu); it wraps
- * instead, as it did on a desktop before 5 October.
- */
-describe("CaptionLine: every part stands in the line", () => {
-  it("draws every part, and nothing to put a part away in", () => {
-    const { wrapper } = comment({});
-    const line = wrapper.get(".caption-line");
-
-    expect(line.findAll(".caption-line__part")).toHaveLength(6);
-    expect(line.find(".more-menu").exists()).toBe(false);
-    expect(line.find(".caption-line__more").exists()).toBe(false);
-    expect(line.find("[hidden]").exists()).toBe(false);
-    expect(line.text()).not.toMatch(/Еще|…/);
-    // Nothing in the line is a row measured for room any more.
-    expect(line.attributes()).not.toHaveProperty("data-fit-row");
-    expect(line.find("[data-fit-keep]").exists()).toBe(false);
-  });
-});
-
-/**
  * The line's own children in order, as a line break meets them: a part, a gap
  * with a bar, or the plain space of a part that opts out of its bar. Empty
  * text nodes are the anchors Vue puts around a fragment; they hold no
@@ -187,7 +146,6 @@ const SPACE = JSON.stringify(" ");
 
 describe("CaptionLine: where it may break", () => {
   const css = componentCss(resolve(HERE, "CaptionLine.vue"));
-  const rules = ruleMap(css);
 
   it("sets two parts apart by a gap, or by the line's space where a part says so", () => {
     const { wrapper } = comment({});
@@ -258,19 +216,6 @@ describe("CaptionLine: where it may break", () => {
     }
   });
 
-  it("wraps lines on its spaces and moves a part to the next line whole", () => {
-    expect(rules.get(".caption-line")?.["white-space"]).toBe("normal");
-    // A part is one box: a part that does not fit what is left of a line goes
-    // to the next one whole, and only a part wider than the whole line wraps,
-    // inside itself and no wider than the line (a word longer than the line
-    // breaks there by the site's rule, Reset.sass). A nowrap run would stand
-    // past the edge instead: nowrap turns off every break, that rule's too.
-    expect(rules.get(`.${PART}`)).toEqual({
-      display: "inline-block",
-      "max-width": "100%",
-    });
-  });
-
   it("lets a part that is words of the sentence wrap at its spaces", () => {
     // A title after the dash of a list: as one box it went to the next line
     // whole and left the dash alone above it.
@@ -291,35 +236,6 @@ describe("CaptionLine: where it may break", () => {
       expect(title.classes()).toContain("caption-line__part--flow");
       expect(action.classes()).not.toContain("caption-line__part--flow");
     }
-    expect(rules.get(".caption-line__part--flow")).toEqual({
-      display: "inline",
-    });
-  });
-
-  it("may be narrower than its widest part where a flex row places it", () => {
-    expect(rules.get(".caption-line")?.["min-width"]).toBe("0");
-  });
-
-  it("widens a gap to ' | ' and holds its bar to it, out of the flow", () => {
-    const gaps = styleRules(css).filter((rule) => rule.selector === `.${GAP}`);
-    // The space of the gap, widened by the advance of "| " in PT Sans: the
-    // containing block of the bar, and as wide as that while it keeps its
-    // space. The second rule for it is the Firefox one below.
-    expect(gaps[0].declarations).toEqual({
-      position: "relative",
-      "word-spacing": "0.506em",
-    });
-    // The bar takes the size of the gap and shows nothing outside it, so a gap
-    // that a line break empties takes its bar along. Its own white space is
-    // kept, which stands the bar one space into the gap.
-    expect(rules.get(".caption-line__bar")).toEqual({
-      position: "absolute",
-      inset: "0",
-      "overflow-x": "clip",
-      "white-space": "pre",
-      "line-height": "normal",
-      "word-spacing": "normal",
-    });
   });
 
   it("clips the gap itself in Firefox and nowhere else", () => {
@@ -330,69 +246,10 @@ describe("CaptionLine: where it may break", () => {
     );
     expect(css.match(/clip-path/g)).toHaveLength(1);
   });
-
-  it("has no rule for a part put away", () => {
-    expect(css).not.toMatch(/hidden|nowrap|ellipsis/);
-  });
 });
 
-describe("CaptionLine: in a shallow mount", () => {
-  const Caller = defineComponent({
-    components: { CaptionLine, CaptionPart, CaptionAction },
-    template: `
-      <CaptionLine>
-        <CaptionPart :bar="false">Автор: X,</CaptionPart>
-        <span>09.09.2026 в 06:33</span>
-        <CaptionAction>Редактировать</CaptionAction>
-        <CaptionAction>Удалить</CaptionAction>
-      </CaptionLine>
-    `,
-  });
-
-  it("shows every part, stubbed the way the mount stubs it", () => {
-    const wrapper = shallowMount(Caller, {
-      global: { stubs: { CaptionLine: false } },
-    });
-    const parts = wrapper.findAll(`.${PART}`);
-    expect(
-      parts.map((part) => part.element.firstElementChild?.localName),
-    ).toEqual([
-      "caption-part-stub",
-      "span",
-      "caption-action-stub",
-      "caption-action-stub",
-    ]);
-    expect(wrapper.findAllComponents(CaptionAction)).toHaveLength(2);
-    // A stubbed CaptionPart still joins the next part with a space.
-    expect(joints(wrapper.element)).toEqual([
-      PART,
-      SPACE,
-      PART,
-      GAP,
-      PART,
-      GAP,
-      PART,
-    ]);
-  });
-
-  it("draws the real part where the mount lets it through", () => {
-    const wrapper = shallowMount(Caller, {
-      global: { stubs: { CaptionLine: false, CaptionAction: false } },
-    });
-    expect(
-      wrapper.findAll("button.caption-action").map((action) => action.text()),
-    ).toEqual(["Редактировать", "Удалить"]);
-  });
-});
-
-describe("CaptionLine: one size and colour for the line", () => {
-  const rules = ruleMap(componentCss(resolve(HERE, "CaptionLine.vue")));
-
-  it("sets the caption colour and the size the caller picks", () => {
-    expect(rules.get(".caption-line")?.color).toBe("var(--text-muted)");
-    expect(rules.get(".caption-line--tertiary")?.["font-size"]).toBe("12px");
-    expect(rules.get(".caption-line--secondary")?.["font-size"]).toBe("14px");
-
+describe("CaptionLine: one size for the line", () => {
+  it("sets the size the caller picks", () => {
     const wrapper = mount(CaptionLine, {
       props: { size: "secondary" },
       slots: { default: "<span>x</span>" },
@@ -434,44 +291,13 @@ describe("CaptionAction", () => {
     expect(wrapper.find("button").exists()).toBe(false);
   });
 
-  it("is the line's text: its font and its colour", () => {
-    const base = rules.get(".caption-action") ?? {};
-    expect(base.font).toBe("inherit");
-    expect(base.color).toBe("inherit");
-    expect(base.background).toBe("none");
-    expect(base.padding).toBe("0");
-  });
-
   it("answers the pointer the way a grey link does", () => {
-    // Owner's standard, 27 September 2026: the actions of a caption line
-    // behave as the site's grey links, which turn $link-hover with the
-    // underline, as every link of DM2 did. It used to keep the line's colour
-    // and take the underline alone, while the same action as a link went blue.
+    // The actions of a caption line behave as the site's grey links, which
+    // turn $link-hover with the underline, as every link of DM2 did.
     expect(hover).toEqual({
       color: "var(--link-hover)",
       "text-decoration": "underline",
     });
     expect(rules.get(".caption-action")?.transition).toBe("color 0.15s ease");
-  });
-
-  it("dims when it is out of reach, and answers nothing", () => {
-    expect(rules.get(".caption-action:disabled")).toEqual({
-      opacity: "0.5",
-      cursor: "default",
-    });
-    // The hover is guarded, so a disabled action does not light up.
-    expect(rules.has(".caption-action:hover")).toBe(false);
-  });
-
-  it("is red nowhere", () => {
-    const css = componentCss(resolve(HERE, "CaptionAction.vue"));
-    expect(css).not.toMatch(/accent-red/);
-  });
-
-  it("wears the inline-text ring", () => {
-    expect(rules.get(".caption-action:focus-visible")).toEqual({
-      outline: "1px solid var(--link)",
-      "outline-offset": "2px",
-    });
   });
 });

@@ -1,14 +1,13 @@
+using System.Text.Json;
+using System.Text.RegularExpressions;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 using Microsoft.AspNetCore.Mvc.Testing;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests;
 
 /// <summary>
-/// Base class for integration tests.
-/// Provides access to the shared database fixture and a configured HttpClient.
-/// Uses a shared WebApplicationFactory to avoid resource exhaustion.
+/// The shared database fixture and a configured HttpClient over one WebApplicationFactory.
 /// </summary>
 [Collection("Database")]
 public abstract class IntegrationTestBase : IDisposable
@@ -30,13 +29,34 @@ public abstract class IntegrationTestBase : IDisposable
     }
 
     /// <summary>
-    /// Create an HttpRequestMessage with test authentication headers.
-    /// This is the preferred way to test authenticated endpoints.
+    /// An answer minus its per-request correlation token, fields in order and identifiers as a placeholder,
+    /// so that two refusals compare equal exactly when a caller could not tell them apart.
     /// </summary>
-    /// <param name="method">HTTP method</param>
-    /// <param name="url">Request URL</param>
-    /// <param name="user">User to authenticate as</param>
-    /// <returns>HttpRequestMessage with authentication headers</returns>
+    protected static string Masked(string body)
+    {
+        if (string.IsNullOrWhiteSpace(body))
+        {
+            return body;
+        }
+
+        using var document = JsonDocument.Parse(body);
+        if (document.RootElement.ValueKind != JsonValueKind.Object)
+        {
+            return body;
+        }
+
+        var fields = string.Join("&", document.RootElement
+            .EnumerateObject()
+            .Where(p => p.Name != "traceId")
+            .OrderBy(p => p.Name, StringComparer.Ordinal)
+            .Select(p => $"{p.Name}={p.Value.GetRawText()}"));
+        return Regex.Replace(fields,
+            @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "{id}");
+    }
+
+    /// <summary>
+    /// A request carrying the test authentication headers of the user.
+    /// </summary>
     protected static HttpRequestMessage CreateAuthenticatedRequest(HttpMethod method, string url, GeneralUser user)
     {
         var request = new HttpRequestMessage(method, url);
@@ -46,17 +66,11 @@ public abstract class IntegrationTestBase : IDisposable
         return request;
     }
 
-    /// <summary>
-    /// Create an HttpRequestMessage authenticated as the test user.
-    /// </summary>
     protected static HttpRequestMessage CreateAuthenticatedRequest(HttpMethod method, string url)
     {
         return CreateAuthenticatedRequest(method, url, CustomWebApplicationFactory.CreateTestUser());
     }
 
-    /// <summary>
-    /// Create an HttpRequestMessage authenticated as admin.
-    /// </summary>
     protected static HttpRequestMessage CreateAdminRequest(HttpMethod method, string url)
     {
         return CreateAuthenticatedRequest(method, url, CustomWebApplicationFactory.CreateAdminUser());
@@ -64,7 +78,7 @@ public abstract class IntegrationTestBase : IDisposable
 
     public void Dispose()
     {
-        // Only dispose the client, not the shared factory
+        // The factory is shared by every test class.
         Client.Dispose();
     }
 }

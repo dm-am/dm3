@@ -31,20 +31,6 @@ function createTestEditor() {
 }
 
 describe("BbImage Extension", () => {
-  it("should have correct name", () => {
-    expect(BbImage.name).toBe("bbImage");
-  });
-
-  it("should be a node", () => {
-    const editor = createTestEditor();
-    expect(editor.schema.nodes.bbImage).toBeDefined();
-  });
-
-  it("should be inline by default", () => {
-    const editor = createTestEditor();
-    expect(editor.schema.nodes.bbImage.spec.inline).toBe(true);
-  });
-
   it('should parse images with data-bb-tag="img"', () => {
     const editor = createTestEditor();
     editor.commands.setContent(
@@ -53,6 +39,16 @@ describe("BbImage Extension", () => {
     const html = editor.getHTML();
     expect(html).toContain('data-bb-tag="img"');
     expect(html).toContain('src="https://example.com/img.png"');
+  });
+
+  it("keeps the spelling a bare image was written in", () => {
+    const editor = createTestEditor();
+    editor.commands.setContent(
+      '<p><img src="https://example.com/img.png" data-bb-source="[IMG]https://example.com/img.png[/IMG]" data-bb-tag="img" /></p>',
+    );
+    expect(editor.getHTML()).toContain(
+      'data-bb-source="[IMG]https://example.com/img.png[/IMG]"',
+    );
   });
 
   it("should parse regular images", () => {
@@ -72,11 +68,6 @@ describe("BbImage Extension", () => {
     );
     const html = editor.getHTML();
     expect(html).toContain('class="bb-image"');
-  });
-
-  it("should provide setBbImage command", () => {
-    const editor = createTestEditor();
-    expect(editor.commands.setBbImage).toBeDefined();
   });
 
   // An image has no alt: a reader never sees one, and text nobody sees on

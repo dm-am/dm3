@@ -5,41 +5,25 @@ import type { User, Username } from "@/entities/user";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 
 /**
- * useProfileSubpageUser — resolves the profile owner for the four
- * profile subpages (received/given reviews, received/given endorsements).
- *
- * These pages never fetch the full `UserProfile` DTO (that's ProfilePage's
- * job) — they only need the lightweight `User` for canonical username casing
- * in the h1/document title, and the answer to "does this user exist at all",
- * which turns the page into a 404. A failed request is not that answer: each
- * page reports its own list's failure with its own ErrorState.
- *
- * Uses `userApi.getUser` (`GET /v1/users/{username}`) — the same
- * truncated DTO used for list rows, already returned in canonical case.
+ * The owner of a profile subpage, for the name in its own case and for the
+ * 404; a failed request is not that answer, each list reports its own failure.
  */
 export function useProfileSubpageUser(username: Ref<string>): {
-  /** True only on a genuine 404/410 (user does not exist) */
+  /** True only on a 404 or 410. */
   notFound: Ref<boolean>;
-  /** Canonical-case username once loaded, falls back to the URL param */
+  /** The name in its own case once loaded, else the address's. */
   canonicalUsername: Ref<string>;
 } {
   const user = ref<User | null>(null);
   const notFound = ref(false);
 
-  // GET /v1/users/{username} is documented as returning the resource
-  // directly, but the sibling /profile endpoint actually wraps it as
-  // `{ resource: User }` (see entities/user/model/communityStore.ts —
-  // "typed lie" comment there). Unwrap defensively (shared helper) so a
-  // matching drift here doesn't silently break username-casing/notFound
-  // resolution.
+  // unwrapResource reads the answer with or without its envelope.
   async function load(name: string) {
     if (!name) return;
     notFound.value = false;
     const { data, error: apiError } = await userApi.getUser(name as Username);
     if (apiError) {
-      // Only "no such user" belongs to the page as a whole. Any other failure
-      // leaves the heading on the URL-cased name — what the page shows while
-      // the request is still in flight anyway.
+      // Only "no such user" is the page's; any other failure leaves the address's name.
       notFound.value = apiError.status === 404 || apiError.status === 410;
       user.value = null;
       return;

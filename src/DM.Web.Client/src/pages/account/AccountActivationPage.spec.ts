@@ -3,20 +3,12 @@
  */
 
 /**
- * The page the activation letter leads to, in the shape the approved guest
- * prototype gave it: one card of one width for all five answers, standing on
- * the guest surface with a frame of its own because nothing dims the page
- * behind it.
- *
- * What is pinned here is what a reader sees and what he can still press —
- * which card the answer stands on, which answer offers help and which does
- * not, that the resend has exactly one attempt, that the caret is already in
- * the one field of the screen, and that the card never invents a sentence the
- * server did not send. The "checking the link" line is pinned by
- * tokenPages.spec.ts, which covers this page together with its sibling.
+ * The page the activation letter leads to: which card each answer stands on,
+ * which offers help, one attempt at a new letter, the caret in the one field,
+ * and no sentence the server did not send. The checking line is tokenPages.spec.ts's.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
 import { createPinia, setActivePinia } from "pinia";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -24,20 +16,11 @@ import { Api } from "@/shared/api";
 import { accountApi, UsernameInput } from "@/entities/user";
 import type { User } from "@/shared/api/models/community";
 import AccountActivationPage from "./AccountActivationPage.vue";
-// The page as it is written: the rule below lives in the stylesheet and never
-// reaches the rendered tree. Vite hands the file over as text.
-import SOURCE from "./AccountActivationPage.vue?raw";
+import { push } from "./guestPages.doubles";
 
-// One push for the whole file. The ways out of this card are router pushes and
-// nothing else, so a fresh vi.fn() handed out on every useRouter() call would
-// leave the test with no way to read where a button led.
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: {}, query: {} }),
-  useRouter: () => ({ push, replace: vi.fn() }),
-  RouterLink: { template: "<a><slot /></a>" },
-}));
+vi.mock("vue-router", async () =>
+  (await import("./guestPages.doubles")).vueRouter(),
+);
 
 // The token arrives in the fragment; readConfirmationToken takes it from there.
 beforeEach(() => {
@@ -60,12 +43,7 @@ const expired = {
   error: null,
 };
 
-/**
- * Land on the page with the answer the check came back with.
- *
- * `attach` puts the card in the document, which is what the caret needs: a
- * wrapper mounted off the tree has no active element to be.
- */
+/** Land on the page with the answer of the check; `attach` puts it in the document, for the caret. */
 const arrive = async (info: unknown, attach = false) => {
   vi.spyOn(accountApi, "getActivationInfo").mockResolvedValue(
     info as Awaited<ReturnType<typeof accountApi.getActivationInfo>>,
@@ -79,11 +57,7 @@ const arrive = async (info: unknown, attach = false) => {
   return wrapper;
 };
 
-/**
- * The channel the two tabs of one letter talk over, in a shape the test can
- * speak into: it hands over the instance the page opened and keeps what the
- * page posted into it.
- */
+/** The channel of the two tabs, handing over the instance the page opened and what it posted. */
 class TabChannel {
   static last: TabChannel | null = null;
   onmessage: ((event: { data: unknown }) => void) | null = null;
@@ -107,7 +81,7 @@ const withTabs = () => {
 
 /** The channel the page opened on mount. */
 const openedChannel = () => {
-  if (!TabChannel.last) throw new Error("страница не открыла канал вкладок");
+  if (!TabChannel.last) throw new Error("the page opened no channel");
   return TabChannel.last;
 };
 
@@ -117,41 +91,45 @@ const activatedElsewhere = (username = "reader") => {
   return nextTick();
 };
 
-/** Choose a free name and step to the confirmation. */
-const atConfirmStep = async () => {
-  const wrapper = await arrive(ready);
+/** The field reports a free name. */
+const chooseName = async (wrapper: VueWrapper) => {
   const name = wrapper.findComponent(UsernameInput);
-
   name.vm.$emit("update:modelValue", "reader");
   name.vm.$emit("availability", true);
   await nextTick();
-  await wrapper.get(".submit-button").trigger("click");
+};
 
+/** Choose a free name and step to the confirmation. */
+const atConfirmStep = async () => {
+  const wrapper = await arrive(ready);
+  await chooseName(wrapper);
+  await wrapper.get(".auth-button").trigger("click");
   return wrapper;
 };
 
-describe("страница активации", () => {
+/** The server's answer to an activation that went through. */
+const activated = () =>
+  ({
+    data: { resource: { id: "1", username: "reader" } as User },
+    error: null,
+  }) as Awaited<ReturnType<typeof accountApi.activate>>;
+
+describe("the activation page", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
-    sessionStorage.clear();
     localStorage.clear();
     vi.restoreAllMocks();
     // Not a spy, so restoreAllMocks does not reach it.
     push.mockClear();
-    // Cards left in the document by an attached mount would answer the next
-    // test's selectors.
+    // A card left in the document would answer the next test's selectors.
     document.body.innerHTML = "";
   });
 
-  /**
-   * The card used to be an element with a shadow, and the invalid-link answer
-   * was 100px wider than the other four: three states of one flow arriving as
-   * three differently shaped pages.
-   */
+  /** Every answer stands on one framed card of one width. */
   it.each([
-    ["выбор имени", ready],
-    ["устаревшую ссылку", expired],
-  ])("ставит %s на одну гостевую карточку с рамкой", async (_, info) => {
+    ["the choice of the name", ready],
+    ["the expired link", expired],
+  ])("stands %s on one framed guest card", async (_, info) => {
     const wrapper = await arrive(info);
 
     expect(
@@ -159,10 +137,9 @@ describe("страница активации", () => {
         .find(".auth-surface > .auth-card--framed.auth-card--center")
         .exists(),
     ).toBe(true);
-    expect(wrapper.find(".activation-page--wide").exists()).toBe(false);
   });
 
-  it("держит поле имени на гостевом поле и на карточке той же ширины", async () => {
+  it("draws the name as a guest field on the same card", async () => {
     const wrapper = await arrive(ready);
 
     expect(wrapper.text()).toContain("Выберите имя");
@@ -174,13 +151,8 @@ describe("страница активации", () => {
     );
   });
 
-  /**
-   * The screen holds one field and the reader came here to fill it in. He
-   * arrives from a letter, on a page whose check answers a render later, so
-   * the caret was left in the document and every reader had to click into the
-   * field before the first keystroke landed anywhere.
-   */
-  it("ставит каретку в поле имени, как только оно на экране", async () => {
+  /** The caret is in the one field as soon as the check has answered. */
+  it("puts the caret in the name field as soon as it is on screen", async () => {
     const wrapper = await arrive(ready, true);
 
     expect(document.activeElement).toBe(
@@ -190,26 +162,17 @@ describe("страница активации", () => {
     wrapper.unmount();
   });
 
-  it("держит Продолжить отключенной, пока имя не свободно", async () => {
+  it("keeps Продолжить disabled until the name is free", async () => {
     const wrapper = await arrive(ready);
-    expect(wrapper.get(".submit-button").attributes("disabled")).toBe("");
+    expect(wrapper.get(".auth-button").attributes("disabled")).toBe("");
 
-    const name = wrapper.findComponent(UsernameInput);
-    name.vm.$emit("update:modelValue", "reader");
-    name.vm.$emit("availability", true);
-    await nextTick();
+    await chooseName(wrapper);
 
-    expect(
-      wrapper.get(".submit-button").attributes("disabled"),
-    ).toBeUndefined();
+    expect(wrapper.get(".auth-button").attributes("disabled")).toBeUndefined();
   });
 
-  /**
-   * The name is fixed for good, so the step that fixes it says so in the red
-   * frame the guest surface keeps for a consequence, and shows the name in the
-   * plate that cannot be typed into.
-   */
-  it("предупреждает о необратимости имени и показывает его плашкой", async () => {
+  /** The name is final, so the step says so in the guest surface's frame and shows the name in a plate. */
+  it("warns that the name is final and shows it in a plate", async () => {
     const wrapper = await atConfirmStep();
 
     expect(wrapper.text()).toContain("Подтвердите выбор имени");
@@ -219,26 +182,17 @@ describe("страница активации", () => {
       "Дальнейшая смена имени возможна лишь в исключительных случаях",
     );
     expect(wrapper.get(".auth-value").text()).toBe("reader");
-    expect(wrapper.get(".submit-button").text()).toBe("Завершить регистрацию");
+    expect(wrapper.get(".auth-button").text()).toBe("Завершить регистрацию");
   });
 
-  /**
-   * Nothing has gone wrong on the finished screen, so there is nobody to ask
-   * for help: the offer stands under the other four answers and not this one.
-   *
-   * And the greeting carries no exclamation mark. The heading above it already
-   * says the whole news, so the bang congratulated the reader a second time.
-   */
-  // The account starts on the clock of the device it is finished on: the site
-  // shows a signed-in reader's time in the zone of the account.
-  it("передает часовой пояс устройства вместе с именем", async () => {
+  // The account starts in the zone of the device it is finished on.
+  it("sends the time zone of the device with the name", async () => {
     const wrapper = await atConfirmStep();
-    const activate = vi.spyOn(accountApi, "activate").mockResolvedValue({
-      data: { resource: { id: "1", username: "reader" } as User },
-      error: null,
-    } as Awaited<ReturnType<typeof accountApi.activate>>);
+    const activate = vi
+      .spyOn(accountApi, "activate")
+      .mockResolvedValue(activated());
 
-    await wrapper.get(".submit-button").trigger("click");
+    await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
 
     expect(activate).toHaveBeenCalledWith(
@@ -249,39 +203,28 @@ describe("страница активации", () => {
     );
   });
 
-  it("оставляет завершенную регистрацию без строки о поддержке", async () => {
+  it("leaves the finished registration without the line about support", async () => {
     const wrapper = await atConfirmStep();
-    vi.spyOn(accountApi, "activate").mockResolvedValue({
-      data: { resource: { id: "1", username: "reader" } as User },
-      error: null,
-    } as Awaited<ReturnType<typeof accountApi.activate>>);
+    vi.spyOn(accountApi, "activate").mockResolvedValue(activated());
 
-    await wrapper.get(".submit-button").trigger("click");
+    await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Регистрация завершена");
     expect(wrapper.get(".auth-text").text()).toBe("Добро пожаловать, reader");
     expect(wrapper.get("button.auth-button").text()).toBe("Перейти в профиль");
     expect(wrapper.get(".auth-status").classes()).toContain("auth-status--ok");
-    expect(wrapper.find(".help-section").exists()).toBe(false);
+    expect(wrapper.find(".auth-footnote").exists()).toBe(false);
   });
 
   /**
-   * One attempt from this screen: the offer is REPLACED by the receipt rather
-   * than joined by it, so there is no button left to press a second time.
-   *
-   * And the receipt is the one the registration ends on, word for word: the
-   * reader who asked for a second letter is waiting for exactly what the first
-   * one promised. It used to keep the warning mark and the heading of the dead
-   * link above a line of its own, so a card that had just done what was asked
-   * of it still carried the sign that something was wrong, and offered help
-   * underneath.
+   * One attempt: the offer is replaced by the receipt the registration ends on,
+   * with no mark, no button and no offer of help.
    */
-  it("подменяет предложение отправки распиской о письме", async () => {
+  it("replaces the offer of a letter with the receipt for it", async () => {
     const wrapper = await arrive(expired);
 
-    // The heading the expired reset link and the expired name change carry:
-    // one event, one name for it. It used to name the letter as well.
+    // The heading of every expired link.
     expect(wrapper.get(".auth-title").text()).toBe("Ссылка устарела");
     expect(wrapper.text()).toContain(
       "Отправить новую ссылку для активации на reader@example.com?",
@@ -291,8 +234,13 @@ describe("страница активации", () => {
       "auth-status--warn",
     );
 
+    // Before the letter goes out the offer says the fallback; the receipt says what the answer named.
     vi.spyOn(accountApi, "recover").mockResolvedValue({
-      data: {},
+      data: {
+        status: "ActivationResent",
+        email: "reader@example.com",
+        linkLifetimeHours: 30,
+      },
       error: null,
     } as Awaited<ReturnType<typeof accountApi.recover>>);
     await wrapper.get(".auth-button").trigger("click");
@@ -303,37 +251,20 @@ describe("страница активации", () => {
       "Мы отправили повторное письмо со ссылкой для активации на reader@example.com",
     );
     expect(wrapper.get(".auth-note").text()).toBe(
-      "Ссылка действительна 48 часов",
+      "Ссылка действительна 30 часов",
     );
     expect(wrapper.text()).not.toContain("устарела");
     expect(wrapper.find(".auth-status").exists()).toBe(false);
     expect(wrapper.find(".auth-button").exists()).toBe(false);
-    expect(wrapper.find(".help-section").exists()).toBe(false);
+    expect(wrapper.find(".auth-footnote").exists()).toBe(false);
   });
 
   /**
-   * Who speaks when the second letter does not go out.
-   *
-   * This card has no strip for a failed press: the offer is replaced by the
-   * receipt and nothing else on it changes. So the refusal belongs to the
-   * response interceptor, and `notifyFailure` covers only the half the
-   * interceptor stays out of - a 404, a 409, a rejected address.
-   *
-   * The two halves used to leave a hole between them. The same endpoint is
-   * pressed by three guest forms that answer for themselves, and the flags
-   * that keep the interceptor quiet for them were fixed inside the method, so
-   * they travelled on this press too: the interceptor said nothing because of
-   * the flags, `notifyFailure` said nothing because those statuses are the
-   * interceptor's, and a 403, a 429 or a 5xx here reached the reader as a
-   * button that had simply stopped working.
-   *
-   * The press is followed through the real service down to the client, because
-   * that is where the flags would be: a test that answers in place of the
-   * service never sees them. That a flagless request is one the interceptor
-   * speaks for is held in client.spec.ts; that the method itself claims
-   * nothing, in accountApi.spec.ts.
+   * Who speaks when the second letter does not go out: the card has no strip for
+   * it, so the press carries no flags and the interceptor speaks. Followed down
+   * to the client, where the flags would be.
    */
-  describe("повторное письмо", () => {
+  describe("the second letter", () => {
     const { toasts, dismiss } = useToast();
 
     /** As much of a request's options as the rule here is about. */
@@ -351,7 +282,7 @@ describe("страница активации", () => {
       return wrapper;
     };
 
-    it("просит письмо, не забирая отказ у перехватчика", async () => {
+    it("asks for the letter without taking the refusal from the interceptor", async () => {
       const post = vi
         .spyOn(Api, "post")
         .mockResolvedValue({ data: null, error: null } as never);
@@ -366,14 +297,8 @@ describe("страница активации", () => {
       expect(options?.ownsRateLimit).toBeUndefined();
     });
 
-    /**
-     * The other half, in the card's own voice: the refusal is named on the
-     * card, over the button, in the sentence the server sent, and once - not
-     * in a plate in the corner (the owner's rule of 26 September 2026). A
-     * refusal the interceptor speaks for is named there too, and the plate it
-     * held is taken down.
-     */
-    it("сама называет отказ над кнопкой, а не плашкой", async () => {
+    /** A refusal the card can say stands over the button, once, with no plate. */
+    it("names a refusal over the button itself, not in a plate", async () => {
       vi.spyOn(Api, "post").mockResolvedValue({
         data: null,
         error: { status: 409, title: "Аккаунт уже активирован" },
@@ -385,45 +310,35 @@ describe("страница активации", () => {
         "Аккаунт уже активирован",
       );
       expect(toasts.value.map((raised) => raised.message)).toEqual([]);
-      // And no receipt over a letter that never went out.
+      // No receipt for a letter that never went out.
       expect(wrapper.text()).not.toContain("Проверьте почту");
     });
   });
 
-  /**
-   * The reader is holding a link, not a token: the old headings named the
-   * thing in the database.
-   */
-  it("называет недействительной ссылку, а не токен", async () => {
+  /** The reader holds a link, not a token. */
+  it("calls the link invalid and names both causes", async () => {
     const wrapper = await arrive({ data: null, error: { status: 404 } });
 
     expect(wrapper.text()).toContain("Ссылка недействительна");
-    expect(wrapper.text()).not.toContain("Токен регистрации");
     expect(wrapper.get(".auth-status").classes()).toContain(
       "auth-status--error",
     );
 
-    // Two causes in one line: the account behind the link is already there, or
-    // the pending registration it belonged to is gone.
+    // The account is there already, or the registration is gone.
     expect(wrapper.get(".auth-text").text()).toBe(
       "Возможно ссылка уже была использована или срок ее действия истек",
     );
     expect(wrapper.find(".auth-note").exists()).toBe(false);
-    expect(wrapper.find(".help-section").exists()).toBe(true);
+    expect(wrapper.find(".auth-footnote").exists()).toBe(true);
   });
 
-  /**
-   * One way out, and the one every screen that answers a dead link gives. The
-   * card used to stand the sign-in and the registration side by side, which
-   * asks the reader to name the cause of a failure he cannot see; both doors
-   * stand on the home page anyway. Owner's decision.
-   */
-  it("дает один выход, и это главная", async () => {
+  /** One way out of a dead link, as on every screen that answers one. */
+  it("gives one way out, the home page", async () => {
     const wrapper = await arrive({ data: null, error: { status: 404 } });
     const ways = wrapper.findAll("button");
 
     expect(ways.map((button) => button.text())).toEqual(["На главную"]);
-    // The single action of the card, so it takes the whole width of it.
+    // The single action of the card, as wide as it.
     expect(ways[0].classes()).toContain("auth-button");
     expect(wrapper.find(".form-actions").exists()).toBe(false);
 
@@ -431,13 +346,8 @@ describe("страница активации", () => {
     expect(push).toHaveBeenLastCalledWith("/");
   });
 
-  /**
-   * A link with nothing in it. The card used to write a line of its own between
-   * the heading and the box of causes, and the only word it had for what was
-   * missing was the name of the thing in the database — the jargon the owner
-   * struck off these screens by name.
-   */
-  it("не пишет своей строки, когда в ссылке ничего нет", async () => {
+  /** A link with nothing in it: no line of the card's own and no word of the database. */
+  it("writes no line of its own for a link with nothing in it", async () => {
     window.location.hash = "";
     const check = vi.spyOn(accountApi, "getActivationInfo");
 
@@ -446,51 +356,40 @@ describe("страница активации", () => {
 
     expect(check).not.toHaveBeenCalled();
     expect(wrapper.text()).toContain("Ссылка недействительна");
-    expect(wrapper.text()).not.toContain("Токен активации отсутствует");
     expect(wrapper.text()).not.toContain("Токен");
-    // The card explains itself whether the server said anything or not, and
-    // says it in the reader's words rather than in the server's.
+    // The card explains itself in the reader's words.
     expect(wrapper.get(".auth-text").text()).toContain(
       "Возможно ссылка уже была использована",
     );
   });
 
-  /**
-   * A name taken between the check and the press. The field said one thing
-   * about an unavailable name and the shared vocabulary said another - the
-   * server answers in codes, and "Taken" reads as "Уже занято" everywhere else
-   * on the site - so the reader who ran into the race was told in a third
-   * wording what the field had already told him in the first.
-   */
-  it("отказывает в занятом имени той же фразой, что и поле", async () => {
+  /** A name taken between the check and the press, refused in the words of the field. */
+  it("refuses a taken name in the words of the field", async () => {
     const wrapper = await atConfirmStep();
     vi.spyOn(accountApi, "activate").mockResolvedValue({
       data: null,
       error: { status: 400, errors: { username: ["Taken"] } },
     } as never);
 
-    await wrapper.get(".submit-button").trigger("click");
+    await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
 
-    // Back to the field, with one sentence about the name above the button.
+    // Back to the field, one sentence above the button.
     expect(wrapper.text()).toContain("Выберите имя");
     expect(wrapper.get(".activation-refusal").text()).toBe("Это имя занято");
     expect(wrapper.text()).not.toContain("Уже занято");
     expect(wrapper.text()).not.toContain("уже используется");
   });
 
-  /**
-   * The refusal the server sent stands where the two removal pages stand
-   * theirs: one line under the heading, above the box of causes.
-   */
-  it("ставит фразу сервера строкой под заголовком", async () => {
+  /** The server's sentence in the line under the heading, as on the removal pages. */
+  it("puts the server sentence in the line under the heading", async () => {
     const wrapper = await atConfirmStep();
     vi.spyOn(accountApi, "activate").mockResolvedValue({
       data: null,
       error: { status: 404, errors: { token: ["Ссылка уже использована"] } },
     } as never);
 
-    await wrapper.get(".submit-button").trigger("click");
+    await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Ссылка недействительна");
@@ -498,14 +397,14 @@ describe("страница активации", () => {
   });
 
   /** And says nothing at all when the server named nothing. */
-  it("объясняет своими словами, когда сервер не прислал фразы", async () => {
+  it("explains in its own words when the server sent none", async () => {
     const wrapper = await atConfirmStep();
     vi.spyOn(accountApi, "activate").mockResolvedValue({
       data: null,
       error: { status: 404 },
     } as never);
 
-    await wrapper.get(".submit-button").trigger("click");
+    await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
 
     expect(wrapper.text()).toContain("Ссылка недействительна");
@@ -514,33 +413,32 @@ describe("страница активации", () => {
     );
   });
 
-  /**
-   * The step back to the name is a button by semantics and a link by sight,
-   * and the sight is the guest surface's own secondary action — the same one
-   * the login dialog wears beside its password. A recipe of its own on this
-   * page is how two controls of one idiom drift apart.
-   */
-  it("берет вторичное действие с гостевой поверхности", async () => {
+  /** The step back is a button that looks like the guest surface's secondary action. */
+  it("goes back to the choice of the name from the button Изменить", async () => {
     const wrapper = await atConfirmStep();
     const back = wrapper.get(".auth-label-row button");
 
     expect(back.text()).toBe("Изменить");
-    expect(back.classes()).toContain("auth-action");
-    expect(back.classes()).not.toContain("change-username");
+    expect(back.attributes("disabled")).toBeUndefined();
+    await back.trigger("click");
+    expect(wrapper.text()).toContain("Выберите имя");
   });
 
-  it("не держит собственного рецепта кнопки-под-ссылку", () => {
-    expect(SOURCE).not.toContain("inline-link-button");
-    expect(SOURCE).not.toContain("change-username");
+  it("shuts Изменить while the activation is on the wire", async () => {
+    const wrapper = await atConfirmStep();
+    vi.spyOn(accountApi, "activate").mockImplementation(
+      () => new Promise(() => {}) as never,
+    );
+
+    await wrapper.get(".auth-button").trigger("click");
+
+    expect(wrapper.get(".auth-label-row button").attributes("disabled")).toBe(
+      "",
+    );
+    expect(wrapper.text()).toContain("Подтвердите выбор имени");
   });
 
-  /**
-   * The green verdict cannot stand over a name the server has just refused.
-   *
-   * The field checks the name a moment before the press and knows nothing of
-   * what the submit came back with, so it kept printing "Имя свободно" and a
-   * tick under the refusal. One screen, one answer.
-   */
+  /** The field's green verdict goes while the server's refusal of the name stands. */
   it("puts out the verdict of the field while a refusal stands", async () => {
     vi.spyOn(accountApi, "activate").mockResolvedValue({
       data: null,
@@ -548,13 +446,10 @@ describe("страница активации", () => {
     } as never);
 
     const wrapper = await arrive(ready);
-    const name = wrapper.findComponent(UsernameInput);
-    name.vm.$emit("update:modelValue", "reader");
-    name.vm.$emit("availability", true);
-    await nextTick();
-    await wrapper.get(".submit-button").trigger("click");
+    await chooseName(wrapper);
+    await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
-    await wrapper.get(".submit-button").trigger("click");
+    await wrapper.get(".auth-button").trigger("click");
     await flushPromises();
 
     expect(wrapper.get(".activation-refusal").text()).toBe("Это имя занято");
@@ -563,16 +458,8 @@ describe("страница активации", () => {
     );
   });
 
-  /**
-   * The letter opened in two tabs. One of them finishes the activation and
-   * says so over the channel; the other used to be carried off to the home
-   * page and told about it in a toast - a card with a finished screen of its
-   * own, answering the best news of the flow by leaving the screen.
-   *
-   * Both tabs end where the activation ends now: the same card, the same
-   * words, the name out of the message.
-   */
-  describe("вторая вкладка той же ссылки", () => {
+  /** The letter opened in two tabs: both end on the finished screen, the name out of the message. */
+  describe("a second tab of the same link", () => {
     const { toasts, dismiss } = useToast();
 
     beforeEach(() => {
@@ -584,7 +471,7 @@ describe("страница активации", () => {
       vi.unstubAllGlobals();
     });
 
-    it("показывает тот же экран успеха с именем из события", async () => {
+    it("shows the same finished screen with the name from the message", async () => {
       withTabs();
       const wrapper = await arrive(ready);
 
@@ -595,21 +482,16 @@ describe("страница активации", () => {
       expect(wrapper.get(".auth-status").classes()).toContain(
         "auth-status--ok",
       );
-      // Nothing has gone wrong here either, so there is nobody to ask for help.
-      expect(wrapper.find(".help-section").exists()).toBe(false);
+      // Nothing has gone wrong, so no help is offered.
+      expect(wrapper.find(".auth-footnote").exists()).toBe(false);
 
-      // The news stands on the card, so the reader is not moved off it and
-      // nothing is said over it.
+      // The news is on the card: nothing moves the reader or speaks over it.
       expect(push).not.toHaveBeenCalled();
       expect(toasts.value).toHaveLength(0);
     });
 
-    /**
-     * And the one control of that screen works from the name the message
-     * brought: this tab never held the account, so a button reading anything
-     * else would drop the reader on the home page.
-     */
-    it("ведет в профиль по имени из события", async () => {
+    /** Its control works from the name the message brought: this tab never held the account. */
+    it("leads to the profile by the name from the message", async () => {
       withTabs();
       const wrapper = await arrive(ready);
       await activatedElsewhere("another");
@@ -620,7 +502,7 @@ describe("страница активации", () => {
     });
 
     /** The half the screen above stands on: the name goes into the message. */
-    it("уносит в канал имя, а не одно событие", async () => {
+    it("sends the name into the channel, not the event alone", async () => {
       withTabs();
       const wrapper = await atConfirmStep();
       vi.spyOn(accountApi, "activate").mockResolvedValue({
@@ -628,23 +510,18 @@ describe("страница активации", () => {
         error: null,
       } as Awaited<ReturnType<typeof accountApi.activate>>);
 
-      await wrapper.get(".submit-button").trigger("click");
+      await wrapper.get(".auth-button").trigger("click");
       await flushPromises();
 
-      // The name of the channel is the other half of the contract: two tabs
-      // listening on different names never hear each other.
+      // The name of the channel is the other half of the contract.
       expect(openedChannel().name).toBe("dm_activation");
       expect(openedChannel().posted).toEqual([
         { type: "activated", username: "reader" },
       ]);
     });
 
-    /**
-     * Both tabs pressed. The loser's own attempt reaches a token that is spent
-     * by the time it lands, and the dead link it earns must not take the
-     * finished screen off the card it has just been put on.
-     */
-    it("не сменяет успех отказом, догнавшим его с этой вкладки", async () => {
+    /** Both tabs pressed: the dead link the loser earns does not replace the finished screen. */
+    it("keeps the finished screen over a refusal of its own attempt", async () => {
       withTabs();
       const wrapper = await atConfirmStep();
 
@@ -655,7 +532,7 @@ describe("страница активации", () => {
         }) as never,
       );
 
-      await wrapper.get(".submit-button").trigger("click");
+      await wrapper.get(".auth-button").trigger("click");
       await activatedElsewhere();
       answer({ data: null, error: { status: 404 } });
       await flushPromises();
@@ -665,7 +542,7 @@ describe("страница активации", () => {
     });
 
     /** The same for the check of the link, which runs on the way in. */
-    it("не затирает успех ответом проверки ссылки", async () => {
+    it("keeps the finished screen over the answer of the link check", async () => {
       withTabs();
       let answer: (value: unknown) => void = () => {};
       vi.spyOn(accountApi, "getActivationInfo").mockReturnValue(
@@ -684,7 +561,7 @@ describe("страница активации", () => {
     });
 
     /** A message with no name in it is not the finished screen. */
-    it("не показывает успеха без имени в событии", async () => {
+    it("shows no finished screen for a message without a name", async () => {
       withTabs();
       const wrapper = await arrive(ready);
 

@@ -1,36 +1,21 @@
-import type { ListEnvelope } from "@/shared/api/models/common";
-import type {
-  UserNotification,
-  NotificationCount,
-} from "@/shared/api/models/notifications";
+import type { ListEnvelope, UnreadCount } from "@/shared/api/models/common";
+import type { UserNotification } from "@/shared/api/models/notifications";
 import { Api } from "@/shared/api";
 
-/** Where the notifications of the signed-in reader live on the API. */
 const BASE_PATH = "users/me/notifications";
 
 export default new (class NotificationApi {
-  /**
-   * Get notifications for the current user
-   * @param skip Number of notifications to skip (default 0)
-   * @param take Number of notifications to take (default 20, max 100)
-   */
   public getNotifications(skip = 0, take = 20) {
     return Api.get<ListEnvelope<UserNotification>>(
       `${BASE_PATH}?skip=${skip}&take=${take}`,
     );
   }
 
-  /**
-   * Get unread notifications count
-   */
   public getUnreadCount() {
-    return Api.get<NotificationCount>(`${BASE_PATH}/unread`);
+    return Api.get<UnreadCount>(`${BASE_PATH}/unread`);
   }
 
-  /**
-   * Mark notification(s) as read
-   * @param id Optional notification id. If not provided, marks all as read.
-   */
+  /** Without an id, all of them. */
   public markAsRead(id?: string) {
     return id
       ? Api.delete(`${BASE_PATH}/${id}/unread`)

@@ -1,21 +1,5 @@
 <script setup lang="ts">
-/**
- * TestimonialEditable — a website testimonial that can be rewritten where it
- * stands: a pencil in the top right corner of the bubble, beside the trash of
- * whoever may delete, and on click the card is replaced by the text in a
- * field with "Сохранить" / "Отмена". Escape cancels.
- *
- * It wraps the card rather than sitting in its #actions slot, because the
- * editor takes the place of the text and a corner control cannot reach it.
- * The card itself stays free of this: two other surfaces draw it read-only
- * (the home page gallery, both profile recommendation lists), and one of them
- * is not even a website testimonial.
- *
- * Who is shown the control is the server's decision, repeated and not widened:
- * WebsiteTestimonialIntentionResolver admits Edit to the named author or to
- * SeniorModerator and above. The text is plain — testimonials carry no BBCode
- * — so what is displayed is what is edited, with no source fetch in between.
- */
+// Wraps the card: the editor takes the place of the text, which a corner control cannot reach.
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
@@ -26,18 +10,17 @@ import { BubbleAction } from "@/shared/ui/SpeechBubble";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import Button from "@/shared/ui/Button/Button.vue";
+import { TESTIMONIAL_TEXT_MAX_LENGTH } from "@/shared/lib/constants/community";
 
 const props = defineProps<{
   testimonial: WebsiteTestimonial;
-  /** Search query for highlighting, forwarded to the card. */
   searchQuery?: string;
 }>();
 
 const { user: currentUser } = storeToRefs(useAuthStore());
 const testimonialStore = useTestimonialStore();
 
-// The server compares identifiers, so this does too: a username can change,
-// and the two sides would then disagree about the same person.
+// The server compares identifiers: a username can change.
 const isAuthor = computed(
   () =>
     !!currentUser.value &&
@@ -54,9 +37,8 @@ const saving = ref(false);
 
 function startEdit() {
   if (isEditing.value) return;
-  // Plain text in, plain text out: a testimonial carries no BBCode, so what
-  // the card displays is already the source and there is nothing to fetch.
-  editText.value = props.testimonial.text.trim();
+  // A testimonial carries no BBCode: the displayed text is the source.
+  editText.value = props.testimonial.text;
   isEditing.value = true;
 }
 
@@ -66,7 +48,6 @@ function cancelEdit() {
   saveResult.clear();
 }
 
-/** A refused save, under the buttons of the editor. */
 const saveResult = useActionResult();
 
 async function saveEdit() {
@@ -75,12 +56,10 @@ async function saveEdit() {
   saveResult.clear();
   const { error } = await testimonialStore.updateTestimonial(
     props.testimonial.id,
-    editText.value.trim(),
+    editText.value,
   );
   saving.value = false;
   if (error) {
-    // Keep the editor open with the text still in it, so a refusal costs
-    // nothing that was typed, and say it under the buttons.
     saveResult.refuse(error, "Не удалось сохранить отзыв");
     return;
   }
@@ -95,28 +74,24 @@ function handleEditKeydown(event: KeyboardEvent) {
 
 <template>
   <div v-if="isEditing" class="testimonial-edit">
-    <!-- Escape reaches the handler by bubbling out of the <textarea>: the
-         listener lands on the component's root, which wraps it. -->
+    <!-- Escape bubbles out of the <textarea> to the component's root. -->
     <TextArea
       v-model="editText"
       placeholder="Текст отзыва"
-      :max-length="1000"
+      :max-length="TESTIMONIAL_TEXT_MAX_LENGTH"
       @keydown="handleEditKeydown"
     />
     <div class="edit-actions">
       <Button
         type="button"
         variant="primary"
-        class="action-btn save-btn"
         :loading="saving"
         :disabled="!editText.trim()"
         @click="saveEdit"
       >
         Сохранить
       </Button>
-      <Button type="button" class="action-btn" @click="cancelEdit">
-        Отмена
-      </Button>
+      <Button type="button" @click="cancelEdit"> Отмена </Button>
     </div>
     <ActionResult :result="saveResult" class="edit-refusal" />
   </div>
@@ -126,7 +101,6 @@ function handleEditKeydown(event: KeyboardEvent) {
     :testimonial="testimonial"
     :search-query="searchQuery"
   >
-    <!-- The pencil first, then whatever the page adds (the trash). -->
     <template #actions>
       <BubbleAction
         v-if="canEdit"
@@ -140,7 +114,6 @@ function handleEditKeydown(event: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 
 .testimonial-edit
   display: flex
@@ -151,8 +124,6 @@ function handleEditKeydown(event: KeyboardEvent) {
   display: flex
   gap: $small
 
-// Spaced by the gap of the column. The two buttons above it are the shared
-// pair of every form on the site, the primary first.
 .edit-refusal
   --action-result-margin: 0
 </style>

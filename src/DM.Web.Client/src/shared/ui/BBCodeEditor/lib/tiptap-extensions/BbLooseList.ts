@@ -52,5 +52,3 @@ export const BbLooseList = Node.create({
     ];
   },
 });
-
-export default BbLooseList;

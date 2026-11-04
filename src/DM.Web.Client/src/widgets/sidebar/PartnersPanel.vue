@@ -1,6 +1,5 @@
 <template>
-  <SidebarBlock token="Partners">
-    <template #title>Партнеры</template>
+  <SidebarBlock token="Partners" title="Партнеры">
     <li v-once class="partners">
       <Tooltip
         v-for="partner in partners"
@@ -56,7 +55,7 @@ const partners: Partner[] = [
 
 .partner-link
   display: block
-  transition: filter 0.15s ease
+  transition: filter $transition-normal
 
   &:hover
     filter: brightness(1.1)
@@ -67,6 +66,6 @@ const partners: Partner[] = [
   border-radius: 50%
   object-fit: cover
   box-shadow: 0 0 12px var(--partner-glow, transparent)
-  margin: 6px
+  margin: $small
   filter: brightness(var(--partner-brightness, 1))
 </style>

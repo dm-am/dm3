@@ -26,7 +26,6 @@ internal class GlobalChatEventService : IGlobalChatEventService
     private readonly IIdentityProvider _identityProvider;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IEventProducer _eventProducer;
-    private readonly IBbTagNameCase _tagNames;
 
     public GlobalChatEventService(
         IValidator<CreateGlobalChatEvent> createValidator,
@@ -36,8 +35,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
         IGlobalChatEventRepository repository,
         IIdentityProvider identityProvider,
         IDateTimeProvider dateTimeProvider,
-        IEventProducer eventProducer,
-        IBbTagNameCase tagNames)
+        IEventProducer eventProducer)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -47,36 +45,25 @@ internal class GlobalChatEventService : IGlobalChatEventService
         _identityProvider = identityProvider;
         _dateTimeProvider = dateTimeProvider;
         _eventProducer = eventProducer;
-        _tagNames = tagNames;
     }
-
-    // ═══ CREATE ═══
 
     /// <inheritdoc />
     public async Task<GlobalChatEvent> CreateAsync(CreateGlobalChatEvent createGlobalChatEvent, CancellationToken ct = default)
     {
-        await _createValidator.ValidateAndThrowAsync(createGlobalChatEvent, ct).ConfigureAwait(false);
+        await _createValidator.ValidateAndThrowAsync(createGlobalChatEvent, ct);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Create);
 
         var userId = _identityProvider.Current.User.UserId;
-        // Event descriptions render on the Comment surface where [mod] is a
-        // green mod block. Event authoring is moderator-gated already, so this
-        // is defensive: strip [mod] if the author is somehow below Moderator.
-        if (!string.IsNullOrEmpty(createGlobalChatEvent.Description))
-            createGlobalChatEvent.Description = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(
-                createGlobalChatEvent.Description, _identityProvider.Current.User.Role), BbTagSet.WithModBlock);
         var chatEvent = _factory.Create(createGlobalChatEvent, userId);
         var creatorParticipant = _factory.CreateParticipant(chatEvent.GlobalChatEventId, userId, isOrganizer: true);
 
-        return await _repository.Create(chatEvent, creatorParticipant, ct).ConfigureAwait(false);
+        return await _repository.Create(chatEvent, creatorParticipant, ct);
     }
-
-    // ═══ READ ═══
 
     /// <inheritdoc />
     public async Task<GlobalChatEvent> GetAsync(Guid eventId)
     {
-        var chatEvent = await _repository.Get(eventId).ConfigureAwait(false);
+        var chatEvent = await _repository.Get(eventId);
         if (chatEvent == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, "Эвент не найден");
@@ -92,21 +79,17 @@ internal class GlobalChatEventService : IGlobalChatEventService
     public Task<IEnumerable<GlobalChatEvent>> GetAllAsync() =>
         _repository.GetByStatus(GlobalChatEventStatus.Live, GlobalChatEventStatus.Scheduled);
 
-    // ═══ UPDATE ═══
-
     /// <inheritdoc />
     public async Task<GlobalChatEvent> UpdateAsync(UpdateGlobalChatEvent updateGlobalChatEvent, CancellationToken ct = default)
     {
-        await _updateValidator.ValidateAndThrowAsync(updateGlobalChatEvent, ct).ConfigureAwait(false);
-        var chatEvent = await GetAsync(updateGlobalChatEvent.Id).ConfigureAwait(false);
+        await _updateValidator.ValidateAndThrowAsync(updateGlobalChatEvent, ct);
+        var chatEvent = await GetAsync(updateGlobalChatEvent.Id);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Update, chatEvent);
 
         var description = updateGlobalChatEvent.Description;
-        // Event descriptions render on the Comment surface where [mod] is a
-        // green mod block; defensive strip for a below-Moderator editor.
+        // The description renders [mod], and an organizer demoted since creation loses it.
         if (!string.IsNullOrEmpty(description))
-            description = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(
-                description, _identityProvider.Current.User.Role), BbTagSet.WithModBlock);
+            description = ModBlockSanitizer.SanitizeForAuthor(description, _identityProvider.Current.User.Role);
 
         var updateEntity = new UpdateGlobalChatEventEntity
         {
@@ -118,33 +101,28 @@ internal class GlobalChatEventService : IGlobalChatEventService
             IsOpen = updateGlobalChatEvent.IsOpen
         };
 
-        await _repository.Update(updateEntity, ct).ConfigureAwait(false);
+        await _repository.Update(updateEntity, ct);
 
-        return await GetAsync(updateGlobalChatEvent.Id).ConfigureAwait(false);
+        return await GetAsync(updateGlobalChatEvent.Id);
     }
-
-    // ═══ DELETE ═══
 
     /// <inheritdoc />
     public async Task DeleteAsync(Guid eventId, CancellationToken ct = default)
     {
-        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
+        var chatEvent = await GetAsync(eventId);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Delete, chatEvent);
 
-        await _repository.Delete(eventId, ct).ConfigureAwait(false);
+        await _repository.Delete(eventId, ct);
     }
-
-    // ═══ LIFECYCLE ═══
 
     /// <inheritdoc />
     public async Task<GlobalChatEvent> StartAsync(Guid eventId, CancellationToken ct = default)
     {
-        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
+        var chatEvent = await GetAsync(eventId);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Start, chatEvent);
 
-        // The ordinary case is answered here, without a write that is going to
-        // fail; the rule itself is held by the partial unique index over the live
-        // status, which is what the two starts that race past this read meet.
+        // The ordinary case, answered without a failing write; two starts that race past
+        // this read meet the partial unique index over the live status.
         if (await _repository.HasActiveEvent())
         {
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AnotherEventIsLive);
@@ -159,7 +137,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
                 GlobalChatEventStatus.Live,
                 startedAt: _dateTimeProvider.Now,
                 endedAt: null,
-                ct).ConfigureAwait(false);
+                ct);
         }
         catch (DuplicateEntityException)
         {
@@ -168,15 +146,11 @@ internal class GlobalChatEventService : IGlobalChatEventService
 
         if (result == null)
         {
-            // This event is no longer the scheduled one that was asked to start:
-            // somebody started or ended it beside this call, and nothing here was
-            // written. The announcement below belongs to the start that happened,
-            // and making it from here would tell the chat the same event began
-            // twice.
+            // Started or ended beside this call: the announcement belongs to that one.
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UnknownStatusTransition);
         }
 
-        await _eventProducer.SendAsync(EventType.GlobalChatEventStarted, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventStarted, eventId);
 
         return result;
     }
@@ -184,7 +158,7 @@ internal class GlobalChatEventService : IGlobalChatEventService
     /// <inheritdoc />
     public async Task<GlobalChatEvent> EndAsync(Guid eventId, CancellationToken ct = default)
     {
-        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
+        var chatEvent = await GetAsync(eventId);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.End, chatEvent);
 
         var result = await _repository.UpdateStatus(
@@ -193,42 +167,27 @@ internal class GlobalChatEventService : IGlobalChatEventService
             GlobalChatEventStatus.Ended,
             startedAt: null,
             endedAt: _dateTimeProvider.Now,
-            ct).ConfigureAwait(false);
+            ct);
 
         if (result == null)
         {
-            // The event was ended beside this call. Same reasoning as the start:
-            // the closing moment belongs to the end that happened, and the
-            // announcement with it.
+            // Ended beside this call, as with the start.
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.UnknownStatusTransition);
         }
 
-        await _eventProducer.SendAsync(EventType.GlobalChatEventEnded, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventEnded, eventId);
 
         return result;
     }
 
-    // ═══ PARTICIPANTS ═══
-
     /// <summary>
-    /// One person joins an event, whether they asked or an organiser added them.
+    /// One person joins an event, by his own request or by an organizer's. A person
+    /// already on the list is a 409 rather than a silent success, whether the read or the
+    /// unique pair finds him: the state asked for already holds. Only the join that wrote
+    /// a row is announced, or the chat hears of it once per click. The refusal is a
+    /// parameter because the two doors have different readers: the one who signed himself
+    /// up, and the organizer who named somebody else.
     /// </summary>
-    /// <remarks>
-    /// A second row for somebody already on the list is a 409 and not a silent
-    /// success: the caller is told the state it wanted is the state that already
-    /// holds, rather than being handed a duplicate participant.
-    ///
-    /// The read below answers the ordinary case without a write that is going to
-    /// do nothing; the rule is held by the unique pair, which is what the two
-    /// clicks that race past that read meet. The announcement is made only for
-    /// the join that wrote a row - repeating it tells the chat somebody joined as
-    /// many times as they pressed the button.
-    ///
-    /// The refusal is a parameter because the two doors have different readers:
-    /// the one who signed himself up is told about himself, the organizer about
-    /// the user they named. Both throw sites here say the caller's sentence, the
-    /// read and the race being one fact reached twice.
-    /// </remarks>
     private async Task<GlobalChatEventParticipant> AddParticipant(
         Guid eventId, Guid userId, string alreadyOnTheList, CancellationToken ct)
     {
@@ -238,13 +197,13 @@ internal class GlobalChatEventService : IGlobalChatEventService
         }
 
         var participant = _factory.CreateParticipant(eventId, userId, isOrganizer: false);
-        var result = await _repository.AddParticipant(participant, ct).ConfigureAwait(false);
+        var result = await _repository.AddParticipant(participant, ct);
         if (result == null)
         {
             throw new HttpException(HttpStatusCode.Conflict, alreadyOnTheList);
         }
 
-        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantJoined, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantJoined, eventId);
 
         return result;
     }
@@ -252,46 +211,42 @@ internal class GlobalChatEventService : IGlobalChatEventService
     /// <inheritdoc />
     public async Task<GlobalChatEventParticipant> JoinAsync(Guid eventId, CancellationToken ct = default)
     {
-        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
+        var chatEvent = await GetAsync(eventId);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Join, chatEvent);
 
         var userId = _identityProvider.Current.User.UserId;
 
         return await AddParticipant(
-            eventId, userId, RefusalMessage.AlreadyParticipant, ct).ConfigureAwait(false);
+            eventId, userId, RefusalMessage.AlreadyParticipant, ct);
     }
 
     /// <inheritdoc />
-    public async Task LeaveAsync(Guid eventId, CancellationToken ct = default)
-    {
-        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
-        _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.Leave, chatEvent);
-
-        var userId = _identityProvider.Current.User.UserId;
-
-        await _repository.RemoveParticipant(eventId, userId, ct).ConfigureAwait(false);
-
-        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantLeft, eventId).ConfigureAwait(false);
-    }
+    public async Task LeaveAsync(Guid eventId, CancellationToken ct = default) =>
+        await RemoveParticipant(
+            eventId, _identityProvider.Current.User.UserId, GlobalChatEventIntention.Leave, ct);
 
     /// <inheritdoc />
     public async Task<GlobalChatEventParticipant> AddParticipantAsync(Guid eventId, Guid userId, CancellationToken ct = default)
     {
-        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
+        var chatEvent = await GetAsync(eventId);
         _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.AddParticipant, chatEvent);
 
         return await AddParticipant(
-            eventId, userId, RefusalMessage.UserAlreadyParticipant, ct).ConfigureAwait(false);
+            eventId, userId, RefusalMessage.UserAlreadyParticipant, ct);
     }
 
     /// <inheritdoc />
-    public async Task RemoveParticipantAsync(Guid eventId, Guid userId, CancellationToken ct = default)
+    public async Task RemoveParticipantAsync(Guid eventId, Guid userId, CancellationToken ct = default) =>
+        await RemoveParticipant(eventId, userId, GlobalChatEventIntention.RemoveParticipant, ct);
+
+    private async Task RemoveParticipant(
+        Guid eventId, Guid userId, GlobalChatEventIntention intention, CancellationToken ct)
     {
-        var chatEvent = await GetAsync(eventId).ConfigureAwait(false);
-        _intentionManager.ThrowIfForbidden(GlobalChatEventIntention.RemoveParticipant, chatEvent);
+        var chatEvent = await GetAsync(eventId);
+        _intentionManager.ThrowIfForbidden(intention, chatEvent);
 
-        await _repository.RemoveParticipant(eventId, userId, ct).ConfigureAwait(false);
+        await _repository.RemoveParticipant(eventId, userId, ct);
 
-        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantLeft, eventId).ConfigureAwait(false);
+        await _eventProducer.SendAsync(EventType.GlobalChatEventParticipantLeft, eventId);
     }
 }

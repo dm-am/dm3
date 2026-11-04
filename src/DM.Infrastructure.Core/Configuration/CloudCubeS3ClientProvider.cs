@@ -8,15 +8,15 @@ namespace DM.Infrastructure.Core.Configuration;
 
 internal class CloudCubeS3ClientProvider(IOptions<CdnConfiguration> cdnConfiguration) : IAmazonS3ClientProvider
 {
-    private readonly CdnConfiguration cdnConfiguration = cdnConfiguration.Value;
+    private readonly CdnConfiguration _cdn = cdnConfiguration.Value;
 
     public IAmazonS3 GetClient() => new AmazonS3Client(
-        new BasicAWSCredentials(cdnConfiguration.AccessKey, cdnConfiguration.SecretKey),
+        new BasicAWSCredentials(_cdn.AccessKey, _cdn.SecretKey),
         new AmazonS3Config
         {
-            ServiceURL = cdnConfiguration.Url,
-            RegionEndpoint = RegionEndpoint.GetBySystemName(cdnConfiguration.Region)
+            ServiceURL = _cdn.Url,
+            RegionEndpoint = RegionEndpoint.GetBySystemName(_cdn.Region)
         });
 
-    public bool CanBeUsed() => cdnConfiguration.Provider == S3Provider.CloudCube;
+    public bool CanBeUsed() => _cdn.Provider == S3Provider.CloudCube;
 }

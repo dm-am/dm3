@@ -1,5 +1,3 @@
-using System;
-
 namespace DM.Domain.Core.Exceptions;
 
 /// <summary>
@@ -15,7 +13,6 @@ namespace DM.Domain.Core.Exceptions;
 /// </remarks>
 public class StorageException : Exception
 {
-    /// <inheritdoc />
     public StorageException(string message, Exception innerException)
         : base(message, innerException)
     {

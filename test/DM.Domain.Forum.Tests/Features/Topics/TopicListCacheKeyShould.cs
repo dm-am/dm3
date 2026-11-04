@@ -17,7 +17,6 @@ using DM.Domain.Forum.Features.Boards;
 using DM.Domain.Forum.Features.Topics;
 using DM.Testing;
 using DM.Testing.Dsl;
-using DM.Testing.Markup;
 using AwesomeAssertions;
 using FluentValidation;
 using NSubstitute;
@@ -65,12 +64,12 @@ public class TopicListCacheKeyShould : UnitTestBase
             "so the board page (isAttached=false) and a plain read of the same size share one entry",
     };
 
-    private readonly List<string> _keys = [];
+    private readonly List<string> keys = [];
 
     [Fact]
     public async Task KeepEveryQueryItCannotTellApartOffTheCache()
     {
-        var service = ServiceFor(BoardAccessPolicy.Guest);
+        var service = ServiceFor();
         var properties = QueryProbes.WritableProperties(typeof(TopicsQuery));
         properties.Should().NotBeEmpty(
             "the query declares the fields this is about, and finding none passes everything");
@@ -108,20 +107,6 @@ public class TopicListCacheKeyShould : UnitTestBase
             "defect, and a register entry the walk no longer finds has been put right and goes");
     }
 
-    /// <summary>
-    /// A guest and a moderator never share a listing: the moderator's carries
-    /// topics the guest may not see.
-    /// </summary>
-    [Fact]
-    public async Task KeepViewersOfDifferentAccessApart()
-    {
-        var asGuest = await KeyOf(ServiceFor(BoardAccessPolicy.Guest), new TopicsQuery());
-        var asModerator = await KeyOf(ServiceFor(BoardAccessPolicy.Moderator), new TopicsQuery());
-
-        asModerator.Should().NotBe(asGuest,
-            "one entry for both shows the guest what only a moderator may read");
-    }
-
     private static TopicsQuery Query(PropertyInfo property, object value)
     {
         var query = new TopicsQuery();
@@ -133,32 +118,31 @@ public class TopicListCacheKeyShould : UnitTestBase
     /// <summary>The key the listing was filed under, or null when it bypassed the cache.</summary>
     private async Task<string?> KeyOf(TopicService service, TopicsQuery query)
     {
-        _keys.Clear();
+        keys.Clear();
         await service.GetListAsync(CachedBoard, query);
 
-        _keys.Should().HaveCountLessThanOrEqualTo(1, "one listing is read through the cache at most once");
-        return _keys.SingleOrDefault();
+        keys.Should().HaveCountLessThanOrEqualTo(1, "one listing is read through the cache at most once");
+        return keys.SingleOrDefault();
     }
 
     /// <summary>
-    /// The service for a viewer whose role converts to the given policy, over a
-    /// cache that records the keys it is handed.
+    /// The service for a guest, over a cache that records the keys it is handed.
     /// </summary>
-    private TopicService ServiceFor(BoardAccessPolicy policy)
+    private TopicService ServiceFor()
     {
         var boardService = Mock<IBoardService>();
-        boardService.GetBoard(Arg.Any<string>(), Arg.Any<bool>())
+        boardService.GetBoard(Arg.Any<string>())
             .Returns(new Board { Id = BoardId, Title = CachedBoard, Alias = CachedBoard });
 
         var accessPolicyConverter = Mock<IAccessPolicyConverter>();
-        accessPolicyConverter.Convert(Arg.Any<UserRole>()).Returns(policy);
+        accessPolicyConverter.Convert(Arg.Any<UserRole>()).Returns(BoardAccessPolicy.Guest);
 
         var identityProvider = Mock<IIdentityProvider>();
         identityProvider.Current.Returns(Identities.Guest());
 
         var repository = Mock<ITopicRepository>();
         repository
-            .Get(Arg.Any<Guid?>(), Arg.Any<BoardAccessPolicy>(), Arg.Any<PagingData?>(), Arg.Any<TopicsQuery>(),
+            .Get(Arg.Any<Guid?>(), Arg.Any<PagingData?>(), Arg.Any<TopicsQuery>(),
                 Arg.Any<CancellationToken>())
             .Returns(Array.Empty<Topic>());
 
@@ -169,7 +153,7 @@ public class TopicListCacheKeyShould : UnitTestBase
             .GetOrCreateAsync(Arg.Any<object>(), Arg.Any<Func<Task<Topic[]>>>(), Arg.Any<TimeSpan>())
             .Returns(call =>
             {
-                _keys.Add((string)call.ArgAt<object>(0));
+                keys.Add((string)call.ArgAt<object>(0));
                 return Array.Empty<Topic>();
             });
 
@@ -185,7 +169,6 @@ public class TopicListCacheKeyShould : UnitTestBase
             Mock<IUserLookupService>(),
             Mock<IEventProducer>(),
             Mock<IGuidFactory>(),
-            cache,
-            new TagNamesAsTyped());
+            cache);
     }
 }

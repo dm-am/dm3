@@ -3,23 +3,9 @@
  */
 
 /**
- * The account page, and the one thing on it that happens in three blocks at
- * once.
- *
- * Changing the password ends every other session and writes the journal entry
- * inside the same server call (PasswordChangeService). The block that changes
- * it is the first of the three; the device list and the journal are further
- * down and read themselves once, in onMounted. So the screen after the press
- * went on offering to sign out of devices that were already signed out, and the
- * journal went on showing an account nothing had happened to.
- *
- * Asking for a new address writes a journal entry too, and only that: the
- * address moves when the link in the letter is followed, and no session is
- * touched.
- *
- * These tests read the screen the reader is left with, not the calls behind it:
- * the device that should be gone, the offer that should be gone with it, and
- * the line the journal should have gained.
+ * The account page and the one change seen in three blocks: a new password
+ * ends the other sessions and writes the journal in one call, a new address
+ * writes the journal only. Read off the screen the reader is left with.
  */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
@@ -33,17 +19,13 @@ import AccountPage from "./AccountPage.vue";
 const fetchUser = vi.hoisted(() => vi.fn());
 vi.mock("@/entities/user/lib/session", () => ({
   fetchUser,
-  register: vi.fn(),
   signIn: vi.fn(),
   completeSecondFactor: vi.fn(),
   signOut: vi.fn(),
   signOutAll: vi.fn(),
 }));
 
-/**
- * Every block of the page that has nothing to do with this: each one loads
- * itself on mount, and none of them is what is being read here.
- */
+/** The blocks that load themselves and are not read here. */
 const QUIET_BLOCKS = [
   "AccountInvitationsSection",
   "AccountTwoFactorSection",
@@ -78,11 +60,7 @@ const THIS_DEVICE = session({
 });
 const OTHER_DEVICE = session();
 
-/**
- * Mounts the page with the three blocks that talk to each other, answering the
- * device list and the journal with what the server holds before the press and
- * then with what it holds after it.
- */
+/** Mounts the page, the device list and the journal answering before the press and after it. */
 async function render(
   sessionsAfter: SessionInfo[] = [THIS_DEVICE],
   eventsAfter: SecurityEvent[] = [],
@@ -114,7 +92,6 @@ async function render(
           QUIET_BLOCKS.map((name) => [name, { template: "<div />" }]),
         ),
         RouterLink: RouterLinkStub,
-        PageTitle: { template: "<h1><slot /></h1>" },
         "page-title": { template: "<h1><slot /></h1>" },
       },
     },
@@ -136,7 +113,8 @@ async function changePassword(wrapper: ReturnType<typeof mount>) {
   await wrapper.get("#confirm-password").setValue("a-longer-secret");
   await wrapper
     .findAll(".security-block")[1]
-    .get("button.save-button")
+    .findAll("button")
+    .find((button) => button.text() === "Изменить пароль")!
     .trigger("click");
   await flushPromises();
 }
@@ -147,7 +125,8 @@ async function askForNewAddress(wrapper: ReturnType<typeof mount>) {
   await wrapper.get("#email-password").setValue("current-secret");
   await wrapper
     .findAll(".security-block")[0]
-    .get("button.save-button")
+    .findAll("button")
+    .find((button) => button.text() === "Изменить почту")!
     .trigger("click");
   await flushPromises();
 }
@@ -201,8 +180,70 @@ describe("the account page after a change of credentials", () => {
     await askForNewAddress(wrapper);
 
     expect(journal(wrapper)).toContain("Запрос смены почты");
-    // No session is touched by the request, so the list is left alone: the
-    // other device is still there to be signed out of.
+    // No session is touched, so the other device is still there.
     expect(devices(wrapper)).toContain("Ubuntu, Firefox");
+  });
+});
+
+/** Every block of the page, stubbed to its name, so only the page's own order is read. */
+const ALL_BLOCKS = [
+  ...QUIET_BLOCKS,
+  "AccountSecuritySection",
+  "AccountSessionsSection",
+  "AccountSecurityHistorySection",
+];
+
+function layout() {
+  setActivePinia(createPinia());
+  useAuthStore().user = { username: "reader", email: "reader@dm.am" } as never;
+  return mount(AccountPage, {
+    global: {
+      stubs: {
+        ...Object.fromEntries(
+          ALL_BLOCKS.map((name) => [
+            name,
+            { template: `<div class="block" data-block="${name}" />` },
+          ]),
+        ),
+        RouterLink: RouterLinkStub,
+        "page-title": { template: "<h1><slot /></h1>" },
+      },
+    },
+  });
+}
+
+describe("the layout of the account page", () => {
+  // What waits for an answer, then what the reader sets most often, then the
+  // rarer and the guarded.
+  it("stands the blocks in the order of the account", () => {
+    const order = layout()
+      .findAll(".block")
+      .map((block) => block.attributes("data-block"));
+
+    expect(order).toEqual([
+      "AccountInvitationsSection",
+      "AccountSettingsSection",
+      "AccountNotificationsSection",
+      "AccountBlacklistSection",
+      "AccountUsernameChangeSection",
+      "AccountSecuritySection",
+      "AccountTwoFactorSection",
+      "AccountSessionsSection",
+      "AccountSecurityHistorySection",
+    ]);
+  });
+
+  it("names what is edited on the profile, with the profile as the link", () => {
+    const hint = layout().get(".profile-link-hint");
+
+    expect(hint.text()).toBe(
+      'Аватар, статус, имя, пол, местоположение, день рождения, контакты и "О себе" правятся в профиле кнопкой "Редактировать"',
+    );
+    const link = hint.getComponent(RouterLinkStub);
+    expect(link.text()).toBe("в профиле");
+    expect(link.props("to")).toEqual({
+      name: "profile",
+      params: { username: "reader" },
+    });
   });
 });

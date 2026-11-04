@@ -2,11 +2,8 @@ using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
-using DM.Domain.Account.Features.Identity;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
@@ -15,24 +12,25 @@ using DM.Domain.Messaging.Authorization;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
 using AwesomeAssertions;
 using DM.Testing;
-using DM.Testing.Markup;
+using DM.Testing.Dsl;
 using FluentValidation;
 using FluentValidation.Results;
 using NSubstitute;
+using NSubstitute.Core;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.GlobalChatEvents;
 
 public class GlobalChatEventServiceShould : UnitTestBase
 {
-    private readonly IIntentionManager _intentionManager;
-    private readonly IGlobalChatEventRepository _repository;
-    private readonly IEventProducer _eventProducer;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IGlobalChatEventFactory _factory;
-    private readonly GlobalChatEventService _service;
-    private readonly Guid _currentUserId = Guid.NewGuid();
-    private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private readonly IIntentionManager intentionManager;
+    private readonly IGlobalChatEventRepository repository;
+    private readonly IEventProducer eventProducer;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGlobalChatEventFactory factory;
+    private readonly GlobalChatEventService service;
+    private readonly Guid currentUserId = Guid.NewGuid();
+    private readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
     public GlobalChatEventServiceShould()
     {
@@ -46,38 +44,32 @@ public class GlobalChatEventServiceShould : UnitTestBase
             .ValidateAsync(Arg.Any<ValidationContext<UpdateGlobalChatEvent>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
 
-        _intentionManager = Mock<IIntentionManager>();
+        intentionManager = Mock<IIntentionManager>();
 
-        _factory = Mock<IGlobalChatEventFactory>();
+        factory = Mock<IGlobalChatEventFactory>();
 
-        _repository = Mock<IGlobalChatEventRepository>();
-        _repository.Create(Arg.Any<CreateGlobalChatEventEntity>(), Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
+        repository = Mock<IGlobalChatEventRepository>();
+        repository.Create(Arg.Any<CreateGlobalChatEventEntity>(), Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
             .Returns(new GlobalChatEvent { Id = Guid.NewGuid() });
 
         var identityProvider = Mock<IIdentityProvider>();
-        var identity = Identity.Success(
-            new AuthenticatedUser { UserId = _currentUserId, Role = UserRole.RegularUser },
-            new Session { Id = Guid.NewGuid() },
-            new UserSettings(),
-            "token");
-        identityProvider.Current.Returns(identity);
+        identityProvider.Current.Returns(Identities.User(currentUserId));
 
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Now.Returns(_now);
+        dateTimeProvider = Mock<IDateTimeProvider>();
+        dateTimeProvider.Now.Returns(now);
 
-        _eventProducer = Mock<IEventProducer>();
-        _eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
+        eventProducer = Mock<IEventProducer>();
+        eventProducer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
 
-        _service = new GlobalChatEventService(
+        service = new GlobalChatEventService(
             createValidator,
             updateValidator,
-            _intentionManager,
-            _factory,
-            _repository,
+            intentionManager,
+            factory,
+            repository,
             identityProvider,
-            _dateTimeProvider,
-            _eventProducer,
-            new TagNamesAsTyped());
+            dateTimeProvider,
+            eventProducer);
     }
 
     [Fact]
@@ -86,12 +78,12 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var createEvent = new CreateGlobalChatEvent { Title = "Test Event" };
         var eventEntity = new CreateGlobalChatEventEntity { GlobalChatEventId = Guid.NewGuid() };
         var participantEntity = new CreateGlobalChatEventParticipantEntity();
-        _factory.Create(Arg.Any<CreateGlobalChatEvent>(), Arg.Any<Guid>()).Returns(eventEntity);
-        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
+        factory.Create(Arg.Any<CreateGlobalChatEvent>(), Arg.Any<Guid>()).Returns(eventEntity);
+        factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
 
-        await _service.CreateAsync(createEvent);
+        await service.CreateAsync(createEvent);
 
-        _intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Create);
+        intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Create);
     }
 
     [Fact]
@@ -100,66 +92,50 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var createEvent = new CreateGlobalChatEvent { Title = "Test Event" };
         var eventEntity = new CreateGlobalChatEventEntity { GlobalChatEventId = Guid.NewGuid() };
         var participantEntity = new CreateGlobalChatEventParticipantEntity();
-        _factory.Create(Arg.Any<CreateGlobalChatEvent>(), Arg.Any<Guid>()).Returns(eventEntity);
-        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
+        factory.Create(Arg.Any<CreateGlobalChatEvent>(), Arg.Any<Guid>()).Returns(eventEntity);
+        factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
 
-        await _service.CreateAsync(createEvent);
+        await service.CreateAsync(createEvent);
 
-        await _repository.Received(1).Create(eventEntity, participantEntity, Arg.Any<CancellationToken>());
+        await repository.Received(1).Create(eventEntity, participantEntity, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AuthorizeStartAction()
     {
         var eventId = Guid.NewGuid();
-        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.HasActiveEvent().Returns(false);
-        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
-            .Returns(chatEvent);
+        var chatEvent = EventIn(eventId, GlobalChatEventStatus.Scheduled);
 
-        await _service.StartAsync(eventId);
+        await service.StartAsync(eventId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Start, chatEvent);
+        intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Start, chatEvent);
     }
 
     [Fact]
     public async Task PublishEventStartedEvent()
     {
         var eventId = Guid.NewGuid();
-        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.HasActiveEvent().Returns(false);
-        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
-            .Returns(chatEvent);
+        EventIn(eventId, GlobalChatEventStatus.Scheduled);
 
-        await _service.StartAsync(eventId);
+        await service.StartAsync(eventId);
 
-        await _eventProducer.Received(1).SendAsync(EventType.GlobalChatEventStarted, eventId);
+        await eventProducer.Received(1).SendAsync(EventType.GlobalChatEventStarted, eventId);
     }
 
     /// <summary>
-    /// The actual start is a fact of its own. It is manual and does not have to
-    /// fall on the planned one, so an event begun late is exactly the case where
-    /// the plan plus the duration answers with an end already in the past, and a
-    /// client holding only those two shows a countdown that has run out while the
-    /// event is still going.
+    /// The actual start is a fact of its own: an event begun late would otherwise show an end already past.
     /// </summary>
     [Fact]
     public async Task StampTheActualStartWhenTheEventGoesLive()
     {
         var eventId = Guid.NewGuid();
-        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.HasActiveEvent().Returns(false);
-        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
-            .Returns(chatEvent);
+        EventIn(eventId, GlobalChatEventStatus.Scheduled);
 
-        await _service.StartAsync(eventId);
+        await service.StartAsync(eventId);
 
-        await _repository.Received(1).UpdateStatus(
+        await repository.Received(1).UpdateStatus(
             eventId, GlobalChatEventStatus.Scheduled, GlobalChatEventStatus.Live,
-            _now, null, Arg.Any<CancellationToken>());
+            now, null, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -170,42 +146,33 @@ public class GlobalChatEventServiceShould : UnitTestBase
     public async Task StampTheEndWhenTheEventIsClosed()
     {
         var eventId = Guid.NewGuid();
-        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Live };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
-            .Returns(chatEvent);
+        EventIn(eventId, GlobalChatEventStatus.Live);
 
-        await _service.EndAsync(eventId);
+        await service.EndAsync(eventId);
 
-        await _repository.Received(1).UpdateStatus(
+        await repository.Received(1).UpdateStatus(
             eventId, GlobalChatEventStatus.Live, GlobalChatEventStatus.Ended,
-            null, _now, Arg.Any<CancellationToken>());
+            null, now, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
     /// The start that moved nothing announces nothing.
     /// </summary>
     /// <remarks>
-    /// Two clicks on "start" reach a scheduled event together and the write is
-    /// conditional on that status, so only one of them moves a row. Announcing
-    /// from the other tells every reader of the chat that the event began a
-    /// second time, and hands the client a second live banner to raise.
+    /// Two clicks on "start" reach the conditional write together, and only one moves a row.
     /// </remarks>
     [Fact]
     public async Task StaySilentWhenTheEventWasStartedBesideThisStart()
     {
         var eventId = Guid.NewGuid();
-        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.HasActiveEvent().Returns(false);
-        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
-            .Returns((GlobalChatEvent?)null);
+        EventIn(eventId, GlobalChatEventStatus.Scheduled);
+        StatusWriteAnswers(_ => null);
 
-        var start = () => _service.StartAsync(eventId);
+        var start = () => service.StartAsync(eventId);
 
         await start.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
-        await _eventProducer.DidNotReceive().SendAsync(EventType.GlobalChatEventStarted, eventId);
+        await eventProducer.DidNotReceive().SendAsync(EventType.GlobalChatEventStarted, eventId);
     }
 
     /// <summary>
@@ -217,17 +184,14 @@ public class GlobalChatEventServiceShould : UnitTestBase
     public async Task RefuseTheStartWhoseLiveStatusWasTakenBesideIt()
     {
         var eventId = Guid.NewGuid();
-        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.HasActiveEvent().Returns(false);
-        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
-            .Returns<GlobalChatEvent?>(_ => throw new DuplicateEntityException("live"));
+        EventIn(eventId, GlobalChatEventStatus.Scheduled);
+        StatusWriteAnswers(_ => throw new DuplicateEntityException("live"));
 
-        var start = () => _service.StartAsync(eventId);
+        var start = () => service.StartAsync(eventId);
 
         await start.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
-        await _eventProducer.DidNotReceive().SendAsync(EventType.GlobalChatEventStarted, eventId);
+        await eventProducer.DidNotReceive().SendAsync(EventType.GlobalChatEventStarted, eventId);
     }
 
     /// <summary>The end that moved nothing announces nothing, for the same reason.</summary>
@@ -235,46 +199,40 @@ public class GlobalChatEventServiceShould : UnitTestBase
     public async Task StaySilentWhenTheEventWasEndedBesideThisEnd()
     {
         var eventId = Guid.NewGuid();
-        var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Live };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.UpdateStatus(Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
-            .Returns((GlobalChatEvent?)null);
+        EventIn(eventId, GlobalChatEventStatus.Live);
+        StatusWriteAnswers(_ => null);
 
-        var end = () => _service.EndAsync(eventId);
+        var end = () => service.EndAsync(eventId);
 
         await end.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
-        await _eventProducer.DidNotReceive().SendAsync(EventType.GlobalChatEventEnded, eventId);
+        await eventProducer.DidNotReceive().SendAsync(EventType.GlobalChatEventEnded, eventId);
     }
 
     /// <summary>
     /// The join that wrote no row is refused and announces nothing.
     /// </summary>
     /// <remarks>
-    /// The pair is unique and the insert is ON CONFLICT DO NOTHING, so of two
-    /// clicks meeting on one list only one writes. The other is told the state it
-    /// asked for already holds, which is the same answer the read before the
-    /// write gives to a second click that arrives later - and it is told so in
-    /// the second person, because it was its own place it asked for.
+    /// The insert is ON CONFLICT DO NOTHING, so of two clicks only one writes.
     /// </remarks>
     [Fact]
     public async Task RefuseTheJoinWhoseRowWasTakenBesideIt()
     {
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.IsParticipant(eventId, _currentUserId).Returns(false);
-        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>())
+        repository.Get(eventId).Returns(chatEvent);
+        repository.IsParticipant(eventId, currentUserId).Returns(false);
+        factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>())
             .Returns(new CreateGlobalChatEventParticipantEntity());
-        _repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
+        repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
             .Returns((GlobalChatEventParticipant?)null);
 
-        var join = () => _service.JoinAsync(eventId);
+        var join = () => service.JoinAsync(eventId);
 
         await join.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict &&
                 e.Message == RefusalMessage.AlreadyParticipant);
-        await _eventProducer.DidNotReceive()
+        await eventProducer.DidNotReceive()
             .SendAsync(EventType.GlobalChatEventParticipantJoined, eventId);
     }
 
@@ -284,15 +242,15 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
         var participantEntity = new CreateGlobalChatEventParticipantEntity();
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.IsParticipant(eventId, _currentUserId).Returns(false);
-        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
-        _repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
+        repository.Get(eventId).Returns(chatEvent);
+        repository.IsParticipant(eventId, currentUserId).Returns(false);
+        factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
+        repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
             .Returns(new GlobalChatEventParticipant());
 
-        await _service.JoinAsync(eventId);
+        await service.JoinAsync(eventId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Join, chatEvent);
+        intentionManager.Received(1).ThrowIfForbidden(GlobalChatEventIntention.Join, chatEvent);
     }
 
     [Fact]
@@ -301,40 +259,37 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
         var participantEntity = new CreateGlobalChatEventParticipantEntity();
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.IsParticipant(eventId, _currentUserId).Returns(false);
-        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
-        _repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
+        repository.Get(eventId).Returns(chatEvent);
+        repository.IsParticipant(eventId, currentUserId).Returns(false);
+        factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>()).Returns(participantEntity);
+        repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
             .Returns(new GlobalChatEventParticipant());
 
-        await _service.JoinAsync(eventId);
+        await service.JoinAsync(eventId);
 
-        await _eventProducer.Received(1).SendAsync(EventType.GlobalChatEventParticipantJoined, eventId);
+        await eventProducer.Received(1).SendAsync(EventType.GlobalChatEventParticipantJoined, eventId);
     }
 
     /// <summary>
     /// The second press of "Участвовать" is answered about the reader himself.
     /// </summary>
     /// <remarks>
-    /// A join and an organizer's add are one write behind two doors, and the
-    /// sentence is the only thing that keeps their readers apart. A person who
-    /// signed himself up and is answered "Пользователь уже участвует в эвенте"
-    /// reads it as being about somebody else and presses again.
+    /// A join and an organizer's add are one write behind two doors, and the sentence keeps their readers apart.
     /// </remarks>
     [Fact]
     public async Task AnswerTheSecondJoinInTheSecondPerson()
     {
         var eventId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.IsParticipant(eventId, _currentUserId).Returns(true);
+        repository.Get(eventId).Returns(chatEvent);
+        repository.IsParticipant(eventId, currentUserId).Returns(true);
 
-        var join = () => _service.JoinAsync(eventId);
+        var join = () => service.JoinAsync(eventId);
 
         await join.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict &&
                 e.Message == RefusalMessage.AlreadyParticipant);
-        await _repository.DidNotReceive()
+        await repository.DidNotReceive()
             .AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>());
     }
 
@@ -348,15 +303,15 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var eventId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.IsParticipant(eventId, otherUserId).Returns(true);
+        repository.Get(eventId).Returns(chatEvent);
+        repository.IsParticipant(eventId, otherUserId).Returns(true);
 
-        var add = () => _service.AddParticipantAsync(eventId, otherUserId);
+        var add = () => service.AddParticipantAsync(eventId, otherUserId);
 
         await add.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict &&
                 e.Message == RefusalMessage.UserAlreadyParticipant);
-        await _repository.DidNotReceive()
+        await repository.DidNotReceive()
             .AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>());
     }
 
@@ -371,19 +326,35 @@ public class GlobalChatEventServiceShould : UnitTestBase
         var eventId = Guid.NewGuid();
         var otherUserId = Guid.NewGuid();
         var chatEvent = new GlobalChatEvent { Id = eventId, Status = GlobalChatEventStatus.Scheduled };
-        _repository.Get(eventId).Returns(chatEvent);
-        _repository.IsParticipant(eventId, otherUserId).Returns(false);
-        _factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>())
+        repository.Get(eventId).Returns(chatEvent);
+        repository.IsParticipant(eventId, otherUserId).Returns(false);
+        factory.CreateParticipant(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<bool>())
             .Returns(new CreateGlobalChatEventParticipantEntity());
-        _repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
+        repository.AddParticipant(Arg.Any<CreateGlobalChatEventParticipantEntity>(), Arg.Any<CancellationToken>())
             .Returns((GlobalChatEventParticipant?)null);
 
-        var add = () => _service.AddParticipantAsync(eventId, otherUserId);
+        var add = () => service.AddParticipantAsync(eventId, otherUserId);
 
         await add.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict &&
                 e.Message == RefusalMessage.UserAlreadyParticipant);
-        await _eventProducer.DidNotReceive()
+        await eventProducer.DidNotReceive()
             .SendAsync(EventType.GlobalChatEventParticipantJoined, eventId);
     }
+
+    /// <summary>An event in the given status, read back by the status write that moves it.</summary>
+    private GlobalChatEvent EventIn(Guid eventId, GlobalChatEventStatus status)
+    {
+        var chatEvent = new GlobalChatEvent { Id = eventId, Status = status };
+        repository.Get(eventId).Returns(chatEvent);
+        StatusWriteAnswers(_ => chatEvent);
+        return chatEvent;
+    }
+
+    /// <summary>The conditional status write answers whatever it is asked with the function given.</summary>
+    private void StatusWriteAnswers(Func<CallInfo, GlobalChatEvent?> answer) =>
+        repository.UpdateStatus(
+                Arg.Any<Guid>(), Arg.Any<GlobalChatEventStatus>(), Arg.Any<GlobalChatEventStatus>(),
+                Arg.Any<DateTimeOffset?>(), Arg.Any<DateTimeOffset?>(), Arg.Any<CancellationToken>())
+            .Returns(answer);
 }

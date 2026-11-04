@@ -7,41 +7,36 @@ namespace DM.Domain.Game.Features.Games;
 /// <inheritdoc />
 internal class UpdateGameValidator : AbstractValidator<UpdateGame>
 {
-    /// <inheritdoc />
     public UpdateGameValidator()
     {
-        When(g => g.Title != default, () =>
+        When(g => g.Title is not null, () =>
             RuleFor(g => g.Title)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(GameFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long));
 
-        When(g => g.SystemName != default, () =>
+        When(g => g.SystemName is not null, () =>
             RuleFor(g => g.SystemName)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(GameFieldLimits.SystemMaxLength).WithMessage(ValidationError.Long));
 
-        When(g => g.NarrativeSetting != default, () =>
+        When(g => g.NarrativeSetting is not null, () =>
             RuleFor(g => g.NarrativeSetting)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(GameFieldLimits.SettingMaxLength).WithMessage(ValidationError.Long));
 
-        When(g => g.Info != default, () =>
+        When(g => g.Info is not null, () =>
         {
             RuleFor(g => g.Info)
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MinimumLength(GameFieldLimits.InfoMinLength).WithMessage(ValidationError.Short);
 
-            // The Profile surface declares neither [mod] nor [private], and an
-            // edit is the other way the tag gets into a stored description.
+            // The Profile surface declares no [private].
             RuleFor(g => g.Info)
                 .Must(info => !PrivateBlockMarkup.ContainsPrivateMarkup(info))
                 .WithMessage(g => PrivateBlockMarkup.DescribeSurfaceRefusal(g.Info));
         });
 
-        // Who may comment is decided by comparing the stored value against the
-        // named members; an integer outside the enum matches none of them and
-        // the game ends up with an access mode nothing in the product can read.
-        // Null passes — omitted keeps the stored value.
+        // An integer outside the enum matches no mode the product reads; null keeps the stored one.
         RuleFor(g => g.CommentsAccessMode)
             .IsInEnum().WithMessage(ValidationError.Invalid);
     }

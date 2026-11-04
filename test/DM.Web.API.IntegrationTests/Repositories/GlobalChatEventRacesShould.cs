@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
@@ -18,18 +15,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// One person is on one event's list once, and one event is live at a time.
 /// </summary>
 /// <remarks>
-/// Both rules used to be held by a read taken before the write: "is this person a
-/// participant" and "is any event live". Under READ COMMITTED neither read sees
-/// the row the other transaction has not committed yet, so two clicks arriving
-/// together both passed and both wrote. The duplicate participant was not even
-/// something the reader could clear - leaving deleted the one row a read returned
-/// - and two live events left the chat belonging to both at once.
-///
-/// The rules now sit in the schema: a unique pair, a partial unique index over
-/// the live status, an insert that says ON CONFLICT DO NOTHING and a transition
-/// that carries the status it starts from. Only a live database can be asked
-/// whether a second write is refused or made to wait, which is why these are here
-/// and not in the domain tests.
+/// The rules sit in the schema: a unique pair, a partial unique index over the live status, ON CONFLICT DO NOTHING
+/// and a transition carrying its start status. Only a live database shows a write refused or made to wait.
 /// </remarks>
 public class GlobalChatEventRacesShould : IntegrationTestBase
 {
@@ -51,10 +38,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
     /// Simultaneous joins of one person leave one row, and one of them answers
     /// that it wrote it.
     /// </summary>
-    /// <remarks>
-    /// The answer is what the service builds its refusal and its announcement on:
-    /// a join that wrote nothing must not tell the chat somebody arrived.
-    /// </remarks>
+    /// <remarks>A join that wrote nothing must not tell the chat somebody arrived.</remarks>
     [Fact]
     public async Task SeatOnePersonOnceHoweverManyClicksArrive()
     {
@@ -85,12 +69,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
     /// <summary>
     /// Leaving leaves, and the person can join again afterwards.
     /// </summary>
-    /// <remarks>
-    /// The delete is a statement over the pair rather than over a row read first,
-    /// so what it clears is everything the pair holds. Joining again has to be
-    /// allowed: the unique index is about the list as it stands, not about who has
-    /// ever been on it.
-    /// </remarks>
+    /// <remarks>The delete is over the pair, and the unique index is about the list as it stands.</remarks>
     [Fact]
     public async Task LetThePersonBackAfterTheyLeave()
     {
@@ -124,13 +103,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
     /// Two events starting at the same moment leave one live event, and the other
     /// start is refused rather than answered with a 500.
     /// </summary>
-    /// <remarks>
-    /// The check before the write is a read and cannot see the event going live
-    /// beside it. What refuses the second one is the partial unique index, and the
-    /// repository turns its violation into the duplicate the service answers with:
-    /// the same sentence the read answers with, because to the organiser it is the
-    /// same fact.
-    /// </remarks>
+    /// <remarks>The partial unique index refuses the second, and the repository answers with the read's sentence.</remarks>
     [Fact]
     public async Task LeaveOneLiveEventWhenTwoOfThemStartTogether()
     {
@@ -165,13 +138,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
     /// Of the starts that meet on one event, exactly one moves it, and the moment
     /// stored is that one's.
     /// </summary>
-    /// <remarks>
-    /// The announcement stands on the answer: a start that moved nothing and
-    /// announced anyway tells every reader of the chat the event began as many
-    /// times as the button was pressed. The stamp is the other half - the event
-    /// began once, and a later start writing its own moment over the first would
-    /// move the countdown the client draws from it.
-    /// </remarks>
+    /// <remarks>The announcement and the stored moment are the one start that moved the event.</remarks>
     [Fact]
     public async Task MoveTheEventInExactlyOneOfTheStartsThatMeet()
     {
@@ -306,9 +273,7 @@ public class GlobalChatEventRacesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Takes the test's events back out. The database is shared by every test in
-    /// the collection, and one live event left behind is a second live event to
-    /// whoever runs next - which is the very state these tests are about.
+    /// Takes the test's events back out: one left live is a second live event to the next test.
     /// </summary>
     private async Task RemoveEvents(params Guid[] eventIds)
     {

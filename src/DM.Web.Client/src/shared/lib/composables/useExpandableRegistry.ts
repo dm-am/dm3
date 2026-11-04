@@ -1,27 +1,8 @@
 /**
- * useExpandableRegistry - module-scoped singleton for coordinating
- * "expand all / collapse all" across every ephemeral expandable element
- * on the current page.
- *
- * Why a singleton (not provide/inject): the ScrollNav toggle button lives
- * in the root layout, outside any route-subtree's provide boundary.
- *
- * Scope — what participates:
- *   - <ExpandableList> accordion rows (via useExpandable)
- *   - <TruncatedContent> "Показать полностью" blocks
- *   - BBCode [spoiler] heads rendered via initSpoilers
- *   - BBCode [nsfw] heads rendered via initNsfw
- *   - Tiptap Spoiler/Nsfw node views (editor variants)
- *   - GamePost review collapse sections
- *
- * Persistent widgets (sidebar sections backed by localStorage) are NOT
- * registered — "expand all" only affects things that don't survive reload.
- *
- * Route navigation wipes the registry via router.afterEach(clearRegistry).
- *
- * Late registration: when a user clicks "Развернуть все", handles that
- * register AFTER the action (e.g. BBCode spoilers inside lazily-loaded
- * review text) are auto-expanded to maintain consistency.
+ * A module-scoped registry for "expand all / collapse all" of the page: the
+ * ScrollNav toggle lives in the root layout, outside any provide. Only what
+ * does not survive a reload takes part; the router clears it on navigation, and
+ * a handle registered after a bulk action is synced to it.
  */
 
 import { computed, shallowRef, triggerRef } from "vue";
@@ -44,11 +25,8 @@ function bump() {
 }
 
 /**
- * Register a handle with the registry. Returns an unregister callback,
- * which MUST be called from onBeforeUnmount to avoid stale handles.
- *
- * If the user recently clicked "Развернуть все" / "Свернуть все",
- * the new handle is automatically expanded/collapsed to match.
+ * Returns the unregister callback, which must run in onBeforeUnmount; a handle
+ * registered after a bulk action is synced to it.
  */
 export function registerExpandable(handle: ExpandableHandle): () => void {
   handles.value.set(handle.id, handle);
@@ -67,21 +45,15 @@ export function registerExpandable(handle: ExpandableHandle): () => void {
   };
 }
 
-/**
- * Tell the registry that a participant's expand state changed by a MANUAL
- * user toggle (spoiler head, accordion header, "показать полностью").
- * Clears the pending bulk action so future registrations don't auto-sync.
- */
+/** A manual toggle: clears the pending bulk action. */
 export function notifyExpandableChanged(): void {
   pendingAction = null;
   bump();
 }
 
 /**
- * Re-evaluate the aggregate expand state (allExpanded) WITHOUT clearing the
- * pending bulk action. For settle events that fire for bulk-driven changes
- * too (e.g. TruncatedContent's transitionend) — clearing there would cancel
- * the bulk action's late-registration sync mid-animation.
+ * Re-evaluates allExpanded without clearing the pending bulk action, for
+ * settle events that bulk changes fire too.
  */
 export function refreshExpandableStates(): void {
   bump();
@@ -112,9 +84,7 @@ export function expandAll(): void {
   for (const handle of snapshot) {
     handle.expand();
   }
-  // Restore pendingAction — expand callbacks may have cleared it via
-  // notifyExpandableChanged(), but we still want late-registering handles
-  // (e.g. BBCode spoilers inside lazily-loaded review HTML) to auto-expand.
+  // Restored: expand callbacks may have cleared it, and late handles still sync.
   pendingAction = "expand";
   bump();
 }

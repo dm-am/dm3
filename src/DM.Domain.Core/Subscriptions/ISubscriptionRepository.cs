@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Subscriptions;
@@ -11,9 +7,6 @@ namespace DM.Domain.Core.Subscriptions;
 /// </summary>
 public interface ISubscriptionRepository
 {
-    /// <summary>
-    /// Get all subscriptions for a user
-    /// </summary>
     Task<IEnumerable<Subscription>> GetUserSubscriptionsAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>

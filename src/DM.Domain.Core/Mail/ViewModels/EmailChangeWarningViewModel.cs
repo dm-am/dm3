@@ -5,9 +5,8 @@ namespace DM.Domain.Core.Mail.ViewModels;
 /// account to another one
 /// </summary>
 /// <remarks>
-/// The new address is printed whole. Masked, it hid the one thing the owner
-/// needs it for, telling a second mailbox of their own from a stranger's, and
-/// what it protected was the address of whoever filed the request.
+/// The new address is printed whole: the owner tells a second mailbox of their own
+/// from a stranger's by it.
 /// </remarks>
 /// <param name="CurrentEmail">Address the account has now, the one this letter goes to</param>
 /// <param name="NewEmail">Address the request names</param>

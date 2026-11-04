@@ -20,7 +20,7 @@ export interface RoleBadge {
   cssClass: string;
 }
 
-export const ROLE_BADGES: Partial<Record<UserRole, RoleBadge>> = {
+const ROLE_BADGES: Partial<Record<UserRole, RoleBadge>> = {
   [UserRole.Admin]: {
     letter: "A",
     label: "Администратор",

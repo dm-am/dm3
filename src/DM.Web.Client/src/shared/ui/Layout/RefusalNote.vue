@@ -20,7 +20,7 @@
 
 <style scoped lang="sass">
 // DM2's .lightbg: padding 5px, 1px dashed frame, 16px text in the ink of the
-// body. 5 is DM2's literal, the one the spoiler keeps (_BbcodeContent.sass),
+// body. 5 is DM2's literal, the one the spoiler keeps (_BbcodeSpoilerNsfw.sass),
 // deliberately off the 4px grid. Square: it is content, not a control.
 .refusal-note
   box-sizing: border-box
@@ -30,5 +30,5 @@
   background-color: $bg-highlight-yellow
   color: $text
   font-size: $font-size
-  font-weight: normal
+  font-weight: 400
 </style>

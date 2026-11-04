@@ -1,8 +1,7 @@
 # Preview deployment with nginx basic auth
 # Usage:
 #   1. Generate the credentials: bash docker/scripts/init-htpasswd.sh
-#      The repository ships no password, and without that file docker creates a
-#      directory in its place and nginx does not start.
+#      Without that file docker creates a directory in its place and nginx does not start.
 #   2. Run: docker compose -f docker/docker-compose.yml -f docker/docker-compose.preview.yml up -d
 
 networks:
@@ -16,24 +15,14 @@ services:
   nginx:
     container_name: 'dm-nginx'
     image: 'nginx:1.27-alpine'
-    # The edge resolves the name of every container behind it once, when it parses
-    # its configuration, and holds the address it got. A replaced container comes
-    # back on a new address, and the edge keeps proxying to the old one until it is
-    # itself recreated - a 502 on every request, lasting until somebody notices.
-    #
-    # The first label is not about updating nginx. With WATCHTOWER_LABEL_ENABLE a
-    # container without it does not exist as far as the updater is concerned, so no
-    # linked restart can apply to it. The second names container_name values, not
-    # service names and not upstream group names: that is what the updater sorts
-    # and restarts by, and a name it does not recognise is skipped in silence.
-    #
-    # The accepted cost: the edge now follows the nginx:1.27-alpine tag on its own.
-    # Pinning a digest instead would mean an edge that never receives a patch and
-    # that nobody ever moves, and the price of following the tag is a few seconds
-    # of the whole site being down on a deployment, against a permanent 502 on the
-    # API path. Anything the updater does not watch - the object store, the image
-    # renderer, a manual --force-recreate - is recreated by whoever recreates it,
-    # per the rule in DEPLOYMENT.md.
+    # The edge resolves the name of every container behind it once, at parse time, so a
+    # replaced container returns on a new address and every request is a 502 until the edge
+    # is recreated. The first label makes the updater see the container at all
+    # (WATCHTOWER_LABEL_ENABLE); the second names container_name values, which the updater
+    # sorts and restarts by and skips in silence when it does not know them. The edge
+    # follows the nginx:1.27-alpine tag: a pinned digest would never receive a patch, and a
+    # few seconds of downtime per deployment beat a permanent 502. Anything the updater does
+    # not watch is recreated by hand (DEPLOYMENT.md).
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
       - "com.centurylinklabs.watchtower.depends-on=dm-api,dm-front"
@@ -44,9 +33,9 @@ services:
       - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
       - ./nginx/edge-locations.conf:/etc/nginx/edge-locations.conf:ro
       - ./nginx/.htpasswd:/etc/nginx/.htpasswd:ro
-      # Пусто до первого выпуска сертификата, и это рабочее состояние: край
-      # отдает http, пока отдавать https нечем. scripts/init-ssl.sh кладет сюда
-      # сервер TLS и редирект на домен, для которого сертификат выпущен.
+      # Empty until the first certificate, which is a working state: the edge serves http
+      # until it has https to serve. docker/scripts/init-ssl.sh puts the TLS server and the
+      # redirect here.
       - ./nginx/tls:/etc/nginx/tls:ro
       - ./nginx/acme:/var/www/certbot:ro
       - ${SSL_ROOT:-/etc/letsencrypt}:/etc/nginx/ssl:ro
@@ -71,34 +60,18 @@ services:
     environment:
       DM_CdnConfiguration__PublicUrl: ""
 
-      # nginx fronts the API here, so the endpoint is a same-origin path and the
-      # /img/ location routes it to imgproxy. An absolute endpoint has to name the
-      # host the stand answers on, and the base default names localhost, which in
-      # a visitor's browser is the visitor's own machine. The container publishes
-      # on 127.0.0.1 and has no route through the edge otherwise.
-      DM_ImageProxyConfiguration__Endpoint: '/img'
-
-      # Этот overlay — единственное место, где перед API появляется nginx, и
-      # единственное, где forwarded-заголовкам можно верить. Без этих переменных
-      # ReverseProxyExtensions выставляет ForwardedHeaders.None, и RemoteIpAddress
-      # каждого запроса — адрес контейнера nginx, один для всех: лимитер в 100
-      # запросов в минуту становится общим бюджетом сайта, политика Auth — пятью
-      # попытками входа в минуту на всех, а журнал входов пишет всем один адрес.
-      # Доверяется подсеть сети dm-full-app из docker-compose.yml, а не loopback:
-      # фреймворковый дефолт здесь не подходит, nginx приходит из своего контейнера.
+      # The only place where nginx stands before the API, so the only one where forwarded
+      # headers can be trusted. Without them every request comes from the nginx container's
+      # address: the 100 requests a minute limiter becomes one budget for the site and the
+      # login log writes one address. The trusted network is dm-full-app from
+      # docker-compose.yml, not loopback.
       DM_ReverseProxyConfiguration__TrustedNetworks__0: '172.28.0.0/16'
       DM_ReverseProxyConfiguration__ProxyCount: '1'
 
-      # The country table the sign-in letter names a country by (user-country of
-      # sapics/ip-location-db, CONFIGURATION.md). The API downloads it itself when
-      # the file is missing and then once a week, and puts each new copy in use
-      # without a restart; nobody on the server touches it. A named volume and not
-      # a directory of the host: the image creates /data/geo owned by its own
-      # user, docker hands that ownership to a new volume, and so the API can
-      # write there whatever the uid of the operator is. The volume outlives the
-      # container, so a recreated API reads the table it already has. The name
-      # says what the file is, not who publishes it, so a change of publisher
-      # leaves this line alone.
+      # The country table the sign-in letter names a country by (CONFIGURATION.md). The API
+      # downloads it when it is missing and weekly. A named volume, because docker hands the
+      # ownership of the image's /data/geo to a new volume, so the API can write there
+      # whatever the uid of the operator is.
       DM_GeoLocationConfiguration__CountryDatabasePath: '/data/geo/ip-country.csv'
     volumes:
       - geodata:/data/geo
@@ -106,8 +79,6 @@ services:
   dmfront:
     container_name: 'dm-front'
     # Same shape as dmapi: the image CI published, under the tag IMAGE_TAG names.
-    # Publishing an image that no deployment ever pulls is how the API image went
-    # unused for months.
     image: ghcr.io/dm-am/dm-front:${IMAGE_TAG:-latest}
     labels:
       - "com.centurylinklabs.watchtower.enable=true"
@@ -115,9 +86,8 @@ services:
       context: ../src/DM.Web.Client
       dockerfile: Dockerfile
       args:
-        # Empty on purpose: the SPA calls relative URLs and nginx routes them to
-        # the API. The name must match the ARG the Dockerfile declares — the
-        # previous VITE_API_URL was declared nowhere and silently did nothing.
+        # Empty on purpose: the SPA calls relative URLs and nginx routes them. Must match
+        # the ARG the Dockerfile declares.
         VITE_API_HOST: ""
     depends_on:
       dmapi:

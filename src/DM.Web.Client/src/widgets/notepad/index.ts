@@ -1,2 +1,3 @@
 export { default as NotepadBoard } from "./NotepadBoard.vue";
-export type { NotepadAdapter, NotepadEntryInput } from "./types";
+export { adapterOf } from "./adapterOf";
+export type { NotepadAdapter } from "./types";

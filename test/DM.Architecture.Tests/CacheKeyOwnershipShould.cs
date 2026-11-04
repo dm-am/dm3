@@ -11,20 +11,8 @@ namespace DM.Architecture.Tests;
 /// A cache key spelled in more than one place is spelled in CacheKeys.
 /// </summary>
 /// <remarks>
-/// The profile is cached under two keys, by name and by identifier, and is
-/// written and invalidated from three modules. Spelled as literals, they drifted:
-/// removing an avatar invalidated user_{Username}, which nothing had ever
-/// written, and left the by-name entry alone — so the profile page kept serving
-/// the deleted avatar for the whole minute of its TTL. The staff lists were a
-/// second copy of the same shape in two modules.
-///
-/// Both directions of a misspelled key fail silently: a stale read, or a cache
-/// that never hits. Nothing throws, no test goes red, and the report is a user
-/// saying the site "remembers" something they deleted. That is what makes this a
-/// rule rather than a matter of care.
-///
-/// Keys used inside a single file stay there — a name nobody else says cannot
-/// drift away from anything.
+/// A misspelled key fails silently, as a stale read or a cache that never hits. Keys used inside
+/// a single file stay there.
 /// </remarks>
 public class CacheKeyOwnershipShould
 {
@@ -34,20 +22,13 @@ public class CacheKeyOwnershipShould
     /// </summary>
     private static readonly Regex KeyLiteral = new(@"\$""(?<prefix>[a-z][a-z0-9]*(?:_[a-z0-9]+)*_)\{", RegexOptions.Compiled);
 
-    private static string SourceRoot() => Path.Combine(DM.Testing.RepositoryLayout.Root, "src");
-
     [Fact]
     public void SpellEveryCacheKeyInExactlyOnePlace()
     {
         var owners = new Dictionary<string, HashSet<string>>();
 
-        foreach (var file in Directory.EnumerateFiles(SourceRoot(), "*.cs", SearchOption.AllDirectories))
+        foreach (var file in RepositoryFiles.ProductionSources())
         {
-            if (file.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}") ||
-                file.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
-            {
-                continue;
-            }
 
             foreach (Match match in KeyLiteral.Matches(File.ReadAllText(file)))
             {
@@ -64,9 +45,7 @@ public class CacheKeyOwnershipShould
 
         owners.Should().NotBeEmpty("the codebase caches by interpolated keys");
 
-        // Every prefix in exactly one file, CacheKeys included: a key that lives
-        // there and is also spelled out at a call site is the same drift, only
-        // with a working spelling standing right next to the broken one.
+        // Every prefix in exactly one file, CacheKeys included.
         var shared = owners
             .Where(pair => pair.Value.Count > 1)
             .Select(pair => $"{pair.Key} -> {string.Join(", ", pair.Value.OrderBy(name => name))}")

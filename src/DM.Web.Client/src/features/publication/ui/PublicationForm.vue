@@ -1,15 +1,11 @@
 <script setup lang="ts">
-/**
- * PublicationForm — the shared create/edit form for blog publications
- * (title, rubric, BBCode content). The pages own loading, validation and the
- * submit/cancel handlers; this component only renders the fields and relays
- * the two actions. `draftKey` is passed on create (autosave the new-post
- * draft) and omitted on edit.
- */
+// The pages own loading, validation and submit; `draftKey` only on create.
 import { ref } from "vue";
 import { Form, FormField } from "@/shared/ui/Form";
 import { Select } from "@/shared/ui/Select";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { PUBLICATION_TITLE_MAX_LENGTH } from "@/shared/lib/constants/blog";
+import { PUBLICATION_EDITOR_HEIGHT } from "./layout";
 
 defineProps<{
   rubricOptions: { value: string; label: string }[];
@@ -18,7 +14,6 @@ defineProps<{
   action: string;
   cancelLabel: string;
   draftKey?: string;
-  /** Why the last submit was refused, said over the footer of the form. */
   refusal?: string | null;
 }>();
 
@@ -30,8 +25,7 @@ const content = defineModel<string>("content", { required: true });
 
 const editor = ref<InstanceType<typeof BBCodeEditor> | null>(null);
 
-// The draft belongs to the editor, and the page is the one that knows the text
-// has been published. Every other composer in the app clears its draft on
+// The page knows when the text is published, so it clears the draft.
 // success through the same call.
 defineExpose({ clearDraft: () => editor.value?.clearDraft() });
 </script>
@@ -51,7 +45,7 @@ defineExpose({ clearDraft: () => editor.value?.clearDraft() });
         id="publication-title"
         v-model="title"
         type="text"
-        maxlength="300"
+        :maxlength="PUBLICATION_TITLE_MAX_LENGTH"
       />
     </FormField>
 
@@ -72,7 +66,7 @@ defineExpose({ clearDraft: () => editor.value?.clearDraft() });
         placeholder="Текст публикации..."
         :draft-key="draftKey"
         :disabled="loading"
-        :min-height="240"
+        :min-height="PUBLICATION_EDITOR_HEIGHT"
         :resizable="true"
       />
     </FormField>

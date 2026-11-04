@@ -7,15 +7,8 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 /// DAL model for the second factor: one row per account, keyed by the account.
 /// </summary>
 /// <remarks>
-/// Its own table rather than columns on the user, and that is a decision. The
-/// user row is read on every request that carries a session, so a secret living
-/// there would travel into memory on every one of them and into every projection
-/// of a user that forgot to exclude it.
-///
-/// The secret is encrypted and not hashed, and it cannot be otherwise: verifying
-/// a code needs the secret itself. The consequence has to be said out loud - a
-/// password in this database cannot be recovered by anything, and this secret can
-/// be recovered by whoever holds the application key.
+/// Its own table so the secret stays out of the user row read on every request.
+/// The secret is encrypted, not hashed, because verifying a code needs the secret itself.
 /// </remarks>
 [Table("UserTwoFactors")]
 public class UserTwoFactor

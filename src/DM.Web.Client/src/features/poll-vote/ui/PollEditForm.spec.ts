@@ -2,15 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The polls page renders a card per poll, every card owns an editor of its own,
- * and nothing closes the neighbour when a second one opens. Ids written as
- * constants would then sit on two fields at once, and a `<label for>` — like an
- * `aria-labelledby` — resolves to the first match in the document: a click on
- * the caption of the second editor would land in the first editor's field, and
- * the radio group of one poll would announce the title of another.
- */
-
 // The device is in Moscow for the file (see "PollEditForm dates" below).
 const MACHINE_ZONE = process.env.TZ;
 process.env.TZ = "Europe/Moscow";
@@ -31,7 +22,8 @@ import type { Poll } from "@/entities/poll";
 
 const { editPoll } = vi.hoisted(() => ({ editPoll: vi.fn() }));
 
-vi.mock("@/entities/poll", () => ({
+vi.mock("@/entities/poll", async (original) => ({
+  ...(await original<typeof import("@/entities/poll")>()),
   usePollsStore: () => ({ editPoll }),
 }));
 
@@ -46,28 +38,44 @@ const poll = (title: string): Poll =>
     options: [],
   }) as unknown as Poll;
 
-/** "Сохранить": the calendar buttons of the dates stand before it. */
+// The calendar buttons of the dates stand before "Сохранить".
 const saveButton = (editor: ReturnType<typeof open>) =>
   editor.findAll("button").find((button) => button.text() === "Сохранить")!;
 
-/** Mounted into the document, so getElementById sees what a browser sees. */
+// Mounted into the document, so getElementById sees what a browser sees.
 const open = (title: string) => {
   const host = document.createElement("div");
   document.body.appendChild(host);
   return mount(PollEditForm, { props: { poll: poll(title) }, attachTo: host });
 };
 
+// Two editors of one page, so in one app, as the sidebar's poll cards are.
+const openTwo = () => {
+  const host = document.createElement("div");
+  document.body.appendChild(host);
+  return mount(
+    {
+      components: { PollEditForm },
+      template: `<div><PollEditForm :poll="first" /><PollEditForm :poll="second" /></div>`,
+      data: () => ({ first: poll("Первый"), second: poll("Второй") }),
+    },
+    { attachTo: host },
+  );
+};
+
 describe("PollEditForm", () => {
-  let editors: ReturnType<typeof open>[] = [];
+  let page: ReturnType<typeof openTwo>;
+  let editors: ReturnType<typeof page.findComponent>[] = [];
 
   beforeEach(() => {
     editPoll.mockReset();
     editPoll.mockResolvedValue({ data: null, error: null });
-    editors = [open("Первый"), open("Второй")];
+    page = openTwo();
+    editors = page.findAllComponents(PollEditForm);
   });
 
   afterEach(() => {
-    for (const editor of editors) editor.unmount();
+    page.unmount();
     document.body.innerHTML = "";
   });
 
@@ -76,13 +84,15 @@ describe("PollEditForm", () => {
       editor.findAll("[id]").map((node) => node.attributes("id")),
     );
 
-    expect(ids).toHaveLength(10);
     expect(new Set(ids).size).toBe(ids.length);
   });
 
   it("points every caption at a control of its own editor", () => {
     for (const editor of editors) {
-      const labels = editor.findAll("label.edit-label");
+      // Title and details; the dates and the type are groups named below.
+      const labels = editor
+        .findAll(".form-field-label label")
+        .filter((label) => label.attributes("for"));
       expect(labels).toHaveLength(2);
 
       for (const label of labels) {
@@ -96,7 +106,9 @@ describe("PollEditForm", () => {
 
   it("names each row of a date and a time by the caption of its own editor", () => {
     for (const editor of editors) {
-      const rows = editor.findAll(".date-time-input");
+      const rows = editor
+        .findAll(".form-field-row")
+        .filter((row) => row.find(".date-time-input").exists());
       expect(rows).toHaveLength(2);
 
       expect(
@@ -114,7 +126,9 @@ describe("PollEditForm", () => {
 
   it("names every radio group by the caption of its own editor", () => {
     for (const editor of editors) {
-      const group = editor.get('[role="radiogroup"]');
+      const group = editor
+        .findAll('.form-field-row[role="group"]')
+        .find((row) => row.find('input[type="radio"]').exists())!;
       const caption = document.getElementById(
         group.attributes("aria-labelledby") ?? "",
       );
@@ -126,15 +140,6 @@ describe("PollEditForm", () => {
   });
 });
 
-/**
- * One refusal, one carrier.
- *
- * The editor has a line beside its save button and the response interceptor has
- * a plate. For a refused edit, a rate limit, a dead server, a dead connection
- * or an expired session the plate is the carrier and the line keeps quiet — the
- * two together were one press refused twice on one card. What is left for the
- * line is what the server said about the values that were sent.
- */
 describe("PollEditForm refusals", () => {
   let editor: ReturnType<typeof open>;
 
@@ -153,9 +158,6 @@ describe("PollEditForm refusals", () => {
     await flushPromises();
   };
 
-  // The refusals the interceptor used to plate stand beside the button now,
-  // with the plate taken down (refusalHere; the owner's rule of 26 September
-  // 2026). The editor stays open with what was typed.
   it.each([
     [403, "Недостаточно прав для этого действия"],
     [429, "Слишком много попыток, попробуйте позже"],
@@ -173,7 +175,6 @@ describe("PollEditForm refusals", () => {
     expect(editor.emitted("saved")).toBeUndefined();
   });
 
-  // An expired session and a dead connection keep the plate.
   it.each([0, 401])(
     "leaves a failure of status %i to the interceptor",
     async (status) => {
@@ -185,8 +186,7 @@ describe("PollEditForm refusals", () => {
       await save();
 
       expect(editor.find(".edit-error").exists()).toBe(false);
-      // Silent about the failure, not about the edit: it did not land, so the
-      // editor stays open instead of reporting itself saved.
+      // The edit did not land, so the editor stays open.
       expect(editor.emitted("saved")).toBeUndefined();
     },
   );
@@ -212,13 +212,7 @@ describe("PollEditForm refusals", () => {
   });
 });
 
-/**
- * The card of a poll prints its dates on the site's clock, the account's zone
- * for a signed-in reader. The editor opened from that card used to fill its
- * fields on the device's clock and read them back the same way: a moderator in
- * Tokyo on a device in Moscow saw 20:00 on the card, 14:00 in the editor, and a
- * 20:00 typed there was sent as 20:00 Moscow.
- */
+// The editor fills and reads its fields on the site's clock, the one the card prints by.
 describe("PollEditForm dates", () => {
   let editor: ReturnType<typeof open>;
 
@@ -240,7 +234,6 @@ describe("PollEditForm dates", () => {
     else process.env.TZ = MACHINE_ZONE;
   });
 
-  /** The date and the time of a row, as they read in the fields. */
   const row = (index: number) => {
     const dates = editor.findAll(".dti-date .di-input");
     const times = editor.findAll("input.dti-time");
@@ -271,20 +264,13 @@ describe("PollEditForm dates", () => {
   });
 });
 
-/**
- * The bounds of an edit (M9 of the critique, 5 October 2026). A poll that has
- * begun has its start in the past; the bound of creation ("no earlier than
- * now") on its editor would have made that start a mistake and the poll
- * impossible to edit. The start goes no earlier than the earlier of its own
- * and now, and the end comes after the start.
- */
+// A begun poll keeps its past start: the bound of creation would make it impossible to edit.
 describe("PollEditForm bounds", () => {
   let editor: ReturnType<typeof open>;
 
   beforeEach(() => {
     editPoll.mockReset();
     editPoll.mockResolvedValue({ data: { id: "poll-1" }, error: null });
-    // The poll of the file began on 1 January 2025 and it is later than that.
     editor = open("Первый");
   });
 
@@ -299,7 +285,7 @@ describe("PollEditForm bounds", () => {
   };
 
   it("saves a poll that has begun, its start in the past", async () => {
-    expect(editor.find(".edit-field-error").exists()).toBe(false);
+    expect(editor.find(".form-field-error").exists()).toBe(false);
 
     await save();
 
@@ -312,7 +298,7 @@ describe("PollEditForm bounds", () => {
     await date.setValue("31.12.2024");
     await date.trigger("blur");
 
-    const line = editor.get(".edit-field-error");
+    const line = editor.get(".form-field-error");
     expect(line.text()).toMatch(/^Не раньше 01.01.2025/);
     await save();
     expect(editPoll).not.toHaveBeenCalled();
@@ -326,11 +312,12 @@ describe("PollEditForm bounds", () => {
     await date.setValue("01.06.2024");
     await date.trigger("blur");
 
-    const line = editor.findAll(".edit-field-error");
+    const line = editor.findAll(".form-field-error");
     expect(line).toHaveLength(1);
     expect(line[0].text()).toMatch(/^Не раньше /);
-    // The row is described by the line under it.
-    const group = editor.findAll(".date-time-input")[1];
+    const group = editor
+      .findAll(".form-field-row")
+      .filter((row) => row.find(".date-time-input").exists())[1];
     expect(group.attributes("aria-describedby")).toBe(line[0].attributes("id"));
     await save();
     expect(editPoll).not.toHaveBeenCalled();

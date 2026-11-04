@@ -1,13 +1,12 @@
 using System;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Tags;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tags;
 
-public class UpdateTagGroupValidatorShould : UnitTestBase
+public class UpdateTagGroupValidatorShould
 {
     private readonly UpdateTagGroupValidator validator = new();
 
@@ -60,7 +59,7 @@ public class UpdateTagGroupValidatorShould : UnitTestBase
         var input = new UpdateTagGroup
         {
             Id = Guid.NewGuid(),
-            Title = new string('a', 101)
+            Title = new string('a', TagFieldLimits.TitleMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
@@ -75,7 +74,7 @@ public class UpdateTagGroupValidatorShould : UnitTestBase
         {
             Id = Guid.NewGuid(),
             Title = "Genres",
-            Description = new string('a', 501)
+            Description = new string('a', TagFieldLimits.DescriptionMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);

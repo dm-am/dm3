@@ -4,7 +4,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Storage;
-using DM.Testing;
 using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Xunit;
@@ -12,11 +11,9 @@ using Xunit;
 namespace DM.Infrastructure.Core.Tests.Storage;
 
 /// <summary>
-/// Gates the moderation pages that list uploads across all users, i.e. other
-/// people's files. Both intentions are moderator-and-above; the boundary below
-/// Moderator is what this pins.
+/// Gates the moderation pages that list everyone's uploads: moderator and above.
 /// </summary>
-public class UploadIntentionResolverShould : UnitTestBase
+public class UploadIntentionResolverShould
 {
     private readonly UploadIntentionResolver resolver = new();
 
@@ -64,8 +61,6 @@ public class UploadIntentionResolverShould : UnitTestBase
 
         resolver.IsAllowed(admin, (UploadIntention)int.MaxValue).Should().BeFalse();
     }
-
-    #region One file: View and Delete
 
     private static StoredUpload FileOf(Guid ownerId) => new() { Id = Guid.NewGuid(), UserId = ownerId };
 
@@ -122,5 +117,4 @@ public class UploadIntentionResolverShould : UnitTestBase
         resolver.IsAllowed(admin, UploadIntention.ListAll, FileOf(Guid.NewGuid())).Should().BeFalse();
     }
 
-    #endregion
 }

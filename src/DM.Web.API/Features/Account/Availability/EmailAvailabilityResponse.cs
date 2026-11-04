@@ -1,3 +1,5 @@
+using DM.Domain.Account.Features.Availability;
+
 namespace DM.Web.API.Features.Account.Availability;
 
 /// <summary>
@@ -14,20 +16,4 @@ public class EmailAvailabilityResponse
     /// Reason if email is not available
     /// </summary>
     public EmailUnavailableReason? Reason { get; set; }
-}
-
-/// <summary>
-/// Reason why email is not available
-/// </summary>
-public enum EmailUnavailableReason
-{
-    /// <summary>
-    /// Email is used by an active user
-    /// </summary>
-    Taken,
-
-    /// <summary>
-    /// Email has a pending registration
-    /// </summary>
-    PendingActivation
 }

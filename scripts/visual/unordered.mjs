@@ -93,7 +93,7 @@ export const UNORDERED = [
 ];
 
 /** The address pattern of a route, for a page that asks it with any ids and query. */
-export const addressOf = (route) =>
+export const routePattern = (route) =>
   new RegExp(
     `${route
       .slice("GET ".length)

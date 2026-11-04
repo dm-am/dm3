@@ -1,11 +1,10 @@
-using System.Collections.Generic;
+using System.Linq;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Enums;
 using DM.Workers.NotificationDispatcher.Bot;
 using DM.Workers.NotificationDispatcher.Email;
 using AwesomeAssertions;
 using Xunit;
-using DM.Workers.NotificationDispatcher.Dispatching;
 
 namespace DM.Infrastructure.Messaging.Tests;
 
@@ -50,42 +49,17 @@ public class NotificationMarkupShould
         AuthorUsername = HostileName
     };
 
-    [Fact]
-    public void KeepMetadataOutOfTheLetterAsMarkup()
-    {
-        var body = NotificationEmailSender.BuildEmailBody(Event, Metadata, Addresses);
-
-        body.Should().NotContain(HostileTitle,
-            "a title shaped like a link becomes a working link to another site in a letter signed dm.am");
-        body.Should().NotContain(HostileName);
-        body.Should().Contain(EscapedTitle);
-        body.Should().Contain(EscapedName);
-        body.Should().Contain("Смените пароль",
-            "escaping must not turn Russian text into numeric references");
-    }
-
     /// <summary>
-    /// The footer names every address the site answers on.
+    /// The letter is handed the words as they were typed: its template escapes them, once
+    /// (NotificationLetterShould), and words escaped here as well would reach the reader as entities.
     /// </summary>
-    /// <remarks>
-    /// A mailbox is the only place a reader can still be reached once the address
-    /// he uses stops answering, and this is the letter he gets most often. The list
-    /// used to be deployment configuration, and no deployment path ever filled it
-    /// in — the line was empty everywhere.
-    ///
-    /// The public address of the fixture is a host of nobody on purpose: taking the
-    /// list from the deployment instead would pass while naming whatever the stand
-    /// happens to answer on.
-    /// </remarks>
     [Fact]
-    public void NameEveryAddressOfTheSiteInTheFooter()
+    public void HandTheLetterTheMetadataAsTyped()
     {
-        var body = NotificationEmailSender.BuildEmailBody(Event, Metadata, Addresses);
+        var facts = NotificationEmailSender.Letter(Event, Metadata, Addresses).Facts.Select(fact => fact.Value);
 
-        foreach (var host in DM.Domain.Core.Site.SiteAddresses.Hosts)
-        {
-            body.Should().Contain(host);
-        }
+        facts.Should().Contain(HostileTitle).And.Contain(HostileName);
+        facts.Should().NotContain(EscapedTitle).And.NotContain(EscapedName);
     }
 
     [Fact]
@@ -113,10 +87,9 @@ public class NotificationMarkupShould
     [Fact]
     public void SayNothingAboutAMetadataBagThatIsNotAnObject()
     {
-        var body = NotificationEmailSender.BuildEmailBody(Event, "{}", Addresses);
+        var letter = NotificationEmailSender.Letter(Event, "{}", Addresses);
 
-        body.Should().NotContain("<pre",
-            "the letter used to fall back to dumping the serialized bag into itself");
-        body.Should().Contain("Новая игра от подписанного автора");
+        letter.Facts.Should().BeEmpty("the letter used to fall back to dumping the serialized bag into itself");
+        letter.Title.Should().Be("Новая игра от подписанного автора");
     }
 }

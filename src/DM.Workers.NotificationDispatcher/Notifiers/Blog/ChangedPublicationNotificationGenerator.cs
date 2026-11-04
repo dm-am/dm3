@@ -19,7 +19,6 @@ internal class ChangedPublicationNotificationGenerator : BaseNotificationGenerat
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public ChangedPublicationNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -44,17 +43,15 @@ internal class ChangedPublicationNotificationGenerator : BaseNotificationGenerat
                 p.ModifiedByUserId,
                 AuthorUsername = p.Author.Username,
                 p.BlogId,
-                BlogTitle = p.Blog.Title,
-                p.IsPublished
+                BlogTitle = p.Blog.Title
             })
             .FirstOrDefaultAsync();
 
-        if (publicationData == null || !publicationData.IsPublished)
+        if (publicationData == null)
         {
             yield break;
         }
 
-        // Find all users subscribed to this blog
         var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Blog,
             publicationData.BlogId,
@@ -70,13 +67,7 @@ internal class ChangedPublicationNotificationGenerator : BaseNotificationGenerat
             yield break;
         }
 
-        // The actor is whoever made the edit, and the update path records it
-        // (PublicationService.UpdatePublication). The author is deliberately not
-        // substituted for a missing value: an assistant and an admin may edit a
-        // publication too (PublicationIntention.Edit), and filling the field from
-        // AuthorId would hold the notification against the wrong person's
-        // blacklist. Null until an edit happens is the honest answer, and it
-        // means the notification is delivered rather than filtered.
+        // Not filled from AuthorId: an assistant or an admin may be the editor.
         yield return new CreateNotification
         {
             UsersInterested = subscriberIds,
@@ -86,8 +77,8 @@ internal class ChangedPublicationNotificationGenerator : BaseNotificationGenerat
                 PublicationId = publicationData.PublicationId.EncodeToReadable(publicationData.Title),
                 PublicationTitle = publicationData.Title,
                 BlogId = publicationData.BlogId.EncodeToReadable(publicationData.BlogTitle),
-                BlogTitle = publicationData.BlogTitle,
-                AuthorUsername = publicationData.AuthorUsername
+                publicationData.BlogTitle,
+                publicationData.AuthorUsername
             }
         };
     }

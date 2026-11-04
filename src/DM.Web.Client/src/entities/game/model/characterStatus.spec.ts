@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { characterStatusLabel } from "./characterStatus";
-import type { Character } from "./types";
+import type { Character } from "./characterTypes";
 
 /** The status of a character and the flags that refine it. */
 type Standing = {

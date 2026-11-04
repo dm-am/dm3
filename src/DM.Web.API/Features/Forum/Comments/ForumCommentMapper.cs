@@ -7,7 +7,7 @@ namespace DM.Web.API.Features.Forum.Comments;
 /// Compile-time mapper from service DTO to API DTO for forum comments
 /// </summary>
 [Mapper]
-internal partial class ForumCommentMapper
+public partial class ForumCommentMapper
 {
     /// <summary>
     /// Domain first-unread position to its response DTO

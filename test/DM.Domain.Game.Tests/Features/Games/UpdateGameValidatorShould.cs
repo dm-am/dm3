@@ -4,20 +4,14 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Games;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
-public class UpdateGameValidatorShould : UnitTestBase
+public class UpdateGameValidatorShould
 {
-    private readonly UpdateGameValidator validator;
-
-    public UpdateGameValidatorShould()
-    {
-        validator = new UpdateGameValidator();
-    }
+    private readonly UpdateGameValidator validator = new();
 
     [Fact]
     public async Task PassForValidInput()
@@ -160,16 +154,7 @@ public class UpdateGameValidatorShould : UnitTestBase
     /// Whatever creation accepts, an edit of the same game accepts too.
     /// </summary>
     /// <remarks>
-    /// The two validators used to carry two sets of numbers: creation took the
-    /// shared <see cref="GameFieldLimits" /> (200 / 100 / 100), while the edit
-    /// had 100 / 50 / 50 written out by hand. So a game created with a
-    /// 150-character title could not be saved again after any edit - refused on
-    /// the length of a field the server itself had just accepted, and the author
-    /// had no way to learn which field, because the domain answers in codes.
-    ///
-    /// The direction is not reversible: narrowing creation to the smaller
-    /// numbers would make already-created games unsavable, which is the same
-    /// defect pointed the other way.
+    /// Both validators read <see cref="GameFieldLimits" />, or a created game could not be saved again.
     /// </remarks>
     [Fact]
     public async Task AcceptEveryLengthGameCreationAccepts()

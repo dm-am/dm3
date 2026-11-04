@@ -37,30 +37,22 @@ public class AuthenticationConfiguration
     /// <summary>
     /// Activity tracking interval in minutes.
     /// User's LastActivityUtc is updated at most once per this interval to reduce database writes.
-    /// Default: 1 minute
     /// </summary>
     public int ActivityTrackingMinutes { get; set; } = 1;
 
     /// <summary>
     /// Login attempt cache expiration in hours.
     /// Failed login attempts are tracked for this duration for rate limiting.
-    /// Default: 24 hours
     /// </summary>
     public int LoginAttemptExpirationHours { get; set; } = 24;
 
     /// <summary>
     /// Progressive delay configuration for failed login attempts.
     /// Each entry: [attemptThreshold, delaySeconds]
-    /// Default: 0-2 attempts = 0s, 3-4 = 1s, 5-9 = 3s, 10+ = 5s
     /// </summary>
     /// <remarks>
-    /// The ceiling has to stay well under the request timeout of the client. At
-    /// thirty seconds it was the timeout: from the tenth attempt on, the answer
-    /// never arrived, and what the reader got instead of "wrong password" was a
-    /// toast about the connection dropping - which says the site is broken rather
-    /// than that the password is wrong, and says it to whoever is simply mistyping.
-    /// The lockout after fifteen attempts is what stops guessing; these seconds only
-    /// make it expensive, and they cost the honest reader too.
+    /// The ceiling stays well under the client's request timeout: the lockout stops
+    /// guessing, these seconds only make it expensive.
     /// </remarks>
     public int[][] LoginDelaySchedule { get; set; } =
     {
@@ -71,13 +63,11 @@ public class AuthenticationConfiguration
 
     /// <summary>
     /// Number of failed login attempts before account is temporarily locked.
-    /// Default: 15 attempts
     /// </summary>
     public int AccountLockoutThreshold { get; set; } = 15;
 
     /// <summary>
     /// Account lockout duration in minutes.
-    /// Default: 30 minutes
     /// </summary>
     public int AccountLockoutDurationMinutes { get; set; } = 30;
 }

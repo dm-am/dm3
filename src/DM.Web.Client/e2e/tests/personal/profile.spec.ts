@@ -1,52 +1,45 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
-import { authenticatedContext, seededUser } from "../../fixtures/auth";
-
-const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
-
-let authContext: APIRequestContext;
-
-test.beforeAll(async () => {
-  authContext = await authenticatedContext();
-});
-
-test.afterAll(async () => {
-  if (authContext) await authContext.dispose();
-});
+import { test, expect, API_BASE_URL, primaryUser } from "../../fixtures/auth";
 
 test.describe("Personal Profile API", () => {
-  test("should get my profile", async () => {
-    const response = await authContext.get(`${API_URL}/v1/users/me/profile`);
+  test("should get my profile", async ({ authContext }) => {
+    const response = await authContext.get(
+      `${API_BASE_URL}/v1/users/me/profile`,
+    );
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
-    expect(data).toHaveProperty("username", seededUser.username);
+    expect(data).toHaveProperty("username", primaryUser.username);
     expect(data).toHaveProperty("email");
     expect(data).toHaveProperty("visibility");
   });
 
-  test("should update my profile status", async () => {
+  test("should update my profile status", async ({ authContext }) => {
     const newStatus = `Test status ${Date.now()}`;
 
-    const response = await authContext.patch(`${API_URL}/v1/users/me/profile`, {
-      headers: { "Content-Type": "application/json" },
-      data: { status: newStatus },
-    });
+    const response = await authContext.patch(
+      `${API_BASE_URL}/v1/users/me/profile`,
+      {
+        data: { status: newStatus },
+      },
+    );
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
     expect(data).toHaveProperty("status", newStatus);
   });
 
-  test("should update visibility settings", async () => {
-    const response = await authContext.patch(`${API_URL}/v1/users/me/profile`, {
-      headers: { "Content-Type": "application/json" },
-      data: {
-        visibility: {
-          showBirthday: true,
-          showRating: true,
+  test("should update visibility settings", async ({ authContext }) => {
+    const response = await authContext.patch(
+      `${API_BASE_URL}/v1/users/me/profile`,
+      {
+        data: {
+          visibility: {
+            showBirthday: true,
+            showRating: true,
+          },
         },
       },
-    });
+    );
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
@@ -55,7 +48,7 @@ test.describe("Personal Profile API", () => {
   });
 
   test("should require authentication", async ({ request }) => {
-    const response = await request.get(`${API_URL}/v1/users/me/profile`);
+    const response = await request.get(`${API_BASE_URL}/v1/users/me/profile`);
     expect(response.status()).toBe(401);
   });
 });

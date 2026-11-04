@@ -16,7 +16,6 @@ internal class WarningIssuedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public WarningIssuedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -50,21 +49,17 @@ internal class WarningIssuedNotificationGenerator : BaseNotificationGenerator
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { warningData.TargetUserId },
-            // No ActorId although the moderator is right there in warningData.AuthorId:
-            // a warning is not less delivered because the warned user has its author
-            // on their blacklist, so this one stays outside the filter.
+            UsersInterested = [warningData.TargetUserId],
+            // No ActorId: a moderation decision is delivered whoever is on the blacklist.
             Metadata = new
             {
-                WarningId = warningData.WarningId,
-                // The name of the warned reader, which is what the link to the log
-                // narrows it by: the list on the website builds that link out of the
-                // payload alone, and the letter reads the same field.
+                warningData.WarningId,
+                // The link to the log is narrowed by this field.
                 Username = warningData.TargetUsername,
                 Reason = warningData.Text,
-                ModeratorUsername = warningData.ModeratorUsername,
-                Points = warningData.Points,
-                CreatedUtc = warningData.CreatedUtc
+                warningData.ModeratorUsername,
+                warningData.Points,
+                warningData.CreatedUtc
             }
         };
     }

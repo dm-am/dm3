@@ -10,14 +10,11 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Community;
 
 /// <summary>
 /// Creates an in-app notification when a user is granted an award.
-/// The recipient is notified: which award, in which contest series
-/// and who granted it — everything needed to open the profile and see details.
 /// </summary>
 internal class AwardGrantedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public AwardGrantedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -29,53 +26,46 @@ internal class AwardGrantedNotificationGenerator : BaseNotificationGenerator
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var data = await _dbContext.UserAwards
+        var awardData = await _dbContext.UserAwards
             .Where(a => a.UserAwardId == entityId && !a.IsRemoved)
             .Select(a => new
             {
                 a.UserAwardId,
                 a.UserId,
-                Username = a.User.Username,
+                a.User.Username,
                 AwardTitle = a.AwardType.Title,
                 AwardDescription = a.AwardType.Description,
                 AwardTier = a.AwardType.Tier,
-                IconName = a.AwardType.IconName,
+                a.AwardType.IconName,
                 a.AwardedUtc,
                 GrantedByUsername = a.AwardedBy.Username,
-                ContestNumber = (int?)(a.ContestSeries != null ? a.ContestSeries.Number : (int?)null),
-                ContestYear = (int?)(a.ContestSeries != null ? a.ContestSeries.Year : (int?)null),
+                ContestNumber = a.ContestSeries != null ? a.ContestSeries.Number : (int?)null,
+                ContestYear = a.ContestSeries != null ? a.ContestSeries.Year : (int?)null,
             })
             .FirstOrDefaultAsync();
 
-        if (data == null)
+        if (awardData == null)
         {
             yield break;
         }
 
         yield return new CreateNotification
         {
-            UsersInterested = new[] { data.UserId },
-            // ActorId stays null on purpose, and not because there is nobody to
-            // put there: the award was granted by an admin or a senior mod, and
-            // AwardedByUserId holds them. It is a staff decision about the
-            // recipient's own profile, of the same kind as a warning, so it must
-            // not become undeliverable when the recipient has that admin on their
-            // blacklist.
+            UsersInterested = [awardData.UserId],
+            // No ActorId: a staff decision about the recipient, delivered whoever is on his blacklist.
             Metadata = new
             {
-                UserAwardId = data.UserAwardId,
-                // The name of the recipient: the notification leads to the hall
-                // of fame of his profile, and the list and the letter both build
-                // that address out of this field.
-                Username = data.Username,
-                AwardTitle = data.AwardTitle,
-                AwardDescription = data.AwardDescription,
-                AwardTier = data.AwardTier,
-                IconName = data.IconName,
-                AwardedUtc = data.AwardedUtc,
-                GrantedByUsername = data.GrantedByUsername,
-                ContestNumber = data.ContestNumber,
-                ContestYear = data.ContestYear,
+                awardData.UserAwardId,
+                // The link to the hall of fame of the profile is built out of this field.
+                awardData.Username,
+                awardData.AwardTitle,
+                awardData.AwardDescription,
+                awardData.AwardTier,
+                awardData.IconName,
+                awardData.AwardedUtc,
+                awardData.GrantedByUsername,
+                awardData.ContestNumber,
+                awardData.ContestYear,
             },
         };
     }

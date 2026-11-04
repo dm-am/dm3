@@ -13,18 +13,8 @@ namespace DM.Architecture.Tests;
 /// reservation that can take it back.
 /// </summary>
 /// <remarks>
-/// There is no transaction across the two stores and no outbox, so a feature living
-/// in both owes an explicit order — DATA_STORAGE.md states it, and the code held it
-/// in one of the six places that needed it. The other five wrote the marker after
-/// the insert, where a refusal from the document store leaves a committed entity
-/// whose counters do not exist and never will: nothing recreates them, and its badge
-/// reads zero for everybody forever.
-///
-/// None of that is visible in a green build or in a running stand. Both stores have
-/// to be up for the code to work at all, and the failure only appears when one of
-/// them refuses at the exact moment between the two writes. Text is the only surface
-/// there is, and it is read with the comments taken out — a paragraph explaining the
-/// order contains every word this rule looks for.
+/// No transaction spans the two stores, so DATA_STORAGE.md fixes the order. Text with comments taken out
+/// is the only surface: the failure needs one store to refuse between the writes.
 /// </remarks>
 public class UnreadMarkerOwnershipShould
 {
@@ -38,10 +28,8 @@ public class UnreadMarkerOwnershipShould
     ];
 
     /// <summary>
-    /// Every caller, with the relational write its markers stand in front of. Named
-    /// rather than discovered: what makes a line the row of an entity is what it
-    /// means, and the whole point is that the two orders are indistinguishable to
-    /// anything but a reader.
+    /// Every caller, with the relational write its markers stand in front of; named, because only a reader
+    /// tells the two orders apart.
     /// </summary>
     private static readonly (string File, string[] RelationalWrites)[] Callers =
     [
@@ -54,13 +42,9 @@ public class UnreadMarkerOwnershipShould
             ["_repository.Create(chat, chatLinks)", "_repository.Update(updateEntity,"]),
     ];
 
-    private static bool IsAuthored(string path) =>
-        !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}", StringComparison.Ordinal) &&
-        !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}", StringComparison.Ordinal);
-
     private static IEnumerable<(string Path, string Code)> Sources() => Directory
         .EnumerateFiles(SourceDirectory, "*.cs", SearchOption.AllDirectories)
-        .Where(IsAuthored)
+        .Where(RepositoryFiles.IsAuthored)
         .Select(path => (path, SourceText.ReadCode(path)));
 
     private static bool IsOwner(string path) =>
@@ -140,8 +124,7 @@ public class UnreadMarkerOwnershipShould
     }
 
     /// <summary>
-    /// Coverage from the other end: a seventh caller would otherwise slip past the
-    /// order check above by not being on its list.
+    /// Coverage from the other end: a new caller would otherwise slip past the list.
     /// </summary>
     [Fact]
     public void NameEveryCallerTheTreeHas()

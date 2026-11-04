@@ -11,8 +11,13 @@
  *
  * Deleting is the caller's to confirm and to carry out (useUploadDelete): this
  * only reports which row the button was pressed on.
+ *
+ * A file of a post kept to some readers is green, as a hidden block, with its
+ * readers in the tooltip; one kept from the viewer is named without a link and
+ * without a preview, which its address would refuse him.
  */
 import type { Upload } from "@/shared/api/models/common/upload";
+import { vBbcodeInteractive } from "@/shared/directives";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { formatFileSize } from "@/shared/lib/utils/fileSize";
@@ -47,7 +52,7 @@ defineSlots<{
   >
     <template #cell-preview="{ row }">
       <img
-        v-if="isImage(row)"
+        v-if="row.canOpen && isImage(row)"
         :src="uploadHref(row)"
         :alt="row.originalFileName"
         class="upload-thumb"
@@ -56,14 +61,22 @@ defineSlots<{
       <span v-else class="upload-ext">{{ fileExt(row) }}</span>
     </template>
     <template #cell-file="{ row }">
-      <a
-        :href="uploadHref(row)"
-        target="_blank"
-        rel="noopener"
-        class="upload-name"
-      >
-        {{ row.originalFileName }}
-      </a>
+      <span v-bbcode-interactive="row.recipients ?? ''">
+        <a
+          v-if="row.canOpen"
+          :href="uploadHref(row)"
+          target="_blank"
+          rel="noopener"
+          class="upload-name"
+          :class="{ 'private-message': !!row.recipients }"
+          :data-recipients="row.recipients"
+        >
+          {{ row.originalFileName }}
+        </a>
+        <span v-else class="upload-name private-message">{{
+          row.originalFileName
+        }}</span>
+      </span>
     </template>
     <template #cell-uploader="slotProps">
       <slot name="cell-uploader" v-bind="slotProps" />
@@ -83,7 +96,7 @@ defineSlots<{
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .upload-thumb
   display: block
@@ -92,13 +105,16 @@ defineSlots<{
   object-fit: cover
   margin: 0 auto
 
+// The green of a hidden block, over the link's own colour.
+.upload-name.private-message
+  color: $text-green
+
 .upload-ext
   color: $text-muted
   font-size: $tertiary-font-size
   font-weight: bold
 
-// A link and not a red word (owner's standard, 27 September 2026): the
-// confirmation it opens is where the danger is spelled out.
+// A link and not a red word: the confirmation it opens is where the danger is spelled out.
 .delete-button
   +inline-link-button
 </style>

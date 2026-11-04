@@ -2,15 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The address of a refused navigation, on its way out and on its way back.
- *
- * Two things are pinned here. That the destination survives at all — the guard
- * used to answer with a bare home page, and since it replaces the navigation
- * the address was not in the history either. And that the way back refuses
- * anything that is not a path on this site: the value arrives through the URL,
- * so "redirect" is a field anyone can fill in a link they hand out.
- */
+// The destination survives a refusal, and only a path on this site comes back.
 import { describe, expect, it } from "vitest";
 import {
   REDIRECT_QUERY_KEY,
@@ -48,10 +40,7 @@ describe("resumeTarget", () => {
     );
   });
 
-  // Annotated as one tuple type: left to inference the cases become a union of
-  // three shapes, and a callback that reads only the first element matches none
-  // of them. resumeTarget takes unknown, which is the point — these are the
-  // values a query string can actually deliver.
+  // One tuple type: inferred, the cases are a union no callback matches.
   it.each<[unknown, string]>([
     ["//evil.example", "protocol-relative"],
     ["/\\evil.example", "a backslash browsers normalise"],

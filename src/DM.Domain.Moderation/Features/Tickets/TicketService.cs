@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
+using System.Security.Cryptography;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
@@ -31,32 +32,9 @@ internal class TicketService : ITicketService
     /// </summary>
     private const string ViolatorCaption = "Нарушитель";
 
-    /// <summary>
-    /// One sentence for both ways of filing a complaint about oneself.
-    /// </summary>
     private const string ComplainAboutYourself = "Нельзя пожаловаться на себя";
 
-    /// <summary>
-    /// The refusal of an answer written into a closed ticket, on both ways of
-    /// writing one.
-    /// </summary>
     private const string TicketClosed = "Обращение закрыто";
-
-    /// <summary>
-    /// The refusal of a second closing without a word, whether the first one was
-    /// read before the request or landed beside it.
-    /// </summary>
-    private const string TicketAlreadyClosed = "Обращение уже закрыто";
-
-    /// <summary>
-    /// The refusal of an answer past the last one a conversation takes.
-    /// </summary>
-    private const string ConversationFull = "В обращении уже 100 ответов, для продолжения подайте новое обращение";
-
-    /// <summary>
-    /// The refusal of a status sent by the side of a ticket.
-    /// </summary>
-    private const string StatusIsModerations = "Статус обращения меняет модерация, а не его автор";
 
     private readonly IValidator<CreateTicket> _createValidator;
     private readonly IValidator<CreateTicketIntake> _createIntakeValidator;
@@ -67,9 +45,7 @@ internal class TicketService : ITicketService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IEventProducer _eventProducer;
-    private readonly IBbTagNameCase _tagNames;
 
-    /// <inheritdoc />
     public TicketService(
         IValidator<CreateTicket> createValidator,
         IValidator<CreateTicketIntake> createIntakeValidator,
@@ -79,8 +55,7 @@ internal class TicketService : ITicketService
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IEventProducer eventProducer,
-        IBbTagNameCase tagNames)
+        IEventProducer eventProducer)
     {
         _createValidator = createValidator;
         _createIntakeValidator = createIntakeValidator;
@@ -91,7 +66,6 @@ internal class TicketService : ITicketService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _eventProducer = eventProducer;
-        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -101,21 +75,12 @@ internal class TicketService : ITicketService
         var caller = _identityProvider.Current.User;
         var visibleSubtypes = TicketVisibility.Subtypes(caller.Role);
 
-        IReadOnlyCollection<TicketSubtype>? filter;
-        if (subtype.HasValue)
+        if (subtype.HasValue && visibleSubtypes != null && !visibleSubtypes.Contains(subtype.Value))
         {
-            if (visibleSubtypes != null && !visibleSubtypes.Contains(subtype.Value))
-            {
-                // Requested subtype is outside of the caller visibility scope
-                return ([], PagingResult.Empty(query.Take));
-            }
+            return ([], PagingResult.Empty(query.Take));
+        }
 
-            filter = [subtype.Value];
-        }
-        else
-        {
-            filter = visibleSubtypes;
-        }
+        IReadOnlyCollection<TicketSubtype>? filter = subtype.HasValue ? [subtype.Value] : visibleSubtypes;
 
         // A complaint about the caller is not his to moderate, and the queue holds
         // exactly what the page of a ticket opens for him.
@@ -127,8 +92,7 @@ internal class TicketService : ITicketService
         PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default)
     {
-        // The reporter owns these tickets, so no subtype visibility gating is
-        // needed — the filters are the user's own view preference.
+        // The reporter's own tickets: no visibility rule applies.
         var userId = _identityProvider.Current.User.UserId;
         return await _ticketRepository.GetUserTickets(userId, query, status, subtype, ct);
     }
@@ -143,9 +107,7 @@ internal class TicketService : ITicketService
     /// <inheritdoc />
     public async Task<TicketDetails?> GetTicketByTrackingToken(string token, CancellationToken ct = default)
     {
-        // Token-gated public access: possession of the token IS the
-        // authorization, so there is no role or ownership check here. The
-        // repository already treats an empty/unknown token as "not found".
+        // The token is the credential: no role or ownership is asked.
         var ticket = await _ticketRepository.GetByTrackingToken(token, ct);
         if (ticket == null)
         {
@@ -168,8 +130,7 @@ internal class TicketService : ITicketService
             throw new HttpException(HttpStatusCode.BadRequest, ComplainAboutYourself);
         }
 
-        // The violator is named in the text, as on the intake path: the ticket is
-        // read as its text and nothing beside it.
+        // The violator is named in the text, as on the intake path.
         var description = $"{createTicket.Description}\n\n{ViolatorCaption}: {targetUser.Username}";
 
         var entity = new CreateTicketEntity
@@ -182,10 +143,8 @@ internal class TicketService : ITicketService
             Status = TicketStatus.WaitingForModeration,
             Subtype = TicketSubtype.UserComplaint,
             CreatedUtc = _dateTimeProvider.Now,
-            // Report bodies render on the moderation surface where [mod] is a
-            // privileged block; strip it for non-moderator reporters, exactly
-            // as the public intake path does.
-            Description = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(description, currentUser.Role), BbTagSet.Common),
+            // [mod] is a privileged block on the moderation surface, as on the intake path.
+            Description = ModBlockSanitizer.SanitizeForAuthor(description, currentUser.Role),
             Comment = ModBlockSanitizer.SanitizeForAuthor(createTicket.Comment, currentUser.Role)
         };
 
@@ -197,65 +156,12 @@ internal class TicketService : ITicketService
     {
         await _createIntakeValidator.ValidateAndThrowAsync(createTicketIntake, ct);
 
-        // Guests are allowed to submit — losing account access must not lock
-        // a user out of support. For authenticated users the author identity
-        // is recorded; for guests the contact goes to GuestEmail.
+        // A guest may file: losing the account must not lock anybody out of support.
         var currentUser = _identityProvider.Current.User;
         var isAuthenticated = currentUser.IsAuthenticated;
 
-        // The violator is a name the reader typed into the form, so what is wrong
-        // with it is answered under that field: an unknown name used to be the
-        // 404 of the lookup, which the form could put nowhere but over the
-        // button, and the reader could not tell which of his words it meant.
-        Guid? targetUserId = null;
-        string? violator = null;
-        if (!string.IsNullOrWhiteSpace(createTicketIntake.TargetUsername))
-        {
-            var (found, userId) = await _userLookupService.FindUserIdAsync(
-                createTicketIntake.TargetUsername.Trim(), ct);
-            if (!found)
-            {
-                throw new HttpBadRequestException(new Dictionary<string, string>
-                {
-                    [TargetUsernameField] = RefusalMessage.UserNotFound
-                });
-            }
-
-            if (isAuthenticated && userId == currentUser.UserId)
-            {
-                throw new HttpBadRequestException(new Dictionary<string, string>
-                {
-                    [TargetUsernameField] = ComplainAboutYourself
-                });
-            }
-
-            targetUserId = userId;
-            // The name as the site spells it, not as it was typed: the lookup
-            // ignores the case, the line is read by people.
-            violator = (await _userLookupService.GetAsync(userId)).Username;
-        }
-
-        // The ticket body is the intake message; the fields of the form that are
-        // not the message (the violator, the link, the contact) are appended as
-        // lines of it, in the order the form asks them, so no form data is lost
-        // and the ticket is read as its text and nothing beside it. A guest's
-        // address is that line too, where moderation reads it; GuestEmail keeps
-        // it as a field of its own as well.
-        var description = createTicketIntake.Text;
-        if (violator != null)
-        {
-            description += $"\n\n{ViolatorCaption}: {violator}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(createTicketIntake.ViolationUrl))
-        {
-            description += $"\n\n{LinkCaption(createTicketIntake.Subtype)}: {createTicketIntake.ViolationUrl}";
-        }
-
-        if (!string.IsNullOrWhiteSpace(createTicketIntake.Contact))
-        {
-            description += $"\n\nКонтакт для ответа: {createTicketIntake.Contact.Trim()}";
-        }
+        var (targetUserId, violator) = await ResolveViolator(createTicketIntake, currentUser, ct);
+        var description = IntakeDescription(createTicketIntake, violator);
 
         var entity = new CreateTicketEntity
         {
@@ -263,22 +169,17 @@ internal class TicketService : ITicketService
             ReporterUserId = isAuthenticated ? currentUser.UserId : null,
             TargetUserId = targetUserId,
             GuestEmail = isAuthenticated ? null : NormalizeOptional(createTicketIntake.Contact),
-            // Guests have no account to track their ticket from, so they get a
-            // one-time unguessable tracking token; authenticated authors use
-            // "Мои обращения" instead and get no token.
+            // A guest has no account to track the ticket from; an author reads "Мои обращения".
             TrackingToken = isAuthenticated ? null : GenerateTrackingToken(),
             EntityId = null,
             EntityType = string.Empty,
             Status = TicketStatus.WaitingForModeration,
             Subtype = createTicketIntake.Subtype,
             CreatedUtc = _dateTimeProvider.Now,
-            // Ticket bodies render on the moderation surface where [mod] is a
-            // privileged block; strip it for non-moderator authors. Guests
-            // (Role=Guest) are always stripped.
-            Description = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(description, currentUser.Role), BbTagSet.Common),
-            // The forms send no subject; an empty one is what the ticket screens
-            // replace with the category name.
-            Comment = NormalizeOptional(createTicketIntake.Subject) ?? string.Empty
+            // [mod] is a privileged block on the moderation surface; a guest always loses it.
+            Description = ModBlockSanitizer.SanitizeForAuthor(description, currentUser.Role),
+            // An empty subject is what the ticket screens replace with the category name.
+            Comment = AuthoredText.AsTyped(createTicketIntake.Subject) ?? string.Empty
         };
 
         return await CreateAndAnnounce(entity, ct);
@@ -293,9 +194,8 @@ internal class TicketService : ITicketService
         var caller = _identityProvider.Current.User;
         var ticket = await ReadableTicket(ticketId, ct);
 
-        // The author answers as the author whatever his role: a moderator who filed
-        // a ticket is its side, and his answer is a reply, not moderation's. Whoever
-        // else got past ReadableTicket moderates the ticket.
+        // The author answers as the author whatever his role; whoever else got past
+        // ReadableTicket moderates the ticket.
         if (IsAuthor(ticket, caller.UserId))
         {
             await Reply(ticket, caller.UserId, caller.Role, createComment, ct);
@@ -305,9 +205,7 @@ internal class TicketService : ITicketService
             await Answer(ticket, caller.UserId, caller.Role, createComment, ct);
         }
 
-        // The page reads the ticket back whole: the answer may have moved it to a
-        // status that changes what the page offers, and the answer of moderation
-        // may have written no comment at all.
+        // Read back whole: the status may have moved, and an answer may have written no comment.
         return await GetTicket(ticketId, ct);
     }
 
@@ -317,9 +215,7 @@ internal class TicketService : ITicketService
     {
         await _createCommentValidator.ValidateAndThrowAsync(createComment, ct);
 
-        // The token is the credential, exactly as on the tracking page, and the
-        // comment it writes is the guest's: signed by nobody whoever holds the
-        // token, and stripped of [mod] the way every guest text is.
+        // The token is the credential, and the comment is the guest's whoever holds it.
         var ticket = await _ticketRepository.GetByTrackingToken(token, ct);
         if (ticket == null)
         {
@@ -337,16 +233,10 @@ internal class TicketService : ITicketService
     }
 
     /// <summary>
-    /// The ticket, if the caller may read it: its author, or a moderator who
-    /// moderates it (TicketVisibility).
+    /// The ticket, if the caller may read it: its author, or a moderator who moderates it
+    /// (TicketVisibility). Anybody else is answered 404 and not 403, so the address tells
+    /// nothing of a ticket he may not touch.
     /// </summary>
-    /// <remarks>
-    /// Everybody else is answered 404 and not 403, so that the address is not an
-    /// existence oracle for tickets probed by GUID: an existing ticket the caller
-    /// may not touch must be indistinguishable from an identifier that addresses
-    /// nothing. That includes the moderator a complaint names, who is an ordinary
-    /// user to it, and an ordinary user never learns of a complaint about himself.
-    /// </remarks>
     private async Task<Ticket> ReadableTicket(Guid ticketId, CancellationToken ct)
     {
         var caller = _identityProvider.Current.User;
@@ -363,22 +253,16 @@ internal class TicketService : ITicketService
     }
 
     /// <summary>
-    /// The answer of the side that filed the ticket, from his account or by the
-    /// tracking token: it leaves the ticket waiting for moderation and is news to
-    /// the moderators who answered him.
+    /// The answer of the side that filed the ticket, from his account or by the tracking
+    /// token: it leaves the ticket waiting for moderation. A status he sends is refused
+    /// rather than ignored, so the request does not read as done.
     /// </summary>
-    /// <remarks>
-    /// The status is moderation's to choose. The author who sends one is refused
-    /// rather than ignored: a moderator who filed a complaint does not close it as
-    /// spam in the name of moderation, and a request that asks for more than it
-    /// gets would read as done.
-    /// </remarks>
     private async Task<TicketComment> Reply(Ticket ticket, Guid? authorId, UserRole role,
         CreateTicketComment reply, CancellationToken ct)
     {
         if (reply.Status.HasValue)
         {
-            throw new HttpException(HttpStatusCode.Forbidden, StatusIsModerations);
+            throw new HttpException(HttpStatusCode.Forbidden, "Статус обращения меняет модерация, а не его автор");
         }
 
         var comment = await WriteComment(ticket, authorId, role, reply.Text, TicketStatus.WaitingForModeration, ct);
@@ -387,22 +271,14 @@ internal class TicketService : ITicketService
     }
 
     /// <summary>
-    /// The answer of moderation: the text, if any, and the status the moderator
-    /// chose with it, written together.
+    /// The answer of moderation: the text, if any, and the status the moderator chose,
+    /// written together into an open ticket, so of two closings the second is refused.
+    /// The comment and the status are one write, so a closing never stands without the
+    /// last word that came with it.
     /// </summary>
     /// <remarks>
-    /// An answer with a text is one write, the comment and the status both or
-    /// neither, so a closing never stands without the last word that came with
-    /// it. One without a text only moves the status, and the validator lets that
-    /// through for a closing alone. Either is the conditional write of an open
-    /// ticket: of two answers that close it at once, the second one is refused.
-    ///
-    /// The author is told once per answer, of what the answer did: an answer that
-    /// waits for him, or the closing, whose page shows the last word if there was
-    /// one. Only an author with an account is told: a guest reads it on the
-    /// tracking page, which says so itself. Spam is closed without telling
-    /// anybody: whoever sent it is the last person the site has anything to say
-    /// to.
+    /// The author with an account is told once per answer; a guest reads it on the
+    /// tracking page. Spam is closed without telling anybody, its sender included.
     /// </remarks>
     private async Task Answer(Ticket ticket, Guid moderatorId, UserRole role, CreateTicketComment answer,
         CancellationToken ct)
@@ -415,7 +291,7 @@ internal class TicketService : ITicketService
             if (!IsOpen(ticket) ||
                 !await _ticketRepository.Close(ticket.TicketId, status, moderatorId, _dateTimeProvider.Now, ct))
             {
-                throw new HttpException(HttpStatusCode.BadRequest, TicketAlreadyClosed);
+                throw new HttpException(HttpStatusCode.BadRequest, "Обращение уже закрыто");
             }
         }
         else
@@ -456,9 +332,8 @@ internal class TicketService : ITicketService
             TicketCommentId = _guidFactory.Create(),
             TicketId = ticket.TicketId,
             AuthorId = authorId,
-            // The editor of comments, [mod] included for moderation; the author of
-            // a ticket without the role loses the block, as in every comment.
-            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(text, role), BbTagSet.WithModBlock),
+            // The editor of comments: [mod] for moderation, unwrapped for anybody below it.
+            Text = ModBlockSanitizer.SanitizeForAuthor(text, role),
             CreatedUtc = _dateTimeProvider.Now
         };
 
@@ -471,25 +346,84 @@ internal class TicketService : ITicketService
                 // Closed between the read above and the write: the write decides.
                 throw new HttpException(HttpStatusCode.BadRequest, TicketClosed);
             case TicketCommentOutcome.Full:
-                throw new HttpException(HttpStatusCode.BadRequest, ConversationFull);
+                throw new HttpException(HttpStatusCode.BadRequest,
+                    $"В обращении уже {TicketTextLimits.MaxComments} ответов, для продолжения подайте новое обращение");
         }
 
         return comment!;
     }
 
     /// <summary>
-    /// Stores a ticket and announces it.
+    /// Stores a ticket and announces it: every way of filing goes through here, so none
+    /// can be added without the moderators hearing of it.
     /// </summary>
-    /// <remarks>
-    /// Both intake paths go through here so that a new way of filing a ticket
-    /// cannot be added without the moderators hearing about it. The queue is the
-    /// only other place a ticket shows up, and nobody is asked to watch it.
-    /// </remarks>
     private async Task<Ticket> CreateAndAnnounce(CreateTicketEntity entity, CancellationToken ct)
     {
         var ticket = await _ticketRepository.Create(entity, ct);
         await _eventProducer.SendAsync(EventType.TicketCreated, ticket.TicketId);
         return ticket;
+    }
+
+    /// <summary>
+    /// The violator an intake complaint names, by his identifier and by his name as the
+    /// site spells it, or neither. The name was typed into the form, so what is wrong
+    /// with it is answered under that field.
+    /// </summary>
+    private async Task<(Guid? targetUserId, string? violator)> ResolveViolator(
+        CreateTicketIntake createTicketIntake, AuthenticatedUser currentUser, CancellationToken ct)
+    {
+        if (string.IsNullOrWhiteSpace(createTicketIntake.TargetUsername))
+        {
+            return (null, null);
+        }
+
+        var (found, userId) = await _userLookupService.FindUserIdAsync(
+            createTicketIntake.TargetUsername.Trim(), ct);
+        if (!found)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [TargetUsernameField] = RefusalMessage.UserNotFound
+            });
+        }
+
+        if (currentUser.IsAuthenticated && userId == currentUser.UserId)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>
+            {
+                [TargetUsernameField] = ComplainAboutYourself
+            });
+        }
+
+        // The lookup ignores the case, the line is read by people.
+        return (userId, (await _userLookupService.GetAsync(userId)).Username);
+    }
+
+    /// <summary>
+    /// The text of an intake ticket: the message, and after it the fields of the form
+    /// that are not the message (the violator, the link, the contact) as lines of it, in
+    /// the order the form asks them. A guest's address is that line too; GuestEmail keeps
+    /// it as a field of its own as well.
+    /// </summary>
+    private static string IntakeDescription(CreateTicketIntake createTicketIntake, string? violator)
+    {
+        var description = createTicketIntake.Text;
+        if (violator != null)
+        {
+            description += $"\n\n{ViolatorCaption}: {violator}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(createTicketIntake.ViolationUrl))
+        {
+            description += $"\n\n{LinkCaption(createTicketIntake.Subtype)}: {createTicketIntake.ViolationUrl}";
+        }
+
+        if (!string.IsNullOrWhiteSpace(createTicketIntake.Contact))
+        {
+            description += $"\n\nКонтакт для ответа: {createTicketIntake.Contact.Trim()}";
+        }
+
+        return description;
     }
 
     /// <summary>
@@ -534,8 +468,7 @@ internal class TicketService : ITicketService
             ResolvedUtc = ticket.ResolvedUtc,
             ResolvedByUsername = ticket.ResolvedByUsername,
             Comments = comments,
-            // Whoever reads the ticket here writes in it: its author, a moderator
-            // who moderates it, the holder of its token.
+            // Whoever reads the ticket here writes in it.
             CanComment = hasRoom,
             CanResolve = !byToken && MayResolve(ticket)
         };
@@ -555,7 +488,7 @@ internal class TicketService : ITicketService
     }
 
     private static bool IsAuthor(Ticket ticket, Guid userId) =>
-        ticket.ReporterUserId.HasValue && ticket.ReporterUserId.Value == userId;
+        ticket.ReporterUserId == userId;
 
     private static bool IsOpen(Ticket ticket) =>
         ticket.Status is TicketStatus.WaitingForModeration or TicketStatus.WaitingForUser;
@@ -564,14 +497,9 @@ internal class TicketService : ITicketService
         string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 
     /// <summary>
-    /// Generates a 128-bit URL-safe tracking token. The token is the only
-    /// credential a guest needs to read their ticket, so it is produced from a
-    /// cryptographic RNG rather than a predictable identifier.
+    /// The only credential a guest needs to read his ticket, so 128 bits from a
+    /// cryptographic generator.
     /// </summary>
-    private static string GenerateTrackingToken()
-    {
-        Span<byte> bytes = stackalloc byte[16];
-        System.Security.Cryptography.RandomNumberGenerator.Fill(bytes);
-        return Convert.ToHexString(bytes).ToLowerInvariant();
-    }
+    private static string GenerateTrackingToken() =>
+        RandomNumberGenerator.GetHexString(32, lowercase: true);
 }

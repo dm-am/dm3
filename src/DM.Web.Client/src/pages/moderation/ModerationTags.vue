@@ -8,29 +8,27 @@ import {
   type ModerationTag,
 } from "@/entities/game";
 import { Tooltip, TooltipContent } from "@/shared/ui/Tooltip";
-import { SvgIcon } from "@/shared/ui/Icon";
+import { RowIconButton } from "@/shared/ui/RowIconButton";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
+import { describeFailureOrWait } from "@/shared/lib/errors";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { ActionResult } from "@/shared/ui/ActionResult";
 import { pluralize } from "@/shared/lib/utils/pluralize";
 import TagGroupDialog from "./dialogs/TagGroupDialog.vue";
 import TagDialog from "./dialogs/TagDialog.vue";
-import { useRoleGate } from "./lib/useRoleGate";
-import { sectionRole } from "./lib/sections";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
-const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-tags"));
 const gamesStore = useGamesStore();
 
-// State
 const groups = ref<ModerationTagGroup[]>([]);
 const tags = ref<ModerationTag[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
-// Selected group for filtering tags
 const selectedGroupId = ref<string | null>(null);
 
-// Computed
 const filteredTags = computed(() => {
   if (!selectedGroupId.value) return tags.value;
   return tags.value.filter((t) => t.groupId === selectedGroupId.value);
@@ -48,19 +46,10 @@ const selectedGroupTitle = computed(() => {
 });
 
 /**
- * Both reads answer for themselves, because this page does.
- *
- * The failure stands where the two panels would be, so the interceptor's plate
- * over it said the same sentence a second time — word for word on a 403 and a
- * 5xx, since both read it out of the same problem document. Without the strip
- * the plate alone would be left explaining an empty section from the corner.
- *
- * An expired session and a dead connection are not in here: neither is about
- * the tag catalogue, and only the interceptor can offer the way back in.
+ * Both reads own their refusal: it stands where the two panels would be. An
+ * expired session and a dead connection stay with the interceptor.
  */
-const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
 
-// Actions
 async function loadData() {
   loading.value = true;
   error.value = null;
@@ -69,17 +58,14 @@ async function loadData() {
       gameTagApi.getTagGroups(OWNS_REFUSAL),
       gameTagApi.getTags(OWNS_REFUSAL),
     ]);
-    // A failed load is the page's own state, not a toast: there is nothing on
-    // screen to go back to, so the message belongs where the table would be.
+    // A failed load is the page's own state: the message stands where the table would be.
     const failure = groupsRes.error ?? tagsRes.error;
     if (failure) {
-      // A wait is said in the shared wording, the one the interceptor would
-      // have raised: it is the only one that names the seconds the server asked
-      // for, and the title sent with a 429 carries no number.
-      error.value =
-        failure.status === 429
-          ? describeRateLimit(failure.retryAfterSeconds)
-          : describeFailure(failure, "Не удалось загрузить данные");
+      // The shared wording names the seconds; the 429 title carries no number.
+      error.value = describeFailureOrWait(
+        failure,
+        "Не удалось загрузить данные",
+      );
       return;
     }
     groups.value = groupsRes.data?.resources ?? [];
@@ -90,13 +76,9 @@ async function loadData() {
 }
 
 /**
- * This page reads `moderation/tags`, which carries no cache policy; the rest of
- * the site reads the same catalogue from `games/tags`, which answers
- * `public, max-age=300`. The write goes to a third address, so nothing
- * invalidates the copy the browser holds for the public one — the tag picker on
- * "Создать игру" would show the pre-edit list for the next five minutes, and
- * survive a reload doing it. So after a write here the public catalogue is
- * re-read from the origin.
+ * The write goes to a third address, so nothing invalidates the browser's copy
+ * of the public `games/tags` (max-age=300): after a write the public catalogue
+ * is read again from the origin, or the picker would show the old list.
  */
 async function reloadAfterWrite() {
   await Promise.all([loadData(), gamesStore.fetchTags(true)]);
@@ -106,7 +88,6 @@ function selectGroup(groupId: string | null) {
   selectedGroupId.value = groupId;
 }
 
-// --- Group dialog (shared Dialog idiom) ---
 const editingGroup = ref<ModerationTagGroup | null>(null);
 
 const { open: openGroupDialog, close: closeGroupDialog } = useModal({
@@ -132,19 +113,9 @@ function openEditGroupModal(group: ModerationTagGroup) {
   openGroupDialog();
 }
 
-// --- Group delete (ConfirmDialog) ---
 const deleteGroupTarget = ref<ModerationTagGroup | null>(null);
 
-function deleteGroup(group: ModerationTagGroup) {
-  // The trash control is drawn only for a group without tags, and the count
-  // stands next to its name, so this guard only repeats what the row shows.
-  if (group.tagsCount > 0) return;
-  deleteGroupTarget.value = group;
-}
-
-// The requests of the two confirmations. The window waits for one, prints a
-// refusal in itself and closes on success alone, so the interceptor keeps quiet
-// about it the way it does about the reads.
+// The window waits for the request, prints a refusal in itself and closes on success alone.
 async function confirmDeleteGroup() {
   const target = deleteGroupTarget.value;
   if (!target) return;
@@ -157,7 +128,6 @@ async function confirmDeleteGroup() {
   return result;
 }
 
-// --- Tag dialog (shared Dialog idiom) ---
 const editingTag = ref<ModerationTag | null>(null);
 
 const { open: openTagDialog, close: closeTagDialog } = useModal({
@@ -182,20 +152,25 @@ function openCreateTagModal() {
   openTagDialog();
 }
 
-function openEditTagModal(tag: ModerationTag) {
-  editingTag.value = tag;
+// A tag that did not come is said in its row, where the pencil was pressed.
+const openFailedTagId = ref<string | null>(null);
+const openResult = useActionResult();
+
+// The list carries the description rendered; the window opens on it as typed.
+async function openEditTagModal(tag: ModerationTag) {
+  openFailedTagId.value = null;
+  openResult.clear();
+  const { data, error } = await gameTagApi.getTagForEdit(tag.id);
+  if (error) {
+    openFailedTagId.value = tag.id;
+    openResult.refuse(error, "Не удалось загрузить тег");
+    return;
+  }
+  editingTag.value = data;
   openTagDialog();
 }
 
-// --- Tag delete (ConfirmDialog) ---
 const deleteTagTarget = ref<ModerationTag | null>(null);
-
-function deleteTag(tag: ModerationTag) {
-  // Same as deleteGroup: the trash control is drawn only for a tag no game
-  // uses, and the row already says in how many games it stands.
-  if (tag.gamesCount > 0) return;
-  deleteTagTarget.value = tag;
-}
 
 async function confirmDeleteTag() {
   const target = deleteTagTarget.value;
@@ -211,18 +186,21 @@ onMounted(() => {
 </script>
 
 <template>
-  <!-- The frame the two panels measure themselves against: the page, not
-       the window. -->
+  <!-- The frame the two panels measure themselves against: the page, not the window. -->
   <div class="tags-page">
     <page-title>Игровые теги</page-title>
 
-    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
-
-    <div v-else class="moderation-tags">
-      <div v-if="loading" class="loading">Загрузка...</div>
-      <div v-else-if="error" class="error">{{ error }}</div>
+    <!-- A read again after a write keeps the panels standing under aria-busy. -->
+    <div class="moderation-tags" :aria-busy="loading || undefined">
+      <!-- Text, not a skeleton: the length of the two lists is anyone's guess. -->
+      <div v-if="loading && !groups.length" class="loading">Загрузка...</div>
+      <ErrorState
+        v-else-if="error"
+        class="load-refusal"
+        :message="error"
+        :retry="loadData"
+      />
       <template v-else>
-        <!-- Groups panel -->
         <div class="groups-panel">
           <div class="panel-header">
             <h3>Группы тегов</h3>
@@ -231,9 +209,7 @@ onMounted(() => {
             </button>
           </div>
           <div class="groups-list">
-            <!-- In the frame of a group row, which stretches its button: a
-                 button outside it is as wide as its words, and the count stood
-                 against the title. -->
+            <!-- The frame of a group row stretches its button, so the count stands at the end. -->
             <div class="group-item-wrapper">
               <button
                 type="button"
@@ -261,34 +237,25 @@ onMounted(() => {
               </button>
               <div class="group-actions">
                 <Tooltip text="Редактировать">
-                  <button
-                    type="button"
-                    class="btn-icon"
-                    aria-label="Редактировать группу"
+                  <RowIconButton
+                    icon="pencil"
+                    label="Редактировать группу"
                     @click.stop="openEditGroupModal(group)"
-                  >
-                    <SvgIcon name="pencil" />
-                  </button>
+                  />
                 </Tooltip>
-                <!-- The server refuses to delete a group that holds tags,
-                     so a group with tags has no trash: a pale control that
-                     does nothing was the refusal drawn in advance. -->
+                <!-- The server refuses to delete a group that holds tags, so it has no trash. -->
                 <Tooltip v-if="group.tagsCount === 0" text="Удалить">
-                  <button
-                    type="button"
-                    class="btn-icon"
-                    aria-label="Удалить группу"
-                    @click.stop="deleteGroup(group)"
-                  >
-                    <SvgIcon name="trash" />
-                  </button>
+                  <RowIconButton
+                    icon="trash"
+                    label="Удалить группу"
+                    @click.stop="deleteGroupTarget = group"
+                  />
                 </Tooltip>
               </div>
             </div>
           </div>
         </div>
 
-        <!-- Tags panel -->
         <div class="tags-panel">
           <div class="panel-header">
             <h3>{{ selectedGroupTitle }}</h3>
@@ -309,13 +276,9 @@ onMounted(() => {
                   <span class="tag-title">{{ tag.title }}</span>
                   <span class="tag-id">#{{ tag.shortId }}</span>
                 </div>
-                <!-- As a reader sees it in the tag's tooltip: the words of a
-                     [tip] under a dotted line, their small tooltip on hover. -->
+                <!-- As in the tag's tooltip: the words of a [tip] under a dotted line. -->
                 <div v-if="tag.description" class="tag-description">
-                  <TooltipContent
-                    :html="tag.descriptionHtml"
-                    :text="tag.description"
-                  />
+                  <TooltipContent :html="tag.description" />
                 </div>
                 <div class="tag-meta">
                   <span class="tag-group">{{ tag.groupTitle }}</span>
@@ -324,28 +287,26 @@ onMounted(() => {
                   }}</span>
                   <span class="tag-sort">Порядок: {{ tag.sortOrder }}</span>
                 </div>
+                <ActionResult
+                  v-if="openFailedTagId === tag.id"
+                  :result="openResult"
+                />
               </div>
               <div class="tag-actions">
                 <Tooltip text="Редактировать">
-                  <button
-                    type="button"
-                    class="btn-icon"
-                    aria-label="Редактировать тег"
+                  <RowIconButton
+                    icon="pencil"
+                    label="Редактировать тег"
                     @click="openEditTagModal(tag)"
-                  >
-                    <SvgIcon name="pencil" />
-                  </button>
+                  />
                 </Tooltip>
-                <!-- Same for a tag that stands in a game. -->
+                <!-- The same for a tag that stands in a game. -->
                 <Tooltip v-if="tag.gamesCount === 0" text="Удалить">
-                  <button
-                    type="button"
-                    class="btn-icon"
-                    aria-label="Удалить тег"
-                    @click="deleteTag(tag)"
-                  >
-                    <SvgIcon name="trash" />
-                  </button>
+                  <RowIconButton
+                    icon="trash"
+                    label="Удалить тег"
+                    @click="deleteTagTarget = tag"
+                  />
                 </Tooltip>
               </div>
             </div>
@@ -353,7 +314,6 @@ onMounted(() => {
         </div>
       </template>
 
-      <!-- Delete confirmations -->
       <ConfirmDialog
         :show="deleteGroupTarget !== null"
         title="Удалить группу?"
@@ -377,13 +337,7 @@ onMounted(() => {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
-
-// The side of an icon button (.btn-icon), and the room a row keeps for two of
-// them: the pencil, then the trash where there is something to delete. The
-// actions of a group and of a tag take it, and .group-item--all leaves it.
-$icon-button: 28px
-$two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
+@use "@/assets/styles/Buttons" as *
 
 // Inline-size containment keeps the width of the page from its ancestors.
 .tags-page
@@ -394,13 +348,12 @@ $two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
   grid-template-columns: 300px 1fr
   gap: $medium
 
-.loading,
-.error
+.loading
   grid-column: 1 / -1
   padding: $large
 
-.error
-  color: $accent-red
+.load-refusal
+  grid-column: 1 / -1
 
 // Panels: content surfaces, square as every card of the site.
 .groups-panel,
@@ -420,25 +373,30 @@ $two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
   h3
     margin: 0
     font-size: $font-size
-    font-weight: 500
+    font-weight: 400
 
 .btn-add
   +button
 
-// Groups list
+// One grid for every row, so the counts stand in one column and the buttons in two,
+// whether a row has its trash or not: a row is a subgrid of it.
 .groups-list
+  display: grid
+  grid-template-columns: 1fr auto auto
+  column-gap: $tiny
   padding: $small
 
 .group-item-wrapper
-  display: flex
+  grid-column: 1 / -1
+  display: grid
+  grid-template-columns: subgrid
   align-items: center
-  gap: $tiny
 
   &:hover .group-actions
     opacity: 1
 
 .group-item
-  flex: 1
+  grid-column: 1
   display: flex
   justify-content: space-between
   align-items: center
@@ -456,19 +414,11 @@ $two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
   &:hover
     background: $bg-element-hover
 
-  // A choice, not a button: the chosen group wears the active segment of the
-  // site ($bg-element-accent and the bold), so the one fill of $link on a page
-  // stays the main button's.
+  // A choice, not a button: the active segment's fill, so the page's one fill of $link stays the main button's.
   &.active
     background: $bg-element-accent
     color: $text
     font-weight: 700
-
-// The row of every tag has no buttons of its own. It stops where a group row
-// stops before its two and the gaps around them, so the counts stand in one
-// column.
-.group-item--all
-  margin-right: calc(#{$two-icon-buttons} + #{$tiny})
 
 .group-title
   flex: 1
@@ -476,25 +426,27 @@ $two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
 .group-count
   font-size: $tertiary-font-size
   color: inherit
-  opacity: 0.7
+  opacity: $opacity-soft
 
-// The room of both buttons whether the trash is drawn or not, so a group that
-// holds tags keeps its count and its pencil in the column of the others.
+// The two columns of the buttons, the pencil in the first.
 .group-actions
-  display: flex
-  gap: $tiny
-  flex: none
-  width: $two-icon-buttons
+  grid-column: 2 / -1
+  display: grid
+  grid-template-columns: subgrid
   opacity: 0
-  transition: opacity 0.15s
+  transition: opacity $transition-normal
 
-// Tags list
+// The same grid for the tags: the pencils stand in one column.
 .tags-list
+  display: grid
+  grid-template-columns: 1fr auto auto
+  column-gap: $tiny
   padding: $small
 
 .tag-item
-  display: flex
-  justify-content: space-between
+  grid-column: 1 / -1
+  display: grid
+  grid-template-columns: subgrid
   align-items: flex-start
   padding: $small $medium
   margin-bottom: $small
@@ -505,7 +457,7 @@ $two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
     opacity: 1
 
 .tag-info
-  flex: 1
+  min-width: 0
 
 .tag-header
   display: flex
@@ -514,7 +466,7 @@ $two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
   margin-bottom: $tiny
 
 .tag-title
-  font-weight: 500
+  font-weight: 400
 
 .tag-id
   font-size: $tertiary-font-size
@@ -532,40 +484,13 @@ $two-icon-buttons: calc(2 * #{$icon-button} + #{$tiny})
   color: $text-muted
 
 .tag-actions
-  display: flex
-  gap: $tiny
-  flex: none
-  width: $two-icon-buttons
+  grid-column: 2 / -1
+  display: grid
+  grid-template-columns: subgrid
   opacity: 0
-  transition: opacity 0.15s
+  transition: opacity $transition-normal
 
-// Icon buttons
-.btn-icon
-  display: flex
-  align-items: center
-  justify-content: center
-  width: $icon-button
-  height: $icon-button
-  padding: 0
-  cursor: pointer
-  border: none
-  border-radius: $border-radius
-  background: none
-  color: $text-muted
-
-  // Deleting wears no colour of its own: the question it asks first spells
-  // it out.
-  &:hover
-    background: $bg-element-accent
-    color: $text
-
-  svg
-    width: 18px
-    height: 18px
-
-// The two panels side by side need 600px of the column: the list of groups
-// keeps its 300px, and a narrower list of tags cut the right edge of its cards
-// off. At 1280 the column is 556px, and there the groups stand over the tags.
+// The two panels side by side need 600px of the column; below it the groups stand over the tags.
 @container tags-page (max-width: 599px)
   .moderation-tags
     grid-template-columns: 1fr

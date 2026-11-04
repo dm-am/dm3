@@ -10,14 +10,12 @@ namespace DM.Domain.Community.Features.Polls;
 /// </summary>
 public interface IPollRepository
 {
-    // ═══ READ ═══
-
     /// <summary>
     /// Count polls matching query
     /// </summary>
     /// <param name="query">Query parameters</param>
     /// <returns>Number of polls</returns>
-    Task<long> Count(PollsQuery query);
+    Task<int> Count(PollsQuery query);
 
     /// <summary>
     /// Get list of polls
@@ -33,8 +31,6 @@ public interface IPollRepository
     /// <param name="id">Poll identifier</param>
     /// <returns>Poll</returns>
     Task<Poll> Get(Guid id);
-
-    // ═══ WRITE ═══
 
     /// <summary>
     /// Create new poll
@@ -60,8 +56,6 @@ public interface IPollRepository
     /// </summary>
     /// <param name="pollId">Poll identifier</param>
     Task Delete(Guid pollId);
-
-    // ═══ VOTING ═══
 
     /// <summary>
     /// Vote for the poll option

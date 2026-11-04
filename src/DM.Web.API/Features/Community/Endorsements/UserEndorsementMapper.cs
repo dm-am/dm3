@@ -10,7 +10,7 @@ namespace DM.Web.API.Features.Community.Endorsements;
 /// avatar URLs.
 /// </summary>
 [Mapper]
-internal partial class UserEndorsementMapper
+public partial class UserEndorsementMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;

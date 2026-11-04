@@ -14,16 +14,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// Switching the factor on and issuing its recovery set is one change or none.
 /// </summary>
 /// <remarks>
-/// The design asks for one transaction here, and the reason is the answer rather
-/// than the table: the recovery set exists in the reply to the confirmation and
-/// nowhere else afterwards. A stamp that survived a failed set would leave the
-/// owner switched on, tied to the single device holding the secret, with no code
-/// to get past it and a week-long mailed removal as the whole of his way back.
-///
-/// Run against the real database because a rollback is not a property of the code
-/// that asks for it. Written over two calls the failure looked identical from the
-/// service - one write returned, the next threw - and only the rows say which of
-/// the two arrangements was in place.
+/// The recovery set exists only in the reply to the confirmation, so the stamp and the set are one transaction.
+/// Against the real database: only the rows show a rollback.
 /// </remarks>
 public class TwoFactorConfirmationShould : IntegrationTestBase
 {
@@ -54,11 +46,7 @@ public class TwoFactorConfirmationShould : IntegrationTestBase
     /// <summary>
     /// A failure part-way through leaves the factor off, not on and empty-handed.
     /// </summary>
-    /// <remarks>
-    /// The set is poisoned with a row the column refuses, which is a failure
-    /// arriving after the stamp has already been written inside the transaction -
-    /// the exact ordering the two-call arrangement could not roll back.
-    /// </remarks>
+    /// <remarks>The set is poisoned with a row the column refuses, after the stamp is written.</remarks>
     [Fact]
     public async Task LeaveTheFactorOffWhenTheSetCannotBeStored()
     {

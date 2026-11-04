@@ -14,6 +14,6 @@
 <style scoped lang="sass">
 .secondary-text
   font-size: $secondary-font-size
-  font-weight: normal
+  font-weight: 400
   color: $text-muted
 </style>

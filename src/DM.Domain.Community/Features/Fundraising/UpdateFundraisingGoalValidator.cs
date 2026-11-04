@@ -6,7 +6,6 @@ namespace DM.Domain.Community.Features.Fundraising;
 /// <inheritdoc />
 internal class UpdateFundraisingGoalValidator : AbstractValidator<UpdateFundraisingGoal>
 {
-    /// <inheritdoc />
     public UpdateFundraisingGoalValidator()
     {
         RuleFor(g => g.Title)

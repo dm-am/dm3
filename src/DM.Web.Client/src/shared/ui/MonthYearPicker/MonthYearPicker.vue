@@ -1,28 +1,6 @@
 <script setup lang="ts">
-/**
- * MonthYearPicker — a compact month/year selector popover in the site's
- * calendar style (no day grid). Two modes:
- *  - "month": year navigation (‹ year ›) + a 12-month grid.
- *  - "year": block navigation (‹ range ›) + a 12-year grid — years are
- *    paged in fixed 12-year blocks anchored at maxYear (mirrors the
- *    12-cell month grid), the oldest block may be partial.
- * Emits the chosen year (and month, in month mode) and closes on pick,
- * outside-click, or Esc. Future months/years past max* are disabled;
- * both modes bottom out at minYear.
- *
- * The panel itself is MonthYearGrid — shared with the day calendar, which
- * shows the same two grids above its day grid. What stays here is the part a
- * grid has no business knowing: the trigger, the stepper pill, the popover
- * and when it is open.
- *
- * The popover stands in a fixed layer, as the date field's calendar and the
- * panel of a subscription do: under the picker with the gap every dropdown
- * keeps, above it when there is no room below, pushed back inside the window
- * at either side, and read again on every scroll and resize while it is open
- * and whenever it changes height. Positioned inside the picker it was cut by
- * any box around the picker that clips, and a row that scrolls sideways on a
- * phone (the period of the statistics page) clips what it scrolls.
- */
+// The trigger, the stepper pill and the popover around MonthYearGrid. The popover stands in a fixed layer:
+// inside the picker it was cut by any box that clips, a sideways-scrolling row among them.
 import { ref, computed, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { RU_MONTHS_CAPITALIZED } from "@/shared/lib/utils/months";
 import { POPOVER_GAP, VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
@@ -60,10 +38,7 @@ const emit = defineEmits<{
   "update:month": [value: number];
 }>();
 
-// Capitalized ("Июль 2026"): a trigger label is a standalone label, not
-// mid-sentence Russian — same convention as every other control label and
-// the sibling CalendarGrid header.
-const MONTHS_FULL = RU_MONTHS_CAPITALIZED;
+// Capitalized: a trigger label stands alone, as every control label does.
 
 const isOpen = ref(false);
 const rootRef = ref<HTMLElement | null>(null);
@@ -76,36 +51,25 @@ const minY = computed(() => props.minYear ?? maxY.value - 11);
 const label = computed(() =>
   props.mode === "year"
     ? `${props.year}`
-    : `${MONTHS_FULL[(props.month ?? 1) - 1]} ${props.year}`,
+    : `${RU_MONTHS_CAPITALIZED[(props.month ?? 1) - 1]} ${props.year}`,
 );
 
-// Width reservation for the stepper pill's middle section: month names vary
-// ("Май 2026" vs "Сентябрь 2026"), and a resizing middle would shift the
-// › arrow under a rapidly clicking cursor. An invisible sizer holding the
-// longest month label keeps the section (and both arrows) stationary while
-// stepping. Year labels are always four digits, so year mode needs no
-// reservation.
-const LONGEST_MONTH = MONTHS_FULL.reduce((a, b) =>
+// The widest month label reserves the pill's middle, so the › arrow never moves under a clicking cursor.
+const LONGEST_MONTH = RU_MONTHS_CAPITALIZED.reduce((a, b) =>
   b.length > a.length ? b : a,
 );
 const sizerLabel = computed(() =>
   props.mode === "year" ? label.value : `${LONGEST_MONTH} ${props.year}`,
 );
 
-// --- The popover's place, as fixed coordinates ---
 const popoverRef = ref<HTMLElement | null>(null);
 const popoverStyle = ref<Record<string, string>>({});
 
-// For the first frame, before the panel can be measured: its width (the
-// width of .myp-popover below) and about the height of the grid of months.
+// For the first frame, before the panel can be measured.
 const FALLBACK_WIDTH = 220;
 const FALLBACK_HEIGHT = 200;
 
-/**
- * Under the picker, left edges together; above it when the window has no
- * room below; pushed back inside the window at either side. The arithmetic of
- * the date field's calendar (DateInput).
- */
+/** Under the picker, above it without room below, pushed back inside the window at either side. */
 function updatePosition() {
   const anchor = rootRef.value;
   if (!anchor) return;
@@ -132,14 +96,12 @@ function updatePosition() {
   popoverStyle.value = { top: `${top}px`, left: `${left}px` };
 }
 
-// Paging the grid of years to the oldest block shortens it: placed above the
-// picker, a panel that shrank would float off it.
+// Placed above the picker, a panel that shrank would float off it.
 let resizeObserver: ResizeObserver | null = null;
 
 watch(isOpen, (opened) => {
   if (opened) {
-    // Passive: the listener only reads geometry, and a blocking one on the
-    // scroll path makes the browser wait for it before every frame.
+    // Passive: the listener only reads geometry, and a blocking one stutters the scroll.
     document.addEventListener("scroll", updatePosition, {
       passive: true,
       capture: true,
@@ -167,8 +129,7 @@ watch(
 async function open() {
   isOpen.value = true;
   updatePosition(); // an estimate before the first paint
-  // Move keyboard focus into the dialog: the selected cell, or the first
-  // enabled one. Without this, Tab from the trigger lands behind the popover.
+  // Into the dialog, or Tab from the trigger lands behind the popover.
   await nextTick();
   updatePosition(); // the panel measured
   const target =
@@ -176,11 +137,7 @@ async function open() {
     rootRef.value?.querySelector<HTMLButtonElement>(".myp-cell:enabled");
   target?.focus();
 }
-/**
- * @param restoreFocus Return focus to the trigger — on Esc and on pick,
- *   where focus would otherwise be dropped on a detached element. Outside
- *   clicks keep the user's chosen focus target.
- */
+/** @param restoreFocus On Esc and on pick, where focus would drop on a detached element. */
 function close(restoreFocus = false) {
   isOpen.value = false;
   if (restoreFocus) triggerRef.value?.focus();
@@ -190,7 +147,6 @@ function toggle() {
   else open();
 }
 
-// --- Trigger-side ‹ › stepper (sequential period browsing) ---
 const canStepPrev = computed(() =>
   props.mode === "year"
     ? props.year > minY.value
@@ -265,18 +221,13 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <!-- Inline flow (not flex) + zero-width spaces so a selection copies as
-       "‹ Июль 2026 ›" on one line (Chrome serializes flex items with
-       newlines). -->
+  <!-- Inline flow and zero-width spaces: a selection copies "‹ Июль 2026 ›" on one line. -->
   <div
     ref="rootRef"
     class="month-year-picker"
     :class="{ 'with-stepper': stepper }"
   >
-    <!-- The bordered box is this inner span, never the root: when the
-         popover stood inside the root, clipping it (the stepper pill clips
-         its sections by radius) sliced the popover down to the height of the
-         field. Same split as DateInput: root places, field draws. -->
+    <!-- The bordered box is this inner span, never the root: the pill clips, and it sliced the popover. -->
     <span class="myp-field">
       <template v-if="stepper"
         ><button
@@ -297,10 +248,7 @@ onUnmounted(() => {
         :aria-expanded="isOpen"
         @click.stop="toggle"
       >
-        <!-- Width is reserved by an invisible ::before reading data-sizer
-             (pseudo-content never enters a selection copy); the label
-             itself is an ordinary word in the button's flow, because a box
-             taken out of the flow copies as a line of its own. -->
+        <!-- The width is reserved by ::before reading data-sizer: pseudo-content never enters a copy. -->
         <span class="myp-label">{{ label }}</span></button
       ><template v-if="stepper"
         ><span class="copy-space">{{ " " }}</span
@@ -340,48 +288,33 @@ onUnmounted(() => {
 
 <style scoped lang="sass">
 @use "@/assets/styles/ZIndex" as *
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 @use "@/assets/styles/Filters" as *
 
-// Inline-block (not flex): a selection then copies in one line. The popover
-// is placed off this box's rectangle, in a fixed layer.
+// Inline-block, not flex: a selection copies in one line.
 .month-year-picker
   display: inline-block
   white-space: nowrap
   vertical-align: middle
 
-  // Stepper mode: ONE bordered pill of three sections — ‹ | label | › —
-  // the same pill anatomy as the segmented control ($control-height,
-  // hairline dividers, rounded corners clipping the sections), so the
-  // arrows read as parts of the control, not floating beside it. The pill
-  // is an inner box (like DateInput's .di-field under .date-input-control)
-  // because its overflow: hidden used to cut the popover, and focus moving
-  // into a cell then scrolled the clipped box, showing a strip of the month
-  // grid inside the field. Without the stepper there is no pill: the span
-  // stays an unstyled inline box and the trigger keeps its own button look.
+  // One bordered pill of three sections, the anatomy of the segmented control.
   &.with-stepper .myp-field
     display: inline-block
-    // Top-aligned, not baseline-aligned: the pill's baseline is its bottom
-    // edge (overflow: hidden), so the line strut's descender would add a
-    // few px under it and the control strip would grow.
+    // Top-aligned: the pill's baseline is its bottom edge, and the strut's descender would grow the strip.
     vertical-align: top
     height: $control-height
     box-sizing: border-box
     border: 1px solid $border
-    border-radius: $button-border-radius
+    border-radius: $border-radius
     overflow: hidden
     background-color: $bg-element
 
-// Standalone trigger (no stepper): the regular button idiom, which
-// centers the label itself — no sizer here, nothing steps beside it.
+// Without the stepper: the regular button idiom.
 .myp-trigger
   vertical-align: middle
   +button
 
-// Middle section of the stepper pill: flat, hairline-divided from the
-// arrow sections. Its width is reserved by the hidden sizer (widest month
-// label), so stepping never resizes it and the › arrow never shifts under
-// a rapidly clicking cursor.
+// The middle of the pill, reserved by the hidden sizer.
 .myp-trigger-section
   display: inline-block
   height: 100%
@@ -401,20 +334,11 @@ onUnmounted(() => {
   &:hover
     background-image: linear-gradient($hover-overlay, $hover-overlay)
 
-  // Inward: the section fills the pill, whose overflow: hidden would clip a
-  // ring drawn on its edge, and the arrow sections sit flush against it.
+  // Inward: the pill's overflow: hidden would clip a ring on its edge.
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
+    +focus-ring($inward: true)
 
-// Width reservation: an invisible ::before with the widest label occupies
-// layout (pseudo-content is excluded from selection copies, unlike a
-// visibility-hidden span, whose text Range.toString still emits). It is a
-// zero-height block: it reserves the width and gives the line back to the
-// visible label, which stays an ordinary word in the button's flow and is
-// centered by the button itself. The label used to be centered over the
-// sizer out of flow, and a browser serializes an out-of-flow box as a line
-// of its own — the strip copied as "‹ \nИюль 2026\n ›".
+// A zero-height ::before reserves the width: an out-of-flow box would copy as a line of its own.
 .myp-trigger-section::before
   content: attr(data-sizer)
   display: block
@@ -447,8 +371,7 @@ onUnmounted(() => {
 
   // Inward, for the same reason as the middle section.
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
+    +focus-ring($inward: true)
 
 // At the coordinates updatePosition reads off the picker (top and left inline).
 .myp-popover

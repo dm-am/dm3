@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Account;
 using AwesomeAssertions;
@@ -9,19 +7,9 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
 /// <summary>
-/// Token.EntityId is polymorphic: depending on Type it holds a GameId, a BlogId
-/// or nothing. Both navigations are mapped on that single column, so EF wants to
-/// emit FK_Tokens_Games_EntityId AND FK_Tokens_Blogs_EntityId — and PostgreSQL
-/// requires a non-null value to satisfy every foreign key on a column, so an
-/// EntityId would have to exist in Games and in Blogs simultaneously. No
-/// invitation of any kind could be inserted. Both constraints are therefore
-/// removed by hand from the migration.
-///
-/// This runs against its own throwaway database rather than the shared one so
-/// that the insert is checked against a schema no seed has touched. The gap
-/// that let the defect survive was different and is now closed: the fixture
-/// used to call EnsureCreated, which derives the schema from the model and so
-/// could not see hand-edits to the migration at all.
+/// Token.EntityId holds a GameId, a BlogId or nothing, so both foreign keys EF would emit on it are removed
+/// from the migration by hand: PostgreSQL checks every foreign key on a non-null value. Run against a throwaway
+/// database built by the migration.
 /// </summary>
 public class InvitationTokenPersistenceShould : IntegrationTestBase
 {

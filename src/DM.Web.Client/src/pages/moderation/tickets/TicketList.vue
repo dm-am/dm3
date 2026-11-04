@@ -1,29 +1,13 @@
 <script setup lang="ts">
 /**
- * TicketList — the queue "Обращения" (doc 4.2.3.8.7 / 4.2.3.8.8): every
- * ticket the reader moderates, in one queue whatever its reason. Renders them
- * in the block every screen draws a ticket with (TicketThread): the reason
- * leading to the ticket's page, and the caption of a topic, "Автор: имя,
- * дата | Ответы (N) | состояние", with a red "*" after the state of a ticket
- * that waits for the reader's answer. The tickets waiting for moderation
- * float to the top, then those waiting for their author, then the ended ones,
- * each group newest first.
- *
- * The backend scopes visibility by role (TicketVisibility) and leaves out a
- * complaint about the reader himself, so every ticket here is his to answer
- * but the ones he filed himself. The filter of reasons offers the reasons his
- * role is shown, by the same rule, and no other: a reason he is never shown
- * would narrow the queue to nothing.
- *
- * Two lists over the queue narrow it, "Тип обращения" and "Статус", and a
- * choice in either applies at once. The statuses are the four a ticket is
- * stored with and every screen names it by (TICKET_STATUS_LABELS): whose turn
- * it is, or how it ended. Nobody takes a ticket in hand, so a status is asked
- * of the server as it is. The filters live in the
- * address, so a narrowed queue is a link a moderator can hand to another one.
+ * The queue "Обращения": every ticket the reader moderates, in the block every
+ * screen draws a ticket with, the server's order. The server scopes what each
+ * role is shown (TicketVisibility); the filter of reasons offers the same
+ * reasons, since one never shown would narrow the queue to nothing. The
+ * filters live in the address, so a narrowed queue is a link.
  */
 import { computed, ref, watch } from "vue";
-import { useRoute, useRouter, type LocationQuery } from "vue-router";
+import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import {
   awaitsReader,
@@ -43,24 +27,15 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import { parseStringFromUrl, toQueryValue } from "@/shared/lib/filters";
 import { TicketThread, TicketThreadSkeleton } from "@/widgets/ticket-thread";
-import { TICKET_STATUS_ORDER } from "../lib/labels";
 
 const route = useRoute();
 const router = useRouter();
 const { user } = storeToRefs(useAuthStore());
 
-/**
- * The reasons the reader's role is shown, as the server decides it
- * (TicketVisibility): a moderator the complaints about users and the
- * suggestions, a senior moderator the complaints about a junior moderator's
- * decision as well, an administrator every reason, the support desk among
- * them. In the order the reasons are named in (TICKET_SUBTYPE_LABELS).
- */
-const MODERATOR_SUBTYPES: TicketSubtype[] = [
-  "UserComplaint",
-  "SiteImprovementSuggestion",
-];
+/** The reasons each role is shown, by the server's rule (TicketVisibility), in TICKET_SUBTYPE_LABELS order. */
+const MODERATOR_SUBTYPES: TicketSubtype[] = ["UserComplaint"];
 const SENIOR_SUBTYPES: TicketSubtype[] = [
   ...MODERATOR_SUBTYPES,
   "ModeratorDecisionComplaint",
@@ -77,9 +52,7 @@ const subtypes = computed<TicketSubtype[]>(() => {
 
 const tickets = ref<Ticket[]>([]);
 
-// The filters come from the address and change under the reader (the back
-// button, a link), so two answers can be on the wire at once; the guard
-// drops the one the reader has already left.
+// The filters come from the address; the guard drops the answer the reader has left.
 const {
   loading,
   error: loadError,
@@ -89,24 +62,22 @@ const {
 /** What the two lists choose and the address holds; "" is no filter. */
 type QueueFilter = { subtype: "" | TicketSubtype; status: "" | TicketStatus };
 
-/** The four statuses, in the order the queue stands in (TICKET_STATUS_ORDER). */
-const STATUSES = (Object.keys(TICKET_STATUS_ORDER) as TicketStatus[]).sort(
-  (a, b) => TICKET_STATUS_ORDER[a] - TICKET_STATUS_ORDER[b],
-);
+/** The four statuses, in the order the server stands the queue in. */
+const STATUSES: TicketStatus[] = [
+  "WaitingForModeration",
+  "WaitingForUser",
+  "Closed",
+  "Spam",
+];
 
-function single(value: LocationQuery[string]): string {
-  const one = Array.isArray(value) ? value[0] : value;
-  return one ? String(one) : "";
-}
-
-/**
- * The filters the address holds. A value the queue does not know (a reason the
- * role of the reader is not shown, a status that is no more) is no filter at
- * all, rather than a request the server answers with an empty queue.
- */
+/** The filters the address holds; a value the queue does not know is no filter at all. */
 const applied = computed<QueueFilter>(() => {
-  const subtype = single(route.query.subtype) as TicketSubtype;
-  const status = single(route.query.status) as TicketStatus;
+  const subtype = parseStringFromUrl(
+    toQueryValue(route.query.subtype),
+  ) as TicketSubtype;
+  const status = parseStringFromUrl(
+    toQueryValue(route.query.status),
+  ) as TicketStatus;
   return {
     subtype: subtypes.value.includes(subtype) ? subtype : "",
     status: STATUSES.includes(status) ? status : "",
@@ -122,7 +93,7 @@ function applyFilter(filter: QueueFilter) {
   router.push({ query });
 }
 
-function fetch() {
+function loadTickets() {
   const { subtype, status } = applied.value;
   return run(
     () =>
@@ -131,27 +102,14 @@ function fetch() {
         subtype: subtype || undefined,
       }),
     (data) => {
-      tickets.value = [...(data?.resources ?? [])].sort((a, b) => {
-        // By status, waiting for moderation first, then newest first (doc:
-        // "в порядке статуса и времени")
-        const byStatus =
-          TICKET_STATUS_ORDER[a.status] - TICKET_STATUS_ORDER[b.status];
-        if (byStatus !== 0) return byStatus;
-        return (
-          new Date(b.createdUtc).getTime() - new Date(a.createdUtc).getTime()
-        );
-      });
+      tickets.value = data?.resources ?? [];
     },
   );
 }
 
-watch([() => applied.value.subtype, () => applied.value.status], fetch, {
+watch([() => applied.value.subtype, () => applied.value.status], loadTickets, {
   immediate: true,
 });
-
-// =============================================================================
-// THE TWO LISTS
-// =============================================================================
 
 const subtypeOptions = computed<SelectOption[]>(() => [
   { value: "", label: "Все типы" },
@@ -175,13 +133,9 @@ const hasFilters = computed(
   () => applied.value.subtype !== "" || applied.value.status !== "",
 );
 
-// =============================================================================
-// THE QUEUE
-// =============================================================================
-
 const isEmpty = computed(() => !loading.value && tickets.value.length === 0);
 
-// A queue narrowed to nothing is not an empty queue (Empty State Standards).
+// A queue narrowed to nothing is not an empty queue.
 const emptyLine = computed(() =>
   hasFilters.value
     ? "Обращений по заданным фильтрам не найдено"
@@ -210,7 +164,7 @@ const emptyLine = computed(() =>
       </FormField>
     </div>
 
-    <ErrorState v-if="loadError" :message="loadError" :retry="fetch" />
+    <ErrorState v-if="loadError" :message="loadError" :retry="loadTickets" />
 
     <TicketThreadSkeleton v-else-if="loading && !tickets.length" :count="3" />
 

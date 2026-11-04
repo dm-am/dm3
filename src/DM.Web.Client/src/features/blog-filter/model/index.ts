@@ -1,2 +1,2 @@
 export * from "./types";
-export { useBlogsFilter, type BlogsFilterComposable } from "./useBlogsFilter";
+export { useBlogsFilter } from "./useBlogsFilter";

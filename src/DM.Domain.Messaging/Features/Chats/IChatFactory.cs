@@ -3,32 +3,22 @@ using System.Collections.Generic;
 
 namespace DM.Domain.Messaging.Features.Chats;
 
-/// <summary>
-/// Factory for chat data
-/// </summary>
 internal interface IChatFactory
 {
-    /// <summary>
-    /// Create data for direct (1-on-1) chat
-    /// </summary>
-    /// <param name="userId">User identifier</param>
-    /// <param name="otherUserId">Other user identifier</param>
-    /// <returns>Chat entity and link entities</returns>
     (CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> links) CreateDirect(Guid userId, Guid otherUserId);
 
     /// <summary>
-    /// Create data for group chat
+    /// Data of a group chat; the participants include the creator and come without repeats
     /// </summary>
-    /// <param name="title">Chat title</param>
-    /// <param name="participantIds">Participant user identifiers (including creator)</param>
-    /// <returns>Chat entity and link entities</returns>
     (CreateChatEntity chat, IEnumerable<CreateChatLinkEntity> links) CreateGroup(string title, IEnumerable<Guid> participantIds);
 
     /// <summary>
-    /// Create data for game room chat (no user links needed)
+    /// Data of a game room chat, which has no participant links
     /// </summary>
-    /// <param name="roomId">Room identifier to link</param>
-    /// <param name="title">Chat title</param>
-    /// <returns>Chat entity</returns>
     CreateChatEntity CreateGameRoom(Guid roomId, string title);
+
+    /// <summary>
+    /// Links of users to a chat, one per user
+    /// </summary>
+    IEnumerable<CreateChatLinkEntity> CreateLinks(Guid chatId, IEnumerable<Guid> userIds);
 }

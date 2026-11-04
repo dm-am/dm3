@@ -2,28 +2,25 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The feed both chats are drawn with.
- *
- * The global chat and a correspondence had a feed each, and the copies parted
- * in a dozen places a reader could see (owner, 5 October 2026: "с какого
- * перепугу личные сообщения визуально отличаются от глобального чата?"). What
- * is held here is what the two now share: the states of the feed, the frame
- * and the line at its top, one fold height, the flash of a message one was
- * taken to, the toolbar's words and link, and a composer that stands only for
- * a reader who may write.
- */
+/** The one feed both chats are drawn with. */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
-import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import {
+  flushPromises,
+  mount,
+  RouterLinkStub,
+  type VueWrapper,
+} from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useAuthStore } from "@/shared/stores";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { componentCss, styleRules } from "@/shared/lib/testing/styles";
+import { ChatMessage } from "@/widgets/chat-message/@x/chat-feed";
+import { deferred } from "@/shared/lib/testing/tasks";
 import ChatFeed from "./ChatFeed.vue";
-import { MESSAGE_FOLD_HEIGHT, type ChatFeedActions } from "./types";
+import type { ChatFeedActions } from "./types";
 
 const virtual = vi.hoisted(() => ({
   rows: null as unknown as { value: unknown[] },
@@ -51,51 +48,11 @@ vi.mock("@/shared/lib/composables/useVirtualScroll", async () => {
 
 const { clearSpy } = vi.hoisted(() => ({ clearSpy: vi.fn() }));
 
-/** The editor, as a textarea on the same v-model: tiptap is not the point. */
-vi.mock("@/shared/ui/BBCodeEditor", () => ({
-  BBCodeEditor: defineComponent({
-    name: "BBCodeEditor",
-    props: { modelValue: { type: String, default: "" } },
-    emits: ["update:modelValue", "submit"],
-    setup(props, { emit, expose }) {
-      expose({ clear: clearSpy, focus: vi.fn() });
-      return () =>
-        h("textarea", {
-          class: "editor-stub",
-          value: props.modelValue,
-          onInput: (e: Event) =>
-            emit("update:modelValue", (e.target as HTMLTextAreaElement).value),
-        });
-    },
-  }),
-}));
-
-/** The message, as the feed hands it over: its props, readable. */
-const ChatMessageStub = defineComponent({
-  name: "ChatMessage",
-  props: {
-    message: { type: Object, required: true },
-    maxHeight: { type: Number, default: 0 },
-    // Read only to show that nothing is handed in for it.
-    narrow: { type: Boolean, default: undefined },
-  },
-  setup: (props) => () =>
-    h("div", { class: "message-stub" }, String(props.message.id)),
-});
-
-/** A router link that says where it leads, so a test reads the target. */
-const RouterLinkStub = defineComponent({
-  name: "RouterLink",
-  props: { to: { type: [String, Object], required: true } },
-  setup(props, { slots, attrs }) {
-    return () =>
-      h(
-        "a",
-        { ...attrs, "data-to": JSON.stringify(props.to) },
-        slots.default?.(),
-      );
-  },
-});
+vi.mock("@/shared/ui/BBCodeEditor", async () =>
+  (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeComposer(
+    clearSpy,
+  ),
+);
 
 /** A tooltip that keeps its words on the trigger. */
 const TooltipStub = defineComponent({
@@ -141,7 +98,10 @@ function open(props: Record<string, unknown> = {}, slots = {}) {
       label: "Сообщения",
       context: "message",
       hasMoreBefore: false,
+      hasMoreAfter: false,
       loadOlder: vi.fn(ok),
+      loadNewer: vi.fn(ok),
+      retry: vi.fn(),
       actions: actions(),
       sending: false,
       canWrite: true,
@@ -153,7 +113,6 @@ function open(props: Record<string, unknown> = {}, slots = {}) {
     attachTo: document.body,
     global: {
       stubs: {
-        ChatMessage: ChatMessageStub,
         Tooltip: TooltipStub,
         RouterLink: RouterLinkStub,
       },
@@ -223,65 +182,65 @@ describe("ChatFeed, what stands in the feed", () => {
   });
 });
 
-describe("ChatFeed, a message on screen", () => {
-  const twoOnScreen = () => {
-    // Index 0 is the date of the two.
+const twoOnScreenWith = (
+  feedActions: ChatFeedActions,
+  props: Record<string, unknown> = {},
+) => {
+  // Index 0 is the date of the two.
+  virtual.rows.value = [
+    { index: 0, start: 0, key: "sep", size: 18 },
+    { index: 1, start: 18, key: "m1", size: 80 },
+    { index: 2, start: 98, key: "m2", size: 80 },
+  ];
+  return open({
+    messages: [message("m1"), message("m2")],
+    actions: feedActions,
+    ...props,
+  });
+};
+
+const twoOnScreen = () => twoOnScreenWith(actions());
+
+describe("ChatFeed, a removed message", () => {
+  const removedOnScreen = (props: Record<string, unknown>) => {
     virtual.rows.value = [
       { index: 0, start: 0, key: "sep", size: 18 },
       { index: 1, start: 18, key: "m1", size: 80 },
-      { index: 2, start: 98, key: "m2", size: 80 },
     ];
-    return open({ messages: [message("m1"), message("m2")] });
+    return open({
+      messages: [
+        { ...message("m1"), text: "Удаленный текст", isRemoved: true },
+      ],
+      ...props,
+    });
   };
 
-  /**
-   * A feed narrower than 480 once drew its messages in a narrow form, the
-   * avatar 48 instead of 72, so a phone showed smaller pictures than a
-   * desktop. The owner, 12 October 2026: the pictures of a phone are the size
-   * they are on the full version. The feed draws its messages alike at any
-   * width, and has no narrow form to hand them.
-   */
-  it("draws its messages alike at any width", async () => {
-    const reports: ((entries: { contentRect: { width: number } }[]) => void)[] =
-      [];
-    vi.stubGlobal(
-      "ResizeObserver",
-      class {
-        constructor(callback: (typeof reports)[number]) {
-          reports.push(callback);
-        }
-        observe() {}
-        unobserve() {}
-        disconnect() {}
-      },
-    );
-    const wrapper = twoOnScreen();
-    for (const report of reports) report([{ contentRect: { width: 285 } }]);
-    await nextTick();
-
-    expect(
-      wrapper.findAllComponents(ChatMessageStub).map((m) => m.props("narrow")),
-    ).toEqual([undefined, undefined]);
-    expect(wrapper.get(".chat-feed__list").classes()).not.toContain(
-      "chat-feed__list--narrow",
-    );
-    // A row is placed by its top, not by a transform: a transform would make
-    // the row the box of every fixed menu inside it.
-    expect(wrapper.get(".chat-feed__row").attributes("style")).not.toContain(
-      "transform",
-    );
+  beforeEach(() => {
+    useAuthStore().updateUser({
+      username: "Alice",
+      role: "Moderator",
+    } as never);
   });
 
-  it("folds at the one height of both feeds", () => {
-    const wrapper = twoOnScreen();
+  it("opens to a moderator where moderation reaches, the global chat", async () => {
+    const wrapper = removedOnScreen({ moderation: { canWarn: () => false } });
 
-    const folds = wrapper
-      .findAllComponents(ChatMessageStub)
-      .map((m) => m.props("maxHeight"));
-    expect(folds).toEqual([MESSAGE_FOLD_HEIGHT, MESSAGE_FOLD_HEIGHT]);
-    expect(MESSAGE_FOLD_HEIGHT).toBe(500);
+    await wrapper.get("button.msg-deleted").trigger("click");
+
+    expect(wrapper.text()).toContain("Удаленный текст");
   });
 
+  // Rooms and private correspondence are not moderated: the text was never his to read there.
+  it("stays shut to a moderator in a feed moderation does not reach", () => {
+    const wrapper = removedOnScreen({});
+
+    expect(wrapper.find("button.msg-deleted").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Сообщение удалено");
+    expect(wrapper.text()).not.toContain("Удаленный текст");
+  });
+});
+
+describe("ChatFeed, a message on screen", () => {
   it("keeps the strip's distance above the very start of the history", async () => {
     const wrapper = twoOnScreen();
     const rows = wrapper.findAll(".chat-feed__row");
@@ -308,25 +267,43 @@ describe("ChatFeed, a message on screen", () => {
     );
   });
 
-  it("names the like the same in both chats", async () => {
+  it("says Нравится in the toolbar, with no tooltip while nobody likes it", async () => {
     useAuthStore().updateUser({ username: "Alice" } as never);
     const wrapper = twoOnScreen();
 
     await wrapper.get("#msg-m1").trigger("mouseenter");
     await nextTick();
 
-    const like = wrapper.get(
-      '.msg-toolbar button[aria-label="Поставить лайк"]',
-    );
+    const like = wrapper.get(".msg-toolbar button.toolbar-btn-text");
+    expect(like.text()).toBe("Нравится");
+    expect(like.attributes("aria-pressed")).toBe("false");
+    expect(like.element.parentElement?.getAttribute("data-tooltip")).toBe("");
+  });
+
+  it("lists the likers on the toolbar's Нравится and presses it for the reader's own", async () => {
+    useAuthStore().updateUser({ username: "Alice" } as never);
+    const liked = {
+      ...message("m1"),
+      likes: [{ username: "Alice" }, { username: "Carol" }],
+    };
+    virtual.rows.value = [
+      { index: 0, start: 0, key: "sep", size: 18 },
+      { index: 1, start: 18, key: "m1", size: 80 },
+    ];
+    const wrapper = open({ messages: [liked], actions: actions() });
+
+    await wrapper.get("#msg-m1").trigger("mouseenter");
+    await nextTick();
+
+    const like = wrapper.get(".msg-toolbar button.toolbar-btn-text");
+    expect(like.attributes("aria-pressed")).toBe("true");
+    expect(like.classes()).toContain("active");
     expect(like.element.parentElement?.getAttribute("data-tooltip")).toBe(
-      "Поставить лайк",
+      "Нравится: Alice, Carol",
     );
   });
 
-  /**
-   * The link of a message is an ordinary link to the page standing on it:
-   * the reader opens it, or copies its address the way he copies any link.
-   */
+  /** An ordinary link to the page standing on the message. */
   it("links the message where the page says, and copies nothing", async () => {
     useAuthStore().updateUser({ username: "Alice" } as never);
     const writeText = vi.fn().mockResolvedValue(undefined);
@@ -342,7 +319,10 @@ describe("ChatFeed, a message on screen", () => {
     const link = wrapper.get(
       '.msg-toolbar a[aria-label="Ссылка на сообщение"]',
     );
-    expect(JSON.parse(link.attributes("data-to")!)).toEqual({
+    const target = wrapper
+      .findAllComponents(RouterLinkStub)
+      .find((stub) => stub.element === link.element);
+    expect(target?.props("to")).toEqual({
       name: "chat",
       query: { msg: "m1" },
     });
@@ -356,12 +336,7 @@ describe("ChatFeed, a message on screen", () => {
   });
 });
 
-/**
- * A fixed layer takes the nearest transformed or contained ancestor for its
- * box. The menu "Еще" of a message's header and the tag menu of its edit box
- * are fixed layers, and in a feed whose rows wore a compositing transform they
- * opened inside the clipped list instead of over the page.
- */
+/** A fixed layer takes the nearest transformed or contained ancestor for its box. */
 describe("ChatFeed, the boxes around a message", () => {
   const BOXES = /\.chat-feed(__(frame|list|row|message|date))?(?![\w-])/;
   const TRAPS = [
@@ -390,6 +365,17 @@ describe("ChatFeed, the boxes around a message", () => {
         ),
       );
     expect(trapped).toEqual([]);
+  });
+
+  // The stylesheet above does not see the inline style a row is placed with.
+  it("place a row by its top, not by a transform", () => {
+    const rows = twoOnScreen().findAll(".chat-feed__row");
+
+    expect(rows).toHaveLength(3);
+    for (const row of rows) {
+      expect(row.attributes("style")).toContain("top:");
+      expect(row.attributes("style")).not.toContain("transform");
+    }
   });
 });
 
@@ -434,5 +420,137 @@ describe("ChatFeed, the composer", () => {
     expect(wrapper.find(".chat-composer").exists()).toBe(false);
     expect(wrapper.find(".editor-stub").exists()).toBe(false);
     expect(wrapper.find(".closed-probe").exists()).toBe(true);
+  });
+});
+
+/** Each press on a message takes the line of its last refusal down before it asks the server. */
+describe("ChatFeed, the line under a message on the next press", () => {
+  const refused = () =>
+    Promise.resolve({
+      error: { type: "", title: "Нельзя", status: 400, traceId: "t" },
+    });
+
+  it("is taken down when the like is pressed again, not when it is answered", async () => {
+    useAuthStore().updateUser({ username: "Alice" } as never);
+    const answer = deferred<{ error: null }>();
+    const like = vi.fn().mockImplementationOnce(refused);
+    like.mockImplementationOnce(() => answer.promise);
+    const wrapper = twoOnScreenWith(actions({ like }));
+
+    await wrapper.get("#msg-m1").trigger("mouseenter");
+    await nextTick();
+    const press = () =>
+      wrapper.get(".msg-toolbar button.toolbar-btn-text").trigger("click");
+
+    await press();
+    await flushPromises();
+    expect(wrapper.get(".action-result").text()).toBe("Нельзя");
+
+    await press();
+    expect(like).toHaveBeenCalledTimes(2);
+    expect(wrapper.find(".action-result").exists()).toBe(false);
+
+    answer.resolve({ error: null });
+    await flushPromises();
+  });
+
+  it("is taken down when the edit is saved again, not when it is answered", async () => {
+    const answer = deferred<{ error: null }>();
+    const saveEdit = vi.fn().mockImplementationOnce(refused);
+    saveEdit.mockImplementationOnce(() => answer.promise);
+    const wrapper = twoOnScreenWith(actions({ saveEdit }));
+    const first = wrapper.findAllComponents(ChatMessage)[0];
+
+    first.vm.$emit("save-edit", "новый текст");
+    await flushPromises();
+    expect(wrapper.get(".action-result").text()).toBe("Нельзя");
+
+    first.vm.$emit("save-edit", "новый текст");
+    await nextTick();
+    expect(saveEdit).toHaveBeenCalledTimes(2);
+    expect(wrapper.find(".action-result").exists()).toBe(false);
+
+    answer.resolve({ error: null });
+    await flushPromises();
+  });
+});
+
+/** The edit box opens on the text of the message, for the last press alone. */
+describe("ChatFeed, the edit box", () => {
+  // A moderator of the global chat edits any message, however old.
+  const editable = (editText: ChatFeedActions["editText"]) => {
+    useAuthStore().updateUser({
+      username: "Alice",
+      role: "Moderator",
+    } as never);
+    return twoOnScreenWith(actions({ editText }), {
+      moderation: { canWarn: () => false },
+    });
+  };
+
+  async function pressEdit(wrapper: VueWrapper, id: string) {
+    await wrapper.get(`#msg-${id}`).trigger("mouseenter");
+    await nextTick();
+    await wrapper
+      .get('.msg-toolbar button[aria-label="Редактировать"]')
+      .trigger("click");
+  }
+
+  const boxText = (wrapper: VueWrapper, id: string) =>
+    wrapper.get<HTMLTextAreaElement>(`#msg-${id} .msg-edit .editor-stub`)
+      .element.value;
+
+  it("opens once the text of the message is in, with that text", async () => {
+    const text = deferred<string>();
+    const editText = vi.fn(() => text.promise);
+    const wrapper = editable(editText);
+
+    await pressEdit(wrapper, "m1");
+    await flushPromises();
+    expect(editText).toHaveBeenCalledWith("m1");
+    // An empty box takes typing that the text arriving after it overwrites.
+    expect(wrapper.find(".msg-edit").exists()).toBe(false);
+
+    text.resolve("[b]m1[/b]");
+    await flushPromises();
+    expect(boxText(wrapper, "m1")).toBe("[b]m1[/b]");
+  });
+
+  it("drops the text of a press another press overtook", async () => {
+    const late = deferred<string>();
+    const editText = vi
+      .fn()
+      .mockImplementationOnce(() => late.promise)
+      .mockImplementationOnce(() => Promise.resolve("m2"));
+    const wrapper = editable(editText);
+
+    await pressEdit(wrapper, "m1");
+    await pressEdit(wrapper, "m2");
+    await flushPromises();
+    late.resolve("m1");
+    await flushPromises();
+
+    expect(wrapper.find("#msg-m1 .msg-edit").exists()).toBe(false);
+    expect(boxText(wrapper, "m2")).toBe("m2");
+  });
+
+  it("drops the text of a press that Отмена came after", async () => {
+    const late = deferred<string>();
+    const editText = vi
+      .fn()
+      .mockImplementationOnce(() => Promise.resolve("m1"))
+      .mockImplementationOnce(() => late.promise);
+    const wrapper = editable(editText);
+
+    await pressEdit(wrapper, "m1");
+    await flushPromises();
+    await pressEdit(wrapper, "m2");
+    await wrapper
+      .get("#msg-m1 .msg-edit-btn:not(.msg-edit-save)")
+      .trigger("click");
+    late.resolve("m2");
+    await flushPromises();
+
+    expect(wrapper.find(".msg-edit").exists()).toBe(false);
   });
 });

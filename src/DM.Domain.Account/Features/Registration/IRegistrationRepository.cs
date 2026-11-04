@@ -13,7 +13,7 @@ public interface IRegistrationRepository
     /// Tells if email is free for new registration (checks both Users and PendingRegistrations)
     /// </summary>
     /// <param name="email">Email</param>
-    /// <param name="cancellationToken"></param>
+    /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if email can be used for registration</returns>
     Task<bool> EmailFreeForNewRegistration(string email, CancellationToken cancellationToken);
 
@@ -21,34 +21,18 @@ public interface IRegistrationRepository
     /// Tells if user with certain username is already registered (checks Users and UsernameHistories)
     /// </summary>
     /// <param name="username">Username to check</param>
-    /// <param name="cancellationToken"></param>
+    /// <param name="cancellationToken">Cancellation token</param>
     /// <returns>True if username is available</returns>
     Task<bool> UsernameFree(string username, CancellationToken cancellationToken);
-
-    /// <summary>
-    /// Checks if pending registration exists for this email
-    /// </summary>
-    /// <param name="email">Email</param>
-    /// <param name="cancellationToken"></param>
-    /// <returns>True if pending registration exists</returns>
-    Task<bool> PendingExists(string email, CancellationToken cancellationToken);
 
     /// <summary>
     /// Record a pending registration, replacing whatever the address already has
     /// </summary>
     /// <remarks>
-    /// One write and not a check followed by an insert: two submissions of the
-    /// form arriving together both found the address free and both wrote it, and
-    /// the one that lost was answered with a failure of the storage engine rather
-    /// than with a letter. The row keeps its original start date, which is what
-    /// the sweep that frees an abandoned address counts from.
+    /// One write, not a check and an insert, so two submissions cannot race. The row
+    /// keeps its original start date, which the sweep of abandoned addresses counts from.
     /// </remarks>
     Task AddPending(PendingRegistration pending);
-
-    /// <summary>
-    /// Replace existing pending registration (re-registration with same email)
-    /// </summary>
-    Task ReplacePending(PendingRegistration pending);
 
     /// <summary>
     /// Find pending registration by email

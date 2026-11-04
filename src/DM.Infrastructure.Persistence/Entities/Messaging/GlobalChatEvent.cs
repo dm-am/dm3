@@ -9,7 +9,7 @@ namespace DM.Infrastructure.Persistence.Entities.Messaging;
 
 /// <summary>
 /// DAL model for events in global chat.
-/// Events are only supported for the global chat (Chat.GlobalChatId).
+/// Events are only supported for the global chat (WellKnownChats.GlobalChatId).
 /// Only one event can be Live at a time.
 /// </summary>
 [Table("GlobalChatEvents")]

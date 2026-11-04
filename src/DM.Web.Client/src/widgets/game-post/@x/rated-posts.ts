@@ -1,7 +1,2 @@
-/**
- * Cross-import surface for widgets/rated-posts (FSD @x).
- *
- * Every list of rated posts draws a post with the same widget the game room
- * uses; a second renderer would drift from it immediately.
- */
+// For widgets/rated-posts: one post renderer, since a second would drift from it.
 export { GamePost } from "..";

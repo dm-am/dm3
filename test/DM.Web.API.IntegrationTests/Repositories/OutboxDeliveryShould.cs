@@ -17,19 +17,12 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// The whole outbox with the broker in the loop: the real relay service, the
-/// real confirm producer, a queue bound to dm.events - and a broker container
-/// that goes down and comes back, which is the deployment window the outbox
-/// exists for.
+/// The whole outbox with the broker in the loop: the real relay, the real confirm producer, a queue bound to
+/// dm.events, and a broker container that goes down and comes back.
 /// </summary>
 /// <remarks>
-/// The main acceptance of the wave is the restart test: before the outbox,
-/// every event of the window was lost in silence; now SendAsync keeps
-/// answering success, the rows keep accumulating, and the backlog leaves in
-/// order once the broker is back - with the lag metric rising while it waits
-/// and returning to zero without anybody restarting the API. The happy path
-/// pins the latency the design promises: one relay tick plus the batch,
-/// bounded at five seconds in a test.
+/// After the broker returns, the backlog leaves in order while the lag metric rises and falls back; the happy path
+/// pins one relay tick plus the batch, bounded at five seconds.
 /// </remarks>
 public class OutboxDeliveryShould : IntegrationTestBase
 {
@@ -66,9 +59,14 @@ public class OutboxDeliveryShould : IntegrationTestBase
             watch.Elapsed.Should().BeLessThan(TimeSpan.FromSeconds(5),
                 "the happy-path latency is one relay tick plus the batch");
 
-            using var check = DatabaseFixture.Factory.Services.CreateScope();
-            Context(check).OutboxEvents.Single(row => row.EventId == eventId)
-                .PublishedUtc.Should().NotBeNull("the confirm arrived, so the row is done");
+            // The batch commits its marks after the counts, so a consumer can see the message first.
+            await WaitUntil(() =>
+                {
+                    using var check = DatabaseFixture.Factory.Services.CreateScope();
+                    return Context(check).OutboxEvents.Single(row => row.EventId == eventId).PublishedUtc != null;
+                },
+                TimeSpan.FromSeconds(5),
+                "the confirm arrived, so the row is done once its batch commits");
         }
         finally
         {
@@ -99,34 +97,8 @@ public class OutboxDeliveryShould : IntegrationTestBase
         try
         {
             await relay.StartAsync(CancellationToken.None);
-            await DatabaseFixture.StopBrokerAsync();
 
-            var entityId = Guid.NewGuid();
-            using (var scope = DatabaseFixture.Factory.Services.CreateScope())
-            {
-                var producer = scope.ServiceProvider.GetRequiredService<IEventProducer>();
-                var send = async () =>
-                {
-                    await producer.SendAsync(EventType.NewGame, entityId);
-                    await producer.SendAsync([EventType.ChangedGame, EventType.NewPublication], entityId);
-                };
-                await send.Should().NotThrowAsync(
-                    "a dead broker must not fail the requests whose work is already done");
-            }
-
-            Guid[] stored;
-            using (var scope = DatabaseFixture.Factory.Services.CreateScope())
-            {
-                // This test's rows only: the periodic jobs of the shared test
-                // host store events of their own into the same table.
-                stored = Context(scope).OutboxEvents
-                    .Where(row => row.EntityId == entityId)
-                    .OrderBy(row => row.OccurredUtc).ThenBy(row => row.Id)
-                    .Select(row => row.EventId)
-                    .ToArray();
-            }
-
-            stored.Should().HaveCount(3, "every event of the outage is a row, not a loss");
+            var (entityId, stored) = await StoreDuringOutageAsync();
 
             await WaitUntil(() => Interlocked.Read(ref publishFailures) > 0,
                 TimeSpan.FromSeconds(60),
@@ -170,6 +142,44 @@ public class OutboxDeliveryShould : IntegrationTestBase
     }
 
     /// <summary>
+    /// The outage itself: the broker goes down, three events are said while it is
+    /// gone, and the rows the outbox holds for them are read back.
+    /// </summary>
+    /// <returns>The entity the events were about and their event ids, in the order they were said.</returns>
+    private async Task<(Guid EntityId, Guid[] Stored)> StoreDuringOutageAsync()
+    {
+        await DatabaseFixture.StopBrokerAsync();
+
+        var entityId = Guid.NewGuid();
+        using (var scope = DatabaseFixture.Factory.Services.CreateScope())
+        {
+            var producer = scope.ServiceProvider.GetRequiredService<IEventProducer>();
+            var send = async () =>
+            {
+                await producer.SendAsync(EventType.NewGame, entityId);
+                await producer.SendAsync([EventType.ChangedGame, EventType.NewPublication], entityId);
+            };
+            await send.Should().NotThrowAsync(
+                "a dead broker must not fail the requests whose work is already done");
+        }
+
+        Guid[] stored;
+        using (var scope = DatabaseFixture.Factory.Services.CreateScope())
+        {
+            // This test's rows only: the periodic jobs of the shared test
+            // host store events of their own into the same table.
+            stored = Context(scope).OutboxEvents
+                .Where(row => row.EntityId == entityId)
+                .OrderBy(row => row.OccurredUtc).ThenBy(row => row.Id)
+                .Select(row => row.EventId)
+                .ToArray();
+        }
+
+        stored.Should().HaveCount(3, "every event of the outage is a row, not a loss");
+        return (entityId, stored);
+    }
+
+    /// <summary>
     /// The relay exactly as the host runs it - the periodic service over the
     /// factory's own container, producer and confirm timeout included.
     /// </summary>
@@ -199,9 +209,7 @@ public class OutboxDeliveryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Polls the queue until every expected id arrived or the budget ran out.
-    /// A fresh connection per poll round, because the point of these tests is a
-    /// broker that was down a moment ago.
+    /// Polls the queue with a fresh connection per round until every id arrived or the budget ran out.
     /// </summary>
     private async Task<HashSet<Guid>> Consume(string queue, Guid[] expected, TimeSpan budget)
     {
@@ -243,9 +251,7 @@ public class OutboxDeliveryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Reads the outbox instruments off the meter, because the gauges the relay
-    /// updates are the interface the alerts consume and a test that never
-    /// listens to them holds nothing.
+    /// Reads the outbox instruments off the meter: the gauges are what the alerts consume.
     /// </summary>
     private static MeterListener Listen(Action<long> onPublishFailed, Action<double> onLag)
     {

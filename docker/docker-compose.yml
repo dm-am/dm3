@@ -1,19 +1,14 @@
 networks:
   default:
     name: 'dm-full-app'
-    # Заданная подсеть, а не выданная Docker из пула. Она — то, что API считает
-    # доверенным источником X-Forwarded-For, поэтому значение должно быть
-    # известно заранее и совпадать с DM_ReverseProxyConfiguration__TrustedNetworks
-    # в docker-compose.preview.yml. Проверяется тестом DeploymentConfigurationShould.
+    # Fixed subnet: the API trusts it as the source of X-Forwarded-For, and it must
+    # equal DM_ReverseProxyConfiguration__TrustedNetworks in docker-compose.preview.yml.
     ipam:
       config:
         - subnet: '172.28.0.0/16'
-  # The object store's own network, with no way out and nobody in it but the
-  # store and its proxy. SeaweedFS runs an admin server, a filer and a volume
-  # server that answer without a password and cannot be switched off; on the
-  # stand network imgproxy, the container that parses untrusted images, could
-  # erase the bucket through them past every account. The proxy "storage" is the
-  # only member of both networks and forwards S3 and metrics, nothing else.
+  # The object store's own network, internal: SeaweedFS runs admin, filer and volume
+  # servers that answer without a password, so only the store and its proxy "storage"
+  # may reach them.
   storage-internal:
     name: 'dm-storage-internal'
     internal: true
@@ -28,41 +23,30 @@ volumes:
   alertmanagerdata:
   prometheusdata:
 
-# Переменные с дефолтами для локальной разработки.
-# Точка присутствия свой набор переопределяет в .env.pop — секретов там нет.
+# Defaults for local development; a point of presence overrides them in .env.pop.
 x-workload-env: &workload-env
   # === ASP.NET Core ===
-  # Production unless explicitly overridden. Development is what maps Swagger UI
-  # and relaxes the script CSP for it, so an unset variable on a server must not
-  # be the thing that publishes the API documentation; docker/.env.example sets
-  # Development for local work. There are no environment-gated seed or role
-  # endpoints: seeding is a separate tool and the role endpoint is closed by
-  # RequireRole(Admin).
+  # Production unless overridden: Development maps Swagger UI and relaxes the script CSP.
   ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Production}
 
   # === Наблюдаемость ===
-  # Уровень логов, единственный на оба синка. Пусто — по окружению: Debug в
-  # Development, иначе Information. Значение задается на время разбора инцидента
-  # и снимается после: Development ради Debug включать нельзя, тот же флаг
-  # публикует Swagger и снимает HSTS. Меняется рестартом, читается один раз на
-  # старте; значение вне перечня Serilog валит старт, а не молча откатывается.
+  # One level for both sinks. Empty follows the environment (Debug in Development, else
+  # Information). Use it for an incident instead of Development, which also publishes
+  # Swagger and drops HSTS. A value Serilog does not know fails the start.
   DM_Observability__MinimumLevel: ${LOG_MINIMUM_LEVEL:-}
 
   # === Базы данных ===
-  # Роль приложения, а не суперпользователь. Утекший пароль суперпользователя это
-  # не данные сайта, а сервер: все базы на нем, роли и COPY FROM PROGRAM. Роль
-  # создает postgres-init.sh при первой инициализации тома, ей же принадлежит
-  # база — с Postgres 15 право CREATE в схеме public есть только у владельца.
+  # The application role, not the superuser: a leaked superuser password is the whole
+  # server. postgres-init.sh creates it, and it owns the database because Postgres 15
+  # allows CREATE in schema public to the owner only.
   DM_ConnectionStrings__Rdb: Host=${DB_HOST:-dm-pg};Port=5432;User ID=${DB_USER:-dm_app};Password=${DM_APP_PASSWORD};Database=dm3;Pooling=true;MinPoolSize=0;MaxPoolSize=100;Connection Idle Lifetime=60;${DB_SSL_MODE:-}
   DM_ConnectionStrings__Logs: http://${LOGS_HOST:-dm-loki}:3100
   DM_ConnectionStrings__TracingEndpoint: http://${TRACING_HOST:-dm-jaeger}:4317
 
   # === Криптография ===
-  # Дефолта нет: пустое значение валит старт приложения. Так и задумано - ключ,
-  # унаследованный из репозитория, секретом не является. Экземпляр приложения
-  # один, и ключ живет только на нем: точка присутствия кода приложения не
-  # выполняет, шифровать ей нечего, и копия ключа на ней отменяет весь смысл
-  # схемы.
+  # No default: an empty value fails the start, since a key inherited from the repository
+  # is no secret. The key lives on the one application instance; a point of presence
+  # runs no application code.
   DM_CryptoConfiguration__KeyBase64: ${DM_CryptoConfiguration__KeyBase64:?DM_CryptoConfiguration__KeyBase64 is required, generate with openssl rand -base64 32}
 
   # === RabbitMQ ===
@@ -75,81 +59,48 @@ x-workload-env: &workload-env
   DM_CdnConfiguration__Url: http://${STORAGE_HOST:-dm-storage}:9000
   DM_CdnConfiguration__PublicUrl: ${CDN_PUBLIC_URL:-http://localhost:9000}
   DM_CdnConfiguration__Region: us-east-1
-  # The same variable names the bucket the server creates and the one its health
-  # check looks for. Never changed after installation: on a volume that holds
-  # the old bucket a new name creates a second, empty one, and every health
-  # check stays green while the site loses its pictures.
+  # Never changed after installation: on a volume with the old bucket a new name creates a
+  # second, empty one while every health check stays green.
   DM_CdnConfiguration__BucketName: ${STORAGE_BUCKET:-dm-uploads}
-  # Service account scoped to one bucket, not an administrator. Object storage
-  # holds the only data nothing else can rebuild, and any leak of a workload's
-  # configuration used to hand over administration of the store: dropping the
-  # bucket, rewriting its policy, minting further accounts. Declared in the
-  # identity file storage-start.sh writes on every start of seaweedfs.
+  # A service account scoped to one bucket, not an administrator. storage-start.sh
+  # declares it on every start of seaweedfs.
   DM_CdnConfiguration__AccessKey: ${STORAGE_APP_USER:-dm-app}
   DM_CdnConfiguration__SecretKey: ${STORAGE_APP_PASSWORD:?STORAGE_APP_PASSWORD is required}
-  DM_CdnConfiguration__Folder:
   DM_CdnConfiguration__Provider: SelfHosted
-
-  # === Image transforms (imgproxy) ===
-  # Endpoint = публичный URL imgproxy (фронт обращается напрямую).
-  # Key/Salt — HMAC-SHA256 signing для anti-abuse (anyone could otherwise
-  # request любой transform и сжечь CPU). Дефолта у пары нет по той же причине,
-  # что и у крипто-ключа выше: подпись, унаследованная из репозитория, не
-  # защищает ни от чего. Пустое значение валит интерполяцию, а не всплывает
-  # первой миниатюрой, подписанной словом insecure.
-  DM_ImageProxyConfiguration__Endpoint: ${IMGPROXY_PUBLIC_URL:-http://localhost:8080}
-  DM_ImageProxyConfiguration__Key: ${IMGPROXY_KEY:?IMGPROXY_KEY is required, generate with openssl rand -hex 32}
-  DM_ImageProxyConfiguration__Salt: ${IMGPROXY_SALT:?IMGPROXY_SALT is required, generate with openssl rand -hex 32}
-  DM_ImageProxyConfiguration__SourceUrlPrefix: s3://${STORAGE_BUCKET:-dm-uploads}/
 
   # === Email ===
   DM_EmailConfiguration__ServerHost: ${MAIL_HOST:-dm-mailpit}
   DM_EmailConfiguration__ServerPort: ${MAIL_PORT:-1025}
-  DM_EmailConfiguration__Username:
-  DM_EmailConfiguration__Password:
+  # Empty username means no authentication, which Mailpit on a stand takes.
+  DM_EmailConfiguration__Username: ${MAIL_USERNAME:-}
+  DM_EmailConfiguration__Password: ${MAIL_PASSWORD:-}
   DM_EmailConfiguration__FromAddress: info@dm.am
   DM_EmailConfiguration__FromDisplayName: DM.am
   DM_EmailConfiguration__ReplyToAddress: test@dm.am
-  # Оппортунистический STARTTLS по умолчанию: relay на стенде — это Mailpit, и
-  # шифрование он предлагает только с выданной ему парой сертификат/ключ,
-  # которой у стенда нет. Развертывание с настоящим relay ставит true, и тогда
-  # сессия падает вместо тихой отправки открытым текстом: в письмах ездят
-  # ссылки активации и сброса пароля.
+  # Opportunistic STARTTLS by default: Mailpit offers it only with a certificate the stand
+  # lacks. A real relay sets true, so the session fails instead of sending activation links
+  # in clear text.
   DM_EmailConfiguration__RequireTls: ${MAIL_REQUIRE_TLS:-false}
 
-  # Область сессионной куки. Пусто — кука принадлежит хосту, который ее выдал,
-  # и вход на каждом адресе свой. Регистрируемый домен — один вход на все
-  # адреса; включать только когда каждый хост этого домена принадлежит нам.
+  # Empty keeps the cookie on the issuing host. A registrable domain shares one login
+  # across hosts; set it only when every host of that domain is ours.
   DM_SessionCookieConfiguration__Domain: ${SESSION_COOKIE_DOMAIN:-}
 
   # === Боты уведомлений ===
-  # Optional on purpose: empty is the shipped default, it keeps both webhooks
-  # closed (404) and bot notifications off. Forwarded by name because this
-  # anchor is an explicit list — a variable set in docker/.env but absent here
-  # never reaches a container. The API answers the webhooks, the notification
-  # worker sends through the bot tokens, and both take the anchor whole.
+  # Optional: empty keeps both webhooks closed (404) and bot notifications off. Forwarded
+  # by name, because this anchor is an explicit list.
   DM_BotConfiguration__TelegramBotToken: ${DM_BotConfiguration__TelegramBotToken:-}
   DM_BotConfiguration__TelegramWebhookSecret: ${DM_BotConfiguration__TelegramWebhookSecret:-}
   DM_BotConfiguration__DiscordBotToken: ${DM_BotConfiguration__DiscordBotToken:-}
   DM_BotConfiguration__DiscordPublicKey: ${DM_BotConfiguration__DiscordPublicKey:-}
 
   # === Адреса сайта ===
-  # PublicUrl — адрес, которым это развертывание называет само себя: из него
-  # собираются все ссылки в письмах. Перечень адресов, по которым сайт открывается,
-  # переменной не имеет: он одинаков для всех развертываний и объявлен в коде.
-  #
-  # Список источников, с которых браузеру разрешено звать API, отдельно не
-  # ведется: он выводится из этих же адресов. Пока он велся, его не заполнял ни
-  # один путь развертывания — стенд отказывал бы на входе собственному адресу.
+  # PublicUrl is the address this deployment calls itself, and all links in mail are built
+  # from it. The origins allowed to call the API are derived from it, not configured.
   DM_SiteAddressConfiguration__PublicUrl: ${WEB_URL:-http://localhost:5173}
 
-# Build context shared by every image this repository produces. CI builds them
-# and pushes them under one tag per run, which is why all four image references
-# below read IMAGE_TAG: they come from a single commit and there is nothing to
-# pin apart. Nothing in the deployment path passes --build, so the server pulls
-# what was published and compose falls back to building only when the registry
-# cannot be reached. Rolling a stand back is IMAGE_TAG in .env set to the short
-# sha of an earlier run.
+# One image tag per CI run for all four images, since they come from one commit. A
+# rollback is IMAGE_TAG in .env set to the short sha of an earlier run.
 x-docker-context: &docker-context
   context: ./..
   dockerfile: ./docker/app.Dockerfile
@@ -164,8 +115,7 @@ services:
       - '127.0.0.1:5432:5432'
     environment:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
-      # Читаются postgres-init.sh при первой инициализации тома: создать роль
-      # приложения может только тот, у кого она еще не создана.
+      # Read by postgres-init.sh on the first initialisation of the volume.
       DM_APP_PASSWORD: ${DM_APP_PASSWORD}
       DM_EXPORTER_PASSWORD: ${DM_EXPORTER_PASSWORD}
     volumes:
@@ -186,13 +136,9 @@ services:
         reservations:
           memory: 512M
 
-  # 3.5 - последняя ветка, чей образ несет что-либо кроме самого loki. Начиная
-  # с 3.6.0 он собран distroless: внутри только /usr/bin/loki, ни оболочки, ни
-  # wget, а значит и никакой пробы, которую можно запустить внутри контейнера.
-  # Healthcheck на каждый сервис - правило этого стека, и проба, отвечающая
-  # "здоров" по факту запуска процесса, хуже отсутствующей: она покупает
-  # уверенность. Отсюда пин на конец 3.5 вместо гонки за 3.7 - до тех пор, пока
-  # готовность loki не станет проверяться чем-то извне контейнера.
+  # Pinned to 3.5, the last image with a shell and wget: 3.6 and later are distroless and
+  # offer no probe inside the container, and a probe that says healthy on start is worse
+  # than none.
   loki:
     container_name: 'dm-loki'
     image: 'grafana/loki:3.5.12'
@@ -219,35 +165,24 @@ services:
 
   rabbitmq:
     container_name: 'dm-rmq'
-    # 4.3: the 3.x series left community support 2024-09-30. The in-place
-    # upgrade path 3.13 -> 4.x does not exist; a reset (down -v) starts the
-    # node clean, which is the project's normal way anyway.
+    # 4.3: 3.x left community support, and there is no in-place upgrade from 3.13.
     image: 'rabbitmq:4.3-management'
     hostname: 'dm-rmq'
     ports:
       - '127.0.0.1:15672:15672'
       - '127.0.0.1:5672:5672'
-      # Metrics endpoint of rabbitmq_prometheus. Everything that says whether the
-      # bus is moving - depth of a queue, a dead-letter queue that stopped being
-      # empty, a queue left with no consumer - is visible only here: the workers
-      # publish nothing about the broker, and a consumer that silently stopped
-      # looks from their side exactly like an idle one.
+      # rabbitmq_prometheus metrics: queue depth, dead-letter queues and consumerless queues
+      # are visible only here.
       - '127.0.0.1:15692:15692'
     environment:
       RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
     volumes:
-      # The metrics plugin is not on by default, and the default endpoint
-      # aggregates across every queue - an aggregate cannot name the queue that
-      # is backing up, which is the whole point of scraping it.
+      # The plugin is off by default, and the default endpoint aggregates across queues,
+      # which cannot name the one backing up.
       - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
       - ./rabbitmq/dm.conf:/etc/rabbitmq/conf.d/10-dm.conf:ro
-      # The one stateful service that had no volume of its own. The queues here
-      # are declared durable, but the directory holding them lived in the
-      # container layer, so recreating the container - an image update, a changed
-      # limit - took the unsent mail and the dead-letter queue with it. The node
-      # name is pinned by the hostname above: mnesia stores its data under a
-      # directory named after the node, and a generated hostname would leave the
-      # next container looking at an empty one.
+      # The queues are durable but lived in the container layer, so recreating the container
+      # lost unsent mail. The hostname pins the node name, under which mnesia stores its data.
       - rmqdata:/var/lib/rabbitmq
     healthcheck:
       test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
@@ -266,11 +201,7 @@ services:
 
   # --- Infrastructure: Dev Tools ---
 
-  # Ловушка для писем стенда: SMTP на 1025, веб и HTTP API на 8025 - те же
-  # порты, что были у MailHog, которого этот сервис заменил. MailHog не
-  # выпускался с 2020 года и архивирован автором; Mailpit - его прямая замена,
-  # с тем же поведением "принять и никуда не отправить" и с STARTTLS, если
-  # выдать ему сертификат.
+  # Mail trap for the stand on the ports MailHog had; MailHog is archived and Mailpit replaces it.
   mailpit:
     container_name: 'dm-mailpit'
     image: 'axllent/mailpit:v1.31.0'
@@ -278,15 +209,11 @@ services:
       - '127.0.0.1:1025:1025'
       - '127.0.0.1:8025:8025'
     environment:
-      # Без -d база уезжает во временный файл, который исчезает вместе с
-      # контейнером: письма стенда живут до перезапуска, тома под них нет и не
-      # нужно. Число - потолок, после которого вытесняются самые старые.
+      # Without -d the database is a temporary file. The number caps stored messages.
       MP_MAX_MESSAGES: '500'
-      # Проверка обновлений на старте ходит наружу, а стенд поднимается и в
-      # окружении без интернета.
+      # The update check calls out, and the stand also runs offline.
       MP_DISABLE_VERSION_CHECK: 'true'
-    # Собственная проба образа: HTTP-запрос к /readyz тем же бинарем, без
-    # curl и wget внутри контейнера.
+    # The image's own probe: the container has neither curl nor wget.
     healthcheck:
       test: ["CMD", "/mailpit", "readyz"]
       interval: 15s
@@ -301,31 +228,23 @@ services:
 
   # --- Infrastructure: Object Storage ---
 
-  # SeaweedFS in its one-process mode: master, volume server, filer, S3 and the
-  # admin server that runs vacuum. Why this store and not another is docs/STACK.md.
-  #
-  # Attached to storage-internal only and publishes nothing, for the reason
-  # written at that network above. The bucket, the accounts and the anonymous reads are set by
-  # storage-start.sh from the variables here, with no administrator account.
+  # SeaweedFS in one-process mode: master, volume server, filer, S3 and the admin server
+  # that runs vacuum (why this store: docs/STACK.md). On storage-internal only and
+  # publishes nothing; storage-start.sh sets the bucket, accounts and anonymous reads from
+  # the variables here.
   seaweedfs:
     container_name: 'dm-seaweedfs'
-    # Tag and digest: a tag on Docker Hub can be rewritten, and the one-process
-    # mode is young enough for its defaults to move between releases. A new tag
-    # is taken only with check-storage.sh green in deployment-smoke.
+    # Tag and digest: a tag can be rewritten and the one-process mode moves its defaults
+    # between releases. A new tag needs check-storage.sh green in deployment-smoke.
     image: 'chrislusf/seaweedfs:4.48@sha256:4e61d15fd35994cb1e43e1e553dff106794841fd9a99ade2fc8c8bfce4d7872d'
     entrypoint: ["/bin/sh", "/storage-start.sh"]
     environment:
-      # Without a limit the collector lets the heap grow to 233 MiB under load
-      # against the 256M of the container, because the filer allocates large
-      # long-lived buffers up front. With it the peak stays near 120 MiB, paid
-      # for with a collector that never rests: about 8% of a core when idle.
-      # check-storage.sh holds both numbers.
+      # Without a limit the heap grows to 233 MiB of the 256M container; with it the peak is
+      # near 120 MiB at about 8% of a core when idle. check-storage.sh holds both numbers.
       GOMEMLIMIT: 180MiB
       STORAGE_BUCKET: ${STORAGE_BUCKET:-dm-uploads}
       STORAGE_APP_USER: ${STORAGE_APP_USER:-dm-app}
       STORAGE_APP_PASSWORD: ${STORAGE_APP_PASSWORD:?STORAGE_APP_PASSWORD is required}
-      STORAGE_IMGPROXY_USER: ${STORAGE_IMGPROXY_USER:-dm-imgproxy}
-      STORAGE_IMGPROXY_PASSWORD: ${STORAGE_IMGPROXY_PASSWORD:?STORAGE_IMGPROXY_PASSWORD is required}
       STORAGE_BACKUP_USER: ${STORAGE_BACKUP_USER:-dm-backup}
       STORAGE_BACKUP_PASSWORD: ${STORAGE_BACKUP_PASSWORD:?STORAGE_BACKUP_PASSWORD is required}
     volumes:
@@ -333,11 +252,9 @@ services:
       - storagedata:/data
     networks:
       - storage-internal
-    # Healthy only when S3 answers and the bucket exists. The server merely logs
-    # a failure to create the bucket, and its /healthz answers 200 regardless,
-    # so the filer is asked for the bucket directory directly. This holds on an
-    # empty volume only: where a bucket already exists, another name in
-    # STORAGE_BUCKET creates a second one and the check stays green.
+    # Healthy when S3 answers and the bucket exists: the server only logs a failed bucket
+    # creation and /healthz answers 200 regardless. Holds on an empty volume only; another
+    # STORAGE_BUCKET over an existing bucket keeps it green.
     healthcheck:
       test: ["CMD-SHELL", "curl -fsS -o /dev/null http://127.0.0.1:8333/healthz && curl -fsS -o /dev/null -H 'Accept: application/json' http://127.0.0.1:8888/buckets/$${STORAGE_BUCKET}/ || exit 1"]
       interval: 5s
@@ -351,14 +268,11 @@ services:
           memory: 256M
           cpus: '0.5'
 
-  # The object store as the stand sees it: S3 on 9000 and metrics on 9324, a
-  # TCP forward into storage-internal and nothing more. Every client, the edge
-  # and the host port talk to this name, and none of them can reach the rest of
-  # SeaweedFS. Its health says only that S3 answers through the proxy.
+  # The store as the stand sees it: a TCP forward of S3 (9000) and metrics (9324) into
+  # storage-internal. Its health says only that S3 answers through the proxy.
   storage:
     container_name: 'dm-storage'
-    # The same digest as nginx:1.27-alpine, which the preview edge runs: the
-    # branch is frozen, and the two share one image in the cache.
+    # The same digest as the nginx:1.27-alpine of the preview edge, so both share one cached image.
     image: 'nginx:1.27.5-alpine@sha256:65645c7bb6a0661892a8b03b89d0743208a18dd2f3f17a54ef4b76fb8e2f2a10'
     volumes:
       - ./storage/nginx-stream.conf:/etc/nginx/nginx.conf:ro
@@ -383,62 +297,10 @@ services:
           memory: 32M
           cpus: '0.25'
 
-  # --- Infrastructure: Image transforms (imgproxy) ---
-  # On-the-fly resize + format negotiation (AVIF/WebP/JPEG via Accept header).
-  # Reads from object storage via S3 protocol, серверу аватаров достаточно хранить
-  # один source-file на upload — все thumbs генерируются по требованию.
-  imgproxy:
-    container_name: 'dm-imgproxy'
-    image: 'darthsim/imgproxy:v4.0.14'
-    ports:
-      - '127.0.0.1:8080:8080'
-    environment:
-      IMGPROXY_KEY: ${IMGPROXY_KEY:?IMGPROXY_KEY is required, generate with openssl rand -hex 32}
-      IMGPROXY_SALT: ${IMGPROXY_SALT:?IMGPROXY_SALT is required, generate with openssl rand -hex 32}
-      # S3 source — читаем напрямую из хранилища, без HTTP-роундтрипа.
-      IMGPROXY_USE_S3: 'true'
-      IMGPROXY_S3_ENDPOINT: 'http://dm-storage:9000'
-      IMGPROXY_S3_REGION: 'us-east-1'
-      IMGPROXY_S3_BUCKET_LOOKUP_TYPE: 'force-path-style'
-      # Read-only service account: imgproxy never writes to the bucket, and it
-      # is the container that parses untrusted image data.
-      AWS_ACCESS_KEY_ID: ${STORAGE_IMGPROXY_USER:-dm-imgproxy}
-      AWS_SECRET_ACCESS_KEY: ${STORAGE_IMGPROXY_PASSWORD:?STORAGE_IMGPROXY_PASSWORD is required}
-      # Format negotiation via Accept header.
-      IMGPROXY_AUTO_WEBP: 'true'
-      IMGPROXY_AUTO_AVIF: 'true'
-      # Anti-abuse: max input size 10 MB, max output dimensions 2048×2048.
-      IMGPROXY_MAX_SRC_RESOLUTION: '50'      # MP
-      IMGPROXY_MAX_SRC_FILE_SIZE: '10485760' # bytes = 10 MB
-      # Output cache hints — фронтенд + CDN кешируют immutable.
-      IMGPROXY_TTL: '31536000'
-    healthcheck:
-      test: ["CMD", "imgproxy", "health"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-      start_period: 5s
-    # The proxy started, not the store healthy: thumbnails of a store that is
-    # down fail one by one, and the transformer has no reason to stay down too.
-    depends_on:
-      storage:
-        condition: service_started
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 256M
-          cpus: '1.0'
-
   # --- Infrastructure: Tracing ---
 
-  # Jaeger v2. Ветка v1 (all-in-one) закончила поддержку 31.12.2025 и последний
-  # ее выпуск - 1.x 2024 года; v2 переехала на сборку OpenTelemetry Collector и
-  # называется другим образом - jaegertracing/jaeger вместо all-in-one.
-  # Приложение этого не замечает: OTLP слушается на тех же 4317/4318, UI на
-  # 16686. Что изменилось - настройка. Флагов v1 (COLLECTOR_OTLP_ENABLED,
-  # MEMORY_MAX_TRACES) больше нет, вместо них конфиг коллектора; порт
-  # administrative-проб уехал с 14269 на 13133.
+  # Jaeger v2 (v1 is end of life). Same OTLP ports 4317 and 4318 and UI 16686; the v1 flags
+  # are gone in favour of the collector config, and the admin probe moved to 13133.
   jaeger:
     container_name: 'dm-jaeger'
     image: jaegertracing/jaeger:2.20.0
@@ -446,17 +308,13 @@ services:
       - '127.0.0.1:16686:16686'
       - '127.0.0.1:4317:4317'
       - '127.0.0.1:4318:4318'
-    # Точечные правки встроенного конфига, а не свой файл целиком: собственная
-    # копия конфига all-in-one устаревала бы на каждом обновлении образа молча.
-    # Ключ, которого в конфиге нет, роняет старт - имя опечатки не переживет.
+    # Targeted overrides of the built-in config instead of a copy that would go stale; an
+    # unknown key fails the start.
     command:
-      # Memory storage is unbounded by default and this service runs under a
-      # 256M limit, so the ceiling is what keeps the collector alive instead of
-      # being OOM-killed - which loses every trace it was holding, silently.
+      # Memory storage is unbounded and the service is limited to 256M: the cap avoids an
+      # OOM kill that silently drops every held trace.
       - '--set=extensions.jaeger_storage.backends.some_storage.memory.max_traces=10000'
-      # Встроенный конфиг v2 включает MCP-эндпоинт на порту UI и фоновую
-      # проверку связи с агентом, которого в этом развертывании нет: ни того,
-      # ни другого мы не используем, а эндпоинт открыт без аутентификации.
+      # The built-in v2 config opens an MCP endpoint on the UI port without authentication.
       - '--set=extensions.jaeger_query.ai.enable_mcp=false'
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:13133/status || exit 1"]
@@ -480,12 +338,9 @@ services:
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
       - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml
-      # Без тома история метрик живет ровно до перезапуска контейнера, а его
-      # делает каждая остановка юнита: расследовать вчерашний инцидент было бы
-      # нечем, и заметить это можно только тогда, когда уже поздно.
+      # Without a volume the metric history ends with every unit stop.
       - prometheusdata:/prometheus
-    # Указан целиком: command перекрывает CMD образа, поэтому пропущенный флаг
-    # это не значение по умолчанию, а отсутствующая настройка.
+    # Complete on purpose: command replaces the image CMD, so an omitted flag is a missing setting.
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -504,43 +359,31 @@ services:
           memory: 256M
           cpus: '0.5'
 
-  # The receiver of the rules Prometheus evaluates. Without it the whole rule set
-  # reached a firing state inside Prometheus and stopped there: finding out that
-  # ApiDown had fired took opening /alerts through a tunnel, which takes already
-  # suspecting the site is down.
-  #
-  # No secret of its own. Alerts go out over the mail transport the deployment
-  # already has - MAIL_HOST is Mailpit on a stand and the relay on a server - so
-  # an alert arrives wherever registration mail arrives, and there is no token to
-  # paste before delivery starts working.
+  # Receives the rules Prometheus evaluates; without it a firing ApiDown is seen only by
+  # opening /alerts. Alerts go out over the deployment's own mail transport (Mailpit on a
+  # stand, the relay on a server), so there is no token to set.
   alertmanager:
     container_name: 'dm-alertmanager'
     image: 'prom/alertmanager:v0.34.0'
-    # Alertmanager expands no environment variable in its configuration file, so
-    # the entrypoint renders one from the environment first. Everything below
-    # would otherwise have to be a literal in the repository.
+    # Alertmanager expands no environment variables in its config, so the entrypoint renders it first.
     entrypoint: ["/bin/sh", "/alertmanager-init.sh"]
     ports:
       - '127.0.0.1:9093:9093'
     environment:
-      # The mail path of the application, not a second one: a relay reachable by
-      # the API is a relay reachable by the alerts about the API.
+      # The application's mail path: a relay the API reaches is one its alerts reach.
       ALERT_SMTP_SMARTHOST: ${MAIL_HOST:-dm-mailpit}:${MAIL_PORT:-1025}
       ALERT_SMTP_USERNAME: ${ALERT_SMTP_USERNAME:-}
       ALERT_SMTP_PASSWORD: ${ALERT_SMTP_PASSWORD:-}
-      # Mailpit offers STARTTLS only when it is given a certificate and a key,
-      # which the stand does not have, and alertmanager insists on it by
-      # default, so the stand default is off and a relay that wants TLS turns
-      # it on.
-      ALERT_SMTP_REQUIRE_TLS: ${ALERT_SMTP_REQUIRE_TLS:-false}
-      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-alertmanager@dm.am}
-      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-alerts@dm.am}
+      # Mailpit offers STARTTLS only with a certificate the stand lacks, while alertmanager
+      # insists on it by default; a relay that wants TLS turns it on.
+      ALERT_SMTP_REQUIRE_TLS: ${ALERT_SMTP_REQUIRE_TLS:-}
+      ALERT_EMAIL_FROM: ${ALERT_EMAIL_FROM:-}
+      ALERT_EMAIL_TO: ${ALERT_EMAIL_TO:-}
     volumes:
       - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
       - ./alertmanager-init.sh:/alertmanager-init.sh:ro
-      # Silences and the notification log. In the container layer they went with
-      # every image update: the stack would then re-send every firing alert and
-      # forget the silence set on the incident being worked on.
+      # Silences and the notification log, which otherwise go with every image update and
+      # make the stack re-send every firing alert.
       - alertmanagerdata:/alertmanager
     healthcheck:
       test: ["CMD-SHELL", "wget --spider -q http://localhost:9093/-/healthy || exit 1"]
@@ -582,8 +425,7 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.20.1
     container_name: 'dm-pg-exporter'
     environment:
-      # pg_monitor и ничего больше: экспортеру нужны представления статистики, а
-      # не таблицы, и уж точно не сервер.
+      # pg_monitor only: statistics views, not tables or the server.
       DATA_SOURCE_NAME: "postgresql://dm_exporter:${DM_EXPORTER_PASSWORD}@dm-pg:5432/dm3?sslmode=disable"
     depends_on:
       postgres:
@@ -608,9 +450,7 @@ services:
       - '--path.rootfs=/rootfs'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($|/)'
-      # Where the nightly backup check leaves its verdict. Without a collector
-      # reading it, that verdict was an exit code going into a log file and into
-      # mail on a machine with no MTA.
+      # Where the nightly backup check leaves its verdict for the textfile collector.
       - '--collector.textfile.directory=/var/lib/node_exporter/textfile'
     restart: unless-stopped
     deploy:
@@ -649,8 +489,6 @@ services:
       <<: *docker-context
       args:
         PROJECT_NAME: DM.Workers.Mail
-    ports:
-      - '127.0.0.1:5003:5000'
     environment: *workload-env
     depends_on:
       rabbitmq:
@@ -679,8 +517,6 @@ services:
       <<: *docker-context
       args:
         PROJECT_NAME: DM.Workers.NotificationDispatcher
-    ports:
-      - '127.0.0.1:5002:5000'
     environment: *workload-env
     depends_on:
       rabbitmq:
@@ -710,13 +546,8 @@ services:
       args:
         PROJECT_NAME: DM.Web.API
     ports:
-      # Привязка к loopback, как у всех остальных семнадцати публикаций в этом
-      # файле. Без нее порт слушал 0.0.0.0, а опубликованный docker-ом порт идет
-      # через цепочки nat/DOCKER мимо INPUT, то есть мимо iptables из
-      # setup-server.sh. На preview-стенде это открывало весь /v1/**, /metrics и
-      # /_health/detail в интернет в обход basic auth: nginx закрывал только
-      # порт 80, то есть SPA, а не данные. Локальной разработке loopback-а
-      # достаточно, а nginx ходит к API по имени сервиса внутри сети.
+      # Loopback, like every other publication here: a docker-published port bypasses
+      # iptables through nat/DOCKER and would expose /v1, /metrics and /_health/detail past basic auth.
       - '127.0.0.1:5000:5000'
     environment: *workload-env
     depends_on:
@@ -724,11 +555,8 @@ services:
         condition: service_completed_successfully
       rabbitmq:
         condition: service_healthy
-      # Started, not healthy. A site without its store still serves every page,
-      # and only uploads and pictures fail; a site that waits for the store does
-      # not come up at all. The health of seaweedfs gates the seeder and every
-      # --wait of CI and the installer instead, and ObjectStorageDown says when
-      # the store is gone.
+      # Started, not healthy: without its store the site still serves pages and only uploads
+      # fail (ObjectStorageDown says so). The seeder and every --wait gate on seaweedfs health.
       storage:
         condition: service_started
     healthcheck:
@@ -748,25 +576,21 @@ services:
 
   # --- Application: Tools ---
 
-  # Сидер тестовых данных. Профиль "tools" держит его в стороне от обычного
-  # docker compose up: это разовая задача, а не сервис.
-  # Запуск: docker compose run --rm seeder [all|users|content]
+  # Test data seeder. The tools profile keeps it out of a plain up, because it is a
+  # one-shot job. Run: docker compose run --rm seeder [all|users|content]
   seeder:
     image: 'dm-seeder:local'
     build:
       <<: *docker-context
       args:
         PROJECT_NAME: DM.Tools.Seeder
-    # Entrypoint образа запускает приложение через sh -c и аргументы до него не
-    # доходят, а команда сидера передается именно аргументом.
+    # The image entrypoint goes through sh -c and drops arguments, and the seeder command is one.
     entrypoint: ["dotnet", "DM.Tools.Seeder.dll"]
     environment: *workload-env
     depends_on:
       postgres:
         condition: service_healthy
-      # The seeder writes pictures and has nothing to do without the bucket, so
-      # it waits for the store to be healthy, which is what proves the bucket,
-      # and starts the proxy it writes through.
+      # The seeder writes pictures, so it waits for a healthy store, which proves the bucket.
       storage:
         condition: service_started
       seaweedfs:
@@ -777,12 +601,9 @@ services:
 
   # --- Infrastructure: Auto-update ---
 
-  # Started by the profile setup-server.sh and dm3.service pass, and by the
-  # pop command on a point of presence. Nothing passed a profile before, so the service
-  # the guides call the update mechanism was declared and never run. It restarts
-  # only containers carrying the watchtower label, and the one-shot migration
-  # deliberately has none: a release that changes the schema is a restart of the
-  # unit, not a container swap.
+  # Started by the profile setup-server.sh and dm3.service pass, and by the pop command.
+  # Restarts only containers with the watchtower label; the one-shot migration has none,
+  # because a schema change is a restart of the unit.
   watchtower:
     container_name: 'dm-watchtower'
     image: nickfedor/watchtower:1.21.0
@@ -790,8 +611,8 @@ services:
       - /var/run/docker.sock:/var/run/docker.sock
     environment:
       WATCHTOWER_CLEANUP: 'true'
-      WATCHTOWER_POLL_INTERVAL: 300  # проверка каждые 5 минут
-      WATCHTOWER_LABEL_ENABLE: 'true'  # обновлять только с label
+      WATCHTOWER_POLL_INTERVAL: 300  # seconds
+      WATCHTOWER_LABEL_ENABLE: 'true'  # labelled containers only
     restart: unless-stopped
     profiles:
       - production

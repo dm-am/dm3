@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Notepads;
@@ -25,14 +21,8 @@ public interface INotepadRepository
     /// </summary>
     Task<NotepadEntry?> GetEntryAsync(Guid entryId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Create new entry
-    /// </summary>
     Task<NotepadEntry> CreateEntryAsync(CreateNotepadEntryInternal entry, CancellationToken ct = default);
 
-    /// <summary>
-    /// Update entry
-    /// </summary>
     Task<NotepadEntry> UpdateEntryAsync(UpdateNotepadEntryInternal entry, CancellationToken ct = default);
 
     /// <summary>
@@ -41,8 +31,6 @@ public interface INotepadRepository
     Task DeleteEntryAsync(Guid entryId, Guid deletedByUserId, CancellationToken ct = default);
 }
 
-#region Internal DTOs for repository
-
 /// <summary>
 /// Internal DTO for creating notepad entry (repository level)
 /// </summary>
@@ -50,7 +38,6 @@ public class CreateNotepadEntryInternal
 {
     /// <summary>Entry identifier</summary>
     public Guid EntryId { get; set; }
-    /// <summary>Notepad type</summary>
     public NotepadType NotepadType { get; set; }
     /// <summary>Container identifier</summary>
     public Guid ContainerId { get; set; }
@@ -79,10 +66,7 @@ public class UpdateNotepadEntryInternal
     public string? Title { get; set; }
     /// <summary>Entry content</summary>
     public string? Content { get; set; }
-    /// <summary>Sort order</summary>
     public int? SortOrder { get; set; }
     /// <summary>Update timestamp</summary>
     public DateTimeOffset ModifiedUtc { get; set; }
 }
-
-#endregion

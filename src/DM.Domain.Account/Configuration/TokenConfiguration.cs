@@ -6,35 +6,35 @@ namespace DM.Domain.Account.Configuration;
 public class TokenConfiguration
 {
     /// <summary>
-    /// Password reset token lifetime in hours (default: 48)
+    /// Password reset token lifetime in hours
     /// </summary>
     /// <remarks>
-    /// The same window as the activation link, on purpose. Both letters are
-    /// read by somebody who cannot get in, and a reader who opens the mailbox
-    /// the next evening should not find that one of the two ways back expired
-    /// while the other did not.
+    /// The same window as the activation link: both letters are read by somebody
+    /// who cannot get in.
     /// </remarks>
     public int PasswordResetTokenLifetimeHours { get; set; } = 48;
 
     /// <summary>
-    /// Account activation token lifetime in hours (default: 48)
+    /// Account activation token lifetime in hours
     /// </summary>
     public int ActivationTokenLifetimeHours { get; set; } = 48;
 
     /// <summary>
-    /// Email change confirmation token lifetime in hours (default: 24)
+    /// Email change confirmation token lifetime in hours
     /// </summary>
     public int EmailChangeTokenLifetimeHours { get; set; } = 24;
 
     /// <summary>
     /// Lifetime in hours of the link that asks for a mailed removal of the
-    /// second factor (default: 24)
+    /// second factor
     /// </summary>
     /// <remarks>
-    /// Only the asking half has a lifetime of its own. The link that calls the
-    /// removal off is live for exactly as long as there is a removal to call
-    /// off: a cancellation that expired before the thing it cancels would be a
-    /// promise made in the letter and broken by the clock.
+    /// The link that calls the removal off lives as long as the removal it cancels.
     /// </remarks>
     public int TwoFactorRemovalTokenLifetimeHours { get; set; } = 24;
+
+    /// <summary>
+    /// Lifetime in hours of the link a moderator's approval of a username change mails
+    /// </summary>
+    public int UsernameChangeApprovalTokenLifetimeHours { get; set; } = 48;
 }

@@ -10,12 +10,9 @@ public class UsernameChangeCompletionRequest
     /// <summary>
     /// Chosen new username (2-20 characters)
     /// </summary>
-    /// <remarks>
-    /// The characters are the domain validator's rule, for the same reason as in
-    /// ActivationRequest: an allow-list here contradicted the deny-list behind
-    /// it, and the two answered differently about the same name.
-    /// </remarks>
+    /// <remarks>The characters are the domain validator's rule, as in ActivationRequest.</remarks>
     [Required(ErrorMessage = "Имя пользователя обязательно")]
+    // Two at least: a name is the one address of a profile, and one-letter names would go to the first comers.
     [StringLength(20, MinimumLength = 2, ErrorMessage = "От 2 до 20 символов")]
     public string Username { get; set; } = string.Empty;
 }

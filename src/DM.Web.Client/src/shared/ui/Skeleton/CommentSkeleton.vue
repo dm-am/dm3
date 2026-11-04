@@ -1,17 +1,5 @@
 <script setup lang="ts">
-/**
- * Skeleton for Comment placeholders (forum and game comments).
- *
- * Layout contract — matches CommentItem.vue:
- *   - Full layout: the card of a post (GamePost.vue), 5px of padding around
- *     the author's column of 140, its content 128 (the name and its marks on
- *     two lines, avatar the width of the content, date, like), a spacer of 10 and the strips of the text,
- *     22px under the top of the column and 10px in from its edges; the number
- *     in the right corner under both. Beside each other at every width.
- *   - Compact layout: block — no avatar, just body: author name + date
- *     header, 3 content lines, footer meta; $medium padding
- *   - Card: 1px dashed $border, $bg-element
- */
+// The numbers copy CommentItem and CommentAuthor; CommentSkeleton.spec.ts holds them together.
 import { storeToRefs } from "pinia";
 import { useUiStore } from "@/shared/stores/ui";
 
@@ -89,26 +77,16 @@ withDefaults(
   border: 1px dashed $border
   background-color: $bg-element
 
-// The full layout is the card of a post (.comment:not(.compact)): 5px of
-// padding around the columns and the row of the number.
+// The full layout is the card of a post.
 .skeleton-comment:not(.compact)
   padding: 5px
 
-// ── Full layout ──────────────────────────────────────────────────────────────
-
-// The columns of a post (.comment-columns): the author's column, a spacer of
-// 10 and the text beside it, at every width.
 .skeleton-columns
   display: flex
   gap: 10px
   align-items: flex-start
 
-// The author's column, 140 wide padding included (.comment-header), the
-// padding being the .author-inner margin and its padding on the right, which
-// leave 128 for the content. The strips stand where the lines do in the usual
-// column, whose name and marks take two lines: the avatar 57 under the top of
-// the column (11, two lines of 20 and their 4, the avatar's own 2), the bottom
-// of the like 234.
+// 140 wide, 128 of content; the strips stand where the lines of a two-line name do.
 .skeleton-meta
   flex-shrink: 0
   box-sizing: border-box
@@ -116,7 +94,7 @@ withDefaults(
   padding: 11px 7px 11px 5px
   display: flex
   flex-direction: column
-  gap: 4px
+  gap: $minor
 
 .skeleton-name
   width: 100px
@@ -128,8 +106,7 @@ withDefaults(
   height: 16px
   +skeleton-shimmer
 
-// Square, the width of the column's content, as the avatar fills it. Never
-// rounded.
+// Never rounded.
 .skeleton-avatar
   width: 128px
   height: 128px
@@ -146,8 +123,7 @@ withDefaults(
   height: 14px
   +skeleton-shimmer
 
-// The text where a post sets it: .comment-body { padding: 11px 0 } and
-// .comment-text { margin: 11px 10px }.
+// Where a post sets its text.
 .skeleton-text
   flex: 1
   min-width: 0
@@ -156,22 +132,18 @@ withDefaults(
   gap: 6px
   padding: 22px 10px 0
 
-// The number at the right of a row of 15 (.comment-footer), in the corner of
-// the card's padding.
+// The number at the right of the card's padding.
 .skeleton-number
   width: 16px
   height: 12px
   margin: 3px 0 0 auto
   +skeleton-shimmer
 
-// ── Compact layout ───────────────────────────────────────────────────────────
-
 .skeleton-body
   display: flex
   flex-direction: column
   gap: $small
 
-// The author name (16px) stacked ABOVE the meta line (12px).
 .skeleton-header
   display: flex
   flex-direction: column
@@ -188,13 +160,7 @@ withDefaults(
   height: 12px
   +skeleton-shimmer
 
-// The bars repeat on a 20px pitch: 14px of bar plus this 6px, five steps of the
-// 4px grid. The gap alone is on no step of the scale, and neither neighbouring
-// step keeps the pitch on the grid ($minor gives 18px, $small gives 22px), so
-// the literal stays. It is the pitch of the real body: .comment-text runs at
-// line-height 1.25 on the 16px page font, so the three lines these 54px stand
-// in for measure 60px on the same 20px step, the last of them a full line
-// where its bar is 14.
+// A 20px pitch, the real body's: 14px of bar and this 6px, off the scale's steps.
 .skeleton-content
   display: flex
   flex-direction: column

@@ -1,26 +1,8 @@
 <script setup lang="ts">
 /**
- * ProfileEndorsementForm — the screen that writes a recommendation about
- * another participant. Reached from the actions row of that participant's
- * profile ("Написать рекомендацию", beside "Написать сообщение"), and the
- * only way a recommendation is created at all: both listings of them existed
- * with nothing on the site able to add a row.
- *
- * Who may write one is the server's word and only the server's: the page asks
- * GET endorsements/eligibility, which is evaluated by the same code the POST
- * refuses by (signed in, not oneself, past probation, played in the same game,
- * no recommendation for this pair yet). A "no" takes the reader to the
- * profile the address names: the link here is drawn there only on a "yes",
- * and a typed address that answered with a sentence of refusal in place of
- * the form was the offer made anyway.
- *
- * The header, the 404 on an unknown owner and the document title are the
- * profile-subpage composable's, the same as the six list subpages next door.
- *
- * Plain text, not BBCode. A recommendation is stored and displayed verbatim
- * (UserEndorsementDtos.cs, TestimonialCard.vue), so an editor with a toolbar
- * would promise formatting that never renders — the same field the website
- * testimonial form uses is the honest one.
+ * Writing a recommendation about another participant, from the actions row of
+ * his profile. Whether one may is the server's answer (endorsements/eligibility);
+ * a "no" goes back to the profile. Plain text: a recommendation is shown verbatim.
  */
 import { computed, ref } from "vue";
 import { useRouter } from "vue-router";
@@ -30,44 +12,26 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import TextArea from "@/shared/ui/TextArea/TextArea.vue";
 import Button from "@/shared/ui/Button/Button.vue";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
-import { pluralize } from "@/shared/lib/utils/pluralize";
-import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
+import { describeFailureOrWait } from "@/shared/lib/errors";
 import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import { useProfileSubpage } from "./useProfileSubpage";
 import { useEndorsementEligibility } from "./useEndorsementEligibility";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
-/** Mirrors CreateUserEndorsementRequest on the server. */
-const MIN_LENGTH = 10;
+/** UserEndorsementFieldLimits.TextMaxLength, compared by ClientFieldLimitsShould. */
 const MAX_LENGTH = 5000;
-
-/** The noun agrees with the number, through the one plural rule. */
-const lengthHint = `минимум ${MIN_LENGTH} ${pluralize(MIN_LENGTH, "символ", "символа", "символов")}`;
 
 const router = useRouter();
 const { username, canonicalUsername, notFound, profileLink } =
   useProfileSubpage("Написать рекомендацию");
 
 /**
- * Both failures of this page are answered on this page, so both flags travel
- * with both requests.
- *
- * A refused save stands under the field the text is still sitting in, and a
- * failed eligibility question stands in the strip above the form with the read
- * offered again — in each case the sentence is already where the reader is
- * looking, and the plate the interceptor used to raise over it was one event
- * told twice. The wait on a 429 is printed here too (describeRateLimit), which
- * is what the second flag is for: taking a limit over without saying how long
- * would drop the seconds the server named.
- *
- * An expired session and a dead connection are left to the interceptor:
- * neither is about this recommendation, and only the interceptor knows the
- * other address of the site.
+ * Both failures are said on this page, under the field or in the strip above
+ * it, the wait of a 429 included; an expired session and a dead connection stay
+ * the interceptor's.
  */
-const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
 
-// Asked again here rather than carried over from the profile: this URL is
-// reachable directly, and a form that draws itself before the server has
-// agreed is the offer the site must not make.
+// Asked again: the address is reachable directly, and the form waits for the server's yes.
 const {
   canCreate: canWrite,
   asking,
@@ -79,13 +43,11 @@ const text = ref("");
 const submitting = ref(false);
 const submitError = ref("");
 
-const tooShort = computed(() => text.value.trim().length < MIN_LENGTH);
+const isBlank = computed(() => !text.value.trim());
 
 async function checkEligibility() {
   await ask(username.value as Username);
-  // A failed question is not a "no": it stays here, with the read offered
-  // again. A "no" is the profile, replaced, so that going back does not land
-  // on this address again.
+  // A failed question stays here with a retry; a "no" replaces this address with the profile.
   if (!askError.value && !canWrite.value) router.replace(profileLink.value);
 }
 
@@ -104,30 +66,24 @@ useFetchData(
 );
 
 async function submit() {
-  if (tooShort.value || submitting.value || !canWrite.value) return;
   submitting.value = true;
   submitError.value = "";
   const { error } = await userApi.createUserEndorsement(
     username.value as Username,
-    { text: text.value.trim() },
+    { text: text.value },
     OWNS_REFUSAL,
   );
   submitting.value = false;
   if (error) {
-    // Every refusal of this endpoint is a sentence of the server's own, and
-    // it belongs under the field the text is still sitting in: a refusal must
-    // cost nothing that was typed.
-    //
-    // A wait is said in the shared wording, the one the interceptor would have
-    // raised: it is the only one that names the seconds the server asked for.
-    submitError.value =
-      error.status === 429
-        ? describeRateLimit(error.retryAfterSeconds)
-        : describeFailure(error, "Не удалось отправить рекомендацию");
+    // The server's own sentence, under the field the text is still in; a wait in the
+    // shared wording, the only one that names the seconds.
+    submitError.value = describeFailureOrWait(
+      error,
+      "Не удалось отправить рекомендацию",
+    );
     return;
   }
-  // Where the recommendation now lives — the recipient's received list, with
-  // the new entry at the top of it.
+  // The recipient's received list, the new entry first.
   router.push({
     name: "received-endorsements",
     params: { username: username.value },
@@ -154,17 +110,14 @@ async function submit() {
       :retry="checkEligibility"
     />
 
-    <!-- Nothing is drawn while the server is still deciding: a form that
-         appears and then disappears has already made the offer. -->
+    <!-- Nothing while the server decides: a form that appears and goes has made the offer. -->
     <template v-else-if="!asking && canWrite">
       <form-field
         label="Текст рекомендации (обычный текст, без форматирования)"
         name="endorsementText"
         :errors="submitError ? [submitError] : []"
       >
-        <template #hint
-          >Чем игрок запомнился в совместной игре: {{ lengthHint }}</template
-        >
+        <template #hint>Чем игрок запомнился в совместной игре</template>
         <text-area
           id="endorsementText"
           v-model="text"
@@ -178,7 +131,7 @@ async function submit() {
         <Button
           variant="primary"
           :loading="submitting"
-          :disabled="tooShort"
+          :disabled="isBlank"
           @click="submit"
         >
           Отправить рекомендацию
@@ -190,7 +143,6 @@ async function submit() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 
 .endorsement-form-page
   width: 100%

@@ -1,0 +1,38 @@
+@*
+    A notification on the frame of the other letters: its facts in the box the security letters use, the way to its page as their button.
+    The site addresses and the way out of the letters stay: this is the letter a reader gets most often.
+*@
+@using DM.Domain.Core.Site
+<EmailLayout Title="@Model.Title">
+    @if (Model.Facts.Count > 0)
+    {
+        <div style="@EmailConstants.BoxStyles">
+        <table style="@EmailConstants.FactTableStyles">
+            @foreach (var (name, value) in Model.Facts)
+            {
+                <tr>
+                    <td style="@EmailConstants.FactLabelStyles">@name</td>
+                    <td style="@EmailConstants.FactValueStyles">@value</td>
+                </tr>
+            }
+        </table>
+        </div>
+    }
+    @if (Model.LinkUrl != null)
+    {
+        <ActionButton Url="@Model.LinkUrl">@Model.LinkCaption</ActionButton>
+    }
+    @if (SiteAddresses.Hosts.Count > 1)
+    {
+        <p style="@EmailConstants.ParagraphStyles">Сайт открывается по адресам: @string.Join(", ", SiteAddresses.Hosts)</p>
+    }
+    <p style="@EmailConstants.ParagraphStyles">Вы можете отключить уведомления на почту в настройках профиля.</p>
+</EmailLayout>
+
+@code {
+
+    /// <summary>What the letter says</summary>
+    [Parameter]
+    public NotificationLetterViewModel Model { get; set; } = null!;
+
+}

@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using DM.Domain.Core.Enums;
+using DM.Domain.Core.Exceptions;
+using DM.Web.API.Shared.BotTrap;
 using DM.Web.API.Features.Moderation.Tickets;
 using DM.Web.API.Shared.BbRendering;
 
@@ -9,7 +11,7 @@ namespace DM.Web.API.Features.General.Tickets;
 /// <summary>
 /// Request to create a ticket ("обращение") via the public intake forms
 /// </summary>
-public class CreateTicketIntakeRequest
+public class CreateTicketIntakeRequest : IHoneypotForm
 {
     /// <summary>
     /// Ticket category
@@ -50,11 +52,10 @@ public class CreateTicketIntakeRequest
     /// <summary>
     /// Honeypot field for bot protection - must be left empty
     /// </summary>
-    /// <remarks>
-    /// This field is invisible to users but often filled by automated bots.
-    /// If this field contains any value, the submission will be rejected.
-    /// </remarks>
     public string? Website { get; set; }
+
+    /// <inheritdoc />
+    (string Field, string Sentence) IHoneypotForm.Refusal => ("subject", RefusalMessage.TicketNotFiled);
 }
 
 /// <summary>
@@ -82,14 +83,9 @@ public class CreateTicketIntakeResponse
 /// Public, token-gated view of a ticket for the guest tracking page.
 /// </summary>
 /// <remarks>
-/// Narrow on purpose: no violator, no warnings, no bans, nothing of the
-/// moderation's internals. What it does carry is the conversation, with its
-/// authors as whole users, and the name of the moderator who closed the ticket:
-/// the guest writes with moderation as an author with an account does, and has to
-/// be able to say who answered him. Names and roles of the moderation are open to
-/// everybody on the page of the rules, and the [online] mark is shown at any name
-/// on the site. The token that opens this view also writes in the conversation
-/// (POST track/comments), under the same rate limit.
+/// Narrow on purpose: nothing of the moderation's internals, but the conversation
+/// with its authors and the moderator who closed the ticket, whose names are open
+/// on the page of the rules anyway.
 /// </remarks>
 public class TrackedTicket
 {
@@ -109,14 +105,9 @@ public class TrackedTicket
     public string Subject { get; set; } = "";
 
     /// <summary>
-    /// Ticket body as the author wrote it, in the site markup
-    /// </summary>
-    public string Description { get; set; } = "";
-
-    /// <summary>
     /// Ticket body rendered for display, with the tag set of profile texts
     /// </summary>
-    public InfoBbText DescriptionHtml { get; set; } = null!;
+    public InfoBbText Description { get; set; } = null!;
 
     /// <summary>
     /// Creation time

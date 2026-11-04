@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Threading;
@@ -20,7 +19,6 @@ internal class UserBlacklistService : IUserBlacklistService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public UserBlacklistService(
         IUserBlacklistRepository repository,
         IUserRepository userRepository,
@@ -36,24 +34,18 @@ internal class UserBlacklistService : IUserBlacklistService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<BlacklistEntry>> GetMyBlacklist(CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        return await _repository.GetBlacklist(userId, ct);
-    }
+    public Task<IEnumerable<BlacklistEntry>> GetMyBlacklist(CancellationToken ct = default) =>
+        _repository.GetBlacklist(_identityProvider.Current.User.UserId, ct);
 
     /// <inheritdoc />
-    public async Task<UserBlacklistSettings> GetSettings(CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        return await _repository.GetSettings(userId, ct);
-    }
+    public Task<UserBlacklistSettings> GetSettings(CancellationToken ct = default) =>
+        _repository.GetSettingsAsync(_identityProvider.Current.User.UserId, ct);
 
     /// <inheritdoc />
     public async Task<UserBlacklistSettings> UpdateSettings(UserBlacklistSettings settings, CancellationToken ct = default)
     {
-        var userId = _identityProvider.Current.User.UserId;
-        return await _repository.UpdateSettings(userId, settings, ct);
+        await _repository.UpdateSettings(_identityProvider.Current.User.UserId, settings, ct);
+        return settings;
     }
 
     /// <inheritdoc />
@@ -69,10 +61,9 @@ internal class UserBlacklistService : IUserBlacklistService
 
         if (userToBlockId.Value == userId)
         {
-            throw new HttpException(HttpStatusCode.BadRequest, "Нельзя заблокировать самого себя");
+            throw new HttpException(HttpStatusCode.BadRequest, "Нельзя внести себя в черный список");
         }
 
-        // Check if already blocked
         var existing = await _repository.Find(userId, userToBlockId.Value, ct);
         if (existing != null)
         {
@@ -98,7 +89,7 @@ internal class UserBlacklistService : IUserBlacklistService
 
         if (userToUnblockId == null)
         {
-            return; // User doesn't exist, nothing to unblock
+            return;
         }
 
         var existing = await _repository.Find(userId, userToUnblockId.Value, ct);
@@ -107,5 +98,4 @@ internal class UserBlacklistService : IUserBlacklistService
             await _repository.Delete(existing.Id, ct);
         }
     }
-
 }

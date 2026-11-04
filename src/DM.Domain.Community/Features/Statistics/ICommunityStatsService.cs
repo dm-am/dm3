@@ -11,14 +11,10 @@ public interface ICommunityStatsService
     /// <summary>
     /// Get live community statistics
     /// </summary>
-    /// <param name="ct">Cancellation token</param>
     Task<LiveStats> GetLiveStatsAsync(CancellationToken ct = default);
 
     /// <summary>
-    /// Get leaderboards for a period
+    /// Get leaderboards for a period: a year of 0 is all time, a null month the whole year
     /// </summary>
-    /// <param name="year">Year, 0 for all time</param>
-    /// <param name="month">Month, null for a whole year</param>
-    /// <param name="ct">Cancellation token</param>
     Task<Leaderboards> GetLeaderboardsAsync(int year, int? month, CancellationToken ct = default);
 }

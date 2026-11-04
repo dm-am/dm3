@@ -1,9 +1,6 @@
 <script setup lang="ts">
-// Blog notepad — shared notes for the blog owner, assistants and the assigned
-// mentor, hidden from readers (dev doc 4.2.3.6.4 "Заметки блога"). The screen
-// itself is NotepadBoard, shared with the personal and game notepads; this page
-// binds it to the blog notepad endpoints and gates access. The backend enforces
-// the same gate (BlogNotepadService).
+// The blog notepad: NotepadBoard, bound to the blog's endpoints. The server
+// enforces the same gate (BlogNotepadService).
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -17,8 +14,7 @@ const blogStore = useBlogDetailsStore();
 const { canUseNotepad, isOwner } = storeToRefs(blogStore);
 const { user } = storeToRefs(useAuthStore());
 
-// Notepad endpoints accept the public id (they are publicId-tolerant), so the
-// raw route param is enough — no need to wait for the blog GUID to resolve.
+// The endpoints take the public id, so the route parameter is enough.
 const blogId = computed(() => route.params.id as string);
 
 const adapter: NotepadAdapter = {
@@ -36,7 +32,7 @@ const adapter: NotepadAdapter = {
     v-else
     :adapter="adapter"
     :accessible="canUseNotepad"
-    :viewer-id="user?.id ?? null"
+    :viewer-id="user.id"
     :can-delete-others="isOwner"
     title="Заметки блога"
     denied-text="Заметки доступны только автору блога и ассистентам"

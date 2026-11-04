@@ -18,15 +18,7 @@ namespace DM.Infrastructure.Persistence.Shared.Comments;
 /// The reading side of a discussion, for all four discussions at once.
 /// </summary>
 /// <remarks>
-/// Forum topics, games, blogs and publications keep their comments in one table, and each
-/// of the four repositories carried its own copy of the filter block, of the paged read and
-/// of the two single-row reads. The copies were identical where it counts and had already
-/// begun to drift where it does not, which is what a copy does on its way to becoming four
-/// different answers to one question: the tie-break of the order (see <see cref="CommentSorting" />)
-/// had to be made in four places, and so would every filter added to the list from here on.
-///
-/// The query tag stays with the caller. It is what names the module a slow query came from,
-/// and one shared tag would take that away.
+/// The query tag stays with the caller: it names the module a slow query came from.
 /// </remarks>
 internal static class CommentQueries
 {
@@ -101,7 +93,7 @@ internal static class CommentQueries
             // accounts (RemovedAuthors); a removed login matches nothing here, or
             // the old name would find what the removal took off it.
             var authorNames = commentsQuery.AuthorUsernames.Select(a => a.ToLowerInvariant()).ToArray();
-            query = query.Where(c => c.Author != null && !c.Author.IsRemoved &&
+            query = query.Where(c => !c.Author.IsRemoved &&
                                      authorNames.Contains(c.Author.Username.ToLower()));
         }
 
@@ -116,11 +108,11 @@ internal static class CommentQueries
             query = query.WhereAtOrBefore(c => c.CreatedUtc, commentsQuery.CreatedToUtc.Value);
         }
 
-        // Search by text content
+        // Search by text content, "%" and "_" as themselves
         if (!string.IsNullOrWhiteSpace(commentsQuery.Search))
         {
-            var searchLower = commentsQuery.Search.ToLowerInvariant();
-            query = query.Where(c => c.Text.ToLower().Contains(searchLower));
+            var pattern = LikePatterns.Contains(commentsQuery.Search);
+            query = query.Where(c => EF.Functions.ILike(c.Text, pattern, "\\"));
         }
 
         return query;

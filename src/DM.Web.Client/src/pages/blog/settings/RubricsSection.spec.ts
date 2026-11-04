@@ -2,32 +2,21 @@
  * @vitest-environment jsdom
  */
 
-/**
- * What the rubric section shows for the two things it can do.
- *
- * Both used to answer with a line in the corner, and both move the list that
- * is on screen instead - but only the delete did it where the reader was
- * looking. A created rubric was sent with no position at all, so the server
- * filed it under SortOrder 0 and it took its place among the other zeros by
- * title: in a blog with a dozen rubrics, somewhere in the middle of a list the
- * reader had just scrolled past to reach the field. The section now asks for
- * the place itself, one past the highest, which is the row directly above that
- * field.
- *
- * What each test here catches, since a rubric that lands anywhere at all looks
- * created either way:
- *  - the position left out of the request: the new row goes back to sorting by
- *    title among the zeros, and the first test reads it in the wrong place;
- *  - the position computed from the count instead of the highest order: a blog
- *    whose rubrics were reordered gets a collision, and the second test names
- *    the number that is actually sent;
- *  - either toast put back: one event announced twice, and the list below is
- *    the half that does not need announcing.
- */
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+// A created rubric is asked for one past the highest place, so it is the row
+// above the field; a delete takes the row out; neither raises a toast.
+import {
+  describe,
+  it,
+  expect,
+  vi,
+  beforeEach,
+  afterEach,
+  type Mock,
+} from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import {
+  blogApi,
   useBlogDetailsStore,
   type Blog,
   type CreateRubricInput,
@@ -53,47 +42,45 @@ const rubric = (id: string, title: string, sortOrder: number): Rubric => ({
 /** The two rubrics the blog starts with, already ordered by their place. */
 const EXISTING = [rubric("r-1", "Бестиарий", 1), rubric("r-2", "Хроники", 2)];
 
-// The confirmation of a delete is the real window, drawn in place: the delete
-// is its request, and a refusal is printed in it.
+// The confirmation of a delete is the real window, drawn in place.
 const stubs = { Teleport: true };
 
-let created: ReturnType<typeof vi.fn>;
-let deleted: ReturnType<typeof vi.fn>;
+let created: Mock;
+let deleted: Mock;
 
 /**
- * The section over a blog with two rubrics.
- *
- * The store stands in for the round trip it makes: the endpoint keeps the
- * position it is handed (BlogRepository.CreateRubric), the blog is read again,
- * and the list is ordered by that position on the way to the screen. Which is
- * why a request without one shows up here as a row in the wrong place, exactly
- * as it does in the browser.
+ * The section over a blog with two rubrics, with the real store and the API
+ * doubled: the server keeps the position it is handed
+ * (BlogRepository.CreateRubric) and serves the blog with its rubrics again.
  */
 function mountSection() {
   const pinia = createPinia();
   setActivePinia(pinia);
-  const store = useBlogDetailsStore();
-  store.blog = {
+  const held = [...EXISTING];
+  const served = () => ({
     id: "the-blog",
     title: "Дневник",
-    rubrics: [...EXISTING],
-  } as unknown as Blog;
+    rubrics: [...held],
+  });
+  useBlogDetailsStore().blog = served() as unknown as Blog;
 
-  created = vi.fn(async (input: CreateRubricInput) => {
-    store.blog!.rubrics!.push(
-      rubric("r-new", input.title, input.sortOrder ?? 0),
-    );
-    return null;
-  });
-  deleted = vi.fn(async (rubricId: string) => {
-    store.blog!.rubrics = store.blog!.rubrics!.filter((r) => r.id !== rubricId);
-    return null;
-  });
-  vi.spyOn(store, "createRubric").mockImplementation(
-    created as unknown as typeof store.createRubric,
-  );
-  vi.spyOn(store, "deleteRubric").mockImplementation(
-    deleted as unknown as typeof store.deleteRubric,
+  created = vi
+    .spyOn(blogApi, "createRubric")
+    .mockImplementation(async (_blogId, input: CreateRubricInput) => {
+      held.push(rubric("r-new", input.title, input.sortOrder ?? 0));
+      return { data: null, error: null };
+    }) as unknown as Mock;
+  deleted = vi
+    .spyOn(blogApi, "deleteRubric")
+    .mockImplementation(async (_blogId, rubricId: string) => {
+      held.splice(
+        held.findIndex((one) => one.id === rubricId),
+        1,
+      );
+      return { data: null, error: null };
+    }) as unknown as Mock;
+  vi.spyOn(blogApi, "getBlog").mockImplementation(
+    async () => ({ data: { resource: served() }, error: null }) as never,
   );
 
   return mount(RubricsSection, { global: { plugins: [pinia], stubs } });
@@ -133,7 +120,7 @@ describe("RubricsSection create", () => {
     await create(wrapper, "Черновики");
 
     expect(created).toHaveBeenCalledTimes(1);
-    expect(created.mock.calls[0][0]).toEqual({
+    expect(created.mock.calls[0][1]).toEqual({
       title: "Черновики",
       sortOrder: 3,
     });
@@ -156,17 +143,14 @@ describe("RubricsSection create", () => {
   it("keeps the name in the field and speaks up when the server refuses", async () => {
     const wrapper = mountSection();
     created.mockResolvedValue({
-      status: 400,
-      title: "",
-      type: "",
-      traceId: "t",
-    } as GeneralError);
+      data: null,
+      error: { status: 400, title: "", type: "", traceId: "t" } as GeneralError,
+    });
 
     await create(wrapper, "Черновики");
 
     expect(titles(wrapper)).toEqual(["Бестиарий", "Хроники"]);
-    // Where the press was, and in no plate (the owner's rule of 26 September
-    // 2026, UI_STANDARDS "Всплывающие сообщения").
+    // Where the press was, and in no plate.
     expect(wrapper.get(".add-row + .action-result").text()).toBe(
       "Не удалось создать рубрику",
     );
@@ -196,7 +180,7 @@ describe("RubricsSection delete", () => {
     await wrapper.find(".dialog-btn-submit").trigger("click");
     await flushPromises();
 
-    expect(deleted).toHaveBeenCalledWith("r-1", {
+    expect(deleted).toHaveBeenCalledWith("the-blog", "r-1", {
       ownsRefusal: true,
       ownsRateLimit: true,
     });
@@ -208,11 +192,9 @@ describe("RubricsSection delete", () => {
   it("says a refused delete in the window, which stays open over the list", async () => {
     const wrapper = mountSection();
     deleted.mockResolvedValue({
-      status: 400,
-      title: "",
-      type: "",
-      traceId: "t",
-    } as GeneralError);
+      data: null,
+      error: { status: 400, title: "", type: "", traceId: "t" } as GeneralError,
+    });
 
     await wrapper.findAll(".remove-btn")[0].trigger("click");
     await wrapper.find(".dialog-btn-submit").trigger("click");

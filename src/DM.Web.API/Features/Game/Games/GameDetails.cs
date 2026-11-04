@@ -1,8 +1,8 @@
 using System;
 using System.Collections.Generic;
+using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
-using DM.Web.API.Features.Game.AttributeSchemas;
 
 namespace DM.Web.API.Features.Game.Games;
 
@@ -76,13 +76,8 @@ public class GameDetails : Game
     /// Whether the viewer is on the game's blacklist. False for a guest.
     /// </summary>
     /// <remarks>
-    /// Lets the page leave out what the list closes - the application, the edit
-    /// of one's own comment or application - instead of offering it and
-    /// refusing it after. The server asks the same rule on both writes
-    /// (GameRoleExtensions.IsBlacklisted), so the flag decides what is offered,
-    /// never what is allowed. On the details only: every page that offers one of
-    /// them reads the game's details. The comment form goes by
-    /// <see cref="Viewer" />, which answers for every reason at once.
+    /// Decides what the page offers, never what is allowed: the writes ask
+    /// GameRoleExtensions.IsBlacklisted themselves.
     /// </remarks>
     public bool ViewerBlacklisted { get; set; }
 
@@ -108,8 +103,9 @@ public class GameViewer
     public bool CanComment { get; set; }
 
     /// <summary>
-    /// Whether the viewer may review the game: past the probation, with a post
-    /// of his in it, and no review of his there yet. False for a guest
+    /// Whether the viewer may review the game: the game closed, past the
+    /// probation, with a post of his in it, and no review of his there yet.
+    /// False for a guest
     /// </summary>
     public bool CanReview { get; set; }
 }
@@ -122,7 +118,7 @@ public class CharacterShortInfo
     /// <summary>
     /// Character identifier
     /// </summary>
-    public System.Guid Id { get; set; }
+    public Guid Id { get; set; }
 
     /// <summary>
     /// Character name
@@ -140,5 +136,5 @@ public class CharacterShortInfo
     /// <summary>
     /// Character status
     /// </summary>
-    public DM.Domain.Core.Enums.CharacterStatus Status { get; set; }
+    public CharacterStatus Status { get; set; }
 }

@@ -1,5 +1,5 @@
-﻿<template>
-  <section class="section">
+<template>
+  <section id="username-change" ref="sectionEl" class="section">
     <h2 class="section-title">Смена имени пользователя</h2>
 
     <div class="username-change-content">
@@ -7,19 +7,16 @@
         Текущее имя: <strong>{{ user.username }}</strong>
       </div>
 
-      <!-- Loading state -->
-      <div v-if="loading" class="loading-state">Загрузка...</div>
+      <!-- The form waits in its shape, without a word. -->
+      <AccountSectionSkeleton v-if="loading" shape="fields" :count="1" />
 
-      <!-- The state could not be read: offering the form here would promise
-           something the server may refuse. -->
-      <div v-else-if="loadError" class="status-card status-card--failed">
-        <div class="status-header">
-          <span class="status-title">{{ loadError }}</span>
-        </div>
-        <p class="status-note">Обновите страницу, чтобы попробовать снова</p>
-      </div>
+      <!-- The state could not be read: no form over something the server may refuse. -->
+      <ErrorState
+        v-else-if="loadError"
+        :message="loadError"
+        :retry="loadExistingRequest"
+      />
 
-      <!-- Pending request status card -->
       <div
         v-else-if="existingRequest && existingRequest.status === 'Pending'"
         class="status-card status-card--pending"
@@ -43,7 +40,6 @@
         </p>
       </div>
 
-      <!-- Rejected request notification -->
       <div
         v-else-if="existingRequest && existingRequest.status === 'Rejected'"
         class="status-card status-card--rejected"
@@ -64,7 +60,6 @@
         <p class="status-note">Вы можете подать новую заявку</p>
       </div>
 
-      <!-- Approved notification -->
       <div
         v-else-if="existingRequest && existingRequest.status === 'Approved'"
         class="status-card status-card--approved"
@@ -78,7 +73,6 @@
         </p>
       </div>
 
-      <!-- Expired notification -->
       <div
         v-else-if="existingRequest && existingRequest.status === 'Expired'"
         class="status-card status-card--expired"
@@ -99,7 +93,6 @@
         <p class="status-note">{{ expiryNote }}</p>
       </div>
 
-      <!-- Completed notification -->
       <div
         v-else-if="existingRequest && existingRequest.status === 'Completed'"
         class="status-card status-card--completed"
@@ -112,7 +105,6 @@
 
       <ActionResult :text="conflictRefusal" />
 
-      <!-- Create request form -->
       <form
         v-if="canCreateRequest"
         class="request-form"
@@ -133,10 +125,12 @@
             v-model="reason"
             :disabled="submitting"
             rows="3"
-            maxlength="500"
+            :maxlength="USERNAME_CHANGE_REASON_MAX_LENGTH"
             placeholder="Объясните, почему хотите сменить имя..."
           ></textarea>
-          <div class="char-count">{{ reason.length }}/500</div>
+          <div class="char-count">
+            {{ reason.length }}/{{ USERNAME_CHANGE_REASON_MAX_LENGTH }}
+          </div>
           <template #hint>Причина смены имени видна модераторам</template>
         </FormField>
 
@@ -159,20 +153,20 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from "vue";
+import { ref, computed, onBeforeUnmount, onMounted } from "vue";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { FormField } from "@/shared/ui/Form";
-import {
-  describeFailure,
-  describeRateLimit,
-  refusalHere,
-} from "@/shared/lib/errors";
+import { describeFailure, refusalHere } from "@/shared/lib/errors";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import type { User } from "@/shared/api/models/community";
-import type { GeneralError } from "@/shared/api/models/common";
 import type { UsernameChangeRequest } from "@/shared/api/models/account";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { describeLoadFailure, OWNED_BY_CARD } from "./loadFailure";
+import AccountSectionSkeleton from "./AccountSectionSkeleton.vue";
+import { USERNAME_CHANGE_REASON_MAX_LENGTH } from "@/shared/lib/constants/user";
+import { holdAnchor } from "@/shared/lib/scroll";
 
 defineProps<{
   user: User;
@@ -184,31 +178,15 @@ const existingRequest = ref<UsernameChangeRequest | null>(null);
 const reason = ref("");
 const submitting = ref(false);
 const submitError = ref<string | null>(null);
-/**
- * Why the request was turned down as a conflict, under the card of the state
- * that stands in the form's place once the section is read again.
- */
+/** A conflict's refusal, under the card that replaces the form once the state is read again. */
 const conflictRefusal = ref<string | null>(null);
 const loadError = ref<string | null>(null);
 
 const LOAD_FAILED = "Не удалось узнать состояние заявки";
 
-/**
- * The read this section answers for itself.
- *
- * A failed read is a card in place of the state and the gate that shuts the
- * form under it, so the card is the one carrier of the failure and a plate in
- * the corner has nothing to add to it. Set here and not inside the request: the
- * profile page reads the same thing and shows nothing about a failure, and a
- * flag fixed in the service would take its plate away too.
- */
-const OWNED_BY_CARD = { ownsRefusal: true, ownsRateLimit: true } as const;
-
-// A request in flight is one awaiting a moderator, or an approval whose name is
-// not yet chosen: those hold a change already asked for. Every other state holds
-// nothing - rejection and both expiries granted no name, completion spent its
-// grant - and asking again is the only way forward. The server draws the same
-// line, and used to be the more permissive of the two.
+// A request awaiting a moderator, or an approval whose name is not chosen yet,
+// holds a change already asked for; every other state lets the reader ask again,
+// as the server does.
 const IN_FLIGHT = ["Pending", "Approved"];
 
 const canCreateRequest = computed(() => {
@@ -224,43 +202,21 @@ const expiryNote = computed(() => {
     : "Модераторы не рассмотрели заявку за отведенный срок. Вы можете подать новую.";
 });
 
-const canSubmit = computed(() => {
-  return reason.value.trim().length >= 10 && !submitting.value;
-});
+const canSubmit = computed(() => !!reason.value.trim() && !submitting.value);
 
+const sectionEl = ref<HTMLElement | null>(null);
+let releaseAnchor = () => {};
+
+// The profile links here ("Сменить имя пользователя"): the blocks above load
+// after the router has scrolled, so the section holds its place until they do.
+// The address is read as the router has already written it for this page.
 onMounted(async () => {
+  const section = sectionEl.value;
+  if (section?.parentElement && window.location.hash === `#${section.id}`)
+    releaseAnchor = holdAnchor(section, section.parentElement);
   await loadExistingRequest();
 });
-
-/**
- * What the card says about a read that failed.
- *
- * A failed read used to be indistinguishable from "never asked": the section
- * offered the form to someone whose request was already in flight, and the
- * server refused it with a conflict that landed as a validation note under the
- * reason field, where there was nothing to correct. So the card stands in place
- * of the state and closes the form.
- *
- * Which makes it the one carrier of the failure, and it says what the server
- * said: a refusal names why this block is shut, where the section's own line
- * names only that something is missing. Nothing stands over it repeating that -
- * the request took the refusal and the limit over from the interceptor.
- *
- * Two statuses keep the section's own line, because the interceptor still
- * speaks for them and knows more about them than this block does: a session
- * that ended is about the session, and a request that never went out has no
- * sentence of its own.
- *
- * The wait is built rather than relayed: the seconds the server named ride in
- * Retry-After and the transport copies them onto the failure, while the title
- * of a 429 carries no number at all.
- */
-function describeLoadFailure(failure: GeneralError): string {
-  if (failure.status === 0 || failure.status === 401) return LOAD_FAILED;
-  if (failure.status === 429)
-    return describeRateLimit(failure.retryAfterSeconds);
-  return describeFailure(failure, LOAD_FAILED);
-}
+onBeforeUnmount(() => releaseAnchor());
 
 async function loadExistingRequest() {
   loading.value = true;
@@ -268,7 +224,7 @@ async function loadExistingRequest() {
     await accountApi.getUsernameChangeRequest(OWNED_BY_CARD);
   loading.value = false;
 
-  loadError.value = error ? describeLoadFailure(error) : null;
+  loadError.value = error ? describeLoadFailure(error, LOAD_FAILED) : null;
   existingRequest.value = data ?? null;
 }
 
@@ -280,15 +236,13 @@ async function submitRequest() {
   conflictRefusal.value = null;
 
   const { data, error } = await accountApi.createUsernameChangeRequest({
-    reason: reason.value.trim(),
+    reason: reason.value,
   });
 
   submitting.value = false;
 
   if (error) {
-    // A conflict means the section is looking at a stale state - the request was
-    // filed elsewhere, or an approval is still live. Re-read it and let the card
-    // say so, with the server's sentence under it, in the place the form stood.
+    // A conflict: the state is stale, so it is read again and the card says so with the server's sentence.
     if (error.status === 409) {
       await loadExistingRequest();
       conflictRefusal.value = describeFailure(
@@ -297,9 +251,7 @@ async function submitRequest() {
       );
       return;
     }
-    // Under the reason field, the refusals the interceptor speaks for included:
-    // the form and the reason typed into it stay on screen, and the plate the
-    // interceptor held for the same refusal is taken down.
+    // Under the reason field, the refusals the interceptor speaks for included; the reason stays typed.
     submitError.value = refusalHere(
       error,
       "Не удалось отправить заявку на смену имени",
@@ -315,7 +267,6 @@ async function submitRequest() {
 </script>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 @use "../AccountPage.styles" as *
 
 .username-change-content
@@ -329,14 +280,8 @@ async function submitRequest() {
   strong
     color: $text
 
-.loading-state
-  padding: $medium
-
-// The state of the request is written in words, as a state is across the
-// site, and not drawn as a panel: no fill, no frame, no mark beside it. The
-// sentence takes the colour of what it means: green for what is granted, red
-// for what was refused or could not be read, grey for what lapsed, the text's
-// own for what still waits.
+// The state in words, not a panel: green for what is granted, red for a
+// refusal, grey for what lapsed, the text's own for what waits.
 .status-card
   margin-bottom: $medium
 
@@ -344,10 +289,9 @@ async function submitRequest() {
   margin-bottom: $small
 
 .status-title
-  font-weight: 600
+  font-weight: 700
 
-  .status-card--rejected &,
-  .status-card--failed &
+  .status-card--rejected &
     color: $accent-red
 
   .status-card--approved &,
@@ -377,7 +321,6 @@ async function submitRequest() {
   font-size: $secondary-font-size
   color: $text-muted
 
-// Form
 .request-form
   display: flex
   flex-direction: column
@@ -397,8 +340,7 @@ async function submitRequest() {
   font-size: $secondary-font-size
   color: $text-muted
 
-// At the width of its caption, as every button of a page is: the column would
-// otherwise stretch it across the card.
+// At the width of its caption, not stretched across the card.
 .request-submit
   align-self: flex-start
 </style>

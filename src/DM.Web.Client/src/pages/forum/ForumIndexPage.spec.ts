@@ -2,14 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The forum index offered "Отметить все как прочитанное" as a button over the
- * table to every reader who had signed in, shaded where the forum was read to
- * the end: a control on the screen that nobody could press. The same action on
- * the notifications page is a line under the heading, and the forum has it the
- * same way now: "Непрочитанных: N | Отметить прочитанными", there only while
- * some comment is unread (shared/ui/UnreadLine holds the line itself).
- */
+// The forum index: "Непрочитанных: N | Отметить прочитанными" under the
+// heading while some comment is unread (shared/ui/UnreadLine holds the line).
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
@@ -45,10 +39,7 @@ afterEach(() => {
   localStorage.clear();
 });
 
-/**
- * The index under the heading of the forum shell, with the boards in the store
- * and `signedIn` deciding whether a reader is signed in.
- */
+/** The index under the forum shell's heading, the boards in the store. */
 async function render(unread: number[], signedIn = true) {
   if (signedIn) {
     localStorage.setItem(
@@ -93,10 +84,9 @@ describe("marking the forum read", () => {
     vi.restoreAllMocks();
   });
 
-  it("offers no button, shaded or not", async () => {
+  it("offers nothing to mark when nothing is unread", async () => {
     const { wrapper } = await render([0, 0]);
 
-    expect(wrapper.text()).not.toContain("Отметить все как прочитанное");
     expect(wrapper.find("button").exists()).toBe(false);
     expect(wrapper.find(".unread-line").exists()).toBe(false);
   });
@@ -107,7 +97,6 @@ describe("marking the forum read", () => {
     expect(unreadLine(wrapper)).toBe(
       "Непрочитанных: 15 | Отметить прочитанными",
     );
-    expect(wrapper.text()).not.toContain("Отметить все как прочитанное");
   });
 
   it("has nothing to mark for a guest, whom the server answers with totals", async () => {

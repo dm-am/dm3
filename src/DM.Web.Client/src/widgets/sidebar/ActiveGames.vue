@@ -4,7 +4,7 @@
     token="ActiveGames"
     title="Активные игры"
     :lines="5"
-    :items="store.activeGames"
+    :items="active"
     :errored="!!store.activeGamesError"
     empty="Активных игр пока нет"
     :retry="() => store.fetchActiveGames(true)"
@@ -19,11 +19,7 @@
     forward-label="Все активные игры"
   >
     <template #item="{ item }">
-      <SidebarGameLink
-        :game="item"
-        :counters="true"
-        :always-show-counters="true"
-      />
+      <SidebarGameLink :game="item" :always-show-counters="true" />
     </template>
   </SidebarEntityList>
 </template>
@@ -31,39 +27,35 @@
 <script setup lang="ts">
 import SidebarEntityList from "./SidebarEntityList.vue";
 import SidebarGameLink from "./SidebarGameLink.vue";
-import { useGamesStore } from "@/entities/game";
+import { SIDEBAR_GAME_ROWS, useGamesStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import { onMounted, watch } from "vue";
 import { useRoute } from "vue-router";
+import { useFilledRows, useLeftSidebarGames } from "./leftSidebarRows";
 
 const store = useGamesStore();
 const userStore = useAuthStore();
 const route = useRoute();
 
-onMounted(() => {
-  if (!userStore.user) {
-    store.fetchActiveGames();
-  }
+// Without the games a block above shows; for a viewer, who has no such block,
+// the list asks the server for no more rows.
+const { active, aboveActive } = useLeftSidebarGames();
+useFilledRows({
+  items: () => (userStore.user ? null : store.activeGames),
+  rows: () => active.value,
+  above: () => aboveActive.value,
+  limit: SIDEBAR_GAME_ROWS.active,
+  take: () => store.activeGamesTake,
+  widen: store.widenActiveGames,
 });
 
-watch(
-  () => userStore.user,
-  (user) => {
-    if (!user) {
-      store.fetchActiveGames();
-    }
-  },
-);
+// The block is the guest's alone.
+function fetchForGuest() {
+  if (!userStore.user) store.fetchActiveGames();
+}
 
-// Re-trigger on navigation so a failed fetch gets another chance once the
-// TTL cache considers it stale. Guarded the same way as the mount fetch —
-// this block only renders (and fetches) for guests.
-watch(
-  () => route.fullPath,
-  () => {
-    if (!userStore.user) {
-      store.fetchActiveGames();
-    }
-  },
-);
+onMounted(fetchForGuest);
+watch(() => userStore.user, fetchForGuest);
+// On navigation too, so a failed fetch gets another chance once the cache is stale.
+watch(() => route.fullPath, fetchForGuest);
 </script>

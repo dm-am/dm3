@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Domain.Core.Chats;
 using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Persistence.Entities.Messaging;
@@ -12,13 +11,6 @@ namespace DM.Infrastructure.Persistence.Entities.Messaging;
 [Table("Chats")]
 public class Chat
 {
-    /// <summary>
-    /// Well-known ID for global chat. Declared by the domain and mirrored here, so
-    /// that a query written over this entity keeps naming it without the kernel and
-    /// a service that does not reference persistence can still name it at all.
-    /// </summary>
-    public static readonly Guid GlobalChatId = WellKnownChats.GlobalChatId;
-
     /// <summary>
     /// Chat identifier
     /// </summary>
@@ -61,15 +53,9 @@ public class Chat
     [InverseProperty(nameof(UserChatLink.Chat))]
     public virtual ICollection<UserChatLink> UserLinks { get; set; } = [];
 
-    /// <summary>
-    /// Messages
-    /// </summary>
     [InverseProperty(nameof(Message.Chat))]
     public virtual ICollection<Message> Messages { get; set; } = [];
 
-    /// <summary>
-    /// Last message
-    /// </summary>
     [ForeignKey(nameof(LastMessageId))]
     public virtual Message? LastMessage { get; set; }
 }

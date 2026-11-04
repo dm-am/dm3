@@ -1,57 +1,13 @@
 <script setup lang="ts">
-/**
- * CalendarGrid — shared month-grid calendar core (single source of truth).
- *
- * Renders the panel with month navigation (‹ / ›), weekday captions and the
- * weeks of the month on view. Picking a day emits the date as a YYYY-MM-DD
- * string. Days outside [min, max] are disabled; the selected day is filled,
- * today is ringed.
- *
- * Only the weeks of the month are drawn, four to six rows, and the days of
- * the neighbouring months are not drawn at all. The grid used to be a fixed
- * six weeks, so a month of five left a whole row of the next one in grey, and
- * with the future out of reach the reader saw two grey rows under the month
- * and could not tell which of them were the next month and which were locked.
- * The panel now changes height between months; it grows downward, so the
- * header and its arrows stay where the pointer is.
- *
- * Three levels, not one. "Сентябрь" in the header is a button into a grid of
- * months and "2026" beside it a button straight into a grid of years; the
- * year in the month grid's header leads there too, and picking drops back a
- * level. Without them the only way to another year was the ‹ arrow, one
- * month per click — a birthday in 1970 is 670 clicks away. Escape on the
- * months or the years goes back down to the days of the month that was on
- * screen, and is taken here: the consumer that closes on Escape closes only
- * from the days.
- *
- * The two grids are MonthYearGrid, the same panel the statistics period
- * picker shows; they are not re-drawn here. Bounds are handed to it as years
- * and months: absent min/max means open-ended paging, which is what a date
- * field usually needs and what the statistics picker never does.
- *
- * The keyboard reaches the day grid as one stop of Tab (a roving tabindex):
- * the arrows walk days and weeks, PageUp and PageDown months (with Shift,
- * years), Home and End the ends of the week, Enter and Space pick. Escape on
- * the days is the consumer's, since the consumer knows where focus came from.
- *
- * A range (`range`) is drawn from `rangeStart` and `rangeEnd`: both ends
- * filled, a band between them. While `rangeOpen`, the next pick closes the
- * range at `rangeStart`, and the band follows the pointer (or the keyboard)
- * to show the range that pick would make. Which click is which is the
- * consumer's business (DateRangePicker); every pick is emitted the same way.
- *
- * Positioning is the consumer's job: the chat's "Перейти к дате" places it as
- * an absolute popover, DateInput as a fixed one, and DateRangePicker sets it
- * into the filter panel (`embedded`, no panel of its own).
- */
+// Days, months and years: the header buttons climb a level, Escape steps back down and goes no further.
+// Only the weeks of the month are drawn, so the panel changes height and grows downward under the arrows.
 import { ref, computed, watch, nextTick, onMounted } from "vue";
 import dayjs from "dayjs";
 import { RU_MONTHS_CAPITALIZED } from "@/shared/lib/utils/months";
-import { siteTime } from "@/shared/lib/utils/datetime";
+import { DAY, siteTime } from "@/shared/lib/utils/datetime";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { MonthYearGrid } from "@/shared/ui/MonthYearPicker";
 
-/** Which grid is on screen: days, the months of a year, or a block of years. */
 type Level = "days" | "months" | "years";
 
 const props = withDefaults(
@@ -97,8 +53,6 @@ const props = withDefaults(
 const emit = defineEmits<{ "update:modelValue": [value: string] }>();
 
 const WEEKDAYS = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
-const MONTHS = RU_MONTHS_CAPITALIZED;
-const DAY = "YYYY-MM-DD";
 
 interface DayCell {
   value: string;
@@ -128,8 +82,7 @@ const anchor = computed(() =>
   props.range ? props.rangeEnd || props.rangeStart : props.modelValue,
 );
 
-// Month currently shown in the grid (first day of that month). Kept as a
-// plain calendar date: the grid counts days, and a day has no zone.
+// A plain calendar date: the grid counts days, and a day has no zone.
 const viewMonth = ref(
   dayjs(anchor.value || props.openOn || todayValue.value).startOf("month"),
 );
@@ -140,16 +93,12 @@ const pointerDay = ref<string | null>(null);
 /** The day that holds the grid's one Tab stop, once the keyboard moved it. */
 const focusDay = ref<string | null>(null);
 
-/**
- * The last two days picked here. A pick comes back as a prop, and a prop that
- * changes is otherwise a date typed into a field, which the grid turns to. The
- * grid must not turn to its own picks: the second click of a range can land in
- * another month than the first, the two ends swap, and the one that changes
- * is the earlier click, out of view.
- */
+/** The last picks made here: the grid turns to a changed prop (a typed date), never to its own picks. */
 const ownPicks: string[] = [];
 
-const monthName = computed(() => MONTHS[viewMonth.value.month()]);
+const monthName = computed(
+  () => RU_MONTHS_CAPITALIZED[viewMonth.value.month()],
+);
 
 // The month and year the month and year grids fill: those of the date, not of
 // the page on view. An empty birthday opens on the years, and a year filled
@@ -162,21 +111,11 @@ const markedMonth = computed(() =>
 );
 const viewYear = computed(() => viewMonth.value.year());
 
-// The day limits as the month/year grids read them. Undefined stays
-// undefined: a calendar with no max may page into any year, and a birthday
-// field has to reach the far side of the century.
-const maxYear = computed(() =>
-  props.max ? dayjs(props.max).year() : undefined,
-);
-const maxMonth = computed(() =>
-  props.max ? dayjs(props.max).month() + 1 : undefined,
-);
-const minYear = computed(() =>
-  props.min ? dayjs(props.min).year() : undefined,
-);
-const minMonth = computed(() =>
-  props.min ? dayjs(props.min).month() + 1 : undefined,
-);
+// Undefined stays undefined: a birthday field has to page into any year.
+const yearMonthOf = (day: string | undefined) =>
+  day ? { year: dayjs(day).year(), month: dayjs(day).month() + 1 } : undefined;
+const minBound = computed(() => yearMonthOf(props.min));
+const maxBound = computed(() => yearMonthOf(props.max));
 
 function withinBounds(value: string): boolean {
   if (props.min && value < props.min) return false;
@@ -288,12 +227,7 @@ function focusGrid() {
   });
 }
 
-/**
- * Swap the grid on screen. The control that asked for it is gone with the
- * grid it stood in, and a focus left on a removed button falls to the page,
- * where Escape and the arrows no longer reach the calendar. So a focus that
- * was inside moves into the new grid; a focus that was elsewhere stays.
- */
+/** Swaps the grid; a focus inside moves into the new one, or it would fall to the page. */
 function setLevel(next: Level) {
   const holdsFocus = !!rootRef.value?.contains(document.activeElement);
   level.value = next;
@@ -312,11 +246,7 @@ function pickYear(year: number) {
   setLevel("months");
 }
 
-/**
- * Escape on the months or the years goes down to the days of the month that
- * was on screen, and goes no further: the owner closes the calendar on
- * Escape, and would close it under a reader who only wanted to step back.
- */
+/** Steps down to the days and goes no further: the owner closes the calendar on Escape. */
 function onRootKeydown(e: KeyboardEvent) {
   if (e.key !== "Escape" || level.value === "days") return;
   e.preventDefault();
@@ -391,11 +321,7 @@ const canGoPrev = computed(() => {
   return viewMonth.value.isAfter(dayjs(props.min).startOf("month"));
 });
 
-/**
- * A day set from outside (typed into a field): show it among its days, from
- * whichever grid is on screen. An empty birthday opens on the years, and the
- * date typed while they are open is what the reader wants to see.
- */
+/** A day set from outside (typed): shown among its days, whichever grid is on screen. */
 function reveal(value: string | null | undefined) {
   if (!value || ownPicks.includes(value)) return;
   level.value = "days";
@@ -506,19 +432,17 @@ defineExpose({ focusGrid });
       </div>
     </template>
 
-    <!-- The two upper levels are one component in two modes. The key is
-         load-bearing: without it Vue patches the same instance across the
-         branches and the grid keeps the year it was navigated to. -->
+    <!-- The key keeps the year from leaking between the two modes of one instance. -->
     <MonthYearGrid
       v-else
       :key="level"
       :mode="level === 'months' ? 'month' : 'year'"
       :year="viewYear"
       :month="viewMonth.month() + 1"
-      :min-year="minYear"
-      :min-month="minMonth"
-      :max-year="maxYear"
-      :max-month="maxMonth"
+      :min-year="minBound?.year"
+      :min-month="minBound?.month"
+      :max-year="maxBound?.year"
+      :max-month="maxBound?.month"
       :marked-year="markedYear"
       :marked-month="markedMonth"
       year-navigable
@@ -531,14 +455,10 @@ defineExpose({ focusGrid });
 
 <style scoped lang="sass">
 @use "@/assets/styles/Filters" as *
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 @use "@/shared/ui/DatePicker/calendar" as *
 
-// Panel visuals live here so every consumer renders the identical calendar;
-// only positioning (absolute/fixed) is added by the consumer. The ground,
-// frame, corners and shadow are the site's one floating panel. Border-box, so
-// the width is the panel's whole outer width and a date field can stand
-// exactly as wide ($calendar-width).
+// Border-box, so a date field can stand exactly as wide ($calendar-width).
 .calendar-grid--panel
   box-sizing: border-box
   width: $calendar-width
@@ -560,10 +480,7 @@ defineExpose({ focusGrid });
   text-align: center
   vertical-align: middle
 
-// A button and not a link — it opens a grid, it does not go anywhere — so
-// it takes the hover of the arrows beside it and keeps the label's own ink
-// and weight. The chevron after the word is the one of a drop-down list
-// (Select): it says there is a choice behind the word.
+// A button, not a link: it opens a grid. The chevron is Select's: there is a choice behind the word.
 .dp-level
   display: inline-block
   height: $grid-step * 6
@@ -586,40 +503,12 @@ defineExpose({ focusGrid });
   margin-left: $minor
 
 .dp-chevron
-  width: 14px
-  height: 14px
-  margin-left: $tiny
-  vertical-align: -2px
-  color: $text-muted
+  +calendar-chevron
 
 .dp-nav
-  vertical-align: middle
-  width: $grid-step * 6
-  height: $grid-step * 6
-  border: none
-  border-radius: $border-radius
-  background: transparent
-  color: $link
-  font-size: $font-size
-  cursor: pointer
-  line-height: 1
+  +calendar-nav($grid-step * 6)
 
-  &:hover:not(:disabled)
-    background-color: $bg-element-accent
-
-  &:disabled
-    color: $text-muted
-    cursor: default
-
-// The shared month/year panel is drawn for the 220px statistics popover; this
-// one is wider and its day header uses smaller arrows. Line the two headers up
-// so nothing changes size under the cursor when the level does.
-//
-// Nested under the root on purpose. A bare `:deep(.myp-nav)` compiles to
-// `[data-v-here] .myp-nav`, which weighs exactly what the panel's own
-// `.myp-nav[data-v-there]` weighs, and a tie is settled by whichever
-// stylesheet the bundler happened to emit second. Under `.calendar-grid` the
-// override outweighs it and the order stops mattering.
+// Lines the shared month/year header up with this one; nested under the root to outweigh the panel's rule.
 .calendar-grid
   :deep(.myp-nav)
     width: $grid-step * 6
@@ -628,8 +517,7 @@ defineExpose({ focusGrid });
   :deep(.myp-year)
     width: calc(100% - #{$grid-step * 12})
 
-  // Twelve cells over the area of a month of days: without a floor the rows
-  // collapse to the height of the words and the panel halves.
+  // A floor, or the twelve rows collapse to their words and the panel halves.
   :deep(.myp-grid)
     grid-auto-rows: minmax(#{$grid-step * 9}, 1fr)
 
@@ -643,11 +531,7 @@ defineExpose({ focusGrid });
   font-size: $tertiary-font-size
   color: $text-muted
 
-// 1px is a hairline between the weeks, not a spacing step, and stays as it
-// is: the cells are aspect-ratio squares in a seven-column 1fr grid, so the
-// smallest step of the scale ($tiny) would shrink every cell with it. There is
-// none between the days of a week: the band of a range runs along the week
-// unbroken, as one strip from end to end.
+// A 1px hairline between weeks; none between days, so a range's band runs unbroken.
 .dp-grid
   display: grid
   grid-template-columns: repeat(7, 1fr)
@@ -656,67 +540,36 @@ defineExpose({ focusGrid });
 .dp-day
   aspect-ratio: 1
   padding: 0
-  border: none
-  border-radius: $border-radius
-  background: transparent
-  color: $text
-  cursor: pointer
-  font: inherit
-  font-size: $secondary-font-size
+  +calendar-cell
+    // Today is ringed and not filled: the fill belongs to the selection, which
+    // is what the reader is about to act on and has to be the stronger mark.
+    &.today
+      font-weight: bold
+      color: $link
+      box-shadow: inset 0 0 0 1px $link
 
-  &:hover:not(:disabled):not(.selected)
-    background-color: $bg-highlight-blue
+    // The band of a range: the days between the ends, and an end the pointer
+    // is only previewing. Square where it meets the next day of the band.
+    &.in-range,
+    &.range-from:not(.selected),
+    &.range-to:not(.selected)
+      background-color: $bg-highlight-blue
 
-  // The grid's cells stand flush against each other, so the site's ring is
-  // pulled inside the cell (UI_STANDARDS, "Клавиатура и фокус"): 2px, a step
-  // heavier than the 1px ring of today, so the two never read as one.
-  &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
+    &.in-range
+      border-radius: 0
 
-  // Today is ringed and not filled: the fill belongs to the selection, which
-  // is what the reader is about to act on and has to be the stronger mark.
-  &.today
-    font-weight: bold
-    color: $link
-    box-shadow: inset 0 0 0 1px $link
+    &.range-from
+      border-top-right-radius: 0
+      border-bottom-right-radius: 0
 
-  // The band of a range: the days between the ends, and an end the pointer
-  // is only previewing. Square where it meets the next day of the band.
-  &.in-range,
-  &.range-from:not(.selected),
-  &.range-to:not(.selected)
-    background-color: $bg-highlight-blue
+    &.range-to
+      border-top-left-radius: 0
+      border-bottom-left-radius: 0
 
-  &.in-range
-    border-radius: 0
-
-  &.range-from
-    border-top-right-radius: 0
-    border-bottom-right-radius: 0
-
-  &.range-to
-    border-top-left-radius: 0
-    border-bottom-left-radius: 0
-
-  // The band is the pointer's own tint, so a day of it answers the pointer
-  // with the overlay every control lays over its ground.
-  &.in-range:hover:not(:disabled),
-  &.range-from:not(.selected):hover:not(:disabled),
-  &.range-to:not(.selected):hover:not(:disabled)
-    background-image: linear-gradient($hover-overlay, $hover-overlay)
-
-  // Out of reach the way everything out of reach is on the site: the
-  // standard dimming and the plain pointer. A cell has no box of its own to
-  // hatch, only its number.
-  &:disabled
-    color: $text-muted
-    opacity: $disabled-opacity
-    cursor: default
-
-  // The picked day, and both ends of a range: the fill of the main action,
-  // its ink and weight, its lighter hover and its ring a pixel out, which is
-  // what keeps the ring visible on this fill.
-  &.selected
-    +button-primary
+    // The band is the pointer's own tint, so a day of it answers the pointer
+    // with the overlay every control lays over its ground.
+    &.in-range:hover:not(:disabled),
+    &.range-from:not(.selected):hover:not(:disabled),
+    &.range-to:not(.selected):hover:not(:disabled)
+      background-image: linear-gradient($hover-overlay, $hover-overlay)
 </style>

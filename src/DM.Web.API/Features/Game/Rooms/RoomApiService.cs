@@ -6,13 +6,11 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Rooms;
 
-/// <inheritdoc />
-internal class RoomApiService : IRoomApiService
+public class RoomApiService
 {
     private readonly IRoomService _roomService;
     private readonly RoomMapper _mapper;
 
-    /// <inheritdoc />
     public RoomApiService(
         IRoomService roomService,
         RoomMapper mapper)
@@ -21,21 +19,18 @@ internal class RoomApiService : IRoomApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Room>> GetAll(Guid gameId)
     {
         var rooms = await _roomService.GetAllAsync(gameId);
         return new ListEnvelope<Room>(rooms.Select(_mapper.ToRoom));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Room>> Get(Guid roomId)
     {
         var room = await _roomService.GetAsync(roomId);
         return new Envelope<Room>(_mapper.ToRoom(room));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Room>> Create(Guid gameId, CreateRoomRequest room)
     {
         var createRoom = _mapper.ToCreateRoom(room);
@@ -44,7 +39,6 @@ internal class RoomApiService : IRoomApiService
         return new Envelope<Room>(_mapper.ToRoom(createdRoom));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Room>> Update(Guid roomId, UpdateRoomRequest request)
     {
         var updateRoom = _mapper.ToUpdateRoom(request);
@@ -53,6 +47,5 @@ internal class RoomApiService : IRoomApiService
         return new Envelope<Room>(_mapper.ToRoom(updatedRoom));
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid roomId) => _roomService.DeleteAsync(roomId);
 }

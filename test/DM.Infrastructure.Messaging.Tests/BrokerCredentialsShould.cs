@@ -1,5 +1,4 @@
 using System;
-using DM.Infrastructure.Messaging;
 using AwesomeAssertions;
 using Xunit;
 

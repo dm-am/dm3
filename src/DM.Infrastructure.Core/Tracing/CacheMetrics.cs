@@ -7,24 +7,15 @@ namespace DM.Infrastructure.Core.Tracing;
 /// Metrics of the in-process cache.
 /// </summary>
 /// <remarks>
-/// A cache is the one component whose failure mode is being useless rather than
-/// being broken: every read still answers, every page still renders, and the only
-/// difference between an entry that serves a thousand readers and one nothing
-/// ever hits again is a number nobody was counting. Both directions cost - a
-/// cache nobody hits is latency and memory spent for nothing, and one everything
-/// hits is where a wrong entry is served the longest.
-///
-/// Counted by the type of what is stored rather than by the key. The keys carry
-/// usernames and identifiers, and a label built from one would open a Prometheus
-/// series per reader; the type is bounded by the code. The cost of that choice is
-/// that two families storing the same shape are counted together.
+/// Counted by the type of the entry, not by the key, which carries user names and
+/// would open a series per reader.
 /// </remarks>
 public static class CacheMetrics
 {
     /// <summary>Meter name for OTel registration.</summary>
     public const string MeterName = "DM.Cache";
 
-    private static readonly Meter Meter = new(MeterName, "1.0.0");
+    private static readonly Meter Meter = new(MeterName, DmActivitySource.Version);
 
     /// <summary>
     /// Cache lookups. Attributes: <c>result</c> (hit or miss), <c>entry</c> (type

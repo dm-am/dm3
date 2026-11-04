@@ -6,3 +6,5 @@ export { default as RoomLink } from "./RoomLink.vue";
 export { default as CharacterCard } from "./CharacterCard.vue";
 export { default as CharacterSheetFields } from "./CharacterSheetFields.vue";
 export { default as TagSelector } from "./TagSelector.vue";
+export { default as DiceRolls } from "./DiceRolls.vue";
+export { default as DiceComposer } from "./DiceComposer.vue";

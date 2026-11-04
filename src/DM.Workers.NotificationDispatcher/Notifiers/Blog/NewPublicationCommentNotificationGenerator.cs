@@ -9,22 +9,13 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Blog;
 
-/// <summary>
-/// Generates notifications when a publication is commented on
-/// </summary>
 /// <remarks>
-/// A comment carries the id of whatever it hangs on in EntityId, so the join is
-/// what tells the two kinds of blog comment apart: this one lands on a
-/// publication, the blog-level one on the blog itself. Publishing the blog event
-/// for a publication comment therefore did not fail loudly — it reached a
-/// generator that joined Comments to Blogs, matched nothing, and yielded no
-/// notification at all.
+/// The join tells the two kinds of blog comment apart: this one hangs on a publication.
 /// </remarks>
 internal class NewPublicationCommentNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public NewPublicationCommentNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -63,9 +54,7 @@ internal class NewPublicationCommentNotificationGenerator : BaseNotificationGene
             yield break;
         }
 
-        // The publication's own author first — on a blog with assistants they are
-        // often not the blog owner, and a comment on their text is theirs to hear
-        // about. The rest of the staff the blog-level generator notifies.
+        // The publication author may not be the blog owner; the blog-level generator tells the rest of the staff.
         var usersToNotify = new HashSet<Guid>
         {
             commentData.PublicationAuthorId,
@@ -82,7 +71,6 @@ internal class NewPublicationCommentNotificationGenerator : BaseNotificationGene
             usersToNotify.Add(assistantId);
         }
 
-        // Don't notify the comment author
         usersToNotify.Remove(commentData.AuthorId);
 
         if (usersToNotify.Count == 0)
@@ -92,15 +80,15 @@ internal class NewPublicationCommentNotificationGenerator : BaseNotificationGene
 
         yield return new CreateNotification
         {
-            UsersInterested = usersToNotify.ToArray(),
+            UsersInterested = usersToNotify,
             ActorId = commentData.AuthorId,
             Metadata = new
             {
-                CommentId = commentData.CommentId,
+                commentData.CommentId,
                 PublicationId = commentData.PublicationId.EncodeToReadable(commentData.PublicationTitle),
-                PublicationTitle = commentData.PublicationTitle,
+                commentData.PublicationTitle,
                 BlogId = commentData.BlogId.EncodeToReadable(commentData.BlogTitle),
-                BlogTitle = commentData.BlogTitle,
+                commentData.BlogTitle,
                 AuthorUsername = commentData.CommentAuthorUsername
             }
         };

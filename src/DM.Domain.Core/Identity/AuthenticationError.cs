@@ -41,7 +41,7 @@ public enum AuthenticationError
     SessionExpired = 6,
 
     /// <summary>
-    /// Unknown authentication error
+    /// This way of signing in is refused for the account
     /// </summary>
     Forbidden = 7,
 

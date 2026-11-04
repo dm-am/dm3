@@ -29,7 +29,7 @@ internal static class OtpAuthUri
         return $"otpauth://totp/{label}" +
                $"?secret={base32Secret}" +
                $"&issuer={escapedIssuer}" +
-               $"&algorithm=SHA1" +
+               "&algorithm=SHA1" +
                $"&digits={TotpCalculator.Digits}" +
                $"&period={TotpCalculator.StepSeconds}";
     }

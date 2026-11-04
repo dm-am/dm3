@@ -223,7 +223,7 @@ public class ModuleStatusPolicyShould
     }
 
     [Fact]
-    public void RefuseAMoveOutsideTheFiveItKnows()
+    public void RefuseAMoveItDoesNotKnow()
     {
         var act = () => ModuleStatusPolicy.Resolve(
             (ModuleStatusTransition)42, Module(ModuleStatus.Draft), Now);

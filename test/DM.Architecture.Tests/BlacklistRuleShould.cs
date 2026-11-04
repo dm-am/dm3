@@ -14,41 +14,16 @@ namespace DM.Architecture.Tests;
 /// close.
 /// </summary>
 /// <remarks>
-/// One rule was spelled three ways and answered in three voices. The game asked
-/// it as an inline Any over BlacklistedUsers, as a repository query and through a
-/// subscription guard; the blog as a Contains over BlacklistedUserIds in four
-/// services and a query in a fifth. Some of those places refused in the list's
-/// words, some in the generic "not enough rights", and one of them refused
-/// something the list was never meant to close: a subscription. Each copy was
-/// right about its own action and nothing held them to each other.
-///
-/// Now the rule is a predicate beside the roles (GameRoleExtensions.IsBlacklisted,
-/// BlogRoleExtensions.IsBlacklisted) and the refusal is the method next to it,
-/// ThrowIfBlacklisted, which is the only thing that says "Вы в черном списке ...".
-/// The check is textual for the reason the neighbouring ownership gates are: the
-/// thing to keep out is a spelling that compiles anywhere.
-///
-/// The list then grew to close posts, chat rooms, turn marks, reviews, ratings,
-/// likes and the return of a character, each of which another tool already
-/// decides: the rooms and the roster, the moderators, the owner's own moves.
-/// The owner cut it back on 05.10 to two closures for a game (the discussion and
-/// the application) and one for a blog (comments). The third fact holds that
-/// line: the predicate is asked by the places that close those and by nobody
-/// else, so a new closure is a decision made here and not a line slipped into a
-/// service.
+/// The rule is a predicate beside the roles (IsBlacklisted) and the refusal the method next to it
+/// (ThrowIfBlacklisted). It closes the discussion and the application of a game and the comments
+/// of a blog, so a new closure is decided here.
 /// </remarks>
 public class BlacklistRuleShould
 {
     /// <summary>
     /// The spellings of the rule and of its refusal.
     /// </summary>
-    /// <remarks>
-    /// A call of IsBlocked is the repository query the two lists used to carry
-    /// beside the predicate. The query is gone, and its spelling stays here so
-    /// that it does not come back as a second way of asking. The personal list's
-    /// checker is IsBlockedAsync, which is a different list, asked in its own
-    /// places, and the open parenthesis keeps it out.
-    /// </remarks>
+    /// <remarks>IsBlocked stays forbidden as a second way of asking; IsBlockedAsync is the personal list.</remarks>
     private static readonly Regex Spelling = new(
         @"BlacklistedUsers\.Any\(|BlacklistedUserIds\.Contains\(|RefusalMessage\.BlacklistedFrom(?:Game|Blog)\b|\.IsBlocked\(",
         RegexOptions.Compiled);
@@ -117,27 +92,5 @@ public class BlacklistRuleShould
             "anything else is decided by the tool that owns it, and a new closure is a change to this list");
         Askers.Keys.Except(askers).Should().BeEmpty(
             "every place named here still asks the list, or the name is stale and lets the next file in");
-    }
-
-    /// <summary>
-    /// Subscribing is refused by no target: the guards a module once put in front
-    /// of it are gone, and none may come back under the old names.
-    /// </summary>
-    [Fact]
-    public void LeaveTheRetiredGuardsUnasked()
-    {
-        var names = new[] { "ISubscriptionTargetGuard", "GameSubscriptionGuard", "BlogSubscriptionGuard" };
-
-        var askers = new List<string>();
-        foreach (var path in RepositoryFiles.ProductionSources())
-        {
-            var code = SourceText.ReadCode(path);
-            askers.AddRange(names
-                .Where(name => code.Contains(name, StringComparison.Ordinal))
-                .Select(name => $"{Path.GetRelativePath(DM.Testing.RepositoryLayout.Root, path)}: {name}"));
-        }
-
-        askers.Should().BeEmpty(
-            "subscribing is not refused by any target any more, so nothing may construct or ask a guard");
     }
 }

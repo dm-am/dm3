@@ -1,23 +1,10 @@
 <script setup lang="ts">
-/**
- * SortButton - Sort control with dropdown.
- *
- * Shows current sort option and allows changing sort field/direction.
- *
- * The icon and the name of the sort at every width, as FilterButton. The menu
- * stays inside the window (useKeepInWindow).
- *
- * The menu and the menu of the filters of the same bar are one floating panel
- * at a time: a click on either button is a click past the other, which closes
- * it.
- */
-import { ref, computed } from "vue";
+// The menu stays inside the window (useKeepInWindow); a press on the filter button of the bar closes it.
+import { ref, computed, onMounted, onUnmounted } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { useMenuKeyboard } from "@/shared/lib/composables/useMenuKeyboard";
 import type { SortButtonProps } from "../types";
 import { useKeepInWindow } from "./useKeepInWindow";
-
-defineOptions({ name: "SortButton" });
 
 const props = defineProps<SortButtonProps>();
 
@@ -33,25 +20,27 @@ const emit = defineEmits<{
   "update:sortOrder": [value: "asc" | "desc"];
 }>();
 
-// Dropdown state
 const showDropdown = ref(false);
+const rootRef = ref<HTMLElement | null>(null);
 const triggerRef = ref<HTMLButtonElement | null>(null);
 const dropdownRef = ref<HTMLElement | null>(null);
 useKeepInWindow(dropdownRef);
 
-// Current sort label
-const currentSortLabel = computed(() => {
-  const option = props.options.find((o) => o.value === props.sortBy);
-  return option?.label ?? "Сортировка";
-});
+const currentOption = computed(() =>
+  props.options.find((o) => o.value === props.sortBy),
+);
+
+const currentSortLabel = computed(
+  () => currentOption.value?.label ?? "Сортировка",
+);
 
 /** The button's name for a reader of the screen: a sort, and which one is on. */
-const buttonName = computed(() => {
-  const option = props.options.find((o) => o.value === props.sortBy);
-  return option ? `Сортировка: ${option.label}` : "Сортировка";
-});
+const buttonName = computed(() =>
+  currentOption.value
+    ? `Сортировка: ${currentOption.value.label}`
+    : "Сортировка",
+);
 
-// Sort icon based on direction
 const sortIcon = computed(() =>
   props.sortOrder === "asc" ? "sortAsc" : "sortDesc",
 );
@@ -86,16 +75,10 @@ function toggleSortOrder() {
   closeDropdown();
 }
 
-// Handle click outside
+// Outside this button's own section, so a second sort menu's trigger closes this one.
 function handleClickOutside(event: MouseEvent) {
-  const target = event.target as HTMLElement;
-  if (!target.closest(".sort-section")) {
-    closeDropdown();
-  }
+  if (!rootRef.value?.contains(event.target as Node)) closeDropdown();
 }
-
-// Setup click outside listener
-import { onMounted, onUnmounted } from "vue";
 
 onMounted(() => {
   document.addEventListener("click", handleClickOutside);
@@ -107,7 +90,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="sort-section" @keydown="handleMenuKeydown">
+  <div ref="rootRef" class="sort-section" @keydown="handleMenuKeydown">
     <button
       ref="triggerRef"
       type="button"
@@ -128,7 +111,6 @@ onUnmounted(() => {
       class="sort-dropdown"
       role="menu"
     >
-      <!-- Sort options -->
       <button
         v-for="option in options"
         :key="option.value"
@@ -146,10 +128,8 @@ onUnmounted(() => {
         </span>
       </button>
 
-      <!-- Divider -->
       <div class="sort-divider" />
 
-      <!-- Direction toggle -->
       <button
         type="button"
         class="sort-option sort-direction"
@@ -166,7 +146,7 @@ onUnmounted(() => {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 @use "@/assets/styles/Filters" as *
 @use "@/assets/styles/Menu" as *
 @use "@/assets/styles/ZIndex" as *
@@ -200,7 +180,7 @@ onUnmounted(() => {
 .sort-option-content
   display: flex
   flex-direction: column
-  gap: 1px
+  gap: $tiny
 
 .sort-option-label
   color: $text

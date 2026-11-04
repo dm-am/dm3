@@ -1,126 +1,59 @@
 /**
- * The BBCode grammar as a table: what an input is, on which surface, and what
- * the reader gets. One table for both sides.
+ * The BBCode grammar as a table for both sides: the executable half of
+ * BBCODE_RENDERING.md, "Грамматика разметки". The server holds its renderer,
+ * save path and search projection to the rows, the client its converter and
+ * markup check; a row one side fails is the grammars drifting apart.
  *
- * The rule itself is written down in docs/architecture/BBCODE_RENDERING.md,
- * section "Грамматика разметки". This file is its executable half: every row is
- * one input and its expected result, stated in a neutral form that neither
- * side's markup leaks into. The server holds its renderer, its save path and
- * its search projection to the rows; the client holds its editor converter and
- * its markup check to the same rows. A row that one side passes and the other
- * does not is the two grammars drifting apart, and that is what this table is
- * for.
+ * The server reads the array between the two marker comments as strict JSON,
+ * one row per line (System.Text.Json through RepositoryLayout.Root): quoted
+ * keys, no trailing comma, hence prettier-ignore.
  *
- * How the server reads it. The array below is strict JSON between the two
- * marker comments, one row per line: a test under test/ reads this file through
- * RepositoryLayout.Root, takes the text between the markers and deserialises it
- * with System.Text.Json, the way BbAuthorEditRoundTripShould reads
- * authorEditRoundTrip.spec.ts. Keys stay quoted and there is no trailing comma,
- * which is why the declaration carries prettier-ignore.
- *
- * Fields of a row:
- * - id: stable and unique, used as the test name on both sides.
- * - rule: which part of the rule the row holds, one letter per subsection of
- *   the document: A the DM2 tags, B the new forms, C how a value is written,
- *   D broken tags, E [private], F typography, and "___", which is text, G [cut],
- *   H [tip], the one tag of a tag description, and the spelling [tip:] that
- *   came before it, I images of the global chat, J what the author's editor gets
+ * A row:
+ * - id: stable and unique, the test name on both sides.
+ * - rule: the subsection of the document: A the DM2 tags, B the new forms, C a
+ *   value, D broken tags, E [private], F typography and "___", G [cut], H [tip]
+ *   and the older [tip:], I global chat images, J what the author's editor gets
  *   back, K names in any case, L the cost of reading, N a tag left open and a
  *   closing tag with nothing to close, O the characters removed before
- *   reading, P [code] and [noparse] with and around other tags. The seed (M)
- *   has no rows here.
- * - input: the BBCode as the author typed it. A character the eye does not
- *   tell from another, or does not see at all, is written as a \u escape.
- * - surface: the BbSurface the result is for, or "any" when it is the same on
- *   all five surfaces of content. The sixth, Hint, is the description of a
- *   game tag, with a tag set of its own, [tip]; every row for it names it.
- * - audience: "display" when absent; "author_edit" rows state what the author's
- *   editor is given back, as one { source } piece.
- * - expect: the result, as a list of pieces (below). An empty list is nothing
- *   at all.
- * - broken: present when the editor's markup check has something to name in
- *   the input: a broken spelling, an address the page refuses, a tag left
- *   open, a closing tag with nothing to close, a hidden block inside another,
- *   or hiding markup on a surface that does not declare it. The value is the
- *   reason the check names, one of the list in BBCODE_RENDERING.md, section
- *   "Предупреждения редактора"; a row where it names more than one carries
- *   the one the row is about. Nothing inside a closed [noparse] is ever named.
- * - save: "refused" when every save path of that surface refuses the text.
- * - editor: true when the editor itself writes this spelling (its windows, its
- *   toolbar, its visual mode); the markup check must accept it as it stands.
+ *   reading, P [code] and [noparse] with other tags.
+ * - input: the BBCode as typed; an invisible or look-alike character is a \u escape.
+ * - surface: the BbSurface, or "any" for all five of content; Hint (a game
+ *   tag's description, [tip] only) is always named.
+ * - audience: "display" when absent; "author_edit" states the editor's
+ *   { source }.
+ * - expect: the result as pieces; an empty list is nothing at all.
+ * - broken: the reason the markup check names (BBCODE_RENDERING.md,
+ *   "Предупреждения редактора"), the one the row is about; nothing inside a
+ *   closed [noparse] is named.
+ * - save: "refused" when every save path of the surface refuses the text.
+ * - editor: true for a spelling the editor writes itself, which the check accepts.
  *
  * Pieces:
- * - { text }: text as the reader sees it, markup characters included. A line
- *   break stays "\n"; the surface decides how it is drawn. The characters that
- *   reorder text for display, U+202A..U+202E and U+2066..U+2069, and the C0 and
- *   C1 control characters other than tab, line feed and carriage return are
- *   never in it: both sides remove them before the text is read, so they can
- *   neither reverse what a reader sees nor split a tag name, and what stood
- *   around one is read joined.
- *   A block ends its line, so the one line break typed straight after its
- *   closing tag is in no piece: the text after [quote]...[/quote] and a line
- *   break starts on the line under the block, as the text over it ends on the
- *   line above (BBCODE_RENDERING.md, "Перевод строки после блока"). A second
- *   break is an empty line and stays "\n". A tag that stands in the line, [b]
- *   or [code], ends none, and the break after it stays; so does a hidden
- *   block, which is text in the line.
- * - { tag, params?, children? }: the tag drawn as markup. img carries src and
- *   whichever of width and height were given; link carries href and the text
- *   it shows; mention carries login; spoiler carries text when a caption was
- *   given. tip carries text and img, whichever it shows, and holds its word as
- *   one text. gate: "compact" on an image of the global chat: behind a spoiler in
- *   the compact layout, in plain view in the full one. code holds its children
- *   drawn as anywhere else, in a monospace font; noparse holds one text, as
- *   typed. A tag that holds hidden blocks a reader does not see and nothing
- *   else but white space is not drawn for that reader at all, as if it had not
- *   been written.
- * - { hidden: { to, seenBy }, typed?, children }: a [private] block. to is the
- *   list of addressee names; seenBy names who reads it: the author, the game
- *   leads (master and assistants), the owners of the addressed characters,
- *   and every reader of the room when the post or the room shares private
- *   text. A reader who sees the block gets with it who reads it, for the
- *   tooltip over it and not as text of the line: "DungeonMaster, Assistant",
- *   the leads first whoever the block names, then ", " and each name of to
- *   that is not one of the two (a name is a lead in any case). An empty
- *   seenBy is nobody, the author included: hiding markup on a surface that
- *   does not declare it, which the page, the plain text and the search all
- *   erase.
- *   A reader who does not see a block that stands on a line of its own -
- *   between two line breaks, or at the start or the end of the text next to
- *   one - does not get that line either: it goes with one of the breaks
- *   around it, as if the author had not typed it. A line with anything else
- *   on it stays, a space included, and inside a tag only a line between two
- *   breaks is one, the tag itself possibly standing in the middle of a line.
- *   The editor shows such a block as the text it was typed: a row where it
- *   stands at the top holds nothing else but plain text around it, and the
- *   preview is the whole input; where it stands inside a tag, typed gives that
- *   text, and the preview has it in the block's place.
- * - { dash: "short" | "long" }: the typographic dash, U+2013 or U+2014.
+ * - { text }: text as seen, "\n" for a break, without the reordering and
+ *   control characters both sides remove. The one break right after a block's
+ *   closing tag is in no piece ("Перевод строки после блока"); an inline tag
+ *   and a hidden block end no line.
+ * - { tag, params?, children? }: a tag drawn as markup (img src/width/height,
+ *   link href/text, mention login, spoiler text, tip text/img; gate: "compact"
+ *   on a global chat image; code holds drawn children, noparse one text). A tag
+ *   holding only hidden blocks a reader does not see, and white space, is not
+ *   drawn for that reader.
+ * - { hidden: { to, seenBy }, typed?, children }: a [private] block; seenBy
+ *   names the author, the leads, the owners of the addressed characters and
+ *   every reader where the post or room shares private text, and the tooltip
+ *   lists "DungeonMaster, Assistant" then the other names. An empty seenBy is
+ *   hiding markup on a surface without it, erased everywhere. A block a reader
+ *   does not see on a line of its own takes the line with it. The editor shows
+ *   such a block as typed (typed, inside a tag).
+ * - { dash: "short" | "long" }: U+2013 or U+2014.
  * - { source }: author_edit only, the BBCode the editor gets back.
  *
- * What each side checks.
- * - Server, per row and per surface: the display render matches expect, for a
- *   stranger and, where a hidden piece is, for every kind of reader a hidden
- *   block can have (its author, a lead, an addressee, a reader let in by either
- *   setting), each of whom sees the block only when its seenBy names them, with
- *   its recipients on it; the plain-text render and the search
- *   projection never carry the children of a hidden piece; the save validator
- *   of the surface refuses exactly the rows marked save: "refused", naming the
- *   place and the correct spelling.
- * - Client, per row in the editor context of its surface (GamePost: post,
- *   Comment: common, GlobalChatMessage: message, DirectMessage: direct,
- *   Profile: info, Hint: hint): the editor preview draws tags, broken spellings and hidden
- *   blocks as expect says. It shows typography as typed, a chat image without
- *   its spoiler, and a hidden block nobody reads as typed (see the hidden
- *   piece above): the editor holds the author's own text, and the save path
- *   refuses that block with a reason rather than hiding it from its author.
- *   The hint's preview is the reader's markup (hintToHtml), less its hidden
- *   blocks, which it shows as typed for the same reason; the exact markup of
- *   it is held by the pairs of hintMarkup.cases.ts.
- *   bbcodeToHtml followed by htmlToBbcode gives every input back as typed,
- *   names in capitals included, less the characters that reorder text and the
- *   control characters; validateBBCode, in the same context, is silent on rows
- *   without broken and names the reason on rows with it.
+ * The server checks the display render for a stranger and every kind of
+ * reader, that plain text and search never carry hidden children, and the save
+ * refusals. The client checks each row in its editor context (GamePost: post,
+ * Comment: common, GlobalChatMessage: message, DirectMessage: direct, Profile:
+ * info, Hint: hint): the preview as expect says less typography, chat spoilers
+ * and unread hidden blocks; the round trip back as typed; and validateBBCode.
  */
 
 export type GrammarSurface =
@@ -132,16 +65,10 @@ export type GrammarSurface =
   | "DirectMessage"
   | "Hint";
 
-export type GrammarAudience = "display" | "author_edit";
+type GrammarAudience = "display" | "author_edit";
 
-/**
- * What the editor's markup check names in a row: why a spelling is broken, an
- * address the page refuses, a tag left open, a closing tag with nothing to
- * close, a hidden block inside another, or hiding markup on a surface that
- * does not declare it. The wording of each is in BBCODE_RENDERING.md, section
- * "Предупреждения редактора".
- */
-export type GrammarBrokenReason =
+/** What the markup check names in a row (BBCODE_RENDERING.md, "Предупреждения редактора"). */
+type GrammarBrokenReason =
   | "value-after-name"
   | "unknown-param"
   | "unquoted-value"
@@ -162,7 +89,7 @@ export type GrammarBrokenReason =
   | "private-outside-game";
 
 /** Who reads a hidden block. */
-export type GrammarReader = "author" | "leads" | "addressees" | "overrides";
+type GrammarReader = "author" | "leads" | "addressees" | "overrides";
 
 export type GrammarPiece =
   | { text: string }

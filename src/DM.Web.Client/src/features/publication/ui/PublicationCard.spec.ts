@@ -2,17 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The heart of a publication on the blog's blacklist.
- *
- * The blog's list closes comments only (BlogRoleExtensions.IsBlacklisted). A
- * like is feedback and stays open, so the heart of a publication is the heart
- * everybody gets, inside the blog and outside it. It used to be a counter for
- * the reader on the list; what this catches is that rule coming back:
- *  - the heart closed inside a blog whose list holds the reader;
- *  - the heart closed outside it, where the publication itself used to carry
- *    its blog's answer.
- */
+// The blog's list closes comments only: "Нравится" stays open to the reader on it.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent, h } from "vue";
 import { mount, flushPromises } from "@vue/test-utils";
@@ -22,10 +12,6 @@ import type { Blog, Publication } from "@/entities/blog";
 import { useAuthStore } from "@/shared/stores";
 import PublicationCard from "./PublicationCard.vue";
 
-/**
- * The topic card the publication is drawn with, down to the heart: whether it
- * is offered, and the press on it.
- */
 const TopicCardStub = defineComponent({
   name: "TopicCard",
   props: {
@@ -39,10 +25,10 @@ const TopicCardStub = defineComponent({
       props.canLike
         ? h(
             "button",
-            { class: "heart", onClick: () => emit("toggleLike") },
+            { class: "like", onClick: () => emit("toggleLike") },
             String(props.likes.length),
           )
-        : h("span", { class: "heart" }, String(props.likes.length));
+        : h("span", { class: "like" }, String(props.likes.length));
   },
 });
 
@@ -57,14 +43,12 @@ const aPublication = (overrides: Partial<Publication> = {}): Publication =>
     content: "<p>Текст</p>",
     preview: "Текст",
     createdUtc: "2026-09-01T10:00:00Z",
-    isPublished: true,
     viewCount: 0,
     commentCount: 0,
     likes: [{ id: "u-other", username: "Другой" }],
     ...overrides,
   }) as Publication;
 
-/** The card inside a blog zone whose blog says what the viewer is to it. */
 function mountCard(publication: Publication, zoneBlog: Partial<Blog> | null) {
   const pinia = createPinia();
   setActivePinia(pinia);
@@ -79,14 +63,14 @@ function mountCard(publication: Publication, zoneBlog: Partial<Blog> | null) {
   });
 }
 
-describe("PublicationCard: сердце у черного списка блога", () => {
+describe("PublicationCard: the like on the blog's blacklist", () => {
   beforeEach(() => {
     localStorage.clear();
   });
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("дает внесенному в список поставить лайк, как всем", async () => {
+  it("lets a listed reader like as anybody does", async () => {
     const like = vi
       .spyOn(blogApi, "likePublication")
       .mockResolvedValue({ data: { resource: ME }, error: null } as never);
@@ -95,16 +79,16 @@ describe("PublicationCard: сердце у черного списка блог�
       viewerBlacklisted: true,
     } as Partial<Blog>);
 
-    await wrapper.get("button.heart").trigger("click");
+    await wrapper.get("button.like").trigger("click");
     await flushPromises();
 
     expect(like).toHaveBeenCalledWith("p-1");
   });
 
   // The profile: no blog is loaded around the card.
-  it("вне блога тоже оставляет сердце", () => {
+  it("keeps the like outside the blog too", () => {
     const wrapper = mountCard(aPublication(), null);
 
-    expect(wrapper.find("button.heart").exists()).toBe(true);
+    expect(wrapper.find("button.like").exists()).toBe(true);
   });
 });

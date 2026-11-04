@@ -1,4 +1,3 @@
-using System;
 using System.Globalization;
 
 namespace DM.Domain.Core.Dates;
@@ -7,14 +6,8 @@ namespace DM.Domain.Core.Dates;
 /// A moment written the way the reader of a letter keeps time.
 /// </summary>
 /// <remarks>
-/// On the site a date is formatted by the browser, which knows where its reader
-/// is. A letter has no browser, so the account carries the zone instead, and
-/// this is the one place that turns a moment into the line a letter prints.
-///
-/// The offset travels with the time and is not decoration. A zone can be stale
-/// — the reader moved and has not said so yet — and then the time is wrong by
-/// hours with nothing on the page admitting it. Named, it is a time the reader
-/// can convert; unnamed, it is a time they have to trust.
+/// The offset is printed because a stored zone can be stale, and a named offset
+/// is a time the reader can convert.
 /// </remarks>
 public static class ReaderTime
 {
@@ -34,7 +27,7 @@ public static class ReaderTime
     {
         var zone = Resolve(timeZoneId);
         var local = TimeZoneInfo.ConvertTime(moment, zone);
-        return $"{local.ToString(Pattern, CultureInfo.InvariantCulture)} ({Name(local.Offset)})";
+        return $"{local.ToString(Pattern, CultureInfo.InvariantCulture)} ({OffsetLabel(local.Offset)})";
     }
 
     /// <summary>
@@ -51,20 +44,11 @@ public static class ReaderTime
         zone.HasIanaId;
 
     /// <summary>The zone by name, or UTC when this machine has no such zone.</summary>
-    private static TimeZoneInfo Resolve(string? timeZoneId)
-    {
-        if (string.IsNullOrWhiteSpace(timeZoneId)) return TimeZoneInfo.Utc;
-
-        try
-        {
-            return TimeZoneInfo.FindSystemTimeZoneById(timeZoneId);
-        }
-        catch (Exception exception) when (
-            exception is TimeZoneNotFoundException or InvalidTimeZoneException)
-        {
-            return TimeZoneInfo.Utc;
-        }
-    }
+    private static TimeZoneInfo Resolve(string? timeZoneId) =>
+        !string.IsNullOrWhiteSpace(timeZoneId) &&
+        TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId, out var zone)
+            ? zone
+            : TimeZoneInfo.Utc;
 
     /// <summary>
     /// The offset as a reader writes it: "UTC", "UTC+3", "UTC-3:30".
@@ -74,7 +58,7 @@ public static class ReaderTime
     /// abbreviations people use for zones collide across the world; an offset
     /// from UTC is the one form that means the same thing everywhere.
     /// </remarks>
-    private static string Name(TimeSpan offset)
+    private static string OffsetLabel(TimeSpan offset)
     {
         if (offset == TimeSpan.Zero) return "UTC";
 

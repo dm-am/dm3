@@ -17,15 +17,9 @@ namespace DM.Web.API.HostedServices;
 /// <see cref="IBlogPopularityProcessor" />, which the seeder calls as well; this
 /// only decides how often to ask.
 /// </remarks>
-internal class PopularityScoreService : PeriodicHostedService
+internal class PopularityScoreService(IServiceProvider serviceProvider, ILogger<PopularityScoreService> logger)
+    : PeriodicHostedService(serviceProvider, logger)
 {
-    private readonly ILogger<PopularityScoreService> _logger;
-
-    public PopularityScoreService(
-        IServiceProvider serviceProvider,
-        ILogger<PopularityScoreService> logger)
-        : base(serviceProvider, logger) => _logger = logger;
-
     /// <inheritdoc />
     protected override string Tag => "[Popularity Score]";
 
@@ -34,17 +28,9 @@ internal class PopularityScoreService : PeriodicHostedService
 
     /// <inheritdoc />
     /// <remarks>
-    /// The first calculation happens on the first pass rather than being deferred
-    /// to the first tick. It used to be deferred on the strength of a comment
-    /// saying WarmupService did it at startup — that phase was deleted with the
-    /// duplicated copy of WarmupService it lived in, and nothing noticed, because
-    /// a stale score looks exactly like a correct one. The result was that
-    /// "популярные игры" and "популярные блоги" served whatever the previous run
-    /// had persisted for a full hour after every cold start, and zeroes for that
-    /// hour on a freshly reset database.
-    ///
-    /// The service that owns the calculation owns its first run: the coupling to
-    /// a warmup phase in another service is what allowed the gap to open.
+    /// The first recalculation runs on the first pass, so a cold start does not
+    /// serve stale scores for an hour. Games and blogs are guarded apart: a
+    /// failure on one does not cost the other its recalculation.
     /// </remarks>
     protected override async Task RunOnce(IServiceProvider scope, CancellationToken cancellationToken)
     {
@@ -59,31 +45,14 @@ internal class PopularityScoreService : PeriodicHostedService
             .UpdateScoresAsync(now, cancellationToken));
     }
 
-    /// <summary>
-    /// One half of the pass, guarded on its own so a failure on the games does
-    /// not cost the blogs their recalculation for the whole interval.
-    /// </summary>
-    private async Task Recalculate(string what, Func<Task<(int Updated, int Total)>> recalculate)
-    {
-        try
+    private Task Recalculate(string what, Func<Task<(int Updated, int Total)>> recalculate) =>
+        Guarded($"updating {what} scores", async () =>
         {
             var (updated, total) = await recalculate();
-            if (total == 0)
+            if (total > 0)
             {
-                _logger.LogDebug("[Popularity Score] No {What} to update", what);
-                return;
+                Logger.LogInformation("{Tag} Updated {UpdatedCount} of {TotalCount} {What}",
+                    Tag, updated, total, what);
             }
-
-            _logger.LogInformation("[Popularity Score] Updated {UpdatedCount} of {TotalCount} {What}",
-                updated, total, what);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogError(ex, "[Popularity Score] Error updating {What} scores", what);
-        }
-    }
+        });
 }

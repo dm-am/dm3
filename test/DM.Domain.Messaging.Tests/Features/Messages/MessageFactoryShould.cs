@@ -10,18 +10,18 @@ namespace DM.Domain.Messaging.Tests.Features.Messages;
 
 public class MessageFactoryShould : UnitTestBase
 {
-    private readonly MessageFactory _factory;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly MessageFactory factory;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
 
     public MessageFactoryShould()
     {
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _factory = new MessageFactory(
-            _guidFactory,
-            _dateTimeProvider);
+        factory = new MessageFactory(
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
@@ -38,70 +38,16 @@ public class MessageFactoryShould : UnitTestBase
             Text = "Test message"
         };
 
-        _guidFactory.Create().Returns(messageId);
-        _dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(messageId);
+        dateTimeProvider.Now.Returns(now);
 
-        var result = _factory.Create(createMessage, userId);
+        var result = factory.Create(createMessage, userId);
 
-        result.Should().NotBeNull();
         result.MessageId.Should().Be(messageId);
         result.ChatId.Should().Be(chatId);
         result.UserId.Should().Be(userId);
         result.Text.Should().Be(createMessage.Text);
         result.CreatedUtc.Should().Be(now);
-        result.IsRemoved.Should().BeFalse();
-    }
-
-    [Fact]
-    public void PreserveMessageText()
-    {
-        var text = "This is a test message with special characters: !@#$%";
-        var createMessage = new CreateMessage
-        {
-            ChatId = Guid.NewGuid(),
-            Text = text
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.Create(createMessage, Guid.NewGuid());
-
-        result.Text.Should().Be(text);
-    }
-
-    [Fact]
-    public void AssignUserIdCorrectly()
-    {
-        var userId = Guid.NewGuid();
-        var createMessage = new CreateMessage
-        {
-            ChatId = Guid.NewGuid(),
-            Text = "Test"
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.Create(createMessage, userId);
-
-        result.UserId.Should().Be(userId);
-    }
-
-    [Fact]
-    public void CreateNonRemovedMessage()
-    {
-        var createMessage = new CreateMessage
-        {
-            ChatId = Guid.NewGuid(),
-            Text = "Test"
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.Create(createMessage, Guid.NewGuid());
-
         result.IsRemoved.Should().BeFalse();
     }
 }

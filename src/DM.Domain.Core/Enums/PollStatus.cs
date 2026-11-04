@@ -4,10 +4,8 @@ namespace DM.Domain.Core.Enums;
 /// Where a poll stands relative to now.
 /// </summary>
 /// <remarks>
-/// Derived from the two dates rather than stored: a poll starts and closes by
-/// the clock, so there is no state to keep in step. Named here because the
-/// listing filters by it, and a filter spelled as a free string answered an
-/// unrecognised word with every poll on the site.
+/// Derived from the two dates rather than stored; an enum so the binder refuses
+/// an unknown filter.
 /// </remarks>
 public enum PollStatus
 {

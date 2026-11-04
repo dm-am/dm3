@@ -1,13 +1,6 @@
 import { test, expect } from "@playwright/test";
 
-/**
- * ".forum-index", ".boards-list", ".forum-section", ".forum-group",
- * ".forum-link", ".forum-title" and ".topics-table" are in no template of the
- * client. The index is a DataTable whose title cell is a `.board-link`, the
- * heading comes from the forum shell, and a board's topics render inside
- * `.topics-page`. The old file asked for all seven and clicked behind an
- * `if`, so it reported green on an empty page.
- */
+/** The forum index is a DataTable whose title cell is a `.board-link`. */
 test.describe("Forum Index", () => {
   test("should display forum index page", async ({ page }) => {
     await page.goto("/forum");
@@ -24,9 +17,7 @@ test.describe("Forum Index", () => {
   test("should list the boards", async ({ page }) => {
     await page.goto("/forum");
     // The seed writes boards, so an empty table is a defect, not a state.
-    // Scoped to the table: the sidebar carries the same class on list items,
-    // and those come first in the document, so a bare .board-link asserted
-    // that the sidebar had rendered.
+    // Scoped to the table: the sidebar carries the same class on list items.
     await expect(
       page.locator("table.data-table a.board-link").first(),
     ).toBeVisible({

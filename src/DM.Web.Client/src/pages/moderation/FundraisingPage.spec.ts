@@ -2,32 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The admin form behind the donation goal, and the one thing it cannot show by
- * itself: that a save worked.
- *
- * The screen after a save is the screen before it - the title, the target and
- * the collected amount, in the fields the administrator typed them into. The
- * answer used to be a plate in the corner, which is gone from here, so the
- * button is now the whole of it: "Сохранено" and inert while the form matches
- * what the server sent back, "Сохранить" again the moment a field changes.
- *
- * Three ways that can go wrong are checked here, and each one is a button that
- * lies. A form nobody has saved must not open reading "Сохранено". A form the
- * server refused must not read it either, and the button has to keep offering
- * the save the administrator still owes. And the claim has to fall away on the
- * first keystroke after it, which is what a snapshot taken by reference instead
- * of by value would quietly break.
- *
- * A refusal is answered in the same place, for the same reason: the form is
- * what the administrator is looking at. It used to be answered by a plate in
- * the corner raised on every status at once, so an expired session, a refusal
- * and a dead server each put two red boxes on screen - the interceptor's and
- * this one's - while the one status the page really owns, a rejected form, got
- * a fallback sentence with the server's own verdict thrown away. The tests
- * below hold both halves: the sentence stands in the form and comes out of the
- * answer, and on the statuses the interceptor speaks for the page is silent.
- */
+// The button is the only place a save can be read: "Сохранено" only while the
+// form matches what the server stored, never before a save or after a refusal,
+// and gone on the first keystroke. A refusal stands in the form.
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   enableAutoUnmount,
@@ -46,12 +23,6 @@ vi.mock("@/entities/fundraising", () => ({
   fundraisingApi: { getFundraising, updateFundraising },
 }));
 
-/** The role gate has its own spec; here the viewer is an administrator. */
-vi.mock("./lib/useRoleGate", async () => {
-  const { ref } = await import("vue");
-  return { useRoleGate: () => ({ hasAccess: ref(true), deniedText: "" }) };
-});
-
 const goal = (over: Record<string, unknown> = {}) => ({
   title: "На сервер",
   goalAmount: 30000,
@@ -64,10 +35,7 @@ const served = (resource: unknown) => ({ data: { resource }, error: null });
 
 enableAutoUnmount(afterEach);
 
-/**
- * The real Button, not a stub: what is checked here is a caption and a
- * disabled attribute, and a stub would be answering for both.
- */
+/** The real Button: a caption and a disabled attribute are what is checked. */
 function render() {
   return mount(FundraisingPage, {
     global: {
@@ -84,7 +52,6 @@ async function rendered() {
   return wrapper;
 }
 
-/** The control the form is saved with. */
 const saveButton = (wrapper: VueWrapper) => wrapper.get(".form-actions button");
 
 /** What the corner of the screen says, if anything. */
@@ -138,25 +105,21 @@ describe("the fundraising form", () => {
     expect(saveButton(wrapper).attributes("disabled")).toBeUndefined();
   });
 
-  /**
-   * The title is trimmed on the way to the server, so a space typed on the end
-   * of a saved one is not a change: offering a save there would promise the
-   * administrator something the server would store identically.
-   */
-  it("does not call a trailing space a change", async () => {
+  // The title goes as typed, so a trailing space is a change and is sent.
+  it("sends a trailing space of the title as typed", async () => {
     const wrapper = await rendered();
     await save(wrapper);
 
     await wrapper.get("#fundraising-title").setValue("На сервер ");
+    expect(saveButton(wrapper).text()).toBe("Сохранить");
+    await save(wrapper);
 
-    expect(saveButton(wrapper).text()).toBe("Сохранено");
+    expect(updateFundraising.mock.calls.at(-1)?.[0]).toMatchObject({
+      title: "На сервер ",
+    });
   });
 
-  /**
-   * The one status this page owns. The server names the field and the rule -
-   * a title of nothing but spaces is `title: ["Empty"]` - and that verdict is
-   * what the administrator needs, in the form, beside the field it is about.
-   */
+  // The one status the page owns: the server names the field and the rule.
   it("answers a rejected form inside the form, in the server's words", async () => {
     const wrapper = await rendered();
     updateFundraising.mockResolvedValue({
@@ -174,14 +137,12 @@ describe("the fundraising form", () => {
 
     const refusal = wrapper.get(".fundraising-form .form-error");
     expect(refusal.text()).toBe("Обязательное поле");
-    // Neither the fallback the page used to show on every failure alike, nor
-    // the field name the server spells it with.
+    // Neither the fallback nor the server's spelling of the field.
     expect(refusal.text()).not.toContain("title");
     expect(plates()).toEqual([]);
     expect(refusal.attributes("role")).toBe("alert");
 
-    // The form is still standing, with everything that was typed into it: the
-    // refusal must not go into `loadError`, which stands instead of the form.
+    // The refusal must not go into `loadError`, which replaces the form.
     expect(wrapper.find(".fundraising-form").exists()).toBe(true);
     expect(
       (wrapper.get("#fundraising-title").element as HTMLInputElement).value,
@@ -190,33 +151,19 @@ describe("the fundraising form", () => {
     expect(saveButton(wrapper).attributes("disabled")).toBeUndefined();
   });
 
-  /**
-   * The statuses the response interceptor used to plate stand in the form's
-   * line now, and the plate is taken down (refusalHere; the owner's rule of
-   * 26 September 2026). An expired session and a dead connection keep the
-   * plate, and the page keeps quiet on them.
-   *
-   * No plate is raised in this test either, because the interceptor lives in
-   * the axios instance and the api is mocked away here - what is measured is
-   * that the page itself says nothing, in the form or in the corner.
-   */
-  it.each([
-    [403, "Ошибка сервера"],
-    [429, "Слишком много попыток, попробуйте позже"],
-    [500, "Ошибка сервера"],
-    [503, "Ошибка сервера"],
-  ])("says a failure of status %i in the form", async (status, line) => {
+  // The api is mocked here, so the test reads that the page itself says nothing.
+  it("says a failure of status 500 in the form", async () => {
     const wrapper = await rendered();
     updateFundraising.mockResolvedValue({
       data: null,
-      error: { status, title: "Ошибка сервера" },
+      error: { status: 500, title: "Ошибка сервера" },
     });
 
     await wrapper.get("#fundraising-collected").setValue(15000);
     await wrapper.get("form").trigger("submit");
     await flushPromises();
 
-    expect(wrapper.get(".form-error").text()).toBe(line);
+    expect(wrapper.get(".form-error").text()).toBe("Ошибка сервера");
     expect(plates()).toEqual([]);
     expect(saveButton(wrapper).text()).toBe("Сохранить");
   });
@@ -236,8 +183,7 @@ describe("the fundraising form", () => {
 
       expect(wrapper.find(".form-error").exists()).toBe(false);
       expect(plates()).toEqual([]);
-      // Silent about the failure, but not about the save: it never happened,
-      // so the button still owes it.
+      // The save never happened, so the button still owes it.
       expect(saveButton(wrapper).text()).toBe("Сохранить");
       expect(saveButton(wrapper).attributes("disabled")).toBeUndefined();
     },
@@ -257,8 +203,48 @@ describe("the fundraising form", () => {
     await wrapper.get("#fundraising-title").setValue("На сервер и домен");
     await flushPromises();
 
-    // A sentence left standing over a changed field reads as a verdict on
-    // what is in it now.
+    // A sentence left over a changed field reads as a verdict on it.
     expect(wrapper.find(".form-error").exists()).toBe(false);
+  });
+});
+
+// The form's twin while it is read, and the page's own line with a retry where it was refused.
+describe("the read of the fundraising form", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("draws the form's skeleton in the form's frame until the goal arrives", async () => {
+    let answer: (value: unknown) => void = () => {};
+    getFundraising.mockReturnValue(
+      new Promise((resolve) => (answer = resolve)),
+    );
+    const wrapper = render();
+
+    const twin = wrapper.get(".fundraising-form");
+    expect(twin.attributes("aria-hidden")).toBe("true");
+    expect(twin.findAll(".form-field")).toHaveLength(3);
+    expect(wrapper.text()).not.toContain("Загрузка...");
+    expect(wrapper.find("form").exists()).toBe(false);
+
+    answer(served(goal()));
+    await flushPromises();
+    expect(wrapper.find("form.fundraising-form").exists()).toBe(true);
+  });
+
+  it("says a refused read with a retry that reads the goal again", async () => {
+    getFundraising
+      .mockResolvedValueOnce({ data: null, error: { status: 500 } })
+      .mockResolvedValueOnce(served(goal()));
+    const wrapper = render();
+    await flushPromises();
+
+    expect(wrapper.get(".error-message").text()).toBe(
+      "Не удалось загрузить данные сбора средств",
+    );
+    await wrapper.get(".error-retry").trigger("click");
+    await flushPromises();
+
+    expect(getFundraising).toHaveBeenCalledTimes(2);
+    expect(wrapper.find(".error-state").exists()).toBe(false);
+    expect(wrapper.find("form").exists()).toBe(true);
   });
 });

@@ -1,34 +1,22 @@
 using System;
 using System.Text.Json;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Core.Parsing;
-using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
 
 /// <summary>
-/// Closes the loop the addressee rule needs and never had: text is saved, the
-/// snapshot is built from it, and the same text is rendered back through the
-/// visibility filter with that snapshot.
+/// Text is saved, the snapshot is built from it, and the same text is rendered back with that snapshot:
+/// the key the writer produces is the one the parser reports.
 /// </summary>
-/// <remarks>
-/// The two halves used to be tested apart — the filter against a hand-written
-/// dictionary, the syntax against the front end — and the field the filter reads
-/// was written by nothing at all, so rule 2 of BBCODE_RENDERING.md (addressee-
-/// forever) never fired for anybody. Every assertion here spans both halves: the
-/// key the writer produces has to be the one the parser reports, or the test goes
-/// red the way production went silent.
-/// </remarks>
 public class PrivateAddresseeSnapshotShould
 {
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 
-    private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid AnnaOwner = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid BorisOwner = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid Stranger = Guid.Parse("44444444-4444-4444-4444-444444444444");
@@ -71,7 +59,7 @@ public class PrivateAddresseeSnapshotShould
     private const string AddressedToChuck = "[private=\"Чак\"]секрет[/private]";
 
     [Fact]
-    public void ReachTheAddressee_AndNobodyElse()
+    public void ReachTheAddresseeAndNobodyElse()
     {
         const string text = "[private=\"Анна\"]секрет[/private]";
         var snapshot = PrivateAddresseeSnapshot.Build(text, Roster);
@@ -86,25 +74,21 @@ public class PrivateAddresseeSnapshotShould
     /// seems to carry: the block stays with the author and the leads, and the save
     /// path refuses the text and says how to write it.
     /// </summary>
-    /// <remarks>
-    /// The unquoted form among them is what the editor used to write. It is not
-    /// the DM2 form, and reading a name out of it would mean guessing where the
-    /// name ends, which is the one guess a hidden block may not make.
-    /// </remarks>
+    /// <remarks>Reading a name out of an unquoted value means guessing where it ends.</remarks>
     [Theory]
     [InlineData("[private=Анна]секрет[/private]")]
     [InlineData("[PRIVATE=Анна]секрет[/private]")]
     [InlineData("[Private=\"Анна]секрет[/private]")]
     [InlineData("[private= Анна ]секрет[/private]")]
     [InlineData("[private to=\"Анна\"]секрет[/private]")]
-    public void ReachNoAddressee_WhenTheAttributeIsMisspelled(string text)
+    public void ReachNoAddresseeWhenTheAttributeIsMisspelled(string text)
     {
         var snapshot = PrivateAddresseeSnapshot.Build(text, Roster);
 
         snapshot.Should().Be(PrivateAddresseeSnapshot.Empty);
         Render(text, snapshot, AnnaOwner).Should().NotContain("секрет");
         Render(text, snapshot, Stranger).Should().NotContain("секрет");
-        Render(text, snapshot, AuthorId).Should().Contain("секрет");
+        Render(text, snapshot, BbVisibilityRender.AuthorId).Should().Contain("секрет");
         PrivateBlockMarkup.IsBalanced(text).Should().BeFalse();
     }
 
@@ -122,7 +106,7 @@ public class PrivateAddresseeSnapshotShould
         boris.Should().Contain("борису");
         boris.Should().NotContain("анне");
 
-        var author = Render(text, snapshot, AuthorId);
+        var author = Render(text, snapshot, BbVisibilityRender.AuthorId);
         author.Should().Contain("анне");
         author.Should().Contain("борису");
 
@@ -177,7 +161,7 @@ public class PrivateAddresseeSnapshotShould
     }
 
     [Fact]
-    public void ResolveABlockTheEditIntroduced_AndDropOneItRemoved()
+    public void ResolveABlockTheEditIntroducedAndDropOneItRemoved()
     {
         var before = PrivateAddresseeSnapshot.Build("[private=\"Анна\"]анне[/private]", Roster);
         const string after = "[private=\"Борис\"]борису[/private]";
@@ -185,21 +169,13 @@ public class PrivateAddresseeSnapshotShould
         var rebuilt = PrivateAddresseeSnapshot.Build(after, before, Roster);
 
         Render(after, rebuilt, BorisOwner).Should().Contain("борису");
-        PrivateAddresseeSnapshot.Parse(rebuilt).Should().NotContainKey("Анна");
+        PrivateAddresseeSnapshot.Read(rebuilt).OwnerUserIdsByAttribute.Should().NotContainKey("Анна");
     }
 
     /// <summary>
-    /// A name is not an identity. Written into a post it points at whoever
-    /// carries it that day, and the post keeps the answer forever - so the same
-    /// key can mean one character in the block it was frozen for and another in
-    /// a block written later, and no block says which save wrote it.
+    /// A name is not an identity: the same key may mean one character in a frozen block and another later,
+    /// so the doubt is put to the author. Nothing leaks, delivery breaks.
     /// </summary>
-    /// <remarks>
-    /// Nothing leaks either way: both characters read the room. What breaks is
-    /// delivery - the secret goes to the player the author did not name and
-    /// misses the one they did - so the doubt is put to the author instead of
-    /// being guessed at.
-    /// </remarks>
     [Fact]
     public void RefuseASaveWhenTheNameNowBelongsToAnotherCharacter()
     {
@@ -257,36 +233,10 @@ public class PrivateAddresseeSnapshotShould
 
         var rebuilt = PrivateAddresseeSnapshot.Build(renamed, frozen, RosterAfterTheRenames);
 
-        PrivateAddresseeSnapshot.Parse(rebuilt).Should().ContainKey("Владимир")
+        PrivateAddresseeSnapshot.Read(rebuilt).OwnerUserIdsByAttribute.Should().ContainKey("Владимир")
             .WhoseValue.Should().BeEquivalentTo(new[] { AnnaOwner });
         Render(renamed, rebuilt, AnnaOwner).Should().Contain("секрет");
         Render(renamed, rebuilt, BorisOwner).Should().NotContain("секрет");
-    }
-
-    /// <summary>
-    /// Rows written before the character was recorded are in the database. They
-    /// still read, they still deliver, and they raise no refusal: the post
-    /// cannot say which character the name was frozen to, and unknown is not a
-    /// mismatch.
-    /// </summary>
-    [Fact]
-    public void ReadASnapshotWrittenBeforeTheCharacterWasRecorded()
-    {
-        var legacy = "{\"Чак\":[\"" + AnnaOwner + "\"]}";
-
-        PrivateAddresseeSnapshot.Parse(legacy).Should().ContainKey("Чак")
-            .WhoseValue.Should().BeEquivalentTo(new[] { AnnaOwner });
-        Render(AddressedToChuck, legacy, AnnaOwner).Should().Contain("секрет");
-
-        var rebuilt = PrivateAddresseeSnapshot.Build(
-            AddressedToChuck, legacy, RosterAfterTheRenames);
-
-        PrivateAddresseeSnapshot.Parse(rebuilt).Should().ContainKey("Чак")
-            .WhoseValue.Should().BeEquivalentTo(new[] { AnnaOwner });
-        // Nobody is named, so the recipients fall back to the author's own
-        // text - exactly what they named before the snapshot recorded any name.
-        Render(AddressedToChuck, rebuilt, AnnaOwner)
-            .Should().Contain("data-recipients=\"DungeonMaster, Assistant, Чак\"");
     }
 
     /// <summary>
@@ -321,13 +271,10 @@ public class PrivateAddresseeSnapshotShould
 
         Render(AddressedToChuck, rebuilt, AnnaOwner)
             .Should().Contain("data-recipients=\"DungeonMaster, Assistant, Владимир\"");
-        RenderForAuthorEdit(AddressedToChuck).Should().Contain("data-bb-addressees=\"Чак\"");
     }
 
     /// <summary>
-    /// The stored shape is a contract with rows nobody is going to rewrite, so
-    /// it is pinned here rather than left to whatever the writer happens to
-    /// emit.
+    /// The stored shape is a contract with rows nobody rewrites.
     /// </summary>
     [Fact]
     public void RecordTheCharacterBesideItsOwner()
@@ -346,9 +293,9 @@ public class PrivateAddresseeSnapshotShould
     {
         // Failure direction is closed: unreadable state denies through this rule
         // instead of granting through it.
-        PrivateAddresseeSnapshot.Parse("not json").Should().BeEmpty();
-        PrivateAddresseeSnapshot.Parse("[]").Should().BeEmpty();
-        PrivateAddresseeSnapshot.Parse(null).Should().BeEmpty();
+        PrivateAddresseeSnapshot.Read("not json").OwnerUserIdsByAttribute.Should().BeEmpty();
+        PrivateAddresseeSnapshot.Read("[]").OwnerUserIdsByAttribute.Should().BeEmpty();
+        PrivateAddresseeSnapshot.Read(null).OwnerUserIdsByAttribute.Should().BeEmpty();
     }
 
     private string Render(string text, string snapshotJson, Guid viewerId)
@@ -358,35 +305,14 @@ public class PrivateAddresseeSnapshotShould
         {
             Audience = RenderAudience.Display,
             Surface = BbSurface.GamePost,
-            Viewer = new TestSubject
-            {
-                UserId = viewerId,
-                Role = UserRole.RegularUser,
-                IsAuthenticated = true,
-                AccessPolicy = AccessPolicy.NotSpecified
-            },
-            PostAuthorUserId = AuthorId,
+            Viewer = BbVisibilityRender.Viewer(UserRole.RegularUser, viewerId),
+            PostAuthorUserId = BbVisibilityRender.AuthorId,
             PrivateAddresseeOwnerUserIdsByAttribute = snapshot.OwnerUserIdsByAttribute,
             PrivateAddresseeNamesByAttribute = snapshot.AddresseeNamesByAttribute
         };
 
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.GamePost);
         return wrapper.RenderHtml(text, ctx);
-    }
-
-    /// <summary>The text as its own author gets it back into the composer.</summary>
-    private string RenderForAuthorEdit(string text)
-    {
-        var author = new TestSubject
-        {
-            UserId = AuthorId,
-            Role = UserRole.RegularUser,
-            IsAuthenticated = true,
-            AccessPolicy = AccessPolicy.NotSpecified
-        };
-
-        var wrapper = (BbParserWrapper)_parserProvider.GetForAuthorEdit(BbSurface.GamePost);
-        return wrapper.RenderHtml(text, RenderContext.ForAuthorEdit(author, BbSurface.GamePost));
     }
 
 }

@@ -14,9 +14,6 @@ public record CreateNotification
     /// </summary>
     public IEnumerable<Guid> UsersInterested { get; set; } = [];
 
-    /// <summary>
-    /// Event type
-    /// </summary>
     public EventType EventType { get; set; }
 
     /// <summary>
@@ -28,12 +25,8 @@ public record CreateNotification
     /// Identity of the bus publication this notification answers, when it has one
     /// </summary>
     /// <remarks>
-    /// The key <see cref="INotificationService.CreateAsync"/> deduplicates by:
-    /// a redelivered event carries the id of the rows its first delivery stored,
-    /// and asking to create them again creates nothing. Null means there is
-    /// nothing to deduplicate against — the message predates the key (the
-    /// dispatcher maps <see cref="Guid.Empty"/> here), so the write proceeds the
-    /// way it always had.
+    /// The key <see cref="INotificationService.CreateAsync"/> deduplicates by; null
+    /// (the dispatcher maps <see cref="Guid.Empty"/> here) deduplicates nothing.
     /// </remarks>
     public Guid? EventId { get; set; }
 
@@ -41,17 +34,9 @@ public record CreateNotification
     /// Who did the thing being reported, when a person did it
     /// </summary>
     /// <remarks>
-    /// Read by <see cref="INotificationService.CreateAsync"/> to drop the
-    /// recipients who have this person on their personal blacklist. Blocking
-    /// somebody means not hearing about them, and before this field the
-    /// notification carried the actor only inside <see cref="Metadata"/>, as a
-    /// display name in an anonymous object nothing could filter on.
-    ///
-    /// Null on purpose in two cases, and the difference matters:
-    /// a system event has no actor at all (a deadline, a reminder, a change of
-    /// one's own password), and a moderation event has one who must not be
-    /// filterable — a warning is not less delivered because its author was
-    /// blocked. Both stay null, and the generator says which of the two it is.
+    /// Read by <see cref="INotificationService.CreateAsync"/> to drop the recipients
+    /// who have this person on their personal blacklist. Null for a system event and
+    /// for a moderation event, whose author must not be filterable.
     /// </remarks>
     public Guid? ActorId { get; set; }
 

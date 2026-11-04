@@ -5,32 +5,16 @@ import {
 } from "./useExpandableRegistry";
 
 /**
- * Composable for expandable section state management.
- *
- * Supports two modes:
- *   - single-open (default): only one item can be expanded at a time.
- *     Opening another collapses the previous.
- *   - multi-open (`multiple: true`): any number of items can be open.
- *
- * When `register` is true (default), each `toggle()` call also syncs the
- * current expanded state with the global expandable registry (used by
- * ScrollNav's "Развернуть все / Свернуть все" button).
- *
- * `ids` accepts a reactive ref/computed/getter so the registry always
- * operates on the current item list (e.g. after pagination in GameReviews).
+ * Expandable sections, one open at a time or `multiple`; with `register` each
+ * toggle syncs with the registry of ScrollNav's "Развернуть все". `ids` may be
+ * reactive, so the registry acts on the current items.
  */
 export interface UseExpandableOptions {
   /** Allow multiple items to be expanded simultaneously. Default: false. */
   multiple?: boolean;
-  /**
-   * Register this composable instance with the global registry so it
-   * participates in "expand all / collapse all". Default: true.
-   */
+  /** Takes part in "expand all / collapse all". Default: true. */
   register?: boolean;
-  /**
-   * List of item ids this composable controls. Accepts a plain array,
-   * a ref, a computed, or a getter function — always reads the latest value.
-   */
+  /** The item ids, as an array, a ref, a computed or a getter. */
   ids?: MaybeRefOrGetter<readonly string[]>;
 }
 
@@ -71,9 +55,7 @@ export function useExpandable(options: UseExpandableOptions = {}) {
     if (multiple) {
       expandedSet.value = new Set(current);
     } else {
-      // Single-open mode can only show one item at a time. "Expand all"
-      // still opens at least one (the first) so the user sees *something*
-      // change. Consumers wanting true multi-open should pass multiple: true.
+      // Single-open: "expand all" opens the first, so something changes.
       expandedId.value = current[0] ?? null;
     }
     if (register) notifyExpandableChanged();

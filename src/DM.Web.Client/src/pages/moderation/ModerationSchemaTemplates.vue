@@ -1,15 +1,8 @@
 <script setup lang="ts">
 /**
- * ModerationSchemaTemplates - the catalogue of starting character sheets the
- * game creation form fills itself from.
- *
- * Exactly one entry carries the default mark, and the site is never without
- * one: the server refuses to hide the template that carries it. So the row
- * with the mark offers no removal, and the way to retire it is to hand the
- * mark to another row first.
- *
- * A game made from a template keeps its own copy of the sheet, so nothing here
- * reaches a game that already exists - neither an edit nor a removal.
+ * The catalogue of starting character sheets. The default mark is never
+ * missing: the server refuses to hide its template, so that row offers no
+ * removal. A game keeps its own copy of the sheet; nothing here reaches it.
  */
 import { onMounted, ref } from "vue";
 import {
@@ -17,52 +10,32 @@ import {
   type AttributeSchemaTemplate,
 } from "@/entities/attribute-schema-template";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import {
-  describeFailure,
-  describeRateLimit,
-  refusalHere,
-} from "@/shared/lib/errors";
+import { describeFailureOrWait, refusalHere } from "@/shared/lib/errors";
 import { ActionResult } from "@/shared/ui/ActionResult";
-import { useRoleGate } from "./lib/useRoleGate";
-import { sectionRole } from "./lib/sections";
-
-const { hasAccess, deniedText } = useRoleGate(
-  sectionRole("moderation-schema-templates"),
-);
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const templates = ref<AttributeSchemaTemplate[]>([]);
 const loading = ref(false);
 const error = ref<string | null>(null);
 
 /**
- * The read answers for itself, because this page does.
- *
- * The failure stands where the list would be, so the interceptor's plate over
- * it said the same sentence a second time — word for word on a 403 and a 5xx,
- * since both read it out of the same problem document.
- *
- * The handover of the mark is not in here: it leaves the catalogue standing,
- * so its refusal belongs on a plate over a page that still reads. The removal
- * carries the same flags for another reason: it is asked in a window, and the
- * window prints the refusal in itself.
+ * The read owns its refusal: it stands where the list would be. The removal,
+ * asked in a window, prints its refusal there; the handover of the mark leaves
+ * the catalogue standing, so its refusal goes on a plate.
  */
-const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
 
 async function load() {
   loading.value = true;
   error.value = null;
   try {
     const answer = await attributeSchemaTemplateApi.getTemplates(OWNS_REFUSAL);
-    // A load that failed is the state of the page and not a toast over it:
-    // there is no list left underneath to go back to.
     if (answer.error) {
-      // A wait is said in the shared wording, the one the interceptor would
-      // have raised: it is the only one that names the seconds the server asked
-      // for, and the title sent with a 429 carries no number.
-      error.value =
-        answer.error.status === 429
-          ? describeRateLimit(answer.error.retryAfterSeconds)
-          : describeFailure(answer.error, "Не удалось загрузить данные");
+      // The shared wording names the seconds; the 429 title carries no number.
+      error.value = describeFailureOrWait(
+        answer.error,
+        "Не удалось загрузить данные",
+      );
       return;
     }
     templates.value = answer.data?.resources ?? [];
@@ -70,8 +43,6 @@ async function load() {
     loading.value = false;
   }
 }
-
-// --- The default mark -----------------------------------------------------
 
 const promoting = ref(false);
 
@@ -86,9 +57,7 @@ async function makeDefault(template: AttributeSchemaTemplate) {
     const { error: failure } = await attributeSchemaTemplateApi.makeDefault(
       template.id,
     );
-    // The mark moves between two rows, so the whole list is re-read rather
-    // than the clicked row flipped: the row that lost the mark is the other
-    // one, and the server is what decides which.
+    // The mark moves between two rows, so the whole list is read again.
     if (failure) {
       const text = refusalHere(
         failure,
@@ -103,12 +72,9 @@ async function makeDefault(template: AttributeSchemaTemplate) {
   }
 }
 
-// --- Removal --------------------------------------------------------------
-
 const deleteTarget = ref<AttributeSchemaTemplate | null>(null);
 
-// The request of the confirmation. The window waits for it, prints a refusal in
-// itself and closes on success alone.
+// The window waits for it, prints a refusal in itself and closes on success alone.
 async function confirmDelete() {
   const target = deleteTarget.value;
   if (!target) return;
@@ -120,19 +86,16 @@ async function confirmDelete() {
   return result;
 }
 
-onMounted(() => {
-  if (hasAccess.value) load();
-});
+onMounted(load);
 </script>
 
 <template>
   <page-title>Шаблоны схем атрибутов</page-title>
 
-  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
-
-  <section v-else class="schema-templates">
-    <div v-if="loading" class="loading">Загрузка...</div>
-    <div v-else-if="error" class="error">{{ error }}</div>
+  <section class="schema-templates">
+    <!-- Text, not a skeleton: how many templates there are is anyone's guess. A read again keeps the rows. -->
+    <div v-if="loading && !templates.length" class="loading">Загрузка...</div>
+    <ErrorState v-else-if="error" :message="error" :retry="load" />
     <template v-else>
       <div class="templates-header">
         <router-link
@@ -142,16 +105,7 @@ onMounted(() => {
         >
       </div>
 
-      <!--
-        Unreachable while the catalogue holds its default: the seeder writes one
-        and deletion refuses to take the last default away. Kept as the plain
-        list form the standard asks for, so a catalogue that somehow empties
-        reads like every other empty list rather than like a broken table.
-      -->
-      <SecondaryText v-if="templates.length === 0">
-        Шаблонов пока нет
-      </SecondaryText>
-      <ul v-else class="templates-list">
+      <ul class="templates-list" :aria-busy="loading || undefined">
         <li
           v-for="template in templates"
           :key="template.id"
@@ -173,10 +127,7 @@ onMounted(() => {
               }"
               >Редактировать</router-link
             >
-            <!-- The one action of the section that goes without a dialog, so
-                 the wait is its own to announce: the control stops answering
-                 while the handover is in flight, and says it is coming back.
-                 The dialog does as much for the removal beside it. -->
+            <!-- The one action here without a dialog, so it announces its own wait. -->
             <button
               v-if="!template.isDefault"
               type="button"
@@ -218,15 +169,12 @@ onMounted(() => {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .schema-templates
   display: flex
   flex-direction: column
   gap: $medium
-
-.error
-  color: $accent-red
 
 .templates-header
   display: flex

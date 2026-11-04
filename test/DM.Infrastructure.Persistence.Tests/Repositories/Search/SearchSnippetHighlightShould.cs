@@ -9,21 +9,13 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Search;
 /// The window the database marked, split into the runs a reader sees.
 /// </summary>
 /// <remarks>
-/// The preview used to be the first two hundred characters of the body, so the
-/// words that were searched for were usually not in it — and could not have been
-/// found by looking either, because the search matches by lexeme: a query for
-/// "странник" matches "странников", and no substring of the query occurs in it.
-/// So the window and the mark both come from the database, and this is where the
-/// marks stop being characters and become a shape the contract can carry.
-///
-/// The sentinels are control characters, and the projection strips control
-/// characters out of every body: a visible pair would be one an author could type,
-/// and the preview would then split where nobody searched.
+/// The search matches by lexeme, so the window and the mark come from the database. The sentinels are
+/// control characters, which the projection strips from every body.
 /// </remarks>
 public class SearchSnippetHighlightShould
 {
-    private const char Start = '';
-    private const char End = '';
+    private const char Start = '\u0011';
+    private const char End = '\u0012';
 
     [Fact]
     public void SplitTheWindowAroundWhatWasMatched()
@@ -68,11 +60,7 @@ public class SearchSnippetHighlightShould
     /// <summary>
     /// A search with no words in it has no match to build a window around.
     /// </summary>
-    /// <remarks>
-    /// Filtering by author or by date matches every row equally, so the beginning
-    /// of the text is the honest preview - and it is one unmarked run, not a
-    /// pretence that something was found.
-    /// </remarks>
+    /// <remarks>Filtering by author or date matches every row equally, so the start of the text is one unmarked run.</remarks>
     [Fact]
     public void FallBackToThePlainBeginningWithNothingMarked()
     {

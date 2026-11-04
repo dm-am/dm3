@@ -38,26 +38,14 @@ const {
   clearFilters,
 } = usePollsFilter();
 
-// Search with debounce
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
   setSearch,
 );
 
-// Filter dropdown with navigation
-const {
-  showDropdown,
-  navPath,
-  closeDropdown: closeDropdownBase,
-  toggleDropdown,
-  navigateBack,
-} = useFilterDropdown();
+const { showDropdown, navPath, closeDropdown, toggleDropdown, navigateBack } =
+  useFilterDropdown();
 
-function closeDropdown() {
-  closeDropdownBase();
-}
-
-// Root level filter options
 const filterOptions = [
   { key: "status", label: "Статус", hint: "Активные или завершенные" },
   { key: "pollType", label: "Тип опроса", hint: "Анонимные или публичные" },
@@ -82,7 +70,6 @@ function getDropdownTitle(): string | null {
   return null;
 }
 
-// Sort
 const sortOptions = SORT_OPTIONS.map((o) => ({
   value: o.value,
   label: o.label,
@@ -95,63 +82,25 @@ function handleSortSelect(value: string, direction?: "asc" | "desc") {
   setSort(value as "starts" | "ends" | "status", direction);
 }
 
-// Status handling
 function handleStatusSelect(value: string) {
   setStatus(value as PollStatus | "");
   closeDropdown();
 }
 
-function getStatusHint(value: string): string {
-  switch (value) {
-    case "":
-      return "Все опросы";
-    case "Pending":
-      return "Еще не начались";
-    case "Active":
-      return "Сейчас идут";
-    case "Closed":
-      return "Уже закончились";
-    default:
-      return "";
-  }
-}
+// Copies: the list takes a mutable array, the registry is read-only.
+const statusOptions = [...STATUS_OPTIONS];
+const pollTypeOptions = [...POLL_TYPE_OPTIONS];
 
-// Status options with hints (for OptionsList)
-const statusOptions = computed(() =>
-  STATUS_OPTIONS.map((o) => ({ ...o, hint: getStatusHint(o.value) })),
-);
-
-// Status label for bubble
 const statusLabel = computed(() => {
   const opt = STATUS_OPTIONS.find((o) => o.value === filterState.value.status);
   return opt?.label || "";
 });
 
-// Poll type handling
 function handlePollTypeSelect(value: string) {
   setPollType(value as "anonymous" | "public" | "");
   closeDropdown();
 }
 
-function getPollTypeHint(value: string): string {
-  switch (value) {
-    case "":
-      return "Все опросы";
-    case "anonymous":
-      return "Голоса скрыты";
-    case "public":
-      return "Видно кто голосовал";
-    default:
-      return "";
-  }
-}
-
-// Poll type options with hints (for OptionsList)
-const pollTypeOptions = computed(() =>
-  POLL_TYPE_OPTIONS.map((o) => ({ ...o, hint: getPollTypeHint(o.value) })),
-);
-
-// Poll type label for bubble
 const pollTypeLabel = computed(() => {
   const opt = POLL_TYPE_OPTIONS.find(
     (o) => o.value === filterState.value.pollType,
@@ -159,7 +108,6 @@ const pollTypeLabel = computed(() => {
   return opt?.label || "";
 });
 
-// Date range handlers
 function handleStartsApply(from: string | null, to: string | null) {
   setStartsFromUtc(from || "");
   setStartsToUtc(to || "");
@@ -184,7 +132,6 @@ function handleEndsClear() {
   closeDropdown();
 }
 
-// Date range display
 const hasStartsFilter = computed(() => {
   return !!filterState.value.startsFromUtc || !!filterState.value.startsToUtc;
 });
@@ -207,8 +154,7 @@ const endsFilterLabel = computed(() => {
   });
 });
 
-// Has bubbles (only when at least one actual filter bubble is rendered;
-// non-default sorting alone must not show a row with a lone "Сбросить")
+// A non-default sort alone must not show a row with a lone "Сбросить".
 const hasBubbles = computed(() => {
   const state = filterState.value;
   return (
@@ -255,7 +201,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
 <template>
   <div class="polls-filter">
     <div class="filter-bar">
-      <!-- Search input -->
       <FilterSearchInput
         v-model="localInput"
         placeholder="Поиск по названию и описанию"
@@ -264,7 +209,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
         <FilterButton
           :active="showDropdown"
@@ -273,14 +217,12 @@ function handleSearchKeydown(event: KeyboardEvent) {
         />
 
         <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"
             :title="getDropdownTitle() ?? ''"
             @back="navigateBack"
           />
 
-          <!-- Root level items -->
           <template v-if="!navPath">
             <FilterDropdownItem
               v-for="item in filterOptions"
@@ -292,21 +234,18 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Status options -->
           <OptionsList
             v-if="navPath?.filter === 'status'"
             :options="statusOptions"
             @select="handleStatusSelect"
           />
 
-          <!-- Poll type options -->
           <OptionsList
             v-if="navPath?.filter === 'pollType'"
             :options="pollTypeOptions"
             @select="handlePollTypeSelect"
           />
 
-          <!-- Starts date range picker -->
           <DateRangePicker
             v-if="navPath?.filter === 'startsRange'"
             :from-value="filterState.startsFromUtc || null"
@@ -317,7 +256,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @clear="handleStartsClear"
           />
 
-          <!-- Ends date range picker -->
           <DateRangePicker
             v-if="navPath?.filter === 'endsRange'"
             :from-value="filterState.endsFromUtc || null"
@@ -330,7 +268,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         </FilterDropdown>
       </div>
 
-      <!-- Sort -->
       <SortButton
         :options="sortOptions"
         :sort-by="filterState.sortBy"
@@ -340,7 +277,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
       />
     </div>
 
-    <!-- Active filter bubbles -->
     <BubblesRow v-if="hasBubbles" @clear-all="clearAll">
       <FilterBubble
         v-if="filterState.status"
@@ -380,7 +316,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
   +filter-bar
   +filter-button
-  +filter-responsive
 
 +filter-dropdown-base
 </style>

@@ -37,8 +37,6 @@ internal class AttributeSchemaTemplateRepository : IAttributeSchemaTemplateRepos
         _dateTimeProvider = dateTimeProvider;
     }
 
-    // --- READ ---
-
     /// <inheritdoc />
     public async Task<IEnumerable<AttributeSchemaTemplate>> GetTemplates(CancellationToken ct = default)
     {
@@ -63,8 +61,6 @@ internal class AttributeSchemaTemplateRepository : IAttributeSchemaTemplateRepos
         return stored == null ? null : ToTemplate(stored);
     }
 
-    // --- WRITE ---
-
     /// <inheritdoc />
     public async Task<AttributeSchemaTemplate> Create(
         CreateAttributeSchemaTemplate create, Guid createdByUserId, CancellationToken ct = default)
@@ -88,7 +84,7 @@ internal class AttributeSchemaTemplateRepository : IAttributeSchemaTemplateRepos
         {
             await _dbContext.SaveChangesAsync(ct);
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: DuplicateKey })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // A new template carries no default flag, so the only unique rule it
             // can break is the one over the title.
@@ -118,7 +114,7 @@ internal class AttributeSchemaTemplateRepository : IAttributeSchemaTemplateRepos
                     .SetProperty(x => x.Specifications, document)
                     .SetProperty(x => x.UpdatedUtc, updatedUtc), ct);
         }
-        catch (PostgresException ex) when (ex.SqlState == DuplicateKey)
+        catch (PostgresException ex) when (ex.IsDuplicateKey())
         {
             // The default flag is untouched here, so the title is again the only
             // unique rule this write can break.
@@ -193,7 +189,7 @@ internal class AttributeSchemaTemplateRepository : IAttributeSchemaTemplateRepos
                     .Where(t => t.TemplateId == templateId)
                     .ExecuteUpdateAsync(t => t.SetProperty(x => x.IsDefault, true), cancellation);
             }
-            catch (PostgresException ex) when (ex.SqlState == DuplicateKey)
+            catch (PostgresException ex) when (ex.IsDuplicateKey())
             {
                 throw new DuplicateEntityException("Concurrent default attribute schema template", ex);
             }
@@ -212,10 +208,6 @@ internal class AttributeSchemaTemplateRepository : IAttributeSchemaTemplateRepos
         return assigned;
     }
 
-    // --- HELPERS ---
-
-    /// <summary>The unique violation PostgreSQL answers a broken index with.</summary>
-    private const string DuplicateKey = "23505";
 
     private static AttributeSchemaTemplate ToTemplate(DbTemplate stored) => new()
     {

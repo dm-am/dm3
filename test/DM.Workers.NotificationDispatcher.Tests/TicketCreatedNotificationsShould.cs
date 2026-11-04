@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
@@ -14,12 +13,8 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// Who is told that a ticket was filed.
 /// </summary>
 /// <remarks>
-/// The notification carries the text of the ticket and the name of its author, so
-/// its audience is the audience of the ticket itself: the moderators whose role
-/// reads its category, less the moderator it names and the moderator who filed it.
-/// Every moderator on duty was told before, and a junior moderator read the text
-/// of an access recovery request he cannot open, and a moderator read a complaint
-/// about himself together with the name of whoever filed it.
+/// The notification carries the text and the author, so its audience is the ticket's: the moderators whose
+/// role reads its category, less the one it names and the one who filed it.
 /// </remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class TicketCreatedNotificationsShould

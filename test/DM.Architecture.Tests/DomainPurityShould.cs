@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,24 +14,8 @@ namespace DM.Architecture.Tests;
 /// framework, not the persistence project.
 /// </summary>
 /// <remarks>
-/// This is the breach that came back the most. Serilog reached DM.Domain.Account
-/// through a log context push, and Npgsql reached DM.Domain.Community and
-/// DM.Domain.Game because three services caught PostgresException to read a
-/// SQLSTATE. Both were unwound afterwards by a read of the whole tree rather than
-/// by a gate, because nothing was watching: the boundary rules next door cover
-/// the controller side only, and this rule lived in a review checklist, which is
-/// read by a reviewer and not by a build.
-///
-/// Asserted against assembly references rather than against using directives. A
-/// type reached through an alias or a fully qualified name leaves nothing in the
-/// file for a textual check to find, while the compiler records the reference
-/// either way. The same property is why a package that is referenced and never
-/// touched stays invisible here: it costs the domain nothing until a type from it
-/// is used.
-///
-/// The DI abstractions are deliberately absent from the list. Each module
-/// composes its own registrations, so the service collection is part of the
-/// shape a domain assembly publishes rather than machinery leaking into it.
+/// Asserted against assembly references: a type reached through an alias leaves nothing in the file.
+/// The DI abstractions are left out: each module composes its own registrations.
 /// </remarks>
 public class DomainPurityShould
 {
@@ -50,7 +35,6 @@ public class DomainPurityShould
         "DM.Infrastructure",
     ];
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     /// <summary>
     /// Discovered in the output directory rather than named by a marker type each:
@@ -71,7 +55,7 @@ public class DomainPurityShould
     public void CoverEveryDomainProjectOfTheSolution()
     {
         var declared = Directory
-            .GetDirectories(Path.Combine(RepositoryRoot, "src"), "DM.Domain.*")
+            .GetDirectories(Path.Combine(RepositoryLayout.Root, "src"), "DM.Domain.*")
             .Select(directory => new DirectoryInfo(directory).Name)
             .ToArray();
 
@@ -103,27 +87,14 @@ public class DomainPurityShould
     /// <summary>
     /// Operations of a store, which no contract of the domain declares.
     /// </summary>
-    /// <remarks>
-    /// Each is a step of a unit of work rather than a thing the domain wants
-    /// done. A repository that offers them lets a service open a transaction,
-    /// write through two other repositories and commit — spreading one unit of
-    /// work across three contracts, none of which can be read to find out what it
-    /// covers, and none of which the retrying execution strategy is wrapped
-    /// around.
-    /// </remarks>
+    /// <remarks>A repository offering them spreads one unit of work across contracts the retry strategy does not wrap.</remarks>
     private static readonly string[] StoragePrimitives =
         ["SaveChanges", "BeginTransaction", "CommitTransaction", "RollbackTransaction", "Flush"];
 
     /// <summary>
     /// A repository is asked for an outcome, not for a step of a transaction.
     /// </summary>
-    /// <remarks>
-    /// One had drifted: a bare SaveChanges on the contract of the username-change
-    /// repository, never called by anything. Nothing failed while it sat there,
-    /// and nothing would have failed on the day something called it either — the
-    /// call would simply have committed whatever another repository happened to
-    /// have left tracked on the shared context, at a moment nobody chose.
-    /// </remarks>
+    /// <remarks>A bare SaveChanges commits whatever another repository left tracked on the shared context.</remarks>
     [Fact]
     public void AskForOutcomesRatherThanForStepsOfATransaction()
     {

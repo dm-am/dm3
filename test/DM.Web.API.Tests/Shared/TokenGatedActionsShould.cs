@@ -15,19 +15,8 @@ namespace DM.Web.API.Tests.Shared;
 /// the path.
 /// </summary>
 /// <remarks>
-/// A path is written verbatim into the reverse-proxy access log, into the request
-/// log and into the trace, so a token placed there is disclosed by construction to
-/// everyone who can read any of the three, and rotating it means purging logs
-/// rather than changing a value. Eight endpoints took theirs from the path —
-/// password reset, activation, email change confirmation, username change approval,
-/// guest ticket tracking — which put a working password-reset credential into the
-/// access log for the whole lifetime of the token, next to a body carrying the new
-/// password. API_DESIGN states the rule; this is what keeps it true, because a new
-/// endpoint is written by copying its neighbour.
-///
-/// Two halves, and both are needed. The route must not name the token, and the
-/// action must still read one: the first check alone is satisfied by an endpoint
-/// that stopped taking a token at all.
+/// A path is written verbatim into the proxy log, the request log and the trace. Both halves: the route
+/// names no token, and the action still reads one.
 /// </remarks>
 public class TokenGatedActionsShould
 {

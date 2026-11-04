@@ -28,23 +28,14 @@ namespace BBCodeParser.Nodes
             ParentNode = null;
         }
 
-        // DM3 change against the original: the public entry points below are
-        // unchanged in signature, but each now starts one iterative walk instead
-        // of a recursive descent. See Node.cs.
-
+        // DM3 change against the original: each entry point starts the one iterative walk of Node.Render.
         public string ToHtml(Func<Node, bool> filter = null, Func<Node, string, string> filterAttributeValue = null)
         {
             return Render(this, EmitMode.Html, securitySubstitutions, aliasSubstitutions, filter, filterAttributeValue);
         }
 
-        // DM3 change against the original: the text is text. The original ran the
-        // text through the substitutions of the HTML, so the plain text carried
-        // "&lt;" for "<", "<br />" for a line break and "&ndash;" for a dash, and
-        // every reader of it had to know which entities to take back - the search
-        // projection did, and a mail would not have. Nothing here is escaped now,
-        // a line break stays a line break, and the alias substitutions are the
-        // parser's text ones, which spell a dash as the character. Whoever puts
-        // this text into markup escapes it there.
+        // DM3 change against the original: no HTML escaping and the text
+        // substitutions, so a reader of plain text gets no entities to undo.
         public string ToText(Func<Node, bool> filter = null, Func<Node, string, string> filterAttributeValue = null)
         {
             return Render(this, EmitMode.Text, null, textSubstitutions, filter, filterAttributeValue);
@@ -52,26 +43,8 @@ namespace BBCodeParser.Nodes
 
         public string ToBb(Func<Node, bool> filter = null, Func<Node, string, string> filterAttributeValue = null)
         {
-            // Security substitutions stay off on this path, as in the original:
-            // the point is to give back the source the author typed.
+            // Security substitutions stay off: this gives back the source as typed.
             return Render(this, EmitMode.Bb, null, null, filter, filterAttributeValue);
-        }
-
-        // DM3 addition against the original: the source the author typed, with
-        // the name of every tag the grammar read as markup, and the names of
-        // its parameters, in lower case. A name is written in lower case
-        // everywhere the site writes one, and the save path writes the author's
-        // text that way too.
-        //
-        // Only what is markup changes. A tag printed as the text it was typed
-        // (broken, left open, a closing tag with nothing to close, a content
-        // tag that holds no value it accepts) is text, and text is not touched;
-        // neither is anything inside a closed [noparse], nor any value, the DM2
-        // attribute of [private] included. The case of a name means nothing to
-        // the grammar, so the page shows the same text either way.
-        public string ToBbInLowerCase()
-        {
-            return Render(this, EmitMode.BbInLowerCase, null, null, null, null);
         }
 
         internal override void Emit(

@@ -22,10 +22,9 @@ namespace DM.Web.API.Features.Moderation.Mentorships;
 [RequireRole(UserRole.Mentor)]
 public class MentorshipController : ControllerBase
 {
-    private readonly IMentorshipApiService _mentorshipApiService;
+    private readonly MentorshipApiService _mentorshipApiService;
 
-    /// <inheritdoc />
-    public MentorshipController(IMentorshipApiService mentorshipApiService)
+    public MentorshipController(MentorshipApiService mentorshipApiService)
     {
         _mentorshipApiService = mentorshipApiService;
     }

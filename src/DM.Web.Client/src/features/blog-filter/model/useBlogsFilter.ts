@@ -1,4 +1,4 @@
-import { computed, type ComputedRef } from "vue";
+import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
@@ -19,43 +19,11 @@ import type {
 import { SORT_OPTIONS, STATUS_OPTIONS, DEFAULT_FILTER_STATE } from "./types";
 import type { BlogStatus } from "@/entities/blog";
 
-// =============================================================================
-// RETURN TYPE
-// =============================================================================
-
-export interface BlogsFilterComposable {
-  /** Current filter state (computed from URL) */
-  filterState: ComputedRef<BlogsFilterState>;
-  /** API search parameters (computed from filterState) */
-  searchParams: ComputedRef<BlogsSearchParams>;
-  /** Whether any filters are active */
-  hasActiveFilters: ComputedRef<boolean>;
-
-  // Actions
-  setSearch: (search: string) => void;
-  setStatus: (status: StatusFilter) => void;
-  clearStatus: () => void;
-  addHost: (username: string) => void;
-  removeHost: (username: string) => void;
-  clearHosts: () => void;
-  setCreatedRange: (fromUtc: string | null, toUtc: string | null) => void;
-  setActivatedRange: (fromUtc: string | null, toUtc: string | null) => void;
-  setClosedRange: (fromUtc: string | null, toUtc: string | null) => void;
-  setSort: (sortBy: string, sortOrder?: "asc" | "desc") => void;
-  toggleSortOrder: () => void;
-  clearFilters: () => void;
-}
-
-// =============================================================================
-// ACTION TYPES (Discriminated Union)
-// =============================================================================
-
 type BlogsFilterAction =
   | { type: "SET_SEARCH"; search: string }
   | { type: "SET_STATUS"; status: StatusFilter }
   | { type: "ADD_HOST"; username: string }
   | { type: "REMOVE_HOST"; username: string }
-  | { type: "CLEAR_HOSTS" }
   | { type: "SET_CREATED_RANGE"; fromUtc: string | null; toUtc: string | null }
   | {
       type: "SET_ACTIVATED_RANGE";
@@ -67,19 +35,10 @@ type BlogsFilterAction =
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
 
-// =============================================================================
-// PURE REDUCER (Testable, no side effects)
-// =============================================================================
-
-/**
- * Pure reducer function - applies action to state and returns new state.
- * This is the ONLY place where state transformation logic lives.
- */
 function reducer(
   state: BlogsFilterState,
   action: BlogsFilterAction,
 ): BlogsFilterState {
-  // Clone state with new Set instance to avoid mutation
   const newState: BlogsFilterState = {
     ...state,
     hostUsernames: new Set(state.hostUsernames),
@@ -100,10 +59,6 @@ function reducer(
 
     case "REMOVE_HOST":
       newState.hostUsernames.delete(action.username);
-      return newState;
-
-    case "CLEAR_HOSTS":
-      newState.hostUsernames.clear();
       return newState;
 
     case "SET_CREATED_RANGE":
@@ -130,16 +85,11 @@ function reducer(
       return createDefaultState();
 
     default: {
-      // Exhaustiveness check - TypeScript will error if we miss a case
       const _exhaustive: never = action;
       return _exhaustive;
     }
   }
 }
-
-// =============================================================================
-// VALIDATION & PARSING
-// =============================================================================
 
 const validSortByValues = new Set<string>(SORT_OPTIONS.map((o) => o.value));
 const validStatusValues = new Set<string>(STATUS_OPTIONS.map((o) => o.value));
@@ -210,49 +160,28 @@ function buildQueryFromState(state: BlogsFilterState): Record<string, string> {
   return query;
 }
 
-// =============================================================================
-// MODULE-LEVEL DISPATCHER (created once per module)
-// =============================================================================
-
 const dispatcher = createFilterDispatcher<BlogsFilterState, BlogsFilterAction>({
   buildQuery: buildQueryFromState,
   name: "useBlogsFilter",
 });
 
-// =============================================================================
-// COMPOSABLE
-// =============================================================================
-
-/**
- * Blogs filter composable with action-based state management.
- *
- * Architecture:
- * - URL is the single source of truth (filterState is computed from route.query)
- * - All mutations go through dispatch() which applies actions via pure reducer
- * - Actions batch via module-level debounce - rapid clicks merge into single navigation
- * - Pure reducer is testable in isolation without router
- */
-export function useBlogsFilter(): BlogsFilterComposable {
+// The URL is the single source of truth; actions batch through one module-level debounce.
+export function useBlogsFilter() {
   const route = useRoute();
   const router = useRouter();
-  const { entitiesPerPage } = usePaging();
+  const { pageSize } = usePaging();
 
-  // Set router for dispatcher
   dispatcher.setRouter(router);
 
-  // Filter state derived from URL (single source of truth)
   const filterState = computed<BlogsFilterState>(() =>
     parseQueryToState(route.query),
   );
 
-  // Helper to get current state for dispatch
   const getCurrentState = () => filterState.value;
 
-  // Dispatch helper
   const dispatch = (action: BlogsFilterAction) =>
     dispatcher.dispatch(action, reducer, getCurrentState);
 
-  // Convert to API params
   const searchParams = computed<BlogsSearchParams>(() => {
     const state = filterState.value;
     const params: BlogsSearchParams = {};
@@ -280,11 +209,10 @@ export function useBlogsFilter(): BlogsFilterComposable {
     const pageNumber = parsePageNumber(route.query.number);
     if (pageNumber) params.number = pageNumber;
 
-    params.size = entitiesPerPage.value;
+    params.size = pageSize.value;
     return params;
   });
 
-  // Active filters check
   const hasActiveFilters = computed(() => {
     const state = filterState.value;
     return (
@@ -300,20 +228,14 @@ export function useBlogsFilter(): BlogsFilterComposable {
     );
   });
 
-  // ==========================================================================
-  // ACTION DISPATCHERS (thin wrappers around dispatch)
-  // ==========================================================================
-
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search });
   const setStatus = (status: StatusFilter) =>
     dispatch({ type: "SET_STATUS", status });
-  const clearStatus = () => dispatch({ type: "SET_STATUS", status: "any" });
   const addHost = (username: string) =>
     dispatch({ type: "ADD_HOST", username });
   const removeHost = (username: string) =>
     dispatch({ type: "REMOVE_HOST", username });
-  const clearHosts = () => dispatch({ type: "CLEAR_HOSTS" });
   const setCreatedRange = (fromUtc: string | null, toUtc: string | null) =>
     dispatch({ type: "SET_CREATED_RANGE", fromUtc, toUtc });
   const setActivatedRange = (fromUtc: string | null, toUtc: string | null) =>
@@ -331,10 +253,8 @@ export function useBlogsFilter(): BlogsFilterComposable {
     hasActiveFilters,
     setSearch,
     setStatus,
-    clearStatus,
     addHost,
     removeHost,
-    clearHosts,
     setCreatedRange,
     setActivatedRange,
     setClosedRange,

@@ -1,28 +1,14 @@
 @use "Variables" as *
 
-// =============================================================================
-// SASS THEME VARIABLES
-// =============================================================================
-// These SASS variables wrap CSS Custom Properties from ThemeVariables.css.
-// Use them directly in your styles:
-//
-//   .my-element
-//     color: $text
-//     background-color: $bg-element
-//     border: 1px solid $border
-//
-// Runtime theme switching is handled by CSS Custom Properties.
-// See THEME_SYSTEM.md for full documentation.
-// =============================================================================
+// Sass names for the custom properties of ThemeVariables.css.
 
 // Text
 $text: var(--text)
 $text-muted: var(--text-muted)
 $text-meta: var(--text-meta)
-// The green text of DM2: the hidden text of [private], on the page itself.
+// DM2's green, the [private] text.
 $text-green: var(--text-green)
-// Inks for a TINT of the accent (see the +tint mixin), not for a solid fill:
-// against the solid accent they measure 1.00-1.15.
+// Inks for a tint of the accent (+tint), not for a solid fill.
 $text-on-green: var(--text-on-green)
 $text-on-red: var(--text-on-red)
 // Ink for a solid accent fill: the page background, flipped with the theme.
@@ -58,11 +44,8 @@ $bg-highlight-blue: var(--bg-highlight-blue)
 $selection-bg: var(--selection-bg)
 $selection-text: var(--selection-text)
 
-// Buttons (solid accents for badges/selected states; interactive button
-// states are relative overlays — see $control-bg-overlay / $hover-overlay)
+// Buttons: a solid fill for badges and selected states
 $button-bg: var(--button-bg)
-$button-text: var(--button-text)
-$button-border: var(--button-border)
 
 // Borders
 $border: var(--border)
@@ -87,34 +70,34 @@ $shade-text: var(--shade-text)
 $tooltip-bg: var(--tooltip-bg)
 $tooltip-text: var(--tooltip-text)
 $tooltip-border: var(--tooltip-border)
-// Links on the tooltip surface (dark in both themes) — $link is unreadable there
+// Links on the tooltip, which is dark in both themes
 $tooltip-link: var(--tooltip-link)
 $tooltip-link-hover: var(--tooltip-link-hover)
 $overlay-bg: var(--overlay-bg)
 $overlay-subtle: var(--overlay-subtle)
-// The faintest wash of the scale — see the note in ThemeVariables.css
+// The faintest wash, of the same weight in both themes
 $overlay-faint: var(--overlay-faint)
 $selected-overlay: var(--selected-overlay)
 $hover-overlay: var(--hover-overlay)
 $active-overlay: var(--active-overlay)
-// Control overlays — alpha calibrated to equal solid $bg-element / $bg-element-accent
-// when composed over $bg-page. Use for buttons, dropdowns, any "control surface".
+// A control fill that reads on every sanctioned surface
 $control-bg-overlay: var(--control-bg-overlay)
-$control-bg-hover-overlay: var(--control-bg-hover-overlay)
-// The button scale: a constant frame plus three steps of fill (rest, hover,
-// press). One step of the palette at four weights — see ThemeVariables.css.
+// The button scale: a constant frame and three steps of fill
 $control-border-overlay: var(--control-border-overlay)
 $control-fill-overlay: var(--control-fill-overlay)
 $control-fill-hover-overlay: var(--control-fill-hover-overlay)
 $control-fill-press-overlay: var(--control-fill-press-overlay)
-// Lightening steps for a SOLID fill (the primary button): white over $link.
+// Lightening steps for the filled primary button
 $primary-hover-overlay: var(--primary-hover-overlay)
 $primary-press-overlay: var(--primary-press-overlay)
 $shadow-color: var(--shadow-color)
 $nsfw-overlay: var(--nsfw-overlay)
 $highlight-overlay-green: var(--highlight-overlay-green)
-$highlight-overlay-red: var(--highlight-overlay-red)
 $highlight-overlay-blue: var(--highlight-overlay-blue)
+
+// Shadows: a floating panel, and a small control lifted off the page
+$shadow-panel: 0 4px 12px $shadow-color
+$shadow-small: 0 2px 8px $shadow-color
 
 // Search highlight
 $search-highlight-bg: var(--search-highlight-bg)
@@ -122,6 +105,3 @@ $search-highlight-bg: var(--search-highlight-bg)
 // Utility
 $filter-invert: var(--filter-invert)
 $hover-brightness: var(--hover-brightness)
-
-// Legacy aliases for backward compatibility
-$bg: $bg-element

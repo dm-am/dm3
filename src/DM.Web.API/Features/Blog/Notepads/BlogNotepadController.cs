@@ -25,13 +25,12 @@ namespace DM.Web.API.Features.Blog.Notepads;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class BlogNotepadController : ControllerBase
 {
-    private readonly IBlogNotepadApiService _notepadApiService;
-    private readonly IBlogApiService _blogApiService;
+    private readonly BlogNotepadApiService _notepadApiService;
+    private readonly BlogApiService _blogApiService;
 
-    /// <inheritdoc />
     public BlogNotepadController(
-        IBlogNotepadApiService notepadApiService,
-        IBlogApiService blogApiService)
+        BlogNotepadApiService notepadApiService,
+        BlogApiService blogApiService)
     {
         _notepadApiService = notepadApiService;
         _blogApiService = blogApiService;

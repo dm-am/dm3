@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Text;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -25,17 +21,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// "Ждем пост" is created from the site, with the body the site sends.
 /// </summary>
 /// <remarks>
-/// It never was. The endpoint bound the response DTO, whose author is a required
-/// nested user, and the site sends the character and nothing else: every press
-/// answered 400 "CreatedBy field is required" before the service was reached.
-/// Behind the binding the service wanted the username of the player as well.
-/// Both are the server's own facts - the caller is in the session, the player
-/// stands behind the character - so the body is the character and the server
-/// reads the rest.
-///
-/// The body is written out as a string here, the way the client serializes it,
-/// rather than built from a server type: a test that sends what the server
-/// declares passes whatever the client actually sends.
+/// The caller and the player behind the character are the server's own facts, so the body is the character.
+/// Written out as a string, the way the client serializes it.
 /// </remarks>
 public class PostPendencyCreationShould : IntegrationTestBase
 {

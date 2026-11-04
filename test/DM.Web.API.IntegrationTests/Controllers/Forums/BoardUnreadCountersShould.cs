@@ -1,12 +1,8 @@
-using System;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Features.Topics;
 using DM.Infrastructure.Persistence;
-using DM.Infrastructure.Persistence.Entities.Forum;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,21 +12,12 @@ using Board = DM.Infrastructure.Persistence.Entities.Forum.Board;
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
 /// <summary>
-/// Reading one board fills two unread counters for a signed-in reader. Both
-/// counters come from the same repository and therefore from the one DbContext
-/// of the request scope, which refuses to serve two operations at once.
+/// Reading one board fills two unread counters for a signed-in reader, from the one DbContext of the request
+/// scope, which serves one operation at a time.
 /// </summary>
 /// <remarks>
-/// The counters used to be started as two tasks and awaited afterwards. While
-/// they lived in the document store the overlap was legal; once they moved to
-/// the relational store every signed-in reader got a 500 on the board page,
-/// while a guest kept getting 200 because the anonymous branch reads no
-/// counters at all. Nothing in the suite failed, because no test asked for a
-/// single board as a signed-in reader - that gap is what this class closes.
-/// The overlap itself is pinned where it can be reproduced on demand
-/// (BoardServiceShould.ReadTheCountersOfOneBoardOneAfterTheOther): this host
-/// answers both reads too quickly to lose the race reliably. Hence the counter
-/// assertions below - a status code alone cannot tell which branch answered.
+/// The overlap itself is BoardServiceShould.ReadTheCountersOfOneBoardOneAfterTheOther's; the counters are
+/// asserted because a status alone does not tell which branch answered.
 /// </remarks>
 public class BoardUnreadCountersShould : IntegrationTestBase
 {
@@ -99,7 +86,6 @@ public class BoardUnreadCountersShould : IntegrationTestBase
             Title = $"Unread board {boardId:N}",
             Alias = alias,
             Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = BoardAccessPolicy.Guest,
         });
         await dbContext.SaveChangesAsync();

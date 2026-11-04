@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using DM.Web.API.Shared.RateLimiting;
+using DM.Web.API.Shared.Http;
 
 namespace DM.Web.API.Features.Game.Games;
 
@@ -23,12 +24,9 @@ namespace DM.Web.API.Features.Game.Games;
 [Tags("Games")]
 public class GameController : ControllerBase
 {
-    private readonly IGameApiService _gameApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <summary>
-    /// Creates a new instance of GameController
-    /// </summary>
-    public GameController(IGameApiService gameApiService)
+    public GameController(GameApiService gameApiService)
     {
         _gameApiService = gameApiService;
     }
@@ -55,12 +53,9 @@ public class GameController : ControllerBase
     [HttpGet(Name = nameof(GetGames))]
     [ProducesResponseType(typeof(ListEnvelope<Game>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
-    // Response carries per-caller unread counts, so it must not be cached
-    // anywhere. Declared, not assigned by hand: one mechanism for cache policy.
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [PrivateResponse]
     public async Task<IActionResult> GetGames([FromQuery] GamesQuery q)
     {
-        // Return lightweight refs for sidebars, full games for table
         if (string.Equals(q.Projection, "ref", StringComparison.OrdinalIgnoreCase))
         {
             return Ok(await _gameApiService.GetRefs(q));
@@ -75,7 +70,7 @@ public class GameController : ControllerBase
     /// <response code="200">Returns the list of all game tags</response>
     [HttpGet("tags", Name = nameof(GetTags))]
     [ProducesResponseType(typeof(ListEnvelope<Tag>), StatusCodes.Status200OK)]
-    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
+    [CatalogueCache]
     public async Task<IActionResult> GetTags()
     {
         return Ok(await _gameApiService.GetTags());

@@ -5,8 +5,7 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Unread;
 
-/// <inheritdoc />
-internal class UnreadApiService : IUnreadApiService
+public class UnreadApiService
 {
     private readonly IFirstUnreadService _firstUnreadService;
     private readonly UnreadMapper _mapper;
@@ -19,21 +18,19 @@ internal class UnreadApiService : IUnreadApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<FirstUnreadPostResult>> GetFirstUnreadPost(Guid gameId)
     {
         var result = await _firstUnreadService.GetFirstUnreadPost(gameId);
         return new Envelope<FirstUnreadPostResult>(_mapper.ToResponse(result));
     }
 
-    /// <inheritdoc />
+    /// <summary>Without a page size the page is counted at the reader's own setting.</summary>
     public async Task<Envelope<FirstUnreadRoomPostResult>> GetFirstUnreadPostInRoom(Guid roomId, int? pageSize)
     {
         var result = await _firstUnreadService.GetFirstUnreadPostInRoom(roomId, pageSize);
         return new Envelope<FirstUnreadRoomPostResult>(_mapper.ToResponse(result));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<FirstUnreadCommentResult>> GetFirstUnreadComment(Guid gameId)
     {
         var result = await _firstUnreadService.GetFirstUnreadComment(gameId);

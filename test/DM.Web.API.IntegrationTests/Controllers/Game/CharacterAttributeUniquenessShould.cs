@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -15,13 +13,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
 /// <summary>
-/// A character holds one value per attribute specification, and that was true
-/// in code only. The update path reads the stored rows into a dictionary keyed
-/// by AttributeId and writes them as check-then-insert, so a second row for the
-/// same pair — from a body that repeated an identifier or from two saves racing
-/// on the same new attribute — made every later edit of that character fail on
-/// the duplicate key, permanently and with no way back short of deleting the
-/// row by hand.
+/// A character holds one value per attribute specification: the update path reads rows into a dictionary by
+/// AttributeId and writes check-then-insert, so the index refuses a second row for the pair.
 /// </summary>
 public class CharacterAttributeUniquenessShould : IntegrationTestBase
 {
@@ -48,9 +41,7 @@ public class CharacterAttributeUniquenessShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The pair is what has to be unique: another specification on the same
-    /// character, and the same specification on another character, are both
-    /// ordinary rows.
+    /// The pair is what is unique: another specification on the character, or the same one on another, is ordinary.
     /// </summary>
     [Fact]
     public async Task KeepValuesOfDifferentSpecificationsAndCharacters()

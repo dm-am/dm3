@@ -9,14 +9,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Forum;
 
-/// <summary>
-/// Generates notifications when a topic comment is liked
-/// </summary>
 internal class TopicCommentLikedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public TopicCommentLikedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -39,7 +35,7 @@ internal class TopicCommentLikedNotificationGenerator : BaseNotificationGenerato
                 LikerId = like.UserId,
                 comment.CommentId,
                 comment.AuthorId,
-                TopicId = topic.TopicId,
+                topic.TopicId,
                 TopicTitle = topic.Title
             })
             .FirstOrDefaultAsync();
@@ -55,9 +51,9 @@ internal class TopicCommentLikedNotificationGenerator : BaseNotificationGenerato
             ActorId = likedCommentData.LikerId,
             Metadata = new
             {
-                LikerUsername = likedCommentData.LikerUsername,
+                likedCommentData.LikerUsername,
                 TopicId = likedCommentData.TopicId.EncodeToReadable(likedCommentData.TopicTitle),
-                TopicTitle = likedCommentData.TopicTitle
+                likedCommentData.TopicTitle
             }
         };
     }

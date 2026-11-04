@@ -7,10 +7,11 @@ namespace DM.Domain.Messaging.Features.GlobalChatEvents;
 /// <inheritdoc />
 internal class GlobalChatEventFactory : IGlobalChatEventFactory
 {
+    private static readonly TimeSpan DefaultDuration = TimeSpan.FromHours(4);
+
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public GlobalChatEventFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)
@@ -26,7 +27,7 @@ internal class GlobalChatEventFactory : IGlobalChatEventFactory
         Title = createGlobalChatEvent.Title,
         Description = createGlobalChatEvent.Description ?? string.Empty,
         StartsUtc = createGlobalChatEvent.StartsUtc,
-        Duration = createGlobalChatEvent.Duration ?? TimeSpan.FromHours(4), // Default to 4 hours if not specified
+        Duration = createGlobalChatEvent.Duration ?? DefaultDuration,
         IsOpen = createGlobalChatEvent.IsOpen,
         Status = GlobalChatEventStatus.Scheduled,
         CreatedByUserId = userId,

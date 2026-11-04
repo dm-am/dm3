@@ -33,17 +33,16 @@ import {
 const CLIENT_SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
 
 /**
- * A block that asks each of the five injected modules for something: a mixin
- * from Surfaces, a breakpoint from Breakpoints, a height from Layout, a colour
- * from Themes and a spacing step from Variables.
+ * A block that asks each of the three injected modules for something: a mixin
+ * from Surfaces, a height from Variables, a colour from Themes and a spacing
+ * step, also from Variables.
  */
 const PROBE = [
   ".probe",
   "  +card",
   "  min-height: $header-height",
   "  color: $text",
-  "  @media (max-width: $bp-mobile)",
-  "    padding: $small",
+  "  padding: $small",
 ].join("\n");
 
 describe("the style compiler the specs share", () => {
@@ -53,14 +52,11 @@ describe("the style compiler the specs share", () => {
       selector.startsWith(".probe"),
     );
 
-    // The base rule and the one inside the media query.
-    expect(probe).toHaveLength(2);
+    expect(probe).toHaveLength(1);
     // +card came from Surfaces (its frame; a card is square and has no
-    // radius to show for it), the height from Layout.
+    // radius to show for it), the height from Variables.
     expect(probe[0].declarations.border).toBe("1px solid var(--border)");
     expect(probe[0].declarations["min-height"]).toBe("100px");
-    // The breakpoint resolved to a length rather than travelling as a name.
-    expect(css).toMatch(/@media \(max-width: \d+px\)/);
   });
 
   it("goes red on that block with the two-module prelude the copies carried", () => {
@@ -107,10 +103,10 @@ describe("the style compiler the specs share", () => {
   });
 
   it("reads a component's own block off disk", () => {
-    const drawer = resolve(CLIENT_SRC, "shared/ui/Drawer/MobileDrawer.vue");
+    const nav = resolve(CLIENT_SRC, "shared/ui/ScrollNav/ScrollNav.vue");
 
-    expect(sassBlocks(drawer)).toContain(".drawer-panel");
-    expect(ruleMap(componentCss(drawer)).get(".drawer-content")).toBeDefined();
+    expect(sassBlocks(nav)).toContain(".scroll-nav");
+    expect(ruleMap(componentCss(nav)).get(".toggle-all-btn")).toBeDefined();
   });
 
   it("compiles a block as its own file, so a relative @use resolves", () => {

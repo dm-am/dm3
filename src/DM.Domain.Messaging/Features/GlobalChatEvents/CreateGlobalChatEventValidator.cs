@@ -9,7 +9,6 @@ namespace DM.Domain.Messaging.Features.GlobalChatEvents;
 /// <inheritdoc />
 internal class CreateGlobalChatEventValidator : AbstractValidator<CreateGlobalChatEvent>
 {
-    /// <inheritdoc />
     public CreateGlobalChatEventValidator(IDateTimeProvider dateTimeProvider)
     {
         RuleFor(e => e.Title)
@@ -19,8 +18,7 @@ internal class CreateGlobalChatEventValidator : AbstractValidator<CreateGlobalCh
         RuleFor(e => e.Description)
             .MaximumLength(GlobalChatEventFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long);
 
-        // The description renders on the Comment surface, which does not
-        // declare [private]: the tag is not markup there and hides nothing.
+        // The Comment surface does not declare [private]: the tag would hide nothing there.
         RuleFor(e => e.Description)
             .Must(description => !PrivateBlockMarkup.ContainsPrivateMarkup(description))
             .WithMessage(e => PrivateBlockMarkup.DescribeSurfaceRefusal(e.Description));

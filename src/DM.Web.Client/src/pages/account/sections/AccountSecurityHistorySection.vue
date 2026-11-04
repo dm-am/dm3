@@ -3,7 +3,18 @@
     <h2 class="section-title">Журнал безопасности</h2>
 
     <div class="security-history-content">
-      <div v-if="loading" class="loading-state">Загрузка...</div>
+      <!-- The entries wait in their own shape; "Нет событий безопасности" is said only by an answer. -->
+      <AccountSectionSkeleton
+        v-if="loading && !loaded"
+        shape="rows"
+        :count="3"
+      />
+
+      <ErrorState
+        v-else-if="loadError && !loaded"
+        :message="loadError"
+        :retry="loadEvents"
+      />
 
       <EmptyState
         v-else-if="events.length === 0"
@@ -11,26 +22,16 @@
       />
 
       <div v-else class="events-list">
-        <div
-          v-for="event in events"
-          :key="event.id"
-          class="event-item"
-          :class="eventClass(event.eventType)"
-        >
+        <div v-for="event in events" :key="event.id" class="event-item">
           <div class="event-info">
-            <!-- What happened and when, as one sentence: "Успешный вход,
-                 05.10.2026 в 21:42". A long name breaks between its words,
-                 as a heading does, and the date after the comma is never
-                 broken. -->
+            <!-- What happened and when, one sentence; the date after the comma never breaks. -->
             <div class="event-heading">
               <span class="event-title">{{ eventTitle(event.eventType) }}</span
               ><span class="event-time"
                 >, <span class="event-date">{{ dateOf(event) }}</span></span
               >
             </div>
-            <!-- From where, under it: a caption line, the bar of a caption
-                 between the parts, wrapping between them where it is short.
-            -->
+            <!-- From where, a caption line under it. -->
             <CaptionLine
               v-if="event.deviceInfo || event.ipAddress"
               size="secondary"
@@ -50,7 +51,7 @@
         </div>
       </div>
 
-      <div v-if="!loading && events.length > 0" class="events-footer">
+      <div v-if="loaded && events.length > 0" class="events-footer">
         Показано {{ events.length }} {{ eventsNoun }}
       </div>
     </div>
@@ -61,6 +62,7 @@
 import { computed, ref, onMounted } from "vue";
 import { accountApi } from "@/entities/user";
 import { EmptyState } from "@/shared/ui/EmptyState";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { CaptionLine } from "@/shared/ui/CaptionLine";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { pluralize } from "@/shared/lib/utils/pluralize";
@@ -68,12 +70,18 @@ import type {
   SecurityEvent,
   SecurityEventType,
 } from "@/shared/api/models/account";
+import AccountSectionSkeleton from "./AccountSectionSkeleton.vue";
+import { OWNED_BY_CARD } from "./loadFailure";
+
+const LOAD_FAILED = "Не удалось загрузить журнал безопасности";
 
 const events = ref<SecurityEvent[]>([]);
 const loading = ref(true);
+/** An answer has come: from then on a re-read keeps the entries on screen. */
+const loaded = ref(false);
+const loadError = ref<string | null>(null);
 
-// The footer counted with one noun form, so it read "последние 3 событий" on a
-// screen a person opens when something already worried them.
+// The noun agrees with the count.
 const eventsNoun = computed(() =>
   pluralize(
     events.value.length,
@@ -89,11 +97,19 @@ onMounted(async () => {
 
 async function loadEvents() {
   loading.value = true;
-  const { data, error } = await accountApi.getSecurityHistory(30);
+  const { data, error } = await accountApi.getSecurityHistory(
+    30,
+    undefined,
+    OWNED_BY_CARD,
+  );
   loading.value = false;
 
   if (!error && data) {
     events.value = data.resources;
+    loaded.value = true;
+    loadError.value = null;
+  } else {
+    loadError.value = LOAD_FAILED;
   }
 }
 
@@ -110,12 +126,8 @@ function eventTitle(type: SecurityEventType): string {
       return "Выход из системы";
     case "PasswordChange":
       return "Изменение пароля";
-    // Written when the new address is asked for, not when it moves: the server
-    // logs it in EmailChangeService.Change, beside the warning letter to the
-    // old address, and the confirmation step that actually moves the address
-    // writes no journal entry at all. "Изменение почты" claimed a move that
-    // had not happened yet, on the one screen a person opens to learn what
-    // somebody else may have done to the account.
+    // Written when the new address is asked for, not when it moves: the
+    // confirmation writes no entry.
     case "EmailChange":
       return "Запрос смены почты";
     case "SessionTerminated":
@@ -151,44 +163,7 @@ function eventTitle(type: SecurityEventType): string {
   }
 }
 
-function eventClass(type: SecurityEventType): string {
-  switch (type) {
-    // The two-factor entries are grouped by what they cost the reader, not by
-    // whether they succeeded: switching the factor on and reissuing the codes
-    // leave the account better locked than before.
-    case "LoginSuccess":
-    case "PasswordChange":
-    case "PasswordResetComplete":
-    case "TwoFactorEnabled":
-    case "TwoFactorRecoveryCodesReissued":
-      return "event-item--success";
-    // A spent recovery code and a mistyped setup code are not failures. They
-    // are the entries a person scanning this journal for somebody else's hand
-    // in their account is looking for.
-    case "LoginFailure":
-    case "AccountLocked":
-    case "SuspiciousLogin":
-    case "TwoFactorRecoveryCodeUsed":
-    case "TwoFactorSetupFailure":
-    case "TwoFactorRemovalScheduled":
-    case "TwoFactorRemovedByAdmin":
-      return "event-item--warning";
-    // Switching the factor off is the owner's own doing, and it leaves nothing
-    // to look into.
-    case "SessionTerminated":
-    case "Logout":
-    case "LogoutElsewhere":
-    case "TwoFactorDisabled":
-    case "TwoFactorRemovalCancelled":
-      return "event-item--neutral";
-    default:
-      return "";
-  }
-}
-
-// Read once on mount, while the security block above writes entries into this
-// journal through the server: a password change and a request for a new address
-// each add one. The page re-reads the block through this door.
+// Read once on mount; the page reads the journal again through this when the security block adds an entry.
 defineExpose({ reload: loadEvents });
 </script>
 
@@ -199,11 +174,7 @@ defineExpose({ reload: loadEvents });
   padding: $medium
   background-color: $bg-element
 
-.loading-state
-  padding: $medium
-
-// A tile of its own, its text 16 in, as the text of a row of "Сессии"
-// above stands inside its frame, 8 to the next.
+// A tile of its own, its text 16 in, 8 to the next, as a row of "Сессии".
 .events-list
   display: flex
   flex-direction: column
@@ -213,25 +184,7 @@ defineExpose({ reload: loadEvents });
   display: flex
   gap: $small
   padding: $small $medium
-  background-color: $bg
-
-.event-icon
-  flex-shrink: 0
-  width: 24px
-  height: 24px
-  display: flex
-  align-items: center
-  justify-content: center
-  font-size: 1rem
-
-  .event-item--success &
-    color: $accent-green
-
-  .event-item--warning &
-    color: $accent-yellow
-
-  .event-item--neutral &
-    color: $text-muted
+  background-color: $bg-element
 
 .event-info
   flex: 1
@@ -244,9 +197,9 @@ defineExpose({ reload: loadEvents });
   color: $text
 
 .event-title
-  font-weight: 500
+  font-weight: 400
 
-// The date in the grey of the caption under it, at its size.
+// The date in the grey and size of the caption under it.
 .event-time
   font-size: $secondary-font-size
   color: $text-muted

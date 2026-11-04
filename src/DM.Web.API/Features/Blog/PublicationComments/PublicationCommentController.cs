@@ -1,7 +1,6 @@
 using System;
 using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
-using DM.Domain.Blog.Features.PublicationComments;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
@@ -9,44 +8,25 @@ using DM.Web.API.Features.Blog.Likes;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Comment = DM.Web.API.Shared.Dto.Comment;
-using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
+using CommentRequest = DM.Web.API.Shared.Dto.CommentRequest;
 
 namespace DM.Web.API.Features.Blog.PublicationComments;
 
 /// <summary>
 /// Publication comment management endpoints
 /// </summary>
-/// <remarks>
-/// Provides CRUD operations for comments within blog publications.
-/// Comments are replies to publications and form the discussion thread.
-///
-/// ## Available Operations
-/// - List comments in a publication (with pagination)
-/// - Create, read, update, delete comments
-/// - Like/unlike comments
-///
-/// ## Access Control
-/// - Viewing: Whoever may see the parent publication
-/// - Creating: Authenticated users (if publication is not closed)
-/// - Editing: Author or moderators
-/// - Deleting: Author or moderators
-/// - Liking: Authenticated users (cannot like own comments)
-/// </remarks>
 [ApiController]
 [Route("v1/publications")]
 [ApiExplorerSettings(GroupName = "Blog")]
 [Tags("Publication Comments")]
 public class PublicationCommentController : ControllerBase
 {
-    private readonly IPublicationCommentApiService _commentApiService;
-    private readonly IBlogLikeApiService _likeApiService;
+    private readonly PublicationCommentApiService _commentApiService;
+    private readonly BlogLikeApiService _likeApiService;
 
-    /// <summary>
-    /// Creates a new instance of PublicationCommentController
-    /// </summary>
     public PublicationCommentController(
-        IPublicationCommentApiService commentApiService,
-        IBlogLikeApiService likeApiService)
+        PublicationCommentApiService commentApiService,
+        BlogLikeApiService likeApiService)
     {
         _commentApiService = commentApiService;
         _likeApiService = likeApiService;
@@ -58,16 +38,6 @@ public class PublicationCommentController : ControllerBase
     /// <remarks>
     /// Returns paginated list of comments in the specified publication.
     /// Supports filtering by author usernames, text search, date range and sorting.
-    ///
-    /// ## Query Parameters
-    /// - **skip**: Number of items to skip (pagination)
-    /// - **take**: Number of items to return (max 100, default 20)
-    /// - **search**: Text search in comment content (case-insensitive)
-    /// - **authorUsernames**: Filter by author usernames, repeated per author (`authorUsernames=alice&amp;authorUsernames=bob`), OR logic
-    /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
-    /// - **createdToUtc**: Filter by creation date end (ISO 8601)
-    /// - **sortBy**: Sort field - "created" (default) or "likes"
-    /// - **sortOrder**: Sort direction - "asc" (default for created) or "desc"
     /// </remarks>
     /// <param name="id">Publication identifier (GUID)</param>
     /// <param name="q">Query parameters with filtering, sorting and pagination</param>
@@ -85,12 +55,6 @@ public class PublicationCommentController : ControllerBase
     /// <remarks>
     /// Adds a new comment to the specified publication.
     /// Cannot add comments to closed publications.
-    ///
-    /// Example request:
-    ///     POST /v1/publications/3fa85f64-5717-4562-b3fc-2c963f66afa6/comments
-    ///     {
-    ///       "text": "Great article! Thanks for sharing."
-    ///     }
     /// </remarks>
     /// <param name="id">Publication identifier (GUID)</param>
     /// <param name="request">Comment creation request with text content</param>
@@ -106,7 +70,7 @@ public class PublicationCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostPublicationComment(Guid id, [FromBody] CreateCommentRequest request)
+    public async Task<IActionResult> PostPublicationComment(Guid id, [FromBody] CommentRequest request)
     {
         var result = await _commentApiService.Create(id, request);
         return CreatedAtRoute(nameof(GetPublicationComment), new { id = result.Resource.Id }, result);
@@ -115,15 +79,6 @@ public class PublicationCommentController : ControllerBase
     /// <summary>
     /// Get publication comment
     /// </summary>
-    /// <remarks>
-    /// Returns detailed information about a specific comment including:
-    /// - Comment text and author
-    /// - Creation and last edit timestamps
-    /// - Like count
-    ///
-    /// Example request:
-    ///     GET /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
-    /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="200">Comment details</response>
     /// <response code="404">Comment not found, or it is not a comment of a publication the user may open</response>
@@ -139,12 +94,6 @@ public class PublicationCommentController : ControllerBase
     /// Updates the comment text.
     /// Only the comment author or moderators can edit comments.
     /// Edit history is preserved.
-    ///
-    /// Example request:
-    ///     PATCH /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
-    ///     {
-    ///       "text": "Updated comment text"
-    ///     }
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <param name="request">Updated comment text</param>
@@ -160,7 +109,7 @@ public class PublicationCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchPublicationComment(Guid id, [FromBody] UpdateCommentRequest request) =>
+    public async Task<IActionResult> PatchPublicationComment(Guid id, [FromBody] CommentRequest request) =>
         Ok(await _commentApiService.Update(id, request));
 
     /// <summary>
@@ -170,9 +119,6 @@ public class PublicationCommentController : ControllerBase
     /// Permanently deletes a comment.
     /// Only the comment author or moderators can delete comments.
     /// This action cannot be undone.
-    ///
-    /// Example request:
-    ///     DELETE /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="204">Comment deleted successfully</response>
@@ -198,9 +144,6 @@ public class PublicationCommentController : ControllerBase
     /// Adds a like to the comment from the current user.
     /// Users cannot like their own comments.
     /// Each user can only like a comment once.
-    ///
-    /// Example request:
-    ///     POST /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="200">Like added, returns user who liked</response>
@@ -224,9 +167,6 @@ public class PublicationCommentController : ControllerBase
     /// <remarks>
     /// Removes the current user's like from the comment.
     /// Can only remove your own likes.
-    ///
-    /// Example request:
-    ///     DELETE /v1/publications/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="204">Like removed successfully</response>

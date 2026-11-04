@@ -15,12 +15,12 @@ namespace DM.Domain.Game.Tests.Features.RoomAccesses;
 public class CreateRoomAccessValidatorShould : UnitTestBase
 {
     private readonly CreateRoomAccessValidator validator;
-    private readonly IUserLookupService userLookupServiceMock;
+    private readonly IUserLookupService userLookupService;
 
     public CreateRoomAccessValidatorShould()
     {
-        userLookupServiceMock = Mock<IUserLookupService>();
-        validator = new CreateRoomAccessValidator(userLookupServiceMock);
+        userLookupService = Mock<IUserLookupService>();
+        validator = new CreateRoomAccessValidator(userLookupService);
     }
 
     [Fact]
@@ -40,7 +40,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     [Fact]
     public async Task PassForValidReaderAccess()
     {
-        userLookupServiceMock
+        userLookupService
             .UsernameExistsAsync("reader", Arg.Any<CancellationToken>()).Returns(true);
 
         var input = new CreateRoomAccess
@@ -102,7 +102,7 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     [Fact]
     public async Task FailWhenReaderUsernameDoesNotExist()
     {
-        userLookupServiceMock
+        userLookupService
             .UsernameExistsAsync("nonexistent", Arg.Any<CancellationToken>()).Returns(false);
 
         var input = new CreateRoomAccess
@@ -118,15 +118,12 @@ public class CreateRoomAccessValidatorShould : UnitTestBase
     }
 
     /// <summary>
-    /// A reader row takes both policies. Pinning it to ReadOnly left the column with
-    /// no decision to carry for half the rows in the table, and once the policy
-    /// decides who writes, a room the master opened to a reader would have no way of
-    /// letting that reader speak in its chat.
+    /// A reader row takes both policies: the policy decides whether the reader speaks in the chat.
     /// </summary>
     [Fact]
     public async Task PassForAReaderGrantedWriting()
     {
-        userLookupServiceMock
+        userLookupService
             .UsernameExistsAsync("reader", Arg.Any<CancellationToken>()).Returns(true);
 
         var input = new CreateRoomAccess

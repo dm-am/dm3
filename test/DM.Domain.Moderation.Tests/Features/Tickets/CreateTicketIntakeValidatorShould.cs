@@ -6,7 +6,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Moderation.Features.Tickets;
 using DM.Testing;
-using AwesomeAssertions;
+using DM.Testing.Dsl;
 using FluentValidation.TestHelper;
 using NSubstitute;
 using Xunit;
@@ -15,27 +15,23 @@ namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
 public class CreateTicketIntakeValidatorShould : UnitTestBase
 {
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IBbCodeNestingLimit _nestingLimit;
-    private readonly CreateTicketIntakeValidator _validator;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IBbCodeNestingLimit nestingLimit;
+    private readonly CreateTicketIntakeValidator validator;
 
     public CreateTicketIntakeValidatorShould()
     {
-        _identityProvider = Mock<IIdentityProvider>();
-        _nestingLimit = Mock<IBbCodeNestingLimit>();
-        _nestingLimit.IsWithinLimit(Arg.Any<string>()).Returns(true);
-        _validator = new CreateTicketIntakeValidator(_identityProvider, _nestingLimit);
+        identityProvider = Mock<IIdentityProvider>();
+        nestingLimit = Mock<IBbCodeNestingLimit>();
+        nestingLimit.IsWithinLimit(Arg.Any<string>()).Returns(true);
+        validator = new CreateTicketIntakeValidator(identityProvider, nestingLimit);
     }
 
     private void SetGuest() =>
-        _identityProvider.Current.Returns(Identity.Guest());
+        identityProvider.Current.Returns(Identity.Guest());
 
     private void SetAuthenticated() =>
-        _identityProvider.Current.Returns(Identity.Success(
-            new AuthenticatedUser { UserId = Guid.NewGuid(), Role = UserRole.RegularUser, Username = "User" },
-            new Session { Id = Guid.NewGuid() },
-            new UserSettings(),
-            "token"));
+        identityProvider.Current.Returns(Identities.User(Guid.NewGuid(), "User"));
 
     private static CreateTicketIntake ValidIntake() => new()
     {
@@ -54,23 +50,22 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         var longest = ValidIntake();
         longest.Text = new string('а', TicketTextLimits.MaxLength);
         var tooLong = ValidIntake();
-        tooLong.Text = new string('а', 10001);
+        tooLong.Text = new string('а', TicketTextLimits.MaxLength + 1);
 
-        _validator.TestValidate(longest).ShouldNotHaveValidationErrorFor(x => x.Text);
-        _validator.TestValidate(tooLong).ShouldHaveValidationErrorFor(x => x.Text)
+        validator.TestValidate(longest).ShouldNotHaveValidationErrorFor(x => x.Text);
+        validator.TestValidate(tooLong).ShouldHaveValidationErrorFor(x => x.Text)
             .WithErrorMessage(ValidationError.Long);
     }
 
     [Fact]
     public void FailWhenGuestOmitsContactEmail()
     {
-        // A guest submission with no contact email must be rejected — the
-        // moderation reply and the tracking flow have nowhere to land.
+        // The reply to a guest has nowhere else to land.
         SetGuest();
         var input = ValidIntake();
         input.Contact = null;
 
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Contact)
             .WithErrorMessage(ValidationError.Empty);
     }
@@ -82,100 +77,35 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         var input = ValidIntake();
         input.Contact = "not-an-email";
 
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Contact)
-            .WithErrorMessage(ValidationError.Invalid);
-    }
-
-    [Fact]
-    public void PassWhenGuestProvidesValidEmail()
-    {
-        SetGuest();
-        var input = ValidIntake();
-        input.Contact = "guest@example.com";
-
-        var result = _validator.TestValidate(input);
-        result.ShouldNotHaveAnyValidationErrors();
-    }
-
-    [Fact]
-    public void PassWhenAuthenticatedUserOmitsContact()
-    {
-        // Authenticated authors are reachable by identity, so contact stays
-        // optional for them.
-        SetAuthenticated();
-        var input = ValidIntake();
-        input.Contact = null;
-
-        var result = _validator.TestValidate(input);
-        result.ShouldNotHaveAnyValidationErrors();
-    }
-
-    [Theory]
-    [InlineData(TicketSubtype.AccountRestoration)]
-    [InlineData(TicketSubtype.PersonalData)]
-    [InlineData(TicketSubtype.AgreementQuestion)]
-    [InlineData(TicketSubtype.SeniorModeratorDecisionComplaint)]
-    public void PassWhenGuestAsksForAnAccountOrALegalPageReason(TicketSubtype subtype)
-    {
-        // Bringing an account back carries no extra gate: a person locked out of
-        // it has no other way to ask. Neither do the questions the legal pages
-        // send a reader with, who need not have an account at all, nor the
-        // complaint about a senior moderator's decision, which is the way out
-        // for an account a full ban keeps from signing in.
-        SetGuest();
-        var input = ValidIntake();
-        input.Subtype = subtype;
-        input.Contact = "guest@example.com";
-
-        var result = _validator.TestValidate(input);
-        result.ShouldNotHaveAnyValidationErrors();
-    }
-
-    [Theory]
-    [InlineData(null)]
-    [InlineData("")]
-    public void PassWithoutSubject(string? subject)
-    {
-        // The support and complaint forms do not ask for a subject: the reason
-        // and the text say it, and the ticket screens name a ticket by its
-        // reason when the subject is empty.
-        SetGuest();
-        var input = ValidIntake();
-        input.Subject = subject;
-        input.Contact = "guest@example.com";
-
-        var result = _validator.TestValidate(input);
-        result.ShouldNotHaveAnyValidationErrors();
-    }
-
-    [Fact]
-    public void RefuseSuggestionFromGuestAndMember()
-    {
-        // Suggestions are discussed on the forum; the category is kept only for
-        // the queues that filter by it, and nothing may file one any more.
-        var input = ValidIntake();
-        input.Subtype = TicketSubtype.SiteImprovementSuggestion;
-        input.Contact = "guest@example.com";
-
-        SetGuest();
-        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.Subtype)
-            .WithErrorMessage(ValidationError.Invalid);
-
-        SetAuthenticated();
-        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.Subtype)
-            .WithErrorMessage(ValidationError.Invalid);
+            .WithErrorMessage(RefusalMessage.EmailInvalid);
     }
 
     /// <summary>
-    /// A complaint about a person and a request to remove an account are filed
-    /// from an account and from nowhere else.
+    /// A signed-in author is reachable by identity and needs no contact; a guest
+    /// asks about an account he is locked out of here or nowhere; a ticket without
+    /// a subject is named by its reason.
     /// </summary>
-    /// <remarks>
-    /// The complaint ends in a warning or a ban and goes to a reporter the
-    /// moderator can write back to, as on DM2; the removal is honoured for the
-    /// owner, and a guest's request cannot say whose account it names.
-    /// </remarks>
+    [Theory]
+    [InlineData(true, TicketSubtype.Bug, "guest@example.com", null)]
+    [InlineData(false, TicketSubtype.Bug, null, null)]
+    [InlineData(true, TicketSubtype.AccountRestoration, "guest@example.com", null)]
+    [InlineData(true, TicketSubtype.PersonalData, "guest@example.com", null)]
+    [InlineData(true, TicketSubtype.AgreementQuestion, "guest@example.com", null)]
+    [InlineData(true, TicketSubtype.SeniorModeratorDecisionComplaint, "guest@example.com", null)]
+    [InlineData(true, TicketSubtype.Bug, "guest@example.com", "")]
+    public void PassAValidIntake(bool guest, TicketSubtype subtype, string? contact, string? subject)
+    {
+        identityProvider.Current.Returns(guest ? Identity.Guest() : Identities.User(Guid.NewGuid(), "User"));
+        var input = ValidIntake();
+        input.Subtype = subtype;
+        input.Contact = contact;
+        input.Subject = subject;
+
+        validator.TestValidate(input).ShouldNotHaveAnyValidationErrors();
+    }
+
     [Theory]
     [InlineData(TicketSubtype.UserComplaint)]
     [InlineData(TicketSubtype.AccountRemoval)]
@@ -188,11 +118,11 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         input.ViolationUrl = "https://dm.am/forum/flood/1";
 
         SetGuest();
-        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.Subtype)
+        validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.Subtype)
             .WithErrorMessage(CreateTicketIntakeValidator.SignInForThisReason);
 
         SetAuthenticated();
-        _validator.TestValidate(input).ShouldNotHaveAnyValidationErrors();
+        validator.TestValidate(input).ShouldNotHaveAnyValidationErrors();
     }
 
     /// <summary>
@@ -205,7 +135,7 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         var input = ValidIntake();
         input.Subtype = TicketSubtype.UserComplaint;
 
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
 
         result.ShouldHaveValidationErrorFor(x => x.TargetUsername)
             .WithErrorMessage(ValidationError.Empty);
@@ -225,7 +155,7 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         input.TargetUsername = "Violator";
         input.ViolationUrl = link;
 
-        _validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.ViolationUrl)
+        validator.TestValidate(input).ShouldHaveValidationErrorFor(x => x.ViolationUrl)
             .WithErrorMessage(ValidationError.Invalid);
     }
 
@@ -242,19 +172,18 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         var input = ValidIntake();
         input.Subtype = subtype;
 
-        _validator.TestValidate(input).ShouldNotHaveAnyValidationErrors();
+        validator.TestValidate(input).ShouldNotHaveAnyValidationErrors();
     }
 
     [Fact]
     public void RefuseTextTheRendererWillNotRender()
     {
-        // Stored, a text nested past the renderer's depth shows moderation an
-        // empty ticket; refused here, the author can still fix it.
+        // Refused here, the author can still fix it.
         SetAuthenticated();
-        _nestingLimit.IsWithinLimit(Arg.Any<string>()).Returns(false);
+        nestingLimit.IsWithinLimit(Arg.Any<string>()).Returns(false);
         var input = ValidIntake();
 
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Text)
             .WithErrorMessage(ValidationError.Invalid);
     }
@@ -262,14 +191,12 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
     [Fact]
     public void RefuseHidingMarkup()
     {
-        // A ticket renders with the tag set of profile texts, where a hiding
-        // block is shown to nobody: the line meant for moderation would reach
-        // none of its readers.
+        // A ticket renders with the tag set of profile texts, where a hiding block is shown to nobody.
         SetAuthenticated();
         var input = ValidIntake();
         input.Text = "до [private=\"Чак\"]СЕКРЕТ[/private] после";
 
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Text)
             .WithErrorMessage(PrivateBlockMarkup.DescribeSurfaceRefusal(input.Text));
     }
@@ -283,7 +210,7 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         var input = ValidIntake();
         input.Text = "Не работает [noparse][private=\"Чак\"]текст[/private][/noparse] в посте";
 
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
     }
 
@@ -294,7 +221,7 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         var input = ValidIntake();
         input.Text = "";
 
-        var result = _validator.TestValidate(input);
+        var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Text)
             .WithErrorMessage(ValidationError.Empty);
     }

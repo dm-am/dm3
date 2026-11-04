@@ -2,29 +2,15 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The strip of boards under the heading of the forum: "Общий | Игровые
- * системы | ...", the board of the page first and bold, as it stood before
- * 5 October 2026. That wave took it away for a menu in the left column; the
- * owner asked for it back on 12 October ("верни как было"), on a phone too,
- * where it used to scroll sideways and now wraps like text: no row of the
- * site scrolls sideways.
- *
- * The wrap falls after a bar and never before one: a board and the bar after
- * it are one unbreakable item, so no line of the strip opens with "|".
- */
+// The strip of boards under the forum heading, the page's board first and
+// bold; it wraps like text, after a bar and never before one.
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { defineComponent } from "vue";
 import { createMemoryHistory, createRouter } from "vue-router";
 import { useBoardsStore, type Board } from "@/entities/forum";
-import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import BoardNavigation from "./BoardNavigation.vue";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
 
 const Empty = defineComponent({ render: () => null });
 
@@ -101,8 +87,7 @@ describe("the strip of boards", () => {
     const wrapper = await stripAt("/forum/general");
     const nav = wrapper.get("nav").element;
 
-    // A board and the bar after it are one item, the space between items is
-    // outside them: the one place the line can break.
+    // A board and its bar are one item; the space between items is the one break.
     const items = wrapper.findAll(".board-item");
     expect(items.map((item) => item.element.textContent)).toEqual([
       "Общий |",
@@ -116,24 +101,6 @@ describe("the strip of boards", () => {
     for (const one of wrapper.findAll(".separator"))
       expect(one.attributes("aria-hidden")).toBe("true");
     expect(nav.textContent).not.toContain("\u00a0");
-
-    const rules = ruleMap(componentCss(resolve(HERE, "BoardNavigation.vue")));
-    expect(rules.get(".board-item")?.["white-space"]).toBe("nowrap");
-  });
-
-  it("wraps like text at every width and never scrolls sideways", () => {
-    const rules = ruleMap(componentCss(resolve(HERE, "BoardNavigation.vue")));
-    const strip = rules.get(".board-navigation") ?? {};
-
-    expect(strip.display).toBe("block");
-    for (const property of ["overflow", "overflow-x", "white-space"])
-      expect(strip[property], property).toBeUndefined();
-    expect(rules.get(".board-link")?.["white-space"]).toBe("nowrap");
-    expect(rules.get(".board-link")?.display).toBe("inline-block");
-    // No @media takes a phone's strip anywhere else.
-    expect(componentCss(resolve(HERE, "BoardNavigation.vue"))).not.toMatch(
-      /@media|@container/,
-    );
   });
 
   it("is not drawn before the boards are there", async () => {

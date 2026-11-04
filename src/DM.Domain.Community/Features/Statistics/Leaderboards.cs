@@ -1,12 +1,25 @@
 using System;
+using System.Collections.Generic;
 
 namespace DM.Domain.Community.Features.Statistics;
 
 /// <summary>
 /// Leaderboards for a specific period
 /// </summary>
+/// <remarks>
+/// The repository fills the boards as the database returns them: positive scores
+/// only, cut to the board size. The service sorts them, assigns the display ranks
+/// and names the period.
+/// </remarks>
 public class Leaderboards
 {
+    /// <summary>
+    /// How many entries a board holds. One number for every board: they are
+    /// read side by side, so a board cut to a different length reads as
+    /// missing data rather than as a shorter list.
+    /// </summary>
+    public const int BoardSize = 10;
+
     /// <summary>
     /// Period information
     /// </summary>
@@ -15,42 +28,42 @@ public class Leaderboards
     /// <summary>
     /// Top players by rating received
     /// </summary>
-    public LeaderboardEntry[] TopPlayersByRating { get; set; } = Array.Empty<LeaderboardEntry>();
+    public List<LeaderboardEntry> TopPlayersByRating { get; init; } = [];
 
     /// <summary>
     /// Top games by total rating
     /// </summary>
-    public LeaderboardEntry[] TopGamesByRating { get; set; } = Array.Empty<LeaderboardEntry>();
+    public List<LeaderboardEntry> TopGamesByRating { get; init; } = [];
 
     /// <summary>
     /// Top players by posts count
     /// </summary>
-    public LeaderboardEntry[] TopPlayersByPosts { get; set; } = Array.Empty<LeaderboardEntry>();
+    public List<LeaderboardEntry> TopPlayersByPosts { get; init; } = [];
 
     /// <summary>
     /// Top games by posts count
     /// </summary>
-    public LeaderboardEntry[] TopGamesByPosts { get; set; } = Array.Empty<LeaderboardEntry>();
+    public List<LeaderboardEntry> TopGamesByPosts { get; init; } = [];
 
     /// <summary>
     /// Top players by written text volume (sum of in-character post characters)
     /// </summary>
-    public LeaderboardEntry[] TopPlayersByVolume { get; set; } = Array.Empty<LeaderboardEntry>();
+    public List<LeaderboardEntry> TopPlayersByVolume { get; init; } = [];
 
     /// <summary>
     /// Top blogs by total rating (sum of likes received on the blog's publications)
     /// </summary>
-    public LeaderboardEntry[] TopBlogsByRating { get; set; } = Array.Empty<LeaderboardEntry>();
+    public List<LeaderboardEntry> TopBlogsByRating { get; init; } = [];
 
     /// <summary>
     /// Top blogs by publications count
     /// </summary>
-    public LeaderboardEntry[] TopBlogsByPosts { get; set; } = Array.Empty<LeaderboardEntry>();
+    public List<LeaderboardEntry> TopBlogsByPosts { get; init; } = [];
 
     /// <summary>
     /// Top blog authors by written text volume (sum of publication content characters)
     /// </summary>
-    public LeaderboardEntry[] TopBlogAuthorsByVolume { get; set; } = Array.Empty<LeaderboardEntry>();
+    public List<LeaderboardEntry> TopBlogAuthorsByVolume { get; init; } = [];
 }
 
 /// <summary>

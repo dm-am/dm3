@@ -1,599 +1,33 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
 using DM.Domain.Game.Features.Posts;
 using DM.Infrastructure.Persistence;
+using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
-using CreatePostEntity = DM.Domain.Game.Features.Games.CreatePostEntity;
-using UpdatePostEntity = DM.Domain.Game.Features.Games.UpdatePostEntity;
-using DbCharacter = DM.Infrastructure.Persistence.Entities.Game.Characters.Character;
-using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
-using DbGameAssistant = DM.Infrastructure.Persistence.Entities.Game.Links.GameAssistant;
-using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
-using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
-using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
-using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
-using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using CreatePostEntity = DM.Domain.Game.Features.Posts.CreatePostEntity;
+using UpdatePostEntity = DM.Domain.Game.Features.Posts.UpdatePostEntity;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Runs against the container Postgres. The ordering under test is produced by
-/// a GroupBy the InMemory provider cannot translate, so the version of this
-/// test that ran there had to stub the hydration step out — which is to say the
-/// production query was never executed by anything. Here it is, joins included.
+/// The page of a room and the writes of a post: the order a room is paged in,
+/// the addressee snapshot both writes store, and the rating every read carries.
 /// </summary>
-public class PostRepositoryShould : IntegrationTestBase
+public class PostRepositoryShould : PostRepositoryTestBase
 {
     public PostRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
-    }
-
-    [Fact]
-    public async Task DefaultSortRatedPostsByRatingDescending()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        var lowRated = await AddRatedPostAsync(dbContext, context, positiveReviews: 1);
-        var highRated = await AddRatedPostAsync(dbContext, context, positiveReviews: 3);
-
-        // No SortBy: the repository default must be rating desc (doc 4.2.3.5.6).
-        // Scoped to this test's own game — the fixture database is seeded and
-        // shared, so an unscoped query would rank against everyone else's posts.
-        var (posts, total) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-        }, Guid.Empty);
-
-        var ordered = posts.ToList();
-        total.Should().Be(2);
-        ordered.Should().HaveCount(2);
-        ordered[0].Id.Should().Be(highRated);
-        ordered[0].Rating.Should().Be(3);
-        ordered[1].Id.Should().Be(lowRated);
-        ordered[1].Rating.Should().Be(1);
-    }
-
-    /// <summary>
-    /// hasReviews is a filter both ways, as on a room's list: false asks for the
-    /// posts nobody reviewed. It used to mean no filter at all, so the same name
-    /// answered two different questions on two neighbouring lists.
-    /// </summary>
-    [Fact]
-    public async Task KeepOnlyThePostsNobodyReviewedWhenAskedForNoReviews()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        await AddRatedPostAsync(dbContext, context, positiveReviews: 2);
-        // A removed review is no review: the post counts as not reviewed.
-        var unreviewed = await AddRatedPostAsync(dbContext, context, positiveReviews: 0, removedReviews: 1);
-
-        var (posts, total) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-            HasReviews = false,
-        }, Guid.Empty);
-
-        total.Should().Be(1);
-        posts.Select(p => p.Id).Should().Equal(unreviewed);
-    }
-
-    [Fact]
-    public async Task SortByLastReviewOrdersByMostRecentReview()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        // The higher-rated post was reviewed earlier; the lower-rated one got a
-        // more recent review. lastreview must invert the rating-desc order.
-        var highRatedOlderReview = await AddRatedPostAsync(
-            dbContext, context, positiveReviews: 3, reviewTime: DateTimeOffset.UtcNow.AddHours(-1));
-        var lowRatedNewerReview = await AddRatedPostAsync(
-            dbContext, context, positiveReviews: 1, reviewTime: DateTimeOffset.UtcNow);
-
-        var (posts, _) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            SortBy = "lastreview",
-            GameId = context.GameId,
-        }, Guid.Empty);
-
-        var ordered = posts.ToList();
-        ordered.Should().HaveCount(2);
-        ordered[0].Id.Should().Be(lowRatedNewerReview);
-        ordered[1].Id.Should().Be(highRatedOlderReview);
-    }
-
-    /// <summary>
-    /// "Лучший пост недели" is the rating board of ONE week, not of all time.
-    /// </summary>
-    /// <remarks>
-    /// The homepage block sends sortBy=rating together with createdFromUtc=Monday,
-    /// and the window has to cut on the POST's creation date. The seed used to
-    /// place its top-rated filler on posts written days before that boundary and
-    /// the block showed the filler instead of the showcase post — a failure the
-    /// sort tests above cannot see, because the sort was never wrong.
-    /// </remarks>
-    [Fact]
-    public async Task KeepPostsCreatedBeforeTheWeekOutOfTheWeeklyRating()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        // The same boundary the client (getWeekStartUtc) and the seeder
-        // (DataSeeder.WeekStartUtc) compute: Monday 00:00 UTC.
-        var now = DateTimeOffset.UtcNow;
-        var weekStart = new DateTimeOffset(now.Year, now.Month, now.Day, 0, 0, 0, TimeSpan.Zero)
-            .AddDays(-(((int)now.DayOfWeek + 6) % 7));
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        // Higher rated, but written before the week started.
-        var lastWeek = await AddRatedPostAsync(
-            dbContext, context, positiveReviews: 12,
-            postCreatedUtc: weekStart.AddSeconds(-1));
-        // The showcase post: fewer reviews, written inside the window.
-        var thisWeek = await AddRatedPostAsync(
-            dbContext, context, positiveReviews: 7,
-            postCreatedUtc: weekStart);
-
-        var (posts, total) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            SortBy = "rating",
-            HasReviews = true,
-            CreatedFromUtc = weekStart,
-            GameId = context.GameId,
-        }, Guid.Empty);
-
-        var ordered = posts.ToList();
-        total.Should().Be(1);
-        ordered.Should().ContainSingle()
-            .Which.Id.Should().Be(thisWeek, "the week's best is the best OF THE WEEK");
-        ordered.Should().NotContain(p => p.Id == lastWeek);
-    }
-
-    /// <summary>
-    /// Which posts come back says nothing about which of them hides something.
-    /// </summary>
-    /// <remarks>
-    /// The filter used to run over the body as written with the private block cut
-    /// out by a regexp inside the query, and a cut leaves a trace: the block became
-    /// a space and the whitespace around it stayed, so a phrase reaching across the
-    /// place where the block stood matched the post without it and missed the post
-    /// with it. Nobody saw a word of the hidden text and everybody could tell it was
-    /// there — a search for the phrase either returned the post or did not.
-    ///
-    /// The two bodies here differ by the block alone and project to the same visible
-    /// text, so the filter has nothing left to tell them apart by.
-    /// </remarks>
-    [Fact]
-    public async Task TellNothingAboutAHiddenBlockFromWhichPostsComeBack()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        var withBlock = await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
-            gameText: "Отряд идет дальше [private=\"Гончая\"]в третьей комнате ловушка[/private] к реке");
-        var withoutBlock = await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
-            gameText: "Отряд идет дальше к реке");
-
-        // The phrase spans exactly the place where the block stands in one of them.
-        var (posts, total) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-            Search = "дальше к реке",
-        }, Guid.Empty);
-
-        total.Should().Be(2);
-        posts.Select(p => p.Id).Should().BeEquivalentTo(new[] { withBlock, withoutBlock },
-            "a post with a hidden block and the same post without one answer a search alike");
-    }
-
-    /// <summary>
-    /// And the hidden words are not what is matched either.
-    /// </summary>
-    [Fact]
-    public async Task KeepThePrivateTextOutOfWhatTheFilterMatches()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
-            gameText: "Отряд идет дальше [private=\"Гончая\"]в третьей комнате ловушка[/private] к реке");
-
-        var (posts, total) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-            Search = "ловушка",
-        }, Guid.Empty);
-
-        total.Should().Be(0);
-        posts.Should().BeEmpty("the block is not on the page, so it is not in the search either");
-    }
-
-    /// <summary>
-    /// The ordinary case: a post is found by the words of its text.
-    /// </summary>
-    [Fact]
-    public async Task FindAPostByTheWordsItsReaderSees()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        var postId = await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
-            gameText: "Гонец принес письмо из столицы");
-        await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
-            gameText: "Караван ушел на восход");
-
-        var (found, foundTotal) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-            Search = "принес письмо",
-        }, Guid.Empty);
-
-        foundTotal.Should().Be(1);
-        found.Should().ContainSingle().Which.Id.Should().Be(postId);
-
-        // The filter is case-insensitive, as the parameter says it is.
-        var (upperCase, _) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-            Search = "ПРИНЕС ПИСЬМО",
-        }, Guid.Empty);
-
-        upperCase.Should().ContainSingle().Which.Id.Should().Be(postId);
-
-        var (missing, missingTotal) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-            Search = "дракон",
-        }, Guid.Empty);
-
-        missingTotal.Should().Be(0);
-        missing.Should().BeEmpty();
-    }
-
-    /// <summary>
-    /// The named, visible price of the move: the markup is no longer searchable and
-    /// the words it splits are.
-    /// </summary>
-    /// <remarks>
-    /// Both directions are the same fact — what is matched is the text the reader is
-    /// shown rather than the body as written. A query that used to hit a tag name
-    /// returned posts with nothing in them to show for it; a word an author put a tag
-    /// inside of was unfindable by the word.
-    /// </remarks>
-    [Fact]
-    public async Task StopMatchingTheMarkupAndStartMatchingTheWordItSplits()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        var postId = await AddRatedPostAsync(dbContext, context, positiveReviews: 0,
-            gameText: "[b]Стран[/b]ники вышли к реке");
-
-        var (byWord, _) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-            Search = "Странники",
-        }, Guid.Empty);
-
-        byWord.Should().ContainSingle("the reader sees one word, and one word is what he searches for")
-            .Which.Id.Should().Be(postId);
-
-        var (byMarkup, byMarkupTotal) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-            Search = "[b]Стран",
-        }, Guid.Empty);
-
-        byMarkupTotal.Should().Be(0);
-        byMarkup.Should().BeEmpty("the markup is not part of what anybody reads");
-    }
-
-    [Fact]
-    public async Task ReportTheViewerAsAReaderOfTheGameTheySubscribeTo()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        await AddRatedPostAsync(dbContext, context, positiveReviews: 1);
-        var subscriberId = await AddSubscriberAsync(dbContext, context.GameId);
-
-        var (forSubscriber, _) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-        }, subscriberId);
-
-        // The attached game is what GameLink builds its tooltip from, and its
-        // participation list is derived from this flag. The feed itself is public,
-        // so the game is loaded anonymously — filling the flag is the only thing
-        // the viewer's identity is used for here.
-        forSubscriber.Single().Room!.Game!.IsViewerSubscriber.Should().BeTrue();
-
-        var (forStranger, _) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-        }, Guid.NewGuid());
-
-        forStranger.Single().Room!.Game!.IsViewerSubscriber.Should().BeFalse();
-
-        var (forGuest, _) = await repository.GetRated(new PostsQuery
-        {
-            Take = 10,
-            GameId = context.GameId,
-        }, Guid.Empty);
-
-        // A guest subscribes to nothing, and no lookup is made for them.
-        forGuest.Single().Room!.Game!.IsViewerSubscriber.Should().BeFalse();
-    }
-
-    /// <summary>
-    /// A user subscribed to the game, so the feed has somebody to report as a
-    /// reader.
-    /// </summary>
-    /// <summary>
-    /// Removing a post takes the author's post count down with it, once.
-    /// </summary>
-    /// <remarks>
-    /// The two used to be separate commits: the soft delete saved, then a bare
-    /// ExecuteUpdate moved the counter. Creation had been wrapped in a
-    /// transaction for exactly this reason, with a comment saying so, and the
-    /// opposite direction was left open. QuantityRating feeds the user rating and
-    /// the stored IsNewbie column, and nothing recomputes either.
-    /// </remarks>
-    [Fact]
-    public async Task TakeTheAuthorsPostCountDownWithTheRemovedPost()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var context = await AddGameWithRoomAsync(dbContext);
-        var characterId = await AddPostByNewCharacterAsync(dbContext, context);
-        var postId = await dbContext.Posts.AsNoTracking()
-            .Where(p => p.CharacterId == characterId)
-            .Select(p => p.PostId)
-            .SingleAsync();
-
-        await dbContext.Users.Where(u => u.UserId == context.UserId)
-            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, 7));
-
-        await repository.Delete(postId, context.UserId);
-
-        var author = await dbContext.Users.AsNoTracking().FirstAsync(u => u.UserId == context.UserId);
-        author.QuantityRating.Should().Be(6);
-        var post = await dbContext.Posts.IgnoreQueryFilters().AsNoTracking()
-            .FirstAsync(p => p.PostId == postId);
-        post.IsRemoved.Should().BeTrue();
-        post.DeletedByUserId.Should().Be(context.UserId);
-    }
-
-    /// <summary>
-    /// A post that is not there moves nobody's count.
-    /// </summary>
-    [Fact]
-    public async Task LeaveTheCountAloneWhenThereIsNoSuchPost()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var context = await AddGameWithRoomAsync(dbContext);
-
-        await dbContext.Users.Where(u => u.UserId == context.UserId)
-            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, 7));
-
-        await repository.Delete(Guid.NewGuid(), context.UserId);
-
-        var author = await dbContext.Users.AsNoTracking().FirstAsync(u => u.UserId == context.UserId);
-        author.QuantityRating.Should().Be(7);
-    }
-
-    /// <summary>
-    /// One post removed twice at once costs its author one post, not two.
-    /// </summary>
-    /// <remarks>
-    /// Two hands reach the same post — the author pressing delete twice on a slow
-    /// answer, the master and a moderator clearing the same thing. The post used
-    /// to be read, checked and marked over three steps with nothing holding the
-    /// row, so both removals found it live and both lowered QuantityRating. That
-    /// column feeds the user rating and the stored IsNewbie flag, nothing
-    /// recomputes it, and the row that would say what the right number is is the
-    /// one that was just removed.
-    ///
-    /// A scope apiece, as two requests would have, and a timeout on the pair: the
-    /// second removal waits on the row lock, and a wait that never ends has to
-    /// fail rather than hang the suite.
-    /// </remarks>
-    [Fact]
-    public async Task TakeTheAuthorsPostCountDownOnceWhenTwoRemovalsRaceForOnePost()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var context = await AddGameWithRoomAsync(dbContext);
-        var characterId = await AddPostByNewCharacterAsync(dbContext, context);
-        var postId = await dbContext.Posts.AsNoTracking()
-            .Where(p => p.CharacterId == characterId)
-            .Select(p => p.PostId)
-            .SingleAsync();
-
-        await dbContext.Users.Where(u => u.UserId == context.UserId)
-            .ExecuteUpdateAsync(u => u.SetProperty(x => x.QuantityRating, 7));
-
-        var removals = await Task
-            .WhenAll(Remove(postId, context.UserId), Remove(postId, context.UserId))
-            .WaitAsync(TimeSpan.FromSeconds(30));
-
-        removals.Count(removed => removed).Should().Be(1,
-            "the mark is conditional on the post still being there, so one of the two " +
-            "calls is the removal and the other found nothing to remove");
-
-        var author = await dbContext.Users.AsNoTracking().FirstAsync(u => u.UserId == context.UserId);
-        author.QuantityRating.Should().Be(6,
-            "QuantityRating is a stored column that nothing recomputes, so a second " +
-            "decrement for one post is a drift with nothing left to catch it");
-    }
-
-    /// <summary>One removal on a scope of its own, as a request would have.</summary>
-    private Task<bool> Remove(Guid postId, Guid deletedByUserId) => Task.Run(async () =>
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        return await scope.ServiceProvider.GetRequiredService<IPostRepository>()
-            .Delete(postId, deletedByUserId);
-    });
-
-    private static async Task<Guid> AddSubscriberAsync(DmDbContext dbContext, Guid gameId)
-    {
-        var subscriberId = Guid.NewGuid();
-        dbContext.Users.Add(new DbUser
-        {
-            UserId = subscriberId,
-            Username = $"sub{subscriberId:N}"[..20],
-            Email = $"{subscriberId:N}@example.com",
-            PasswordHash = "hash",
-            Salt = "salt",
-        });
-        dbContext.Subscriptions.Add(new DbSubscription
-        {
-            SubscriptionId = Guid.NewGuid(),
-            SubscriberId = subscriberId,
-            TargetType = SubscriptionTargetType.Game,
-            TargetId = gameId,
-            CreatedUtc = DateTimeOffset.UtcNow,
-        });
-        await dbContext.SaveChangesAsync();
-        return subscriberId;
-    }
-
-    /// <summary>
-    /// A room shows the portrait the character has now, not the one it replaced.
-    /// </summary>
-    /// <remarks>
-    /// The batch load keyed a dictionary on the target character, so a second live
-    /// upload pointing at the same character made ToDictionaryAsync throw on the
-    /// duplicate key — and that read is on all three post paths, so every member of
-    /// the room got a 500 until somebody edited rows by hand. The pair is refused by
-    /// the schema now, and the second upload here is legal only because the insert
-    /// retires the row it replaces in the same transaction: it goes through the
-    /// repository the endpoint calls, so a unique violation is what this test would
-    /// report if that retirement were dropped.
-    /// </remarks>
-    [Fact]
-    public async Task ShowThePortraitThatReplacedTheOneBeforeIt()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var uploads = scope.ServiceProvider.GetRequiredService<IUploadRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        var characterId = await AddPostByNewCharacterAsync(dbContext, context);
-
-        var older = await AddCharacterPortraitAsync(
-            uploads, context.UserId, characterId, DateTimeOffset.UtcNow.AddHours(-1));
-        var newer = await AddCharacterPortraitAsync(
-            uploads, context.UserId, characterId, DateTimeOffset.UtcNow);
-
-        var posts = (await repository.Get(
-            context.RoomId,
-            new RoomPostsQuery(),
-            new PagingData(new PagingQuery { Skip = 0, Take = 10 }, 10, 1),
-            context.UserId)).ToList();
-
-        posts.Should().ContainSingle();
-        posts[0].Character.Picture.SourceObjectKey.Should().Be(newer,
-            "the current portrait is the live upload pointing at the character");
-        posts[0].Character.Picture.SourceObjectKey.Should().NotBe(older);
-    }
-
-    /// <summary>
-    /// Reading a room's posts has to translate to SQL at all.
-    /// </summary>
-    /// <remarks>
-    /// The DbPost projection built the lead list as
-    /// <c>new[] { master }.Concat(assistants.Select(...))</c>. Npgsql cannot
-    /// correlate a collection subquery concatenated onto an in-memory array, and it
-    /// refuses the whole query rather than the one member, so every read that went
-    /// through this projection answered 500 — the room page of every game, and the
-    /// single-post read with it. Nothing covered either path, so it stayed.
-    ///
-    /// The assistant is what makes this a gate rather than a smoke test: with the
-    /// master alone the broken shape and the fixed one agree.
-    /// </remarks>
-    [Fact]
-    public async Task ProjectTheGameLeadsOfEveryPostInARoom()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        var context = await AddGameWithRoomAsync(dbContext);
-        await AddPostByNewCharacterAsync(dbContext, context);
-        var assistantId = await AddAssistantAsync(dbContext, context.GameId);
-
-        var posts = (await repository.Get(
-            context.RoomId,
-            new RoomPostsQuery(),
-            new PagingData(new PagingQuery { Skip = 0, Take = 10 }, 10, 1),
-            context.UserId)).ToList();
-
-        posts.Should().ContainSingle();
-        posts[0].GameLeadUserIds.Should().BeEquivalentTo(new[] { context.UserId, assistantId },
-            "the leads are the master and the assistants, and mentors are not leads");
-
-        // The single-post path shares the projection, so it shares the failure.
-        var single = await repository.Get(posts[0].Id, context.UserId);
-        single.Should().NotBeNull();
-        single!.GameLeadUserIds.Should().BeEquivalentTo(new[] { context.UserId, assistantId });
     }
 
     /// <summary>
     /// Posts written in one instant are spread across the pages, not repeated on them.
     /// </summary>
     /// <remarks>
-    /// The order was CreatedUtc and nothing else, and a timestamp is not unique: a busy
-    /// second ties on its own, and the import of DM2 carries whole rooms written under one.
-    /// Paging asks for the same order once per page, and rows the order cannot tell apart
-    /// may come back arranged differently between two of those asks, which shows one post
-    /// on both pages and another on neither. Comments (CommentSorting) and messages (the
-    /// ChatId composite) already end their order on the identifier; a room does now, and
-    /// the index behind it is (RoomId, CreatedUtc, PostId).
+    /// A timestamp is not unique (the DM2 import writes rooms under one), so the order ends on the identifier, by the
+    /// index (RoomId, CreatedUtc, PostId), as comments and messages do.
     /// </remarks>
     [Fact]
     public async Task PageARoomWhosePostsShareOneTimestamp()
@@ -637,13 +71,7 @@ public class PostRepositoryShould : IntegrationTestBase
     /// <summary>
     /// The addressee snapshot has to reach its column and come back from it.
     /// </summary>
-    /// <remarks>
-    /// The column existed, the render path read it and the save path wrote
-    /// nothing into it, so the addressee rule never fired for anybody. Everything
-    /// upstream of this write can be correct and the rule still dead, which is
-    /// exactly how it stayed unnoticed — hence a gate on the write itself, on
-    /// both paths that perform it.
-    /// </remarks>
+    /// <remarks>A gate on the write itself, on both paths that perform it.</remarks>
     [Fact]
     public async Task StoreThePrivateAddresseeSnapshotOnBothWritePaths()
     {
@@ -667,22 +95,65 @@ public class PostRepositoryShould : IntegrationTestBase
             CreatedUtc = DateTimeOffset.UtcNow,
         });
 
-        PrivateAddresseeSnapshot.Parse(await ReadSnapshotAsync(dbContext, created.Id))
+        PrivateAddresseeSnapshot.Read(await ReadSnapshotAsync(dbContext, created.Id)).OwnerUserIdsByAttribute
             .Should().ContainKey("Анна")
             .WhoseValue.Should().BeEquivalentTo(new[] { annaOwner });
 
         await repository.Update(new UpdatePostEntity
         {
             PostId = created.Id,
+            PostEditId = Guid.NewGuid(),
+            EditorUserId = context.UserId,
+            EditedUtc = DateTimeOffset.UtcNow,
             GameText = "[private=\"Борис\"]секрет[/private]",
             PrivateAddresseeSnapshotJson = PrivateAddresseeSnapshot.Build(
                 "[private=\"Борис\"]секрет[/private]",
                 new[] { new PrivateAddressee(Guid.NewGuid(), "Борис", borisOwner) }),
         });
 
-        var afterEdit = PrivateAddresseeSnapshot.Parse(await ReadSnapshotAsync(dbContext, created.Id));
+        var afterEdit = PrivateAddresseeSnapshot.Read(await ReadSnapshotAsync(dbContext, created.Id)).OwnerUserIdsByAttribute;
         afterEdit.Should().ContainKey("Борис").WhoseValue.Should().BeEquivalentTo(new[] { borisOwner });
         afterEdit.Should().NotContainKey("Анна");
+    }
+
+    /// <summary>
+    /// An edit stays in the history of the post, so "Отредактировано" under it
+    /// survives the next read; a save that changes nothing writes no line.
+    /// </summary>
+    [Fact]
+    public async Task KeepTheEditInTheHistoryOfThePost()
+    {
+        using var scope = DatabaseFixture.Factory.Services.CreateScope();
+        var repository = scope.ServiceProvider.GetRequiredService<IPostRepository>();
+        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+
+        var context = await AddGameWithRoomAsync(dbContext);
+        var postId = await AddRatedPostAsync(dbContext, context, positiveReviews: 0);
+        var stored = await dbContext.Posts.AsNoTracking().SingleAsync(p => p.PostId == postId);
+        var editedUtc = DateTimeOffset.UtcNow.AddMinutes(-1);
+
+        UpdatePostEntity Save(string gameText) => new()
+        {
+            PostId = postId,
+            PostEditId = Guid.NewGuid(),
+            EditorUserId = context.UserId,
+            EditedUtc = editedUtc,
+            GameText = gameText,
+            MetagameText = stored.MetagameText,
+            PrivateAddresseeSnapshotJson = stored.PrivateAddresseeSnapshotJson
+        };
+
+        await repository.Update(Save(stored.GameText));
+        (await repository.Get(postId, context.UserId))!.Edits.Should().BeEmpty(
+            "the same text saved again is no edit");
+
+        await repository.Update(Save(stored.GameText + " и еще строка"));
+
+        // Read again in a scope of its own, as the next page load reads it.
+        using var reading = DatabaseFixture.Factory.Services.CreateScope();
+        var post = await reading.ServiceProvider.GetRequiredService<IPostRepository>().Get(postId, context.UserId);
+        post!.Edits.Should().ContainSingle()
+            .Which.ModifiedUtc.Should().BeCloseTo(editedUtc, TimeSpan.FromMilliseconds(1));
     }
 
     [Fact]
@@ -704,9 +175,7 @@ public class PostRepositoryShould : IntegrationTestBase
             Guid.Empty);
 
         var post = posts.Single(x => x.Id == postId);
-        // Both numbers used to come back at zero here while the same post read
-        // through the rated path carried them, so the room page — the page where
-        // reviews are written — showed every post at +0 and would not open them.
+        // The room page, where reviews are written, carries the rating and the count as the rated path does.
         post.Rating.Should().Be(2, "the rating is the sum of the signs: +1 +1 +1 -1");
         post.ReviewCount.Should().Be(4, "the removed review counts for neither");
     }
@@ -738,215 +207,4 @@ public class PostRepositoryShould : IntegrationTestBase
             .Where(p => p.PostId == postId)
             .Select(p => p.PrivateAddresseeSnapshotJson)
             .SingleAsync();
-
-    /// <summary>An assistant on the game, so the lead list has two entries.</summary>
-    private static async Task<Guid> AddAssistantAsync(DmDbContext dbContext, Guid gameId)
-    {
-        var assistantId = Guid.NewGuid();
-
-        dbContext.Users.Add(new DbUser
-        {
-            UserId = assistantId,
-            Username = $"ast{assistantId:N}"[..20],
-            Email = $"{assistantId:N}@example.com",
-            PasswordHash = "hash",
-            Salt = "salt",
-        });
-        dbContext.GameAssistants.Add(new DbGameAssistant
-        {
-            GameAssistantId = Guid.NewGuid(),
-            GameId = gameId,
-            UserId = assistantId,
-            JoinedUtc = DateTimeOffset.UtcNow,
-        });
-
-        await dbContext.SaveChangesAsync();
-        return assistantId;
-    }
-
-    private sealed record GameContext(Guid UserId, Guid GameId, Guid RoomId);
-
-    /// <summary>A character in the game with one post in the room.</summary>
-    private static async Task<Guid> AddPostByNewCharacterAsync(
-        DmDbContext dbContext, GameContext context)
-    {
-        var characterId = Guid.NewGuid();
-
-        dbContext.Characters.Add(new DbCharacter
-        {
-            CharacterId = characterId,
-            GameId = context.GameId,
-            AuthorId = context.UserId,
-            Status = CharacterStatus.Active,
-            Name = "Char " + Guid.NewGuid().ToString("N")[..6],
-            CreatedUtc = DateTimeOffset.UtcNow,
-        });
-        dbContext.Posts.Add(new DbPost
-        {
-            PostId = Guid.NewGuid(),
-            RoomId = context.RoomId,
-            CharacterId = characterId,
-            AuthorId = context.UserId,
-            GameText = "text",
-            CreatedUtc = DateTimeOffset.UtcNow,
-        });
-
-        await dbContext.SaveChangesAsync();
-        return characterId;
-    }
-
-    /// <summary>
-    /// A character portrait written the way the upload endpoint writes it, so the
-    /// retirement of the previous one is part of what is under test. Returns its
-    /// object key.
-    /// </summary>
-    private static async Task<string> AddCharacterPortraitAsync(
-        IUploadRepository uploads, Guid userId, Guid characterId, DateTimeOffset createdUtc)
-    {
-        var objectKey = $"characters/{Guid.NewGuid():N}.png";
-
-        await uploads.AddAsync(new NewUpload
-        {
-            Id = Guid.NewGuid(),
-            UserId = userId,
-            TargetId = characterId,
-            Type = UploadType.CharacterAvatar,
-            Status = UploadStatus.Confirmed,
-            FileName = "portrait.png",
-            ContentType = "image/png",
-            SizeBytes = 1024,
-            ObjectKey = objectKey,
-            Original = true,
-            Url = $"https://cdn.example/{objectKey}",
-            CreatedUtc = createdUtc,
-            ConfirmedUtc = createdUtc,
-        });
-
-        return objectKey;
-    }
-
-    /// <summary>
-    /// A fresh master, game and room per test: the fixture's database is shared
-    /// and seeded, so fixed identifiers would collide.
-    /// </summary>
-    private static async Task<GameContext> AddGameWithRoomAsync(DmDbContext dbContext)
-    {
-        var userId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-        var roomId = Guid.NewGuid();
-
-        dbContext.Users.Add(new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id is
-            // truncated rather than used whole.
-            Username = $"post{userId:N}"[..20],
-            Email = $"{userId:N}@example.com",
-            PasswordHash = "hash",
-            Salt = "salt",
-        });
-        dbContext.Games.Add(new DbGame
-        {
-            GameId = gameId,
-            PublicId = UniquePublicId(),
-            Title = "Game for the rated-post ordering check",
-            MasterId = userId,
-            Status = ModuleStatus.Active,
-            PremoderationStatus = PremoderationStatus.Approved,
-        });
-        dbContext.Rooms.Add(new DbRoom
-        {
-            RoomId = roomId,
-            GameId = gameId,
-            RoomNumber = 1,
-            Title = "Room",
-            AccessType = RoomAccessType.Open,
-            OrderNumber = 1,
-        });
-        await dbContext.SaveChangesAsync();
-
-        return new GameContext(userId, gameId, roomId);
-    }
-
-    /// <summary>
-    /// A post authored by a character, with a set of reviews. The post's rating
-    /// is the sum of the sign values of the reviews that are not removed, and
-    /// its review count is how many of those there are — which is why the
-    /// helper can add negative and removed ones: a rating that is only ever a
-    /// count of positives is a number two different rules agree on by accident.
-    /// </summary>
-    private static async Task<Guid> AddRatedPostAsync(
-        DmDbContext dbContext, GameContext context, int positiveReviews,
-        DateTimeOffset? reviewTime = null, DateTimeOffset? postCreatedUtc = null,
-        int negativeReviews = 0, int removedReviews = 0, string gameText = "text")
-    {
-        var characterId = Guid.NewGuid();
-        var postId = Guid.NewGuid();
-        var baseTime = reviewTime ?? DateTimeOffset.UtcNow;
-
-        dbContext.Characters.Add(new DbCharacter
-        {
-            CharacterId = characterId,
-            GameId = context.GameId,
-            AuthorId = context.UserId,
-            Status = CharacterStatus.Active,
-            Name = "Char " + Guid.NewGuid().ToString("N")[..6],
-            CreatedUtc = DateTimeOffset.UtcNow,
-        });
-        dbContext.Posts.Add(new DbPost
-        {
-            PostId = postId,
-            RoomId = context.RoomId,
-            CharacterId = characterId,
-            AuthorId = context.UserId,
-            GameText = gameText,
-            CreatedUtc = postCreatedUtc ?? DateTimeOffset.UtcNow,
-        });
-
-        // One reviewer per review. PostReviews is uniquely indexed on
-        // (AuthorId, PostId) — a rating is a count of distinct people, not of
-        // one person's clicks. The InMemory provider had no such index, so the
-        // version of this test that ran there built every rating out of rows the
-        // database would have refused.
-        var written = 0;
-        void AddReview(short sign, bool isRemoved)
-        {
-            var reviewerId = Guid.NewGuid();
-            dbContext.Users.Add(new DbUser
-            {
-                UserId = reviewerId,
-                Username = $"rev{reviewerId:N}"[..20],
-                Email = $"{reviewerId:N}@example.com",
-                PasswordHash = "hash",
-                Salt = "salt",
-            });
-            dbContext.PostReviews.Add(new DbPostReview
-            {
-                PostReviewId = Guid.NewGuid(),
-                PostId = postId,
-                AuthorId = reviewerId,
-                PostAuthorId = context.UserId,
-                GameId = context.GameId,
-                SignValue = sign,
-                IsRemoved = isRemoved,
-                CreatedUtc = baseTime.AddSeconds(written++),
-            });
-        }
-
-        for (var i = 0; i < positiveReviews; i++) AddReview(1, isRemoved: false);
-        for (var i = 0; i < negativeReviews; i++) AddReview(-1, isRemoved: false);
-        // A removed review is in neither number, and it is the only way to tell
-        // a filtered sum from an unfiltered one.
-        for (var i = 0; i < removedReviews; i++) AddReview(1, isRemoved: true);
-
-        await dbContext.SaveChangesAsync();
-        return postId;
-    }
-
-    /// <summary>
-    /// A public id no other row holds. The column is NOT NULL and uniquely
-    /// indexed — a constraint the InMemory provider did not have, which is why
-    /// the version of this test that ran there could omit the value entirely.
-    /// </summary>
-    private static string UniquePublicId() => Guid.NewGuid().ToString("N")[..10];
 }

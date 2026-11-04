@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -20,14 +17,7 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// One user is on one blog's blacklist once, the rule the game's list already
 /// keeps (GameBlacklistUniquenessShould).
 /// </summary>
-/// <remarks>
-/// Adding is check-then-insert: the service reads the list off the blog and
-/// inserts a statement later, and two requests for one name both passed that
-/// read and both inserted. The blog then showed the name twice. A rule about
-/// rows that do not exist yet can only be stated in the schema, so what is
-/// asserted here is that the refusal comes from there and that the repository
-/// answers it in the domain's own currency.
-/// </remarks>
+/// <remarks>Adding is check-then-insert, so the rule lives in the schema, and the repository answers its refusal in the domain's terms.</remarks>
 public class BlogBlacklistUniquenessShould : IntegrationTestBase
 {
     public BlogBlacklistUniquenessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -66,13 +56,7 @@ public class BlogBlacklistUniquenessShould : IntegrationTestBase
     /// The owner's personal list lands on the blog once, however many copies of it
     /// run at the same time.
     /// </summary>
-    /// <remarks>
-    /// The copy skipped what it saw on the list already, and a read cannot see the
-    /// copy beside it: with the index in place, the second of two copies would have
-    /// been refused outright with a 23505. The statement now settles every pair
-    /// against the index itself, so each copy ends without an error and between
-    /// them they write every entry exactly once.
-    /// </remarks>
+    /// <remarks>The statement settles every pair against the index itself, so concurrent copies end without an error.</remarks>
     [Fact]
     public async Task CopyThePersonalListOnceWhenCopiesRunTogether()
     {

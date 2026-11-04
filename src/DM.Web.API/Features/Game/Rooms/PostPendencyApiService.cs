@@ -5,13 +5,11 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Game.Rooms;
 
-/// <inheritdoc />
-internal class PostPendencyApiService : IPostPendencyApiService
+public class PostPendencyApiService
 {
     private readonly IPostPendencyService _pendencyService;
     private readonly RoomMapper _mapper;
 
-    /// <inheritdoc />
     public PostPendencyApiService(
         IPostPendencyService pendencyService,
         RoomMapper mapper)
@@ -20,14 +18,12 @@ internal class PostPendencyApiService : IPostPendencyApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<PostPendency>> Create(Guid roomId, CreatePostPendencyRequest request)
     {
-        var createPostPendency = _mapper.ToCreatePostPendency(roomId, request);
+        var createPostPendency = RoomMapper.ToCreatePostPendency(roomId, request);
         var createdPostPendency = await _pendencyService.CreateAsync(createPostPendency);
         return new Envelope<PostPendency>(_mapper.ToPostPendency(createdPostPendency));
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid postPendencyId) => _pendencyService.DeleteAsync(postPendencyId);
 }

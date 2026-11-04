@@ -13,9 +13,7 @@ public static class MailConfigurationExtensions
     /// Binds the SMTP settings.
     /// </summary>
     /// <remarks>
-    /// Deliberately not validated on start. A host that cannot send mail still
-    /// serves every page; the delivery failure belongs in the log of the send
-    /// that failed, not in a refusal to boot.
+    /// Not validated on start: a host that cannot send mail still serves every page.
     /// </remarks>
     /// <param name="services">Service collection.</param>
     /// <param name="configuration">Configuration to read the section from.</param>

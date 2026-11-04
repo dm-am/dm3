@@ -12,13 +12,7 @@ public class UserPasswordChange
     /// </summary>
     public Guid? Token { get; set; }
 
-    /// <summary>
-    /// Old password
-    /// </summary>
     public string OldPassword { get; set; } = null!;
 
-    /// <summary>
-    /// New password
-    /// </summary>
     public string NewPassword { get; set; } = null!;
 }

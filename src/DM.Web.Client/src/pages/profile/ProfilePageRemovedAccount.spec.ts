@@ -3,21 +3,10 @@
  */
 
 /**
- * The profile of "Аккаунт удален": an ordinary profile page over the sum of
- * every removed account, and nothing that was any one of theirs.
- *
- * The server answers the name at the profile and in the lists its tabs are
- * made of, and treats it as a name nobody holds everywhere else. So the page
- * must not ask those other endpoints at all (each would come back refused),
- * and must not draw what they would fill: the dates, the actions, the
- * recommendations and reviews, the violations, the contacts, "Зал славы".
- * The counters it does draw are sums, and the lists behind their links are
- * not answered for this name, so they are plain numbers.
- *
- * The viewer is an administrator, the one who sees the most on anybody's
- * profile: the moderation panel, the extra links, every action. A control
- * render of an ordinary profile in front of the same viewer shows that the
- * absences below come from the name and not from a mock that answers nothing.
+ * The profile of "Аккаунт удален": the page asks none of the endpoints that
+ * treat the name as nobody's and draws nothing they would fill; its counters
+ * are plain sums. The viewer is an administrator, who sees the most, and a
+ * control render of an ordinary profile shows the absences come from the name.
  */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import {
@@ -48,21 +37,12 @@ import ProfilePersonalInfo from "./ProfilePersonalInfo.vue";
 import ProfileViolations from "./ProfileViolations.vue";
 import ProfileAchievements from "./ProfileAchievements.vue";
 import ProfileModerationTab from "./moderation/ProfileModerationTab.vue";
+import { route } from "./ProfilePage.doubles";
+import { askedForNote, ok } from "./ProfilePage.fixtures";
 
-const { route } = vi.hoisted(() => ({
-  route: {
-    params: { username: "Аккаунт удален" },
-    query: {} as Record<string, string>,
-  },
-}));
-
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => route,
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}));
-
-const ok = (data: unknown = null) => ({ data, error: null }) as never;
+vi.mock("vue-router", async (importOriginal) =>
+  (await import("./ProfilePage.doubles")).vueRouter(importOriginal),
+);
 
 /**
  * The summary the server answers the name with (RemovedAccountProfileShould):
@@ -80,8 +60,6 @@ const removedAccountProfile = {
   rating: { postReviewScoreSum: 12, totalPosts: 40 },
   reviewsGiven: 5,
   reviewsReceived: 9,
-  postReviewsGiven: 5,
-  postReviewsReceived: 9,
   gamesHosting: 2,
   gamesPlaying: 1,
   blogsHosting: 1,
@@ -101,13 +79,6 @@ const ordinaryProfile = {
   // What the reader may do with this user, as the profile answers it.
   viewer: { canMessage: true },
 };
-
-/** Whether a read went to the reader's notes. */
-function askedForNote(get: { mock: { calls: unknown[][] } }): boolean {
-  return get.mock.calls.some(([url]) =>
-    String(url).includes("users/me/notes/"),
-  );
-}
 
 function spyOnRequests() {
   return {
@@ -170,11 +141,16 @@ async function render(
   const wrapper = shallowMount(ProfilePage, {
     global: {
       plugins: [pinia],
-      // The tab strip and the buttons are real: what they say is read.
-      // The row of the actions is drawn for real, or the buttons in it are
-      // not.
+      // The tab strip, the buttons and the row of actions are real: what they say is read.
       stubs: {
         Tabs: false,
+        // The parts the drawn page is read from.
+        ProfileStats: false,
+        ProfileActions: false,
+        ProfileTabs: false,
+        ProfilePersonalNote: false,
+        ProfileUsername: false,
+        ProfileEditBar: false,
         ButtonRow: false,
         Button: false,
         RouterLink: RouterLinkStub,
@@ -227,12 +203,7 @@ describe("the profile of an ordinary user, in front of an administrator", () => 
   });
 });
 
-/**
- * Moderation is the last tab of the strip, drawn over the moderated profile the
- * server serves: the red bar it replaced stood between the actions and the
- * contacts. No answer, no tab, as the control render above shows for an answer
- * of nothing.
- */
+/** "Модерация" is the last tab, drawn over the moderated profile the server serves: no answer, no tab. */
 describe("the moderation tab of an ordinary profile", () => {
   it("is the last tab, once the server serves the moderated profile", async () => {
     const { wrapper } = await render(
@@ -254,7 +225,6 @@ describe("the moderation tab of an ordinary profile", () => {
     expect(tabs(wrapper)).not.toContain("Модерация");
   });
 
-  // A page of moderation can send a moderator straight into the tab.
   /** The moderated profile's answer, held until the profile is on screen. */
   function heldAnswer() {
     let give!: (value: unknown) => void;
@@ -262,9 +232,7 @@ describe("the moderation tab of an ordinary profile", () => {
     return { answer, give };
   }
 
-  // A page of moderation can send a moderator straight into the tab, and the
-  // tab waits for the answer that decides whether it exists: the profile is
-  // on screen first, and the tab must not be left while the answer is out.
+  // The tab waits for the answer that decides whether it exists, the profile on screen first.
   it("opens on the tab when asked to, waiting for the moderated profile", async () => {
     route.query = { tab: "moderation" };
     const { answer, give } = heldAnswer();
@@ -277,7 +245,7 @@ describe("the moderation tab of an ordinary profile", () => {
     expect(wrapper.findComponent(ProfileModerationTab).exists()).toBe(true);
   });
 
-  // And leaves it once the answer is none, though no tab changes then.
+  // It leaves the tab once the answer is none, though no tab changes then.
   it("falls back to О себе once the server serves nothing", async () => {
     route.query = { tab: "moderation" };
     const { answer, give } = heldAnswer();
@@ -337,8 +305,7 @@ describe("the profile of Аккаунт удален", () => {
     expect(tabs(wrapper)).toEqual(["О себе", "Игры", "Блоги", "Топики"]);
   });
 
-  // With no games and no blogs the strip never changes after the load, so
-  // nothing but the page's first choice keeps it off the tab it lacks.
+  // With no games and no blogs the strip never changes, so only the page's first choice keeps it off the tab.
   it("does not open on Зал славы when asked to", async () => {
     route.query = { tab: "achievements" };
     const { wrapper } = await render("Аккаунт удален", {

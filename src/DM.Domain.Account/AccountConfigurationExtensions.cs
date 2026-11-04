@@ -60,8 +60,9 @@ public static class AccountConfigurationExtensions
             return false;
         }
 
-        // AES-256 takes exactly 32 bytes. A shorter value would be rejected later
-        // by the crypto service, on the first request instead of at startup.
+        // AES-256 takes exactly 32 bytes, and this is the only check the current
+        // key gets: the crypto service takes it as given, and AesGcm would accept
+        // a 16- or 24-byte key as a weaker cipher. A shorter key must stop the host.
         Span<byte> key = stackalloc byte[64];
         return Convert.TryFromBase64String(crypto.KeyBase64, key, out var written) && written == 32;
     }

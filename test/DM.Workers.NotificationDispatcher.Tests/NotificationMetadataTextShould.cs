@@ -8,14 +8,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// <summary>
 /// A letter does not open by telling a person their own name.
 /// </summary>
-/// <remarks>
-/// The channels print the payload field by field, and every payload that carries
-/// a bare Username carries the name of the reader the letter is addressed to: the
-/// ban, the warning, the correction of its points and the four security events.
-/// The field is there because the link is built out of it, the same reason the
-/// identifiers are carried, so it belongs with them on the hidden list rather
-/// than at the top of the letter.
-/// </remarks>
+/// <remarks>A bare Username names the reader the letter is addressed to; it is carried for the link, so it is hidden.</remarks>
 public class NotificationMetadataTextShould
 {
     [Fact]

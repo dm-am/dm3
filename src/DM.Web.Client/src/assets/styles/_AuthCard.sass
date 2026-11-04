@@ -1,0 +1,113 @@
+// The guest card: the surface, the card in its dialog, the cross, the type.
+@use "Themes" as *
+@use "Variables" as *
+@use "AuthTokens" as *
+
+.auth-surface
+  font-size: $auth-font-size
+  line-height: 1.45
+  color: $text
+
+  // Bold: at regular weight a secondary action in a label row reads as prose.
+  a
+    font-weight: 700
+
+// The guest card is the whole dialog: the wrapper's own padding, fill and edge
+// step aside.
+.dialog:has(> .auth-surface)
+  width: auto
+  max-width: none
+  padding: 0
+  background-color: transparent
+  border-radius: 0
+
+// The width sits on the wrapper, so the lit area and the card are one
+// rectangle and a click beside the card closes the dialog.
+.auth-surface.auth-dialog
+  width: $auth-card-width
+  // The cap of the dialog tier, for a 375px screen.
+  max-width: calc(100vw - #{$medium} * 2)
+
+// The narrow dialog; the class reaches the card as well, so the two agree.
+.auth-surface.auth-dialog--compact
+  width: $auth-card-width-compact
+
+.auth-surface .auth-card
+  position: relative
+  box-sizing: border-box
+  max-width: $auth-card-width
+  margin: 0 auto
+  padding: 24px
+  background-color: $bg-page
+  // Transparent and not absent: --framed turns the same line on at no change
+  // of size.
+  border: 1px solid transparent
+  border-radius: $border-radius
+
+/// The last block adds no gap of its own to the card's padding.
+.auth-surface .auth-card > *:last-child
+  margin-bottom: 0
+
+/// A card on the undimmed page needs a line of its own.
+.auth-surface .auth-card--framed
+  border-color: $border
+
+/// The narrow card, worn by the screens that ask one question or state one
+/// outcome.
+.auth-surface .auth-card--compact
+  max-width: $auth-card-width-compact
+
+.auth-surface .auth-card--center
+  text-align: center
+
+// The visible way out of a guest dialog, drawn of two bars: a typed cross
+// varies with the font that loaded.
+.auth-surface .auth-close
+  position: absolute
+  top: 10px
+  right: 10px
+  width: 32px
+  height: 32px
+  padding: 0
+  color: $text-muted
+  background: none
+  border: 0
+  border-radius: $border-radius
+  cursor: pointer
+
+  &:hover
+    color: $text
+
+  // A shadow and not an outline, which the card's edge would clip.
+  &:focus-visible
+    outline: none
+    box-shadow: 0 0 0 2px $link
+
+  +auth-bar-cross
+
+// A centred title clears the cross by the card's gutter on both sides, which
+// fits the longest heading on the compact card.
+.auth-surface .auth-card:has(> .auth-close) .auth-title
+  padding: 0 24px
+
+/// The card's name: the page title's size, in caps, centred.
+.auth-surface .auth-title
+  margin: 0 0 1rem
+  font-size: $title-font-size
+  font-weight: 700
+  letter-spacing: .5px
+  text-transform: uppercase
+  color: $heading
+  text-align: center
+
+/// A paragraph of the card body.
+.auth-surface .auth-text
+  margin: 0 0 1rem
+  line-height: 1.5
+
+/// The secondary line under it: a validity period, a consequence, a way back.
+.auth-surface .auth-note
+  margin: 0 0 1rem
+  font-size: $secondary-font-size
+  line-height: 1.4
+  color: $text-muted

@@ -2,68 +2,41 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The tag section answers a failed load itself, so this is about who speaks.
- *
- * Two reads fill the section - the groups and the tags - and neither leaves
- * anything on screen when it fails: the panels are drawn from what they
- * returned, so the page puts a line where both panels would be. That line is
- * the one carrier of the failure, and the response interceptor has to be told,
- * or the same sentence stands twice: once in the middle of the section, once on
- * a plate in the corner. The interceptor lives below the mock this suite
- * installs, so the telling is checked on the request, where the decision is.
- *
- * A wait is checked separately from the rest because it is the one refusal the
- * page cannot relay as the server worded it: the title of a 429 names no
- * number, and the seconds arrive beside it.
- */
+// Both reads own their refusal: one line stands where the panels would be,
+// and the interceptor is told on the request. The 429 title names no number,
+// so the wait is checked apart.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
+import {
+  flushPromises,
+  enableAutoUnmount,
+  type VueWrapper,
+} from "@vue/test-utils";
+import { useToast } from "@/shared/lib/composables/useToast";
 import ModerationTags from "./ModerationTags.vue";
-import SOURCE from "./ModerationTags.vue?raw";
+import { mountPage, windows } from "@/shared/lib/testing/mountPage";
 
-const getTagGroups = vi.hoisted(() => vi.fn());
-const getTags = vi.hoisted(() => vi.fn());
-const fetchTags = vi.hoisted(() => vi.fn());
-const deleteTagGroup = vi.hoisted(() => vi.fn());
-const deleteTag = vi.hoisted(() => vi.fn());
-
-vi.mock("@/entities/game", () => ({
-  gameTagApi: {
-    getTagGroups,
-    getTags,
-    deleteTagGroup,
-    deleteTag,
-  },
-  useGamesStore: () => ({ fetchTags }),
+const {
+  getTagGroups,
+  getTags,
+  getTagForEdit,
+  deleteTagGroup,
+  deleteTag,
+  publicTags,
+} = vi.hoisted(() => ({
+  getTagGroups: vi.fn(),
+  getTags: vi.fn(),
+  getTagForEdit: vi.fn(),
+  deleteTagGroup: vi.fn(),
+  deleteTag: vi.fn(),
+  publicTags: vi.fn(),
 }));
 
-/** The two write dialogs have their own specs; nothing here opens one. */
-vi.mock("./dialogs/TagGroupDialog.vue", () => ({
-  default: { template: "<div />" },
+// The network only: the games store, the windows and the plates are the real ones.
+vi.mock("@/entities/game/api/gameTagApi", () => ({
+  default: { getTagGroups, getTags, getTagForEdit, deleteTagGroup, deleteTag },
 }));
-vi.mock("./dialogs/TagDialog.vue", () => ({
-  default: { template: "<div />" },
-}));
-
-vi.mock("vue-final-modal", () => ({
-  useModal: () => ({ open: vi.fn(), close: vi.fn() }),
-}));
-
-/** The gate has its own spec; here the viewer is a moderator. */
-const gate = vi.hoisted(() => ({ hasAccess: true }));
-
-vi.mock("./lib/useRoleGate", async () => {
-  const { ref } = await import("vue");
-  return {
-    useRoleGate: () => ({ hasAccess: ref(gate.hasAccess), deniedText: "" }),
-  };
-});
-
-const toastError = vi.hoisted(() => vi.fn());
-
-vi.mock("@/shared/lib/composables/useToast", () => ({
-  useToast: () => ({ error: toastError, success: vi.fn() }),
+vi.mock("@/entities/game/api/gameApi", () => ({
+  default: { getTags: publicTags },
 }));
 
 /** What the page says it will answer for, on both reads. */
@@ -78,30 +51,28 @@ const refused = (error: Record<string, unknown>) => ({ data: null, error });
 
 enableAutoUnmount(afterEach);
 
-function render() {
-  return mount(ModerationTags, {
-    global: {
-      stubs: {
-        SecondaryText: true,
-        SvgIcon: true,
-        EmptyState: true,
-        // The confirmations of a delete are the real window, drawn in place.
-        Teleport: true,
-        // Passthrough: the controls it wraps are part of the panel it hides
-        // when a stub swallows its slot.
-        Tooltip: { template: "<div><slot /></div>" },
-      },
-    },
+async function render() {
+  const { wrapper } = await mountPage(ModerationTags, "/moderation/tags", {
+    routes: [["moderation-tags", "/moderation/tags"]],
   });
+  await flushPromises();
+  return wrapper;
 }
+
+/** What the corner of the screen says, if anything. */
+const plates = () => useToast().toasts.value.map((toast) => toast.message);
+
+beforeEach(() => {
+  const { toasts, dismiss } = useToast();
+  for (const toast of [...toasts.value]) dismiss(toast.id);
+  publicTags.mockReset();
+  publicTags.mockResolvedValue(served([]));
+});
 
 describe("the tag section", () => {
   beforeEach(() => {
     getTagGroups.mockReset();
     getTags.mockReset();
-    fetchTags.mockReset();
-    toastError.mockReset();
-    gate.hasAccess = true;
     getTagGroups.mockResolvedValue(
       served([{ id: "g-1", title: "Жанр", sortOrder: 0, tagsCount: 1 }]),
     );
@@ -121,22 +92,16 @@ describe("the tag section", () => {
   });
 
   it("draws both panels from what the two reads returned", async () => {
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await render();
 
-    expect(wrapper.find(".error").exists()).toBe(false);
+    expect(wrapper.find(".error-state").exists()).toBe(false);
     expect(wrapper.text()).toContain("Жанр");
     expect(wrapper.text()).toContain("Детектив");
   });
 
-  /**
-   * Asserted on the requests rather than on the plate: the interceptor that
-   * would have raised it sits below the mock, and the flag on the way out is
-   * the only thing that can reach it.
-   */
+  // Asserted on the requests: the flag on the way out is what reaches the interceptor.
   it("takes the refusal of both reads over from the interceptor", async () => {
-    render();
-    await flushPromises();
+    await render();
 
     expect(getTagGroups).toHaveBeenCalledWith(OWNS_REFUSAL);
     expect(getTags).toHaveBeenCalledWith(OWNS_REFUSAL);
@@ -147,13 +112,26 @@ describe("the tag section", () => {
       refused({ type: "Forbidden", status: 403, title: "Раздел закрыт" }),
     );
 
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await render();
 
-    expect(wrapper.find(".error").text()).toBe("Раздел закрыт");
+    expect(wrapper.find(".error-message").text()).toBe("Раздел закрыт");
     // Nothing of the section is left standing beside the line.
     expect(wrapper.find(".groups-panel").exists()).toBe(false);
     expect(wrapper.find(".tags-panel").exists()).toBe(false);
+  });
+
+  it("reads both lists again from the line's own retry", async () => {
+    getTagGroups.mockResolvedValueOnce(
+      refused({ type: "ServerError", status: 500, title: "Внутренняя ошибка" }),
+    );
+    const wrapper = await render();
+
+    await wrapper.get(".error-retry").trigger("click");
+    await flushPromises();
+
+    expect(getTagGroups).toHaveBeenCalledTimes(2);
+    expect(wrapper.find(".error-state").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Детектив");
   });
 
   /** The failure of the second read is a failure of the section too. */
@@ -162,17 +140,12 @@ describe("the tag section", () => {
       refused({ type: "ServerError", status: 500, title: "Внутренняя ошибка" }),
     );
 
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await render();
 
-    expect(wrapper.find(".error").text()).toBe("Внутренняя ошибка");
+    expect(wrapper.find(".error-message").text()).toBe("Внутренняя ошибка");
   });
 
-  /**
-   * The wait comes over with the refusal, so the line has to say what the plate
-   * would have: the seconds the server asked for. The title sent with a 429
-   * carries no number, so relaying it would drop the one part a reader acts on.
-   */
+  // The 429 title carries no number, so the line says the seconds itself.
   it("names the wait when a read is rate limited", async () => {
     getTagGroups.mockResolvedValue(
       refused({
@@ -183,30 +156,21 @@ describe("the tag section", () => {
       }),
     );
 
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await render();
 
-    expect(wrapper.find(".error").text()).toBe(
+    expect(wrapper.find(".error-message").text()).toBe(
       "Слишком много попыток, попробуйте через 30 секунд",
     );
   });
 });
 
-/**
- * The two deletes. Each confirmation runs its request itself: it waits for the
- * answer, prints a refusal in itself and closes on success alone, and the
- * request carries the flags that keep the interceptor quiet about it, the way
- * the reads do.
- */
+// Each confirmation runs its request, prints a refusal in itself and closes on success alone.
 describe("the tag section deletes", () => {
   beforeEach(() => {
     getTagGroups.mockReset();
     getTags.mockReset();
-    fetchTags.mockReset();
     deleteTagGroup.mockReset();
     deleteTag.mockReset();
-    toastError.mockReset();
-    gate.hasAccess = true;
     getTagGroups.mockResolvedValue(
       served([
         { id: "g-1", title: "Жанр", sortOrder: 0, tagsCount: 1 },
@@ -228,18 +192,14 @@ describe("the tag section deletes", () => {
     );
   });
 
-  const confirm = async (wrapper: ReturnType<typeof render>, label: string) => {
+  const confirm = async (wrapper: VueWrapper, label: string) => {
     await wrapper.get(`button[aria-label="${label}"]`).trigger("click");
-    await wrapper.get(".dialog-btn-submit").trigger("click");
+    await windows().get(".dialog-btn-submit").trigger("click");
     await flushPromises();
   };
 
-  /**
-   * The server refuses to delete a group that holds tags and a tag that
-   * stands in a game. Their trash used to be drawn pale, and pressing it did
-   * nothing: the refusal drawn in advance. Now there is no trash to press, and
-   * the count in the row says why.
-   */
+  // The server refuses to delete a group that holds tags and a tag that stands
+  // in a game, so neither has a trash; the count in the row says why.
   it("draws no trash where the server would refuse the delete", async () => {
     getTags.mockResolvedValue(
       served([
@@ -263,8 +223,7 @@ describe("the tag section deletes", () => {
         },
       ]),
     );
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await render();
 
     const groupTrash = wrapper.findAll('button[aria-label="Удалить группу"]');
     const tagTrash = wrapper.findAll('button[aria-label="Удалить тег"]');
@@ -289,14 +248,36 @@ describe("the tag section deletes", () => {
 
   it("deletes an empty group with the window's flags and reads the catalogue again", async () => {
     deleteTagGroup.mockResolvedValue({ data: null, error: null });
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await render();
 
     await confirm(wrapper, "Удалить группу");
 
     expect(deleteTagGroup).toHaveBeenCalledWith("g-2", OWNS_REFUSAL);
     expect(getTagGroups).toHaveBeenCalledTimes(2);
-    expect(wrapper.find(".dialog-container").exists()).toBe(false);
+    // The public catalogue the game form picks from is asked past its copy.
+    expect(publicTags).toHaveBeenCalledWith(true);
+    expect(windows().find(".dialog-container").exists()).toBe(false);
+  });
+
+  // Shown rows stay: a read again after a write does not blank the section.
+  it("keeps the panels standing under aria-busy while it reads them again", async () => {
+    deleteTagGroup.mockResolvedValue({ data: null, error: null });
+    const wrapper = await render();
+    let answer: (value: unknown) => void = () => {};
+    getTagGroups.mockReturnValueOnce(
+      new Promise((resolve) => (answer = resolve)),
+    );
+
+    await confirm(wrapper, "Удалить группу");
+
+    const section = wrapper.get(".moderation-tags");
+    expect(section.attributes("aria-busy")).toBe("true");
+    expect(wrapper.find(".groups-panel").exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("Загрузка...");
+
+    answer(served([{ id: "g-1", title: "Жанр", sortOrder: 0, tagsCount: 1 }]));
+    await flushPromises();
+    expect(section.attributes("aria-busy")).toBeUndefined();
   });
 
   it.each([
@@ -306,34 +287,22 @@ describe("the tag section deletes", () => {
     "prints a refused %s in the window and stays open",
     async (label, request, sentence) => {
       request.mockResolvedValue(refused({ type: "Conflict", status: 409 }));
-      const wrapper = render();
-      await flushPromises();
+      const wrapper = await render();
 
       await confirm(wrapper, label);
 
-      expect(wrapper.get(".dialog-refusal").text()).toBe(sentence);
-      expect(wrapper.find(".dialog-container").exists()).toBe(true);
-      expect(toastError).not.toHaveBeenCalled();
+      expect(windows().get(".dialog-refusal").text()).toBe(sentence);
+      expect(windows().find(".dialog-container").exists()).toBe(true);
+      expect(plates()).toEqual([]);
       expect(getTagGroups).toHaveBeenCalledTimes(1);
     },
   );
 });
 
-/**
- * The counts of the list of groups stand in one column. The row of every tag
- * stood outside the frame a group row has, and a button there is as wide as
- * its words: its count stood against the title ("Все теги72"), where the rows
- * under it hold theirs apart at the right, before their buttons. Nothing is
- * laid out here, so the row is checked for the frame and for the room it keeps
- * for the buttons it has not got, read from the rules where they are written.
- *
- * A group that holds tags has no trash, and its buttons keep the room of two
- * all the same: the actions are as wide as two buttons whatever is drawn in
- * them, and the row of every tag leaves that room and the gap before it.
- */
+// The row of every tag stands in the frame of a group row, so the counts stand
+// in one column; a group that holds tags has its pencil and no trash.
 describe("the list of groups", () => {
   beforeEach(() => {
-    gate.hasAccess = true;
     getTagGroups.mockResolvedValue(
       served([{ id: "g-1", title: "Жанр", sortOrder: 0, tagsCount: 1 }]),
     );
@@ -341,8 +310,7 @@ describe("the list of groups", () => {
   });
 
   it("draws the row of every tag in the frame of a group row", async () => {
-    const wrapper = render();
-    await flushPromises();
+    const wrapper = await render();
 
     const rows = wrapper.findAll(".groups-list .group-item");
     expect(rows.map((row) => row.get(".group-title").text())).toEqual([
@@ -355,21 +323,73 @@ describe("the list of groups", () => {
 
     // The group holds a tag: its pencil is drawn, its trash is not.
     expect(
-      wrapper.findAll(".group-item-wrapper .group-actions .btn-icon"),
+      wrapper.findAll(".group-item-wrapper .group-actions .icon-btn"),
     ).toHaveLength(1);
+  });
+});
 
-    // Two buttons and the gap between them, kept by the actions of a group
-    // whatever is drawn in them, and left by the row of every tag with the
-    // gap before them.
-    expect(rows[0].classes()).toContain("group-item--all");
-    expect(SOURCE).toMatch(
-      /\n\$two-icon-buttons: calc\(2 \* #\{\$icon-button\} \+ #\{\$tiny\}\)\n/,
+// The list carries the description rendered, as the tooltip of the tag shows it;
+// the edit window reads the tag again and opens on the description as typed.
+describe("the description of a tag", () => {
+  const TAG = {
+    id: "t-1",
+    shortId: 7,
+    groupId: "g-1",
+    groupTitle: "Жанр",
+    title: "Детектив",
+    sortOrder: 0,
+    gamesCount: 1,
+  };
+  const RENDERED =
+    '<span class="bb-tip" data-tip-text="Расследование">Сыщик</span> ищет';
+  const TYPED = '[tip="Расследование"]Сыщик[/tip] ищет';
+
+  beforeEach(() => {
+    getTagForEdit.mockReset();
+    getTagGroups.mockResolvedValue(
+      served([{ id: "g-1", title: "Жанр", sortOrder: 0, tagsCount: 1 }]),
     );
-    expect(SOURCE).toMatch(
-      /\n\.group-actions\n(\s+[^\n]+\n)*?\s+width: \$two-icon-buttons\n/,
+    getTags.mockResolvedValue(served([{ ...TAG, description: RENDERED }]));
+  });
+
+  it("is drawn on the card as the server rendered it", async () => {
+    const wrapper = await render();
+
+    expect(wrapper.get(".tag-description .bb-tip").text()).toBe("Сыщик");
+    expect(wrapper.get(".tag-description").text()).not.toContain("[tip");
+  });
+
+  it("opens the edit window as typed", async () => {
+    getTagForEdit.mockResolvedValue({
+      data: { ...TAG, description: TYPED },
+      error: null,
+    });
+    const wrapper = await render();
+
+    await wrapper
+      .get('button[aria-label="Редактировать тег"]')
+      .trigger("click");
+    await flushPromises();
+
+    expect(getTagForEdit).toHaveBeenCalledWith("t-1");
+    expect(
+      (windows().get("#tag-description").element as HTMLTextAreaElement).value,
+    ).toBe(TYPED);
+  });
+
+  it("opens no window when the tag does not come, and says so in its row", async () => {
+    getTagForEdit.mockResolvedValue(refused({ status: 404, title: "" }));
+    const wrapper = await render();
+
+    await wrapper
+      .get('button[aria-label="Редактировать тег"]')
+      .trigger("click");
+    await flushPromises();
+
+    expect(windows().find("#tag-description").exists()).toBe(false);
+    expect(wrapper.get(".tag-item .action-result").text()).toBe(
+      "Не удалось загрузить тег",
     );
-    expect(SOURCE).toMatch(
-      /\n\.group-item--all\n\s+margin-right: calc\(#\{\$two-icon-buttons\} \+ #\{\$tiny\}\)/,
-    );
+    expect(plates()).toEqual([]);
   });
 });

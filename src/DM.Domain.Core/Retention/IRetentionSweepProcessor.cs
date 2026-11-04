@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace DM.Domain.Core.Retention;
 
 /// <summary>
@@ -18,7 +14,6 @@ public interface IRetentionSweepProcessor
     /// <summary>
     /// Run one sweep over every declared retention policy.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>What the pass removed, per table.</returns>
     Task<IReadOnlyList<RetentionSweepResult>> SweepAsync(CancellationToken cancellationToken = default);
 }

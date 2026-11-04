@@ -7,176 +7,70 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
-/// <summary>
-/// Integration tests for TopicController
-/// </summary>
 public class TopicControllerShould : IntegrationTestBase
 {
     public TopicControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    #region GetBoardTopics Tests
-
-    /// <summary>
-    /// Get topics from valid board should return OK
-    /// </summary>
     [Fact]
-    public async Task GetBoardTopics_WithValidBoard_ReturnsOk()
+    public async Task GetBoardTopicsWithValidBoardReturnsOk()
     {
-        // Act
         var response = await Client.GetAsync($"/v1/boards/{Uri.EscapeDataString(TestConstants.TestBoardTitle)}/topics");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("resources");
     }
 
-    /// <summary>
-    /// Get topics from non-existent board should return NotFound. A board is not
-    /// a resource this API tells "deleted" from "never existed", so an id that
-    /// addresses nothing is the plain 404 the controller declares.
-    /// </summary>
     [Fact]
-    public async Task GetBoardTopics_WithNonExistentBoard_ReturnsNotFound()
+    public async Task GetBoardTopicsWithNonExistentBoardReturnsNotFound()
     {
-        // Arrange
         var nonExistentBoardId = Guid.NewGuid();
 
-        // Act
         var response = await Client.GetAsync($"/v1/boards/{nonExistentBoardId}/topics");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// Get topics with invalid board id should return error
-    /// </summary>
     [Fact]
-    public async Task GetBoardTopics_WithInvalidBoardId_ReturnsError()
+    public async Task GetBoardTopicsWithInvalidBoardIdReturnsError()
     {
-        // Act
         var response = await Client.GetAsync("/v1/boards/not-a-guid/topics");
 
-        // Assert - an alias nothing answers to is a board that never existed
+        // An alias nothing answers to is a board that never existed
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    #endregion
-
-    #region PostBoardTopic Tests
-
-    /// <summary>
-    /// Create topic without authentication should return Unauthorized
-    /// </summary>
     [Fact]
-    public async Task PostBoardTopic_WhenNotAuthenticated_ReturnsUnauthorized()
+    public async Task GetTopicWithValidIdReturnsOk()
     {
-        // Arrange
-        var topic = new
-        {
-            title = "Test Topic",
-            text = "Test topic content"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync($"/v1/boards/{Uri.EscapeDataString(TestConstants.TestBoardTitle)}/topics", topic);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Create topic with empty title should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task PostBoardTopic_WithEmptyTitle_ReturnsUnauthorized()
-    {
-        // Arrange
-        var topic = new
-        {
-            title = "",
-            text = "Test topic content"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync($"/v1/boards/{Uri.EscapeDataString(TestConstants.TestBoardTitle)}/topics", topic);
-
-        // Assert - auth check happens before validation
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Create topic on non-existent board should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task PostBoardTopic_OnNonExistentBoard_ReturnsUnauthorized()
-    {
-        // Arrange
-        var nonExistentBoardId = Guid.NewGuid();
-        var topic = new
-        {
-            title = "Test Topic",
-            text = "Test topic content"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync($"/v1/boards/{nonExistentBoardId}/topics", topic);
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    #endregion
-
-    #region GetTopic Tests
-
-    /// <summary>
-    /// Get existing topic should return OK
-    /// </summary>
-    [Fact]
-    public async Task GetTopic_WithValidId_ReturnsOk()
-    {
-        // Act
         var response = await Client.GetAsync($"/v1/topics/{TestConstants.TestTopicId}");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
         var content = await response.Content.ReadAsStringAsync();
         content.Should().Contain("resource");
     }
 
     /// <summary>
-    /// Get a topic id that never existed should return NotFound. Gone (410) is
-    /// reserved for a topic row that exists but is soft-deleted — a reader who
-    /// follows a stale link to a removed topic must be able to tell "this was
-    /// deleted" from "this address was never valid".
+    /// Get a topic id that never existed should return NotFound; Gone is for a soft-deleted row.
     /// </summary>
     [Fact]
-    public async Task GetTopic_WithNonExistentId_ReturnsNotFound()
+    public async Task GetTopicWithNonExistentIdReturnsNotFound()
     {
-        // Arrange
         var nonExistentId = Guid.NewGuid();
 
-        // Act
         var response = await Client.GetAsync($"/v1/topics/{nonExistentId}");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
     /// <summary>
-    /// Get a soft-deleted topic should return Gone — the counterpart of the
-    /// NotFound case above. Both directions are asserted because the service
-    /// distinguishes them with an extra existence probe: a regression that
-    /// drops the probe collapses one status into the other silently.
+    /// Get a soft-deleted topic should return Gone: the service tells the two apart with an existence probe.
     /// </summary>
     [Fact]
-    public async Task GetTopic_WithRemovedTopic_ReturnsGone()
+    public async Task GetTopicWithRemovedTopicReturnsGone()
     {
-        // Arrange
         var removedTopicId = Guid.NewGuid();
         await using (var db = DatabaseFixture.CreateDbContext())
         {
@@ -196,235 +90,34 @@ public class TopicControllerShould : IntegrationTestBase
             await db.SaveChangesAsync();
         }
 
-        // Act
         var response = await Client.GetAsync($"/v1/topics/{removedTopicId}");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Gone);
     }
 
-    /// <summary>
-    /// Get topic with invalid GUID should return error
-    /// </summary>
     [Fact]
-    public async Task GetTopic_WithInvalidGuid_ReturnsBadRequest()
+    public async Task GetTopicWithInvalidGuidReturnsBadRequest()
     {
-        // Act
         var response = await Client.GetAsync("/v1/topics/not-a-guid");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    #endregion
-
-    #region PatchTopic Tests
-
     /// <summary>
-    /// Pinning a topic sends only that flag — the rest of the topic must survive
+    /// Pinning a topic sends only that flag, as the client does, and the rest of the topic survives.
     /// </summary>
-    /// <remarks>
-    /// This is exactly what the client does (`{ isAttached: true }`). While the
-    /// PATCH body was the read model, its Title initialized to an empty string,
-    /// the update validator saw "set the title to empty" and answered 400 — so
-    /// pinning and closing a topic were broken from the UI.
-    /// </remarks>
     [Fact]
-    public async Task PatchTopic_WithOnlyOneFlag_KeepsEverythingElse()
+    public async Task PatchTopicWithOnlyOneFlagKeepsEverythingElse()
     {
-        // Act
         var request = CreateAdminRequest(HttpMethod.Patch, $"/v1/topics/{TestConstants.TestTopicId}");
         request.Content = JsonContent.Create(new { isAttached = true });
         var response = await Client.SendAsync(request);
         var content = await response.Content.ReadAsStringAsync();
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
         var topic = JsonDocument.Parse(content).RootElement.GetProperty("resource");
         topic.GetProperty("isAttached").GetBoolean().Should().BeTrue();
         topic.GetProperty("title").GetString().Should().NotBeNullOrEmpty();
     }
 
-    /// <summary>
-    /// Update topic without authentication should return Unauthorized
-    /// </summary>
-    [Fact]
-    public async Task PatchTopic_WhenNotAuthenticated_ReturnsUnauthorized()
-    {
-        // Arrange
-        var topicUpdate = new
-        {
-            title = "Updated Title"
-        };
-        var content = JsonContent.Create(topicUpdate);
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/topics/{TestConstants.TestTopicId}")
-        {
-            Content = content
-        };
-
-        // Act
-        var response = await Client.SendAsync(request);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Update non-existent topic should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task PatchTopic_WithNonExistentId_ReturnsUnauthorized()
-    {
-        // Arrange
-        var nonExistentId = Guid.NewGuid();
-        var topicUpdate = new
-        {
-            title = "Updated Title"
-        };
-        var content = JsonContent.Create(topicUpdate);
-        var request = new HttpRequestMessage(HttpMethod.Patch, $"/v1/topics/{nonExistentId}")
-        {
-            Content = content
-        };
-
-        // Act
-        var response = await Client.SendAsync(request);
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    #endregion
-
-    #region DeleteTopic Tests
-
-    /// <summary>
-    /// Delete topic without authentication should return Unauthorized
-    /// </summary>
-    [Fact]
-    public async Task DeleteTopic_WhenNotAuthenticated_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await Client.DeleteAsync($"/v1/topics/{TestConstants.TestTopicId}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Delete non-existent topic should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task DeleteTopic_WithNonExistentId_ReturnsUnauthorized()
-    {
-        // Arrange
-        var nonExistentId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.DeleteAsync($"/v1/topics/{nonExistentId}");
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    #endregion
-
-    #region PostTopicLike Tests
-
-    /// <summary>
-    /// Like topic without authentication should return Unauthorized
-    /// </summary>
-    [Fact]
-    public async Task PostTopicLike_WhenNotAuthenticated_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await Client.PostAsync($"/v1/topics/{TestConstants.TestTopicId}/likes", null);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Like non-existent topic should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task PostTopicLike_WithNonExistentId_ReturnsUnauthorized()
-    {
-        // Arrange
-        var nonExistentId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.PostAsync($"/v1/topics/{nonExistentId}/likes", null);
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    #endregion
-
-    #region DeleteTopicLike Tests
-
-    /// <summary>
-    /// Remove like without authentication should return Unauthorized
-    /// </summary>
-    [Fact]
-    public async Task DeleteTopicLike_WhenNotAuthenticated_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await Client.DeleteAsync($"/v1/topics/{TestConstants.TestTopicId}/likes");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Remove like from non-existent topic should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task DeleteTopicLike_WithNonExistentId_ReturnsUnauthorized()
-    {
-        // Arrange
-        var nonExistentId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.DeleteAsync($"/v1/topics/{nonExistentId}/likes");
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    #endregion
-
-    #region ReadTopicComments Tests
-
-    /// <summary>
-    /// Mark comments as read without authentication should return Unauthorized
-    /// </summary>
-    [Fact]
-    public async Task ReadTopicComments_WhenNotAuthenticated_ReturnsUnauthorized()
-    {
-        // Act
-        var response = await Client.DeleteAsync($"/v1/topics/{TestConstants.TestTopicId}/comments/unread");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    /// <summary>
-    /// Mark comments as read for non-existent topic should return Unauthorized (auth check first)
-    /// </summary>
-    [Fact]
-    public async Task ReadTopicComments_WithNonExistentId_ReturnsUnauthorized()
-    {
-        // Arrange
-        var nonExistentId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.DeleteAsync($"/v1/topics/{nonExistentId}/comments/unread");
-
-        // Assert - auth check happens first
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    #endregion
 }

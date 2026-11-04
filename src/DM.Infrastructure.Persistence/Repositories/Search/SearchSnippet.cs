@@ -1,8 +1,13 @@
+using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.Threading.Tasks;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
+using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Search;
 
@@ -23,20 +28,13 @@ internal static class SearchSnippet
     public const int Length = 280;
 
     /// <summary>
-    /// Matches a [private] block — the same string the Post.SearchVector column is
+    /// The [private] block pattern is the string the Post.SearchVector column is
     /// generated from, so that a preview can never show text the index refused to
-    /// tokenize. An alias, not a second spelling.
+    /// tokenize. The pattern spells the casing it forgives itself, so .NET reads it
+    /// with no options for case.
     /// </summary>
-    public const string PrivateBlockPattern = PrivateBlockMarkup.BlockPattern;
-
-    /// <summary>
-    /// The flags PostgreSQL applies <see cref="PrivateBlockPattern"/> with. The
-    /// pattern spells the casing it forgives itself, so .NET reads it with none.
-    /// </summary>
-    public const string PrivateBlockPatternFlags = PrivateBlockMarkup.BlockPatternFlags;
-
     private static readonly Regex PrivateBlockRegex = new(
-        PrivateBlockPattern,
+        PrivateBlockMarkup.BlockPattern,
         RegexOptions.Compiled);
 
     /// <summary>
@@ -89,6 +87,56 @@ internal static class SearchSnippet
     /// </summary>
     public const string HeadlineOptions =
         "StartSel=\u0011, StopSel=\u0012, MaxWords=20, MinWords=8, MaxFragments=2, FragmentDelimiter=…";
+
+    /// <summary>
+    /// The searchable text of one row of a page, keyed by the row.
+    /// </summary>
+    internal sealed class Body
+    {
+        public Guid Id { get; set; }
+        public string Text { get; set; } = string.Empty;
+    }
+
+    /// <summary>
+    /// The window around the match for every row of a page that has one, keyed by the row.
+    /// </summary>
+    /// <remarks>
+    /// A pass over the page rather than the ranked query: ts_headline re-parses its document,
+    /// so it runs only for the rows a reader sees. It reads the document and not the vector,
+    /// so the hidden block is cut again before the window is opened.
+    /// </remarks>
+    public static async Task<Dictionary<Guid, string>> Headlines(
+        string query, CancellationToken ct, params (Guid[] Ids, IQueryable<Body> Bodies)[] sources)
+    {
+        var headlines = new Dictionary<Guid, string>();
+
+        // A filter with no words in it matches every row equally: nothing to build a window around.
+        if (string.IsNullOrWhiteSpace(query))
+        {
+            return headlines;
+        }
+
+        foreach (var (ids, bodies) in sources.Where(source => source.Ids.Length > 0))
+        {
+            foreach (var row in await bodies
+                .Select(b => new
+                {
+                    b.Id,
+                    Headline = EF.Functions.WebSearchToTsQuery(SearchTextConfiguration.Name, query)
+                        .GetResultHeadline(
+                            SearchTextConfiguration.Name,
+                            DmDbContext.RegexpReplace(
+                                b.Text, PrivateBlockMarkup.BlockPattern, " ", PrivateBlockMarkup.BlockPatternFlags),
+                            HeadlineOptions),
+                })
+                .ToArrayAsync(ct))
+            {
+                headlines[row.Id] = row.Headline;
+            }
+        }
+
+        return headlines;
+    }
 
     /// <summary>
     /// Splits a marked headline into the runs a reader sees, matched and not.

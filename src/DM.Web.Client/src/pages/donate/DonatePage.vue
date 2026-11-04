@@ -6,18 +6,14 @@ import { fundraisingApi, type Fundraising } from "@/entities/fundraising";
 import { useApiResource } from "@/shared/lib/composables/useApiResource";
 import type { Envelope } from "@/shared/api/models/common";
 
-// Same endpoint as the sidebar SupportPanel, but useApiResource state is per
-// component instance: this page remounts on every visit and always refetches,
-// while the panel's long-lived instance may serve a sum cached for up to its
-// window, so the two bars can briefly disagree after an admin edit.
+// The sidebar panel's instance may serve a cached sum; this page refetches on every visit.
 const { data, loading, error, fetch } = useApiResource<Envelope<Fundraising>>(
   () => fundraisingApi.getFundraising(),
 );
 
 const fundraising = computed(() => data.value?.resource ?? null);
 
-// Fetch synchronously during setup so `loading` is already true on the
-// first render (avoids a flash of the no-progress-bar layout).
+// During setup, so `loading` is already true on the first render.
 void fetch();
 </script>
 
@@ -32,8 +28,7 @@ void fetch();
     </p>
 
     <block-title>Сбор средств</block-title>
-    <!-- What the money is for, above the bar: the numbers alone say how far
-         along the collection is and not what it is a collection for. -->
+    <!-- What the money is for: the numbers alone do not say it. -->
     <p v-if="fundraising" class="goal-title">{{ fundraising.title }}</p>
     <div
       v-if="loading && !fundraising"
@@ -67,9 +62,7 @@ void fetch();
         Играйте и водите игры: живая площадка держится на тех, кто пишет посты и
         набирает игроков
       </li>
-      <!-- A found fault is a topic in the forum's "Ошибки", where the community
-           answers, as the page of support itself says: the administration's
-           form is for security and for trouble with an account. -->
+      <!-- A found fault is a forum topic; the administration's form is for security and accounts. -->
       <li>
         Тестируйте сайт и
         <router-link :to="{ name: 'forum', params: { alias: 'bugs' } }"
@@ -99,15 +92,7 @@ void fetch();
     margin-bottom: 0
     font-weight: bold
 
-  a
-    color: $link
-    &:hover
-      color: $link-hover
-      text-decoration: underline
-
-// Same box as ProgressBar (margin, padding, one text row) so nothing
-// shifts vertically when the real bar replaces it. The bar's text row
-// inherits the 1.6 line-height of .donate-content, hence the height.
+// The box of ProgressBar, so nothing shifts when the bar replaces it.
 .progress-skeleton
   display: flex
   align-items: center

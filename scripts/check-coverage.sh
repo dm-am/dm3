@@ -1,89 +1,33 @@
 #!/usr/bin/env bash
 # Fails when the merged coverage of the solution drops below the ratchet below.
 #
-# Why a script and not a switch on `dotnet test`: the run writes one cobertura
-# file per test project, and each of them measures only the assemblies that
-# project happened to load. A threshold applied to any one of them is a threshold
-# on a fraction of the code, so the reports have to be merged first - which is
-# the whole of what ReportGenerator does here.
+# A script and not a switch on `dotnet test`: each test project's cobertura file measures
+# only the assemblies it loaded, so the reports are merged first (ReportGenerator).
+# One pair of numbers, not one per assembly: a per-assembly floor is a list kept by hand,
+# an assembly missing from it slips out silently, and more numbers are more occasions to
+# fix a red build by lowering one.
 #
-# Why one pair of numbers and not one per assembly: a per-assembly floor is a
-# second set of numbers, each measured, written down and raised by hand, plus a
-# list of assemblies kept by hand - and an assembly missing from that list slips
-# out from under the floor silently, which makes the gate worse than one honest
-# number. More numbers also mean more occasions for a red build under time
-# pressure to be fixed by lowering one, the single use this must never be put to.
-# A drop inside one assembly is caught reading the diff. The frontend thresholds
-# are global for the same reason, though vitest offers perFile.
-#
-# The results directory is expected to hold one run: a report merged out of two
-# describes neither, and the span check further down refuses it outright. CI
-# checks out clean, and by hand the directory should be passed in fresh:
+# The results directory has to hold one run: a report merged out of two describes neither,
+# and the span check below refuses it. CI checks out clean; by hand pass it in fresh:
 #   dotnet test --collect:"XPlat Code Coverage" --results-directory TestResults
 set -euo pipefail
 
-# Ratchet, not a floor to duck under - the same rule as the frontend thresholds
-# in src/DM.Web.Client/vite.config.ts: raise after a gain, never lower after a
-# miss. Measured on the merged report of a full run of the solution with every
-# test project green, 18 assemblies: 77.4% lines, 60.3% branches (2026-08-27,
-# commit 89daa7b3), with what a generator wrote left out of both - see the file
-# filter further down, and read the pair as being about code somebody here typed.
-# Those are the two numbers this script prints, read off the line-rate and
-# branch-rate attributes of the merged Cobertura report, which are the values the
-# comparison below is made against. Lines are the load-bearing number; branches
-# read low because files with no tests contribute few branch counters.
-#
-# The gaps are 1.9 points on lines and 1.1 on branches. They are uneven because
-# the two numbers below were set against a measurement that still counted the
-# generated sources, and taking those out moved lines two tenths up and branches
-# six tenths down: on that run the generated files held 2454 coverable lines at
-# 72.0% and 572 branches at 70.3%, which is under the solution on the first
-# number and ten points over it on the second. Neither move is a gain to raise
-# after nor a miss to lower after, and lowering is the one use this must never be
-# put to, so both stand where they were set.
-#
-# The size a gap has to have is measured rather than guessed. The same tree was
-# merged on the CI runner and on a developer machine within the hour: 77.1/60.8
-# there against 77.2/60.9 here, a tenth apart on both. (That pair is from before
-# the filter; it changes the denominator the same way on either machine, so the
-# difference it measures is the same.) The gap has to cover that difference and
-# nothing else, because a ratchet set a hair under the last measurement turns the
-# difference into a red build, and a red build under time pressure gets fixed by
-# lowering the number. What too wide a gap costs is what the pair these replace
-# cost: 70 and 50 trailed the measurement by seven points and eleven, so a third
-# of the tests could have been deleted with the gate still green.
-#
-# The TextSummary of the same merge reads a tenth below the attributes on both
-# numbers (77.3/60.2 against the 77.4/60.3 the awk below prints) because the two
-# round separately. Read the pair off one source, the way this script does;
-# taking one number from each spends a tenth of the gap before anything is
-# measured.
+# Ratchet, as the frontend thresholds in src/DM.Web.Client/vite.config.ts: raise after a
+# gain, never lower after a miss. Lines are the load-bearing number; branches read low
+# because files with no tests contribute few branch counters. The gap below the last
+# measurement covers the difference between the CI runner and a developer machine and
+# nothing more: wider, and a third of the tests could go with the gate still green. The
+# rates are read off the line-rate and branch-rate attributes of the merged Cobertura
+# report, not off the TextSummary, which rounds separately and reads a tenth lower.
 MIN_LINE_RATE=75.5
 MIN_BRANCH_RATE=59.2
 
 REPORTGENERATOR_VERSION=5.3.11
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+# shellcheck source=/dev/null
+. "$REPO_ROOT/scripts/lib/common.sh"
 RESULTS="${1:-$REPO_ROOT/TestResults}"
-
-# The same path, spelled so a native program can resolve it. Under Git Bash every
-# path built above is an MSYS one (/d/Projects/Web/dm3/...) and ReportGenerator
-# is a Windows binary, so MSYS rewrites such an argument on its way out - unless
-# the argument carries a wildcard, and then it hands it over untouched. That is
-# the shape of the -reports argument below, which therefore reached the tool as
-# /d/... and matched nothing. Called with no argument - the form the CI step uses,
-# and the only form that needs no knowledge of the layout - the tool answered "No
-# report files specified." and the script exited before reading a single rate, so
-# the one gate on backend coverage could not be run on Windows at all. A space in
-# the path is not the cause and moving the checkout does not help: MSYS converts
-# paths with spaces. On Linux cygpath does not exist and the path passes through.
-native() {
-  if command -v cygpath > /dev/null 2>&1; then
-    cygpath -m "$1"
-  else
-    printf '%s' "$1"
-  fi
-}
 
 if [ -z "$(find "$RESULTS" -name coverage.cobertura.xml -print -quit 2>/dev/null)" ]; then
   echo "ERROR: no coverage report under $RESULTS." >&2
@@ -91,25 +35,11 @@ if [ -z "$(find "$RESULTS" -name coverage.cobertura.xml -print -quit 2>/dev/null
   exit 1
 fi
 
-# One run, all of it. A GUID directory here is a test PROJECT, not a run: a
-# single `dotnet test` of the solution drops eighteen of them side by side, one
-# per test project, and each holds the assemblies that project happened to load.
-# Eighteen directories in a checkout is therefore the normal result of one run,
-# not evidence of eighteen - and keeping only the newest of them measures one
-# test project and reports it as the solution. That is what this gate did for
-# exactly one revision: 72.1% lines and 39.6% branches off the integration suite
-# alone, against 77.2% and 60.9% for the run it came from.
-#
-# What must not be merged is two runs, and those are told apart by span rather
-# than by directory count. Nothing removes the previous run's reports, so a
-# checkout accumulates them, and merging that pile answers with the coverage of
-# no version in particular: a file deleted last week still contributes its old
-# lines, and a line uncovered today is reported covered because some older run
-# covered it. The reports of one run land within its duration - minutes, and the
-# build job of the workflow may not exceed forty of them - so a spread of an
-# hour means two runs are lying in here and the answer would be about neither.
-# Refused rather than silently narrowed: age is not the test, spread is, so
-# reading yesterday's collection is still allowed.
+# One run, all of it. A GUID directory is a test PROJECT, not a run: one `dotnet test` of
+# the solution drops one per project, and keeping only the newest measures one project and
+# reports it as the solution. What must not be merged is two runs, told apart by span: the
+# reports of one run land within its duration (a build job may not exceed forty minutes),
+# so a spread of an hour means older reports lie here and the answer would be about neither.
 TIMES="$(find "$RESULTS" -name coverage.cobertura.xml -exec stat -c %Y {} + 2>/dev/null | sort -n)"
 OLDEST="$(printf '%s\n' "$TIMES" | head -1)"
 LATEST="$(printf '%s\n' "$TIMES" | tail -1)"
@@ -130,25 +60,13 @@ fi
 MERGED="$(mktemp -d)"
 trap 'rm -rf "$MERGED"' EXIT
 
-# The tests are out of the denominator: DM.Testing is the shared harness and the
-# *.Tests assemblies are the tests themselves. Covering the tests with the tests
-# says nothing about the code they were written for.
-#
-# So is what a generator wrote. The mappers Riok.Mapperly emits are the whole of
-# it here - 48 files, all of them under obj/, and every file under obj/ is one of
-# them - and a number that counts them answers a different question than the one
-# this gate asks: writing a test for a mapper body nobody typed proves the
-# generator works. Nor is counting them harmless either way - it moves both
-# numbers, by how much and in which direction is written next to the ratchet
-# above.
-#
-# The other half of it is the output. The generated sources are deleted with obj/
-# while the report still names them, so every run printed some fifty lines of
-# "File '...\GameMapper.g.cs' does not exist (any more)" - which changed no
-# verdict and buried the two lines that do.
+# The tests are out of the denominator: DM.Testing and the *.Tests assemblies. So is what a
+# generator wrote (the Riok.Mapperly mappers, all under obj/): a test of a mapper body
+# nobody typed proves the generator works. The file filter also silences the fifty lines of
+# "does not exist (any more)" that cleaning obj/ left in the report.
 "$TOOLS/reportgenerator" \
-  "-reports:$(native "$RESULTS")/**/coverage.cobertura.xml" \
-  "-targetdir:$(native "$MERGED")" \
+  "-reports:$(host "$RESULTS")/**/coverage.cobertura.xml" \
+  "-targetdir:$(host "$MERGED")" \
   "-reporttypes:Cobertura;TextSummary" \
   "-assemblyfilters:-*.Tests;-DM.Testing" \
   "-filefilters:-*.g.cs" \

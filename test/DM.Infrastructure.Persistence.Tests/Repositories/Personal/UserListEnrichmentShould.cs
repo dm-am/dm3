@@ -1,14 +1,12 @@
 using System;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 using DM.Infrastructure.Persistence.Repositories.Personal;
-using DM.Infrastructure.Persistence.Shared.Users;
+using DM.Testing;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DbEndorsement = DM.Infrastructure.Persistence.Entities.Community.UserEndorsement;
@@ -22,22 +20,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Personal;
 /// The user list fetches the four numbers it draws, and none of the profile ones.
 /// </summary>
 /// <remarks>
-/// One enrichment routine used to serve both the profile and the list: a page of
-/// fifty paid for twenty-odd aggregates — reviews given and received both ways,
-/// bans, drops, publications, likes over four joins, the subscriber summary, the
-/// username history — of which the table renders four. The list now calls the first
-/// part of it and stops.
-///
-/// The counters are nullable exactly so that "not fetched" is a state distinct from
-/// "fetched and zero", which is what makes the claim assertable at all: the seeded
-/// user authors a topic and a comment, so a profile counter that came back zero
-/// would mean the list ran the query and found nothing, and one that came back null
-/// means the list never ran it.
-///
-/// Both directions are asserted here. Trimming the list is only correct while the
-/// profile still answers everything, and a split that dropped the four list numbers
-/// out of the profile would leave the profile page blank without failing a test
-/// about the list.
+/// The counters are nullable, so "not fetched" differs from "fetched and zero". Both directions: the
+/// profile still answers everything the list does not fetch.
 /// </remarks>
 public class UserListEnrichmentShould
 {
@@ -46,10 +30,6 @@ public class UserListEnrichmentShould
 
     private static readonly DateTimeOffset Created = new(2026, 3, 1, 9, 0, 0, TimeSpan.Zero);
 
-    private sealed class FixedClock : IDateTimeProvider
-    {
-        public DateTimeOffset Now => Created.AddDays(1);
-    }
 
     private static DbUser NewUser(Guid id, string username) => new()
     {
@@ -64,15 +44,11 @@ public class UserListEnrichmentShould
     };
 
     /// <summary>
-    /// One user with something of every kind: a game he masters and a recommendation
-    /// he received are what the table draws; the topic and the comment are profile
-    /// content and are what the list must not go looking for.
+    /// One user with something of every kind; the topic and the comment are profile content.
     /// </summary>
     private static DmDbContext Seeded()
     {
-        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var context = InMemoryStore.Open();
 
         context.Users.AddRange(NewUser(AuthorId, "author"), NewUser(FanId, "fan"));
 
@@ -120,7 +96,7 @@ public class UserListEnrichmentShould
     }
 
     private static UserRepository Repository(DmDbContext context) =>
-        new(context, new FixedClock());
+        new(context, new FixedClock(Created.AddDays(1)));
 
     private static Task<GeneralUser> ListedAsync(DmDbContext context) =>
         Repository(context)

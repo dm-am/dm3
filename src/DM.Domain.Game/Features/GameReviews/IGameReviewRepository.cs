@@ -2,91 +2,38 @@ using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
-using DM.Domain.Game.Features.Games;
 
 namespace DM.Domain.Game.Features.GameReviews;
 
-/// <summary>
-/// Repository for game review operations
-/// </summary>
 public interface IGameReviewRepository
 {
-    // ═══ READ ═══
-
-    /// <summary>
-    /// Get total count of reviews for a game
-    /// </summary>
-    /// <param name="gameId">Game ID</param>
     Task<int> CountAsync(Guid gameId);
 
-    /// <summary>
-    /// Get reviews for a game
-    /// </summary>
-    /// <param name="gameId">Game ID</param>
-    /// <param name="paging">Paging parameters</param>
     Task<IEnumerable<GameReview>> GetAsync(Guid gameId, PagingData paging);
 
-    /// <summary>
-    /// Get single game review by ID
-    /// </summary>
-    /// <param name="id">Review ID</param>
     Task<GameReview?> GetAsync(Guid id);
 
     /// <summary>
-    /// Get game review by author
+    /// Under the scope of games of <paramref name="viewerId"/>
     /// </summary>
-    /// <param name="gameId">Game ID</param>
-    /// <param name="authorId">Author ID</param>
-    Task<GameReview?> GetByAuthorAsync(Guid gameId, Guid authorId);
-
-    /// <summary>
-    /// Get count of the reviews of the games the reader may open, with optional filter
-    /// </summary>
-    /// <param name="viewerId">Reader, whose scope of games applies</param>
-    /// <param name="filter">Optional filter parameters</param>
     Task<int> CountAllAsync(Guid viewerId, GameReviewFilter? filter = null);
 
-    /// <summary>
-    /// Get the reviews of the games the reader may open, with optional filter
-    /// </summary>
-    /// <param name="viewerId">Reader, whose scope of games applies</param>
-    /// <param name="paging">Paging parameters</param>
-    /// <param name="filter">Optional filter parameters</param>
+    /// <inheritdoc cref="CountAllAsync" />
     Task<IEnumerable<GameReview>> GetAllAsync(Guid viewerId, PagingData paging, GameReviewFilter? filter = null);
 
-    // ═══ WRITE ═══
-
-    /// <summary>
-    /// Check if user already has a review for the game
-    /// </summary>
-    /// <param name="authorId">Author ID</param>
-    /// <param name="gameId">Game ID</param>
     Task<bool> ExistsAsync(Guid authorId, Guid gameId);
 
-    /// <summary>
-    /// Create new game review
-    /// </summary>
-    /// <param name="entity">Review data</param>
     Task<GameReview> CreateAsync(CreateGameReviewEntity entity);
 
-    /// <summary>
-    /// Update game review
-    /// </summary>
-    /// <param name="entity">Update data</param>
     Task<GameReview> UpdateAsync(UpdateGameReviewEntity entity);
 
-    // ═══ ELIGIBILITY ═══
-
     /// <summary>
-    /// Check if user can review a game (has at least one post in it)
+    /// The user has a post in the game
     /// </summary>
-    /// <param name="userId">User ID</param>
-    /// <param name="gameId">Game ID</param>
     Task<bool> CanReviewGameAsync(Guid userId, Guid gameId);
 
     /// <summary>
-    /// Get user's total post count in games (for newbie check)
+    /// The user's post count in all games
     /// </summary>
-    /// <param name="userId">User ID</param>
     Task<int> GetUserPostCountAsync(Guid userId);
 }

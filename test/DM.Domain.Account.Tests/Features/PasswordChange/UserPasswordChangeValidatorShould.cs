@@ -5,10 +5,12 @@ using DM.Domain.Account.Features.PasswordChange;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
+using DM.Domain.Account.Tests.Dsl;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Testing;
+using DM.Testing.Dsl;
 using FluentValidation.TestHelper;
 using Microsoft.Extensions.Options;
 using NSubstitute;
@@ -34,46 +36,25 @@ public class UserPasswordChangeValidatorShould : UnitTestBase
         var now = DateTimeOffset.UtcNow;
         dateTimeProvider.Now.Returns(now);
 
-        var authenticatedUser = new AuthenticatedUser
-        {
-            UserId = Guid.NewGuid(),
-            Username = "testuser",
-            Email = "test@example.com",
-            Role = UserRole.RegularUser,
-            Salt = "salt",
-            PasswordHash = "hash"
-        };
-
-        identityProvider.Current.Returns(Identity.Success(authenticatedUser, new Session { Id = Guid.NewGuid() }, UserSettings.Default, "token"));
+        var user = Create.User().WithRole(UserRole.RegularUser).WithCredentials("salt", "hash").Please();
+        identityProvider.Current.Returns(Identity.Success(user, new Session(), UserSettings.Default, "token"));
 
         securityManager.ComparePasswords("correctpassword", "salt", "hash").Returns(true);
         securityManager.ComparePasswords(Arg.Is<string>(p => p != "correctpassword"), "salt", "hash").Returns(false);
 
         repository.TokenValid(Arg.Any<Guid>(), Arg.Any<DateTimeOffset>()).Returns(true);
 
-        var passwordPolicy = Options.Create(new PasswordPolicyConfiguration
-        {
-            MinimumLength = 8,
-            MaximumLength = 128,
-            RequireUppercase = false,
-            RequireLowercase = false,
-            RequireDigit = false,
-            RequireSpecialCharacter = false
-        });
+        validator = CreateValidator(PasswordPolicies.Requiring());
+    }
 
-        var tokenConfig = Options.Create(new TokenConfiguration
-        {
-            PasswordResetTokenLifetimeHours = 24
-        });
-
-        validator = new UserPasswordChangeValidator(
+    private UserPasswordChangeValidator CreateValidator(PasswordPolicyConfiguration passwordPolicy) =>
+        new(
             repository,
             dateTimeProvider,
             identityProvider,
             securityManager,
-            passwordPolicy,
-            tokenConfig);
-    }
+            Options.Create(passwordPolicy),
+            Options.Create(new TokenConfiguration { PasswordResetTokenLifetimeHours = 24 }));
 
     [Fact]
     public async Task PassForValidInputWithToken()
@@ -131,11 +112,35 @@ public class UserPasswordChangeValidatorShould : UnitTestBase
         var input = new UserPasswordChange
         {
             OldPassword = "correctpassword",
-            NewPassword = new string('a', 129)
+            NewPassword = new string('a', PasswordPolicies.MaximumLength + 1)
         };
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.NewPassword)
             .WithErrorMessage(ValidationError.Long);
+    }
+
+    [Theory]
+    [InlineData(true, false, false, false, "password123!", ValidationError.RequiresUppercase)]
+    [InlineData(false, true, false, false, "PASSWORD123!", ValidationError.RequiresLowercase)]
+    [InlineData(false, false, true, false, "Password!", ValidationError.RequiresDigit)]
+    [InlineData(false, false, false, true, "Password123", ValidationError.RequiresSpecialCharacter)]
+    public void FailWhenNewPasswordLacksWhatThePolicyRequires(
+        bool requireUppercase, bool requireLowercase, bool requireDigit, bool requireSpecialCharacter,
+        string newPassword, string expectedError)
+    {
+        var strictValidator = CreateValidator(
+            PasswordPolicies.Requiring(requireUppercase, requireLowercase, requireDigit, requireSpecialCharacter));
+        var input = new UserPasswordChange
+        {
+            OldPassword = "correctpassword",
+            NewPassword = newPassword
+        };
+
+        var result = strictValidator.TestValidate(input);
+
+        result.ShouldHaveValidationErrorFor(x => x.NewPassword)
+            .WithErrorMessage(expectedError)
+            .Only();
     }
 
     [Fact]

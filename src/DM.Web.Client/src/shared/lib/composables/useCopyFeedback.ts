@@ -2,21 +2,9 @@ import { computed, onUnmounted, ref, type ComputedRef, type Ref } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
 
 /**
- * How a control answers for what it put in the clipboard.
- *
- * The clipboard is invisible, so copying is one of the few actions whose
- * result the screen genuinely cannot show - and for a long time every one of
- * them answered with a plate in the corner. A plate is the wrong carrier here
- * for a reason that has nothing to do with taste: the reader is looking at the
- * control they just pressed, and the answer arrives at the other end of the
- * page. The control itself is where they are looking, and it has room to say
- * two words.
- *
- * One idiom for every copy on the site, so the answer reads the same wherever
- * it comes from: the control says so for two seconds and goes back. Controls
- * with a caption say it in words, controls without one - the anchor icon in
- * the chat toolbar, the number of a comment - say it with the mark of the same
- * two outcomes. The two seconds are the ones the bot-link button already held.
+ * How a control answers for what it put in the clipboard: it says so itself
+ * for two seconds, in words or with the mark of the outcome, since the reader
+ * is looking at it and not at a plate in the corner.
  */
 
 /** A control with a caption says this instead of its own word. */
@@ -28,7 +16,7 @@ export const COPY_FAILED = "Не удалось";
 /** How long the answer stands before the control goes back to itself. */
 export const HOLD_MS = 2000;
 
-export type CopyOutcome = "idle" | "copied" | "failed";
+type CopyOutcome = "idle" | "copied" | "failed";
 
 export interface CopyFeedback {
   /** What the control is saying right now. */
@@ -50,9 +38,7 @@ export function useCopyFeedback(): CopyFeedback {
     try {
       await navigator.clipboard.writeText(text);
     } catch {
-      // Every way this fails is the same fact for the reader: what they wanted
-      // is not in the clipboard. The page is not on https, the tab lost focus,
-      // the browser withheld permission, or there is no clipboard API at all.
+      // Every failure is the same fact for the reader: nothing in the clipboard.
       written = false;
     }
 

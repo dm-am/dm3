@@ -13,11 +13,6 @@ public interface IEmailLookupRepository
     /// Get user info by email (private lookup for account operations)
     /// </summary>
     Task<EmailLookupInfo?> GetUserByEmail(string email, CancellationToken ct = default);
-
-    /// <summary>
-    /// Check if email exists
-    /// </summary>
-    Task<bool> EmailExists(string email, CancellationToken ct = default);
 }
 
 /// <summary>
@@ -30,9 +25,6 @@ public class EmailLookupInfo
     /// </summary>
     public Guid UserId { get; set; }
 
-    /// <summary>
-    /// Username
-    /// </summary>
     public string Username { get; set; } = null!;
 
     /// <summary>

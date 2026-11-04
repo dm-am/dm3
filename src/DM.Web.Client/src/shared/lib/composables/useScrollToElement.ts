@@ -1,29 +1,28 @@
 import { watch, nextTick, type Ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 
-/**
- * Bring an element into view and mark it for a moment.
- *
- * The mark is the same class the unread highlight uses, and it comes off after
- * two seconds: what it says is "this is the one you asked for", and a highlight
- * that stays says something else.
- */
 function reveal(element: Element): void {
   element.scrollIntoView({ behavior: "smooth", block: "center" });
   markArrival(element);
 }
 
 /**
- * The mark alone, for a page that brings the element into view its own way.
- * The two seconds are the length of the pulse in Reset.sass.
+ * The unread highlight for the length of its pulse in Reset.sass: a mark that
+ * stays would say something else than "this is the one you asked for".
  */
 export function markArrival(element: Element): void {
   element.classList.add("highlight-unread");
   setTimeout(() => element.classList.remove("highlight-unread"), 2000);
 }
 
+/** After the render, and a moment for avatars and BBCode media to settle. */
+async function settleLayout(): Promise<void> {
+  await nextTick();
+  await new Promise((resolve) => setTimeout(resolve, 100));
+}
+
 /**
- * Composable for scrolling to a specific element based on query parameter
+ * Scrolls to the element `?scrollTo=` names once the items are loaded.
  * @param itemsLoaded - Ref indicating when items are loaded and ready for scroll
  */
 export function useScrollToElement(itemsLoaded: Ref<boolean>) {
@@ -31,12 +30,10 @@ export function useScrollToElement(itemsLoaded: Ref<boolean>) {
   const router = useRouter();
 
   async function scrollToTarget() {
-    const targetId = route.query.scrollTo as string;
+    const targetId = String(route.query.scrollTo ?? "");
     if (!targetId) return;
 
-    await nextTick();
-    // Wait a bit for DOM to fully render
-    await new Promise((r) => setTimeout(r, 100));
+    await settleLayout();
 
     const element = document.querySelector(`[data-id="${targetId}"]`);
     if (element) {
@@ -61,13 +58,8 @@ export function useScrollToElement(itemsLoaded: Ref<boolean>) {
 }
 
 /**
- * Scroll to the comment named by the URL hash (#comment-{id}) once the page
- * holding it has rendered.
- *
- * Backs the link the number of a comment is, and the link a warning quotes. On
- * the game and the blog that link used to open the page and go nowhere,
- * because the handler lived on the topic alone; it was then copied to the
- * discussion widget, which is the same defect one screen further along.
+ * Scrolls to the comment of the URL hash (#comment-{id}) once its page has
+ * rendered: the link a comment's number and a warning quote are.
  *
  * @param comments Getter for the rendered list — both what to wait for and the
  * proof that there is anything to look in.
@@ -82,9 +74,7 @@ export function useCommentHashScroll(
     if (!hash.startsWith("#comment-")) return;
     if (!comments()?.length) return;
 
-    await nextTick();
-    // Wait for content (avatars, BBCode media) to settle before measuring.
-    await new Promise((resolve) => setTimeout(resolve, 100));
+    await settleLayout();
 
     const element = document.getElementById(hash.slice(1));
     if (!element) return;

@@ -8,26 +8,10 @@ namespace DM.Domain.Personal.Features.Notifications;
 /// reader of one: the letter, the two bots and the list in the application.
 /// </summary>
 /// <remarks>
-/// The list in the application had a table of these from the start and the server
-/// had none at all, so a letter and both bot messages named what had happened and
-/// led to the front page. The server table that closed that gap lived in the
-/// dispatcher, which left the list on a narrower copy of its own; it lives here
-/// now, so that the dispatcher and the API read one table.
-///
-/// The identifier is read out of the payload field the generator wrote it in.
-/// Which is what those fields are carried for: NotificationWording keeps them out
-/// of the sentence because a slug is no use to a person, and this is the reader
-/// they stayed in the bag for.
-///
-/// A path and not an address. The root is the address a deployment answers on,
-/// which is configuration, and only a reader with nothing to resolve a path
-/// against needs it: the dispatcher puts it in front for a letter and a bot
-/// message, the list in the application resolves the path against the site it is
-/// on.
-///
-/// An event with no destination and a payload with no identifier both yield no
-/// path rather than the front page. A changed password is not a page, and a link
-/// that lands on the front page is a promise the notification does not keep.
+/// One table for the dispatcher and the API. The identifier is read out of the
+/// payload field the generator wrote it in. A path and not an address: the
+/// dispatcher puts the root in front, the list resolves it against its site. No
+/// destination or no identifier yields no path rather than the front page.
 /// </remarks>
 public static class NotificationDestination
 {
@@ -74,6 +58,24 @@ public static class NotificationDestination
     /// </remarks>
     /// <param name="eventType">Event the notification is about</param>
     public static string? FieldOf(EventType eventType) => DestinationOf(eventType)?.Field;
+
+    /// <summary>
+    /// The payload field that names in words what the path of an event leads to,
+    /// or null for an event whose page goes untitled in the payload.
+    /// </summary>
+    /// <remarks>
+    /// A bag can name two places, a publication and its blog; jsonb does not keep the
+    /// order of keys, so the title is named after the field the path is built from.
+    /// </remarks>
+    /// <param name="eventType">Event the notification is about</param>
+    public static string? PlaceFieldOf(EventType eventType) => FieldOf(eventType) switch
+    {
+        "PublicationId" => "PublicationTitle",
+        "BlogId" => "BlogTitle",
+        "TopicId" => "TopicTitle",
+        "GameId" => "GameTitle",
+        _ => null
+    };
 
     /// <summary>
     /// Where an event leads, or null for an event that leads nowhere.
@@ -160,7 +162,7 @@ public static class NotificationDestination
         EventType.StatusCharacterDied or EventType.StatusCharacterResurrected or
         EventType.StatusCharacterReadmitted or
         EventType.StatusCharacterLeft or
-        EventType.StatusCharacterExiled or EventType.StatusCharacterRetired or
+        EventType.StatusCharacterExiled or
         EventType.NewGameFromSubscribedAuthor
             => new Destination("GameId", "/game/{id}"),
 

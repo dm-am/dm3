@@ -2,13 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The request of the polls list: a day of the address reaches the server as
- * the whole day. Sent as the bare day, the end of a period was the first
- * instant of its last day, and a poll that started on that day was not found.
- * An address that holds a moment and not a day is read as its day, and one
- * that holds no date at all as no filter.
- */
+// A day of the address reaches the server as the whole day; a moment is read as its day.
 import { describe, it, expect, afterEach } from "vitest";
 import {
   filterOnListPage,
@@ -16,6 +10,7 @@ import {
   type Page,
 } from "@/shared/lib/testing/urlFilter";
 import { PollStatus } from "@/shared/api/models/community/polls";
+import { DEFAULT_PAGE_SIZE } from "@/shared/lib/composables/usePaging";
 import { usePollsFilter } from "./usePollsFilter";
 
 type Filter = ReturnType<typeof usePollsFilter>;
@@ -32,7 +27,6 @@ async function on(query: Record<string, string>) {
   return page;
 }
 
-/** The filter as the list reads it, on an address with this query. */
 async function filterOn(query: Record<string, string>) {
   return (await on(query)).filter;
 }
@@ -89,7 +83,7 @@ const FULL = {
 };
 
 describe("usePollsFilter: what an address means", () => {
-  it("reads an empty address as every poll by status, fifteen to a page", async () => {
+  it("reads an empty address as every poll by status, a page of the default size", async () => {
     const { filter } = await on({});
 
     expect(plain(filter.filterState.value)).toEqual({
@@ -106,7 +100,7 @@ describe("usePollsFilter: what an address means", () => {
     expect(filter.searchParams.value).toEqual({
       sortBy: "status",
       sortOrder: "asc",
-      size: 15,
+      size: DEFAULT_PAGE_SIZE,
     });
     expect(filter.hasActiveFilters.value).toBe(false);
   });
@@ -125,7 +119,7 @@ describe("usePollsFilter: what an address means", () => {
       sortBy: "starts",
       sortOrder: "desc",
       number: 2,
-      size: 15,
+      size: DEFAULT_PAGE_SIZE,
     });
     expect(filter.hasActiveFilters.value).toBe(true);
   });
@@ -147,7 +141,7 @@ describe("usePollsFilter: what an address means", () => {
     expect(filter.searchParams.value).toEqual({
       sortBy: "status",
       sortOrder: "asc",
-      size: 15,
+      size: DEFAULT_PAGE_SIZE,
     });
   });
 });

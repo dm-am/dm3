@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Domain.Personal.Features.Notifications;
-using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Security;
 
@@ -13,16 +11,11 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Security;
 /// Generates security notification when user email is changed.
 /// Notifies the user about the email change for security awareness.
 /// </summary>
-internal class EmailChangedNotificationGenerator : BaseNotificationGenerator
+internal class EmailChangedNotificationGenerator : SecurityNotificationGenerator
 {
-    private readonly DmDbContext _dbContext;
-    private readonly IDateTimeProvider _dateTimeProvider;
-
-    /// <inheritdoc />
     public EmailChangedNotificationGenerator(DmDbContext dbContext, IDateTimeProvider dateTimeProvider)
+        : base(dbContext, dateTimeProvider)
     {
-        _dbContext = dbContext;
-        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -31,35 +24,21 @@ internal class EmailChangedNotificationGenerator : BaseNotificationGenerator
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var userData = await _dbContext.Users
-            .Where(u => u.UserId == entityId)
-            .Select(u => new
-            {
-                u.UserId,
-                u.Username,
-                u.Email
-            })
-            .FirstOrDefaultAsync();
-
-        if (userData == null)
+        var subject = await Subject(entityId);
+        if (subject == null)
         {
             yield break;
         }
 
-        // As a DateTime rather than the offset the clock answers with: the letter
-        // prints this field the way the serializer writes it down.
-        var eventTime = _dateTimeProvider.Now.UtcDateTime;
-
         yield return new CreateNotification
         {
-            UsersInterested = new[] { userData.UserId },
-            // No ActorId: a system event. The owner changed their own email, so
-            // there is no other person the recipient could have blacklisted.
+            UsersInterested = [subject.UserId],
+            // No ActorId: the owner changed his own email.
             Metadata = new
             {
-                Username = userData.Username,
-                NewEmail = userData.Email,
-                EventTime = eventTime
+                subject.Username,
+                NewEmail = subject.Email,
+                subject.EventTime
             }
         };
     }

@@ -1,52 +1,30 @@
 /**
- * The styles of a client build, reduced to what the cascade reads: every
- * stylesheet, the styles and sheet links of each page, and the order in which
- * each chunk brings its sheets. Two builds that differ only in what is
- * normalized below give the browser the same rules in the same order.
+ * The styles of a client build as the cascade reads them: every sheet, the
+ * styles and sheet links of each page, and the order each chunk brings its
+ * sheets. Normalized only: whitespace, comments and blocks left empty by them,
+ * the last optional semicolon, and scope ids renumbered by first appearance
+ * (the production id hashes the whole source). Order is kept, since the cascade
+ * reads it, so the build is made with the CSS minifier off. Markup and the
+ * preload lists are compare-code --build's.
  *
- * Three things are normalized and nothing else:
- * - whitespace and comments, which the production minifier drops anyway,
- *   and with them a block left with nothing inside: Sass keeps a rule whose
- *   only content is a loud comment, and the comment is all it carried;
- * - the semicolon after the last declaration of a block, which is optional;
- * - the scope ids of scoped styles. @vitejs/plugin-vue derives the id of a
- *   component from its path and, in a production build, from its whole
- *   source, so a comment edited in a component's script renames every
- *   selector of its style and every @keyframes it defines. Ids are renumbered
- *   by first appearance in each sheet: a sheet that applies the same rules to
- *   the same components in the same order reads the same.
- *
- * The order of declarations, of rules and of sheets is kept as built, because
- * the cascade depends on it: the later of two declarations wins, and a sheet
- * loaded later wins over an earlier one of the same weight. That is also why
- * the build this reads is made with the CSS minifier off: lightningcss sorts
- * declarations and merges rules, and after it a swap of two declarations
- * could not be seen.
- *
- * Only styles are read. The markup a component renders, and with it the
- * classes its elements carry, is in the scripts of the build, and so is the
- * exact list of sheets each dynamic import preloads: `compare-code.mjs
- * --build` compares those.
- *
- * scripts/visual/compare-css.mjs runs the gate on top of this file, and Node
- * loads it there with its types stripped: it may import only node: modules
- * and may use no syntax beyond type annotations.
+ * scripts/visual/compare-css.mjs loads this with Node's type stripping: node:
+ * imports only, and no syntax beyond type annotations.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
-/** The prefix of a line that opens a section of a snapshot. */
+/**
+ * The prefix of a line that opens a section of a snapshot.
+ *
+ * @public scripts/visual/compare-css.mjs imports it by URL to count sections,
+ * and knip does not read that script.
+ */
 export const SECTION = "### ";
 
 /**
- * Renumbers the scope ids of one sheet or chunk by first appearance.
- *
- * A scoped style carries its component's id in two forms: the attribute
- * data-v-<id> in its selectors (data-v-<id>-s under :slotted), and the suffix
- * -<id> Vue gives the name of each @keyframes it defines, wherever that name
- * is used. Both forms of one id get the same label, so a component whose id
- * changed reads the same everywhere and two components still read apart. The
- * labels (-~1, -~2, ...) are nothing a source can spell.
+ * Renumbers the scope ids of one sheet or chunk by first appearance, in both
+ * forms (data-v-<id> in selectors, -<id> on @keyframes names), with labels
+ * (-~1, -~2) no source can spell.
  */
 export function relabelScopeIds(text: string): string {
   const ids = new Set<string>();
@@ -94,12 +72,9 @@ function canonicalDeclaration(statement: string): string {
 }
 
 /**
- * One stylesheet as lines: a rule opens with `selector{`, each declaration is
- * a line of its own ending in `;`, and `}` closes the rule. Whitespace runs
- * are collapsed to one space and removed where CSS never reads them: around
- * braces, semicolons and commas, inside parentheses and around a
- * declaration's colon. A space before a parenthesis and after a closing one
- * stays, because there it can be a combinator or a separator.
+ * One stylesheet as lines: `selector{`, a declaration per line ending in `;`,
+ * and `}`; whitespace collapsed and dropped where CSS never reads it, kept
+ * before and after parentheses where it can be a combinator.
  *
  * `keepLegalComments` keeps each /*! comment in place: the production build
  * ships it, so the comparison of sources counts it as code. The CSS gate
@@ -308,12 +283,9 @@ function attribute(tag: string, name: string): string | undefined {
 }
 
 /**
- * What a page puts into the cascade itself, in document order: each sheet it
- * links (with its media, if it names one) and each <style> it holds, read as
- * canonicalCss reads a sheet. The built page links the bundle's sheets after
- * the styles written into index.html, so the order between the two counts as
- * much as either. Comments and the text of scripts are passed over, so
- * neither a commented-out tag nor a string in a script is read as one.
+ * What a page puts into the cascade, in document order: each linked sheet
+ * (with its media) and each <style>, after the styles index.html writes;
+ * comments and script text are passed over.
  */
 function pageStyles(html: string): string[] {
   const lines: string[] = [];
@@ -341,12 +313,8 @@ function pageStyles(html: string): string[] {
 }
 
 /**
- * The sheets loading a chunk brings, in the order Vite's preload puts them on
- * the page: depth first through the chunks it imports, each chunk's own sheets
- * after those of its imports, every chunk and every sheet once (addDeps in
- * Vite's import analysis). The list one particular import preloads also
- * leaves out the importing chunk; those lists are in the scripts, and
- * compare-code --build compares them.
+ * The sheets a chunk brings, in Vite's preload order: depth first through its
+ * imports, each chunk's sheets after its imports', every one once (addDeps).
  */
 function chunkSheets(
   manifest: Record<string, ManifestChunk>,
@@ -367,11 +335,8 @@ function chunkSheets(
 
 /**
  * The snapshot of one build output, as lines:
- * - `### page <file>`: for every page, the sheets it links and the styles it
- *   holds, in document order;
- * - `### chunk <file>`: for every chunk that brings stylesheets, which ones,
- *   in the order loading it brings them (needs the build manifest; without
- *   one the sections are absent);
+ * - `### page <file>`: the sheets it links and the styles it holds;
+ * - `### chunk <file>`: the sheets loading it brings (needs the manifest);
  * - `### sheet <file>`: every stylesheet, as canonicalCss reads it.
  */
 export function cssSnapshot(outDir: string): string[] {

@@ -17,10 +17,9 @@ namespace DM.Web.API.Features.Community.WebsiteTestimonials;
 [Tags("Website Testimonials")]
 public class WebsiteTestimonialController : ControllerBase
 {
-    private readonly IWebsiteTestimonialApiService _testimonialApiService;
+    private readonly WebsiteTestimonialApiService _testimonialApiService;
 
-    /// <inheritdoc />
-    public WebsiteTestimonialController(IWebsiteTestimonialApiService testimonialApiService)
+    public WebsiteTestimonialController(WebsiteTestimonialApiService testimonialApiService)
     {
         _testimonialApiService = testimonialApiService;
     }
@@ -31,15 +30,6 @@ public class WebsiteTestimonialController : ControllerBase
     /// <remarks>
     /// Returns positive testimonials written about the website.
     /// Users can leave one testimonial about the website.
-    /// Plain text only - NO BBCode support.
-    /// NO likes support.
-    ///
-    /// ## Query Parameters
-    /// - **skip**: Number of items to skip (pagination)
-    /// - **take**: Number of items to return (max 100, default 20)
-    /// - **search**: Text search in testimonial content or author username (case-insensitive)
-    /// - **sortBy**: Sort field - "created" (default) or "author"
-    /// - **sortOrder**: Sort direction - "asc" or "desc" (default: desc for created, asc for author)
     /// </remarks>
     /// <param name="q">Query parameters with search, sorting and pagination</param>
     /// <response code="200">List of website testimonials</response>
@@ -68,8 +58,6 @@ public class WebsiteTestimonialController : ControllerBase
     /// The testimonial is posted on behalf of the participant named in
     /// `authorUsername` - senior moderation submits it, the named user signs it.
     /// Only one testimonial per user is allowed.
-    /// Plain text only - NO BBCode support.
-    /// NO likes support.
     /// </remarks>
     /// <param name="request">Testimonial data</param>
     /// <response code="201">Testimonial created successfully</response>

@@ -21,18 +21,9 @@ public interface IUserNotepadService
     /// </summary>
     Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Create new entry
-    /// </summary>
     Task<NotepadEntry> CreateEntry(CreateNotepadEntry createEntry, CancellationToken ct = default);
 
-    /// <summary>
-    /// Update entry
-    /// </summary>
     Task<NotepadEntry> UpdateEntry(Guid entryId, UpdateNotepadEntry updateEntry, CancellationToken ct = default);
 
-    /// <summary>
-    /// Delete entry
-    /// </summary>
     Task DeleteEntry(Guid entryId, CancellationToken ct = default);
 }

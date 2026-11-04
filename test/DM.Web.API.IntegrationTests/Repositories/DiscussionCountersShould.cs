@@ -1,17 +1,11 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Comments;
-using DM.Domain.Game.Features.Games;
-using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
-using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbPublication = DM.Infrastructure.Persistence.Entities.Blog.Publication;
 
@@ -22,17 +16,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// query earlier and wrote back.
 /// </summary>
 /// <remarks>
-/// CommentCount and PublicationCount are stored columns and nothing recomputes them:
-/// the count was read into a service, incremented there and assigned to the owner row,
-/// so two writers who read the same number wrote the same number back and one of the
-/// two writes was never counted. Deletion had the mirror image — read the comment,
-/// check it, mark it — and two removals of one comment both found it live and both
-/// took the count down.
-///
-/// Run against PostgreSQL because both fixes are set-based statements: the increment
-/// that also locks the owner row, and the conditional mark whose match count decides
-/// whether anything else happens. Neither has an in-memory implementation, and neither
-/// is observable at all without two writers running at once.
+/// CommentCount and PublicationCount are stored columns written by set-based statements: an increment that locks
+/// the owner row and a conditional mark whose match count decides the rest. Neither runs in memory.
 /// </remarks>
 public class DiscussionCountersShould : IntegrationTestBase
 {
@@ -62,15 +47,8 @@ public class DiscussionCountersShould : IntegrationTestBase
     /// The pointer does not walk backwards when an older comment lands last.
     /// </summary>
     /// <remarks>
-    /// CreatedUtc is stamped by the service before the write reaches the owner row, so
-    /// the comment that commits last is not necessarily the newest one — a request that
-    /// waited on a lock, on a retry or on a slow round trip commits after a comment
-    /// written later than it. Assigning the pointer unconditionally then advertised an
-    /// older reply as the game's last activity, and the list orders by it.
-    ///
-    /// Written in order rather than in parallel: which of two concurrent comments commits
-    /// last is exactly what a test cannot pin down, and the defect is about the one that
-    /// does.
+    /// CreatedUtc is stamped before the write, so the last commit is not always the newest. In order, not in parallel:
+    /// which concurrent comment commits last cannot be pinned.
     /// </remarks>
     [Fact]
     public async Task LeaveThePointerOnTheNewerCommentWhenAnOlderOneArrivesAfterIt()
@@ -178,7 +156,6 @@ public class DiscussionCountersShould : IntegrationTestBase
             Title = "Запись",
             Content = "text",
             Preview = "text",
-            PublishImmediately = true,
             CreatedUtc = Written,
         });
         return publicationId;

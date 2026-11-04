@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Web.API.Shared.Http;
 
 namespace DM.Web.API.Features.Community.Achievements;
 
@@ -21,10 +22,9 @@ namespace DM.Web.API.Features.Community.Achievements;
 [Tags("Achievements")]
 public class AchievementController : ControllerBase
 {
-    private readonly IAchievementApiService _achievementApiService;
+    private readonly AchievementApiService _achievementApiService;
 
-    /// <inheritdoc />
-    public AchievementController(IAchievementApiService achievementApiService)
+    public AchievementController(AchievementApiService achievementApiService)
     {
         _achievementApiService = achievementApiService;
     }
@@ -34,9 +34,7 @@ public class AchievementController : ControllerBase
     /// <response code="200">List of categories.</response>
     [HttpGet("achievement-categories", Name = nameof(GetAchievementCategories))]
     [ProducesResponseType(typeof(ListEnvelope<AchievementCategory>), StatusCodes.Status200OK)]
-    // A catalogue: the service is called without an identity, so every caller
-    // gets the same bytes. Same policy as /v1/games/tags.
-    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
+    [CatalogueCache]
     public async Task<IActionResult> GetAchievementCategories() =>
         Ok(await _achievementApiService.GetCategories());
 
@@ -44,9 +42,7 @@ public class AchievementController : ControllerBase
     /// <response code="200">List of tiers.</response>
     [HttpGet("achievement-types", Name = nameof(GetAchievementTypes))]
     [ProducesResponseType(typeof(ListEnvelope<AchievementType>), StatusCodes.Status200OK)]
-    // A catalogue: the service is called without an identity, so every caller
-    // gets the same bytes. Same policy as /v1/games/tags.
-    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
+    [CatalogueCache]
     public async Task<IActionResult> GetAchievementTypes() =>
         Ok(await _achievementApiService.GetTypes());
 

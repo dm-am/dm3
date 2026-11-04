@@ -8,16 +8,12 @@ import {
   type UsernameChangeRequest,
   type ResolveUsernameChangeRequest,
 } from "@/entities/moderation";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import UsernameChangeRejectDialog from "./dialogs/UsernameChangeRejectDialog.vue";
-import { useRoleGate } from "./lib/useRoleGate";
-import { sectionRole } from "./lib/sections";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
-const { hasAccess, deniedText } = useRoleGate(
-  sectionRole("moderation-username-changes"),
-);
 const requests = ref<UsernameChangeRequest[]>([]);
 const loading = ref(false);
 const processing = ref<string | null>(null);
@@ -25,23 +21,13 @@ const processing = ref<string | null>(null);
 const LOAD_FAILED = "Не удалось загрузить запросы на смену имени";
 
 /**
- * Why the list did not arrive, printed where the list would stand.
- *
- * A failed load is the state of the page and not a plate over it: there is no
- * list underneath to go back to, and a plate in the corner over an empty
- * section explains nothing (UI_STANDARDS, "Всплывающие сообщения"). The api
- * method has no seam for `ownsRefusal`, so the refusal is taken over from the
- * interceptor (refusalHere): it stands here in the server's words and the
- * plate held for it is taken down. An expired session and a dead connection
- * stay with the plate. Cleared by the next read.
+ * Why the list did not arrive, printed where the list would stand. The api
+ * method has no seam for `ownsRefusal`, so the refusal is taken over
+ * (refusalHere). Cleared by the next read.
  */
 const loadRefusal = ref("");
 
-/**
- * Whether the last read was refused. "Нет активных запросов" is a claim about
- * the queue, and a refused read makes none: without this a dead server read
- * as an empty queue.
- */
+/** A refused read makes no claim that the queue is empty. */
 const loadFailed = ref(false);
 
 const pendingRequests = computed(() =>
@@ -58,8 +44,7 @@ const fetchRequests = async () => {
     const { data, error } =
       await moderationApi.getPendingUsernameChangeRequests();
     if (error) {
-      // The rows of an earlier read are not this answer, and a re-read after
-      // a resolved request would otherwise keep showing the row it resolved.
+      // The rows of an earlier read are not this answer: one may be a resolved request.
       requests.value = [];
       loadFailed.value = true;
       loadRefusal.value = refusalHere(error, LOAD_FAILED) ?? "";
@@ -71,12 +56,10 @@ const fetchRequests = async () => {
   }
 };
 
-// --- Approve (ConfirmDialog) ---
 const approveTarget = ref<UsernameChangeRequest | null>(null);
 
-// The request of the confirmation. The window waits for it, prints a refusal in
-// itself and closes on success alone, so the interceptor keeps quiet about it.
-// The row stays shut until the queue is read again without it.
+// The window waits for it, prints a refusal in itself and closes on success
+// alone. The row stays shut until the queue is read again without it.
 const confirmApprove = async () => {
   const target = approveTarget.value;
   if (!target) return;
@@ -87,7 +70,7 @@ const confirmApprove = async () => {
   const result = await moderationApi.resolveUsernameChangeRequest(
     target.id,
     resolve,
-    { ownsRefusal: true, ownsRateLimit: true },
+    OWNS_REFUSAL,
   );
   if (result.error) {
     processing.value = null;
@@ -97,9 +80,7 @@ const confirmApprove = async () => {
   return result;
 };
 
-// --- Reject dialog (shared Dialog idiom) ---
-// Null until the first openRejectModal sets it; the dialog only mounts
-// after that, so the non-null cast below is safe.
+// Set before the dialog first mounts, so the non-null cast below is safe.
 const rejectingRequest = ref<UsernameChangeRequest | null>(null);
 
 const { open: openRejectDialog, close: closeRejectDialog } = useModal({
@@ -125,29 +106,34 @@ onMounted(() => fetchRequests());
 <template>
   <page-title>Запросы на смену имени</page-title>
 
-  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
+  <div class="username-changes">
+    <!-- Text, not a skeleton: a reason runs to any length. A read again keeps the cards. -->
+    <secondary-text v-if="loading && !requests.length"
+      >Загрузка...</secondary-text
+    >
 
-  <div v-else class="username-changes">
-    <secondary-text v-if="loading">Загрузка...</secondary-text>
-
-    <!-- Why the list did not arrive, in its place. A plate in the corner
-         used to say this over an empty section. -->
-    <p v-else-if="loadRefusal" class="form-error" role="alert">
-      {{ loadRefusal }}
-    </p>
+    <!-- Why the list did not arrive, in its place. -->
+    <ErrorState
+      v-else-if="loadRefusal"
+      :message="loadRefusal"
+      :retry="fetchRequests"
+    />
 
     <template v-else-if="pendingRequests.length === 0 && !loadFailed">
       <secondary-text>Нет активных запросов</secondary-text>
     </template>
 
-    <div v-else-if="pendingRequests.length > 0" class="requests-list">
+    <div
+      v-else-if="pendingRequests.length > 0"
+      class="requests-list"
+      :aria-busy="loading || undefined"
+    >
       <div
         v-for="request in pendingRequests"
         :key="request.id"
         class="request-card"
       >
-        <!-- No word of the state: the queue holds the waiting requests
-             alone, and a word the same on every row says nothing. -->
+        <!-- No word of the state: every request here is waiting. -->
         <div class="request-header">
           <router-link
             :to="{
@@ -189,7 +175,6 @@ onMounted(() => fetchRequests());
       </div>
     </div>
 
-    <!-- Approve confirmation -->
     <ConfirmDialog
       :show="approveTarget !== null"
       title="Одобрить смену имени?"
@@ -203,25 +188,17 @@ onMounted(() => fetchRequests());
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
 .requests-list
   display: flex
   flex-direction: column
   gap: $medium
 
-// The refusal line of a form, in place of the list: the same red and the same
-// secondary size as .form-error in the character form and the grant form.
-.form-error
-  margin: $small 0 0
-  color: $accent-red
-  font-size: $secondary-font-size
-
 .request-card
   +card()
 
-// The name on the left, the date level with it on the right while the list is
-// wide.
+// The name on the left, the date level with it on the right while the list is wide.
 .request-header
   display: flex
   justify-content: space-between
@@ -229,10 +206,9 @@ onMounted(() => fetchRequests());
   gap: $medium
   margin-bottom: $small
 
-// A date is not broken: "04.10.2026" and "в 18:20" on two lines read as two
-// facts.
+// A date is not broken: on two lines it reads as two facts.
 .request-date
-  font-size: 0.85rem
+  font-size: $secondary-font-size
   color: $text-muted
   white-space: nowrap
 
@@ -258,9 +234,7 @@ onMounted(() => fetchRequests());
   gap: $small
   margin-top: $medium
 
-.approve-btn
-  +button
-
+.approve-btn,
 .reject-btn
   +button
 </style>

@@ -11,27 +11,9 @@ namespace DM.Domain.Personal.Features.Notifications;
 /// every reader of one: the letter, the two bots and the list in the application.
 /// </summary>
 /// <remarks>
-/// Email and the bots say the same thing about the same event, so they say it
-/// from one place. While each channel kept a private copy, the copies drifted:
-/// the email formatter knew the IsReminder metadata key and the bot formatter
-/// did not, and nothing short of a diff of the two files could reveal it. The list
-/// in the application kept a third copy of its own on the client, which knew
-/// twenty-four of the events and called the rest "Уведомление". The table lives in
-/// the domain so that the dispatcher and the API read the same one.
-///
-/// This is text, not policy: which events reach which channel is decided by
-/// NotificationCategoryMapper beside it, which is why the two stay separate
-/// tables rather than one.
-///
-/// The mapper also sets how far the table has to reach. Both senders stop where
-/// it answers null, so an event that has a category is an event that will be
-/// titled from here. Four of them had a category and no title and went out
-/// headed "Уведомление", with the metadata under it and nothing naming what had
-/// happened. NotificationTitleCoverageShould in DM.Architecture.Tests keeps the
-/// two in step.
-///
-/// What a channel does with the words is the channel's: the dispatcher escapes
-/// them for the markup of a letter and of Telegram, and nothing here knows HTML.
+/// One table for the dispatcher and the API. Text, not policy: which events reach
+/// which channel is NotificationCategoryMapper's, and NotificationTitleCoverageShould
+/// keeps every event with a category titled here. Escaping is the channel's.
 /// </remarks>
 public static class NotificationWording
 {
@@ -66,23 +48,23 @@ public static class NotificationWording
         [EventType.RoomPendencyReminder] = "Напоминание о посте",
         [EventType.RoomPendencyFulfilled] = "Ожидаемый пост написан",
         [EventType.PostReviewed] = "Пост оценен",
-        [EventType.LikedGameComment] = "Лайк на комментарий к игре",
+        [EventType.LikedGameComment] = "Нравится: комментарий к игре",
 
         // Forum
         [EventType.NewTopic] = "Новый топик на форуме",
         [EventType.ChangedTopic] = "Топик изменен",
-        [EventType.LikedTopic] = "Лайк на топик",
+        [EventType.LikedTopic] = "Нравится: топик",
         [EventType.NewTopicComment] = "Новый комментарий в топике",
-        [EventType.LikedTopicComment] = "Лайк на комментарий",
+        [EventType.LikedTopicComment] = "Нравится: комментарий",
 
         // Blog
         [EventType.NewPublication] = "Новая публикация",
         [EventType.ChangedPublication] = "Публикация изменена",
-        [EventType.LikedPublication] = "Лайк на публикацию",
+        [EventType.LikedPublication] = "Нравится: публикация",
         [EventType.NewBlogComment] = "Новый комментарий в блоге",
-        [EventType.LikedBlogComment] = "Лайк на комментарий в блоге",
+        [EventType.LikedBlogComment] = "Нравится: комментарий в блоге",
         [EventType.NewPublicationComment] = "Новый комментарий к публикации",
-        [EventType.LikedPublicationComment] = "Лайк на комментарий к публикации",
+        [EventType.LikedPublicationComment] = "Нравится: комментарий к публикации",
         [EventType.StatusBlogActive] = "Блог открыт",
         [EventType.StatusBlogClosed] = "Блог закрыт",
         [EventType.StatusBlogFrozen] = "Блог заморожен",
@@ -91,7 +73,7 @@ public static class NotificationWording
 
         // Messages
         [EventType.NewMessage] = "Новое сообщение",
-        [EventType.LikedMessage] = "Лайк на сообщение",
+        [EventType.LikedMessage] = "Нравится: сообщение",
 
         // Subscriptions
         [EventType.NewCommentInSubscribedTopic] = "Новый комментарий в подписанном топике",
@@ -149,7 +131,7 @@ public static class NotificationWording
         ["CreatedByUsername"] = "Создал",
         ["FulfilledByUsername"] = "Выполнил",
         ["GrantedByUsername"] = "Вручил",
-        ["LikerUsername"] = "Лайк от",
+        ["LikerUsername"] = "Отметил",
         ["PointsChangedByUsername"] = "Изменил",
 
         // Games
@@ -215,12 +197,8 @@ public static class NotificationWording
     /// </remarks>
     private static readonly HashSet<string> HiddenProperties = new(StringComparer.OrdinalIgnoreCase)
     {
-        // The addressee themselves. Username is the name of the reader the letter
-        // is going to, carried so the link can narrow the log to them, and a
-        // letter that opens by telling a person their own name says nothing: all
-        // eight payloads that carry it - the ban, the warning, the correction of
-        // its points, the award and the four security events - address the very
-        // person it names.
+        // The addressee themselves: every payload that carries Username addresses
+        // the very person it names, for the link to narrow the log to them.
         "Username",
 
         // Identifiers: the link is made of them, the sentence is not
@@ -264,7 +242,6 @@ public static class NotificationWording
     public static string FormatPropertyValue(JsonElement element) => element.ValueKind switch
     {
         JsonValueKind.String => element.GetString() ?? "",
-        JsonValueKind.Number => element.ToString(),
         JsonValueKind.True => "Да",
         JsonValueKind.False => "Нет",
         JsonValueKind.Null => "",
@@ -283,61 +260,43 @@ public static class NotificationWording
     /// buildable: NotificationDestination reads the same bag through ReadFields below.
     /// </remarks>
     /// <param name="metadata">Metadata bag of a notification</param>
-    public static IReadOnlyList<KeyValuePair<string, string>> ReadMetadata(object? metadata)
-    {
-        var shown = new List<KeyValuePair<string, string>>();
-        foreach (var (name, value) in ReadFields(metadata))
-        {
-            if (IsHiddenFromText(name) || string.IsNullOrEmpty(value))
-            {
-                continue;
-            }
-
-            shown.Add(new KeyValuePair<string, string>(FormatPropertyName(name), value));
-        }
-
-        return shown;
-    }
+    public static IReadOnlyList<KeyValuePair<string, string>> ReadMetadata(object? metadata) =>
+        ShownFields(metadata)
+            .Select(field => new KeyValuePair<string, string>(FormatPropertyName(field.Key), field.Value))
+            .ToList();
 
     /// <summary>
     /// Metadata of a notification as the list in the application shows it under the
     /// title: what a letter prints, less the time the row already shows, with every
-    /// other time marked as a moment.
+    /// other time marked as a moment, and the place the notification leads to
+    /// marked as its destination.
     /// </summary>
     /// <param name="metadata">Metadata bag of a notification</param>
-    public static IReadOnlyList<NotificationDetail> ReadDetails(object? metadata)
-    {
-        var details = new List<NotificationDetail>();
-        foreach (var (name, value) in ReadFields(metadata))
-        {
-            if (IsHiddenFromText(name) || string.IsNullOrEmpty(value) ||
-                RowTimeProperties.Contains(name, StringComparer.OrdinalIgnoreCase))
-            {
-                continue;
-            }
+    /// <param name="placeField">
+    /// The field naming the place the notification leads to
+    /// (NotificationDestination.PlaceFieldOf), or null when it names none
+    /// </param>
+    public static IReadOnlyList<NotificationDetail> ReadDetails(object? metadata, string? placeField = null) =>
+        ShownFields(metadata)
+            .Where(field => !RowTimeProperties.Contains(field.Key, StringComparer.OrdinalIgnoreCase))
+            .Select(field => new NotificationDetail(
+                FormatPropertyName(field.Key),
+                field.Value,
+                MomentProperties.Contains(field.Key, StringComparer.OrdinalIgnoreCase),
+                string.Equals(field.Key, placeField, StringComparison.OrdinalIgnoreCase)))
+            .ToList();
 
-            details.Add(new NotificationDetail(
-                FormatPropertyName(name),
-                value,
-                MomentProperties.Contains(name, StringComparer.OrdinalIgnoreCase)));
-        }
-
-        return details;
-    }
+    private static IEnumerable<KeyValuePair<string, string>> ShownFields(object? metadata) =>
+        ReadFields(metadata)
+            .Where(field => !IsHiddenFromText(field.Key) && !string.IsNullOrEmpty(field.Value));
 
     /// <summary>
     /// Metadata of a notification as it arrived: every field, under the name the
     /// generator declared it by, in the order it declared them.
     /// </summary>
     /// <remarks>
-    /// Reading the bag was written out once per channel and the copies differed down
-    /// to their serializer options. Metadata that is not an object yields nothing: the
-    /// email sender used to fall back to dumping the serialized bag into the letter,
-    /// which is both the JSON body EmailTemplatesShould exists to prevent and one more
-    /// place the values reached the reader unescaped.
-    ///
-    /// Nothing is dropped here, because the two readers of the bag drop different
-    /// things: the sentence leaves out the identifiers, and the link is one of them.
+    /// Metadata that is not an object yields nothing. Nothing is dropped here: the
+    /// sentence leaves out the identifiers, and the link is made of them.
     /// </remarks>
     /// <param name="metadata">Metadata bag of a notification</param>
     public static IReadOnlyList<KeyValuePair<string, string>> ReadFields(object? metadata)
@@ -349,14 +308,14 @@ public static class NotificationWording
 
         try
         {
-            using var document = JsonDocument.Parse(JsonSerializer.Serialize(metadata));
-            if (document.RootElement.ValueKind != JsonValueKind.Object)
+            var root = JsonSerializer.SerializeToElement(metadata);
+            if (root.ValueKind != JsonValueKind.Object)
             {
                 return Array.Empty<KeyValuePair<string, string>>();
             }
 
             var fields = new List<KeyValuePair<string, string>>();
-            foreach (var property in document.RootElement.EnumerateObject())
+            foreach (var property in root.EnumerateObject())
             {
                 fields.Add(new KeyValuePair<string, string>(
                     property.Name, FormatPropertyValue(property.Value)));

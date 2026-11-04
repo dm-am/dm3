@@ -15,7 +15,6 @@ internal class FundraisingGoalService : IFundraisingGoalService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IIdentityProvider _identityProvider;
 
-    /// <inheritdoc />
     public FundraisingGoalService(
         IValidator<UpdateFundraisingGoal> updateValidator,
         IFundraisingGoalRepository repository,
@@ -29,17 +28,8 @@ internal class FundraisingGoalService : IFundraisingGoalService
     }
 
     /// <inheritdoc />
-    public async Task<FundraisingGoal> GetAsync()
-    {
-        var goal = await _repository.Get();
-        if (goal == null)
-        {
-            // The row is seeded in the InitialCreate migration, so this is exceptional
-            throw new HttpException(HttpStatusCode.NotFound, "Цель сбора средств не найдена");
-        }
-
-        return goal;
-    }
+    public async Task<FundraisingGoal> GetAsync() =>
+        await _repository.Get() ?? throw new HttpException(HttpStatusCode.NotFound, "Цель сбора средств не найдена");
 
     /// <inheritdoc />
     public async Task<FundraisingGoal> UpdateAsync(UpdateFundraisingGoal updateGoal)

@@ -12,12 +12,8 @@ namespace DM.Infrastructure.Core.Tests.Configuration;
 /// The object storage client is built for the provider the configuration names.
 /// </summary>
 /// <remarks>
-/// The two providers want different clients from the same settings: the store
-/// run beside the site answers only path-style addresses and signs for whatever
-/// region it is told, while CloudCube is an AWS bucket reached through its
-/// region's endpoint. The one chosen for the other provider starts without a
-/// complaint and fails on the first upload, so the choice is asserted on the
-/// client the container hands out rather than on the settings it was given.
+/// The local store answers only path-style addresses, CloudCube is an AWS bucket behind its region's
+/// endpoint; asserted on the client the container hands out.
 /// </remarks>
 public class S3ClientSelectionShould
 {
@@ -47,11 +43,7 @@ public class S3ClientSelectionShould
     /// <summary>
     /// A host that leaves the provider unset is refused with the setting and its value named.
     /// </summary>
-    /// <remarks>
-    /// The default member of the setting is one no implementation claims, so a
-    /// host that leaves it unset lands here, and a bare "Sequence contains no
-    /// matching element" names neither.
-    /// </remarks>
+    /// <remarks>The default member is one no implementation claims.</remarks>
     [Fact]
     public void RefuseAProviderLeftUnset()
     {

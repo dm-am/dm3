@@ -29,9 +29,4 @@ public enum LikeEntityType
     /// Blog publication
     /// </summary>
     Publication = 4,
-
-    /// <summary>
-    /// Game post
-    /// </summary>
-    Post = 5,
 }

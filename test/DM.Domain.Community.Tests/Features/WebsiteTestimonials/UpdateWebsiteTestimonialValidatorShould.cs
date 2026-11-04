@@ -1,13 +1,12 @@
 using System;
 using DM.Domain.Community.Features.WebsiteTestimonials;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.WebsiteTestimonials;
 
-public class UpdateWebsiteTestimonialValidatorShould : UnitTestBase
+public class UpdateWebsiteTestimonialValidatorShould
 {
     private readonly UpdateWebsiteTestimonialValidator validator = new();
 
@@ -44,7 +43,7 @@ public class UpdateWebsiteTestimonialValidatorShould : UnitTestBase
         var input = new UpdateWebsiteTestimonial
         {
             Id = Guid.NewGuid(),
-            Text = new string('a', 10001)
+            Text = new string('a', WebsiteTestimonialFieldLimits.TextMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
@@ -58,7 +57,7 @@ public class UpdateWebsiteTestimonialValidatorShould : UnitTestBase
         var input = new UpdateWebsiteTestimonial
         {
             Id = Guid.NewGuid(),
-            Text = new string('a', 10000)
+            Text = new string('a', WebsiteTestimonialFieldLimits.TextMaxLength)
         };
 
         var result = validator.TestValidate(input);

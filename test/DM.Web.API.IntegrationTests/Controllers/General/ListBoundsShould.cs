@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
 using DM.Web.API.Swagger;
@@ -13,19 +10,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// A list either takes a page or is bounded by what it is.
 /// </summary>
 /// <remarks>
-/// Forty-seven list endpoints declared no paging parameter of any kind. Most are
-/// bounded by their subject — the tag catalogue, the boards, the moderators, the
-/// assistants of one game — and those are fine and named below. The rest grew
-/// with the data: every subscriber of an account, on a public endpoint, each one
-/// a full user; the whole moderation intake queue on every open of the screen;
-/// the login journal of an account, silently cut to fifty with no total and no
-/// parameter, so an administrator reading an incident could not tell from the
-/// answer that there was more of it.
-///
-/// The list is asserted in both directions, so it can only shrink. A new list
-/// without paging turns the first test red, and an entry that has since grown a
-/// paging parameter turns the second red — an exemption nobody has to maintain
-/// outlives the reason it was granted.
+/// A list that grows with the data needs a page; one bounded by its subject is named below. Asserted both ways,
+/// so it only shrinks.
 /// </remarks>
 public class ListBoundsShould : IntegrationTestBase
 {
@@ -40,11 +26,7 @@ public class ListBoundsShould : IntegrationTestBase
     /// <summary>
     /// Lists bounded by their subject, not by a page.
     /// </summary>
-    /// <remarks>
-    /// The test is what makes the boundedness a claim somebody made rather than
-    /// an omission. Adding a line here is the decision "this cannot grow without
-    /// bound", and it is reviewable precisely because it has to be written down.
-    /// </remarks>
+    /// <remarks>Adding a line is the decision "this cannot grow without bound".</remarks>
     private static readonly HashSet<string> BoundedBySubject = new(StringComparer.Ordinal)
     {
         "GET /v1/account/sessions",
@@ -84,6 +66,7 @@ public class ListBoundsShould : IntegrationTestBase
         "GET /v1/moderation/violators",
         "GET /v1/users/me/invitations",
         "GET /v1/users/me/subscriptions",
+        "GET /v1/users/subscription-categories",
         "GET /v1/users/{username}/achievements",
         "GET /v1/users/{username}/awards",
     };
@@ -92,22 +75,8 @@ public class ListBoundsShould : IntegrationTestBase
     /// Lists that grow with the data and have no page yet.
     /// </summary>
     /// <remarks>
-    /// Separated from the list above because the two claims are different and only
-    /// one of them was true. The roster of a game and the notepads were sitting
-    /// among the endpoints declared bounded by their subject while the analysis of
-    /// this finding said the opposite about them in as many words: CharacterRepository
-    /// .GetCharacters and NotepadRepository both end in ToArrayAsync with no Skip and
-    /// no Take, and a game accumulates characters (every application ever made, every
-    /// retired character) and a notepad accumulates entries for as long as the game
-    /// runs. Writing them down as "bounded by what they are" turned an open debt into
-    /// a decision nobody made.
-    ///
-    /// What closing them takes, and why it is not done here: paging a roster or a
-    /// notepad is not only a query change. All of those screens
-    /// render the whole collection today, so a page size takes rows off the screen —
-    /// a visible change, and this project approves those one by one. The server half
-    /// without the client half is worse than either: the roster would silently lose
-    /// its tail.
+    /// Their screens render the whole collection, so a page size is a visible change that waits for approval,
+    /// and the server half alone would lose the tail.
     /// </remarks>
     private static readonly HashSet<string> GrowingWithoutAPage = new(StringComparer.Ordinal)
     {
@@ -177,13 +146,7 @@ public class ListBoundsShould : IntegrationTestBase
     }
 
     /// <summary>Whether a 200 answers a list of resources.</summary>
-    /// <remarks>
-    /// Two shapes, and only one of them used to count. A declared ListEnvelope is
-    /// a class the document names; an array written out in place names nothing,
-    /// and reading that as "no body" dropped the operation out of the walk before
-    /// its parameters were ever looked at - so a list with no page and no
-    /// envelope was on neither of the two lists above and held by nothing at all.
-    /// </remarks>
+    /// <remarks>A declared ListEnvelope, or an array written out in place.</remarks>
     private static bool AnswersAList(JsonElement success)
     {
         var schema = ResponseBodySchema.NameOf(success);
@@ -221,12 +184,7 @@ public class ListBoundsShould : IntegrationTestBase
     /// <summary>
     /// The two headings stay apart.
     /// </summary>
-    /// <remarks>
-    /// Nothing else stops the debt from being quietly reclassified: moving a line
-    /// from the growing list up into the bounded one is a one-word edit that makes
-    /// an open finding look closed, which is how the lines below got there the
-    /// first time.
-    /// </remarks>
+    /// <remarks>Moving a line from the growing list into the bounded one would make an open finding look closed.</remarks>
     [Fact]
     public void KeepTheDebtApartFromTheDecision() =>
         BoundedBySubject.Intersect(GrowingWithoutAPage).Should().BeEmpty(
@@ -236,11 +194,6 @@ public class ListBoundsShould : IntegrationTestBase
     /// <summary>
     /// A truncated list says how much it truncated.
     /// </summary>
-    /// <remarks>
-    /// The login journal is the case that made this worth asserting: it answered
-    /// with fifty records and a null paging block, so the answer to "are there
-    /// more" was not in the response at all.
-    /// </remarks>
     [Fact]
     public async Task ReportTheTotalOnATruncatedList()
     {

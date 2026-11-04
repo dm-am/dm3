@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Uploads;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.Configuration;
@@ -19,20 +18,8 @@ namespace DM.Web.API.Tests.Features.Community;
 /// one it is.
 /// </summary>
 /// <remarks>
-/// A user nested in someone else's resource — the author of a comment, the
-/// people who liked it — is filled by the query that fetched that resource, and
-/// that query counts no bans, no drops, no subscribers and no username history:
-/// those are a separate batch of aggregates that only the user repository runs.
-/// While the members were plain ints and empty lists they went out as zeros, and
-/// a zero somebody counted read exactly like a zero nobody counted — a card
-/// reporting "нарушений: 0" under the name of a user with ten bans was
-/// describing the query, not the user.
-///
-/// The discriminator is absence: every aggregate is nullable and the API
-/// serializer drops nulls. These two tests hold both ends of that. The first
-/// fails the moment a member goes back to non-nullable, because the zero
-/// reappears on the wire. The second fails if the pendulum swings the other way
-/// and a counted zero stops being sent.
+/// A nested user is filled by the query of the resource and counts no aggregates, so every aggregate is
+/// nullable and the serializer drops nulls. The two tests hold both directions.
 /// </remarks>
 public class UserFidelityShould : UnitTestBase
 {
@@ -46,12 +33,10 @@ public class UserFidelityShould : UnitTestBase
         "rating", "picture", "registeredUtc",
     };
 
-    private UserMapper CreateMapper() => new(Mock<IImgproxyUrlBuilder>());
+    private static UserMapper CreateMapper() => new();
 
     /// <summary>
-    /// A user exactly as a nested projection produces one: identity, the two
-    /// rating columns, the avatar key and the registration date all come off the
-    /// user row, and nothing else does.
+    /// A user exactly as a nested projection produces one, off the user row alone.
     /// </summary>
     private static GeneralUser Projection() => new()
     {

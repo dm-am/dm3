@@ -1,43 +1,11 @@
-/**
- * useChatHistoryWindow: which part of a chat's history the feed shows, the
- * global chat's and a correspondence's alike.
- *
- * The feed lives in one of two modes; the ?date query of the chat's address is
- * the single source of truth for which one:
- *
- * LIVE (no ?date, nothing newer to fetch): the loaded window ends at the
- *   newest message, and new messages are appended to it by the page.
- *
- * ARCHIVE (?date=YYYY-MM-DD): the window starts at the picked day.
- *   - While newer pages are there to fetch, the bottom sentinel keeps paging
- *     toward "now", and the button back to the latest messages jumps straight
- *     to them (clears ?date, reloads the tail).
- *   - Once the last page is in, reaching its bottom means the reader has
- *     caught up with the present: ?date is taken off the address without a
- *     reload (the window already IS the tail) and the feed is live again.
- *
- * LIVE -> ARCHIVE only through the calendar or the address; ARCHIVE -> LIVE
- * through the button, the catch-up above, or ?date leaving the address (back
- * and forward included).
- *
- * Two ways onto a chat ask for one place in its history, a link to a message
- * and a day, and either can come back with nothing: the message is gone, or
- * the store found no window near the day. A day with no message of its own is
- * not that case: the server answers it with the messages near it, and the day
- * stays picked (loadDate). The feed then shows the latest messages, which is
- * the right fallback and a silent one: the calendar shows no date, the linked
- * message is nowhere, and the feed looks exactly like a plain visit. `notice`
- * says so in words, in the line under the strip of the frame, for as long as
- * the window it explains stands: until the reader asks for another place (a
- * day, a search hit, a link) or leaves. Not a toast: the reader is looking at
- * the feed, and the line is about the feed.
- *
- * Both pages drive their feed through this one. What stays the page's is its
- * store and the chat its address names (`chat`): a change of the chat is the
- * page's to load whole, its day included.
- */
+/** Which part of a chat's history the feed shows; ?date in the address is its one source of truth. */
 import { computed, nextTick, ref, watch, type Ref } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import {
+  useRoute,
+  useRouter,
+  type RouteLocationNormalizedLoaded,
+  type Router,
+} from "vue-router";
 import type { Message } from "@/shared/api/models/common";
 import {
   DATE_FORMAT,
@@ -47,7 +15,7 @@ import {
 import { LANDING_SCROLL_MS } from "@/shared/lib/composables/useAnchoredInfiniteScroll";
 
 /** What the window asks of the feed: the handle ChatFeed exposes. */
-export interface ChatHistoryFeed {
+interface ChatHistoryFeed {
   scrollToBottom(): void;
   scrollToMessage(id: string, align?: "center" | "start"): void;
   atBottom(): boolean;
@@ -58,11 +26,7 @@ export interface ChatHistoryFeed {
 
 export interface ChatHistoryWindowOptions {
   feed: Ref<ChatHistoryFeed | null>;
-  /**
-   * The chat's address: where ?date goes in and out. Its query holds what the
-   * address keeps beside the window's own keys (the page of a list standing
-   * next to the feed), and every move of the window carries it.
-   */
+  /** The chat's address: ?date goes in and out of it, beside the keys it already holds. */
   location: () => {
     name: string;
     params?: Record<string, string>;
@@ -78,10 +42,7 @@ export interface ChatHistoryWindowOptions {
   failed: () => boolean;
   /** Newer pages are there to fetch: the window does not end at the newest. */
   hasMoreAfter: () => boolean;
-  /**
-   * The store took a window near the day it was asked for. False means it
-   * fell back to the latest messages itself (or the request failed).
-   */
+  /** The store found a window near the day; false when it fell back to the latest. */
   landedOnRequestedDate: () => boolean;
   /** The store's loads of a window. */
   load: {
@@ -98,260 +59,215 @@ export const MESSAGE_GONE_NOTICE =
 /** The line over a day with no message on it. */
 export function emptyDayNotice(date: string): string | null {
   const day = siteTime(date);
-  // A day that does not parse (?date= typed by hand) is not a day the chat
-  // could be empty on; the tail stands without a line.
+  // A ?date typed by hand that does not parse is not an empty day.
   if (!day.isValid()) return null;
   return `За ${day.format(DATE_FORMAT)} сообщений нет, показаны последние сообщения`;
 }
 
-export function useChatHistoryWindow(options: ChatHistoryWindowOptions) {
-  const route = useRoute();
-  const router = useRouter();
-
+/** What a move of the window reads and writes. */
+interface HistoryWindow {
+  options: ChatHistoryWindowOptions;
+  route: RouteLocationNormalizedLoaded;
+  router: Router;
   /** The day the window starts at, YYYY-MM-DD, or "" while live. */
-  const selectedDate = ref("");
-
+  selectedDate: Ref<string>;
   /** Why the feed shows a window the reader did not ask for. */
-  const notice = ref<string | null>(null);
+  notice: Ref<string | null>;
+  /** Set before the page's own move drops ?date, so the watcher does not load twice. */
+  suppressNextDateWatch: boolean;
+}
+
+/** The day the address names, if any. */
+function dateInRoute(w: HistoryWindow): string | null {
+  const date = w.route.query.date;
+  return typeof date === "string" && date ? date : null;
+}
+
+/** The chat's address at a day, or at none: live. */
+function withDate(w: HistoryWindow, date: string | null) {
+  const { query, ...location } = w.options.location();
+  return { ...location, query: date ? { ...query, date } : { ...query } };
+}
+
+function scrollToBottom(w: HistoryWindow) {
+  nextTick(() => w.options.feed.value?.scrollToBottom());
+}
+
+/** Hands the observers a replaced window's new sentinels, awake once a landing scroll settles. */
+function observeWindow(w: HistoryWindow, landing: boolean) {
+  const feed = w.options.feed;
+  nextTick(() => {
+    feed.value?.setupInfiniteScroll();
+    if (!landing) {
+      feed.value?.resumeInfiniteScroll();
+      return;
+    }
+    setTimeout(() => feed.value?.resumeInfiniteScroll(), LANDING_SCROLL_MS);
+  });
+}
+
+/** The latest messages, with the reader at their end. */
+async function loadLatest(w: HistoryWindow) {
+  await w.options.load.latest();
+  scrollToBottom(w);
+  observeWindow(w, false);
+}
+
+/** The archive is left: no day selected, none in the address. */
+function leaveDate(w: HistoryWindow) {
+  w.selectedDate.value = "";
+  if (w.route.query.date) {
+    w.suppressNextDateWatch = true;
+    w.router.replace(withDate(w, null));
+  }
+}
+
+/** A day was picked in the calendar: the address takes it, the watcher loads. */
+function pickDate(w: HistoryWindow, date: string) {
+  if (!date) return;
+  w.router.push(withDate(w, date));
+}
+
+/** Lands on a day's window; the day is given up only where the store fell back to the latest. */
+async function loadDate(w: HistoryWindow, date: string) {
+  const { options } = w;
+  w.notice.value = null;
+  w.selectedDate.value = date;
+  options.feed.value?.suspendInfiniteScroll();
+  await options.load.date(date);
+
+  if (options.landedOnRequestedDate()) {
+    // The window starts before the day, so its first message is found on the feed's clock.
+    const held = options.messages();
+    const target =
+      held.find((m) => formatSiteTime(m.createdUtc, "YYYY-MM-DD") === date) ??
+      held[0];
+    if (target) {
+      nextTick(() => options.feed.value?.scrollToMessage(target.id, "start"));
+    }
+    observeWindow(w, true);
+    return;
+  }
+
+  leaveDate(w);
+  observeWindow(w, false);
+  // A failed request is not an empty day: it was announced, and there is nothing to explain.
+  if (options.failed() || !options.messages().length) return;
+  scrollToBottom(w);
+  w.notice.value = emptyDayNotice(date);
+}
+
+/** Lands on a message; a missing one leaves the latest messages under a line saying so. */
+async function landOnMessage(w: HistoryWindow, id: string) {
+  const { options } = w;
+  w.notice.value = null;
+  leaveDate(w);
+  options.feed.value?.suspendInfiniteScroll();
+  await options.load.message(id);
+  const found = options.messages().some((m) => m.id === id);
+  if (found) {
+    observeWindow(w, true);
+    return;
+  }
+  const answered = !options.failed();
+  if (!answered && options.messages().length) {
+    observeWindow(w, false);
+    return;
+  }
+  await loadLatest(w);
+  if (answered && !options.failed() && options.messages().length) {
+    w.notice.value = MESSAGE_GONE_NOTICE;
+  }
+}
+
+/** "К последним сообщениям": clearing ?date lets the watcher load; without one, here. */
+async function jumpToLatest(w: HistoryWindow) {
+  w.selectedDate.value = "";
+  if (dateInRoute(w)) {
+    w.router.replace(withDate(w, null));
+    return;
+  }
+  if (!w.options.hasMoreAfter()) {
+    scrollToBottom(w);
+    return;
+  }
+  w.notice.value = null;
+  await loadLatest(w);
+}
+
+/** Back to live at the real bottom of an archive's last page, measured when asked. */
+function followToLive(w: HistoryWindow) {
+  const { options, selectedDate } = w;
+  if (!selectedDate.value || options.hasMoreAfter() || options.loading()) {
+    return;
+  }
+  nextTick(() => {
+    if (!selectedDate.value || options.hasMoreAfter()) return;
+    if (!(options.feed.value?.atBottom() ?? true)) return;
+    leaveDate(w);
+  });
+}
+
+/** Forgets the window's day and its line: another chat, or a plain visit. */
+function forget(w: HistoryWindow) {
+  w.notice.value = null;
+  w.selectedDate.value = "";
+}
+
+export function useChatHistoryWindow(options: ChatHistoryWindowOptions) {
+  const w: HistoryWindow = {
+    options,
+    route: useRoute(),
+    router: useRouter(),
+    selectedDate: ref(""),
+    notice: ref<string | null>(null),
+    suppressNextDateWatch: false,
+  };
 
   /** Today on the site's clock, the latest day the calendar offers. */
-  const today = computed(() => siteTime().format("YYYY-MM-DD"));
+  const today = siteTime().format("YYYY-MM-DD");
 
-  /**
-   * "Строки поиска нет, пока сообщений нет": the row above the frame stands
-   * while the history is on its way, failed or holds something, and not over
-   * a chat the server called empty, where there is nothing to search and no
-   * day to go to.
-   */
+  /** The search row stands unless the server called the chat empty. */
   const hasHistory = computed(
     () =>
       options.loading() || options.failed() || options.messages().length > 0,
   );
 
-  // Set right before the address loses its ?date on the page's own move: the
-  // window on screen is already the one the address will name, and the
-  // watcher below must not load it a second time.
-  let suppressNextDateWatch = false;
-
-  /** The day the address names, if any. */
-  function dateInRoute(): string | null {
-    const date = route.query.date;
-    return typeof date === "string" && date ? date : null;
-  }
-
-  /** The chat's address at a day, or at none: live. */
-  function withDate(date: string | null) {
-    const { query, ...location } = options.location();
-    return { ...location, query: date ? { ...query, date } : { ...query } };
-  }
-
-  function scrollToBottom() {
-    nextTick(() => options.feed.value?.scrollToBottom());
-  }
-
-  /**
-   * After a window was replaced. Its sentinels are elements drawn anew (the
-   * skeleton stood in their place while it loaded, or one appeared that was
-   * not there), and the observers watch the elements they were given, so they
-   * are given the new ones. A landing scroll crosses the whole window, and the
-   * sentinels it flies past would read it as a request for another page: they
-   * wake once it has settled.
-   */
-  function observeWindow(landing: boolean) {
-    const feed = options.feed;
-    nextTick(() => {
-      feed.value?.setupInfiniteScroll();
-      if (!landing) {
-        feed.value?.resumeInfiniteScroll();
-        return;
-      }
-      setTimeout(() => feed.value?.resumeInfiniteScroll(), LANDING_SCROLL_MS);
-    });
-  }
-
-  /** The latest messages, with the reader at their end. */
-  async function loadLatest() {
-    await options.load.latest();
-    scrollToBottom();
-    observeWindow(false);
-  }
-
-  /** The archive is left: no day selected, none in the address. */
-  function leaveDate() {
-    selectedDate.value = "";
-    if (route.query.date) {
-      suppressNextDateWatch = true;
-      router.replace(withDate(null));
-    }
-  }
-
-  /** A day was picked in the calendar: the address takes it, the watcher loads. */
-  function pickDate(date: string) {
-    if (!date) return;
-    router.push(withDate(date));
-  }
-
-  /**
-   * Loads the window of a day and lands on it. The day stays picked, in the
-   * address and in the calendar, for every window the store found near it, as
-   * it did before 5 October 2026. From 5 October it was dropped for a day with
-   * no message of its own, and the calendar opened on nothing picked the next
-   * time.
-   *
-   * The server answers a day with the window around the first message from
-   * its midnight on (around the last one before it, where nothing comes
-   * after), about half of the window before that message. The feed opens at
-   * the first message of the day where the window holds one, and at the top
-   * of the window otherwise, as it did before 5 October. For a day with no
-   * message of its own that top is a message from before the day, wherever
-   * the chat has one.
-   *
-   * Only where the store found nothing near the day and fell back to the
-   * latest messages, the address gives the day up and a line names it:
-   * presenting the latest window while the calendar still shows the picked
-   * day would look exactly like landing on the wrong one.
-   */
-  async function loadDate(date: string) {
-    notice.value = null;
-    selectedDate.value = date;
-    options.feed.value?.suspendInfiniteScroll();
-    await options.load.date(date);
-
-    if (options.landedOnRequestedDate()) {
-      // The window starts before the day wherever the chat has messages
-      // before it, so the day's first message is found here, on the clock
-      // the feed dates its messages by.
-      const held = options.messages();
-      const target =
-        held.find((m) => formatSiteTime(m.createdUtc, "YYYY-MM-DD") === date) ??
-        held[0];
-      if (target) {
-        nextTick(() => options.feed.value?.scrollToMessage(target.id, "start"));
-      }
-      observeWindow(true);
-      return;
-    }
-
-    leaveDate();
-    observeWindow(false);
-    // A failed request is not an empty day. The interceptor has announced a
-    // 5xx or a dead network, the red box stands where an empty feed would be,
-    // and the window on screen is whatever was there before the request:
-    // nothing to explain and nothing to scroll.
-    if (options.failed() || !options.messages().length) return;
-    scrollToBottom();
-    notice.value = emptyDayNotice(date);
-  }
-
-  /**
-   * Lands on a message: a search hit, or a link to it on the way in. Leaves
-   * any day for the live feed's window around the message. The landing scroll
-   * crosses the whole loaded window, so the sentinels are off while it lasts,
-   * or they would read it as a request for another page.
-   *
-   * A message the server does not have (removed, or never there) leaves the
-   * latest messages under a line saying so. A request that failed was
-   * announced already (the interceptor, the red box), and a line calling that
-   * "not found" would be a second carrier saying a different thing; it gets
-   * the latest messages only when the feed has nothing else to show.
-   */
-  async function landOnMessage(id: string) {
-    notice.value = null;
-    leaveDate();
-    options.feed.value?.suspendInfiniteScroll();
-    await options.load.message(id);
-    const found = options.messages().some((m) => m.id === id);
-    if (found) {
-      observeWindow(true);
-      return;
-    }
-    const answered = !options.failed();
-    if (!answered && options.messages().length) {
-      observeWindow(false);
-      return;
-    }
-    await loadLatest();
-    if (answered && !options.failed() && options.messages().length) {
-      notice.value = MESSAGE_GONE_NOTICE;
-    }
-  }
-
-  /**
-   * "К последним сообщениям". Clearing ?date lets the watcher load the latest;
-   * with no day in the address they load here. In LIVE mode the tail is held
-   * already, and there is only somewhere to scroll.
-   */
-  async function jumpToLatest() {
-    selectedDate.value = "";
-    if (dateInRoute()) {
-      router.replace(withDate(null));
-      return;
-    }
-    if (!options.hasMoreAfter()) {
-      scrollToBottom();
-      return;
-    }
-    notice.value = null;
-    await loadLatest();
-  }
-
-  /**
-   * ARCHIVE -> LIVE: the reader stands at the real bottom of the last page of
-   * an archive window. Asked on every scroll of the feed and when the last
-   * page arrives. Where the reader stands is measured when asked: appending a
-   * page grows the list without a scroll event, so a remembered answer goes
-   * stale exactly when it matters.
-   */
-  function followToLive() {
-    if (!selectedDate.value || options.hasMoreAfter() || options.loading()) {
-      return;
-    }
-    nextTick(() => {
-      if (!selectedDate.value || options.hasMoreAfter()) return;
-      if (!(options.feed.value?.atBottom() ?? true)) return;
-      leaveDate();
-    });
-  }
-
-  watch(() => options.hasMoreAfter(), followToLive);
-
-  /** Forgets the window's day and its line: another chat, or a plain visit. */
-  function forget() {
-    notice.value = null;
-    selectedDate.value = "";
-  }
-
-  // ?date moving under the same chat: the calendar, the button, back and
-  // forward. The page loads the first window itself, and a change of the chat
-  // with it; this follows only the later moves of the day.
   watch(
-    () => [options.chat?.(), route.query.date] as const,
+    () => options.hasMoreAfter(),
+    () => followToLive(w),
+  );
+
+  // Later moves of ?date under the same chat; the page loads the first window and a new chat.
+  watch(
+    () => [options.chat?.(), w.route.query.date] as const,
     ([chat, date], [previousChat, previousDate]) => {
       if (chat !== previousChat || date === previousDate) return;
-      if (suppressNextDateWatch) {
-        suppressNextDateWatch = false;
+      if (w.suppressNextDateWatch) {
+        w.suppressNextDateWatch = false;
         return;
       }
-      if (typeof date === "string" && date) {
-        loadDate(date);
+      const day = dateInRoute(w);
+      if (day) {
+        loadDate(w, day);
         return;
       }
-      forget();
-      loadLatest();
+      forget(w);
+      loadLatest(w);
     },
   );
 
   return {
-    selectedDate,
-    notice,
+    selectedDate: w.selectedDate,
+    notice: w.notice,
     today,
     hasHistory,
-    dateInRoute,
-    pickDate,
-    loadDate,
-    landOnMessage,
-    jumpToLatest,
-    followToLive,
-    forget,
+    dateInRoute: () => dateInRoute(w),
+    pickDate: (date: string) => pickDate(w, date),
+    loadDate: (date: string) => loadDate(w, date),
+    landOnMessage: (id: string) => landOnMessage(w, id),
+    jumpToLatest: () => jumpToLatest(w),
+    followToLive: () => followToLive(w),
+    forget: () => forget(w),
   };
 }

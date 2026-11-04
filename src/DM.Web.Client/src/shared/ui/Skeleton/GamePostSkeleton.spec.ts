@@ -5,12 +5,12 @@
 /**
  * The skeleton of a post has the shape of the post it stands for (GamePost),
  * so nothing jumps when the post comes: the left column of 140 beside the
- * strips of the text, at every width, for a phone shows the post of 1366, the
- * square of the portrait as wide as the content of the column, and the strips
+ * strips of the text, at every width, the square of the portrait as wide as the content of the column, and the strips
  * where the text starts, the cards as far apart as the posts of the list.
  *
- * Read off the two stylesheets: the numbers live in two components that
- * change apart.
+ * Read off the stylesheets of the skeleton and of the post (its column of the
+ * author and its text are parts of their own): the numbers live in components
+ * that change apart.
  */
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
@@ -23,6 +23,8 @@ const HERE = dirname(fileURLToPath(import.meta.url));
 const SKELETON = resolve(HERE, "GamePostSkeleton.vue");
 const SRC = resolve(HERE, "../../..");
 const POST = resolve(SRC, "widgets/game-post/GamePost.vue");
+const AUTHOR = resolve(SRC, "widgets/game-post/GamePostAuthor.vue");
+const TEXT = resolve(SRC, "widgets/game-post/GamePostText.vue");
 const ROOM = resolve(SRC, "pages/game/GameRoom.vue");
 const FEEDS = [
   resolve(SRC, "widgets/pulse-feed/PulseFeed.vue"),
@@ -49,6 +51,8 @@ function sides(shorthand: string): [number, number, number, number] {
 describe("the skeleton of a post", () => {
   const skeleton = componentCss(SKELETON);
   const post = componentCss(POST);
+  const author = componentCss(AUTHOR);
+  const text = componentCss(TEXT);
 
   it("keeps its column beside the strips at every width, as the post does", () => {
     expect(skeleton).not.toMatch(/@media/);
@@ -69,7 +73,7 @@ describe("the skeleton of a post", () => {
 
     // The skeleton pads its column by what the post spends around its
     // content: the margin of .meta-inner and its padding on the right.
-    const inner = declarationsOf(post, ".meta-inner");
+    const inner = declarationsOf(author, ".meta-inner");
     const [top, right, bottom, left] = sides(inner.margin);
     const padRight = parseFloat(inner["padding-right"] ?? "0");
     expect(sides(column.padding)).toEqual([
@@ -90,7 +94,7 @@ describe("the skeleton of a post", () => {
   it("starts the strips where the text of the post starts", () => {
     const [bodyTop] = sides(declarationsOf(post, ".post-body").padding);
     const [textTop, textRight, , textLeft] = sides(
-      declarationsOf(post, ".game-text").margin,
+      declarationsOf(text, ".game-text").margin,
     );
     const [top, right, , left] = sides(
       declarationsOf(skeleton, ".skeleton-body").padding,

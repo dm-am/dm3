@@ -1,11 +1,8 @@
 using System;
+using System.ComponentModel.DataAnnotations;
 using DM.Domain.Core.Enums;
 
 namespace DM.Web.API.Features.Personal.Notepads;
-
-// =====================
-// Response DTOs
-// =====================
 
 /// <summary>
 /// Notepad entry response
@@ -47,9 +44,6 @@ public class NotepadEntryResponse
     public DateTimeOffset? ModifiedUtc { get; set; }
 }
 
-// =====================
-// Request DTOs
-// =====================
 
 /// <summary>
 /// Create notepad entry request
@@ -57,6 +51,7 @@ public class NotepadEntryResponse
 public class CreateNotepadEntryRequest
 {
     /// <summary>Entry title</summary>
+    [StringLength(200, ErrorMessage = "Название записи не длиннее 200 символов")]
     public string Title { get; set; } = null!;
 
     /// <summary>Entry content</summary>
@@ -74,6 +69,7 @@ public class UpdateNotepadEntryRequest
     /// as "leave alone", and only this DTO declared the fields required, so
     /// changing a title alone answered 400 "The Content field is required".
     /// </remarks>
+    [StringLength(200, ErrorMessage = "Название записи не длиннее 200 символов")]
     public string? Title { get; set; }
 
     /// <summary>Entry content. Omit to leave unchanged.</summary>

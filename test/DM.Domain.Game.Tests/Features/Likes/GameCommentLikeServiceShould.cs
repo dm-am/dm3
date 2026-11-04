@@ -21,71 +21,53 @@ namespace DM.Domain.Game.Tests.Features.Likes;
 /// </summary>
 public class GameCommentLikeServiceShould : UnitTestBase
 {
-    private readonly IGameCommentService _commentService;
-    private readonly IIntentionManager _intentionManager;
-    private readonly ILikeOperations _likeOperations;
-    private readonly GameCommentLikeService _service;
+    private readonly IGameCommentService commentService;
+    private readonly IIntentionManager intentionManager;
+    private readonly ILikeOperations likeOperations;
+    private readonly GameCommentLikeService service;
 
     public GameCommentLikeServiceShould()
     {
-        _commentService = Mock<IGameCommentService>();
-        _intentionManager = Mock<IIntentionManager>();
+        commentService = Mock<IGameCommentService>();
+        intentionManager = Mock<IIntentionManager>();
 
-        _likeOperations = Mock<ILikeOperations>();
-        _likeOperations.LikeAsync(Arg.Any<Comment>(), Arg.Any<EventType>())
+        likeOperations = Mock<ILikeOperations>();
+        likeOperations.LikeAsync(Arg.Any<Comment>(), Arg.Any<EventType>())
             .Returns(new GeneralUser { UserId = Guid.NewGuid() });
-        _likeOperations.UnlikeAsync(Arg.Any<Comment>()).Returns(Task.CompletedTask);
+        likeOperations.UnlikeAsync(Arg.Any<Comment>()).Returns(Task.CompletedTask);
 
-        _service = new GameCommentLikeService(
-            _commentService,
-            _intentionManager,
-            _likeOperations);
+        service = new GameCommentLikeService(
+            commentService,
+            intentionManager,
+            likeOperations);
     }
 
     [Fact]
-    public async Task AuthorizeLikeCommentAction()
+    public async Task LikeACommentTheCallerMayLike()
     {
         var comment = GivenComment();
 
-        await _service.LikeCommentAsync(comment.Id);
+        await service.LikeCommentAsync(comment.Id);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
+        await likeOperations.Received(1).LikeAsync(comment, EventType.LikedGameComment);
     }
 
     [Fact]
-    public async Task LikeCommentUsingLikeOperations()
+    public async Task UnlikeACommentTheCallerMayLike()
     {
         var comment = GivenComment();
 
-        await _service.LikeCommentAsync(comment.Id);
+        await service.UnlikeCommentAsync(comment.Id);
 
-        await _likeOperations.Received(1).LikeAsync(comment, EventType.LikedGameComment);
-    }
-
-    [Fact]
-    public async Task AuthorizeUnlikeCommentAction()
-    {
-        var comment = GivenComment();
-
-        await _service.UnlikeCommentAsync(comment.Id);
-
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
-    }
-
-    [Fact]
-    public async Task UnlikeCommentUsingLikeOperations()
-    {
-        var comment = GivenComment();
-
-        await _service.UnlikeCommentAsync(comment.Id);
-
-        await _likeOperations.Received(1).UnlikeAsync(comment);
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Like, comment);
+        await likeOperations.Received(1).UnlikeAsync(comment);
     }
 
     private Comment GivenComment()
     {
         var comment = new Comment { Id = Guid.NewGuid(), EntityId = Guid.NewGuid() };
-        _commentService.GetAsync(comment.Id).Returns(comment);
+        commentService.GetAsync(comment.Id).Returns(comment);
         return comment;
     }
 }

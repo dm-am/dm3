@@ -1,13 +1,8 @@
 import { readonly, ref } from "vue";
 
 /**
- * The picture of a text open whole over the page, or null.
- *
- * A picture in a post is drawn no taller than the window allows, and a map or
- * a character sheet taller than that cannot be read there. A click opens it at
- * its own size in the viewer (shared/ui/ImageViewer), which the app draws
- * once; the click itself is heard by the text (bbcodeInteractive.ts), which
- * knows nothing of the component and hands the picture over through here.
+ * The picture of a text open whole over the page, or null: the text hears the
+ * click (bbcodeImageViewer.ts) and hands it to the viewer the app draws once.
  */
 export interface ViewedImage {
   src: string;

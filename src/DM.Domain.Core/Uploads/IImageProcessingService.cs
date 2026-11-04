@@ -1,7 +1,3 @@
-using System.Collections.Generic;
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Uploads;
@@ -13,21 +9,19 @@ namespace DM.Domain.Core.Uploads;
 ///   3) dimension guards,
 ///   4) EXIF/IPTC/XMP strip (re-encode metadata-free),
 ///   5) downscale to <see cref="ImageProcessingDefaults.OriginalMaxDimension"/>
-///      if the type asks for it.
+///      if the type asks for it,
+///   6) square thumbnails of an avatar (<see cref="AvatarThumbnail"/>).
 ///
 /// Steps 3 and 5 differ per upload type — see <see cref="ImageProcessingDefaults"/>.
-/// Returns a single file (source). Thumbnails are generated on-the-fly
-/// via imgproxy at serving time — not pre-generated, and never for a post
-/// attachment, whose bytes are served by an endpoint that authorizes the caller.
+/// Never a thumbnail for a post attachment: its bytes are served by an endpoint
+/// that authorizes the caller.
 /// </summary>
 public interface IImageProcessingService
 {
-    /// <summary>True if the upload type requires the image pipeline (validation+EXIF strip).</summary>
-    bool IsImageType(UploadType type);
-
     /// <summary>
     /// Read the stream, validate (magic bytes, dimensions, decompression bomb),
-    /// strip EXIF, downscale where the type asks for it. Throws
+    /// strip EXIF, downscale where the type asks for it, cut the thumbnails of an
+    /// avatar. Throws
     /// <see cref="DM.Domain.Core.Exceptions.HttpBadRequestException"/> on any
     /// validation error.
     /// </summary>
@@ -50,9 +44,8 @@ public interface IImageProcessingService
 }
 
 /// <summary>
-/// Processing result — a single re-encoded source file
-/// ready for S3 PUT. Thumbnails are not pre-generated — imgproxy
-/// does on-the-fly transforms on request.
+/// Processing result — the re-encoded source file ready for S3 PUT, and the
+/// thumbnails that go next to it.
 /// </summary>
 /// <param name="Bytes">Encoded file to store.</param>
 /// <param name="ContentType">MIME type the bytes are encoded in.</param>
@@ -69,11 +62,24 @@ public sealed record ProcessedImage(
     string ContentType,
     string Extension,
     int Width,
-    int Height);
+    int Height)
+{
+    /// <summary>
+    /// Square thumbnails of the stored picture, one per side
+    /// <see cref="AvatarThumbnail.SizesFor"/> names for the type, none for the others.
+    /// </summary>
+    public IReadOnlyList<ProcessedThumbnail> Thumbnails { get; init; } = [];
+}
 
 /// <summary>
-/// Publicly accessible pipeline constants — SSOT for docs, tests,
-/// imgproxy presets and the client's file picker.
+/// A square thumbnail of the stored picture, encoded as <see cref="AvatarThumbnail.ContentType"/>.
+/// </summary>
+/// <param name="Size">Side in pixels.</param>
+/// <param name="Bytes">Encoded file to store.</param>
+public sealed record ProcessedThumbnail(int Size, byte[] Bytes);
+
+/// <summary>
+/// Pipeline constants; the client's file picker keeps a copy.
 /// </summary>
 public static class ImageProcessingDefaults
 {
@@ -91,21 +97,16 @@ public static class ImageProcessingDefaults
     /// Formats an avatar may be in.
     /// </summary>
     public static IReadOnlyCollection<string> AvatarContentTypes { get; } =
-        new[] { "image/jpeg", "image/png", "image/webp" };
+        ["image/jpeg", "image/png", "image/webp"];
 
     /// <summary>
     /// Formats a post attachment may be in: pictures only, and only the ones the
     /// decoder in this pipeline reads.
     /// </summary>
     /// <remarks>
-    /// The specification asked for documents as well — pdf, docx, txt. They are
-    /// deliberately not here. Everything on this list is validated by decoding it,
-    /// which is what makes "the extension says jpg" irrelevant; a document format
-    /// has no decode step, so admitting one means a second validation path that
-    /// judges a file by its signature alone and then stores content the site
-    /// serves from its own origin. That is how an upload becomes stored XSS, and
-    /// no attachment use case in the product needs it.
+    /// Only formats validated by decoding: a document has no decode step, and stored
+    /// as is it would be served from the site's own origin.
     /// </remarks>
     public static IReadOnlyCollection<string> PostAttachmentContentTypes { get; } =
-        new[] { "image/jpeg", "image/png", "image/webp", "image/gif" };
+        [.. AvatarContentTypes, "image/gif"];
 }

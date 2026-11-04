@@ -4,36 +4,22 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
-using DM.Infrastructure.Persistence.Entities.Game.Posts;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
 using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAttributeSchema;
 using DbCharacterAttribute = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.CharacterAttribute;
-using DefaultAttributeSchema = DM.Infrastructure.Persistence.InitialData.DefaultAttributeSchema;
+using DM.Infrastructure.Persistence.InitialData;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    // ─────────────────────────────────────────────────────────────────────
-    // The default character sheet is initial data of the schema and lives
-    // beside it (DefaultAttributeSchema): the template row ships with the
-    // migration, and every seeded game gets its own copy of the same sheet.
-    // Every specification identifier is pinned there, because the attribute
-    // values of seeded characters address them.
-    // ─────────────────────────────────────────────────────────────────────
-    private static IReadOnlyList<string> AlignmentNames => DefaultAttributeSchema.AlignmentNames;
-
     /// <summary>
     /// Gives every seeded game its own copy of the default sheet.
     /// </summary>
     /// <remarks>
-    /// Written only for the games that hold none, so a second run leaves the
-    /// sheets a master may already have edited alone and the version of an
-    /// untouched one does not creep upwards with every run. The copy carries
-    /// the pinned identifiers, which is what keeps the attribute values of
-    /// seeded characters readable across runs.
+    /// Only for the games that hold none, so a second run leaves an edited sheet and its version alone.
     /// </remarks>
     private async Task SeedGameAttributeSchemasAsync(ComprehensiveSeedResult result)
     {
@@ -64,15 +50,10 @@ internal sealed partial class DataSeeder
     }
 
     /// <summary>
-    /// Writes <see cref="DbCharacterAttribute"/> rows for the inherited
-    /// per-field character values against the pinned default sheet. Empty and
-    /// null values are skipped (e.g. a Cyberpunk character with no alignment
-    /// gets no "Мировоззрение" row, mirroring the legacy games that had no
-    /// alignment at all). The fields the default sheet does not draw - race and
-    /// class - are not written at all: there would be no specification for them
-    /// to answer to.
+    /// Writes <see cref="DbCharacterAttribute"/> rows for the per-field character values against the
+    /// default sheet. Empty values are skipped, and so are race and class, which the sheet does not draw.
     /// </summary>
-    private void AddLegacyCharacterAttributes(
+    private void AddCharacterSheetValues(
         Guid characterId,
         int? alignmentIndex = null,
         string? appearance = null,
@@ -97,7 +78,7 @@ internal sealed partial class DataSeeder
             });
         }
 
-        Add(DefaultAttributeSchema.AlignmentId, alignmentIndex.HasValue ? AlignmentNames[alignmentIndex.Value] : null);
+        Add(DefaultAttributeSchema.AlignmentId, alignmentIndex.HasValue ? DefaultAttributeSchema.AlignmentNames[alignmentIndex.Value] : null);
         Add(DefaultAttributeSchema.AppearanceId, appearance);
         Add(DefaultAttributeSchema.TemperId, temper);
         Add(DefaultAttributeSchema.StoryId, story);
@@ -120,367 +101,181 @@ internal sealed partial class DataSeeder
             CreatedUtc = game.CreatedUtc,
             Name = "Таинственный Незнакомец",
             IsNpc = true,
-            AccessPolicy = CharacterAccessPolicy.NoAccess,
-            IsRemoved = false
         };
         _dbContext.Set<Character>().Add(npc);
-        AddLegacyCharacterAttributes(npc.CharacterId,
+        AddCharacterSheetValues(npc.CharacterId,
             appearance: "Фигура, скрытая тенью.");
         result.CharactersCreated++;
         return npc;
     }
 
-    private void SeedCharactersAndPostsForGames(List<DbGame> games, List<DbUser> users, ComprehensiveSeedResult result)
+    /// <summary>
+    /// The characters of a catalog game: the players drawn for it, every
+    /// character written into it with the nameless figure last, the ones
+    /// granted the closed rooms, and that figure.
+    /// </summary>
+    private sealed record GameCast(
+        List<DbUser> Players, List<Character> Characters, List<Character> RoomMembers, Character Npc);
+
+    private static readonly string[] GameCharacterNames =
+        ["Арагорн Следопыт", "Эльвира Чародейка", "Горим Железный Кулак", "Лиара Тенебраум", "Кассандра Видящая", "Торин Дубощит", "Леголас Зеленый Лист", "Гимли сын Глоина"];
+
+    /// <summary>
+    /// The characters of a catalog game: active ones by its variation, a few
+    /// non-active ones for variety, and the nameless figure.
+    /// </summary>
+    private async Task<GameCast> SeedGameCharacters(
+        SeedingGame seeding, GameRooms rooms, List<DbUser> users, GameShowcase showcase,
+        ComprehensiveSeedResult result)
     {
-        // The one place that read the clock again instead of the run's epoch, so
-        // its timestamps drifted from every other aggregate by the runtime of the
-        // seed and could not be pinned at all.
-        var now = _now;
-        var characterNames = new[] { "Арагорн Следопыт", "Эльвира Чародейка", "Горим Железный Кулак", "Лиара Тенебраум", "Кассандра Видящая", "Торин Дубощит" };
-        var postTexts = new[]
-        {
-            "Я осторожно оглядываюсь по сторонам, держа руку на рукояти меча.",
-            "Произношу заклинание обнаружения магии, пытаясь понять природу этого места.",
-            "Проверяю следы на земле. Кто-то здесь был совсем недавно.",
-            "Подхожу к двери и прислушиваюсь.",
-            "Готовлю щит и занимаю оборонительную позицию.",
-            "Внимательно осматриваю комнату в поисках скрытых проходов."
-        };
+        var (game, master, _, variation, _) = seeding;
 
-        foreach (var game in games)
-        {
-            var room = game.Rooms.FirstOrDefault(r => r.AccessType == RoomAccessType.Open);
-            if (room == null)
-            {
-                // Create a room if none exists
-                var maxRoomNumber = game.Rooms.Count > 0 ? game.Rooms.Max(r => r.RoomNumber) : 0;
-                room = new Room
-                {
-                    RoomId = _guidFactory.Create(),
-                    GameId = game.GameId,
-                    Title = "Главная локация",
-                    AccessType = RoomAccessType.Open,
-                    Type = RoomType.Default,
-                    RoomNumber = maxRoomNumber + 1,
-                    OrderNumber = 1.0,
-                    ViewPrivateText = false,
-                    ViewDiceResults = true,
-                    DiceEnabled = true,
-                    IsRemoved = false
-                };
-                _dbContext.Set<Room>().Add(room);
-            }
+        var playersForGame = users.Where(u => u.UserId != master.UserId).OrderBy(_ => _random.Next()).Take(variation.ActiveChars + 2).ToList();
+        var createdCharacters = new List<Character>();
+        // Characters holding access to the closed rooms: whoever writes
+        // there has to be able to read there.
+        var restrictedRoomMembers = new List<Character>();
 
-            // Exclude "OnlyReader" from playing games (for testing 0 gamesPlaying tooltip).
-            // Take(2) player characters + the single NPC below = 3 active characters per
-            // game/room. Keeps demo tooltips (game.activeCharacters, room participants)
-            // concise — earlier Take(3) + NPC = 4 characters felt overloaded in UI.
-            var playersForGame = users.Where(u => u.UserId != game.MasterId && u.Username != "OnlyReader").OrderBy(_ => _random.Next()).Take(2).ToList();
-            var createdCharacters = new List<Character>();
+        await SeedActiveCharacters(seeding, rooms, playersForGame, createdCharacters, restrictedRoomMembers, showcase, result);
+        SeedInactiveCharacters(seeding, playersForGame, createdCharacters, result);
 
-            // Create characters
-            for (var ci = 0; ci < playersForGame.Count; ci++)
-            {
-                var player = playersForGame[ci];
-                var character = new Character
-                {
-                    CharacterId = _guidFactory.Create(),
-                    GameId = game.GameId,
-                    AuthorId = player.UserId,
-                    Status = CharacterStatus.Active,
-                    IsDead = false,
-                    IsPlayerLeft = false,
-                    IsPlayerExiled = false,
-                    CreatedUtc = game.CreatedUtc.AddDays(_random.Next(1, 7)),
-                    Name = characterNames[ci % characterNames.Length],
-                    IsNpc = false,
-                    AccessPolicy = CharacterAccessPolicy.NoAccess,
-                    IsRemoved = false
-                };
+        var npc = AddMysteriousStranger(game, result);
+        createdCharacters.Add(npc);
 
-                _dbContext.Set<Character>().Add(character);
-                AddLegacyCharacterAttributes(character.CharacterId,
-                    alignmentIndex: ci % AlignmentNames.Count,
-                    appearance: "Высокий, крепкого телосложения.",
-                    temper: "Решительный и отважный.",
-                    story: "Родился в маленькой деревне...",
-                    skills: "Владение мечом, выживание.",
-                    inventory: "Меч, лук, рюкзак.");
-                createdCharacters.Add(character);
-                result.CharactersCreated++;
-            }
-
-            // Create NPC
-            createdCharacters.Add(AddMysteriousStranger(game, result));
-
-            // Create posts
-            var activeChars = createdCharacters.Where(c => c.Status == CharacterStatus.Active).ToList();
-            if (activeChars.Count > 0 && game.ActivatedUtc.HasValue)
-            {
-                var postsToCreate = 10;
-                var baseTime = game.ActivatedUtc.Value;
-                // Spread posts between activation and now (or closed date)
-                var endTime = game.ClosedUtc ?? now;
-                var totalHoursAvailable = (int)(endTime - baseTime).TotalHours;
-                var hoursPerPost = postsToCreate > 0 ? Math.Max(1, totalHoursAvailable / postsToCreate) : 1;
-
-                for (var pi = 0; pi < postsToCreate; pi++)
-                {
-                    var character = activeChars[pi % activeChars.Count];
-                    var postOffsetHours = Math.Min(pi * hoursPerPost + _random.Next(0, hoursPerPost), Math.Max(1, totalHoursAvailable - 1));
-                    var post = new Post
-                    {
-                        PostId = _guidFactory.Create(),
-                        RoomId = room.RoomId,
-                        CharacterId = character.CharacterId,
-                        AuthorId = character.AuthorId ?? game.MasterId,
-                        CreatedUtc = baseTime.AddHours(postOffsetHours),
-                        GameText = postTexts[pi % postTexts.Length],
-                        IsRemoved = false
-                    };
-                    _dbContext.Set<Post>().Add(post);
-                    result.PostsCreated++;
-                }
-            }
-        }
-
-        result.Details.Add($"Seeded {result.CharactersCreated} characters and {result.PostsCreated} posts for {games.Count} existing games");
+        return new GameCast(playersForGame, createdCharacters, restrictedRoomMembers, npc);
     }
 
     /// <summary>
-    /// Creates 10 "drop" characters for SolohinLex — Retired with
-    /// <see cref="DM.Infrastructure.Persistence.Entities.Game.Characters.Character.IsPlayerLeft"/>=true
-    /// in existing games. Idempotent: if there are already 10+ drops, does nothing.
-    /// We pick arbitrary games (not ones created by SolohinLex as a master, to
-    /// avoid breaking the logic), without the "one player — one active role
-    /// per game" uniqueness check: the Retired status rules out competing with Active.
+    /// The active characters of a catalog game, each granted the rooms of the
+    /// game; the first one of the first finished game is Diopside.
     /// </summary>
-    private async Task SeedSolohinLexDrops(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task SeedActiveCharacters(
+        SeedingGame seeding, GameRooms rooms, List<DbUser> playersForGame, List<Character> createdCharacters,
+        List<Character> restrictedRoomMembers, GameShowcase showcase, ComprehensiveSeedResult result)
     {
-        var solohin = users.FirstOrDefault(u => u.Username == "SolohinLex");
-        if (solohin == null)
+        var (game, _, template, variation, _) = seeding;
+
+        for (var ci = 0; ci < Math.Min(variation.ActiveChars, playersForGame.Count); ci++)
         {
-            result.Details.Add("SolohinLex drops skipped: target user not found");
-            return;
-        }
+            var player = playersForGame[ci];
 
-        var existing = await _dbContext.Set<Character>()
-            .Where(c => c.AuthorId == solohin.UserId
-                && c.Status == CharacterStatus.Retired
-                && c.IsPlayerLeft
-                && !c.IsRemoved)
-            .CountAsync();
-        if (existing >= 10)
-        {
-            result.Details.Add($"SolohinLex already has {existing} drops, skipping drop seed");
-            return;
-        }
+            var isDiopsideChar = !showcase.HasDiopsideCharacter && ci == 0
+                && template.ClosedReason == ClosedReason.Finished;
+            if (isDiopsideChar) showcase.HasDiopsideCharacter = true;
 
-        const int targetCount = 10;
-        var toCreate = targetCount - existing;
-
-        // Take existing games from the ChangeTracker (created in step 6) —
-        // more convenient than a repeated SELECT; and these games are definitely valid.
-        var availableGames = _dbContext.ChangeTracker.Entries<DbGame>()
-            .Select(e => e.Entity)
-            .Where(g => !g.IsRemoved && g.MasterId != solohin.UserId)
-            .Take(toCreate * 2)
-            .ToList();
-
-        if (availableGames.Count < toCreate)
-        {
-            // Fallback: pick from the DB (in case the ChangeTracker is empty,
-            // e.g. after a restart between seed steps).
-            availableGames = await _dbContext.Set<DbGame>()
-                .Where(g => !g.IsRemoved && g.MasterId != solohin.UserId)
-                .OrderBy(g => g.SerialNumber)
-                .Take(toCreate * 2)
-                .ToListAsync();
-        }
-
-        if (availableGames.Count == 0)
-        {
-            result.Details.Add("SolohinLex drops skipped: no eligible games");
-            return;
-        }
-
-        var characterNames = new[]
-        {
-            "Алхимик", "Лучник", "Странствующий бард", "Бывший рыцарь",
-            "Чародей-отшельник", "Авантюрист", "Наемник", "Картограф",
-            "Бывший монах", "Путник",
-        };
-
-        for (var i = 0; i < toCreate; i++)
-        {
-            var game = availableGames[i % availableGames.Count];
-            var createdAgo = (existing + i + 1) * 45;
-            var dropCharacter = new Character
+            var character = new Character
             {
                 CharacterId = _guidFactory.Create(),
                 GameId = game.GameId,
-                AuthorId = solohin.UserId,
-                Status = CharacterStatus.Retired,
-                IsDead = false,
-                IsPlayerLeft = true,
-                IsPlayerExiled = false,
-                CreatedUtc = now.AddDays(-createdAgo),
-                Name = characterNames[(existing + i) % characterNames.Length],
-                IsNpc = false,
-                AccessPolicy = CharacterAccessPolicy.NoAccess,
-                IsRemoved = false,
+                AuthorId = player.UserId,
+                Status = CharacterStatus.Active,
+                CreatedUtc = game.CreatedUtc.AddDays(_random.Next(1, 7)),
+                Name = isDiopsideChar ? "Диопсид" : GameCharacterNames[ci % GameCharacterNames.Length],
             };
-            _dbContext.Set<Character>().Add(dropCharacter);
-            AddLegacyCharacterAttributes(dropCharacter.CharacterId,
-                story: "Покинул игру по личным обстоятельствам.");
+
+            _dbContext.Set<Character>().Add(character);
+            AddCharacterSheetValues(character.CharacterId,
+                alignmentIndex: template.System != "Cyberpunk RED" ? ci % DefaultAttributeSchema.AlignmentNames.Count : null,
+                appearance: isDiopsideChar
+                    ? "Полупрозрачное существо из живого кристалла. Отростки вдоль позвоночника мерцают приглушенным светом. Тело переливается оттенками зеленого и голубого."
+                    : "Высокий, крепкого телосложения, с проницательным взглядом.",
+                temper: isDiopsideChar
+                    ? "Древний и терпеливый. Мыслит категориями эпох, но способен к неожиданному любопытству."
+                    : "Решительный и отважный, но иногда слишком упрямый.",
+                story: isDiopsideChar
+                    ? "Осколок кристаллического мира, упавший через разрыв между измерениями. Столетия одиночества обострили восприятие, но оставили тоску по утраченной гармонии."
+                    : "Родился в маленькой деревне, с детства мечтал о приключениях...",
+                skills: isDiopsideChar
+                    ? "Телепатия, резонанс с магией, поглощение эссенции, кристаллическая регенерация."
+                    : "Владение мечом, выживание в дикой местности, следопытство.",
+                inventory: isDiopsideChar
+                    ? "Нет материальных вещей — только воспоминания о родном мире."
+                    : "Меч, лук, 20 стрел, рюкзак с припасами.");
+            createdCharacters.Add(character);
+            result.CharactersCreated++;
+
+            if (isDiopsideChar)
+            {
+                await SeedDiopsidePortrait(character, player);
+            }
+
+            // Every active character gets the rooms, except the last one of the UI test data game: its closed
+            // rooms then show a granted and a denied player, its open rooms a reader who may not write.
+            var leaveOutForUiTest = seeding.IsUiTestDataGame &&
+                ci == Math.Min(variation.ActiveChars, playersForGame.Count) - 1;
+            if (!leaveOutForUiTest)
+            {
+                GrantRoomAccess(rooms, character);
+                restrictedRoomMembers.Add(character);
+            }
         }
-        await _dbContext.SaveChangesAsync();
-        result.Details.Add($"SolohinLex drops seeded: {toCreate} created (total {targetCount}) for \"дропы\" demo");
     }
 
     /// <summary>
-    /// Seeds deterministic player characters for SolohinLex so the profile
-    /// games table ("Игрок" mode) can demonstrate the character status
-    /// column: two games where he has an active character (one alongside a
-    /// dead character, the other alongside one that left), one game where he
-    /// has ONLY former characters (dead + left, no active one) and one game
-    /// where he has ONLY an application under review. The profile table
-    /// queries the games player filter with PlayerParticipation.Any, so the
-    /// two active-less games stay visible there while the public /games
-    /// player filter (active-only scope) keeps excluding them. Games are
-    /// picked among non-draft games not mastered by SolohinLex where he has
-    /// no characters yet, keeping the "one active character per player per
-    /// game" rule intact. Idempotent per marker name: re-running skips the
-    /// characters that already exist, so extending the plan list back-fills
-    /// only the new ones.
+    /// The portrait of the Diopside character — the real pipeline: EXIF strip +
+    /// downscale, one source object lands in object storage.
     /// </summary>
-    private async Task SeedSolohinLexPlayerCharacters(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task SeedDiopsidePortrait(Character character, DbUser player)
     {
-        var solohin = users.FirstOrDefault(u => u.Username == "SolohinLex");
-        if (solohin == null)
+        var bytes = ReadEmbeddedSeedBytes(DiopsideImage);
+        var upload = await SeedImageFromBytesAsync(
+            bytes,
+            declaredContentType: "image/jpeg",
+            sourceFileName: "diopside.jpg",
+            type: UploadType.CharacterAvatar,
+            uploadId: _guidFactory.Create(),
+            userId: player.UserId,
+            entityId: character.CharacterId,
+            uploadedUtc: character.CreatedUtc);
+        _dbContext.Uploads.Add(upload);
+    }
+
+    /// <summary>
+    /// The declined application of the UI test data game. Fixed, because no list shows a declined
+    /// character: the frames open its address by this identifier.
+    /// </summary>
+    private static readonly Guid UiTestDeclinedCharacterId = FixedGuid(0xc1, 1);
+
+    /// <summary>
+    /// A few non-active characters for variety, from the players left over after
+    /// the active ones.
+    /// </summary>
+    private void SeedInactiveCharacters(
+        SeedingGame seeding, List<DbUser> playersForGame, List<Character> createdCharacters,
+        ComprehensiveSeedResult result)
+    {
+        var (game, _, template, variation, _) = seeding;
+
+        var nonActiveStatuses = new[] { CharacterStatus.UnderReview, CharacterStatus.Declined, CharacterStatus.Retired };
+        for (var ci = variation.ActiveChars; ci < playersForGame.Count && ci < variation.ActiveChars + 2; ci++)
         {
-            result.Details.Add("SolohinLex player characters skipped: target user not found");
-            return;
-        }
-
-        var plans = new (int GameIndex, string Name, CharacterStatus Status, bool IsDead, bool IsPlayerLeft, int DaysAgo, string Story)[]
-        {
-            // Game 0: active character + a dead one.
-            (0, "Ролан Странник", CharacterStatus.Active, false, false, 30, "Вышел на тракт за новыми историями."),
-            (0, "Торвальд Смелый", CharacterStatus.Retired, true, false, 120, "Пал в бою, прикрывая отход отряда."),
-            // Game 1: active character + one that left the game.
-            (1, "Мираэль Тихая", CharacterStatus.Active, false, false, 20, "Держится в тени и слушает больше, чем говорит."),
-            (1, "Каспар Непоседа", CharacterStatus.Retired, false, true, 90, "Покинул игру: дорога позвала дальше."),
-            // Game 2: former participation only (dead + left, no active
-            // character) - visible only via PlayerParticipation.Any.
-            (2, "Эйнар Хмурый", CharacterStatus.Retired, true, false, 200, "Погиб, не отступив ни на шаг."),
-            (2, "Лира Певунья", CharacterStatus.Retired, false, true, 150, "Покинула игру ради новой баллады."),
-            // Game 3: application under review only - visible only via
-            // PlayerParticipation.Any.
-            (3, "Дориан Пытливый", CharacterStatus.UnderReview, false, false, 3, "Заявка ожидает решения мастера."),
-        };
-
-        // Per-name idempotency: every plan name is a marker. A database
-        // seeded by an older version of this step gets only the missing
-        // characters back-filled; a fully seeded one is skipped entirely.
-        var planNames = plans.Select(p => p.Name).ToList();
-        var existingNames = await _dbContext.Set<Character>()
-            .Where(c => c.AuthorId == solohin.UserId && !c.IsRemoved && planNames.Contains(c.Name))
-            .Select(c => c.Name)
-            .ToListAsync();
-        var pending = plans.Where(p => !existingNames.Contains(p.Name)).ToList();
-        if (pending.Count == 0)
-        {
-            result.Details.Add("SolohinLex player characters already seeded, skipping");
-            return;
-        }
-
-        // Games where SolohinLex already has any character (random seed picks
-        // or the drop characters from the previous step) are excluded so we
-        // never create a second active character in the same game.
-        var occupiedGameIds = await _dbContext.Set<Character>()
-            .Where(c => c.AuthorId == solohin.UserId && !c.IsRemoved)
-            .Select(c => c.GameId)
-            .Distinct()
-            .ToListAsync();
-
-        var pendingGameIndexes = pending.Select(p => p.GameIndex).Distinct().OrderBy(i => i).ToList();
-        var gamesNeeded = pendingGameIndexes.Count;
-
-        var eligibleGames = _dbContext.ChangeTracker.Entries<DbGame>()
-            .Select(e => e.Entity)
-            .Where(g => !g.IsRemoved &&
-                        g.Status != ModuleStatus.Draft &&
-                        g.MasterId != solohin.UserId &&
-                        !occupiedGameIds.Contains(g.GameId))
-            .Take(gamesNeeded)
-            .ToList();
-
-        if (eligibleGames.Count < gamesNeeded)
-        {
-            // Fallback to the database (e.g. when seed steps run against an
-            // already-populated database and the ChangeTracker is empty).
-            eligibleGames = await _dbContext.Set<DbGame>()
-                .Where(g => !g.IsRemoved &&
-                            g.Status != ModuleStatus.Draft &&
-                            g.MasterId != solohin.UserId &&
-                            !occupiedGameIds.Contains(g.GameId))
-                .OrderBy(g => g.SerialNumber)
-                .Take(gamesNeeded)
-                .ToListAsync();
-        }
-
-        if (eligibleGames.Count == 0)
-        {
-            result.Details.Add("SolohinLex player characters skipped: no eligible games");
-            return;
-        }
-
-        // Each distinct plan game index gets its own eligible game. Folding
-        // several plan indexes into one game is NOT allowed: it could create
-        // a second active character of the same player in one game (invariant
-        // violation) and would blur the Any-vs-Active scope demo (a
-        // former-players-only game would gain an active character). With
-        // fewer eligible games than needed the unlucky plan indexes are
-        // skipped and reported instead.
-        var gameByPlanIndex = pendingGameIndexes
-            .Take(eligibleGames.Count)
-            .Select((planIndex, i) => (PlanIndex: planIndex, Game: eligibleGames[i]))
-            .ToDictionary(x => x.PlanIndex, x => x.Game);
-
-        var skippedCount = pending.Count(p => !gameByPlanIndex.ContainsKey(p.GameIndex));
-        if (skippedCount > 0)
-        {
-            pending = pending.Where(p => gameByPlanIndex.ContainsKey(p.GameIndex)).ToList();
-            result.Details.Add(
-                $"SolohinLex player characters partially skipped ({skippedCount}): not enough eligible games");
-        }
-
-        foreach (var plan in pending)
-        {
-            var planCharacter = new Character
+            var player = playersForGame[ci];
+            var status = nonActiveStatuses[(ci - variation.ActiveChars) % nonActiveStatuses.Length];
+            // Drawn even where the fixed one stands, so no identifier drawn after it moves.
+            var drawnId = _guidFactory.Create();
+            var character = new Character
             {
-                CharacterId = _guidFactory.Create(),
-                GameId = gameByPlanIndex[plan.GameIndex].GameId,
-                AuthorId = solohin.UserId,
-                Status = plan.Status,
-                IsDead = plan.IsDead,
-                IsPlayerLeft = plan.IsPlayerLeft,
-                IsPlayerExiled = false,
-                CreatedUtc = now.AddDays(-plan.DaysAgo),
-                Name = plan.Name,
-                IsNpc = false,
-                AccessPolicy = CharacterAccessPolicy.NoAccess,
-                IsRemoved = false,
+                CharacterId = seeding.IsUiTestDataGame && status == CharacterStatus.Declined
+                    ? UiTestDeclinedCharacterId
+                    : drawnId,
+                GameId = game.GameId,
+                AuthorId = player.UserId,
+                Status = status,
+                IsDead = status == CharacterStatus.Retired,
+                CreatedUtc = game.CreatedUtc.AddDays(_random.Next(1, 7)),
+                Name = GameCharacterNames[ci % GameCharacterNames.Length],
             };
-            _dbContext.Set<Character>().Add(planCharacter);
-            AddLegacyCharacterAttributes(planCharacter.CharacterId,
-                story: plan.Story);
+
+            _dbContext.Set<Character>().Add(character);
+            AddCharacterSheetValues(character.CharacterId,
+                alignmentIndex: template.System != "Cyberpunk RED" ? ci % DefaultAttributeSchema.AlignmentNames.Count : null,
+                appearance: "Среднего роста, ничем не примечательный.",
+                temper: "Спокойный и рассудительный.",
+                story: "История еще пишется...",
+                skills: "Базовые навыки выживания.",
+                inventory: "Простая одежда, кошелек с монетами.");
+            createdCharacters.Add(character);
             result.CharactersCreated++;
         }
-
-        await _dbContext.SaveChangesAsync();
-        result.Details.Add(
-            $"SolohinLex player characters seeded: {pending.Count} across {gameByPlanIndex.Count} game(s) for profile games table status column");
     }
 }

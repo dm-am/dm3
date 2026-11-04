@@ -1,19 +1,11 @@
 #!/bin/bash
 set -euo pipefail
 
-# Nightly copy of the object storage bucket as a plain directory of files.
-#
-# A directory rather than a dump of the volume: it is readable without the store
-# that wrote it, verify-backup.sh counts its files, and a restore into this store
-# or any other S3 is one command, the line in docs/guides/DEPLOYMENT.md.
-#
-# Runs as dm-backup, the account that may read and list and nothing else, so
-# the key on this host cannot change a single object. The key goes into the
-# throwaway container only. The AWS variables of docker/.env, which _env.sh
-# exports, stay what they are for: the offsite replication at the end.
+# Nightly copy of the object storage bucket as a plain directory of files: readable without
+# the store, countable by verify-backup.sh, restorable with restore-storage.sh. Runs as
+# dm-backup, which may read and list only; its key goes into the throwaway container, while
+# the AWS variables of docker/.env stay for the offsite replication at the end.
 
-# Cron дает почти пустое окружение: без этого ночной запуск не видел ни пароля
-# хранилища, ни ключей offsite-репликации.
 # shellcheck source=/dev/null
 . "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/_env.sh"
 
@@ -35,11 +27,9 @@ fi
 mkdir -p "$BACKUP_DIR/$TIMESTAMP"
 echo "[$(date)] Starting object storage backup..."
 
-# Path-style addressing is set inside the container: without it the client puts
-# the bucket into the host name, and no such host exists. Checksums are sent
-# only where the protocol requires them: newer clients add their own by default,
-# and this store was tested with the required ones only. The keys are passed by
-# name, so they appear in no process list.
+# Path-style addressing, or the client puts the bucket into a host name that does not
+# exist. Checksums only where the protocol requires them. The keys are passed by name, so
+# they appear in no process list.
 AWS_ACCESS_KEY_ID="$BACKUP_USER" AWS_SECRET_ACCESS_KEY="$STORAGE_BACKUP_PASSWORD" \
 docker run --rm --network "$NETWORK" \
   -v "$BACKUP_DIR/$TIMESTAMP:/backup" \

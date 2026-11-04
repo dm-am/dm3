@@ -1,4 +1,5 @@
 using System;
+using System.Diagnostics.CodeAnalysis;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
@@ -21,9 +22,9 @@ public class SecondShared : ISharedContract;
 /// <summary>Second implementation of a contract the infrastructure assembly introduces.</summary>
 public class FixtureCursorService : ICursorService
 {
-    public bool TryDecode(string cursor, out CursorData data)
+    public bool TryDecode(string cursor, [NotNullWhen(true)] out CursorData? data)
     {
-        data = null!;
+        data = null;
         return false;
     }
 

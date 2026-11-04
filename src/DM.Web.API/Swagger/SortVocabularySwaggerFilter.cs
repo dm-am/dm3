@@ -1,3 +1,4 @@
+using System;
 using System.Linq;
 using System.Text.Json.Nodes;
 using DM.Web.API.Shared.Sorting;
@@ -10,15 +11,8 @@ namespace DM.Web.API.Swagger;
 /// Publishes the sort fields an endpoint accepts as the parameter's enum.
 /// </summary>
 /// <remarks>
-/// Without this every sortBy and sortOrder was a bare <c>"type": "string"</c>,
-/// so the contract said nothing about what the endpoint would take, and a
-/// reader had to guess the vocabulary from the response fields — which is what
-/// API_DESIGN promised would never be necessary ("перечислены они не здесь, а
-/// рядом с самим эндпоинтом — в объявлении его параметра").
-///
-/// The values come from SortVocabulary, the same table the action filter
-/// enforces, so the published contract and the answer on the wire are one
-/// thing said twice rather than two things kept in step.
+/// The values come from SortVocabulary, the table the action filter enforces,
+/// so the contract and the answer on the wire are one thing.
 /// </remarks>
 internal class SortVocabularySwaggerFilter : IParameterFilter
 {
@@ -37,8 +31,8 @@ internal class SortVocabularySwaggerFilter : IParameterFilter
         var fields = SortVocabulary.FieldsOf(declaringType);
         var values = parameter.Name switch
         {
-            "sortBy" => fields,
-            "sortOrder" => fields == null ? null : SortVocabulary.SortOrders,
+            _ when Names(SortVocabulary.SortByProperty) => fields,
+            _ when Names(SortVocabulary.SortOrderProperty) => fields == null ? null : SortVocabulary.SortOrders,
             _ => null
         };
 
@@ -51,5 +45,8 @@ internal class SortVocabularySwaggerFilter : IParameterFilter
         }
 
         schema.Enum = values.Select(v => (JsonNode)v!).ToList();
+
+        // The parameter is published in camel case, the property is named in Pascal case.
+        bool Names(string property) => string.Equals(parameter.Name, property, StringComparison.OrdinalIgnoreCase);
     }
 }

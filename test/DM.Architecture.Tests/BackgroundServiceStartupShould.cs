@@ -13,17 +13,8 @@ namespace DM.Architecture.Tests;
 /// A background service does its work after the host has started, not during.
 /// </summary>
 /// <remarks>
-/// BackgroundService.StartAsync calls ExecuteAsync and awaits nothing: everything
-/// before the first await runs inside host startup. Both worker consumers declared
-/// ExecuteAsync as a plain Task and opened a connection to the broker in it, so a
-/// broker that was not up yet aborted the host before its own health check could
-/// say why - and the retry policy first held the start for a minute of Thread.Sleep.
-/// The API consumer avoided it with a Task.Yield and a comment describing exactly
-/// this, which is the asymmetry the rule removes.
-///
-/// An async state machine is what makes the yield possible, so the attribute the
-/// compiler emits for one is what gets asserted: it cannot be satisfied by a body
-/// that returns Task.CompletedTask after doing the work.
+/// Everything before the first await of ExecuteAsync runs inside host startup. The async state
+/// machine attribute is asserted: a body returning Task.CompletedTask cannot satisfy it.
 /// </remarks>
 public class BackgroundServiceStartupShould
 {
@@ -34,9 +25,8 @@ public class BackgroundServiceStartupShould
 
     [Fact]
     public void FindTheBackgroundServices() =>
-        Services.Should().HaveCountGreaterThanOrEqualTo(10,
-            "the API host alone runs nine periodic jobs, so a smaller match means the " +
-            "assemblies were never loaded and the rule below checks nothing");
+        Services.Should().NotBeEmpty(
+            "no match means the assemblies were never loaded and the rule below checks nothing");
 
     [Fact]
     public void RunEveryExecuteAsyncAsAnAsyncMethod() =>

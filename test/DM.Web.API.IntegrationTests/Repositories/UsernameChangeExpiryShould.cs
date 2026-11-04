@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -18,16 +15,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// left a comment of their own.
 /// </summary>
 /// <remarks>
-/// The pass used to append the reason to whatever comment was already stored:
-/// `SetProperty(r => r.ResolverComment, r => r.ResolverComment + suffix)`, and
-/// the suffix carried its own separator. Approving takes no comment - only
-/// rejection demands one - so that column is normally null here, and what the
-/// requester was shown began with a separator joining it to nothing: " | Токен
-/// истек...".
-///
-/// Asserted against a real database on purpose. How a null operand is treated in
-/// an ExecuteUpdate concatenation is the provider's decision, not the language's,
-/// and it is the only thing under test here.
+/// Approving takes no comment, so the column is normally null. How a null operand joins an ExecuteUpdate
+/// concatenation is the provider's decision, so a real database.
 /// </remarks>
 public class UsernameChangeExpiryShould : IntegrationTestBase
 {
@@ -67,10 +56,7 @@ public class UsernameChangeExpiryShould : IntegrationTestBase
             comment.Should().Be(ModeratorComment + ResolutionComment.Separator + Reason));
 
     /// <summary>
-    /// The other road into Expired: no moderator opened the request. It must leave
-    /// the token deadline empty, because that emptiness is what the reply reads as
-    /// "nobody looked at it" - a pass that filled the field would have the site
-    /// telling the requester about an approval that never happened.
+    /// Expiry when no moderator opened the request leaves the token deadline empty: the reply reads it as "nobody looked".
     /// </summary>
     [Fact]
     public async Task LeaveTheTokenDeadlineEmptyWhenNobodyReviewedTheRequest()

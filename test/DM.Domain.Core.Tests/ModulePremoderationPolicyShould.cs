@@ -33,8 +33,6 @@ public class ModulePremoderationPolicyShould
         IsUnderModerationWatch = underWatch
     };
 
-    #region Initial status
-
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
@@ -52,10 +50,6 @@ public class ModulePremoderationPolicyShould
             .Should().Be(PremoderationStatus.Approved);
     }
 
-    #endregion
-
-    #region SetApproved
-
     [Theory]
     [InlineData(PremoderationStatus.Approved)]
     [InlineData(PremoderationStatus.AwaitingApproval)]
@@ -70,10 +64,6 @@ public class ModulePremoderationPolicyShould
         change.MentorId.Should().BeNull();
     }
 
-    #endregion
-
-    #region SetAwaitingEdits
-
     [Theory]
     [InlineData(PremoderationStatus.Approved)]
     [InlineData(PremoderationStatus.AwaitingApproval)]
@@ -87,10 +77,6 @@ public class ModulePremoderationPolicyShould
         change.SetMentorId.Should().BeTrue();
         change.MentorId.Should().Be(Mentor);
     }
-
-    #endregion
-
-    #region SubmitForApproval
 
     [Fact]
     public void SubmitAModuleAwaitingEditsWithoutTouchingTheCurator()
@@ -118,10 +104,8 @@ public class ModulePremoderationPolicyShould
             .WithMessage(RefusalMessage.CannotSubmitForApproval(current));
     }
 
-    #endregion
-
     [Fact]
-    public void RefuseAMoveOutsideTheThreeItKnows()
+    public void RefuseAMoveItDoesNotKnow()
     {
         var act = () => ModulePremoderationPolicy.Resolve(
             (ModulePremoderationTransition)42, PremoderationStatus.AwaitingEdits, Mentor);

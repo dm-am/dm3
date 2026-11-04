@@ -1,7 +1,8 @@
 using System;
-using DM.Domain.Account.Features.Authentication;
+using System.Linq;
 using DM.Domain.Core.Identity;
 using DM.Domain.Community.Authorization;
+using DM.Testing;
 using DM.Testing.Dsl;
 using DM.Domain.Core.Enums;
 using DM.Domain.Community.Features.Polls;
@@ -12,18 +13,24 @@ using Xunit;
 
 namespace DM.Domain.Community.Tests.Authorization;
 
-public class PollIntentionResolverShould
+public class PollIntentionResolverShould : UnitTestBase
 {
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly PollIntentionResolver _resolver;
-    private readonly DateTimeOffset _now = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
+    private readonly PollIntentionResolver resolver;
+    private readonly DateTimeOffset now = new(2024, 1, 15, 12, 0, 0, TimeSpan.Zero);
 
     public PollIntentionResolverShould()
     {
-        _dateTimeProvider = Substitute.For<IDateTimeProvider>();
-        _dateTimeProvider.Now.Returns(_now);
-        _resolver = new PollIntentionResolver(_dateTimeProvider);
+        var dateTimeProvider = Mock<IDateTimeProvider>();
+        dateTimeProvider.Now.Returns(now);
+        resolver = new PollIntentionResolver(dateTimeProvider);
     }
+
+    /// <summary>A poll that ends the given number of days from now, with these options.</summary>
+    private Poll PollEndingIn(int days, params Guid[] options) => new()
+    {
+        EndsUtc = now.AddDays(days),
+        Options = [.. options.Select(id => new PollOption { Id = id })]
+    };
 
     [Theory]
     [InlineData(PollIntention.Create)]
@@ -33,26 +40,22 @@ public class PollIntentionResolverShould
     [InlineData(PollIntention.Delete)]
     public void ForbidEverythingForGuest(PollIntention intention)
     {
-        _resolver.IsAllowed(AuthenticatedUser.Guest, intention).Should().BeFalse();
+        resolver.IsAllowed(AuthenticatedUser.Guest, intention).Should().BeFalse();
     }
 
     [Theory]
-    [InlineData(UserRole.RegularUser)]
-    [InlineData(UserRole.Mentor)]
-    [InlineData(UserRole.Moderator)]
-    public void ForbidCreateForNonSeniorModerator(UserRole role)
+    [InlineData(UserRole.RegularUser, false)]
+    [InlineData(UserRole.Mentor, false)]
+    [InlineData(UserRole.Moderator, false)]
+    [InlineData(UserRole.SeniorModerator, true)]
+    [InlineData(UserRole.Admin, true)]
+    public void LetOnlySeniorModerationCreateEditAndDeleteAPoll(UserRole role, bool allowed)
     {
         var user = Create.User().WithRole(role).Please();
-        _resolver.IsAllowed(user, PollIntention.Create).Should().BeFalse();
-    }
 
-    [Theory]
-    [InlineData(UserRole.SeniorModerator)]
-    [InlineData(UserRole.Admin)]
-    public void AllowCreateForSeniorModeratorOrHigher(UserRole role)
-    {
-        var user = Create.User().WithRole(role).Please();
-        _resolver.IsAllowed(user, PollIntention.Create).Should().BeTrue();
+        resolver.IsAllowed(user, PollIntention.Create).Should().Be(allowed);
+        resolver.IsAllowed(user, PollIntention.Edit, new Poll()).Should().Be(allowed);
+        resolver.IsAllowed(user, PollIntention.Delete, new Poll()).Should().Be(allowed);
     }
 
     [Fact]
@@ -60,26 +63,17 @@ public class PollIntentionResolverShould
     {
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
         var optionId = Guid.NewGuid();
-        var poll = new Poll
-        {
-            EndsUtc = _now.AddDays(1),
-            Options = [new PollOption { Id = optionId }]
-        };
 
-        _resolver.IsAllowed(user, PollIntention.Vote, (poll, optionId)).Should().BeTrue();
+        resolver.IsAllowed(user, PollIntention.Vote, (PollEndingIn(1, optionId), optionId)).Should().BeTrue();
     }
 
     [Fact]
     public void ForbidVoteForGuestOnActivePoll()
     {
         var optionId = Guid.NewGuid();
-        var poll = new Poll
-        {
-            EndsUtc = _now.AddDays(1),
-            Options = [new PollOption { Id = optionId }]
-        };
 
-        _resolver.IsAllowed(AuthenticatedUser.Guest, PollIntention.Vote, (poll, optionId)).Should().BeFalse();
+        resolver.IsAllowed(AuthenticatedUser.Guest, PollIntention.Vote, (PollEndingIn(1, optionId), optionId))
+            .Should().BeFalse();
     }
 
     [Fact]
@@ -87,89 +81,32 @@ public class PollIntentionResolverShould
     {
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
         var optionId = Guid.NewGuid();
-        var poll = new Poll
-        {
-            EndsUtc = _now.AddDays(-1),
-            Options = [new PollOption { Id = optionId }]
-        };
 
-        _resolver.IsAllowed(user, PollIntention.Vote, (poll, optionId)).Should().BeFalse();
+        resolver.IsAllowed(user, PollIntention.Vote, (PollEndingIn(-1, optionId), optionId)).Should().BeFalse();
     }
 
     [Fact]
     public void ForbidVoteWithInvalidOptionId()
     {
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
-        var poll = new Poll
-        {
-            EndsUtc = _now.AddDays(1),
-            Options = [new PollOption { Id = Guid.NewGuid() }]
-        };
 
-        _resolver.IsAllowed(user, PollIntention.Vote, (poll, Guid.NewGuid())).Should().BeFalse();
+        resolver.IsAllowed(user, PollIntention.Vote, (PollEndingIn(1, Guid.NewGuid()), Guid.NewGuid()))
+            .Should().BeFalse();
     }
 
     [Fact]
     public void AllowUnvoteForAuthenticatedUserOnActivePoll()
     {
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
-        var poll = new Poll { EndsUtc = _now.AddDays(1) };
 
-        _resolver.IsAllowed(user, PollIntention.Unvote, poll).Should().BeTrue();
+        resolver.IsAllowed(user, PollIntention.Unvote, PollEndingIn(1)).Should().BeTrue();
     }
 
     [Fact]
     public void ForbidUnvoteOnExpiredPoll()
     {
         var user = Create.User().WithRole(UserRole.RegularUser).Please();
-        var poll = new Poll { EndsUtc = _now.AddDays(-1) };
 
-        _resolver.IsAllowed(user, PollIntention.Unvote, poll).Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData(UserRole.SeniorModerator)]
-    [InlineData(UserRole.Admin)]
-    public void AllowEditForSeniorModeratorOrHigher(UserRole role)
-    {
-        var user = Create.User().WithRole(role).Please();
-        var poll = new Poll();
-
-        _resolver.IsAllowed(user, PollIntention.Edit, poll).Should().BeTrue();
-    }
-
-    [Theory]
-    [InlineData(UserRole.RegularUser)]
-    [InlineData(UserRole.Mentor)]
-    [InlineData(UserRole.Moderator)]
-    public void ForbidEditForNonSeniorModerator(UserRole role)
-    {
-        var user = Create.User().WithRole(role).Please();
-        var poll = new Poll();
-
-        _resolver.IsAllowed(user, PollIntention.Edit, poll).Should().BeFalse();
-    }
-
-    [Theory]
-    [InlineData(UserRole.SeniorModerator)]
-    [InlineData(UserRole.Admin)]
-    public void AllowDeleteForSeniorModeratorOrHigher(UserRole role)
-    {
-        var user = Create.User().WithRole(role).Please();
-        var poll = new Poll();
-
-        _resolver.IsAllowed(user, PollIntention.Delete, poll).Should().BeTrue();
-    }
-
-    [Theory]
-    [InlineData(UserRole.RegularUser)]
-    [InlineData(UserRole.Mentor)]
-    [InlineData(UserRole.Moderator)]
-    public void ForbidDeleteForNonSeniorModerator(UserRole role)
-    {
-        var user = Create.User().WithRole(role).Please();
-        var poll = new Poll();
-
-        _resolver.IsAllowed(user, PollIntention.Delete, poll).Should().BeFalse();
+        resolver.IsAllowed(user, PollIntention.Unvote, PollEndingIn(-1)).Should().BeFalse();
     }
 }

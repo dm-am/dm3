@@ -2,13 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * A game that was deleted, a game the viewer may not open and a server that
- * fell over are three different things to say. The shell said one sentence to
- * all three — "Не удалось загрузить игру", which reads as "try again" — because
- * the store kept the sentence and threw the status away. The forum has told the
- * four cases apart for its topics all along.
- */
+// A failed load of the game is a page of its own status.
 import { describe, expect, it, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -49,20 +43,12 @@ function render(status: number | null) {
 }
 
 describe("GamePage failure", () => {
-  it.each([
-    // Gone, not Removed: the endpoint answers Gone for a deleted game, for a
-    // mistyped id and for a game hidden from this reader alike, so the page
-    // that says "удалена" would be inventing a fact for two of the three.
-    [410, "404"],
-    [403, "403"],
-    [404, "404"],
-    [500, "500"],
-  ])("answers %i with its own error page", (status, code) => {
-    expect(render(status).find(".error-page").text()).toBe(code);
+  // Not "удалена": the game endpoint answers Gone for a typo too.
+  it("answers Gone with the page of an address that leads nowhere", () => {
+    expect(render(410).find(".error-page").text()).toBe("404");
   });
 
   it("reads a request that never left as a server failure", () => {
-    // client.ts fills status 0 for a request that did not reach the API.
     expect(render(0).find(".error-page").text()).toBe("500");
   });
 

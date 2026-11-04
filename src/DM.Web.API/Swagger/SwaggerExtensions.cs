@@ -6,7 +6,6 @@ using System.Reflection;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.BbRendering;
 using Microsoft.AspNetCore.Builder;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.OpenApi;
@@ -27,19 +26,15 @@ public static class SwaggerExtensions
     /// it: a hard-coded list in the generator would drift from the code the
     /// moment a group is added.
     /// </summary>
-    public static readonly IEnumerable<string> ApiGroups = Assembly.GetExecutingAssembly().GetTypes()
+    public static readonly IReadOnlyList<string> ApiGroups = Assembly.GetExecutingAssembly().GetTypes()
         .Where(t => t.IsSubclassOf(typeof(ControllerBase)))
-        .Select(t => t.GetCustomAttribute<ApiExplorerSettingsAttribute>())
-        .Where(t => t is { IgnoreApi: false })
-        .Select(t => t!.GroupName)
-        .Where(g => g != null)
-        .Select(g => g!)
-        .Distinct();
+        .Select(t => t.GetCustomAttribute<ApiExplorerSettingsAttribute>() is { IgnoreApi: false } settings
+            ? settings.GroupName
+            : null)
+        .OfType<string>()
+        .Distinct()
+        .ToArray();
 
-    /// <summary>
-    /// Configure swagger gen
-    /// </summary>
-    /// <param name="options"></param>
     public static void ConfigureGen(this SwaggerGenOptions options)
     {
         foreach (var apiGroup in ApiGroups)
@@ -48,11 +43,11 @@ public static class SwaggerExtensions
         }
 
         // BFF Pattern: Cookie-based authentication
-        options.AddSecurityDefinition("cookieAuth", new OpenApiSecurityScheme
+        options.AddSecurityDefinition(AuthenticationSwaggerFilter.CookieScheme, new OpenApiSecurityScheme
         {
             Type = SecuritySchemeType.ApiKey,
             In = ParameterLocation.Cookie,
-            Name = "dm_session",
+            Name = ApiCredentialsStorage.AuthCookieName,
             Description = "Authentication via HttpOnly session cookie. " +
                           "Login using POST /v1/account/login to set the cookie automatically."
         });
@@ -73,20 +68,11 @@ public static class SwaggerExtensions
         options.CustomSchemaIds(type => type.FullName?.Replace("+", "."));
     }
 
-    /// <summary>
-    /// Configure swagger usage
-    /// </summary>
-    /// <param name="options"></param>
     public static void Configure(this SwaggerOptions options)
     {
         options.RouteTemplate = "swagger/{documentName}/swagger.json";
-        options.PreSerializeFilters.Add(ReverseProxyPreSerializeFilter);
     }
 
-    /// <summary>
-    /// Configure swagger UI
-    /// </summary>
-    /// <param name="options"></param>
     public static void ConfigureUi(this SwaggerUIOptions options)
     {
         foreach (var apiGroup in ApiGroups)
@@ -97,25 +83,4 @@ public static class SwaggerExtensions
         options.RoutePrefix = string.Empty;
         options.DocumentTitle = "DM.API";
     }
-
-    private const string ForwardedPrefixHeader = "X-Forwarded-Prefix";
-
-    private static readonly Action<OpenApiDocument, HttpRequest> ReverseProxyPreSerializeFilter =
-        (document, request) =>
-        {
-            string? prefix = null;
-            if (!request.Headers.TryGetValue(ForwardedPrefixHeader, out var prefixHeaderValues) ||
-                !prefixHeaderValues.Any() ||
-                string.IsNullOrEmpty(prefix = prefixHeaderValues.First()))
-            {
-                return;
-            }
-
-            document.Servers ??= new List<OpenApiServer>();
-            document.Servers.Add(new OpenApiServer
-            {
-                Url = prefix,
-                Description = "Reverse proxy server",
-            });
-        };
 }

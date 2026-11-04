@@ -5,11 +5,6 @@ namespace DM.Domain.Game.Configuration;
 /// <summary>
 /// When a player is reminded that a room is waiting for their post.
 /// </summary>
-/// <remarks>
-/// A product decision about how often the site is allowed to prod somebody, and
-/// it used to be two fields of a background job in the HTTP host, where nothing
-/// could read it, call it or test it without starting the host.
-/// </remarks>
 public static class PendencyPolicy
 {
     /// <summary>

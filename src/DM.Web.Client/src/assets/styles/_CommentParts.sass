@@ -1,0 +1,20 @@
+// The parts of a comment that a piece of content drawn as a comment wears too:
+// a moderation record in the frame of one, the quote of a violation with its
+// number. CommentItem.vue is the comment itself.
+
+@use "Variables" as *
+@use "Themes" as *
+@use "Links" as *
+
+/// The dashed frame of a comment on its fill.
+=comment-frame
+  padding: $medium
+  border: 1px dashed $border
+  background-color: $bg-element
+
+/// The number of a comment, a grey link at the right end of its line.
+=comment-number
+  flex: none
+  margin-left: auto
+  font-size: $tertiary-font-size
+  +muted-link

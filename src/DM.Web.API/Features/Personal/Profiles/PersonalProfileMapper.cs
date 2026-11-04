@@ -11,7 +11,7 @@ namespace DM.Web.API.Features.Personal.Profiles;
 /// Compile-time mapper for the account owner's own profile.
 /// </summary>
 [Mapper]
-internal partial class PersonalProfileMapper
+public partial class PersonalProfileMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -34,25 +34,18 @@ internal partial class PersonalProfileMapper
         }
 
         var result = ToPersonalProfileCore(user);
-        result.Rating = new Rating { TotalPosts = user.QuantityRating, PostReviewScoreSum = user.QualityRating };
-        result.Birthday = user.BirthdayDate.HasValue
-            ? new Birthday
-            {
-                Day = user.BirthdayDate.Value.Day,
-                Month = user.BirthdayDate.Value.Month,
-                Year = user.BirthdayDate.Value.Year
-            }
-            : null;
-        result.Contacts = user.Contacts
-            .OrderBy(c => c.SortOrder)
-            .Select(c => new Contact { ContactType = c.ContactType, Value = c.ContactValue })
-            .ToList();
+        result.Rating = UserMapper.RatingOf(user);
+        result.Birthday = UserMapper.BirthdayOf(user.BirthdayDate);
+        result.Contacts = user.Contacts.OrderBy(c => c.SortOrder).Select(_userMapper.ToContact).ToList();
         result.Visibility = new VisibilitySettings
         {
             ShowBirthday = user.ShowBirthday,
             ShowRating = !user.RatingDisabled
         };
+        // The owner reads the profile to edit it: with the author_edit audience
+        // "О себе" comes back as typed.
         result.Info = string.IsNullOrEmpty(user.Info) ? null : new InfoBbText { Value = user.Info };
+        result.Info?.BindAuthor(user.UserId);
         return result;
     }
 
@@ -63,18 +56,18 @@ internal partial class PersonalProfileMapper
     /// means "not sent": the contact list in particular must stay null when
     /// absent, because an empty list is an instruction to remove them all.
     /// </summary>
-    public DomainUpdateUser ToUpdateUser(UpdateProfile profile) => new()
+    public static DomainUpdateUser ToUpdateUser(UpdateProfile profile) => new()
     {
-        Status = profile.Status!,
-        Name = profile.Name!,
-        Location = profile.Location!,
-        Info = profile.Info!,
+        Status = profile.Status,
+        Name = profile.Name,
+        Location = profile.Location,
+        Info = profile.Info,
         ShowBirthday = profile.Visibility?.ShowBirthday,
         // Lifted negation on purpose: a visibility block whose flag was not
         // sent folds to null, not to a value.
         RatingDisabled = profile.Visibility == null ? null : !profile.Visibility.ShowRating,
         Contacts = profile.Contacts == null
-            ? null!
+            ? null
             : profile.Contacts
                 .Select((c, i) => new UserContact
                 {
@@ -90,11 +83,8 @@ internal partial class PersonalProfileMapper
     // wrapper; the history, the personal note and what a viewer may do with
     // the user belong to other endpoints.
     [MapProperty(nameof(UserDetails.UserId), nameof(PersonalProfile.Id))]
-    [MapProperty(nameof(UserDetails.CreatedUtc), nameof(PersonalProfile.RegisteredUtc))]
     [MapProperty(nameof(UserDetails.PostReviewsGivenCount), nameof(PersonalProfile.ReviewsGiven))]
     [MapProperty(nameof(UserDetails.PostReviewsReceivedCount), nameof(PersonalProfile.ReviewsReceived))]
-    [MapProperty(nameof(UserDetails.PostReviewsGivenCount), nameof(PersonalProfile.PostReviewsGiven))]
-    [MapProperty(nameof(UserDetails.PostReviewsReceivedCount), nameof(PersonalProfile.PostReviewsReceived))]
     [MapProperty(nameof(UserDetails.EndorsementsGivenCount), nameof(PersonalProfile.EndorsementsGiven))]
     [MapProperty(nameof(UserDetails.EndorsementsReceivedCount), nameof(PersonalProfile.EndorsementsReceived))]
     [MapProperty(nameof(UserDetails.GameReviewsGivenCount), nameof(PersonalProfile.GameReviewsGiven))]

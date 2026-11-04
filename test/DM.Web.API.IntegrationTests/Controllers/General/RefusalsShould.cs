@@ -1,9 +1,5 @@
-using System;
-using System.Linq;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -19,25 +15,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// A refusal says only that it refused.
 /// </summary>
 /// <remarks>
-/// Every authorization refusal in the project raises IntentionManagerException,
-/// whose message the problem-details factory used to put in the response title —
-/// and that message carried JsonSerializer.Serialize(target). So a refused request
-/// answered with the whole object it had refused: measured against the running
-/// stack before the fix, a read refused on a blog came back 403 carrying the blog
-/// DTO, the description and the author's GeneralUser, email and real name
-/// included.
-///
-/// One test rather than one per endpoint, deliberately: the leak was in the
-/// exception and in the factory, so every 403 with a target had it and every 403
-/// with a target is fixed by the same two edits. What is guarded here is that
-/// shape — if somebody puts the message back into the response, this reddens
-/// whichever endpoint it happens on.
-///
-/// The case used to be an anonymous read of a private draft. That read now
-/// answers 404, because on a blog the caller cannot see, the difference between
-/// "no such blog" and "not yours" is itself a leak. So the subject moved to the
-/// nearest refusal that still names a target and must stay a 403: editing a blog
-/// the caller can see and does not own.
+/// Every authorization refusal raises IntentionManagerException, whose message must not reach the title. One test:
+/// the shape is in the exception and the factory. The subject is a visible blog the caller does not own.
 /// </remarks>
 public class RefusalsShould : IntegrationTestBase
 {
@@ -79,9 +58,7 @@ public class RefusalsShould : IntegrationTestBase
         string PublicId, string Username, string Email, string Title, string Description);
 
     /// <summary>
-    /// A fresh author and a blog anybody may open. Fresh rather than seeded
-    /// because the assertions search the response for these exact strings, and a
-    /// value another test also uses would make the test lie.
+    /// A fresh author and a blog anybody may open: the assertions search the response for these strings.
     /// </summary>
     private async Task<SeededBlog> AddVisibleBlogAsync()
     {
@@ -108,7 +85,6 @@ public class RefusalsShould : IntegrationTestBase
         {
             BlogId = Guid.NewGuid(),
             PublicId = publicId,
-            SerialNumber = 1_000 + dbContext.Blogs.Count(),
             AuthorId = userId,
             Title = title,
             Description = description,

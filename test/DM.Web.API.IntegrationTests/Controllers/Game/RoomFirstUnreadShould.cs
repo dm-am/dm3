@@ -1,7 +1,6 @@
 using System.Net;
 using System.Text.Json;
 using DM.Domain.Core.Enums;
-using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Xunit;
 using static DM.Web.API.IntegrationTests.Helpers.RoomPostsTestHelper;
@@ -26,9 +25,8 @@ public class RoomFirstUnreadShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Five live posts a minute apart and a removed one among them, read up to the
-    /// third: the fourth is the first unread. The removed post is written after the
-    /// read mark, so a count that forgot the soft delete would call it unread.
+    /// Five live posts and a removed one, read up to the third: the fourth is the first unread, and the removed
+    /// post after the mark is not.
     /// </summary>
     [Fact]
     public async Task OpenTheRoomOnTheFirstUnreadPost()
@@ -63,9 +61,7 @@ public class RoomFirstUnreadShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The room is marked read when it is opened, not when a post is sent from it,
-    /// so the reader's own post stands after their mark. It is not news to them,
-    /// and neither is what they answered: the room opens on the post after theirs.
+    /// The room is marked read when opened, so the reader's own post and what they answered are not news.
     /// </summary>
     [Fact]
     public async Task NotOpenTheRoomOnTheReadersOwnPost()

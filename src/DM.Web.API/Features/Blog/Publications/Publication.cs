@@ -63,16 +63,6 @@ public class Publication
     public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
-    /// Whether the publication is published (visible)
-    /// </summary>
-    public bool IsPublished { get; set; }
-
-    /// <summary>
-    /// Publication date (UTC)
-    /// </summary>
-    public DateTimeOffset? PublishedUtc { get; set; }
-
-    /// <summary>
     /// View count
     /// </summary>
     public int ViewCount { get; set; }
@@ -124,14 +114,14 @@ public class CreatePublicationRequest
     /// Publication title (1-300 characters)
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(300, MinimumLength = 1, ErrorMessage = "Заголовок должен быть от 1 до 300 символов")]
+    [StringLength(300, ErrorMessage = "Заголовок должен быть от 1 до 300 символов")]
     public string Title { get; set; } = string.Empty;
 
     /// <summary>
     /// Publication content (BBCode)
     /// </summary>
     [Required(ErrorMessage = "Содержимое обязательно")]
-    [StringLength(100000, MinimumLength = 1, ErrorMessage = "Содержимое должно быть от 1 до 100000 символов")]
+    [StringLength(100000, ErrorMessage = "Содержимое должно быть от 1 до 100000 символов")]
     public string Content { get; set; } = string.Empty;
 
     /// <summary>
@@ -139,11 +129,6 @@ public class CreatePublicationRequest
     /// </summary>
     [StringLength(500, ErrorMessage = "Превью не должно превышать 500 символов")]
     public string Preview { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Whether to publish immediately (default: false - draft)
-    /// </summary>
-    public bool PublishImmediately { get; set; }
 }
 
 /// <summary>
@@ -178,9 +163,4 @@ public class UpdatePublicationRequest
     /// </summary>
     [StringLength(500, ErrorMessage = "Превью не должно превышать 500 символов")]
     public string Preview { get; set; } = string.Empty;
-
-    /// <summary>
-    /// Whether the publication is published (optional)
-    /// </summary>
-    public bool? IsPublished { get; set; }
 }

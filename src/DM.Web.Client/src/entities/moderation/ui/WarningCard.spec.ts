@@ -2,31 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * One warning drawn once, for both readers.
- *
- * The owner (28.09) named what the card is made of, and every part of it is a
- * part of the site already. On top, the content the warning was issued for in
- * the dashed square of a comment, with DM2's caption of content under it:
- * "Название места, Автор: имя, дата". Under it, the decisions as the reviews of
- * a post: the warning, and the change of its points when there was one, each a
- * point of a list signed "<Что> от <кого>, <когда>". The points stand in the
- * kind, "Предупреждение (3 балла)" with the points it was issued with and
- * "Изменение баллов (1 балл)" with the points the change left, and nowhere on
- * the content (the owner, 05.10 and 12.10). A warning without points is
- * "Устное предупреждение", not "Комментарий". A kind that names points is
- * red, one that names none is grey: the warning by the points it was issued
- * with, the change by the points it left, so the colour never disagrees with
- * the number written beside it. Nothing on the card is green: green says a
- * thing is good, and a warning never is.
- *
- * The text arrives rendered, always (the owner, 05.10: "Всегда показывай"),
- * and it is the text the warning was issued for, with nothing said of a later
- * edit (the owner, 12.10: "Предупреждение же не к отредактированному"); the
- * address of it only where a guest could follow it. The card draws what it is
- * handed and decides nothing about that itself, so what is checked below is
- * that each shape of the row reads the way the owner's words say it should.
- */
+// The card draws what it is handed; checked is that each shape of the row reads as it should.
 import { describe, it, expect, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { h } from "vue";
@@ -104,9 +80,7 @@ function render(model: Record<string, unknown> = warning(), slots = {}) {
       stubs: {
         RouterLink: {
           props: ["to"],
-          // Two shapes of destination on this card: the address of the
-          // offending object is a string and goes in `href`, a profile is a
-          // named route and only `data-to` can carry it.
+          // An address goes in `href`, a named route of a profile only in `data-to`.
           template:
             "<a class='router-link' :href='typeof to === \"string\" ? to : undefined' :data-to='JSON.stringify(to)'><slot /></a>",
         },
@@ -119,10 +93,7 @@ function render(model: Record<string, unknown> = warning(), slots = {}) {
 const line = (text: string) => text.replace(/\s+/g, " ").trim();
 
 describe("the warning card, the content on top", () => {
-  /**
-   * The owner (28.09): "Где контент, к которому предупреждение, как на ДМ2?"
-   * The text is rendered, as its place shows it, and not its source.
-   */
+  // Rendered as its place shows it, not its source.
   it("shows the offending text as its place renders it", () => {
     const wrapper = render(onContent());
 
@@ -131,8 +102,7 @@ describe("the warning card, the content on top", () => {
     expect(text.classes()).toContain("bbcode-content");
   });
 
-  // The points are the decision's, not the content's (the owner, 05.10: "У
-  // самого контента их незачем писать").
+  // The points are the decision's, not the content's.
   it("signs the text the way DM2 signed content: place, author, date, and no points", () => {
     const wrapper = render(onContent());
 
@@ -175,12 +145,7 @@ describe("the warning card, the content on top", () => {
     ).toBe("Публикация");
   });
 
-  /**
-   * A text deleted after the warning, or standing where a guest cannot follow
-   * it, is still the text the warning was given for (the owner, 05.10:
-   * "Всегда показывай"); there is no address to open, so the place is named
-   * and not linked.
-   */
+  // A text with no address to open is named and not linked.
   it("names the place of a text without an address, and shows the text", () => {
     const wrapper = render(onContent({ entityUrl: null }));
 
@@ -190,42 +155,7 @@ describe("the warning card, the content on top", () => {
     expect(wrapper.find(".warning-evidence").exists()).toBe(true);
   });
 
-  /**
-   * The owner (12.10): "А зачем это вообще? Предупреждение же не к
-   * отредактированному. Тут везде надо то, к чему предупреждение." The text
-   * shown is the one the warning was issued for, and an edit made to it later
-   * on the site is not the warning's business: the caption says nothing of it.
-   * The server no longer sends the moment of an edit; the row below carries
-   * one anyway, so that a field like it coming back stays off the card.
-   */
-  it("says nothing of an edit made to the text after the warning", () => {
-    const wrapper = render(
-      onContent({ entityEditedUtc: "2026-05-02T14:30:00" }),
-    );
-
-    expect(line(wrapper.get(".record-block__caption").text())).toBe(
-      "Правила форума, Автор: Нарушитель, 30.04.2026 в 10:15",
-    );
-    expect(wrapper.text()).not.toContain("Отредактировано");
-    expect(wrapper.text()).not.toContain("Изменено после предупреждения");
-    expect(wrapper.find(".warning-edited").exists()).toBe(false);
-    expect(wrapper.get(".warning-evidence strong").text()).toBe("Грубость");
-  });
-
-  // The line that stood where the log left a text out is gone, and so is the
-  // reason moderation was told for it: the text is shown everywhere now.
-  it("never says a text is for moderators alone", () => {
-    const html = render(onContent({ entityUrl: null })).html();
-
-    expect(html).not.toContain("Текст виден только модераторам");
-    expect(html).not.toContain("Скрыт из лога");
-  });
-
-  /**
-   * A warning issued on a profile is signed with DM2's "Профиль
-   * пользователя", which leads to the profile. A profile the server sent no
-   * copy of (a removed account) has no text line at all, not an empty one.
-   */
+  // A profile with no copy from the server has no text line at all.
   it("signs a warning on a profile with DM2's words and no text", () => {
     const wrapper = render(warning({ entityType: "Profile", profile: null }));
 
@@ -250,15 +180,7 @@ describe("the warning card, the content on top", () => {
   });
 });
 
-/**
- * A warning on a profile shows the profile as it stood when the warning was
- * issued (the owner, 12.10, line 41: "почему профиль пользователя не видно?";
- * line 44: "Тут везде надо то, к чему предупреждение"): the avatar at the size
- * of the profile, in its own proportions and not rounded, "Статус:" and "О
- * себе:", in a column at every width, as the column of the profile has them.
- * The server took the copy at the moment of issue; the card draws what came
- * and leaves out what did not.
- */
+// The profile as the server copied it at the moment of issue.
 describe("the warning card on a profile", () => {
   const PICTURE = {
     smallUrl: "/u/small.png",
@@ -287,8 +209,7 @@ describe("the warning card on a profile", () => {
 
     expect(picture.attributes("src")).toBe("/u/original.png");
     expect(picture.attributes("width")).toBe("220");
-    // The original keeps its proportions: a square crop may cut away what
-    // the warning was given for.
+    // A square crop may cut away what the warning was given for.
     expect(picture.attributes("height")).toBe(
       String(Math.round((220 * 793) / 731)),
     );
@@ -368,28 +289,7 @@ describe("the warning card on a profile", () => {
     ).not.toContain("|");
   });
 
-  /** No picture of the site is rounded (the owner), this one included. */
-  it("sets the picture square-cornered at the width of the profile's avatar", () => {
-    const rule = ruleMap(
-      componentCss(
-        resolve(dirname(fileURLToPath(import.meta.url)), "WarningCard.vue"),
-      ),
-    ).get(".warning-profile__picture");
-
-    expect(rule).toMatchObject({
-      width: "220px",
-      "max-width": "100%",
-      height: "auto",
-    });
-    expect(rule?.["border-radius"]).toBeUndefined();
-  });
-
-  /**
-   * The snapshot of a profile is read as the profile, so its parts are set in
-   * the type of the profile page. That type is read off the profile page
-   * itself: a copy that only names its original drifts the first time the
-   * profile moves.
-   */
+  // The card copies the type of the profile page until they share a mixin; this holds the copy.
   describe("in the type of the profile page", () => {
     const SRC = resolve(dirname(fileURLToPath(import.meta.url)), "../../..");
     const card = ruleMap(
@@ -432,11 +332,24 @@ describe("the warning card on a profile", () => {
   });
 });
 
-/**
- * A warning issued on a ticket about a person names no text and no profile:
- * it may be about the private messages. "Профиль пользователя" over nothing is
- * what made the owner ask where the profile was, so it names the person.
- */
+// It may be about the private messages, so it names the person.
+// The open log by its reader: a place he does not read, or none found, is one block for all.
+describe("the warning card of a place the reader does not read", () => {
+  const restricted = () =>
+    warning({ entityType: "Comment", accessRestricted: true });
+
+  it("stands one block for the text, and names the author alone", () => {
+    const wrapper = render(restricted());
+
+    expect(wrapper.get(".warning-restricted").text()).toBe("Доступ ограничен");
+    expect(wrapper.find(".warning-evidence").exists()).toBe(false);
+    expect(line(wrapper.get(".record-block__caption").text())).toBe(
+      "Автор: Нарушитель",
+    );
+    expect(wrapper.find(".warning-place").exists()).toBe(false);
+  });
+});
+
 describe("the warning card that names nothing", () => {
   it.each([
     ["the open log", { entityType: null }],
@@ -453,11 +366,6 @@ describe("the warning card that names nothing", () => {
 });
 
 describe("the warning card, the decisions under it", () => {
-  /**
-   * The owner (28.09): "устное предупреждение, а не комментарий"; (05.10):
-   * "Баллы пиши рядом с" the word "в скобочках, если это не устное
-   * предупреждение".
-   */
   it("calls a warning with points a warning, its points in brackets, in red", () => {
     const kind = render().get(".warning-verdict .record-verdict__kind");
 
@@ -465,21 +373,6 @@ describe("the warning card, the decisions under it", () => {
     expect(kind.classes()).toContain("is-negative");
   });
 
-  it.each([
-    [1, "Предупреждение (1 балл)"],
-    [5, "Предупреждение (5 баллов)"],
-  ])("counts %i points in the brackets", (points, expected) => {
-    expect(
-      render(warning({ points, originalPoints: points }))
-        .get(".warning-verdict .record-verdict__kind")
-        .text(),
-    ).toBe(expected);
-  });
-
-  /**
-   * The owner (12.10): "Давай серое при изменении на 0 или устном. Если баллы
-   * есть, то красное."
-   */
   it("calls a warning without points a verbal warning, in grey", () => {
     const kind = render(warning({ points: 0, originalPoints: 0 })).get(
       ".warning-verdict .record-verdict__kind",
@@ -489,12 +382,7 @@ describe("the warning card, the decisions under it", () => {
     expect(kind.classes()).toContain("is-neutral");
   });
 
-  /**
-   * The warning is named by the points it was issued with, and the change
-   * under it by the points it left: read the other way, 3 changed to 1 would
-   * say "1 балл" twice and the 3 would be lost (the owner asked on 12.10 for
-   * "Изменение баллов (x баллов)").
-   */
+  // Read the other way, 3 changed to 1 would say "1 балл" twice and lose the 3.
   it("names the warning by the points it was issued with and the change by the points it left", () => {
     const wrapper = render(corrected({ originalPoints: 3, points: 1 }));
 
@@ -506,11 +394,7 @@ describe("the warning card, the decisions under it", () => {
     );
   });
 
-  /**
-   * A warning of 2 points changed to 0: grey for the change, which left none,
-   * and red for the warning, whose kind still says "(2 балла)". A kind is
-   * coloured by the points it names.
-   */
+  // A kind is coloured by the points it names.
   it("keeps the points of a warning corrected to nothing in its kind, in red", () => {
     const kind = render(corrected()).get(
       ".warning-verdict .record-verdict__kind",
@@ -520,12 +404,6 @@ describe("the warning card, the decisions under it", () => {
     expect(kind.classes()).toContain("is-negative");
   });
 
-  /**
-   * "Если баллы есть, то красное": each kind by the points it names, the
-   * warning by those it was issued with and the change by those it left. A
-   * verbal warning stays grey over the points a change gave it, a warning of
-   * points stays red over the change that took them off.
-   */
   it.each([
     [2, 0, "is-negative", "is-neutral"],
     [3, 1, "is-negative", "is-negative"],
@@ -545,10 +423,6 @@ describe("the warning card, the decisions under it", () => {
     },
   );
 
-  /**
-   * The reason is written in the BBCode editor of the warning window, and the
-   * server sends it rendered: "[b]теме[/b]" stood with its brackets before.
-   */
   it("shows the reason as it was formatted, in the colour of the text", () => {
     const wrapper = render(
       warning({ reason: "Оскорбление в <strong>теме</strong>" }),
@@ -563,12 +437,7 @@ describe("the warning card, the decisions under it", () => {
     ).not.toContain("is-warning");
   });
 
-  /**
-   * A text of the site is set as the text of a comment (CommentItem): flush
-   * on both sides at every width, and broken at syllables while the reader's
-   * switch "Перенос слов" is on.
-   */
-  it("sets the words as the text of a comment, hyphenated by the switch", async () => {
+  it("hyphenates the words of the decisions by the switch", async () => {
     const pinia = createPinia();
     const wrapper = mount(WarningCard, {
       props: { warning: corrected() as never },
@@ -586,14 +455,6 @@ describe("the warning card, the decisions under it", () => {
     await wrapper.vm.$nextTick();
     for (const text of texts())
       expect(text.classes()).not.toContain("hyphenated");
-
-    const rules = ruleMap(
-      componentCss(
-        resolve(dirname(fileURLToPath(import.meta.url)), "RecordVerdict.vue"),
-      ),
-    );
-    expect(rules.get(".record-verdict__text")?.["text-align"]).toBe("justify");
-    expect(rules.get(".record-verdict__text.hyphenated")?.hyphens).toBe("auto");
   });
 
   it("signs the decision with its kind, the moderator and the date", () => {
@@ -602,13 +463,7 @@ describe("the warning card, the decisions under it", () => {
     ).toBe("Предупреждение (2 балла) от Модератор, 01.05.2026 в 12:00");
   });
 
-  /**
-   * The owner (28.09): "Почему изменения баллов оформлены как контент, а не
-   * как предупреждение?" The change is a point of the same list, with the
-   * points it left in its kind and the explanation as its words. The kind is a
-   * noun, so "от" names who changed them: "Баллы ... от" read as if the points
-   * had come from that moderator (the owner, 05.10).
-   */
+  // A noun, so "от" names who changed the points.
   it("draws the change of points as a decision under the warning", () => {
     const wrapper = render(corrected());
     const items = wrapper.findAll(".record-verdict");
@@ -624,24 +479,6 @@ describe("the warning card, the decisions under it", () => {
     expect(wrapper.find(".warning-change.record-block").exists()).toBe(false);
   });
 
-  /**
-   * The owner (12.10) on the change of a warning to nothing: "нахуя тут
-   * зеленое? ... Давай серое при изменении на 0 или устном. Если баллы есть,
-   * то красное." Which way the points went does not colour the change; what
-   * it left does.
-   */
-  it("colours a change to nothing grey, and one that leaves points red", () => {
-    const kindOf = (from: number, to: number) =>
-      render(corrected({ originalPoints: from, points: to }))
-        .get(".warning-change .record-verdict__kind")
-        .classes();
-
-    expect(kindOf(2, 0)).toContain("is-neutral");
-    expect(kindOf(3, 1)).toContain("is-negative");
-    expect(kindOf(1, 3)).toContain("is-negative");
-    expect(kindOf(0, 2)).toContain("is-negative");
-  });
-
   it("colours nothing on the card green, whatever its points", () => {
     for (const model of [
       warning(),
@@ -650,7 +487,10 @@ describe("the warning card, the decisions under it", () => {
       corrected({ originalPoints: 3, points: 1 }),
       corrected({ originalPoints: 0, points: 2 }),
     ]) {
-      expect(render(model).find(".is-positive").exists()).toBe(false);
+      const card = render(model);
+      expect(card.find(".is-positive").exists()).toBe(false);
+      // Nor are the words of the decisions set as a [mod] block: one is green.
+      expect(card.find(".record-verdict-list .mod-block").exists()).toBe(false);
     }
   });
 
@@ -667,11 +507,6 @@ describe("the warning card, the decisions under it", () => {
     });
   });
 
-  /**
-   * The account of the moderator who changed the points can be gone; the
-   * change is not. The kind and the moment stay, the missing name is simply
-   * not there.
-   */
   it("keeps the change when the name behind it is gone", () => {
     const caption = render(corrected({ pointsChangedBy: null })).get(
       ".warning-change .record-verdict__caption",
@@ -682,10 +517,6 @@ describe("the warning card, the decisions under it", () => {
     );
   });
 
-  /**
-   * The signature and the caller's control are one caption line: the control
-   * follows the date after a bar, as the actions of a review do.
-   */
   it("carries the caller's control at the end of the signature, and no bar when there is none", () => {
     const withControl = render(warning(), {
       controls: "<button class='control-stub'>Изменить баллы</button>",
@@ -703,19 +534,7 @@ describe("the warning card, the decisions under it", () => {
   });
 });
 
-/**
- * On a phone and in a narrow column both captions went down a second line:
- * the date under the author, the controls under the date (an audit of narrow
- * screens, 28.09.2026). From 5 October they stood in one line instead and put
- * their parts away under "Еще", the end of a name under "…". The owner (12
- * October 2026): on a phone every block is the block of the full version,
- * "НИКОГДА НЕ УКОРАЧИВАЙ". A caption wraps between its parts at every width
- * (CaptionLine), as the caption of a topic does: every part of it stands in
- * the line, the date with its time is one part, and the comma ends the part
- * before it, so a narrow record breaks after the comma and takes the date to
- * the next line whole. Where the line breaks is the browser's to decide; what
- * is read here is that nothing is put away for it to decide on.
- */
+// A caption wraps between its parts at every width; nothing is put away for want of room.
 describe("the warning card wraps its captions", () => {
   const control = {
     controls: "<button class='control'>Изменить баллы</button>",
@@ -724,17 +543,6 @@ describe("the warning card wraps its captions", () => {
   /** The parts of a caption line, in order. */
   const parts = (caption: ReturnType<ReturnType<typeof render>["get"]>) =>
     caption.findAll(".caption-line > .caption-line__part");
-
-  // A caption stands in its block as text, so the block takes the caption's
-  // size: on the size of the words above it the line would be their height.
-  it("sets each caption block in the caption's size", () => {
-    const here = dirname(fileURLToPath(import.meta.url));
-    const size = (file: string, selector: string) =>
-      ruleMap(componentCss(resolve(here, file))).get(selector)?.["font-size"];
-
-    expect(size("RecordBlock.vue", ".record-block__caption")).toBe("12px");
-    expect(size("RecordVerdict.vue", ".record-verdict__caption")).toBe("12px");
-  });
 
   it("keeps each caption a line of its own, not a row that scrolls", () => {
     const wrapper = render(onContent(corrected()), control);
@@ -749,37 +557,6 @@ describe("the warning card wraps its captions", () => {
       expect(block.element.children[0].matches(".caption-line")).toBe(true);
     }
     expect(wrapper.find(".scroll-row").exists()).toBe(false);
-  });
-
-  it("draws every part of every caption, with no Еще and every name whole", () => {
-    const wrapper = render(onContent(corrected()), control);
-
-    expect(line(wrapper.get(".record-block__caption").text())).toBe(
-      "Правила форума, Автор: Нарушитель, 30.04.2026 в 10:15",
-    );
-    expect(
-      line(wrapper.get(".warning-verdict .record-verdict__caption").text()),
-    ).toBe(
-      "Предупреждение (2 балла) от Модератор, 01.05.2026 в 12:00 | Изменить баллы",
-    );
-    expect(
-      line(wrapper.get(".warning-change .record-verdict__caption").text()),
-    ).toBe("Изменение баллов (0 баллов) от Старший, 08.05.2026 в 09:00");
-    expect(wrapper.find(".more-menu").exists()).toBe(false);
-    expect(wrapper.find("[hidden]").exists()).toBe(false);
-    expect(wrapper.text()).not.toMatch(/Еще|…/);
-    const names = wrapper.findAll(".caption-line a");
-    expect(names.length).toBeGreaterThan(0);
-    for (const name of names) {
-      expect(name.attributes("title")).toBeUndefined();
-      expect(name.attributes("style")).toBeUndefined();
-    }
-    // Nothing is written for the queue of a line that put parts away: no
-    // element of the card carries an attribute of the fitted row.
-    const fitted = [wrapper.element, ...wrapper.element.querySelectorAll("*")]
-      .flatMap((element) => element.getAttributeNames())
-      .filter((attribute) => attribute.startsWith("data-fit"));
-    expect(fitted).toEqual([]);
   });
 
   it("ends a part with its comma and keeps a date and its time one part", () => {

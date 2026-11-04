@@ -1,21 +1,8 @@
 @use "sass:math"
 
-// The family the whole site is set in, so it is on the critical path of every
-// address (Reset.sass puts it on the root elements, main.ts imports this file).
-//
-// font-display is the difference between a page that appears and a page that
-// does not. Its default is `auto`, which every engine reads as `block`: the
-// text a browser is about to paint is held back for up to three seconds while
-// the file arrives, so a slow first visit shows an empty page frame. `swap`
-// spends one reflow instead — the words are there from the first frame in the
-// fallback face and change shape once the real one lands. The same value on all
-// four faces: a rule that holds for the roman and not for the italic is a rule
-// nobody can state.
-//
-// The two normal faces are also asked for in index.html, so their request
-// leaves with the document instead of waiting for this stylesheet to parse.
-// fontDelivery.spec.ts keeps the two lists in step, and keeps both nginx hops
-// compressing the files.
+// swap on every face: the text shows at once in the fallback face instead of
+// waiting for the file. index.html preloads the two normal faces
+// (fontDelivery.spec.ts).
 
 @font-face
   font-family: "PT Sans"
@@ -45,30 +32,10 @@
   font-display: swap
   src: url("@/assets/fonts/PTSans-BoldItalic.ttf") format("truetype")
 
-// The face the words are drawn in during that first frame, fitted to PT Sans.
-//
-// `swap` shows the text at once in the next family of the stack, and that
-// family was the system's sans-serif: Arial on most desktops, which sets the
-// bold of the headings 14 percent wider than PT Sans. A heading that fits one
-// line in PT Sans took two in the first frame and jumped back to one when the
-// file landed, and every line of text under it jumped with it. So the stack
-// names this family before the generic one (Reset.sass, Inputs.sass): Arial,
-// or one of the faces drawn to its metrics (Liberation Sans, Arimo), scaled to
-// the width of PT Sans and given its ascent and descent, so a line keeps its
-// length and its baseline when the real face arrives. A system with none of
-// them skips the family and falls to the generic one, as every system did
-// before.
-//
-// Measured 27.09.2026 in headless Chrome, the faces of assets/fonts against the
-// Arial of Windows 11: the widths of every heading and paragraph of seven pages
-// of the site, rendered in both, and the italics on a paragraph of Russian
-// prose. One number for every weight does not hold: 85.8, taken off one bold
-// heading, fits the bold and makes the roman 8 percent narrower than PT Sans,
-// and body text is roman.
-//
-// The metric overrides are divided by size-adjust because the browser scales
-// them by it: PT Sans has an ascent of 1.018 and a descent of 0.276 of the
-// size, and no line gap.
+// The face of that first frame: Arial or a face of its metrics, scaled per
+// weight to the width of PT Sans and given its ascent and descent, so a line
+// keeps its length and baseline when the real face arrives. The overrides are
+// divided by size-adjust, which the browser scales them by.
 
 @font-face
   font-family: "PT Sans Fallback"

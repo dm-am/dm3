@@ -27,15 +27,9 @@ public class GameTag
     /// </summary>
     public Guid TagId { get; set; }
 
-    /// <summary>
-    /// Game
-    /// </summary>
     [ForeignKey(nameof(GameId))]
     public virtual Game Game { get; set; } = null!;
 
-    /// <summary>
-    /// Tag
-    /// </summary>
     [ForeignKey(nameof(TagId))]
     public virtual Tag Tag { get; set; } = null!;
 }

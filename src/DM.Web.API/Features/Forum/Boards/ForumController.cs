@@ -9,26 +9,16 @@ namespace DM.Web.API.Features.Forum.Boards;
 /// <summary>
 /// Forum management endpoints
 /// </summary>
-/// <remarks>
-/// Global forum operations that belong to no single board.
-/// The board list itself lives at GET /v1/boards.
-///
-/// ## Available Operations
-/// - Mark all forum content as read (for authenticated users)
-/// </remarks>
 [ApiController]
 [Route("v1/forum")]
 [ApiExplorerSettings(GroupName = "Forum")]
 [Tags("Forum")]
 public class ForumController : ControllerBase
 {
-    private readonly IForumCommentApiService _commentApiService;
+    private readonly ForumCommentApiService _commentApiService;
 
-    /// <summary>
-    /// Creates a new instance of ForumController
-    /// </summary>
     public ForumController(
-        IForumCommentApiService commentApiService)
+        ForumCommentApiService commentApiService)
     {
         _commentApiService = commentApiService;
     }

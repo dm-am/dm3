@@ -1,21 +1,22 @@
 <script setup lang="ts">
 /**
- * AchievementCategoryDialog — edit an achievement category (title /
- * description / icon / sortOrder / isActive; metric is immutable).
- * Dialog twin of the former hand-rolled modal in
- * ModerationAchievements.vue.
- *
- * The window runs the request (Dialog `action`): it waits for the answer,
- * prints a refusal in itself and closes on success alone. An edited
+ * Edits an achievement category; the metric is fixed. The window runs the
+ * request, prints a refusal in itself and closes on success alone; an edited
  * description is typed text, so the window asks before it is dropped.
  */
 import { ref, computed } from "vue";
-import { achievementApi } from "@/entities/achievement";
+import {
+  achievementApi,
+  CATALOG_TITLE_MAX_LENGTH,
+  CATALOG_DESCRIPTION_MAX_LENGTH,
+  CATALOG_ICON_NAME_MAX_LENGTH,
+} from "@/entities/achievement";
 import type { AchievementCategory } from "@/shared/api/models/achievements";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{
   category: AchievementCategory;
@@ -52,7 +53,7 @@ async function send() {
       sortOrder: sortOrder.value,
       isActive: isActive.value,
     },
-    { ownsRefusal: true, ownsRateLimit: true },
+    OWNS_REFUSAL,
   );
   if (!result.error) emit("success");
   return result;
@@ -75,12 +76,12 @@ async function send() {
           v-model="title"
           type="text"
           required
-          maxlength="200"
+          :maxlength="CATALOG_TITLE_MAX_LENGTH"
         />
       </FormField>
 
       <FormField
-        label="Описание (показывается в popover)"
+        label="Описание"
         name="achievement-cat-description"
         field="description"
       >
@@ -88,9 +89,10 @@ async function send() {
           id="achievement-cat-description"
           v-model="description"
           rows="3"
-          maxlength="1000"
+          :maxlength="CATALOG_DESCRIPTION_MAX_LENGTH"
           required
         ></textarea>
+        <template #hint>Показывается во всплывающей подсказке</template>
       </FormField>
 
       <FormField
@@ -103,8 +105,9 @@ async function send() {
           v-model="iconName"
           type="text"
           required
-          maxlength="80"
+          :maxlength="CATALOG_ICON_NAME_MAX_LENGTH"
         />
+        <template #hint>Из набора иконок</template>
       </FormField>
 
       <FormField label="Порядок" name="achievement-cat-sort" field="sortOrder">

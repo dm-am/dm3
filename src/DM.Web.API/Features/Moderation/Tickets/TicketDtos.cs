@@ -61,18 +61,13 @@ public class Ticket
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Ticket body as it was stored, in the site markup: the text of a support
-    /// or complaint form, or the reported content snapshot. The fields of the
+    /// Ticket body rendered for display, with the tag set of profile texts:
+    /// neither [mod] nor [private] draws anything. It is the text of a support
+    /// or complaint form, or the reported content snapshot; the fields of the
     /// form that are not the text (the violator, the link, the contact of an
     /// author with an account) are lines of it, written there at filing
     /// </summary>
-    public string Description { get; set; } = "";
-
-    /// <summary>
-    /// Ticket body rendered for display, with the tag set of profile texts:
-    /// neither [mod] nor [private] draws anything
-    /// </summary>
-    public InfoBbText DescriptionHtml { get; set; } = null!;
+    public InfoBbText Description { get; set; } = null!;
 
     /// <summary>
     /// Reporter's comment

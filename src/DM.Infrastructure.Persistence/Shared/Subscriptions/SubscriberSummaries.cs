@@ -15,10 +15,7 @@ namespace DM.Infrastructure.Persistence.Shared.Subscriptions;
 /// there are, whether the viewer is one of them, and a capped preview of names.
 /// </summary>
 /// <param name="Count">
-/// Distinct subscribers, not subscription rows. The pair is unique in the schema
-/// now, so the two forms agree; the distinct one stays because it is what the
-/// column means, and because the count has to keep meaning that if the rows ever
-/// arrive from an import rather than from the subscribe path.
+/// Distinct subscribers, not subscription rows.
 /// </param>
 /// <param name="ViewerSubscribed">The viewer is among them</param>
 /// <param name="Preview">
@@ -53,10 +50,6 @@ internal sealed class SubscriberSummaryRow
 /// an EXISTS over the same (TargetType, TargetId) index with an equality on
 /// SubscriberId - no join, so unlike a conditional count over the navigation it
 /// does not re-scan Users per group.
-///
-/// Blogs and games asked the same question with two copies of this text, each
-/// carrying a comment pointing at the other. Whoever answers it next names a
-/// target type instead.
 /// </remarks>
 internal static class SubscriberSummaries
 {
@@ -70,6 +63,25 @@ internal static class SubscriberSummaries
         .ToDictionary(
             x => x.TargetId,
             x => new SubscriberSummary(x.Count, x.ViewerSubscribed, x.Preview));
+
+    /// <summary>
+    /// Subscribers active after the given moment, per target. A GROUP BY of its own:
+    /// folded into the summary as a conditional count it re-joins Users per target.
+    /// </summary>
+    public static Task<Dictionary<Guid, int>> ActiveByTarget(
+        IQueryable<Subscription> subscriptions,
+        SubscriptionTargetType targetType,
+        IReadOnlyCollection<Guid> targetIds,
+        DateTimeOffset activeSince,
+        CancellationToken ct) =>
+        subscriptions
+            .Where(s => s.TargetType == EF.Constant(targetType) &&
+                        targetIds.Contains(s.TargetId) &&
+                        s.Subscriber.LastActivityUtc.HasValue &&
+                        s.Subscriber.LastActivityUtc.Value > activeSince)
+            .GroupBy(s => s.TargetId)
+            .Select(g => new { TargetId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.TargetId, x => x.Count, ct);
 
     /// <summary>
     /// The statement itself, apart from the dictionary it is read into: a shape

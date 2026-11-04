@@ -1,6 +1,7 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using DM.Domain.Community.Features.Catalogs;
 
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
@@ -15,11 +16,11 @@ public class AchievementType
     public Guid AchievementTypeId { get; set; }
 
     [Required]
-    [MaxLength(80)]
+    [MaxLength(CatalogFieldLimits.CodeMaxLength)]
     public string Code { get; set; } = string.Empty;
 
     [Required]
-    [MaxLength(200)]
+    [MaxLength(CatalogFieldLimits.TitleMaxLength)]
     public string Title { get; set; } = string.Empty;
 
     public int Threshold { get; set; }

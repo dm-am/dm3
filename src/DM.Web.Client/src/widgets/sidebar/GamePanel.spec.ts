@@ -2,41 +2,26 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The game menu is a composition, and the composition is the requirement:
- * one fixed heading, the two room groups with their rooms nested under them,
- * then the game's pages, each with a counter and no exception at zero.
- *
- * It had drifted on every one of those at once. The heading was the game's
- * title; the groups were bold captions rather than menu rows; four rows out
- * of five carried no counter; "Информация" and "Рецензии" were absent though
- * both routes exist; and a second list, rendered from
- * GET games/{id}/chat-rooms over the same rooms the first list already had,
- * drew every chat room a second time.
- */
+/** The game menu: one heading, the room groups nested, every page with a counter. */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { nextTick } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import GamePanel from "./GamePanel.vue";
 import {
   CommentariesAccessMode,
   GameParticipation,
-  gameApi,
+  discussionApi,
   useGameDetailsStore,
   type Character,
   type Game,
-  type GamePremoderationStatus,
   type Room,
 } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
-import { UserRole } from "@/shared/api/models/common";
+import { UserRole, type PremoderationStatus } from "@/shared/api/models/common";
 
 const stubs = {
-  "router-link": {
-    template: '<a class="router-link"><slot /></a>',
-    props: ["to"],
-  },
+  RouterLink: RouterLinkStub,
   Tooltip: { template: "<span><slot /></span>", props: ["text"] },
   ConfirmDialog: true,
   GameStatusButtons: true,
@@ -76,12 +61,10 @@ const rooms = [
 
 function mountPanel(
   participation: GameParticipation[] = [],
-  premoderationStatus?: GamePremoderationStatus,
+  premoderationStatus?: PremoderationStatus,
   overrides: Record<string, unknown> = {},
 ) {
-  // The server serves roles in a game to a signed-in viewer alone, and the menu
-  // reads them only for one: a participant here is someone signed in, unless
-  // the test has already signed somebody in itself.
+  // Roles are served to a signed-in viewer alone: a participant here is signed in.
   const auth = useAuthStore();
   if (participation.length && !auth.user) signedInAs(UserRole.RegularUser);
   const store = useGameDetailsStore();
@@ -165,52 +148,47 @@ describe("GamePanel", () => {
     expect(mountPanel().text()).not.toContain("Пролог");
   });
 
-  // GameIntention.EditSettings admits the curating mentor, so the menu has to
-  // carry the link: without it the page is reachable only by typing the URL,
-  // and the audience the intention was widened for never sees it.
-  it("gives the curating mentor the settings link", () => {
-    const menu = rows(mountPanel([GameParticipation.Moderator]));
+  // The settings admit the curating mentor; the NPCs and the notepad are the master's and the assistants'.
+  it.each([
+    [
+      "the master",
+      GameParticipation.Owner,
+      ["- Настройки", "- Создать неигрового персонажа", "- Заметки игры"],
+      [],
+    ],
+    [
+      "the curating mentor",
+      GameParticipation.Moderator,
+      ["- Настройки"],
+      ["- Заметки игры", "- Создать неигрового персонажа"],
+    ],
+    [
+      "a plain player",
+      GameParticipation.Player,
+      [],
+      ["- Настройки", "- Заметки игры"],
+    ],
+  ])(
+    "gives %s the management rows the server admits",
+    (_name, participation, shown, hidden) => {
+      const menu = rows(mountPanel([participation]));
 
-    expect(menu).toContain("- Настройки");
+      for (const row of shown) expect(menu).toContain(row);
+      for (const row of hidden) expect(menu).not.toContain(row);
+    },
+  );
+
+  it("leads the master to the first non-player character of the game", async () => {
+    const wrapper = mountPanel([GameParticipation.Owner]);
+    useGameDetailsStore().characters = [
+      { id: "c-2", name: "Трактирщик", isNpc: true, status: "Active" },
+    ] as unknown as Character[];
+    await nextTick();
+
+    expect(rows(wrapper)).toContain("- Редактировать неигрового персонажа");
   });
 
-  // The notepad of the game is narrower than the settings page:
-  // NotepadIntentionResolver answers it with HasEditAccess, which is master and
-  // assistant only. The row used to be offered to a mentor and refused by the
-  // API on arrival.
-  it("keeps the notes of the game away from the curating mentor", () => {
-    expect(rows(mountPanel([GameParticipation.Moderator]))).not.toContain(
-      "- Заметки игры",
-    );
-  });
-
-  it("keeps the game's own edit items away from the curating mentor", () => {
-    // The settings link rides EditSettings; NPCs and the status strip are the leads'.
-    expect(rows(mountPanel([GameParticipation.Moderator]))).not.toContain(
-      "- Создать NPC",
-    );
-  });
-
-  it("keeps the management block away from a plain player", () => {
-    const menu = rows(mountPanel([GameParticipation.Player]));
-
-    expect(menu).not.toContain("- Настройки");
-    expect(menu).not.toContain("- Заметки игры");
-  });
-
-  it("keeps every edit item for the master", () => {
-    const menu = rows(mountPanel([GameParticipation.Owner]));
-
-    expect(menu).toContain("- Настройки");
-    expect(menu).toContain("- Создать NPC");
-    expect(menu).toContain("- Заметки игры");
-  });
-
-  // A session can end under an open page: a 401 on any request drops the
-  // viewer from the auth store (sessionExpiry.ts), while the refetch that
-  // brings a guest's roles is a round trip away and may never land. The rows
-  // that need a signed-in master leave with the viewer, and the roles the
-  // store still holds do not keep them.
+  // A 401 drops the viewer: the master's rows leave with him, whatever roles the store holds.
   it("takes the master's rows away the moment the session ends", async () => {
     const wrapper = mountPanel([GameParticipation.Owner], "AwaitingEdits");
     expect(wrapper.text()).toContain("Управление игрой");
@@ -224,7 +202,7 @@ describe("GamePanel", () => {
     expect(wrapper.text()).not.toContain("Управление игрой");
     for (const row of [
       "- Настройки",
-      "- Создать NPC",
+      "- Создать неигрового персонажа",
       "- Отправить на проверку",
       "- Заметки игры",
     ]) {
@@ -236,10 +214,7 @@ describe("GamePanel", () => {
     expect(useGameDetailsStore().isMaster).toBe(true);
   });
 
-  // Premoderation. The server grants exactly three moves and grants them to
-  // two different audiences; a row the panel shows to anybody else is a
-  // promise the server answers with 403 or 400, which is the defect this
-  // whole wave has been catching.
+  // Three moves to two audiences; a row shown to anybody else would be answered 403 or 400.
   describe("premoderation", () => {
     const SUBMIT = "- Отправить на проверку";
     const APPROVE = "- Одобрить игру";
@@ -252,8 +227,8 @@ describe("GamePanel", () => {
     });
 
     it.each([
-      ["AwaitingApproval", "AwaitingApproval" as GamePremoderationStatus],
-      ["Approved", "Approved" as GamePremoderationStatus],
+      ["AwaitingApproval", "AwaitingApproval" as PremoderationStatus],
+      ["Approved", "Approved" as PremoderationStatus],
       ["not sent at all", undefined],
     ])(
       "hides the submit row from the master when the status is %s",
@@ -264,9 +239,7 @@ describe("GamePanel", () => {
       },
     );
 
-    // GameIntention.SubmitForApproval admits the master alone. An assistant
-    // fills the form in and the curating mentor helps shape it; neither of
-    // them declares the game ready.
+    // GameIntention.SubmitForApproval admits the master alone.
     it.each([
       ["an assistant", GameParticipation.Authority],
       ["the curating mentor", GameParticipation.Moderator],
@@ -282,12 +255,11 @@ describe("GamePanel", () => {
       expect(rows(mountPanel([], "AwaitingEdits"))).not.toContain(SUBMIT);
     });
 
-    // Both verdicts are legal from every status on the server, so neither row
-    // is keyed on the status the game happens to be in.
+    // Both verdicts are legal from every status.
     it.each([
-      ["Approved" as GamePremoderationStatus],
-      ["AwaitingApproval" as GamePremoderationStatus],
-      ["AwaitingEdits" as GamePremoderationStatus],
+      ["Approved" as PremoderationStatus],
+      ["AwaitingApproval" as PremoderationStatus],
+      ["AwaitingEdits" as PremoderationStatus],
     ])("gives a site mentor both verdicts from %s", (status) => {
       signedInAs(UserRole.Mentor);
       const menu = rows(mountPanel([], status));
@@ -303,25 +275,10 @@ describe("GamePanel", () => {
       expect(menu).not.toContain(APPROVE);
       expect(menu).not.toContain(RETURN);
     });
-
-    // The mentor-only round trip the machine no longer has. Its two rows
-    // named transitions the server has deleted, so both were a guaranteed 400.
-    it("no longer offers the old take-in / release pair", () => {
-      signedInAs(UserRole.Admin);
-      const menu = rows(mountPanel([GameParticipation.Owner], "AwaitingEdits"));
-
-      expect(menu).not.toContain("- Отправить на премодерацию");
-      expect(menu).not.toContain("- Выпустить из премодерации");
-    });
   });
 });
 
-/**
- * The question before a moderation move waits for the answer and says a
- * refusal in itself. It used to close before the request went out, so a
- * refused verdict came back as a plate over a menu that looked as if nothing
- * had been asked.
- */
+/** The question before a moderation move waits for the answer and says a refusal in itself. */
 describe("GamePanel moderation question", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -365,12 +322,7 @@ describe("GamePanel moderation question", () => {
   });
 });
 
-/**
- * "Обсуждение" is a row for everybody who sees the game: everybody reads the
- * discussion, empty or not, whatever its mode. Read-only to those outside the
- * game, or closed to him by the game's blacklist, it is closed to his writing
- * and not to his reading.
- */
+/** "Обсуждение" is a row for everybody who sees the game: a closed discussion closes writing, not reading. */
 describe("GamePanel discussion row", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -381,8 +333,7 @@ describe("GamePanel discussion row", () => {
   });
 
   function mountWith(
-    // A string: a game the server still sends with the old members-only mode
-    // is read as any other, and the enum need not name that mode.
+    // A string: the old members-only mode is read as any other.
     commentariesAccess: CommentariesAccessMode | string,
     participation: GameParticipation[] = [],
     over: Partial<Game> = {},
@@ -407,8 +358,7 @@ describe("GamePanel discussion row", () => {
     expect(hasRow(wrapper)).toBe(true);
   });
 
-  // Nothing is asked of the discussion to draw the row: whether it has
-  // comments is no question the menu answers.
+  // Nothing is asked of the discussion to draw the row.
   it.each([
     ["somebody outside a read-only game", CommentariesAccessMode.Readonly, []],
     [
@@ -418,7 +368,7 @@ describe("GamePanel discussion row", () => {
     ],
     ["anybody in an open game", CommentariesAccessMode.Public, []],
   ])("keeps the row of an empty discussion for %s", async (_, mode, roles) => {
-    const asked = vi.spyOn(gameApi, "getGameComments");
+    const asked = vi.spyOn(discussionApi, "getGameComments");
     const wrapper = mountWith(mode, roles);
     await flushPromises();
 

@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using Microsoft.AspNetCore.Http;
 
@@ -15,7 +14,7 @@ public interface ICredentialsStorage
     /// </summary>
     /// <param name="httpContext">HTTP context</param>
     /// <returns>Token or null if not authenticated</returns>
-    Task<TokenCredentials?> ExtractToken(HttpContext httpContext);
+    TokenCredentials? ExtractToken(HttpContext httpContext);
 
     /// <summary>
     /// Append authentication token to response

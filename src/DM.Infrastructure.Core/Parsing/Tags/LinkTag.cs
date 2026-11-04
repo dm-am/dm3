@@ -9,13 +9,6 @@ namespace DM.Infrastructure.Core.Parsing.Tags;
 /// <c>[link]address[/link]</c>, which shows the word "ссылка" as on DM2, and
 /// <c>[link text="..."]address[/link]</c>, which shows its own text.
 /// </summary>
-/// <remarks>
-/// The text is a parameter of a node like any other, so it is read by the
-/// grammar and encoded where it is written. It used to be cut out of the post by
-/// a regular expression before the parse, as the attribute of a spelling that
-/// no longer exists, and every rule that had to hold for it had to be repeated
-/// for that expression.
-/// </remarks>
 internal sealed class LinkTag : ContentTag
 {
     /// <summary>What a link shows when it was given no text, as on DM2.</summary>

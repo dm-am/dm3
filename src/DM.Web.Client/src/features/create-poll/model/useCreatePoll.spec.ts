@@ -2,20 +2,7 @@
  * @vitest-environment node
  */
 
-/**
- * One refusal, one carrier.
- *
- * The poll form has a line of its own and the response interceptor has a plate.
- * For a refused action, a rate limit, a dead server, a dead connection or an
- * expired session the plate speaks and the form keeps quiet — before this the
- * 500 stood in both places at once. The form still answers for what was typed
- * into it: a rejected pair of dates is its own sentence, and the server's title
- * is read out for anything else it names.
- */
-
-// The device is in Moscow for the file, set before anything reads the clock:
-// the fields of the form are filled in on the site's clock, and a reader whose
-// account is in Tokyo is only told apart from the device on a device elsewhere.
+// The device is in Moscow for the file, set before anything reads the clock.
 const MACHINE_ZONE = process.env.TZ;
 process.env.TZ = "Europe/Moscow";
 
@@ -38,7 +25,6 @@ vi.mock("@/entities/poll", () => ({
 
 import { useCreatePoll } from "./useCreatePoll";
 
-/** An open form, filled in well enough to reach the server. */
 async function submitted() {
   const form = useCreatePoll();
   form.toggleForm();
@@ -52,9 +38,6 @@ async function submitted() {
 describe("useCreatePoll", () => {
   beforeEach(() => createPoll.mockReset());
 
-  // The statuses the response interceptor used to plate stand in the form's
-  // line now, and the plate is taken down (refusalHere; the owner's rule of
-  // 26 September 2026).
   it.each([
     [403, "Недостаточно прав для этого действия"],
     [429, "Слишком много попыток, попробуйте позже"],
@@ -73,7 +56,6 @@ describe("useCreatePoll", () => {
     expect(form.pollTitle.value).toBe("Любимый модуль года");
   });
 
-  // An expired session and a dead connection keep the plate.
   it.each([0, 401])(
     "leaves a failure of status %i to the interceptor",
     async (status) => {
@@ -85,22 +67,36 @@ describe("useCreatePoll", () => {
       const form = await submitted();
 
       expect(form.errorMessage.value).toBe("");
-      // Silent about the failure, not about the attempt: the poll was not
-      // created, so the form stays open with everything that was typed in it.
+      // The poll was not created, so the form stays open with what was typed.
       expect(form.formExpanded.value).toBe(true);
       expect(form.pollTitle.value).toBe("Любимый модуль года");
     },
   );
 
-  it("keeps its own sentence for a rejected pair of dates", async () => {
+  it("names the field the server refused, not a sentence of its own", async () => {
     createPoll.mockResolvedValue({
       data: null,
-      error: { status: 400, title: "Validation failed" },
+      error: {
+        status: 400,
+        title: "Validation failed",
+        errors: { Title: ["Empty"] },
+      },
     });
 
     const form = await submitted();
 
-    expect(form.errorMessage.value).toBe("Начало должно быть раньше окончания");
+    expect(form.errorMessage.value).toBe("Название: обязательное поле");
+  });
+
+  it("says the server's title for a 400 without fields", async () => {
+    createPoll.mockResolvedValue({
+      data: null,
+      error: { status: 400, title: "Опрос уже закрыт" },
+    });
+
+    const form = await submitted();
+
+    expect(form.errorMessage.value).toBe("Опрос уже закрыт");
   });
 
   it("reads out a refusal the interceptor says nothing about", async () => {
@@ -123,6 +119,21 @@ describe("useCreatePoll", () => {
     expect(form.pollTitle.value).toBe("");
     expect(form.formExpanded.value).toBe(false);
   });
+
+  it("sends the answers as strings, the list CreatePollRequest takes", async () => {
+    createPoll.mockResolvedValue({ data: { id: "p-1" }, error: null });
+
+    await submitted();
+
+    expect(createPoll).toHaveBeenCalledWith({
+      title: "Любимый модуль года",
+      details: null,
+      startsUtc: expect.any(String),
+      endsUtc: expect.any(String),
+      isAnonymous: true,
+      options: ["Первый", "Второй"],
+    });
+  });
 });
 
 describe("useCreatePoll dates", () => {
@@ -141,10 +152,7 @@ describe("useCreatePoll dates", () => {
     else process.env.TZ = MACHINE_ZONE;
   });
 
-  // The card of the poll prints its dates by the account's clock; the form
-  // the dates were typed into has to read them by the same one.
   it("sends 20:00 typed by a reader in Tokyo on a device in Moscow as 20:00 in Tokyo", async () => {
-    // Before the start typed: a start the clock has passed goes out as now.
     vi.useFakeTimers({ now: new Date("2026-09-27T12:00:00Z") });
     setAccountTimeZone("Asia/Tokyo");
     const form = useCreatePoll();
@@ -189,21 +197,12 @@ describe("useCreatePoll dates", () => {
   });
 });
 
-/**
- * The bounds of a new poll are the server's (CreatePollValidator): it starts
- * no earlier than now, ends more than a day after it starts, and within a
- * year. The fields take nothing else and say why under them; the form does
- * not send while they say anything.
- */
 describe("useCreatePoll bounds", () => {
   beforeEach(() => {
     createPoll.mockReset();
     createPoll.mockResolvedValue({ data: { id: "p-1" }, error: null });
     vi.useFakeTimers({ now: new Date("2026-10-06T02:30:00Z") });
-    // The bounds are read on the site's clock, which for a signed-in reader is
-    // the zone of the account. Pinned here rather than through the device: the
-    // TZ of the file above is honoured by Date on this machine, but a vitest
-    // worker on Linux keeps the zone it was started with, and CI runs in UTC.
+    // Pinned on the account: a vitest worker on Linux keeps the TZ it started with, and CI runs in UTC.
     setAccountTimeZone("Europe/Moscow");
   });
 
@@ -222,7 +221,6 @@ describe("useCreatePoll bounds", () => {
 
   it("offers now as the start, and takes no earlier one", () => {
     const form = filled();
-    // Moscow, the zone of the account.
     expect(form.pollStartsUtc.value).toBe("2026-10-06T05:30");
     expect(form.startsMin.value).toBe("2026-10-06T05:30");
   });
@@ -245,9 +243,6 @@ describe("useCreatePoll bounds", () => {
   });
 
   it("sends the start it offered as the moment the form is sent", async () => {
-    // The field is read to the minute and the server takes no start before
-    // its own clock: by the time the form is sent, the minute it offered is
-    // behind.
     const form = filled();
     vi.setSystemTime(new Date("2026-10-06T02:41:17Z"));
 

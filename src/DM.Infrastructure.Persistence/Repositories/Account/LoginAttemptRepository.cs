@@ -3,7 +3,6 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Account.Features.Authentication;
-using DM.Infrastructure.Persistence.Entities.Account;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
@@ -14,7 +13,6 @@ internal class LoginAttemptRepository : ILoginAttemptRepository
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public LoginAttemptRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
@@ -43,7 +41,7 @@ internal class LoginAttemptRepository : ILoginAttemptRepository
 
     /// <inheritdoc />
     /// <remarks>
-    /// One atomic statement, as FindOneAndUpdate was: two requests racing each
+    /// One atomic statement: two requests racing each
     /// other both land, the server serializes the increments, and each caller
     /// reads back the count its own attempt produced.
     /// </remarks>
@@ -52,7 +50,7 @@ internal class LoginAttemptRepository : ILoginAttemptRepository
         var now = _dateTimeProvider.Now.UtcDateTime;
 
         // Email and address are only written on the insert that creates the row,
-        // like SetOnInsert before: denormalized out of the composite key so a
+        // denormalized out of the composite key so a
         // successful login can clear every address at once.
         //
         // ToListAsync, not SingleAsync: an operator composed over SqlQuery wraps

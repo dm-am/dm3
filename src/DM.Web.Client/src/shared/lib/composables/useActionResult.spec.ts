@@ -3,27 +3,14 @@
  */
 
 /**
- * The refusal of a press, written where the press was made.
- *
- * The line has to say what the plate used to say, the refusals the
- * interceptor speaks for included, and the plate must not go up beside it: a
- * refusal said twice, once far from the button, is the defect the owner's rule
- * of 26 September 2026 ends. What it must not take over is the pair that is not
- * about the press - an expired session, a dead connection - whose plate stays.
+ * The refusal of a press, written where the press was made, with the plate
+ * taken down; an expired session and a dead connection keep their plate.
  */
 import { afterEach, describe, expect, it, vi } from "vitest";
-import type { GeneralError } from "@/shared/api/models/common";
+import { problem } from "@/shared/lib/testing/problem";
+import { endOfTask } from "@/shared/lib/testing/tasks";
 import { announceWorded } from "@/shared/lib/errors";
 import { useActionResult } from "./useActionResult";
-
-const problem = (
-  status: number,
-  title = "",
-  extra: Partial<GeneralError> = {},
-): GeneralError => ({ type: "", title, status, traceId: "t", ...extra });
-
-/** Lets a plate the interceptor holds run out. */
-const endOfTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 afterEach(() => {
   vi.useRealTimers();

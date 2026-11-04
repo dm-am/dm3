@@ -1,0 +1,25 @@
+@*
+    How long the link of the letter lives, in the hours the settings give it: the same hours the server holds the link to.
+    No parameter is named Model, so the template scan skips this component.
+*@
+<p style="@EmailConstants.ParagraphStyles">@ChildContent действительна @Hours @Unit</p>
+
+@code {
+
+    /// <summary>Which link the sentence is about</summary>
+    [Parameter]
+    public RenderFragment ChildContent { get; set; } = null!;
+
+    /// <summary>Lifetime of the link, in hours</summary>
+    [Parameter]
+    public int Hours { get; set; }
+
+    /// <summary>The noun agreeing with the number</summary>
+    private string Unit => (Hours % 10, Hours % 100) switch
+    {
+        (1, not 11) => "час",
+        (>= 2 and <= 4, < 12 or > 14) => "часа",
+        _ => "часов"
+    };
+
+}

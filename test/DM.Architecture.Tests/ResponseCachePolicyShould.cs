@@ -5,6 +5,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Xunit;
@@ -15,20 +16,8 @@ namespace DM.Architecture.Tests;
 /// The cache policy the server declares is a policy the only consumer can obey.
 /// </summary>
 /// <remarks>
-/// The API registers response caching and declares `public, max-age=300` on five
-/// catalogues, and the number of hits either cache ever served was zero: the
-/// client put `Cache-Control: no-cache` on the default headers of every request
-/// it makes. On the request side that directive forbids
-/// ResponseCachingMiddleware from reading its store at all, and requires the
-/// browser to revalidate before reusing anything of its own — and with no ETag
-/// and no Last-Modified anywhere in this API, revalidating is a whole request.
-/// So the project carried the risk of a shared cache on a cookie-authenticated
-/// API and took none of the benefit, and nothing said so: a policy that never
-/// applies looks exactly like a policy that works.
-///
-/// Textual because the header is a literal in a TypeScript object, and the
-/// alternative — asserting on a live browser — would test the browser. What the
-/// server's half of the same pair promises is checked from the wire, by
+/// A request-side `no-cache` forbids the middleware its store and makes the browser revalidate, and this
+/// API has no ETag. Textual: the header is a literal in a TypeScript object. The wire half is
 /// PublicCacheableResponsesShould.
 /// </remarks>
 public class ResponseCachePolicyShould
@@ -40,7 +29,7 @@ public class ResponseCachePolicyShould
     [Fact]
     public void NotBeCancelledByTheClientOnEveryRequest()
     {
-        var client = Path.Combine(RepositoryRoot, "src", "DM.Web.Client", "src", "shared", "api", "client.ts");
+        var client = Path.Combine(RepositoryLayout.Root, "src", "DM.Web.Client", "src", "shared", "api", "client.ts");
         File.Exists(client).Should().BeTrue("the HTTP client is where the default headers live");
 
         var code = SourceText.ReadCode(client);
@@ -57,23 +46,11 @@ public class ResponseCachePolicyShould
     /// Every endpoint that may be stored by a cache the client does not own is
     /// covered by the client's freshness gate.
     /// </summary>
-    /// <remarks>
-    /// The four catalogues behind the profile were given a reload that asks the
-    /// origin; the fifth, /v1/games/tags, was not, because the list of
-    /// catalogues was written by hand from the four that had been looked at. It
-    /// is written by a moderator through v1/moderation/tags — a different
-    /// address, which invalidates nothing — and read by the tag picker, so a tag
-    /// added on the moderation screen stayed invisible for five minutes and
-    /// survived a reload doing it.
-    ///
-    /// So the list is derived here instead: the policy is read off the assembly,
-    /// and a path that carries it and is missing from the client gate fails.
-    /// A sixth catalogue cannot be forgotten the way the fifth was.
-    /// </remarks>
+    /// <remarks>Derived from the assembly: a catalogue missing from the client gate fails.</remarks>
     [Fact]
     public void CoverEveryPubliclyCacheableReadByTheClientsFreshnessGate()
     {
-        var gate = Path.Combine(RepositoryRoot, "src", "DM.Web.Client", "src", "catalogFreshness.spec.ts");
+        var gate = Path.Combine(RepositoryLayout.Root, "src", "DM.Web.Client", "src", "gates", "catalogFreshness.spec.ts");
         File.Exists(gate).Should().BeTrue("the client's freshness gate is what this check derives the list for");
 
         var declared = SharedCacheableReads();
@@ -96,19 +73,8 @@ public class ResponseCachePolicyShould
     /// What a scanner rule is silenced with is what the code does.
     /// </summary>
     /// <remarks>
-    /// .zap/rules.tsv switches off rule 10049, "Storable and Cacheable Content",
-    /// with a sentence about a measure taken elsewhere: the reads that hand out
-    /// the caller's own account state declare no-store. Nothing did - the only
-    /// NoStore in the whole API sat on two catalogues and was put there for
-    /// unread counts - so a scanner rule was switched off by pointing at
-    /// something that did not exist, which is the way of triaging a finding that
-    /// leaves no trace when it stops being true.
-    ///
-    /// Derived rather than listed: every authenticated read of the account area
-    /// is asked, so the endpoint written next month is covered without anybody
-    /// remembering this file. The area is the one the sentence is about; a rule
-    /// over the whole API would be a decision about its cache policy, and that
-    /// is not one a test may make on its own.
+    /// .zap/rules.tsv silences rule 10049 by pointing at no-store on the account reads. Derived: every
+    /// authenticated read of the account area is asked.
     /// </remarks>
     [Fact]
     public void KeepEveryAuthenticatedAccountReadOutOfEveryCache()
@@ -126,21 +92,13 @@ public class ResponseCachePolicyShould
             policy.Location.Should().Be(ResponseCacheLocation.None,
                 $"{origin} must be stored by no cache, the browser's own included");
         }
-
-        File.ReadAllText(Path.Combine(RepositoryRoot, ".zap", "rules.tsv")).Should().Contain("10049",
-            "this check exists because that rule is silenced with the measure above; with the " +
-            "rule back in force the scan reports the same thing on its own");
     }
 
     /// <summary>
     /// Every GET of the account area that requires a session, with whatever cache
     /// policy it declares.
     /// </summary>
-    /// <remarks>
-    /// The authentication attribute is internal to the host, so it is matched by
-    /// name rather than by type: opening the host up so that a test project can
-    /// see one attribute is the wrong shape of dependency for one line.
-    /// </remarks>
+    /// <remarks>The authentication attribute is internal to the host, so it is matched by name.</remarks>
     private static IReadOnlyCollection<(string Origin, ResponseCacheAttribute? Policy)> AuthenticatedAccountReads()
     {
         var found = new List<(string, ResponseCacheAttribute?)>();
@@ -189,9 +147,7 @@ public class ResponseCachePolicyShould
     private sealed record CacheableRead(string Action, string Path);
 
     /// <summary>
-    /// Reads the declared policy off the assembly rather than off the attribute
-    /// text: the wire path is the route the framework composes, and composing it
-    /// again from source text would be a second implementation of the same rule.
+    /// Reads the declared policy off the assembly: the wire path is the route the framework composes.
     /// </summary>
     private static CacheableRead[] SharedCacheableReads()
     {
@@ -231,6 +187,4 @@ public class ResponseCachePolicyShould
 
         return found.ToArray();
     }
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

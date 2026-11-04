@@ -3,20 +3,8 @@
  */
 
 /**
- * The two questions asked before spending a reader's traffic on something they
- * did not ask for.
- *
- * Worth a file of its own because of how this code fails. Both answers are
- * read off a field name in an object the platform hands over, both are
- * compared against string literals, and both callers use the answer to do
- * NOTHING — the address block skips its probes, route prefetch skips its
- * fetch. A typo in one of the literals therefore breaks nothing visible: the
- * site keeps working, keeps rendering, keeps passing every other gate, and the
- * only symptom is a reader on a metered phone quietly paying for pages they
- * never opened. `"2g"` was exactly that for one wave — the sibling of
- * `"slow-2g"`, and executed by no test in the tree.
- *
- * So every branch is named here, including the ones that say yes.
+ * Every branch of the two traffic questions, the yes ones included: a typo in
+ * a literal breaks nothing visible, the reader only pays for unasked pages.
  */
 import { describe, it, expect, afterEach } from "vitest";
 import { onSlowConnection, savingData } from "./connection";

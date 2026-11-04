@@ -4,18 +4,22 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
+import type { RouteLocationNormalized } from "vue-router";
 
 const { replace, currentRoute, setSessionExpiredHandler } = vi.hoisted(() => ({
   replace: vi.fn(),
-  currentRoute: { value: { meta: {}, fullPath: "/" } as Record<string, any> },
+  currentRoute: {
+    value: { meta: {}, fullPath: "/" } as Pick<
+      RouteLocationNormalized,
+      "meta" | "fullPath"
+    >,
+  },
   setSessionExpiredHandler: vi.fn(),
 }));
 
-// Navigation is not what this asserts, and a real push would pull every lazy
-// route component into the test.
+// A real push would pull every lazy route component into the test.
 vi.mock("./router", () => ({
   default: { replace, currentRoute },
-  extractNumberParam: vi.fn(),
 }));
 
 vi.mock("@/shared/api", () => ({
@@ -33,12 +37,6 @@ import {
   installSessionExpiredHandler,
 } from "./sessionExpiry";
 
-/**
- * The 401 interceptor used to clear only the persisted copy of the viewer. The
- * store kept its own, so the header, the sidebar blocks and every action button
- * went on rendering as signed in while the route guard bounced the same viewer
- * to the login modal — and it stayed that way until a full page reload.
- */
 describe("endExpiredSession", () => {
   beforeEach(() => {
     localStorage.clear();
@@ -102,9 +100,8 @@ describe("endExpiredSession", () => {
 });
 
 /**
- * The owner's word: when the site learns the session is over, the windows
- * open over the page close with it. Each window registers its own way out
- * (Dialog.vue, useDialogShell); the guest windows, the login one first, do not.
+ * The windows over the page close with the session, each its own way
+ * (Dialog.vue, useDialogShell); the guest windows do not.
  */
 describe("the windows at the end of a session", () => {
   beforeEach(() => {

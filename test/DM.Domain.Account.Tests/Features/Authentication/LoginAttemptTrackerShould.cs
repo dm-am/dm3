@@ -26,19 +26,19 @@ namespace DM.Domain.Account.Tests.Features.Authentication;
 /// </remarks>
 public class LoginAttemptTrackerShould : UnitTestBase
 {
-    private readonly DateTimeOffset _now = new(2026, 8, 4, 12, 0, 0, TimeSpan.Zero);
-    private readonly LoginAttemptOrigin _origin = new("test@example.com", "203.0.113.7");
-    private readonly ILoginAttemptRepository _repository;
-    private readonly LoginAttemptTracker _tracker;
+    private readonly DateTimeOffset now = new(2026, 8, 4, 12, 0, 0, TimeSpan.Zero);
+    private readonly LoginAttemptOrigin origin = new("test@example.com", "203.0.113.7");
+    private readonly ILoginAttemptRepository repository;
+    private readonly LoginAttemptTracker tracker;
 
     public LoginAttemptTrackerShould()
     {
-        _repository = Mock<ILoginAttemptRepository>();
+        repository = Mock<ILoginAttemptRepository>();
         var dateTimeProvider = Mock<IDateTimeProvider>();
-        dateTimeProvider.Now.Returns(_now);
+        dateTimeProvider.Now.Returns(now);
 
-        _tracker = new LoginAttemptTracker(
-            _repository,
+        tracker = new LoginAttemptTracker(
+            repository,
             dateTimeProvider,
             Options.Create(new AuthenticationConfiguration
             {
@@ -50,24 +50,38 @@ public class LoginAttemptTrackerShould : UnitTestBase
     [Fact]
     public async Task LiftAnExpiredLockoutForItsOwnAddressOnly()
     {
-        _repository.GetLockoutStart(_origin).Returns(_now.UtcDateTime.AddHours(-1));
+        repository.GetLockoutStart(origin).Returns(now.UtcDateTime.AddHours(-1));
 
-        var locked = await _tracker.IsAccountLocked(_origin);
+        var locked = await tracker.IsAccountLocked(origin);
 
         locked.Should().BeFalse();
-        await _repository.Received(1).ResetAttempts(_origin);
-        await _repository.DidNotReceive().ResetAttempts(Arg.Any<string>());
+        await repository.Received(1).ResetAttempts(origin);
+        await repository.DidNotReceive().ResetAttempts(Arg.Any<string>());
+    }
+
+    [Theory]
+    [InlineData(2, 0)]
+    [InlineData(3, 1)]
+    [InlineData(5, 3)]
+    [InlineData(12, 5)]
+    public async Task DelayByTheHighestThresholdReached(int failedAttempts, int expectedDelaySeconds)
+    {
+        repository.GetFailedAttemptCount(origin).Returns(failedAttempts);
+
+        var delay = await tracker.GetDelayForUser(origin);
+
+        delay.Should().Be(expectedDelaySeconds);
     }
 
     [Fact]
     public async Task KeepAnUnexpiredLockoutAndClearNothing()
     {
-        _repository.GetLockoutStart(_origin).Returns(_now.UtcDateTime.AddMinutes(-1));
+        repository.GetLockoutStart(origin).Returns(now.UtcDateTime.AddMinutes(-1));
 
-        var locked = await _tracker.IsAccountLocked(_origin);
+        var locked = await tracker.IsAccountLocked(origin);
 
         locked.Should().BeTrue();
-        await _repository.DidNotReceive().ResetAttempts(Arg.Any<LoginAttemptOrigin>());
-        await _repository.DidNotReceive().ResetAttempts(Arg.Any<string>());
+        await repository.DidNotReceive().ResetAttempts(Arg.Any<LoginAttemptOrigin>());
+        await repository.DidNotReceive().ResetAttempts(Arg.Any<string>());
     }
 }

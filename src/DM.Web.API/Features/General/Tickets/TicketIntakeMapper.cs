@@ -7,7 +7,7 @@ namespace DM.Web.API.Features.General.Tickets;
 /// Compile-time mapper for the public ticket intake
 /// </summary>
 [Mapper]
-internal partial class TicketIntakeMapper
+public partial class TicketIntakeMapper
 {
     /// <summary>
     /// Intake request to the domain create command. The honeypot field stays

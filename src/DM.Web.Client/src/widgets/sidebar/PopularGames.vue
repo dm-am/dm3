@@ -14,11 +14,7 @@
     forward-label="Все популярные игры"
   >
     <template #item="{ item }">
-      <SidebarGameLink
-        :game="item"
-        :counters="true"
-        :always-show-counters="!userStore.user"
-      />
+      <SidebarGameLink :game="item" :always-show-counters="!userStore.user" />
     </template>
   </SidebarEntityList>
 </template>

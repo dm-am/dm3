@@ -2,15 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The list of conversations stands beside every correspondence and keeps its
- * page in the address, ?number, the key of the site's paging. A conversation
- * opened from the second page took the page out of the address, and the list
- * went back to its first page under the reader, the row just pressed going
- * with it. The page of the list is kept by every move inside the messenger:
- * the row of a conversation here, the link of a message and the day of the
- * calendar in ChatView.spec.ts.
- */
+// The list keeps its page in the address (?number) through every move inside
+// the messenger: the row here, the message link and the calendar in ChatView.spec.ts.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { createMemoryHistory, createRouter, RouterView } from "vue-router";

@@ -7,14 +7,12 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Community.Endorsements;
 
-/// <inheritdoc />
-internal class UserEndorsementApiService : IUserEndorsementApiService
+public class UserEndorsementApiService
 {
     private readonly IUserEndorsementService _endorsementService;
     private readonly IUserLookupService _userLookupService;
     private readonly UserEndorsementMapper _mapper;
 
-    /// <inheritdoc />
     public UserEndorsementApiService(
         IUserEndorsementService endorsementService,
         IUserLookupService userLookupService,
@@ -25,7 +23,6 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<UserEndorsement>> GetReceived(string username, UserEndorsementsQuery query)
     {
         var user = await _userLookupService.GetAsync(username);
@@ -38,7 +35,6 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
         });
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<UserEndorsement>> GetWritten(string username, UserEndorsementsQuery query)
     {
         var user = await _userLookupService.GetAsync(username);
@@ -59,7 +55,6 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
         return new ListEnvelope<UserEndorsement>(apiEndorsements, new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<EndorsementEligibility>> GetEligibility(string username)
     {
         var user = await _userLookupService.GetAsync(username);
@@ -71,14 +66,12 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
         });
     }
 
-    /// <inheritdoc />
     public async Task<UserEndorsement> Get(Guid id)
     {
         var endorsement = await _endorsementService.GetAsync(id);
         return _mapper.ToUserEndorsement(endorsement);
     }
 
-    /// <inheritdoc />
     public async Task<UserEndorsement> Create(string username, CreateUserEndorsementRequest request)
     {
         var user = await _userLookupService.GetAsync(username);
@@ -91,7 +84,6 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
         return _mapper.ToUserEndorsement(endorsement);
     }
 
-    /// <inheritdoc />
     public async Task<UserEndorsement> Update(Guid id, UpdateUserEndorsementRequest request)
     {
         var updateEndorsement = new UpdateUserEndorsement
@@ -103,6 +95,5 @@ internal class UserEndorsementApiService : IUserEndorsementApiService
         return _mapper.ToUserEndorsement(endorsement);
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid id) => _endorsementService.DeleteAsync(id);
 }

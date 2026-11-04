@@ -3,17 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Uploads;
-using DM.Domain.Moderation.Features.Warnings;
-using DM.Testing;
-using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Moderation.Bans;
-using DM.Web.API.Features.Moderation.Warnings;
 using AwesomeAssertions;
 using NSubstitute;
 using Xunit;
-using DomainBan = DM.Domain.Moderation.Features.Warnings.Ban;
+using DomainBan = DM.Domain.Moderation.Features.Bans.Ban;
+using DM.Domain.Moderation.Features.Bans;
 
 namespace DM.Web.API.Tests.Features.Moderation;
 
@@ -21,19 +16,10 @@ namespace DM.Web.API.Tests.Features.Moderation;
 /// A lifted ban stays in the moderation history and stays out of the public one.
 /// </summary>
 /// <remarks>
-/// Two paths read the same list and they used to agree by accident: a lifted ban
-/// was soft-deleted, so it was gone from both. Keeping it (which is what the
-/// finding asked for) split them apart, and nothing said so. The profile prints
-/// "Последний бан: N-й с ..." off History.Count, PublicBan carries neither
-/// IsLifted nor LiftedUtc, and the achievement counter behind "резиновая уточка"
-/// goes on not counting a ban that was taken back -- so the same lifted ban was
-/// counted against the user on his profile and not counted for his achievement.
-///
-/// The moderation view is the opposite rule and is asserted here as well: that
-/// one has the flag, and hiding a lifted ban there is the defect the finding was
-/// raised over.
+/// The profile counts off History.Count and PublicBan carries no lift, while the achievement does not count
+/// a lifted ban; the moderation view keeps it, asserted here as well.
 /// </remarks>
-public class PublicBanHistoryShould : UnitTestBase
+public class PublicBanHistoryShould
 {
     private static readonly DateTimeOffset Moment = new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);
 

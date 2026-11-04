@@ -1,4 +1,3 @@
-using DM.Domain.Core.Content;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -18,9 +17,6 @@ using FluentValidation;
 
 namespace DM.Domain.Game.Features.Characters;
 
-/// <summary>
-/// Unified service for character CRUD operations
-/// </summary>
 internal class CharacterService : ICharacterService
 {
     private readonly IValidator<CreateCharacter> _createValidator;
@@ -35,7 +31,6 @@ internal class CharacterService : ICharacterService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IBbTagNameCase _tagNames;
 
     public CharacterService(
         IValidator<CreateCharacter> createValidator,
@@ -49,8 +44,7 @@ internal class CharacterService : ICharacterService
         IEventProducer producer,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider,
-        IBbTagNameCase tagNames)
+        IDateTimeProvider dateTimeProvider)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -64,7 +58,6 @@ internal class CharacterService : ICharacterService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _tagNames = tagNames;
     }
 
     #region Create
@@ -75,20 +68,16 @@ internal class CharacterService : ICharacterService
         var game = await _gameService.GetAsync(createCharacter.GameId);
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // The application is one of the two things the game's blacklist closes.
-        // The intention carries the same rule; asked first, it answers with the
-        // reason.
+        // The intention carries the same rule; asked first, this one names the reason.
         game.ThrowIfBlacklisted(currentUserId);
         _intentionManager.ThrowIfForbidden(GameIntention.CreateCharacter, game);
 
         var gameRoles = game.GetRoles(currentUserId);
 
-        // Master and assistant characters should be created in Active status
         var initialStatus = gameRoles.HasEditAccess()
             ? CharacterStatus.Active
             : CharacterStatus.UnderReview;
 
-        // Only master and assistant are allowed to create NPCs
         var isNpc = createCharacter.IsNpc && gameRoles.HasEditAccess();
 
         var entity = new CreateCharacterEntity
@@ -96,16 +85,11 @@ internal class CharacterService : ICharacterService
             CharacterId = _guidFactory.Create(),
             GameId = createCharacter.GameId,
             AuthorId = isNpc ? null : currentUserId,
-            Name = createCharacter.Name.Trim(),
+            Name = createCharacter.Name,
             IsNpc = isNpc,
             AccessPolicy = createCharacter.AccessPolicy,
             InitialStatus = initialStatus,
-            Attributes = await WithTagNamesInLowerCase(createCharacter.GameId,
-                createCharacter.Attributes.Select(a => new CharacterAttributeInput
-                {
-                    Id = a.Id,
-                    Value = a.Value
-                })),
+            Attributes = createCharacter.Attributes.Select(ToInput),
             CreatedUtc = _dateTimeProvider.Now
         };
 
@@ -123,26 +107,38 @@ internal class CharacterService : ICharacterService
     public async Task<IEnumerable<Character>> GetAllAsync(Guid gameId)
     {
         var game = await _gameService.GetAsync(gameId);
-        var characters = (await _repository.GetCharacters(gameId)).ToArray();
+        var characters = (await _repository.GetCharacters(gameId))
+            .Where(IsVisible)
+            .ToArray();
         await _attributeValueFiller.Fill(characters, game, _identityProvider.Current.User.UserId);
         return characters;
     }
 
+    public async Task<bool> MayEditAsync(Guid characterId) =>
+        await _repository.GetForUpdate(characterId) is { } character &&
+        _intentionManager.IsAllowed(CharacterIntention.Edit, character);
+
     public async Task<Character> GetAsync(Guid characterId)
     {
+        // A direct link does not tell a declined application from an unknown identifier.
         var character = await _repository.FindCharacter(characterId);
-        if (character == null)
+        if (character == null || !IsVisible(character))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
         }
 
-        // A character of a game the reader may not open answers as a character
-        // that is not there, not as the game: see HiddenContainerRefusal.
         var game = await HiddenContainerRefusal.AsNotFound(RefusalMessage.CharacterNotFound,
             () => _gameService.GetAsync(character.GameId));
+
         await _attributeValueFiller.Fill(new[] { character }, game, _identityProvider.Current.User.UserId);
         return character;
     }
+
+    /// <summary>
+    /// An application under review is seen by everybody; a declined one by nobody, its author and the leads included.
+    /// </summary>
+    private static bool IsVisible(Character character) =>
+        character.Status != CharacterStatus.Declined;
 
     public async Task MarkAsReadAsync(Guid gameId)
     {
@@ -158,30 +154,19 @@ internal class CharacterService : ICharacterService
     public async Task<Character> UpdateAsync(UpdateCharacter updateCharacter)
     {
         await _updateValidator.ValidateAndThrowAsync(updateCharacter);
-        var characterToUpdate = await _repository.GetForUpdate(updateCharacter.CharacterId);
-        if (characterToUpdate == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
-        }
-
+        var characterToUpdate = await _repository.GetForUpdateOrThrow(updateCharacter.CharacterId);
         _intentionManager.ThrowIfForbidden(CharacterIntention.Edit, characterToUpdate);
 
-        // Editing one's own application is applying again, which the game's
-        // blacklist closes. The sheet of a character in play or retired is not an
-        // application, and a lead editing somebody else's is on no list of the
-        // game.
+        // Editing one's own application is applying again, which the blacklist closes.
         var currentUserId = _identityProvider.Current.User.UserId;
-        if (characterToUpdate.UserId == currentUserId && IsApplication(characterToUpdate))
+        if (characterToUpdate.AuthorId == currentUserId && IsApplication(characterToUpdate))
         {
             var game = await _gameService.GetAsync(characterToUpdate.GameId);
             game.ThrowIfBlacklisted(currentUserId);
         }
 
-        // A field the caller may not set is refused, not dropped. Asking IsAllowed
-        // and leaving the value out answered 200 with the character unchanged,
-        // which is what success looks like. Asked only when the request actually
-        // changes the field: the client round-trips the whole character, and a value
-        // it already has is nobody's attempt at anything.
+        // A field the caller may not set is refused, not dropped, and only when the request changes it:
+        // the client round-trips the whole character.
         CharacterAccessPolicy? accessPolicy = null;
         if (updateCharacter.AccessPolicy.HasValue &&
             updateCharacter.AccessPolicy != characterToUpdate.AccessPolicy)
@@ -197,32 +182,19 @@ internal class CharacterService : ICharacterService
             isNpc = updateCharacter.IsNpc;
         }
 
-        var invokedEvents = new List<EventType> { EventType.ChangedCharacter };
-
         var attributeInputs = await BuildAttributeInputs(characterToUpdate, updateCharacter.Attributes);
-        if (attributeInputs != null)
-        {
-            attributeInputs = await WithTagNamesInLowerCase(characterToUpdate.GameId, attributeInputs);
-        }
-
-        // No status here: a character's place in the game is moved by
-        // ChangeStatusAsync. This method used to move it through a target status plus
-        // three flags, a pair the intent had to be guessed from, and a combination
-        // that guessed wrong answered 500. The right was checked through IsAllowed as
-        // well: a forbidden change fell through silently and the answer was 200 with
-        // the old status.
+        // No status here: ChangeStatusAsync moves the character's place in the game.
         var entity = new UpdateCharacterEntity
         {
             CharacterId = updateCharacter.CharacterId,
-            Name = updateCharacter.Name?.Trim(),
+            Name = updateCharacter.Name,
             IsNpc = isNpc,
             AccessPolicy = accessPolicy,
             Attributes = attributeInputs
-            // Modification tracking is handled via Edit history, not inline ModifiedUtc
         };
 
         var character = await _repository.Update(entity);
-        await _producer.SendAsync(invokedEvents, updateCharacter.CharacterId);
+        await _producer.SendAsync(EventType.ChangedCharacter, updateCharacter.CharacterId);
 
         return character;
     }
@@ -231,73 +203,9 @@ internal class CharacterService : ICharacterService
     public async Task<Character> ChangeStatusAsync(
         Guid characterId, CharacterStatusTransition transition)
     {
-        var character = await _repository.GetForUpdate(characterId);
-        if (character == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
-        }
-
+        var character = await _repository.GetForUpdateOrThrow(characterId);
         var entity = new UpdateCharacterEntity { CharacterId = characterId };
-        EventType statusEvent;
-
-        switch (transition)
-        {
-            case CharacterStatusTransition.Accept:
-                RequireStatus(character, transition,
-                    CharacterStatus.UnderReview, CharacterStatus.Declined);
-                _intentionManager.ThrowIfForbidden(CharacterIntention.Accept, character);
-                entity.Status = CharacterStatus.Active;
-                statusEvent = EventType.StatusCharacterAccepted;
-                break;
-
-            case CharacterStatusTransition.Decline:
-                RequireStatus(character, transition, CharacterStatus.UnderReview);
-                _intentionManager.ThrowIfForbidden(CharacterIntention.Decline, character);
-                entity.Status = CharacterStatus.Declined;
-                statusEvent = EventType.StatusCharacterDeclined;
-                break;
-
-            case CharacterStatusTransition.Kill:
-                RequireStatus(character, transition, CharacterStatus.Active);
-                _intentionManager.ThrowIfForbidden(CharacterIntention.Kill, character);
-                entity.Status = CharacterStatus.Retired;
-                entity.IsDead = true;
-                statusEvent = EventType.StatusCharacterDied;
-                break;
-
-            case CharacterStatusTransition.Exile:
-                RequireStatus(character, transition, CharacterStatus.Active);
-                _intentionManager.ThrowIfForbidden(CharacterIntention.Exile, character);
-                entity.Status = CharacterStatus.Retired;
-                entity.IsPlayerExiled = true;
-                statusEvent = EventType.StatusCharacterExiled;
-                break;
-
-            case CharacterStatusTransition.Leave:
-                RequireStatus(character, transition, CharacterStatus.Active);
-                _intentionManager.ThrowIfForbidden(CharacterIntention.Leave, character);
-                entity.Status = CharacterStatus.Retired;
-                entity.IsPlayerLeft = true;
-                statusEvent = EventType.StatusCharacterLeft;
-                break;
-
-            case CharacterStatusTransition.Resurrect:
-                RequireStatus(character, transition, CharacterStatus.Retired);
-                _intentionManager.ThrowIfForbidden(CharacterIntention.Resurrect, character);
-                entity.Status = CharacterStatus.Active;
-                statusEvent = EventType.StatusCharacterResurrected;
-                break;
-
-            case CharacterStatusTransition.Readmit:
-                RequireStatus(character, transition, CharacterStatus.Retired);
-                _intentionManager.ThrowIfForbidden(CharacterIntention.Readmit, character);
-                entity.Status = CharacterStatus.Active;
-                statusEvent = EventType.StatusCharacterReadmitted;
-                break;
-
-            default:
-                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
-        }
+        var statusEvent = ApplyTransition(character, transition, entity);
 
         // Coming back to the game clears all three reasons for leaving: otherwise a
         // revived character stays marked dead and a second revival is impossible.
@@ -312,33 +220,94 @@ internal class CharacterService : ICharacterService
         await _producer.SendAsync(
             new List<EventType> { EventType.ChangedCharacter, statusEvent }, characterId);
 
-        // A player who has lost their last active character stays with the game as a
-        // reader rather than dropping out of it entirely - a blacklisted one too:
-        // the list closes the discussion and the application, and following the
-        // game is reading.
-        if (entity.Status != CharacterStatus.Active &&
-            character.Status == CharacterStatus.Active &&
-            !character.IsNpc)
-        {
-            var hasOtherActive = await _repository.HasOtherActiveCharacters(
-                character.GameId, character.UserId, characterId);
-
-            if (!hasOtherActive)
-            {
-                // The player who lost the character, not whoever sent the request:
-                // the lead who kills or exiles used to become the reader of his own
-                // game while the player dropped out of the game list.
-                await _subscriptionService.SubscribeUserAsync(character.GameId, character.UserId);
-            }
-        }
+        await KeepPlayerAsReader(character, entity);
 
         return updated;
     }
 
     /// <summary>
-    /// The character is an application: waiting for the lead's verdict or
-    /// declined by it, not yet in play.
+    /// Writes the target status into the change and answers with the event that announces it.
     /// </summary>
+    /// <remarks>
+    /// Refused first for the status it starts from, then for the right to make it.
+    /// </remarks>
+    private EventType ApplyTransition(
+        CharacterToUpdate character, CharacterStatusTransition transition, UpdateCharacterEntity entity)
+    {
+        switch (transition)
+        {
+            case CharacterStatusTransition.Accept:
+                RequireStatus(character, transition,
+                    CharacterStatus.UnderReview, CharacterStatus.Declined);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Accept, character);
+                entity.Status = CharacterStatus.Active;
+                return EventType.StatusCharacterAccepted;
+
+            case CharacterStatusTransition.Decline:
+                RequireStatus(character, transition, CharacterStatus.UnderReview);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Decline, character);
+                entity.Status = CharacterStatus.Declined;
+                return EventType.StatusCharacterDeclined;
+
+            case CharacterStatusTransition.Kill:
+                RequireStatus(character, transition, CharacterStatus.Active);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Kill, character);
+                entity.Status = CharacterStatus.Retired;
+                entity.IsDead = true;
+                return EventType.StatusCharacterDied;
+
+            case CharacterStatusTransition.Exile:
+                RequireStatus(character, transition, CharacterStatus.Active);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Exile, character);
+                entity.Status = CharacterStatus.Retired;
+                entity.IsPlayerExiled = true;
+                return EventType.StatusCharacterExiled;
+
+            case CharacterStatusTransition.Leave:
+                RequireStatus(character, transition, CharacterStatus.Active);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Leave, character);
+                entity.Status = CharacterStatus.Retired;
+                entity.IsPlayerLeft = true;
+                return EventType.StatusCharacterLeft;
+
+            case CharacterStatusTransition.Resurrect:
+                RequireStatus(character, transition, CharacterStatus.Retired);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Resurrect, character);
+                entity.Status = CharacterStatus.Active;
+                return EventType.StatusCharacterResurrected;
+
+            case CharacterStatusTransition.Readmit:
+                RequireStatus(character, transition, CharacterStatus.Retired);
+                _intentionManager.ThrowIfForbidden(CharacterIntention.Readmit, character);
+                entity.Status = CharacterStatus.Active;
+                return EventType.StatusCharacterReadmitted;
+
+            default:
+                throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition);
+        }
+    }
+
+    /// <summary>
+    /// A player who lost his last active character stays as a reader, a blacklisted one too:
+    /// following the game is reading.
+    /// </summary>
+    private async Task KeepPlayerAsReader(CharacterToUpdate character, UpdateCharacterEntity entity)
+    {
+        if (entity.Status != CharacterStatus.Active &&
+            character.Status == CharacterStatus.Active &&
+            !character.IsNpc)
+        {
+            var hasOtherActive = await _repository.HasOtherActiveCharacters(
+                character.GameId, character.AuthorId, entity.CharacterId);
+
+            if (!hasOtherActive)
+            {
+                // The player who lost the character, not whoever sent the request.
+                await _subscriptionService.SubscribeUserAsync(character.GameId, character.AuthorId);
+            }
+        }
+    }
+
     private static bool IsApplication(CharacterToUpdate character) =>
         character.Status is CharacterStatus.UnderReview or CharacterStatus.Declined;
 
@@ -354,24 +323,19 @@ internal class CharacterService : ICharacterService
     }
 
     /// <summary>
-    /// Builds the attribute inputs for an update, protecting hidden attribute
-    /// values against a redacted round-trip. A submitter whose read redacted the
-    /// hidden values (anyone who is neither owner nor game lead) must never
-    /// create, overwrite, or blank them: their hidden inputs are dropped and the
-    /// stored values are restored so they survive the save.
+    /// A submitter whose read redacted the hidden values must not blank them: his hidden inputs
+    /// are dropped and the stored values restored.
     /// </summary>
     private async Task<IEnumerable<CharacterAttributeInput>?> BuildAttributeInputs(
         CharacterToUpdate character,
-        IEnumerable<Games.CharacterAttribute>? submitted)
+        IEnumerable<CharacterAttribute>? submitted)
     {
         if (submitted == null)
         {
             return null;
         }
 
-        var inputs = submitted
-            .Select(a => new CharacterAttributeInput { Id = a.Id, Value = a.Value })
-            .ToList();
+        var inputs = submitted.Select(ToInput).ToList();
 
         if (inputs.Count == 0)
         {
@@ -381,7 +345,7 @@ internal class CharacterService : ICharacterService
         var game = await _gameService.GetAsync(character.GameId);
         var currentUserId = _identityProvider.Current.User.UserId;
         var canSeeHidden = game.GetRoles(currentUserId).HasEditAccess() ||
-                           character.UserId == currentUserId;
+                           character.AuthorId == currentUserId;
         if (canSeeHidden)
         {
             return inputs;
@@ -402,43 +366,14 @@ internal class CharacterService : ICharacterService
         var stored = await _repository.FindCharacter(character.Id);
         if (stored != null)
         {
-            foreach (var attribute in stored.Attributes.Where(a => hiddenSpecIds.Contains(a.Id)))
-            {
-                inputs.Add(new CharacterAttributeInput { Id = attribute.Id, Value = attribute.Value });
-            }
+            inputs.AddRange(stored.Attributes.Where(a => hiddenSpecIds.Contains(a.Id)).Select(ToInput));
         }
 
         return inputs;
     }
 
-    /// <summary>
-    /// The values, with the names of the tags of every value written in the
-    /// site markup in lower case, as the site writes them (IBbTagNameCase). A
-    /// value of any other type is plain text and stays as typed.
-    /// </summary>
-    private async Task<List<CharacterAttributeInput>> WithTagNamesInLowerCase(
-        Guid gameId, IEnumerable<CharacterAttributeInput> inputs)
-    {
-        // A value with no capital A-Z has no name to change, and the schema is
-        // not read for it.
-        var values = inputs.ToList();
-        if (!values.Any(value => value.Value?.Any(char.IsAsciiLetterUpper) == true))
-        {
-            return values;
-        }
-
-        var schema = await _repository.GetGameSchema(gameId);
-        var markup = schema?.Specifications
-            .Where(specification => specification.Type == AttributeSpecificationType.BbCode)
-            .Select(specification => specification.Id)
-            .ToHashSet() ?? [];
-        foreach (var value in values.Where(value => markup.Contains(value.Id)))
-        {
-            value.Value = _tagNames.ToLowerCase(value.Value, BbTagSet.Common);
-        }
-
-        return values;
-    }
+    private static CharacterAttributeInput ToInput(CharacterAttribute attribute) =>
+        new() { Id = attribute.Id, Value = attribute.Value };
 
     #endregion
 
@@ -446,12 +381,7 @@ internal class CharacterService : ICharacterService
 
     public async Task DeleteAsync(Guid characterId)
     {
-        var character = await _repository.GetForUpdate(characterId);
-        if (character == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
-        }
-
+        var character = await _repository.GetForUpdateOrThrow(characterId);
         _intentionManager.ThrowIfForbidden(CharacterIntention.Delete, character);
 
         await _repository.Delete(characterId, _identityProvider.Current.User.UserId);

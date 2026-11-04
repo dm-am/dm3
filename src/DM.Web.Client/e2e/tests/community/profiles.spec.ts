@@ -1,14 +1,7 @@
 import { test, expect } from "@playwright/test";
 import { primaryUser } from "../../fixtures/auth";
 
-/**
- * Three assertions, none of which could hold. The profile lives at
- * `/users/:username`, not at the site root, so `/Alice` was a 404 page and
- * "Alice" is not an account the seeder writes. ".profile-info",
- * ".user-information", ".user-games" and ".user-characters" are in no
- * template. And the tabs are pure client state — `/users/X/games` redirects
- * to the profile with the default tab, and there is no characters tab at all.
- */
+/** The profile lives at `/users/:username`; its tabs are client state. */
 const profile = `/users/${primaryUser.username}`;
 
 test.describe("User Profiles", () => {

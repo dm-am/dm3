@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Moderation;
 using Microsoft.EntityFrameworkCore;
@@ -14,16 +13,8 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// conversations of two of them.
 /// </summary>
 /// <remarks>
-/// Every row makes one recipient rule distinguishable from the rule a generator
-/// could get away with instead. The moderators are of every rank, so telling all
-/// of them about a support ticket shows; one of them is named by a complaint and
-/// one filed a complaint himself, so telling the side of a ticket shows; the
-/// conversations have a moderator who answered beside one who did not, a writer
-/// who is no longer a moderator and a writer whose account is gone, so telling
-/// everybody on duty or everybody who ever wrote shows.
-///
-/// Written into the shared database under identifiers of its own, once for the
-/// whole collection: the tests only read it.
+/// Every row makes one recipient rule distinguishable from a looser one. Written into the shared database
+/// once, under identifiers of its own.
 /// </remarks>
 internal static class TicketSeed
 {
@@ -47,7 +38,6 @@ internal static class TicketSeed
     /// <summary>A reader who files tickets and answers in them.</summary>
     public static readonly Guid ReaderId = Id("06");
 
-    /// <summary>A moderator whose account is removed.</summary>
     public static readonly Guid RemovedModeratorId = Id("07");
 
     /// <summary>A former moderator, an ordinary user now, who answered once.</summary>
@@ -80,9 +70,7 @@ internal static class TicketSeed
     public static readonly Guid DemotedAnswerId = Id("23");
 
     /// <summary>
-    /// Written by the moderator the complaint names. The service answers him 404
-    /// on every path into it, so this is the row that stands for whatever might
-    /// still put him among the writers: the rule is the generator's to keep too.
+    /// Written by the moderator the complaint names, who must not be among the writers told.
     /// </summary>
     public static readonly Guid NamedModeratorCommentId = Id("24");
 

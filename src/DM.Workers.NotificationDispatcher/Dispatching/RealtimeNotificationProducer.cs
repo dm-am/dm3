@@ -25,7 +25,6 @@ internal class RealtimeNotificationProducer : IRealtimeNotificationProducer, IDi
 {
     private readonly IDmProducer<RealtimeNotification> producer;
 
-    /// <inheritdoc />
     public RealtimeNotificationProducer(IDmProducerBuilder producerBuilder) =>
         producer = producerBuilder.Build<RealtimeNotification>(
             new DmProducerParameters(RealtimeNotificationsTransport.ExchangeName));
@@ -35,9 +34,7 @@ internal class RealtimeNotificationProducer : IRealtimeNotificationProducer, IDi
         producer.Send(string.Empty, notification, cancellationToken);
 
     /// <summary>
-    /// Closes the AMQP channel this producer opened. Same reasoning as
-    /// MailSender: the producer opens a channel on its first send and closes it
-    /// only on Dispose.
+    /// Closes the AMQP channel this producer opened.
     /// </summary>
     public void Dispose() => producer.Dispose();
 }

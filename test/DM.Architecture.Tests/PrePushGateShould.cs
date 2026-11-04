@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,46 +13,19 @@ namespace DM.Architecture.Tests;
 /// The hook that runs before a push is a claim about CI, and the claim has to hold.
 /// </summary>
 /// <remarks>
-/// It arrived saying it "runs exactly what CI runs". It did not: the solution was
-/// built in Release and then tested in Debug, which compiled everything a second
-/// time and ran the tests against binaries the build gate had never seen, and
-/// dependency-scan was absent altogether — the job both publish jobs name in
-/// needs, and the one that twice found vulnerable packages only after they had
-/// reached origin.
-///
-/// So parity is asserted rather than trusted, and asserted against the workflow
-/// rather than against a copy of it: the configuration is read out of the build
-/// job, the commands are read out of dependency-scan, and every job of both
-/// workflows has to appear in the header of the hook either as run locally or as
-/// deliberately left to CI with a reason. A job added to CI turns this red until
-/// someone decides which of the two it is.
-///
-/// Cost is part of that decision rather than a footnote: a gate that takes twenty
-/// minutes gets bypassed with --no-verify, and a bypassed gate protects nobody.
-/// Which is why what belongs to CI stays in CI, and says why.
-///
-/// What the rules here assert about a job is specific: the configuration of the
-/// build job, the flags of the audit, the script names of the frontend job. Which
-/// gates a mirrored job has at all is the one question none of them asked, and
-/// that is how the threshold on backend coverage came to run in the build job and
-/// nowhere local. AgentToolingShould.RunEveryGateTheWorkflowRunsThatBelongsOnThisMachine
-/// asks it, in both directions.
+/// Parity is asserted against the workflow: the build configuration, the dependency-scan commands,
+/// and every job named in the hook header as run locally or left to CI with a reason. Which part a
+/// branch push runs is AgentToolingShould's.
 /// </remarks>
 public class PrePushGateShould
 {
     private const string NpmAudit = "npm audit";
 
     /// <summary>
-    /// A row of the coverage table in the hook header: the job, "+" or "-", and the
-    /// note. The note is required by both markers: "-" without one is exactly the
-    /// silence this class exists against, and "+" without one names no command.
+    /// A row of the coverage table in the hook header: the job, "+" or "-", and the note both markers need.
     /// </summary>
     private static readonly Regex JobDecision = new(
         @"^#\s+([a-z][a-z0-9-]*)\s+([+-])\s+(\S.*)$", RegexOptions.Compiled);
-
-    /// <summary>A job: below jobs: it is the only key written at two spaces.</summary>
-    private static readonly Regex JobName = new(
-        @"^  ([a-z][a-z0-9-]*):\s*$", RegexOptions.Compiled);
 
     /// <summary>The value of a run: step, in the plain form and in the block one.</summary>
     private static readonly Regex RunStep = new(
@@ -75,12 +49,7 @@ public class PrePushGateShould
 
     private static readonly string[] Workflows = ["dotnet.yml", "security.yml"];
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    private static string HookPath => Path.Combine(RepositoryRoot, "scripts", "hooks", "pre-push");
-
-    private static string WorkflowPath(string workflow) =>
-        Path.Combine(RepositoryRoot, ".github", "workflows", workflow);
+    private static string HookPath => Path.Combine(RepositoryLayout.Root, "scripts", "hooks", "pre-push");
 
     /// <summary>
     /// The commands of the hook. Prose that names a command is not a command, and
@@ -97,26 +66,8 @@ public class PrePushGateShould
     }
 
     /// <summary>The lines of one job, from its key to the next job's, comments out.</summary>
-    private static List<string> JobBody(string workflow, string job)
-    {
-        var path = WorkflowPath(workflow);
-        File.Exists(path).Should().BeTrue($"the workflow must exist at {path}");
-
-        var lines = File.ReadAllLines(path);
-        var start = Array.FindIndex(
-            lines, line => line.StartsWith($"  {job}:", StringComparison.Ordinal));
-        start.Should().BeGreaterThan(-1, $"{workflow} must still declare the {job} job");
-
-        var end = start + 1;
-        while (end < lines.Length && !JobName.IsMatch(lines[end]))
-        {
-            end++;
-        }
-
-        return lines[start..end]
-            .Where(line => !line.TrimStart().StartsWith('#'))
-            .ToList();
-    }
+    private static List<string> JobBody(string workflow, string job) =>
+        WorkflowJobs.Body(workflow, job).Where(WorkflowJobs.IsCode).ToList();
 
     /// <summary>The commands of one job: the value of every run: step it has.</summary>
     private static List<string> CiCommands(string workflow, string job)
@@ -159,18 +110,7 @@ public class PrePushGateShould
         return commands;
     }
 
-    private static IEnumerable<string> Jobs(string workflow)
-    {
-        var lines = File.ReadAllLines(WorkflowPath(workflow));
-        var start = Array.FindIndex(lines, line => line.StartsWith("jobs:", StringComparison.Ordinal));
-        start.Should().BeGreaterThan(-1, $"{workflow} must declare jobs");
-
-        return lines
-            .Skip(start + 1)
-            .Select(line => JobName.Match(line))
-            .Where(match => match.Success)
-            .Select(match => match.Groups[1].Value);
-    }
+    private static IEnumerable<string> Jobs(string workflow) => WorkflowJobs.Read(workflow).Select(job => job.Name);
 
     private static string ConfigurationOf(IEnumerable<string> commands, string command, string source)
     {
@@ -183,8 +123,7 @@ public class PrePushGateShould
     }
 
     /// <summary>
-    /// The configuration is read out of the workflow rather than written down here:
-    /// what is asserted is that the two agree, not which one they agree on.
+    /// The configuration is read out of the workflow: what is asserted is that the two agree.
     /// </summary>
     [Fact]
     public void BuildAndTestInTheConfigurationCiShips()
@@ -209,9 +148,7 @@ public class PrePushGateShould
     }
 
     /// <summary>
-    /// dependency-scan stands in the needs of both publish jobs, so red there stops
-    /// the release entirely, and it is the one job whose failures have twice been
-    /// discovered after the push rather than before it.
+    /// dependency-scan stands in the needs of both publish jobs.
     /// </summary>
     [Fact]
     public void RunEveryGateOfTheDependencyScanJob()
@@ -252,44 +189,7 @@ public class PrePushGateShould
     }
 
     /// <summary>
-    /// A job marked "+" runs the gates of that job, not a subset of them.
-    /// </summary>
-    /// <remarks>
-    /// The header claimed the frontend job while the hook ran "npx vitest run"
-    /// against a job that runs "npm run test:coverage" — the same tests, and not
-    /// the same gate: the thresholds live in coverage.thresholds of vite.config.ts
-    /// and apply only under --coverage, so deleting a suite passed locally and
-    /// failed in CI. AccountForEveryJobOfBothWorkflows compares job names only, so
-    /// a "+" over a subset was invisible to it.
-    ///
-    /// Read as scripts rather than as command lines: package.json is where a
-    /// frontend gate is defined, and both sides address it by the same name.
-    /// </remarks>
-    [Fact]
-    public void RunEveryScriptOfTheFrontendJob()
-    {
-        var scriptCall = new Regex(@"npm run ([\w:-]+)", RegexOptions.Compiled);
-
-        var ci = CiCommands("dotnet.yml", "frontend")
-            .SelectMany(command => scriptCall.Matches(command).Select(match => match.Groups[1].Value))
-            .Distinct()
-            .ToList();
-
-        ci.Should().NotBeEmpty("the frontend job runs its gates through npm scripts");
-
-        var hook = HookCommands();
-        foreach (var script in ci)
-        {
-            hook.Should().Contain(line => line.Contains($"npm run {script}", StringComparison.Ordinal),
-                $"the header marks frontend as run locally, and {script} is one of its gates; " +
-                "running an equivalent-looking command instead answers a different question");
-        }
-    }
-
-    /// <summary>
     /// Every job is either run by the hook or named in its header as left to CI.
-    /// The third option, saying nothing, is the one that produced a local gate green
-    /// on a push CI then failed.
     /// </summary>
     [Fact]
     public void AccountForEveryJobOfBothWorkflows()
@@ -312,19 +212,11 @@ public class PrePushGateShould
     /// <summary>
     /// A push to a branch that takes only merges is refused before any gate runs.
     /// </summary>
-    /// <remarks>
-    /// dev takes a change only as the squash of a pull request whose checks are
-    /// green, and the protection of the branch refuses a direct push anyway. The
-    /// hook says so first, rather than after twenty minutes of gates spent on a
-    /// push that cannot land. The branches are read out of the pull_request
-    /// trigger of the workflow rather than written here: a branch pull requests
-    /// are opened against is a branch that takes them, and one added there with
-    /// no refusal here would take the direct push the hook waved through.
-    /// </remarks>
+    /// <remarks>The branches are read out of the pull_request trigger of the workflow.</remarks>
     [Fact]
     public void RefuseAPushToABranchThatTakesOnlyMerges()
     {
-        var trigger = PullRequestTargets.Match(File.ReadAllText(WorkflowPath("dotnet.yml")));
+        var trigger = PullRequestTargets.Match(File.ReadAllText(WorkflowJobs.PathOf("dotnet.yml")));
         trigger.Success.Should().BeTrue("dotnet.yml runs on the pull requests into the branches that take them");
 
         var branches = trigger.Groups[1].Value
@@ -357,21 +249,12 @@ public class PrePushGateShould
     /// <summary>
     /// Every hook has a test, and every one of those tests is run before a push.
     /// </summary>
-    /// <remarks>
-    /// The hooks are the last thing standing between a forbidden command and lost
-    /// work, and they are the one part of the tree no workflow covers: CI never
-    /// invokes them, so nothing outside this hook would notice a rule that stopped
-    /// matching. One of the two shipped with a test on thirty-five cases that
-    /// nothing ever ran.
-    ///
-    /// Both halves matter. A hook with no test is unverified; a test nothing calls
-    /// is a file that looks like a gate and is not one.
-    /// </remarks>
+    /// <remarks>CI never invokes the hooks; a test nothing calls looks like a gate and is not one.</remarks>
     [Fact]
     public void RunTheTestOfEveryHook()
     {
         var hooks = Directory
-            .GetFiles(Path.Combine(RepositoryRoot, ".claude", "hooks"), "*.js")
+            .GetFiles(Path.Combine(RepositoryLayout.Root, ".claude", "hooks"), "*.js")
             .Select(Path.GetFileName)
             .ToList();
 

@@ -21,8 +21,8 @@ public class MessageSearchHit
     public Guid SourceId { get; set; }
 
     /// <summary>
-    /// Human-readable container label (chat title or game title). May be empty
-    /// for direct chats — the client derives the counterpart participant name.
+    /// Chat title or game title; may be empty for a direct chat, which the client names
+    /// by the other participant.
     /// </summary>
     public string? SourceTitle { get; set; }
 
@@ -32,28 +32,20 @@ public class MessageSearchHit
     public Guid Id { get; set; }
 
     /// <summary>
-    /// Creation moment (UTC), primary sort key.
+    /// Primary sort key.
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>
-    /// Preview of the matched text, split into the runs a reader sees.
+    /// Preview of the matched text, split into the runs a reader sees: as a marked-up
+    /// string it would be the one field a client renders as markup, unescaped.
     /// </summary>
-    /// <remarks>
-    /// Segments rather than a marked-up string: the database marks the match, and
-    /// a string carrying those marks would be the one field of this contract a
-    /// client had to render as markup — from a document nobody escaped.
-    /// </remarks>
     public IReadOnlyList<SnippetSegment> SnippetSegments { get; set; } = [];
 
     /// <summary>
-    /// The projected visible text of the body, as the repository read it. Always
-    /// derived from the already-stripped/indexed text — [private] blocks are never
-    /// present here.
+    /// The visible text of the body as the repository read it, [private] blocks never in
+    /// it. Internal to the search: the window is cut from it when the query has no words
+    /// to build one around.
     /// </summary>
-    /// <remarks>
-    /// Internal to the search: the window is cut from it when the query has no
-    /// words to build one around. It never reaches the contract.
-    /// </remarks>
     public string Snippet { get; set; } = "";
 }

@@ -95,11 +95,11 @@ public class PollOption
 public class CreatePollRequest
 {
     /// <summary>
-    /// Poll question/title (5-500 characters)
+    /// Poll question/title (1-500 characters)
     /// </summary>
     /// <example>What's your favorite programming language?</example>
     [Required(ErrorMessage = "Введите заголовок")]
-    [StringLength(500, MinimumLength = 5, ErrorMessage = "Заголовок от 5 до 500 символов")]
+    [StringLength(500, MinimumLength = 1, ErrorMessage = "Заголовок от 1 до 500 символов")]
     public string Title { get; set; } = "";
 
     /// <summary>
@@ -124,6 +124,7 @@ public class CreatePollRequest
     /// Answer options (2-10 options required)
     /// </summary>
     [Required(ErrorMessage = "Добавьте варианты ответа")]
+    // Two at least: a poll of one option has nothing to choose between.
     [MinLength(2, ErrorMessage = "Нужно хотя бы два варианта ответа")]
     [MaxLength(10, ErrorMessage = "Не больше десяти вариантов ответа")]
     public List<string> Options { get; set; } = new();
@@ -140,9 +141,9 @@ public class CreatePollRequest
 public class UpdatePollRequest
 {
     /// <summary>
-    /// Updated poll title (5-500 characters, optional)
+    /// Updated poll title (1-500 characters, optional)
     /// </summary>
-    [StringLength(500, MinimumLength = 5, ErrorMessage = "Заголовок от 5 до 500 символов")]
+    [StringLength(500, MinimumLength = 1, ErrorMessage = "Заголовок от 1 до 500 символов")]
     public string? Title { get; set; }
 
     /// <summary>
@@ -209,13 +210,13 @@ public class PollsQuery : PagingQuery
     public DateTimeOffset? EndsToUtc { get; set; }
 
     /// <summary>
-    /// Sort field: "status" (default), "starts", "ends"
+    /// Sort field (default: status)
     /// </summary>
     /// <example>status</example>
     public string SortBy { get; set; } = "status";
 
     /// <summary>
-    /// Sort direction: "asc" (default) or "desc"
+    /// Sort direction (default: asc)
     /// </summary>
     /// <example>asc</example>
     public string SortOrder { get; set; } = "asc";

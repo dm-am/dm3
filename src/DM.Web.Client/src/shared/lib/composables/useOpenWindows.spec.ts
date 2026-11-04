@@ -2,12 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The self-rolled windows (ConfirmDialog and the question over a window with
- * typed text) close with the session through the dialog shell they share, the
- * way Escape closes them. The navigation drawer uses the same shell and is not
- * a window: it stays.
- */
+/** The self-rolled windows close with the session through their dialog shell. */
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref } from "vue";
 import { enableAutoUnmount, mount } from "@vue/test-utils";
@@ -17,7 +12,7 @@ import { closeOpenWindows, openWindowCount } from "./useOpenWindows";
 enableAutoUnmount(afterEach);
 
 /** A window of the shell: shown from the start, and what Escape would do. */
-function shellWith(holdPage: boolean) {
+function shellWith() {
   const dismiss = vi.fn();
   const shown = ref(true);
   const Host = defineComponent({
@@ -27,7 +22,6 @@ function shellWith(holdPage: boolean) {
         container: ref(null),
         initialFocus: () => null,
         onDismiss: dismiss,
-        holdPage,
       });
       return () => h("div");
     },
@@ -37,7 +31,7 @@ function shellWith(holdPage: boolean) {
 
 describe("a window of the dialog shell at the end of the session", () => {
   it("is closed the way Escape closes it", () => {
-    const { dismiss } = shellWith(true);
+    const { dismiss } = shellWith();
 
     closeOpenWindows();
 
@@ -45,7 +39,7 @@ describe("a window of the dialog shell at the end of the session", () => {
   });
 
   it("is not asked once it has closed", () => {
-    const { dismiss, shown } = shellWith(true);
+    const { dismiss, shown } = shellWith();
 
     shown.value = false;
     closeOpenWindows();
@@ -55,19 +49,11 @@ describe("a window of the dialog shell at the end of the session", () => {
 
   it("leaves the list with its screen", () => {
     const before = openWindowCount();
-    const { wrapper } = shellWith(true);
+    const { wrapper } = shellWith();
     expect(openWindowCount()).toBe(before + 1);
 
     wrapper.unmount();
 
     expect(openWindowCount()).toBe(before);
-  });
-
-  it("leaves the navigation drawer, which is no window, open", () => {
-    const { dismiss } = shellWith(false);
-
-    closeOpenWindows();
-
-    expect(dismiss).not.toHaveBeenCalled();
   });
 });

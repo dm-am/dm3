@@ -8,7 +8,7 @@ using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Notepads;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using NotepadEntryEntity = DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadEntry;
+using DbNotepadEntry = DM.Infrastructure.Persistence.Entities.Personal.Notepads.NotepadEntry;
 
 namespace DM.Infrastructure.Persistence.Shared.Notepads;
 
@@ -18,7 +18,6 @@ internal class NotepadRepository : INotepadRepository
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public NotepadRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
@@ -26,8 +25,6 @@ internal class NotepadRepository : INotepadRepository
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
     }
-
-    #region Entries
 
     /// <inheritdoc />
     public async Task<IEnumerable<NotepadEntry>> GetEntriesAsync(
@@ -68,7 +65,7 @@ internal class NotepadRepository : INotepadRepository
     /// <inheritdoc />
     public async Task<NotepadEntry> CreateEntryAsync(CreateNotepadEntryInternal create, CancellationToken ct = default)
     {
-        var entry = new NotepadEntryEntity
+        var entry = new DbNotepadEntry
         {
             EntryId = create.EntryId,
             NotepadType = create.NotepadType,
@@ -90,7 +87,7 @@ internal class NotepadRepository : INotepadRepository
     /// <inheritdoc />
     public async Task<NotepadEntry> UpdateEntryAsync(UpdateNotepadEntryInternal update, CancellationToken ct = default)
     {
-        var entry = await _dbContext.NotepadEntries.FindAsync(new object[] { update.EntryId }, ct)
+        var entry = await _dbContext.NotepadEntries.FindAsync([update.EntryId], ct)
             ?? throw new InvalidOperationException($"Entry {update.EntryId} not found");
 
         if (update.Title != null)
@@ -109,7 +106,7 @@ internal class NotepadRepository : INotepadRepository
     /// <inheritdoc />
     public async Task DeleteEntryAsync(Guid entryId, Guid deletedByUserId, CancellationToken ct = default)
     {
-        var entry = await _dbContext.NotepadEntries.FindAsync(new object[] { entryId }, ct);
+        var entry = await _dbContext.NotepadEntries.FindAsync([entryId], ct);
         if (entry != null)
         {
             SoftDelete.Mark(entry, deletedByUserId, _dateTimeProvider.Now);
@@ -117,11 +114,7 @@ internal class NotepadRepository : INotepadRepository
         }
     }
 
-    #endregion
-
-    #region Mapping
-
-    private static NotepadEntry MapToDto(NotepadEntryEntity entry) => new()
+    private static NotepadEntry MapToDto(DbNotepadEntry entry) => new()
     {
         Id = entry.EntryId,
         NotepadType = entry.NotepadType,
@@ -134,6 +127,4 @@ internal class NotepadRepository : INotepadRepository
         CreatedUtc = entry.CreatedUtc,
         ModifiedUtc = entry.ModifiedUtc
     };
-
-    #endregion
 }

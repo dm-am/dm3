@@ -15,25 +15,12 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Moderation;
 /// Notifies the moderators who have written in it.
 /// </summary>
 /// <remarks>
-/// The entity is the comment. The reply passes the turn back to moderation, and the
-/// moderators it is news to are the ones already in the conversation: whoever has
-/// not written in it learns of the ticket from the queue, which is where everybody
-/// else on duty looks, and is not called to every ticket a colleague is settling.
-///
-/// Of those who wrote, the ones the ticket is still moderation's business of right
-/// now, by the rule the ticket service and the queue read (TicketVisibility): a
-/// moderator who lost the rank since, or whose role no longer reads the category,
-/// cannot open the page the notification leads to. The violator a complaint names
-/// never gets past the service into the conversation, and the rule keeps him out of
-/// here too, whatever put him among the writers. The author is left out: a
-/// moderator who filed a ticket writes in it as its author, and his reply is not
-/// news to himself.
+/// Only the writers TicketVisibility still lets in, minus the author; the rest learn from the queue.
 /// </remarks>
 internal class TicketRepliedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public TicketRepliedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -64,9 +51,7 @@ internal class TicketRepliedNotificationGenerator : BaseNotificationGenerator
             yield break;
         }
 
-        // The writers of this conversation who are still on the staff. System is
-        // excluded because the robot account cannot read, and a removed account is
-        // out of the read altogether.
+        // The writers who are still on the staff, without System.
         var writers = await _dbContext.Users
             .Where(u => !u.IsRemoved)
             .Where(u => u.Role >= UserRole.Moderator && u.Role < UserRole.System)
@@ -88,15 +73,13 @@ internal class TicketRepliedNotificationGenerator : BaseNotificationGenerator
         yield return new CreateNotification
         {
             UsersInterested = moderatorIds,
-            // No ActorId although the author is on the row: a reply reaching the
-            // moderators settling a ticket cannot depend on whether one of them
-            // blacklisted its author, as with the filing of it.
+            // No ActorId: a reply reaching the moderators cannot depend on their blacklists.
             Metadata = new
             {
-                // The moderation page of the ticket is built out of this field.
-                TicketId = reply.TicketId,
-                AuthorUsername = reply.AuthorUsername,
-                CreatedUtc = reply.CreatedUtc
+                // The link to the ticket is built out of this field.
+                reply.TicketId,
+                reply.AuthorUsername,
+                reply.CreatedUtc
             }
         };
     }

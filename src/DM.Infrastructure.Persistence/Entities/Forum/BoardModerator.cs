@@ -27,15 +27,9 @@ public class BoardModerator
     /// </summary>
     public Guid UserId { get; set; }
 
-    /// <summary>
-    /// Board
-    /// </summary>
     [ForeignKey(nameof(BoardId))]
     public virtual Board Board { get; set; } = null!;
 
-    /// <summary>
-    /// User
-    /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User User { get; set; } = null!;
 }

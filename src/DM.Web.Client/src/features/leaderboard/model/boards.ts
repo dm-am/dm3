@@ -3,18 +3,13 @@ import type {
   LeaderboardEntry,
 } from "@/shared/api/models/community";
 
-/**
- * Leaderboard board definitions — SSOT for both consumers (the full
- * statistics page and the period-digest topics), so titles, kinds and
- * response-field wiring can never drift between them.
- */
+// One definition for the statistics page and the digest topics, so the two cannot drift.
 export interface LeaderboardBoardDef {
   key: string;
   title: string;
   kind: "player" | "game" | "blog";
-  /** Reads this board's entries from the leaderboards response. */
   select: (boards: Leaderboards) => LeaderboardEntry[] | undefined;
-  /** Included in the three-card digest-topic teaser (rating boards only). */
+  /** In the three-card digest teaser (rating boards only). */
   teaser: boolean;
 }
 
@@ -35,7 +30,7 @@ export const LEADERBOARD_BOARDS: readonly LeaderboardBoardDef[] = [
   },
   {
     key: "blogs-by-rating",
-    title: "Лучший блог по лайкам",
+    title: "Лучший блог по отметкам Нравится",
     kind: "blog",
     select: (b) => b.topBlogsByRating,
     teaser: true,
@@ -77,6 +72,5 @@ export const LEADERBOARD_BOARDS: readonly LeaderboardBoardDef[] = [
   },
 ];
 
-/** The three rating boards shown by the digest-topic teaser. */
 export const TEASER_BOARDS: readonly LeaderboardBoardDef[] =
   LEADERBOARD_BOARDS.filter((b) => b.teaser);

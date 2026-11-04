@@ -11,20 +11,14 @@ export function useCreateTestimonial() {
 
   const formExpanded = ref(false);
 
-  // Who the testimonial is signed by. A testimonial is posted on behalf of a
-  // participant, so the name is asked for rather than taken from the session:
-  // without it the entry carried the moderator who typed it.
+  // Posted on behalf of a participant, so the name is asked for, not taken from the session.
   const authorUsername = ref("");
   const testimonialText = ref("");
   const isSubmitting = ref(false);
-  // Two messages, because there are two fields and a refusal that names one of
-  // them read as a complaint about the other when they shared a line.
+  // Two messages: a refusal naming one field read as a complaint about the other.
   const authorError = ref("");
   const errorMessage = ref("");
 
-  // The reveal itself is the global CSS-only .expand-fold (Reset.sass) —
-  // an inline tool form: unified animation tempo, no registry
-  // (UI_STANDARDS, Animation Standards).
   function toggleForm() {
     formExpanded.value = !formExpanded.value;
   }
@@ -47,25 +41,19 @@ export function useCreateTestimonial() {
 
     const { error } = await testimonialStore.createTestimonial(
       authorUsername.value.trim(),
-      testimonialText.value.trim(),
+      testimonialText.value,
     );
 
     isSubmitting.value = false;
 
     if (error) {
       if (error.status === 409) {
-        // The named participant, not the moderator submitting the form.
-        authorError.value = "У этого участника уже есть отзыв";
+        authorError.value = "У этого пользователя уже есть отзыв";
       } else if (error.status === 404) {
         // The server checks the name exists; the picker can be typed past.
         authorError.value = describeFailure(error, "Пользователь не найден");
-      } else if (error.status === 400) {
-        errorMessage.value = "Некорректные данные (10-1000 символов)";
       } else {
-        // What is left after the three answers about the form itself - a
-        // refused action, a rate limit, a dead server - stands in the same
-        // line, and the plate the interceptor held for it is taken down. An
-        // expired session and a dead connection stay with the plate.
+        // A refused length is said in the server's words, with its bound.
         errorMessage.value = refusalHere(error, REQUEST_FAILED) ?? "";
       }
     } else {

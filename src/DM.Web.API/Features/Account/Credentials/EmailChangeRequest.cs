@@ -11,7 +11,7 @@ public class EmailChangeRequest
     /// Current password for verification
     /// </summary>
     [Required(ErrorMessage = "Пароль обязателен")]
-    [StringLength(128, MinimumLength = 1, ErrorMessage = "Пароль обязателен")]
+    [StringLength(128, ErrorMessage = "Пароль обязателен")]
     public string Password { get; set; } = "";
 
     /// <summary>

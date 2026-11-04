@@ -31,8 +31,7 @@
 
   <secondary-text v-else-if="loaded"> Отзывов пока нет </secondary-text>
 
-  <!-- Reserves space equal to one collapsed testimonial bubble so the
-       content below does not jump up when the testimonials array arrives. -->
+  <!-- One collapsed bubble, so the content below does not jump. -->
   <TestimonialSkeleton v-else />
 </template>
 
@@ -68,13 +67,12 @@ const hasMore = computed(
 
 async function loadTestimonials() {
   loadFailed.value = false;
-  // Use store for initial load (benefits from 60s cache)
+  // The store's cache serves the first page
   const ok = await store.fetchTestimonials({ take: 10 }, true);
   const data = store.testimonials;
   if (data?.resources?.length) {
-    testimonials.value = [...data.resources]; // Copy to local ref for pagination
+    testimonials.value = [...data.resources];
     totalTestimonials.value = data.paging?.total ?? data.resources.length;
-    // Start with a random testimonial
     currentIndex.value = Math.floor(Math.random() * data.resources.length);
   } else if (!ok) {
     loadFailed.value = true;
@@ -82,11 +80,7 @@ async function loadTestimonials() {
   loaded.value = true;
 }
 
-/**
- * Load the next page of testimonials into the local gallery list.
- * Returns true only when the list actually grew, so callers can keep
- * currentIndex inside the array bounds when the request fails.
- */
+/** Returns true only when the list grew, so the index stays in bounds on a failure. */
 async function loadMoreTestimonials(): Promise<boolean> {
   if (loading.value || !hasMore.value) return false;
   loading.value = true;
@@ -108,19 +102,15 @@ async function nextTestimonial() {
   if (currentIndex.value < testimonials.value.length - 1) {
     currentIndex.value++;
   } else if (hasMore.value) {
-    // Advance only when the list actually grew — on a failed page load
-    // wrap to the first testimonial instead of stepping out of bounds.
+    // On a failed page load wrap to the first one instead of stepping out of bounds.
     const grew = await loadMoreTestimonials();
     currentIndex.value = grew ? currentIndex.value + 1 : 0;
   } else {
-    // Cycle to first
     currentIndex.value = 0;
   }
 }
 
-// Auto-rotate testimonials every 10 seconds (pause when hovered,
-// focused within, text selected, or the current testimonial is expanded —
-// swapping it out mid-read would be jarring).
+// Held while the reader is on it: swapping it out mid-read would be jarring.
 const AUTO_ROTATE_INTERVAL = 10000;
 let autoRotateTimer: ReturnType<typeof setInterval> | null = null;
 
@@ -133,8 +123,7 @@ function shouldPauseRotation() {
   );
 }
 
-// Pause rotation while keyboard focus is inside the gallery (WCAG 2.2.2):
-// otherwise the focused element unmounts mid-reading on the next tick.
+// WCAG 2.2.2: otherwise the focused element unmounts mid-reading.
 function onFocusIn() {
   isFocusWithin.value = true;
 }
@@ -168,7 +157,6 @@ function checkSelection() {
     hasSelection.value = false;
     return;
   }
-  // Only pause if selection is within the gallery
   if (galleryRef.value && selection.anchorNode) {
     hasSelection.value = galleryRef.value.contains(selection.anchorNode);
   } else {
@@ -176,7 +164,7 @@ function checkSelection() {
   }
 }
 
-// Pause auto-rotate when tab is hidden (saves CPU/battery)
+// Saves CPU and battery in a hidden tab
 function handleVisibilityChange() {
   if (document.hidden) {
     stopAutoRotate();
@@ -198,9 +186,7 @@ onUnmounted(() => {
   document.removeEventListener("visibilitychange", handleVisibilityChange);
 });
 
-// Called when new testimonial element has finished entering (after Transition)
 function onTestimonialEntered() {
-  // Measure content after transition completes
   testimonialRef.value?.measureContent();
 }
 </script>
@@ -210,34 +196,25 @@ function onTestimonialEntered() {
   position: relative
   margin: 0 0 $small
 
-// Testimonial transition animation - entire component as one unit.
-//
-// NOTE: no `:deep(*) transition: none` killer here. It used to disable
-// child transitions during the fade, but children are static during
-// enter/leave anyway (new testimonial mounts collapsed, old one
-// unmounts as-is). Worse: when a fade phase got stuck (background tab
-// throttling leaves the -active class on the element), the killer
-// permanently disabled the expand/collapse animation of the bubble —
-// collapse became instant while expand stayed smooth.
+// No `:deep(*) transition: none` here: a fade stuck in a background tab would
+// keep it and switch off the bubble's expand animation for good.
 .testimonial-fade-enter-active,
 .testimonial-fade-leave-active
-  transition: opacity 0.3s ease, transform 0.3s ease
-  // Force single compositing layer for entire testimonial
+  transition: opacity $transition-slow, transform $transition-slow
   will-change: opacity, transform
 
 .testimonial-fade-enter-from
   opacity: 0
-  transform: translateX(16px)
+  transform: translateX($medium)
 
 .testimonial-fade-leave-to
   opacity: 0
-  transform: translateX(-16px)
+  transform: translateX(-$medium)
 
-// Respect reduced motion preference
 @media (prefers-reduced-motion: reduce)
   .testimonial-fade-enter-active,
   .testimonial-fade-leave-active
-    transition: opacity 0.15s ease
+    transition: opacity $transition-normal
   .testimonial-fade-enter-from,
   .testimonial-fade-leave-to
     transform: none

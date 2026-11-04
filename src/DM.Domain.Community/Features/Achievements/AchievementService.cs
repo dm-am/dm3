@@ -38,8 +38,6 @@ internal class AchievementService : IAchievementService
         _updateCategoryValidator = updateCategoryValidator;
     }
 
-    // ---- Categories ----
-
     /// <inheritdoc />
     public Task<IReadOnlyCollection<AchievementCategory>> GetCategoriesAsync(bool includeInactive = false, CancellationToken ct = default) =>
         _repository.GetCategoriesAsync(includeInactive, ct);
@@ -48,13 +46,15 @@ internal class AchievementService : IAchievementService
     public async Task<AchievementCategory> UpdateCategoryAsync(UpdateAchievementCategory update, CancellationToken ct = default)
     {
         await _updateCategoryValidator.ValidateAndThrowAsync(update, ct);
-        if (update.IconName != null) GameIconCatalog.EnsureValid(update.IconName);
+        if (update.IconName != null)
+        {
+            GameIconCatalog.EnsureValid(update.IconName);
+        }
+
         _ = await _repository.GetCategoryAsync(update.Id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AchievementCategoryNotFound);
         return await _repository.UpdateCategoryAsync(update, ct);
     }
-
-    // ---- Tiers ----
 
     /// <inheritdoc />
     public Task<IReadOnlyCollection<AchievementType>> GetTypesAsync(bool includeInactive = false, CancellationToken ct = default) =>
@@ -65,8 +65,7 @@ internal class AchievementService : IAchievementService
     {
         await _createTypeValidator.ValidateAndThrowAsync(create, ct);
 
-        // Without this the unknown category surfaced as a foreign-key violation,
-        // i.e. a 500, while the endpoint advertised 400 for exactly this case.
+        // An unknown category is a 404, not a foreign-key violation.
         _ = await _repository.GetCategoryAsync(create.AchievementCategoryId, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AchievementCategoryNotFound);
 
@@ -91,15 +90,11 @@ internal class AchievementService : IAchievementService
     /// <inheritdoc />
     public async Task DeleteTypeAsync(Guid id, CancellationToken ct = default)
     {
-        // The repository returns silently when the row is absent, so without this
-        // a delete of a nonexistent tier answered 204 and the declared 404 could
-        // never fire.
+        // The repository returns silently when the row is absent.
         _ = await _repository.GetTypeAsync(id, ct)
             ?? throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.AchievementTypeNotFound);
         await _repository.DeleteTypeAsync(id, ct);
     }
-
-    // ---- User earnings ----
 
     /// <inheritdoc />
     public async Task<IReadOnlyCollection<UserAchievement>> GetUserAchievementsAsync(string username, CancellationToken ct = default)
@@ -115,23 +110,24 @@ internal class AchievementService : IAchievementService
 
         foreach (var type in types)
         {
-            if (earnedTypeIds.Contains(type.Id)) continue;
+            if (earnedTypeIds.Contains(type.Id))
+            {
+                continue;
+            }
 
-            // Metric lives on the parent category (SSOT).
             var value = AchievementMetricResolver.GetValue(type.Category.Metric, user, now);
-            if (value < type.Threshold) continue;
+            if (value < type.Threshold)
+            {
+                continue;
+            }
 
-            // TryGrantAsync is idempotent — the UNIQUE constraint silently
-            // rejects a duplicate in case of a race with the event evaluator.
+            // Idempotent: the UNIQUE constraint rejects the duplicate of a concurrent read.
             if (await _repository.TryGrantAsync(user.UserId, type.Id, now, ct))
             {
                 newlyGranted = true;
             }
         }
 
-        // If anything was granted, re-read earned to return
-        // the full list in one pass (fresh records with up-to-date
-        // EarnedUtc + related Type+Category).
         return newlyGranted
             ? await _repository.GetUserAchievementsAsync(user.UserId, ct)
             : earned;

@@ -1,14 +1,10 @@
 namespace DM.Domain.Game.Authorization;
 
-/// <summary>
-/// List of attribute schema template actions that require authorization
-/// </summary>
 public enum AttributeSchemaTemplateIntention
 {
     /// <summary>
-    /// Keep the catalogue of templates: create, replace, delete, and name the
-    /// one new games start from. Reading is not here, because a template is
-    /// open to everyone the way the tag catalogue is.
+    /// Create, replace, delete and name the default template. Reading is not
+    /// here: a template is open to everyone, like the tag catalogue.
     /// </summary>
     Manage = 0
 }

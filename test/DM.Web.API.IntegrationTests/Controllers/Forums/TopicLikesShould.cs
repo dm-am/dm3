@@ -12,15 +12,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 /// A like on a topic is on the topic the reader is handed back.
 /// </summary>
 /// <remarks>
-/// The topic projection carried a count of likes and no likers, and nothing
-/// filled them after it: every read answered with an empty list. The page tells
-/// the reader's own like by that list, so the heart of the one who had liked a
-/// topic was empty after a reload, and the list of those who liked it was empty
-/// however many had.
-///
-/// Written against HTTP, as the comment half of the same proof is
-/// (<see cref="General.CommentLikesShould" />): the omission lived in a query,
-/// which a test with a substituted repository steps straight over.
+/// The page tells the reader's own like by the list of likers. Over HTTP, as
+/// <see cref="General.CommentLikesShould" /> is: the list is filled in a query.
 /// </remarks>
 public class TopicLikesShould : IntegrationTestBase
 {

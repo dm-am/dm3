@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 export const REPO = resolve(HERE, "..", "..", "..");
-export const CLIENT_PREFIX = "src/DM.Web.Client";
+const CLIENT_PREFIX = "src/DM.Web.Client";
 export const CLIENT = join(REPO, ...CLIENT_PREFIX.split("/"));
 
 // What a directory side never contributes: installed packages, build output
@@ -54,7 +54,7 @@ export function git(args, { input, encoding = "utf8" } = {}) {
 }
 
 /** The commit a revision names, so both reads of one side see the same tree. */
-export function resolveRev(rev) {
+function resolveRev(rev) {
   return git(["rev-parse", "--verify", "--quiet", `${rev}^{commit}`]).trim();
 }
 
@@ -87,7 +87,7 @@ export function readBlobs(specs) {
 }
 
 /** Every file a revision holds under a prefix, with its object name. */
-export function listTree(sha, prefix) {
+function listTree(sha, prefix) {
   const out = git(["ls-tree", "-r", "-z", "--full-tree", sha, "--", prefix]);
   return out
     .split("\0")

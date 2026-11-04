@@ -1,4 +1,3 @@
-using System;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Dto;
@@ -8,13 +7,9 @@ namespace DM.Domain.Core.Dto;
 /// two flags that colour their name.
 /// </summary>
 /// <remarks>
-/// The counterpart of the API's UserRef, and the whole reason it exists is that
-/// <see cref="GeneralUser" /> promises far more. Filling a GeneralUser costs
-/// twenty-one aggregate queries — achievement counters, hosting breakdowns,
-/// subscribers, username history — and a caller that only needs a name and an
-/// avatar-less badge pays all of it. This type is filled by one projection, so
-/// asking for it cannot quietly buy the hydration; the flip side is that it must
-/// not grow fields that need one, or it turns back into GeneralUser.
+/// The counterpart of the API's UserRef. Filled by one projection, unlike the
+/// aggregate queries of <see cref="GeneralUser" />, so it must not grow fields
+/// that need one.
 /// </remarks>
 public class UserReference
 {

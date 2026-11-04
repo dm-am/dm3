@@ -1,26 +1,9 @@
 <script setup lang="ts">
 /**
- * ModerationNotes — moderator notes about a user (product doc 4.2.2.20), a
- * section of the profile's "Модерация" tab.
- *
- * Divergence from the doc, kept intentionally: the doc frames this as ONE
- * note per profile, but the backend models it as a LIST of authored notes
- * (each carries its own author, timestamps and per-note canEdit/canDelete —
- * see ModeratedProfileNote / GET moderatorNotes). The multi-note model is the
- * richer, correct one — several moderators can leave distinct, attributed
- * notes over time rather than overwriting a single shared field — so it is
- * preserved and flagged rather than collapsed to a single note.
- *
- * The notes read the way the viewer's own note on the same page reads: the
- * text, and a grey "Добавить" under it that opens the editor. The editor used
- * to stand open under the list at all times, with its toolbar and a button
- * across the column, and pushed everything after it down the tab.
- *
- * The note text is authored with the BBCode editor (doc: "BBCode editor"),
- * matching the warning/ban reason inputs. Display stays plain text: the
- * moderation domain stores the raw text and does not server-render it (the
- * warning reason on ModerationWarnings.vue is shown the same way). Rendering
- * BBCode here would need a server-rendered HTML field on the note DTO.
+ * The moderators' notes about a user: a list of authored notes, as the server
+ * models them, read as the viewer's own note reads, with a grey "Добавить".
+ * Written in the BBCode editor and shown as plain text: the server does not
+ * render them.
  */
 import { ref } from "vue";
 import type { ModNote } from "@/shared/api/models/moderation";
@@ -38,6 +21,7 @@ import Button from "@/shared/ui/Button/Button.vue";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{
   notes: ModNote[];
@@ -78,7 +62,7 @@ async function createNote() {
   createResult.clear();
   const { error } = await moderationApi.createModNote(
     props.targetUsername as Username,
-    newNoteText.value.trim(),
+    newNoteText.value,
   );
   creating.value = false;
   if (error) {
@@ -104,10 +88,7 @@ function cancelEdit() {
 async function saveEdit(noteId: string) {
   if (!editText.value.trim()) return;
   editResult.clear();
-  const { error } = await moderationApi.updateModNote(
-    noteId,
-    editText.value.trim(),
-  );
+  const { error } = await moderationApi.updateModNote(noteId, editText.value);
   if (error) {
     editResult.refuse(error, "Не удалось сохранить заметку");
     return;
@@ -116,32 +97,25 @@ async function saveEdit(noteId: string) {
   emit("updated");
 }
 
-// --- Delete note (ConfirmDialog-gated) ---
+// Delete, asked first.
 const deleteTarget = ref<ModNote | null>(null);
 
-// The request of the confirmation. The window waits for it, prints a refusal in
-// itself and closes on success alone, so the interceptor keeps quiet about it.
+// The window waits for the request, says a refusal in itself and closes on success alone.
 async function confirmDelete() {
   const target = deleteTarget.value;
   if (!target) return;
-  const result = await moderationApi.deleteModNote(target.id, {
-    ownsRefusal: true,
-    ownsRateLimit: true,
-  });
+  const result = await moderationApi.deleteModNote(target.id, OWNS_REFUSAL);
   if (!result.error) emit("updated");
   return result;
 }
 </script>
 
 <template>
-  <section class="mod-section">
+  <section>
     <BlockTitle>Заметки модераторов</BlockTitle>
 
     <div v-for="note in notes" :key="note.id" class="mod-note">
-      <!-- The name, then the caption line in the size of the secondary text
-           around it: the date, the mark of an edit and what the viewer may do
-           with the note. The actions go while the note is open in the editor,
-           which has buttons of its own. -->
+      <!-- The name, then its caption line; the actions go while the note is in the editor. -->
       <div class="mod-note_header">
         <strong class="mod-note_author">{{ note.authorUsername }}</strong
         >{{ " "
@@ -194,7 +168,7 @@ async function confirmDelete() {
     <p v-if="!notes.length && !adding" class="mod-note_empty">Заметок нет</p>
 
     <template v-if="canCreate">
-      <!-- The personal note of the same page opens its editor the same way. -->
+      <!-- As the personal note opens its editor. -->
       <CaptionLine v-if="!adding" class="mod-note_add">
         <CaptionAction @click="startAdding">Добавить</CaptionAction>
       </CaptionLine>
@@ -239,13 +213,11 @@ async function confirmDelete() {
 .mod-note + .mod-note
   margin-top: $small
 
-// Inline flow: the name and the caption line share a baseline, and a narrow
-// column wraps the line under the name instead of beside it.
+// Inline: the name and the caption share a baseline and wrap under each other in a narrow column.
 .mod-note_header
   margin-bottom: $minor
 
-// The step the old flex gap made between the name and the date, and between
-// the date and the mark of an edit: a space and $minor more.
+// A space and $minor between the name and the date.
 .mod-note_author
   margin-right: $minor
 
@@ -254,7 +226,7 @@ async function confirmDelete() {
 
 .mod-note_text
   white-space: pre-wrap
-  word-break: break-word
+  overflow-wrap: anywhere
 
 .mod-note_edit
   margin-top: $minor

@@ -15,13 +15,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// Who is told that the author of a ticket wrote in its conversation, what they
 /// are told, and where it leads them.
 /// </summary>
-/// <remarks>
-/// The moderators already in the conversation, and of them the ones the ticket is
-/// still moderation's business of: not a moderator who never wrote, not one who
-/// lost the rank since, not the violator, not the author himself when he is a
-/// moderator. Each of those is what a generator answering "every moderator" or
-/// "everybody who wrote" would get wrong, and the seed has one of each.
-/// </remarks>
+/// <remarks>The seed has one of each moderator a rule like "every moderator" or "everybody who wrote" would get wrong.</remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class TicketRepliedNotificationsShould
 {

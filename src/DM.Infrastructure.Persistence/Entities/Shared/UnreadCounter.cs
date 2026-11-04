@@ -43,13 +43,9 @@ public class UnreadCounter : IRemovable
     /// for some entities and the reader themselves for others
     /// </summary>
     /// <remarks>
-    /// "Aggregation entity identifier" named only the first half, and the second
-    /// is what the delicate code depends on. Which of the two a marker carries is
-    /// decided by the overload that created it, and the rule is written once, at
-    /// IUnreadCountersRepository, rather than restated here — see CODE_STYLE.md
-    /// on where the reason for a contract belongs.
-    /// No foreign key: the reference is polymorphic by EntryType, like every
-    /// polymorphic reference of the project, so integrity stays on the application.
+    /// Which of the two a marker carries is decided by the overload of
+    /// IUnreadCountersRepository that created it. No foreign key: the reference is
+    /// polymorphic by EntryType.
     /// </remarks>
     public Guid ParentId { get; set; }
 

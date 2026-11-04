@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -12,40 +11,26 @@ namespace DM.Web.API.Features.Blog.Users;
 /// <summary>
 /// Blog users API
 /// </summary>
-/// <remarks>
-/// Provides endpoints for viewing and managing blog users (owner, assistants, readers).
-/// For invitations, see BlogInvitationController.
-/// </remarks>
 [ApiController]
 [Route("v1/blogs/{id}/users")]
 [ApiExplorerSettings(GroupName = "Blog")]
 [Tags("Users")]
 public class BlogUserController : ControllerBase
 {
-    private readonly IBlogUserApiService _userApiService;
-    private readonly IBlogApiService _blogApiService;
+    private readonly BlogUserApiService _userApiService;
+    private readonly BlogApiService _blogApiService;
 
-    /// <inheritdoc />
     public BlogUserController(
-        IBlogUserApiService userApiService,
-        IBlogApiService blogApiService)
+        BlogUserApiService userApiService,
+        BlogApiService blogApiService)
     {
         _userApiService = userApiService;
         _blogApiService = blogApiService;
     }
 
-    #region Users
-
     /// <summary>
     /// Get all users of a blog
     /// </summary>
-    /// <remarks>
-    /// Returns users of the blog. Use the role parameter to filter by specific roles:
-    /// - owner - blog owner
-    /// - assistant - blog assistants
-    /// - mentor - assigned mentor
-    /// - reader - subscribed users
-    /// </remarks>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="role">Optional role filter</param>
     /// <response code="200">List of users</response>
@@ -59,36 +44,6 @@ public class BlogUserController : ControllerBase
         var users = await _userApiService.GetUsers(blogId, role);
         return Ok(new ListEnvelope<BlogUser>(users));
     }
-
-    /// <summary>
-    /// Remove assistant from the blog by user ID
-    /// </summary>
-    /// <remarks>
-    /// Only the blog owner can remove assistants.
-    /// Readers can only unsubscribe themselves. Cannot remove the blog owner.
-    /// </remarks>
-    /// <param name="id">Blog public ID (5 letters) or GUID</param>
-    /// <param name="userId">Assistant user ID to remove</param>
-    /// <response code="204">Assistant removed</response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not blog owner</response>
-    /// <response code="404">Blog or assistant not found</response>
-    [HttpDelete("{userId:guid}", Name = nameof(RemoveBlogUser))]
-    [AuthenticationRequired]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveBlogUser(string id, Guid userId)
-    {
-        var blogId = await _blogApiService.ResolveId(id);
-        await _userApiService.RemoveUser(blogId, userId);
-        return NoContent();
-    }
-
-    #endregion
-
-    #region Assistants
 
     /// <summary>
     /// Get list of blog assistants
@@ -127,8 +82,4 @@ public class BlogUserController : ControllerBase
         await _userApiService.RemoveAssistantByUsername(blogId, username);
         return NoContent();
     }
-
-    #endregion
-
-    // Note: Readers endpoints are at /v1/blogs/{id}/readers (see BlogReaderController)
 }

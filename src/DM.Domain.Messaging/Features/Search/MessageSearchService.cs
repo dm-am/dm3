@@ -7,8 +7,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
+using DM.Domain.Messaging.Features.Messages;
 
 namespace DM.Domain.Messaging.Features.Search;
 
@@ -19,8 +19,6 @@ internal class MessageSearchService : IMessageSearchService
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserBlacklistChecker _userBlacklistChecker;
 
-    // Inline operator tokens: from:/before:/after:/during:/in: followed by a
-    // non-space value. Everything not matched stays as free-text tsquery input.
     private static readonly Regex OperatorRegex = new(
         @"\b(from|before|after|during|in):(\S+)",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -42,21 +40,13 @@ internal class MessageSearchService : IMessageSearchService
         var query = Parse(request);
         var user = _identityProvider.Current.User;
 
-        // "Скрывать сообщения в чате" hides the general chat messages of the
-        // people on the reader's list wherever the reader reads that chat, and a
-        // search over it is one more way of reading it: the chat left them out
-        // and the search handed them back, a click away from the chat itself.
-        // Only the general chat, as in MessageService.GetWithCursorAsync: a
-        // private conversation is closed by BlockDirectMessages instead, and a
-        // game room is the game's, not the reader's. A search scoped away from
-        // the general chat has nobody to hide and asks nothing.
+        // A search over the general chat is one more way of reading it, so it hides what
+        // the chat hides; a search scoped away from the general chat asks nothing.
         var readsGeneralChat = query.Scopes.Count == 0 ||
                                query.Scopes.Any(s => s.Type == SearchSourceType.Global);
         if (user.IsAuthenticated && readsGeneralChat)
         {
-            var hidden = await _userBlacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
-                user.UserId, UserBlacklistSettings.HideMessages, ct);
-            query.HiddenAuthorIds = hidden.Count > 0 ? hidden : null;
+            query.HiddenAuthorIds = await _userBlacklistChecker.HiddenAuthorsAsync(user.UserId, ct);
         }
 
         return await _repository.Search(user.UserId, query, ct);
@@ -69,7 +59,6 @@ internal class MessageSearchService : IMessageSearchService
         var before = request.Before;
         var scopeTokens = new List<string>(request.In);
 
-        // Extract inline operators, accumulating the free-text remainder.
         var freeText = OperatorRegex.Replace(request.Query ?? "", match =>
         {
             var op = match.Groups[1].Value.ToLowerInvariant();
@@ -121,8 +110,7 @@ internal class MessageSearchService : IMessageSearchService
 
             if (token.Equals("all", StringComparison.OrdinalIgnoreCase))
             {
-                // Explicit "all" clears any restriction.
-                return new List<SearchScope>();
+                return [];
             }
 
             if (token.Equals("global", StringComparison.OrdinalIgnoreCase))

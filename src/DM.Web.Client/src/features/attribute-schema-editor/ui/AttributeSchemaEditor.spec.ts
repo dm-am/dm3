@@ -1,27 +1,6 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * The one control that says where a character sheet comes from.
- *
- * Doc 4.2.2.10 gives the editor a single list, "Схема атрибутов", over the
- * table, with "Скопировать" beside it: the site's templates with the default
- * one first and already picked, then the sheets of the games the reader leads,
- * and an empty sheet last. Before this the same control offered other people's
- * public schemas, which the server no longer serves at all, so the list was
- * empty and the master had nothing to start from.
- *
- * Two things about a copy are worth pinning beyond the ordering. It replaces
- * the whole set rather than adding to it, which is why a table with anything
- * in it is asked about first; and the specifications arrive with fresh
- * identifiers, because a copy is a sheet of its own and the values stored
- * against the source's specifications are not its to claim.
- *
- * The last block of the file is about the action bar instead: what the save
- * button says once the host tells the editor the draft on screen is the one
- * the server has.
- */
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { defineComponent, h } from "vue";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
@@ -30,6 +9,7 @@ import { useSchemaSources, type SchemaSource } from "../model/schemaSources";
 import { attributeSchemaTemplateApi } from "@/entities/attribute-schema-template";
 import {
   gameApi,
+  gameCatalogApi,
   AttributeSpecificationType,
   GameParticipation,
   type AttributeSchemaDraft,
@@ -52,11 +32,7 @@ const spec = (id: string, title: string): AttributeSpecification => ({
 const DEFAULT_TEMPLATE_SPEC = spec("template-spec", "Мировоззрение");
 const GAME_SPEC = spec("game-spec", "Фракция");
 
-/**
- * The modal is a double that draws one button per open dialog, named by the
- * dialog's title: the real one teleports to the body, and this file asks only
- * whether the question was put and what answering it does.
- */
+// One button per open dialog, named by its title: the real modal teleports to the body.
 const confirmStub = defineComponent({
   props: {
     show: { type: Boolean, default: false },
@@ -109,7 +85,7 @@ function serveCatalogue() {
     ReturnType<typeof attributeSchemaTemplateApi.getTemplates>
   >);
 
-  vi.spyOn(gameApi, "getParticipatingGames").mockResolvedValue({
+  vi.spyOn(gameCatalogApi, "getParticipatingGames").mockResolvedValue({
     data: {
       resources: [
         {
@@ -128,7 +104,9 @@ function serveCatalogue() {
       paging: null,
     },
     error: null,
-  } as unknown as Awaited<ReturnType<typeof gameApi.getParticipatingGames>>);
+  } as unknown as Awaited<
+    ReturnType<typeof gameCatalogApi.getParticipatingGames>
+  >);
 
   vi.spyOn(gameApi, "getGame").mockResolvedValue({
     data: {
@@ -138,7 +116,6 @@ function serveCatalogue() {
   } as unknown as Awaited<ReturnType<typeof gameApi.getGame>>);
 }
 
-/** The list as the composable builds it. */
 async function loadSources(): Promise<SchemaSource[]> {
   const { sources, load } = useSchemaSources();
   await load();
@@ -157,7 +134,6 @@ const mountEditor = (
 const named = (wrapper: VueWrapper, text: string) =>
   wrapper.findAll("button").find((b) => b.text() === text)!;
 
-/** The attribute names the table draws, in table order. */
 const rows = (wrapper: VueWrapper) =>
   wrapper.findAll(".col-name").map((cell) => cell.text());
 
@@ -165,8 +141,6 @@ afterEach(() => vi.restoreAllMocks());
 
 describe("the source list", () => {
   it("offers templates, then the games the reader leads, then an empty sheet", async () => {
-    // The game entries say they are games: a template and a game may be called
-    // the same thing, and what the button does with them differs.
     serveCatalogue();
 
     expect((await loadSources()).map((s) => s.label)).toEqual([
@@ -223,7 +197,6 @@ describe("copying a sheet into the editor", () => {
     await named(wrapper, "Скопировать").trigger("click");
     await flushPromises();
 
-    // Nothing has moved yet: the question is out and the table is untouched.
     expect(rows(wrapper)).toEqual(["Раса"]);
 
     const question = wrapper.find(".confirm-stub");
@@ -234,7 +207,6 @@ describe("copying a sheet into the editor", () => {
     await question.trigger("click");
     await flushPromises();
 
-    // The whole set, not an addition to it.
     expect(rows(wrapper)).toEqual(["Мировоззрение"]);
   });
 
@@ -268,14 +240,6 @@ describe("copying a sheet into the editor", () => {
   });
 });
 
-/**
- * The line under the list, for what went wrong behind it.
- *
- * The host owns the list and its reads (schemaSources.spec pins what they say
- * and when); the editor only prints the sentence, under the control it is
- * about, where the reader who pressed "Скопировать" or is looking for the
- * templates is looking. A plate in the corner used to say this.
- */
 describe("the line under the source list", () => {
   const mountWithRefusal = (sourcesRefusal: string) =>
     mount(AttributeSchemaEditor, {
@@ -304,35 +268,15 @@ describe("the line under the source list", () => {
   });
 });
 
-/**
- * The action bar, and the one thing it has to say.
- *
- * A schema save changes nothing the editor draws: the table after it holds the
- * same rows it held before, the preview under it is the same preview, and the
- * page does not move. Until the host was given a way to answer, the only thing
- * that ever said the save had happened was a message in the corner - which is
- * what UI_STANDARDS, "Всплывающие сообщения", sends back to the button.
- *
- * The editor cannot work the answer out for itself: the draft it holds is a
- * copy and the save belongs to whoever mounted it, so `saved` arrives as a
- * prop. What is pinned here is that the prop reaches the reader - the label
- * and the press - and nothing else about it.
- */
-
-/** The first control of the action bar: the one that saves. */
 const saveButton = (wrapper: VueWrapper) =>
   wrapper.find(".editor-actions button");
 
-/** What the button says, and whether it can still be pressed. */
 const savedAnswer = (wrapper: VueWrapper) => ({
   label: saveButton(wrapper).text(),
   inert: saveButton(wrapper).attributes("disabled") !== undefined,
 });
 
-/**
- * The editor with a sheet in it and no source list: the list is the subject of
- * the tests above, and without it nothing here reaches for the network.
- */
+// Without the source list nothing here reaches for the network.
 const mountActions = (saved = false, save = vi.fn().mockResolvedValue({})) =>
   mount(AttributeSchemaEditor, {
     props: {
@@ -373,15 +317,6 @@ describe("the editor's answer to a save", () => {
   });
 });
 
-/**
- * The data-loss question, with the site's own window rather than the double.
- *
- * The save it guards cannot be taken back, and it used to close the question
- * before the request went out: a refused save then fell as a plate on a page
- * whose question was gone. The question runs the host's save as its action
- * now, so it waits for the answer, prints a refusal in itself and closes on
- * success alone.
- */
 describe("the data-loss question", () => {
   type Save = (
     draft: AttributeSchemaDraft,
@@ -475,5 +410,46 @@ describe("the data-loss question", () => {
     await flushPromises();
     expect(question()).not.toContain("Сохранить схему атрибутов?");
     wrapper.unmount();
+  });
+});
+
+describe("the privacy of the descriptor", () => {
+  const mountTable = (specifications: AttributeSpecification[]) =>
+    mount(AttributeSchemaEditor, {
+      props: { modelValue: { title: "", specifications } },
+      global: { stubs },
+    });
+
+  const privacy = (wrapper: VueWrapper, title: string) =>
+    wrapper.find(`input[aria-label="Приватность: ${title}"]`);
+
+  const lastDraft = (wrapper: VueWrapper) =>
+    wrapper.emitted("update:modelValue")?.at(-1)?.[0] as AttributeSchemaDraft;
+
+  it("offers no privacy for the descriptor, and a dash in its place", () => {
+    const wrapper = mountTable([
+      { ...spec("class", "Класс"), isDescriptor: true },
+      spec("race", "Раса"),
+    ]);
+
+    expect(privacy(wrapper, "Класс").exists()).toBe(false);
+    expect(
+      wrapper.findAll(".attr-row")[0].find(".col-flag .dash").exists(),
+    ).toBe(true);
+    expect(privacy(wrapper, "Раса").exists()).toBe(true);
+  });
+
+  it("takes the privacy off an attribute chosen for the descriptor", async () => {
+    const wrapper = mountTable([{ ...spec("class", "Класс"), isHidden: true }]);
+
+    await wrapper
+      .find('input[aria-label="Дескриптор: Класс"]')
+      .trigger("change");
+
+    expect(lastDraft(wrapper).specifications[0]).toMatchObject({
+      isDescriptor: true,
+      isHidden: false,
+    });
+    expect(privacy(wrapper, "Класс").exists()).toBe(false);
   });
 });

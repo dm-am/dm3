@@ -1,16 +1,5 @@
 <script setup lang="ts">
-/**
- * Dynamic error page for /error/:code routes and the catch-all 404.
- *
- * The code segment resolves in two ways:
- *  - a numeric HTTP status (/error/404, /error/403…);
- *  - absent, unreadable or not a number (the catch-all route) -> 404.
- *
- * Non-numeric codes used to resolve through a table of symbolic ones borrowed
- * from an external sign-in the server never grew. Nothing redirected here with
- * one, so the three entries only gave three addresses a page of their own that
- * no link led to.
- */
+/** /error/:code and the catch-all: a numeric code is the status, anything else is 404. */
 import { computed } from "vue";
 import { useRoute } from "vue-router";
 import { useDocumentTitle } from "@/shared/lib/composables/useDocumentTitle";

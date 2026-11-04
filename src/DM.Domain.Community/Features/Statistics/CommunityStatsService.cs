@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Caching;
+using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Community.Features.Statistics;
 
@@ -14,18 +15,12 @@ internal class CommunityStatsService : ICommunityStatsService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ICache _cache;
 
-    // Longer TTL than the frontend poll interval (60s) so the vast majority of
-    // SiteStatistics requests hit a warm cache. The stats are approximate by
-    // design — "Users: 12,345, online: 42" is a vibe number, not a real-time
-    // metric — so a two-minute staleness window is well within acceptable
-    // drift. The heavy 15-query path only runs on genuine cache misses.
+    // Longer than the client's poll interval, so most requests hit a warm cache:
+    // the numbers are approximate by design.
     private static readonly TimeSpan LiveStatsCacheDuration = TimeSpan.FromMinutes(2);
 
-    // Closed calendar periods are immutable (new content is always dated
-    // "now"), so their leaderboards can live in cache for a long time; only
-    // soft-deletes of old content can retroactively change them, hence a day
-    // rather than forever. The current (still-open) period keeps changing as
-    // reviews and posts arrive, so it gets a short TTL.
+    // A closed period changes only by soft-deletes of old content, hence a day
+    // rather than forever; the open one keeps changing.
     private static readonly TimeSpan ClosedPeriodCacheDuration = TimeSpan.FromHours(24);
     private static readonly TimeSpan OpenPeriodCacheDuration = TimeSpan.FromMinutes(10);
 
@@ -49,6 +44,14 @@ internal class CommunityStatsService : ICommunityStatsService
     /// <inheritdoc />
     public Task<Leaderboards> GetLeaderboardsAsync(int year, int? month, CancellationToken ct = default)
     {
+        // A 400 rather than a DateTimeOffset construction throwing into a 500.
+        var refusals = LeaderboardPeriod.Refusals(year, month);
+        if (refusals.Count > 0)
+        {
+            throw new HttpBadRequestException(new Dictionary<string, string>(refusals),
+                RefusalMessage.PeriodInvalid);
+        }
+
         var (startDate, endDate) = ResolvePeriodBounds(year, month);
         var cacheDuration = endDate <= _dateTimeProvider.Now
             ? ClosedPeriodCacheDuration
@@ -63,35 +66,29 @@ internal class CommunityStatsService : ICommunityStatsService
     private async Task<Leaderboards> CalculateLeaderboards(
         int year, int? month, DateTimeOffset startDate, DateTimeOffset endDate, CancellationToken ct)
     {
-        // Contract: every board carries POSITIVE scores only (the "only
-        // positive achievement is celebrated" product rule), enforced in the
-        // query so no consumer has to re-filter. The SQL tie-break on the
-        // entity id makes the board boundary deterministic across runs; the
-        // display ranks (with ties broken by name) are assigned here.
-        var boards = await _repository.GetLeaderboards(startDate, endDate, ct);
+        // Positive scores only, enforced in the query; the display ranks are assigned here.
+        var leaderboards = await _repository.GetLeaderboards(startDate, endDate, ct);
 
-        AssignCompetitionRanks(boards.TopPlayersByRating);
-        AssignCompetitionRanks(boards.TopPlayersByPosts);
-        AssignCompetitionRanks(boards.TopGamesByRating);
-        AssignCompetitionRanks(boards.TopGamesByPosts);
-        AssignCompetitionRanks(boards.TopPlayersByVolume);
-        AssignCompetitionRanks(boards.TopBlogsByRating);
-        AssignCompetitionRanks(boards.TopBlogsByPosts);
-        AssignCompetitionRanks(boards.TopBlogAuthorsByVolume);
-
-        return new Leaderboards
+        foreach (var board in BoardsOf(leaderboards))
         {
-            Period = new Period { Year = year, Month = month },
-            TopPlayersByRating = boards.TopPlayersByRating.ToArray(),
-            TopPlayersByPosts = boards.TopPlayersByPosts.ToArray(),
-            TopGamesByRating = boards.TopGamesByRating.ToArray(),
-            TopGamesByPosts = boards.TopGamesByPosts.ToArray(),
-            TopPlayersByVolume = boards.TopPlayersByVolume.ToArray(),
-            TopBlogsByRating = boards.TopBlogsByRating.ToArray(),
-            TopBlogsByPosts = boards.TopBlogsByPosts.ToArray(),
-            TopBlogAuthorsByVolume = boards.TopBlogAuthorsByVolume.ToArray()
-        };
+            AssignOrdinalRanks(board);
+        }
+
+        leaderboards.Period = new Period { Year = year, Month = month };
+        return leaderboards;
     }
+
+    private static IEnumerable<List<LeaderboardEntry>> BoardsOf(Leaderboards leaderboards) =>
+    [
+        leaderboards.TopPlayersByRating,
+        leaderboards.TopPlayersByPosts,
+        leaderboards.TopGamesByRating,
+        leaderboards.TopGamesByPosts,
+        leaderboards.TopPlayersByVolume,
+        leaderboards.TopBlogsByRating,
+        leaderboards.TopBlogsByPosts,
+        leaderboards.TopBlogAuthorsByVolume
+    ];
 
     /// <summary>
     /// Resolves the [start, end) UTC bounds for a stats period. A year of 0 is
@@ -122,7 +119,7 @@ internal class CommunityStatsService : ICommunityStatsService
     /// reads as a simple numbered list; ties are broken by name rather than
     /// sharing a rank number. Internal for unit testing.
     /// </summary>
-    internal static void AssignCompetitionRanks(List<LeaderboardEntry> entries)
+    internal static void AssignOrdinalRanks(List<LeaderboardEntry> entries)
     {
         entries.Sort((a, b) =>
         {

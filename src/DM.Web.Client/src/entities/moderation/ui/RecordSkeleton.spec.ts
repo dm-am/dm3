@@ -2,16 +2,7 @@
  * @vitest-environment node
  */
 
-/**
- * The waiting twin of a record stands in the geometry of the record, so the
- * log does not jump when the answer replaces it. The bar of the text is one
- * line of the record's text: the text took DM2's step of 20 (line-height
- * 1.25 on the page's 16px, RecordBlock.vue), the bar stayed at 1.6em, and it
- * stood 5.6px taller than the line it waits for.
- *
- * Read off the compiled styles of both files: jsdom lays nothing out, and the
- * two numbers live in two components that change apart.
- */
+// The bar copies the line of the record's text so the log does not jump; this holds the copy.
 import { describe, it, expect } from "vitest";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -33,8 +24,7 @@ describe("RecordSkeleton", () => {
       ".page",
     )?.["font-size"];
 
-    // The record's text sets no size of its own and runs in the page's type,
-    // so an em of the bar is an em of the text only in that type.
+    // The text runs in the page's type, so an em of the bar is an em of the text only there.
     expect(text?.["font-size"]).toBeUndefined();
     expect(skeleton.get(".skeleton-text")?.["font-size"]).toBe(pageType);
 

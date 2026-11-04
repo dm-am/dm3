@@ -1,25 +1,6 @@
 <script setup lang="ts">
-// The window a form opens in: the vue-final-modal tier underneath, the card
-// of _DialogSurface.sass on top of it, and the cross in its corner.
-//
-// The card is the guest card (owner's call, 21 September 2026): the page's
-// own fill, 24px of gutter, no frame, no shadow, no blur under it. What the
-// window holds is told that it stands in one (IN_DIALOG), so a form inside it
-// takes the window's fields and buttons without each of the forms saying so.
-//
-// A window handed an `action` owns the request the form inside it sends
-// (useDialogAction, DIALOG_FORM): it stays open until the answer, is shut
-// while it waits, prints a refusal in itself and closes on success alone. The
-// owner approved the four of them on 22 September 2026, together with the
-// question that guards typed text and the caret's first place. The rules are
-// written in UI_STANDARDS.md, "Dialog Standards".
-//
-// The library closes nothing of a site window by itself. With Escape and the
-// click beside the card left to it, a window could not ask before dropping
-// typed text or refuse to close while its request is in flight: the library
-// reports neither gesture in a way that can be declined. So both are caught
-// here and go the one way the cross goes. The guest card (`auto`) keeps the
-// library's own closing, as it was approved.
+// The library closes nothing of a site window by itself: it reports neither Escape nor a click beside the
+// card in a way that can be declined, so both go the cross's way here. The guest card (`auto`) keeps the library's.
 import { computed, provide, ref, watch } from "vue";
 import { VueFinalModal } from "vue-final-modal";
 import ConfirmDialog from "@/shared/ui/ConfirmDialog/ConfirmDialog.vue";
@@ -35,28 +16,13 @@ import { DIALOG_FORM, IN_DIALOG } from "./dialogContext";
 
 const props = withDefaults(
   defineProps<{
-    /**
-     * Whether the window is open. A window opened with useModal gets it from
-     * the library's container; one written into a template takes v-model.
-     */
+    /** Open: from the library's container under useModal, or v-model. */
     modelValue?: boolean;
-    /**
-     * The window holds the BBCode editor. At 920px the editor's toolbar and its
-     * [bbcode]/wysiwyg switch stand in one row; at 580 they took three.
-     */
+    /** Holds the BBCode editor: at 920px its toolbar and switch stand in one row. */
     editor?: boolean;
-    /**
-     * The guest dialog (AuthDialog), whose content is a card of its own painted
-     * by AuthSurface.sass. The wrapper then draws no cross of its own, since the
-     * guest card has one, and tells nothing inside it that it is in a window:
-     * the guest surface has its own fields.
-     */
+    /** The guest dialog (AuthDialog): its own card and cross, and no IN_DIALOG for what it holds. */
     auto?: boolean;
-    /**
-     * What the main button of the form inside does: a request that resolves to
-     * the client's `{ data, error }`, or a function that asks no server. The
-     * window runs it, shows the wait and the refusal, and closes after success.
-     */
+    /** What the main button of the form inside does: the window runs it, waits, refuses and closes. */
     action?: DialogAction;
     /**
      * The refusal line's sentence for a failure the server did not word
@@ -92,9 +58,7 @@ const cross = ref<HTMLButtonElement | null>(null);
 /** The question "Закрыть без сохранения?" stands over the window. */
 const asking = ref(false);
 
-// The question goes with the window. Closed by its own "Закрыть", it is gone
-// before it could say so itself: the window it answers for closes first, and
-// takes the question's own report of closing with it.
+// The question goes with the window: closed first, the window takes the question's report with it.
 const shut = () => {
   asking.value = false;
   emit("update:modelValue", false);
@@ -117,10 +81,7 @@ const request = useDialogAction({
 });
 const { busy } = request;
 
-/**
- * The cross, Escape and "Отмена". Nothing while the request is in flight; the
- * question while typed text would be lost; the way out otherwise.
- */
+/** The cross, Escape and "Отмена": nothing while busy, the question over typed text, else the way out. */
 const requestClose = () => {
   if (busy.value) return;
   if (props.dirty) {
@@ -130,20 +91,13 @@ const requestClose = () => {
   leave();
 };
 
-/**
- * A click beside the card. It never asks: the gesture is too easy to make by
- * accident to be worth a second window, so over typed text it does nothing.
- */
+/** A click beside the card never asks: too easy to make by accident; over typed text it does nothing. */
 const closeBeside = () => {
   if (busy.value || props.dirty) return;
   leave();
 };
 
-// The session ended (useOpenWindows): the window goes, typed text or not,
-// since nothing typed here can be sent any more. A window waiting for its own
-// request is left to that request, which meets the same refusal and closes it
-// through `onExpired`; closed here as well, it would say "close" twice. The
-// guest card stays: it is how a signed-out reader signs in again.
+// The session ended: the window goes, unless its own request is in flight and closes it through onExpired.
 useOpenWindow(
   computed(() => !props.auto && !!props.modelValue),
   () => {
@@ -174,17 +128,7 @@ const cardClass = computed(() =>
   props.editor ? "dialog dialog--editor" : "dialog",
 );
 
-/**
- * The caret's first place: what the opener focused itself, if it did; else
- * the first empty field; else the cross. Read by the library's focus trap when
- * it starts, which is after the window is on screen.
- *
- * Focused here and without a scroll, and handed back already focused, which
- * the trap then leaves alone. Focused by the trap, the first empty field of a
- * window taller than the screen scrolled the frame down to itself, and the
- * window opened with its heading out of sight; the trap also selects the text
- * of a field it focuses, and a filled one opened selected.
- */
+/** The caret's first place, focused here without a scroll: the trap scrolled a tall window and selected the field. */
 const initialFocus = (): HTMLElement | undefined => {
   const root = card.value;
   if (!root) return undefined;
@@ -195,27 +139,17 @@ const initialFocus = (): HTMLElement | undefined => {
   return first;
 };
 
-// Escape is the window's and not the trap's: left to its default, the trap
-// switches itself off on Escape and hands the caret to the page, even where
-// the window stays open because it is busy or asking.
+// Escape is the window's: the trap would switch itself off and hand the caret to the page.
 const focusTrap = computed(() =>
   props.auto
     ? undefined
     : { allowOutsideClick: true, escapeDeactivates: false, initialFocus },
 );
 
-// The frame the library draws around the card is not a control, and the
-// question over the window cycles Tab through what is left live: without this
-// the frame is a stop in the cycle where nothing is visibly focused.
+// The library's frame is no control: without this it is an invisible stop in the question's Tab cycle.
 watch(card, (el) => el?.parentElement?.setAttribute("tabindex", "-1"));
 
-// An Escape that a control inside keeps to itself never gets here: the
-// question over the window and the calendar of a date field stop it where they
-// take it. The editor's input window is a window of its own, drawn from
-// <body>, and a key pressed in it does not pass through this one. `defaultPrevented` is no such claim and is not read:
-// the editor (ProseMirror) prevents the default of every Escape pressed in it,
-// and a window that took that for an answer stayed open over its editor, empty
-// or with a typed reason, and asked nothing.
+// defaultPrevented is not read: ProseMirror prevents every Escape pressed in the editor.
 function onKeydown(e: KeyboardEvent) {
   if (props.auto || e.key !== "Escape") return;
   e.preventDefault();
@@ -242,11 +176,7 @@ function onRelease(e: MouseEvent) {
   pressedBeside = false;
 }
 
-/**
- * A link in the card does not lead away while the request is in flight: the
- * screen that opened the window would unmount with it, and the answer would
- * arrive nowhere. The warning window carries one, to the violator's profile.
- */
+/** No link leads away while the request is in flight: the answer would arrive nowhere. */
 function holdLinks(e: MouseEvent) {
   if (!busy.value) return;
   if (!(e.target as Element | null)?.closest?.("a[href]")) return;
@@ -280,8 +210,6 @@ function holdLinks(e: MouseEvent) {
     <slot v-if="auto" />
     <template v-else>
       <div ref="card" :class="cardClass" :inert="asking || undefined">
-        <!-- Empty on purpose: the two bars of the cross are drawn by the
-             stylesheet, and a glyph inside would stand behind them. -->
         <button
           ref="cross"
           type="button"
@@ -290,12 +218,10 @@ function holdLinks(e: MouseEvent) {
           :aria-disabled="busy || undefined"
           @click="requestClose"
         ></button>
-        <!-- `busy` for a body that holds a control of its own to shut while
-             the request is in flight, as the warning window shuts its editor. -->
+        <!-- `busy` for a body that shuts a control of its own, as the warning window shuts its editor. -->
         <slot :busy="busy" />
       </div>
-      <!-- Inside the frame and not teleported: the library's focus trap holds
-           the caret within the window, and the question has to stand in it. -->
+      <!-- Inside the frame: the library's focus trap holds the caret within the window. -->
       <ConfirmDialog
         v-if="dirty || asking"
         inline
@@ -318,19 +244,10 @@ function holdLinks(e: MouseEvent) {
   display: flex
   justify-content: center
   align-items: center
-  // Align vfm modals with the self-rolled dialog tier (ConfirmDialog sits at
-  // $z-dialog).
+  // The tier of ConfirmDialog.
   z-index: $z-dialog
 
-.dialog-overlay
-  /* styled via ThemeVariables.css for proper cascade */
-
-// The frame a site window stands in: the whole screen over the dimming, and
-// the one thing that scrolls. A card taller than the screen starts at its top
-// and scrolls whole, the cross and the buttons with the body, as a page does;
-// nothing in it is sticky, because a sticky row covers the field that holds
-// the caret. `margin: auto` on the card centres a card that fits and starts
-// one that does not at the top, where centring would cut it at both ends.
+// The one thing that scrolls; nothing in the card is sticky: a sticky row covers the field with the caret.
 .dialog-frame
   position: absolute
   inset: 0
@@ -340,9 +257,7 @@ function holdLinks(e: MouseEvent) {
   overflow-y: auto
   overscroll-behavior: contain
 
-// The card, with the width of a window that holds a form. One width for every
-// form: a narrow tier of 380 made a window of four fields read as a column of
-// scraps, and the owner removed it.
+// One width for every form: the owner removed the narrow tier.
 .dialog
   +dialog-card
   width: $dialog-width
@@ -356,7 +271,7 @@ function holdLinks(e: MouseEvent) {
 .dialog--editor
   width: $dialog-width-editor
 
-// The guest dialog's tier. AuthSurface.sass takes the wrapper over with
+// The guest dialog's tier. _AuthCard.sass takes the wrapper over with
 // `.dialog:has(> .auth-surface)`, which outranks both rules here, so this one
 // only speaks for a browser without :has. It stays because AuthDialog passes
 // `auto` and is not this window's to change.

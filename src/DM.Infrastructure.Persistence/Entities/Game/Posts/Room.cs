@@ -31,9 +31,6 @@ public class Room : ISoftDeletable
     /// </summary>
     public int RoomNumber { get; set; }
 
-    /// <summary>
-    /// Title
-    /// </summary>
     public string Title { get; set; } = null!;
 
     /// <summary>
@@ -94,9 +91,6 @@ public class Room : ISoftDeletable
     /// </summary>
     public Guid? ChatId { get; set; }
 
-    /// <summary>
-    /// Game
-    /// </summary>
     [ForeignKey(nameof(GameId))]
     public virtual Game Game { get; set; } = null!;
 
@@ -112,9 +106,6 @@ public class Room : ISoftDeletable
     [InverseProperty(nameof(RoomAccess.Room))]
     public virtual ICollection<RoomAccess> RoomAccesses { get; set; } = [];
 
-    /// <summary>
-    /// Posts
-    /// </summary>
     [InverseProperty(nameof(Post.Room))]
     public virtual ICollection<Post> Posts { get; set; } = [];
 

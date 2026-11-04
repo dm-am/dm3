@@ -3,8 +3,7 @@
 // package BBCodeParser 1.0.0 was built from: upstream commit
 // c2ccefdf9d657e130186b60fc253821c7af4e168.
 //
-// DM3 change against the original: this file is new. It is one entry of the
-// explicit stack that replaced the call stack in Node.Render - see Node.cs.
+// DM3 change against the original: this file is new, an entry of the stack of Node.Render.
 
 using System.Collections.Generic;
 
@@ -16,15 +15,8 @@ namespace BBCodeParser.Nodes
     /// children to be written first.
     /// </summary>
     /// <remarks>
-    /// The literal form is what carries a closing tag. A recursive renderer
-    /// keeps it in a local variable while it descends; an iterative one has
-    /// nowhere to keep it, so it goes on the same stack under the children and
-    /// comes back off after them.
-    ///
-    /// The alias substitutions travel per step rather than per walk because a
-    /// preformatted tag turns them off for its whole subtree, and the mode travels
-    /// per step because a code tag switches its subtree to BBCode output. Both
-    /// used to be expressed by what the recursive call passed down.
+    /// The mode and the substitutions travel per step because a tag can switch
+    /// them for its subtree.
     /// </remarks>
     internal readonly struct EmitStep
     {

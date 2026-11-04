@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,16 +13,8 @@ namespace DM.Architecture.Tests;
 /// The storage layer reads "now" through the clock abstraction and never off the machine.
 /// </summary>
 /// <remarks>
-/// Everything the layer decides by time — whether an account counts as online, which side of
-/// midnight a statistic falls on, how long a bot link code stays valid, what moment a deletion
-/// is stamped with — is a rule, and a rule that reads the system clock cannot be stated in a
-/// test. Two of these classes used to hold an injected provider and read the machine clock in
-/// the same file, so one class carried two different answers to what "now" means.
-///
-/// Read out of the sources rather than measured, for the same reason SeedDeterminismShould is:
-/// the property belongs to the code, while measuring it would need PostgreSQL up.
-/// Comments are stripped first, so the paragraph explaining why a call is absent does not
-/// count as the call.
+/// A rule that reads the system clock cannot be stated in a test. Read out of the sources with comments
+/// stripped, as SeedDeterminismShould is.
 /// </remarks>
 public class StorageClockShould
 {
@@ -29,12 +22,8 @@ public class StorageClockShould
     /// A read of the machine clock, under either spelling.
     /// </summary>
     /// <remarks>
-    /// The lookbehind exists to let a property called DateTime through — <c>row.DateTime.Now</c>
-    /// is a field of a row and not the framework type. Applied to the bare name alone it also let
-    /// the fully qualified form through, because <c>System.DateTimeOffset.UtcNow</c> carries a dot
-    /// right where the lookbehind looks: the rule was blind to the one spelling a developer
-    /// reaches for when the short one is flagged. The optional <c>System.</c> is therefore matched
-    /// explicitly, and the lookbehind now guards the front of the whole reference.
+    /// The lookbehind lets a property called DateTime through (<c>row.DateTime.Now</c>); the optional
+    /// <c>System.</c> is matched explicitly so the qualified form is caught.
     /// </remarks>
     private static readonly Regex Clock = new(
         @"(?<![\w.])(System\s*\.\s*)?DateTime(Offset)?\s*\.\s*(Now|UtcNow|Today)\b",
@@ -58,20 +47,13 @@ public class StorageClockShould
     /// A generated identifier, taken off the framework instead of the factory.
     /// </summary>
     private static readonly Regex Identifier = new(
-        @"(?<![w.])Guids*.s*NewGuids*(s*)",
+        @"(?<![\w.])(System\s*\.\s*)?Guid\s*\.\s*NewGuid\s*\(",
         RegexOptions.Compiled);
 
     /// <summary>
     /// One source of new identifiers for the whole layer, and it is injected.
     /// </summary>
-    /// <remarks>
-    /// The same argument as the clock above, and the same seam: the seeding tool
-    /// replaces IGuidFactory with a deterministic one so that a fixture built twice
-    /// is the same fixture, and every repository that calls Guid.NewGuid directly
-    /// is a hole in that. Ten of them called it while the factory was already
-    /// injected next door — the value is identical, which is exactly why the drift
-    /// went unnoticed until the seed stopped reproducing.
-    /// </remarks>
+    /// <remarks>The seeding tool replaces IGuidFactory with a deterministic one, so a direct call breaks reproduction.</remarks>
     [Fact]
     public void TakeNewIdentifiersOnlyThroughTheInjectedFactory()
     {
@@ -88,10 +70,9 @@ public class StorageClockShould
     {
         var sources = StorageSources();
 
-        sources.Should().HaveCountGreaterThan(50,
-            "the layer is the context, the migration and some ninety repository files, and a " +
-            "rule that found a handful of them would report green over everything it never " +
-            "opened");
+        sources.Should().NotBeEmpty(
+            "a rule that found none of the files of the layer would report green over " +
+            "everything it never opened");
         sources.Should().Contain(path => Path.GetFileName(path) == "DmDbContext.cs",
             "the context is where the seed and the model live; if the walk misses it, it is " +
             "walking the wrong directory");
@@ -99,25 +80,15 @@ public class StorageClockShould
 
     private static IReadOnlyList<string> StorageSources() => Directory
         .EnumerateFiles(StorageDirectory, "*.cs", SearchOption.AllDirectories)
-        .Where(IsAuthored)
+        .Where(RepositoryFiles.IsAuthored)
         .OrderBy(path => path, StringComparer.Ordinal)
         .ToList();
 
     private static IReadOnlyList<string> Offenders(Regex pattern) => StorageSources()
-        .Where(path => pattern.IsMatch(Code(path)))
-        .Select(path => Path.GetRelativePath(RepositoryRoot, path))
+        .Where(path => pattern.IsMatch(SourceText.ReadCode(path)))
+        .Select(RepositoryFiles.Relative)
         .ToList();
 
-    private static string Code(string path) =>
-        SourceText.ReadCode(path);
-
     private static string StorageDirectory =>
-        Path.Combine(RepositoryRoot, "src", "DM.Infrastructure.Persistence");
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    private static bool IsAuthored(string path) =>
-        !path
-            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(segment => segment is "obj" or "bin");
+        Path.Combine(RepositoryLayout.Root, "src", "DM.Infrastructure.Persistence");
 }

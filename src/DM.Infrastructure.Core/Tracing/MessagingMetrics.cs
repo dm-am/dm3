@@ -4,31 +4,19 @@ using System.Diagnostics.Metrics;
 namespace DM.Infrastructure.Core.Tracing;
 
 /// <summary>
-/// Metrics of message consumption (Prometheus + OTel). Global SSOT — everything
-/// the two workers publish about the messages they handle lives here.
+/// Metrics of message consumption: only the consumer says whether the work it took
+/// succeeded.
 /// </summary>
 /// <remarks>
-/// The broker says how much work is waiting; only the consumer says whether the
-/// work it took succeeded. Before these, a worker that failed every message it
-/// touched looked identical to an idle one from the outside: its process
-/// answered, its request rate was the scrape interval, its heap was flat, and
-/// the only trace of the failures was a warning line nothing was watching.
-///
-/// Names follow OpenTelemetry semantic conventions: snake_case, dot-separated
-/// namespace, and the unit only in the unit argument, because the Prometheus
-/// exporter appends its own suffix on top of whatever the name already says.
-/// The counters carry no unit at all: a unit outside the UCUM table is appended
-/// verbatim, so "messages" would export dm_messaging_failed_messages_total and
-/// every rule written from this file would query a series that does not exist.
-/// What the scrape shows is dm_messaging_{consumed,failed,retried}_total and
-/// dm_messaging_duration_seconds.
+/// The unit only in the unit argument and none on a counter: the Prometheus
+/// exporter appends it to the name, verbatim outside UCUM.
 /// </remarks>
 public static class MessagingMetrics
 {
     /// <summary>Meter name for OTel registration.</summary>
     public const string MeterName = "DM.Messaging";
 
-    private static readonly Meter Meter = new(MeterName, "1.0.0");
+    private static readonly Meter Meter = new(MeterName, DmActivitySource.Version);
 
     /// <summary>
     /// Messages a consumer finished with. Attributes: <c>queue</c>,
@@ -65,18 +53,10 @@ public static class MessagingMetrics
     /// Attributes: <c>event</c> (event type), <c>reason</c> (exception type).
     /// </summary>
     /// <remarks>
-    /// An event is not the carrier of the fact — SYSTEM.md says so, and the
-    /// producer therefore swallows a refusal instead of turning a committed
-    /// write into a 500. That trade only holds while someone can see the
-    /// swallowing: without this counter the swallowed losses look exactly like a
-    /// quiet site, and the first symptom is a user asking why notifications
-    /// stopped.
-    ///
-    /// Since the outbox (W1.5) this counts only the irrecoverable losses: the
-    /// outbox insert refused right after the domain commit, and the one letter
-    /// whose loss a caller swallows on the same terms — the warning about a
-    /// login from an unknown address. A broker refusal is no longer here at
-    /// all: it became a delay, counted by <see cref="OutboxPublishFailed"/>.
+    /// The producer swallows a refusal rather than fail a committed write, so this is
+    /// what shows it: the outbox insert refused after the commit, and the swallowed
+    /// letter about a sign-in from an unknown address. A broker refusal is a delay
+    /// (<see cref="OutboxPublishFailed"/>).
     /// </remarks>
     public static readonly Counter<long> PublishFailed =
         Meter.CreateCounter<long>("dm.messaging.publish_failed", null, "Events the publisher could not hand to the broker");
@@ -86,10 +66,7 @@ public static class MessagingMetrics
     /// backlog. Updated by every relay pass.
     /// </summary>
     /// <remarks>
-    /// The number behind the backlog alert. A growing lag with a live process
-    /// means the broker has been down longer than any deployment, or the relay
-    /// is jammed on a row it cannot assemble — either way the events are not
-    /// lost, only not delivered, and a human decides.
+    /// The number behind the backlog alert.
     /// </remarks>
     public static readonly Gauge<double> OutboxLag =
         Meter.CreateGauge<double>("dm.messaging.outbox_lag", "s", "Age of the oldest unpublished outbox row");
@@ -114,9 +91,7 @@ public static class MessagingMetrics
     /// Relay passes, ticking on an empty backlog too.
     /// </summary>
     /// <remarks>
-    /// Without this a stalled relay loop in a live process would leave the lag
-    /// gauge frozen at its last value — a zero that masks a growing backlog.
-    /// The stall alert reads the increase of this counter.
+    /// A stalled relay would leave the lag gauge frozen; the stall alert reads this.
     /// </remarks>
     public static readonly Counter<long> OutboxRelayPasses =
         Meter.CreateCounter<long>("dm.messaging.outbox_relay_passes", null, "Passes of the outbox relay");
@@ -127,17 +102,8 @@ public static class MessagingMetrics
     /// <c>event</c> (notification type).
     /// </summary>
     /// <remarks>
-    /// The far end of the same trade as <see cref="PublishFailed"/>, and the one
-    /// that was invisible. A message is taken off the queue, handed to a sender,
-    /// and the sender swallows what the channel answered: a bot that returns 403
-    /// for every chat, a relay that refuses every letter and a push nobody is
-    /// subscribed to are all a warning line and an acknowledged message. The
-    /// consumer counters say the message was consumed successfully, because from
-    /// the pipeline's side it was — the swallowing happens below it.
-    ///
-    /// The channel and the type of notification, and nothing about the recipient:
-    /// the address, the chat and the user are what makes a failure specific, and
-    /// a label carrying any of them multiplies streams per user without bound.
+    /// A sender swallows what the channel answered, so the consumer counters see a
+    /// success. Nothing about the recipient, which would open a series per user.
     /// </remarks>
     public static readonly Counter<long> DeliveryFailed = Meter.CreateCounter<long>(
         "dm.messaging.delivery_failed", null, "Notifications a channel refused to deliver");

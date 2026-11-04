@@ -5,18 +5,12 @@ using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Configuration;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Extensions;
 using DM.Domain.Core.Identity;
-using DbToken = DM.Infrastructure.Persistence.Entities.Account.Token;
-using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence.RelationalStorage;
-using DM.Infrastructure.Persistence.Shared.Queries;
-using DM.Infrastructure.Persistence.Shared.Subscriptions;
-using DM.Infrastructure.Persistence.Shared.Users;
+using DM.Infrastructure.Persistence.Shared.Attachments;
 using GameDto = DM.Domain.Game.Features.Games.Game;
 using Microsoft.EntityFrameworkCore;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
@@ -28,398 +22,23 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 /// <summary>
 /// Repository for game operations
 /// </summary>
-internal class GameRepository : IGameRepository
+internal partial class GameRepository : IGameRepository
 {
     private readonly DmDbContext _dbContext;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IPublicIdService _publicIdService;
+    private readonly PublicIdService _publicIdService;
 
     public GameRepository(
         DmDbContext dbContext,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IPublicIdService publicIdService)
+        PublicIdService publicIdService)
     {
         _dbContext = dbContext;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _publicIdService = publicIdService;
-    }
-
-    #region Read Operations
-
-    public async Task<int> Count(GamesQuery query, Guid userId, CancellationToken ct = default)
-    {
-        var asked = await AskedAccountsOf(query, ct);
-        return await ApplyFilters(_dbContext.Games.AsQueryable(), query, userId, asked)
-            .CountAsync(ct);
-    }
-
-    public async Task<IEnumerable<GameDto>> GetGames(PagingData pagingData, GamesQuery query, Guid userId, CancellationToken ct = default)
-    {
-        var asked = await AskedAccountsOf(query, ct);
-        var gamesQuery = ApplyFilters(_dbContext.Games.AsQueryable(), query, userId, asked);
-        // The GameId tiebreaker makes the ordering unique so split-query
-        // pagination stays deterministic: each collection subquery re-runs the
-        // same ORDER BY + OFFSET/FETCH and must select the identical page.
-        // That fixes the ordering, not the snapshot: the subqueries are separate
-        // statements under READ COMMITTED, so a game created or removed between
-        // them shifts the OFFSET window and a card can render with another card's
-        // tags. Accepted deliberately — the window is milliseconds against a
-        // handful of writes a day, and the damage is one wrong collection on one
-        // render.
-        //
-        // The cure is not keyset pagination and does not touch the API contract:
-        // materialise the page of identifiers first and fetch the collections by
-        // Where(id => ids.Contains(...)), the way EnrichGamesAsync already fetches
-        // everything else, and the collection queries stop replaying the OFFSET.
-        // The price is one more round trip on the busiest list on the site, paid on
-        // every page by every visitor, against a defect that needs a concurrent
-        // create to appear at all. Revisit if game creation ever becomes
-        // high-volume — that is the number that moves this trade, not the contract.
-        var orderedGames = ApplySorting(gamesQuery, query).ThenBy(g => g.GameId);
-
-        var games = await orderedGames
-            .Page(pagingData)
-            // GameDto projects three independent collections (GameTags,
-            // Assistants, BlackList); a single query LEFT-JOINs them into a
-            // cartesian product that can exhaust memory (BufferedDataReader
-            // OOM). AsSplitQuery loads each collection with its own query.
-            .ProjectToGame()
-            .AsSplitQuery()
-            .ToArrayAsync(ct);
-
-        await EnrichGamesAsync(games, userId, ct);
-        await EnrichWithFilteredPlayerCharactersAsync(games, query.PlayerUsername, asked.Players, ct);
-        return games;
-    }
-
-    /// <summary>
-    /// The accounts the host and player filters mean when they name "Аккаунт удален":
-    /// the removed accounts, with the live hosts named alongside. Null where the name
-    /// is not asked for - that filter keeps reading the name.
-    /// </summary>
-    private sealed record AskedAccounts(IReadOnlyCollection<Guid>? Hosts, IReadOnlyCollection<Guid>? Players);
-
-    private async Task<AskedAccounts> AskedAccountsOf(GamesQuery query, CancellationToken ct) => new(
-        await RemovedAccountScope.IdsIfAsked(_dbContext.Users, query.OwnerUsernames, ct),
-        string.IsNullOrEmpty(query.PlayerUsername)
-            ? null
-            : await RemovedAccountScope.IdsIfAsked(_dbContext.Users, [query.PlayerUsername], ct));
-
-    /// <summary>
-    /// Populate <see cref="GameDto.FilteredPlayerCharacters"/> for the
-    /// player-filtered list (profile games table). Only runs when the
-    /// query carries a player filter - the field stays null otherwise,
-    /// so unfiltered lists pay no extra query. Returns ALL of that
-    /// player's non-NPC characters regardless of the query's
-    /// PlayerParticipation scope: with the default Active scope the filter
-    /// guarantees at least one active character per game (actives are
-    /// ordered first), while with PlayerParticipation.Any a row may carry
-    /// only retired characters or an application under review. Declined
-    /// applications are excluded - a rejected application never was a
-    /// character in the game.
-    /// </summary>
-    private async Task EnrichWithFilteredPlayerCharactersAsync(
-        IReadOnlyList<GameDto> games,
-        string? playerUsername,
-        IReadOnlyCollection<Guid>? playerIds,
-        CancellationToken ct)
-    {
-        if (games.Count == 0 || string.IsNullOrEmpty(playerUsername)) return;
-
-        var gameIds = games.Select(g => g.Id).ToHashSet();
-        // Case-insensitive per USERNAME_POLICY.md, same as the filter itself.
-        var usernameLower = playerUsername.ToLower();
-
-        // "Аккаунт удален" plays through every removed account's characters, read
-        // by the author column (RemovedAccountScope); any other name, by the name.
-        var characters = _dbContext.Characters
-            .Where(c => gameIds.Contains(c.GameId) &&
-                        !c.IsRemoved &&
-                        !c.IsNpc &&
-                        c.Status != CharacterStatus.Declined);
-        characters = playerIds is null
-            ? characters.Where(c => c.Author!.Username.ToLower() == usernameLower)
-            : characters.Where(c => c.AuthorId.HasValue && playerIds.Contains(c.AuthorId.Value));
-
-        var characterData = await characters
-            .OrderBy(c => c.CreatedUtc)
-            .Select(c => new { c.GameId, c.Name, c.Status, c.IsDead, c.IsPlayerLeft, c.IsPlayerExiled })
-            .ToListAsync(ct);
-
-        var charactersMap = characterData
-            .GroupBy(c => c.GameId)
-            .ToDictionary(
-                g => g.Key,
-                // Active characters first, then retired/pending in creation order.
-                g => g.OrderBy(c => c.Status == CharacterStatus.Active ? 0 : 1)
-                    .Select(c => new PlayerCharacterInfo
-                    {
-                        Name = c.Name,
-                        Status = c.Status,
-                        IsDead = c.IsDead,
-                        IsPlayerLeft = c.IsPlayerLeft,
-                        IsPlayerExiled = c.IsPlayerExiled
-                    })
-                    .ToList());
-
-        foreach (var game in games)
-        {
-            game.FilteredPlayerCharacters = charactersMap.GetValueOrDefault(game.Id, []);
-        }
-    }
-
-    /// <summary>
-    /// Populate computed / aggregated fields on Game DTOs that cannot
-    /// be produced by the ProjectTo mapping (ActiveCharacters, Players,
-    /// subscriber summary, Recruitment.PcCount, GameReviewsCount,
-    /// PostReviewsCount, SubscriberUsernames, Pending* invitations).
-    ///
-    /// This is the single source of truth for "full game DTO hydration"
-    /// and MUST be called by every read path that returns a Game or
-    /// GameDetails (list, by-ids, details). Previously the inline
-    /// duplicated block lived in three places; details-reads skipped
-    /// it entirely, which is why the game tooltip on featured posts
-    /// silently showed no characters. Works uniformly for Game and
-    /// GameDetails (GameDetails : Game) — the type parameter is
-    /// constrained so callers can pass paged lists, ad-hoc arrays, or
-    /// a single-element array from a details fetch, all for the same
-    /// code path.
-    ///
-    /// All queries are batched (GROUP BY / IN(...)) so the cost is
-    /// O(1) per table regardless of how many games are in the input.
-    /// </summary>
-    /// <param name="games">Games to hydrate</param>
-    /// <param name="userId">
-    /// The user the read is on behalf of. Only <see cref="GameDto.IsViewerSubscriber" />
-    /// and the turn marker (<see cref="GameDto.AwaitsViewerTurn" /> with its
-    /// character names) depend on it; every other field here is the same for all
-    /// viewers. <see cref="Guid.Empty" /> for an anonymous read.
-    /// </param>
-    /// <param name="ct">Cancellation token</param>
-    private async Task EnrichGamesAsync<T>(
-        IReadOnlyList<T> games,
-        Guid userId,
-        CancellationToken ct) where T : GameDto
-    {
-        if (games.Count == 0) return;
-        var gameIds = games.Select(g => g.Id).ToHashSet();
-
-        // PcCount — active non-NPC characters per game, single GROUP BY.
-        var pcCounts = await _dbContext.Characters
-            .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
-            .GroupBy(c => c.GameId)
-            .Select(g => new { GameId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
-
-        foreach (var game in games)
-        {
-            game.Recruitment.PcCount = pcCounts.GetValueOrDefault(game.Id, 0);
-        }
-
-        // Players — unique authors of active non-NPC characters.
-        // Projected, not materialized: selecting the Author navigation pulled whole
-        // User rows — Salt and PasswordHash included — into memory for every active
-        // character on the page, and left Picture empty besides, because AvatarUpload
-        // is not loaded and lazy loading is off.
-        var playerData = await _dbContext.Characters
-            .AsNoTracking()
-            .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc &&
-                        c.AuthorId.HasValue && c.Author != null)
-            .Select(c => new
-            {
-                c.GameId,
-                Author = new GeneralUser
-                {
-                    UserId = c.Author!.UserId,
-                    Username = c.Author.Username,
-                    Role = c.Author.Role,
-                    Status = c.Author.Status,
-                    LastActivityUtc = c.Author.LastActivityUtc,
-                    RegisteredUtc = c.Author.CreatedUtc,
-                    // Carried on purpose: IsNewbie derives from it, and dropping it
-                    // would silently mark every player a newbie.
-                    QuantityRating = c.Author.QuantityRating,
-                    Picture = AvatarProjections.From(c.Author.AvatarUpload),
-                },
-            })
-            .ToListAsync(ct);
-
-        var playersMap = playerData
-            .GroupBy(c => c.GameId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(c => c.Author).DistinctBy(u => u.UserId).ToList());
-
-        // Subscriber summary — the total, whether this viewer is one of them, and
-        // the capped preview of names, all from one statement.
-        var subscriberSummaries = await SubscriberSummaries.ByTarget(
-            _dbContext.Subscriptions, SubscriptionTargetType.Game, gameIds, userId, ct);
-
-        foreach (var game in games)
-        {
-            game.Players = playersMap.TryGetValue(game.Id, out var players)
-                ? players.ToList()
-                : [];
-
-            var summary = subscriberSummaries.GetValueOrDefault(game.Id);
-            game.SubscribersCount = summary?.Count ?? 0;
-            game.IsViewerSubscriber = summary?.ViewerSubscribed ?? false;
-            game.SubscriberUsernames = summary?.Preview ?? [];
-        }
-
-        // Invitation tokens — single query instead of N subqueries. Projected for the
-        // reason the players block above is: including the User navigation pulled whole
-        // User rows, Salt and PasswordHash included, into memory for every invitation on
-        // the page, and left PendingAssistant.Picture empty besides, because
-        // AvatarUpload is not loaded and lazy loading is off.
-        var tokens = await _dbContext.Tokens
-            .AsNoTracking()
-            .Where(t => !t.IsRemoved &&
-                        t.EntityId.HasValue &&
-                        gameIds.Contains(t.EntityId.Value) &&
-                        (t.Type == TokenType.GameAssistantInvitation ||
-                         t.Type == TokenType.GamePlayerInvitation ||
-                         t.Type == TokenType.GameReaderInvitation))
-            .Select(t => new
-            {
-                GameId = t.EntityId!.Value,
-                t.Type,
-                t.UserId,
-                User = new GeneralUser
-                {
-                    UserId = t.User.UserId,
-                    Username = t.User.Username,
-                    Role = t.User.Role,
-                    Status = t.User.Status,
-                    LastActivityUtc = t.User.LastActivityUtc,
-                    RegisteredUtc = t.User.CreatedUtc,
-                    QuantityRating = t.User.QuantityRating,
-                    Picture = AvatarProjections.From(t.User.AvatarUpload),
-                },
-            })
-            .ToListAsync(ct);
-
-        var tokensByGame = tokens.GroupBy(t => t.GameId).ToDictionary(g => g.Key, g => g.ToList());
-
-        foreach (var game in games)
-        {
-            if (tokensByGame.TryGetValue(game.Id, out var gameTokens))
-            {
-                var assistantToken = gameTokens.FirstOrDefault(t => t.Type == TokenType.GameAssistantInvitation);
-                game.PendingAssistant = assistantToken?.User;
-                game.PendingInvitedUserIds = gameTokens
-                    .Where(t => t.Type == TokenType.GamePlayerInvitation || t.Type == TokenType.GameReaderInvitation)
-                    .Select(t => t.UserId)
-                    .ToHashSet();
-                game.PendingPlayerInvitedUserIds = gameTokens
-                    .Where(t => t.Type == TokenType.GamePlayerInvitation)
-                    .Select(t => t.UserId)
-                    .ToHashSet();
-            }
-            else
-            {
-                game.PendingAssistant = null;
-                game.PendingInvitedUserIds = new HashSet<Guid>();
-                game.PendingPlayerInvitedUserIds = new HashSet<Guid>();
-            }
-        }
-
-        // Game / post review counts — both batched by GameId.
-        var gameReviewCounts = await _dbContext.GameReviews
-            .Where(r => !r.IsRemoved && gameIds.Contains(r.GameId))
-            .GroupBy(r => r.GameId)
-            .Select(g => new { GameId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
-
-        var postReviewCounts = await _dbContext.PostReviews
-            .Where(r => !r.IsRemoved && gameIds.Contains(r.GameId))
-            .GroupBy(r => r.GameId)
-            .Select(g => new { GameId = g.Key, Count = g.Count() })
-            .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
-
-        // Active characters for [X/Y] tooltip — feeds game/room tooltips.
-        var activeCharacterData = await _dbContext.Characters
-            .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
-            .Select(c => new { c.GameId, c.Name, OwnerUsername = c.Author!.Username })
-            .ToListAsync(ct);
-
-        var activeCharactersMap = activeCharacterData
-            .GroupBy(c => c.GameId)
-            .ToDictionary(
-                g => g.Key,
-                g => g.Select(c => new ActiveCharacterInfo
-                {
-                    Name = c.Name,
-                    OwnerUsername = c.OwnerUsername
-                }).ToList());
-
-        foreach (var game in games)
-        {
-            game.GameReviewsCount = gameReviewCounts.GetValueOrDefault(game.Id, 0);
-            game.PostReviewsCount = postReviewCounts.GetValueOrDefault(game.Id, 0);
-            game.ActiveCharacters = activeCharactersMap.GetValueOrDefault(game.Id, []);
-        }
-
-        await FillTurnMarkersAsync(games, gameIds, userId, ct);
-    }
-
-    /// <summary>
-    /// Populate the turn marker — whether the game waits for a post from this
-    /// viewer, and for which of his characters.
-    /// </summary>
-    /// <remarks>
-    /// The room list has always carried the expectations of a game and the
-    /// sidebar draws its star from them, but a list of games carries no rooms, so
-    /// the panel that shows a player his games could not say which of them was
-    /// waiting for him without fetching every room of every one. The same
-    /// selection, asked of the pendencies table instead: one statement for the
-    /// whole page, and a row only for this viewer, so the anonymous read skips it
-    /// entirely.
-    /// </remarks>
-    private async Task FillTurnMarkersAsync<T>(
-        IReadOnlyList<T> games,
-        HashSet<Guid> gameIds,
-        Guid userId,
-        CancellationToken ct) where T : GameDto
-    {
-        if (userId == Guid.Empty)
-        {
-            foreach (var game in games)
-            {
-                game.AwaitsViewerTurn = false;
-                game.AwaitedCharacterNames = [];
-            }
-
-            return;
-        }
-
-        var awaited = await _dbContext.PostPendencies
-            .AsNoTracking()
-            .Where(p => p.WaitingForUserId == userId &&
-                        p.FulfilledUtc == null &&
-                        // A removed room is off the room list, so the expectation
-                        // inside it is off every screen that reads one.
-                        !p.Room.IsRemoved &&
-                        gameIds.Contains(p.Room.GameId))
-            .Where(PostPendencyFilters.Genuine)
-            .OrderBy(p => p.CreatedUtc)
-            .ThenBy(p => p.PendencyId)
-            .Select(p => new { p.Room.GameId, CharacterName = p.Character.Name })
-            .ToListAsync(ct);
-
-        var awaitedByGame = awaited
-            .GroupBy(p => p.GameId)
-            .ToDictionary(g => g.Key, g => g.Select(p => p.CharacterName).Distinct().ToList());
-
-        foreach (var game in games)
-        {
-            var names = awaitedByGame.GetValueOrDefault(game.Id, []);
-            game.AwaitedCharacterNames = names;
-            game.AwaitsViewerTurn = names.Count > 0;
-        }
     }
 
     /// <summary>
@@ -451,355 +70,6 @@ internal class GameRepository : IGameRepository
         // Dice support = any live room of the game has dice rolling enabled.
         game.DiceSupported = await _dbContext.Rooms
             .AnyAsync(r => !r.IsRemoved && r.GameId == game.Id && r.DiceEnabled, ct);
-    }
-
-    private IQueryable<DbGame> ApplyFilters(
-        IQueryable<DbGame> games, GamesQuery query, Guid userId, AskedAccounts asked)
-    {
-        // Premoderation filter (service-gated, Mentor+ only): the moderation
-        // worklist must show ALL games in the requested premoderation states,
-        // while the regular accessibility scope hides exactly those games
-        // from non-participants. Switch to the moderation scope instead.
-        if (query.PremoderationStatuses is { Count: > 0 })
-        {
-            var premoderationStatuses = query.PremoderationStatuses.ToArray();
-            games = games.Where(g => !g.IsRemoved && premoderationStatuses.Contains(g.PremoderationStatus));
-        }
-        else
-        {
-            games = games.Where(GameAccessibilityFilters.GameAvailable(userId));
-        }
-
-        // Text search with fuzzy matching (OR between title/system/setting)
-        if (!string.IsNullOrWhiteSpace(query.Search))
-        {
-            var searchPattern = LikePatterns.Contains(query.Search);
-            var searchLower = query.Search.ToLower();
-            games = games.Where(g =>
-                // Contains match (case-insensitive)
-                EF.Functions.ILike(g.Title, searchPattern) ||
-                (g.SystemName != null && EF.Functions.ILike(g.SystemName, searchPattern)) ||
-                (g.NarrativeSetting != null && EF.Functions.ILike(g.NarrativeSetting, searchPattern)) ||
-                // Fuzzy match with trigrams (typo tolerance)
-                EF.Functions.TrigramsSimilarity(g.Title, searchLower) > 0.3 ||
-                (g.SystemName != null && EF.Functions.TrigramsSimilarity(g.SystemName, searchLower) > 0.3) ||
-                (g.NarrativeSetting != null && EF.Functions.TrigramsSimilarity(g.NarrativeSetting, searchLower) > 0.3));
-        }
-
-        // Statuses with sub-filters (OR between statuses, sub-filters apply within each status)
-        if (query.Statuses is { Count: > 0 })
-        {
-            var statuses = query.Statuses.ToHashSet();
-
-            games = games.Where(g =>
-                // Draft - no sub-filters
-                (statuses.Contains(ModuleStatus.Draft) && g.Status == ModuleStatus.Draft)
-                ||
-                // Active - RecruitmentFilter sub-filter
-                (statuses.Contains(ModuleStatus.Active) && g.Status == ModuleStatus.Active
-                    && (query.RecruitmentFilter == null
-                        || query.RecruitmentFilter == RecruitmentFilter.Any
-                        || (query.RecruitmentFilter == RecruitmentFilter.Open && g.IsRecruitmentOpen)
-                        || (query.RecruitmentFilter == RecruitmentFilter.Initial && g.IsRecruitmentOpen && g.RecruitmentCount == 1)
-                        || (query.RecruitmentFilter == RecruitmentFilter.Subsequent && g.IsRecruitmentOpen && g.RecruitmentCount >= 2)
-                        || (query.RecruitmentFilter == RecruitmentFilter.Closed && !g.IsRecruitmentOpen)))
-                ||
-                // Closed - ClosedReasonFilter sub-filter
-                (statuses.Contains(ModuleStatus.Closed) && g.Status == ModuleStatus.Closed
-                    && (query.ClosedReasonFilter == null
-                        || g.ClosedReason == query.ClosedReasonFilter)));
-        }
-
-        // Required tags - game must have ALL of them (AND logic)
-        if (query.RequiredTags is { Count: > 0 })
-        {
-            var required = query.RequiredTags.ToList();
-            games = games.Where(g =>
-                g.GameTags.Count(t => required.Contains(t.Tag.ShortId)) >= required.Count);
-        }
-
-        // Optional tags - game must have at least ONE of them (OR logic)
-        if (query.OptionalTags is { Count: > 0 })
-        {
-            var optional = query.OptionalTags.ToArray();
-            games = games.Where(g =>
-                g.GameTags.Any(t => optional.Contains(t.Tag.ShortId)));
-        }
-
-        // Excluded tags - game must NOT have any of them (NOR logic)
-        if (query.ExcludedTags is { Count: > 0 })
-        {
-            var excluded = query.ExcludedTags.ToArray();
-            games = games.Where(g =>
-                !g.GameTags.Any(t => excluded.Contains(t.Tag.ShortId)));
-        }
-
-        // Owner filter - master OR assistant (case-insensitive per USERNAME_POLICY.md, OR logic).
-        // Asked for "Аккаунт удален", by the identifiers of the removed accounts and of
-        // the live hosts named with it, joining no account.
-        var hostIds = asked.Hosts;
-        if (hostIds is not null)
-        {
-            games = games.Where(g =>
-                hostIds.Contains(g.MasterId) || g.Assistants.Any(a => hostIds.Contains(a.UserId)));
-        }
-        else if (query.OwnerUsernames is { Count: > 0 })
-        {
-            var usernamesLower = query.OwnerUsernames
-                .Where(u => !string.IsNullOrWhiteSpace(u))
-                .Select(u => u.ToLower())
-                .ToArray();
-            if (usernamesLower.Length > 0)
-            {
-                // The list lifts the account filter to keep the games of removed
-                // masters (RemovedAuthors), so a removed login is refused in the
-                // open: the old name must not find what the removal took off it.
-                games = games.Where(g =>
-                    (!g.Master.IsRemoved && usernamesLower.Contains(g.Master.Username.ToLower())) ||
-                    g.Assistants.Any(a => !a.User.IsRemoved && usernamesLower.Contains(a.User.Username.ToLower())));
-            }
-        }
-
-        // Date range filters
-        // CreatedUtc always exists, so just filter by range
-        if (query.CreatedFromUtc.HasValue)
-        {
-            games = games.Where(g => g.CreatedUtc >= query.CreatedFromUtc.Value);
-        }
-        if (query.CreatedToUtc.HasValue)
-        {
-            games = games.WhereAtOrBefore(g => g.CreatedUtc, query.CreatedToUtc.Value);
-        }
-
-        // ActivatedUtc - exclude games without this date if filter is set
-        if (query.ActivatedFromUtc.HasValue)
-        {
-            games = games.Where(g => g.ActivatedUtc.HasValue && g.ActivatedUtc.Value >= query.ActivatedFromUtc.Value);
-        }
-        if (query.ActivatedToUtc.HasValue)
-        {
-            games = games.WhereAtOrBefore(g => g.ActivatedUtc, query.ActivatedToUtc.Value);
-        }
-
-        // ClosedUtc - exclude games without this date if filter is set
-        if (query.ClosedFromUtc.HasValue)
-        {
-            games = games.Where(g => g.ClosedUtc.HasValue && g.ClosedUtc.Value >= query.ClosedFromUtc.Value);
-        }
-        if (query.ClosedToUtc.HasValue)
-        {
-            games = games.WhereAtOrBefore(g => g.ClosedUtc, query.ClosedToUtc.Value);
-        }
-
-        // RecruitmentStartedUtc - exclude games without this date if filter is set
-        if (query.RecruitmentStartedFromUtc.HasValue)
-        {
-            games = games.Where(g => g.RecruitmentStartedUtc.HasValue &&
-                                     g.RecruitmentStartedUtc.Value >= query.RecruitmentStartedFromUtc.Value);
-        }
-        if (query.RecruitmentStartedToUtc.HasValue)
-        {
-            games = games.WhereAtOrBefore(g => g.RecruitmentStartedUtc, query.RecruitmentStartedToUtc.Value);
-        }
-
-        // Player filter (case-insensitive per USERNAME_POLICY.md).
-        // Scope: Active (default) - user has an active character, the public
-        // /games semantics ("player = participant with an active character");
-        // Any - any non-NPC character except declined applications, i.e.
-        // retired characters and applications under review also match
-        // (profile dossier semantics).
-        var playerIds = asked.Players;
-        if (playerIds is not null)
-        {
-            games = query.PlayerParticipation == PlayerParticipation.Any
-                ? games.Where(g => g.Characters.Any(c =>
-                    !c.IsRemoved && !c.IsNpc && c.Status != CharacterStatus.Declined &&
-                    c.AuthorId.HasValue && playerIds.Contains(c.AuthorId.Value)))
-                : games.Where(g => g.Characters.Any(c =>
-                    !c.IsRemoved && c.Status == CharacterStatus.Active &&
-                    c.AuthorId.HasValue && playerIds.Contains(c.AuthorId.Value)));
-        }
-        else if (!string.IsNullOrEmpty(query.PlayerUsername))
-        {
-            // A removed login matches nothing, for the reason the owner filter
-            // above spells out.
-            var usernameLower = query.PlayerUsername.ToLower();
-            games = query.PlayerParticipation == PlayerParticipation.Any
-                ? games.Where(g => g.Characters.Any(c =>
-                    !c.IsRemoved && !c.IsNpc && c.Status != CharacterStatus.Declined &&
-                    !c.Author!.IsRemoved && c.Author.Username.ToLower() == usernameLower))
-                : games.Where(g => g.Characters.Any(c =>
-                    !c.IsRemoved && c.Status == CharacterStatus.Active &&
-                    !c.Author!.IsRemoved && c.Author.Username.ToLower() == usernameLower));
-        }
-
-        // Participating filter - current user is master, mentor, assistant, player, or reader
-        if (query.Participating == true)
-        {
-            games = games.Where(GameParticipationFilters.Participating(_dbContext, userId));
-        }
-
-        // The viewer's "Скрывать игры": the service decides which lists it cleans.
-        if (query.ExcludedMasterIds is { Count: > 0 })
-        {
-            var excludedMasters = query.ExcludedMasterIds.ToArray();
-            games = games.Where(g => !excludedMasters.Contains(g.MasterId));
-        }
-
-        return games;
-    }
-
-    private IOrderedQueryable<DbGame> ApplySorting(IQueryable<DbGame> games, GamesQuery query)
-    {
-        var sortBy = query.SortBy?.ToLowerInvariant();
-        var isAscending = string.Equals(query.SortOrder, "asc", StringComparison.OrdinalIgnoreCase);
-
-        // When searching without explicit sort, use relevance-based ordering
-        if (!string.IsNullOrWhiteSpace(query.Search) && string.IsNullOrEmpty(query.SortBy))
-        {
-            var searchLower = query.Search.ToLower();
-            var prefixPattern = LikePatterns.StartsWith(query.Search);
-            return games
-                .OrderByDescending(g => g.Title.ToLower() == searchLower) // Exact match first
-                .ThenByDescending(g => EF.Functions.ILike(g.Title, prefixPattern)) // Prefix match
-                .ThenByDescending(g => EF.Functions.TrigramsSimilarity(g.Title, searchLower)) // Fuzzy match score
-                .ThenBy(g => g.Title);
-        }
-
-        if (sortBy == "recruitmentstarted")
-        {
-            return isAscending
-                ? games.OrderBy(g => g.RecruitmentStartedUtc ?? DateTimeOffset.MaxValue).ThenBy(g => g.Title)
-                : games.OrderByDescending(g => g.RecruitmentStartedUtc ?? DateTimeOffset.MinValue).ThenBy(g => g.Title);
-        }
-
-        if (sortBy == "title")
-        {
-            return isAscending
-                ? games.OrderBy(g => g.Title)
-                : games.OrderByDescending(g => g.Title);
-        }
-
-        if (sortBy == "created")
-        {
-            // Sort by CreatedUtc (pure creation date)
-            return isAscending
-                ? games.OrderBy(g => g.CreatedUtc).ThenBy(g => g.Title)
-                : games.OrderByDescending(g => g.CreatedUtc).ThenBy(g => g.Title);
-        }
-
-        if (sortBy == "activated")
-        {
-            // Sort by ActivatedUtc; games without it (Draft) go to end
-            return isAscending
-                ? games.OrderBy(g => g.ActivatedUtc.HasValue ? 0 : 1)
-                    .ThenBy(g => g.ActivatedUtc ?? DateTimeOffset.MaxValue)
-                    .ThenBy(g => g.Title)
-                : games.OrderBy(g => g.ActivatedUtc.HasValue ? 0 : 1)
-                    .ThenByDescending(g => g.ActivatedUtc ?? DateTimeOffset.MinValue)
-                    .ThenBy(g => g.Title);
-        }
-
-        if (sortBy == "closed")
-        {
-            // Sort by ClosedUtc; games without it (Draft, Active) go to end
-            return isAscending
-                ? games.OrderBy(g => g.ClosedUtc.HasValue ? 0 : 1)
-                    .ThenBy(g => g.ClosedUtc ?? DateTimeOffset.MaxValue)
-                    .ThenBy(g => g.Title)
-                : games.OrderBy(g => g.ClosedUtc.HasValue ? 0 : 1)
-                    .ThenByDescending(g => g.ClosedUtc ?? DateTimeOffset.MinValue)
-                    .ThenBy(g => g.Title);
-        }
-
-        if (sortBy == "popularity")
-        {
-            // Popularity uses pre-computed PopularityScore column (updated by PopularityScoreService)
-            // Status grouping: Active first, then Closed, then Draft
-            return isAscending
-                ? games
-                    .OrderBy(g => g.Status == ModuleStatus.Active)
-                    .ThenBy(g => g.Status == ModuleStatus.Closed)
-                    .ThenBy(g => g.PopularityScore)
-                    .ThenByDescending(g => g.Title)
-                : games
-                    .OrderByDescending(g => g.Status == ModuleStatus.Active)
-                    .ThenByDescending(g => g.Status == ModuleStatus.Closed)
-                    .ThenByDescending(g => g.PopularityScore)
-                    .ThenBy(g => g.Title);
-        }
-
-        if (sortBy == "status")
-        {
-            // Status order (asc): Draft(0), Active+first recruitment(1), Active+subsequent recruitment(2),
-            //                     Active+not recruiting(3), Closed+Frozen(4), Closed+Finished(5), Closed+None(6)
-            // Within each group: sort by relevant date (CreatedUtc/ActivatedUtc/ClosedUtc)
-            return isAscending
-                ? games
-                    .OrderBy(g =>
-                        g.Status == ModuleStatus.Draft ? 0 :
-                        g.Status == ModuleStatus.Active && g.IsRecruitmentOpen && g.RecruitmentCount == 1 ? 1 :
-                        g.Status == ModuleStatus.Active && g.IsRecruitmentOpen && g.RecruitmentCount >= 2 ? 2 :
-                        g.Status == ModuleStatus.Active ? 3 :
-                        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Frozen ? 4 :
-                        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Finished ? 5 : 6)
-                    .ThenByDescending(g => g.Status == ModuleStatus.Draft ? g.CreatedUtc :
-                                 g.Status == ModuleStatus.Active ? (g.ActivatedUtc ?? g.CreatedUtc) :
-                                 (g.ClosedUtc ?? g.ActivatedUtc ?? g.CreatedUtc))
-                    .ThenBy(g => g.Title)
-                : games
-                    .OrderByDescending(g =>
-                        g.Status == ModuleStatus.Draft ? 0 :
-                        g.Status == ModuleStatus.Active && g.IsRecruitmentOpen && g.RecruitmentCount == 1 ? 1 :
-                        g.Status == ModuleStatus.Active && g.IsRecruitmentOpen && g.RecruitmentCount >= 2 ? 2 :
-                        g.Status == ModuleStatus.Active ? 3 :
-                        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Frozen ? 4 :
-                        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Finished ? 5 : 6)
-                    .ThenByDescending(g => g.Status == ModuleStatus.Draft ? g.CreatedUtc :
-                                           g.Status == ModuleStatus.Active ? (g.ActivatedUtc ?? g.CreatedUtc) :
-                                           (g.ClosedUtc ?? g.ActivatedUtc ?? g.CreatedUtc))
-                    .ThenBy(g => g.Title);
-        }
-
-        if (sortBy == "availableslots")
-        {
-            // Group order: Active+recruiting(0), Draft(1), Active+not recruiting(2),
-            //              Closed+Frozen(3), Closed+Finished(4), Closed+None(5)
-            // Within Active+recruiting: sort by RecruitmentStartedUtc
-            return isAscending
-                ? games
-                    .OrderBy(g =>
-                        g.Status == ModuleStatus.Active && g.IsRecruitmentOpen ? 0 :
-                        g.Status == ModuleStatus.Draft ? 1 :
-                        g.Status == ModuleStatus.Active ? 2 :
-                        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Frozen ? 3 :
-                        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Finished ? 4 : 5)
-                    .ThenBy(g => g.RecruitmentStartedUtc ?? DateTimeOffset.MaxValue)
-                    .ThenBy(g => g.Title)
-                : games
-                    .OrderBy(g =>
-                        g.Status == ModuleStatus.Active && g.IsRecruitmentOpen ? 0 :
-                        g.Status == ModuleStatus.Draft ? 1 :
-                        g.Status == ModuleStatus.Active ? 2 :
-                        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Frozen ? 3 :
-                        g.Status == ModuleStatus.Closed && g.ClosedReason == ClosedReason.Finished ? 4 : 5)
-                    .ThenByDescending(g => g.RecruitmentStartedUtc ?? DateTimeOffset.MinValue)
-                    .ThenBy(g => g.Title);
-        }
-
-        // Check if filtering only Closed games - sort by ClosedUtc
-        var isClosedOnly = query.Statuses is { Count: 1 } && query.Statuses.Contains(ModuleStatus.Closed);
-        if (isClosedOnly)
-        {
-            return isAscending
-                ? games.OrderBy(g => g.ClosedUtc ?? g.ActivatedUtc ?? g.CreatedUtc).ThenBy(g => g.Title)
-                : games.OrderByDescending(g => g.ClosedUtc ?? g.ActivatedUtc ?? g.CreatedUtc).ThenBy(g => g.Title);
-        }
-
-        // Default: activated (ActivatedUtc with fallback to CreatedUtc)
-        return isAscending
-            ? games.OrderBy(g => g.ActivatedUtc ?? g.CreatedUtc).ThenBy(g => g.Title)
-            : games.OrderByDescending(g => g.ActivatedUtc ?? g.CreatedUtc).ThenBy(g => g.Title);
     }
 
     public async Task<IDictionary<Guid, IEnumerable<Guid>>> GetAvailableRoomIds(IEnumerable<Guid> gameIds, Guid userId, CancellationToken ct = default)
@@ -887,11 +157,6 @@ internal class GameRepository : IGameRepository
         bool mayJudgePremoderation,
         CancellationToken ct)
     {
-        // GameDetails projects several independent collections (Tags,
-        // Assistants, FullAssistants, Characters, BlackList). A single query
-        // LEFT-JOINs them into a cartesian product that can exhaust memory
-        // (BufferedDataReader OOM); AsSplitQuery loads each collection with
-        // its own query instead.
         var games = _dbContext.Games.AsQueryable();
         games = moderationScope
             ? games.Where(g => !g.IsRemoved)
@@ -905,45 +170,15 @@ internal class GameRepository : IGameRepository
 
         if (game is not null)
         {
-            // Single-element enrichment — reuses the same batched helper
-            // as the list / by-ids paths so the details endpoint returns
-            // ActiveCharacters, Players, SubscriberUsernames, review
-            // counts, etc. Previously these were silently empty on the
-            // details path, which is why game tooltips on featured
-            // posts showed no characters.
             await EnrichGamesAsync(new[] { game }, viewerId, ct);
             await EnrichGameDetailsAsync(game, ct);
         }
         return game;
     }
 
-    public async Task<GameDto?> GetGame(
-        Guid gameId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default)
-    {
-        var game = await _dbContext.Games
-            .Where(GameAccessibilityFilters.GameAvailable(userId, mayJudgePremoderation))
-            .Where(g => g.GameId == gameId)
-            // GameDto's three collections (GameTags/Assistants/BlackList) would
-            // otherwise multiply into a cartesian product on a single query.
-            .ProjectToGame()
-            .AsSplitQuery()
-            .FirstOrDefaultAsync(ct);
-
-        if (game is not null)
-        {
-            // Players and the subscriber summary are ignored by the projection and
-            // filled only here. This load is the one every authorization decision
-            // about a game is made on — GetRoles cannot see a player at all without
-            // it, so without this call an accepted player is indistinguishable from
-            // a stranger: private-comment access and the ban's own-game exemption
-            // both resolve against an empty player list. The same argument now
-            // covers the Reader role, which reads IsViewerSubscriber: the userId
-            // this method already filters visibility by is the one it is filled for.
-            await EnrichGamesAsync(new[] { game }, userId, ct);
-        }
-
-        return game;
-    }
+    public Task<GameDto?> GetGame(
+        Guid gameId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default) =>
+        ReadOne(g => g.GameId == gameId, userId, mayJudgePremoderation, ct);
 
     public Task<Guid?> FindGameIdByPublicId(
         string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default)
@@ -960,26 +195,25 @@ internal class GameRepository : IGameRepository
             .FirstOrDefaultAsync(ct);
     }
 
-    public async Task<GameDto?> GetGameByPublicId(
-        string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default)
+    public Task<GameDto?> GetGameByPublicId(
+        string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default) =>
+        ReadOne(g => g.PublicId == publicId, userId, mayJudgePremoderation, ct);
+
+    /// <summary>
+    /// One game as the user reads it. Enriched here because every authorization
+    /// decision about a game reads its players, readers and pending invitations.
+    /// </summary>
+    private async Task<GameDto?> ReadOne(
+        Expression<Func<DbGame, bool>> predicate, Guid userId, bool mayJudgePremoderation, CancellationToken ct)
     {
         var game = await _dbContext.Games
             .Where(GameAccessibilityFilters.GameAvailable(userId, mayJudgePremoderation))
-            .Where(g => g.PublicId == publicId)
-            // See GetGame: AsSplitQuery avoids the multi-collection cartesian.
+            .Where(predicate)
             .ProjectToGame()
             .AsSplitQuery()
             .FirstOrDefaultAsync(ct);
 
-        // The projection cannot produce these, so without this the same endpoint
-        // answered two different payloads: addressed by its five-letter alias a
-        // game reported no subscribers, no active characters and pcCount 0, and
-        // addressed by its GUID it reported all three. It also decided
-        // authorization on a different set of facts — PendingInvitedUserIds is
-        // filled here and nowhere else, so GameIntention.Read refused a user
-        // holding a pending invitation to a hidden game by alias and served it
-        // by GUID.
-        if (game != null)
+        if (game is not null)
         {
             await EnrichGamesAsync(new[] { game }, userId, ct);
         }
@@ -991,27 +225,6 @@ internal class GameRepository : IGameRepository
         string publicId, Guid userId, bool mayJudgePremoderation, CancellationToken ct = default) =>
         LoadGameDetails(g => g.PublicId == publicId, userId, moderationScope: false, mayJudgePremoderation, ct);
 
-    public async Task<IEnumerable<GameTag>> GetTags(CancellationToken ct = default)
-    {
-        return await _dbContext.Tags
-            .OrderBy(t => t.TagGroup.SortOrder)
-            .ThenBy(t => t.SortOrder)
-            .Select(t => new GameTag
-            {
-                Id = t.TagId,
-                ShortId = t.ShortId,
-                Title = t.Title,
-                Description = t.Description,
-                GroupTitle = t.TagGroup.Title,
-                GroupDescription = t.TagGroup.Description,
-                GroupSortOrder = t.TagGroup.SortOrder,
-                GroupMaxTagsPerGame = t.TagGroup.MaxTagsPerGame,
-                SortOrder = t.SortOrder,
-                GamesCount = t.GameTags.Count(gt => gt.Game.Status == ModuleStatus.Active)
-            })
-            .ToArrayAsync(ct);
-    }
-
     public async Task<IEnumerable<GameDto>> GetByIds(
         IEnumerable<Guid> gameIds, Guid userId, Guid viewerId, CancellationToken ct = default)
     {
@@ -1022,9 +235,6 @@ internal class GameRepository : IGameRepository
         var games = await _dbContext.Games
             .Where(GameAccessibilityFilters.GameAvailable(userId))
             .Where(g => gameIdList.Contains(g.GameId))
-            // GameDto's GameTags/Assistants/BlackList collections cartesian-
-            // explode on a single query; split them (EF orders each split by
-            // the parent key automatically when there is no row limiting).
             .ProjectToGame()
             .AsSplitQuery()
             .ToArrayAsync(ct);
@@ -1033,76 +243,12 @@ internal class GameRepository : IGameRepository
         return games;
     }
 
-    #endregion
-
-    #region Write Operations
-
     public async Task<GameDetails> Create(CreateGameEntity game, CreateRoomEntity room, CancellationToken ct = default)
     {
-        var dbGame = new DbGame
-        {
-            GameId = game.GameId,
-            CreatedUtc = game.CreatedUtc,
-            Status = game.Status,
-            PremoderationStatus = game.PremoderationStatus,
-            DraftVisibility = game.DraftVisibility,
-            ActivatedUtc = game.ActivatedUtc,
-            MasterId = game.MasterId,
-            Title = game.Title.Trim(),
-            SystemName = game.SystemName?.Trim(),
-            NarrativeSetting = game.NarrativeSetting?.Trim(),
-            Info = game.Info?.Trim(),
-            HideDiceResult = game.HideDiceResult,
-            ShowPrivateMessages = game.ShowPrivateMessages,
-            HidePostStats = game.HidePostStats,
-            CommentsAccessMode = game.CommentsAccessMode,
-            IsRemoved = false,
-            IsRecruitmentOpen = game.IsRecruitmentOpen,
-            RecruitmentStartedUtc = game.RecruitmentStartedUtc,
-            RecruitmentCount = game.RecruitmentCount
-        };
-
-        var dbRoom = new DbRoom
-        {
-            RoomId = room.RoomId,
-            GameId = room.GameId,
-            // The game itself is inserted by this call, so nobody else can hold
-            // a room in it yet and its first room is number 1 and first in the
-            // list by construction. Every later room takes MAX+1 of both under
-            // the game row lock, in RoomRepository.Create.
-            RoomNumber = 1,
-            OrderNumber = 1,
-            Title = room.Title.Trim(),
-            Type = room.Type,
-            AccessType = room.AccessType,
-            ViewPrivateText = room.ViewPrivateText,
-            ViewDiceResults = room.ViewDiceResults,
-            DiceEnabled = room.DiceEnabled,
-            IsRemoved = false
-        };
-
-        // A set, not a list: the same tag twice is the same tag, and the pair is
-        // unique in the schema.
-        var dbTags = game.TagIds.Distinct().Select(tagId => new DbTag
-        {
-            GameTagId = _guidFactory.Create(),
-            GameId = game.GameId,
-            TagId = tagId
-        });
-
-        // The character sheet goes in with the game, in the same save: a
-        // creation that failed after the game row would otherwise leave a game
-        // whose characters cannot be described, and every read of a game asks
-        // for its sheet. The identifiers are the server's, all of them - a
-        // caller has nothing yet to keep.
-        var dbSchema = new Entities.Game.GameAttributeSchema
-        {
-            GameId = game.GameId,
-            Specifications = AttributeSpecificationDocument.ToDocument(
-                game.AttributeSpecifications, _ => _guidFactory.Create()),
-            Version = 0,
-            UpdatedUtc = game.CreatedUtc
-        };
+        var dbGame = NewGameRow(game);
+        var dbRoom = NewFirstRoom(room);
+        var dbTags = NewTags(game);
+        var dbSchema = NewSheet(game);
 
         // The readable address is taken before the insert instead of being stamped by
         // a second SaveChanges — see SerialNumberAllocator for what that pair cost.
@@ -1129,6 +275,95 @@ internal class GameRepository : IGameRepository
             throw new InvalidOperationException($"Game {updateGame.GameId} not found");
 
         // Update fields if provided
+        ApplyStatus(game, updateGame);
+        ApplySettings(game, updateGame);
+
+        // Update tags if provided. Null and empty are not the same answer: null
+        // is the update saying nothing about tags, an empty list is the master
+        // taking them all off, and the `.Any()` this once also carried made the
+        // second one unsayable.
+        await ReplaceTags(updateGame, ct);
+
+        await _dbContext.SaveChangesAsync(ct);
+
+        return await _dbContext.Games
+            .Where(g => g.GameId == updateGame.GameId)
+            .ProjectToGameDetails()
+            .AsSplitQuery()
+            .FirstAsync(ct);
+    }
+
+    private static DbGame NewGameRow(CreateGameEntity game) => new()
+    {
+        GameId = game.GameId,
+        CreatedUtc = game.CreatedUtc,
+        Status = game.Status,
+        PremoderationStatus = game.PremoderationStatus,
+        DraftVisibility = game.DraftVisibility,
+        ActivatedUtc = game.ActivatedUtc,
+        MasterId = game.MasterId,
+        Title = game.Title,
+        SystemName = game.SystemName,
+        NarrativeSetting = game.NarrativeSetting,
+        Info = game.Info,
+        HideDiceResult = game.HideDiceResult,
+        ShowPrivateMessages = game.ShowPrivateMessages,
+        HidePostStats = game.HidePostStats,
+        CommentsAccessMode = game.CommentsAccessMode,
+        IsRemoved = false,
+        IsRecruitmentOpen = game.IsRecruitmentOpen,
+        RecruitmentStartedUtc = game.RecruitmentStartedUtc,
+        RecruitmentCount = game.RecruitmentCount
+    };
+
+    private static DbRoom NewFirstRoom(CreateRoomEntity room) => new()
+    {
+        RoomId = room.RoomId,
+        GameId = room.GameId,
+        // The game itself is inserted by this call, so nobody else can hold
+        // a room in it yet and its first room is number 1 and first in the
+        // list by construction. Every later room takes MAX+1 of both under
+        // the game row lock, in RoomRepository.Create.
+        RoomNumber = 1,
+        OrderNumber = 1,
+        Title = room.Title,
+        Type = room.Type,
+        AccessType = room.AccessType,
+        ViewPrivateText = room.ViewPrivateText,
+        ViewDiceResults = room.ViewDiceResults,
+        DiceEnabled = room.DiceEnabled,
+        IsRemoved = false
+    };
+
+    // A set, not a list: the same tag twice is the same tag, and the pair is
+    // unique in the schema.
+    private IEnumerable<DbTag> NewTags(CreateGameEntity game) => game.TagIds.Distinct().Select(tagId => new DbTag
+    {
+        GameTagId = _guidFactory.Create(),
+        GameId = game.GameId,
+        TagId = tagId
+    });
+
+    // The character sheet goes in with the game, in the same save: a
+    // creation that failed after the game row would otherwise leave a game
+    // whose characters cannot be described, and every read of a game asks
+    // for its sheet. The identifiers are the server's, all of them - a
+    // caller has nothing yet to keep.
+    private Entities.Game.GameAttributeSchema NewSheet(CreateGameEntity game) => new()
+    {
+        GameId = game.GameId,
+        Specifications = AttributeSpecificationDocument.ToDocument(
+            game.AttributeSpecifications, _ => _guidFactory.Create()),
+        Version = 0,
+        UpdatedUtc = game.CreatedUtc
+    };
+
+    /// <summary>
+    /// The place of the game in its lifecycle: status, premoderation, closure
+    /// and the dates and mentor that go with them
+    /// </summary>
+    private static void ApplyStatus(DbGame game, UpdateGameEntity updateGame)
+    {
         if (updateGame.Status.HasValue)
         {
             // Reset inactivity warnings when game is reactivated
@@ -1146,9 +381,25 @@ internal class GameRepository : IGameRepository
         if (updateGame.ClosedReason.HasValue)
             game.ClosedReason = updateGame.ClosedReason.Value;
 
-        if (updateGame.DraftVisibility.HasValue)
-            game.DraftVisibility = updateGame.DraftVisibility.Value;
+        if (updateGame.ActivatedUtc.HasValue)
+            game.ActivatedUtc = updateGame.ActivatedUtc.Value;
 
+        if (updateGame.ClosedUtc.HasValue)
+            game.ClosedUtc = updateGame.ClosedUtc.Value;
+
+        if (updateGame.ClearClosedUtc)
+            game.ClosedUtc = null;
+
+        if (updateGame.SetMentorId)
+            game.MentorId = updateGame.MentorId;
+    }
+
+    /// <summary>
+    /// What the settings page writes: recruitment, the information form and
+    /// privacy
+    /// </summary>
+    private static void ApplySettings(DbGame game, UpdateGameEntity updateGame)
+    {
         if (updateGame.IsRecruitmentOpen.HasValue)
             game.IsRecruitmentOpen = updateGame.IsRecruitmentOpen.Value;
 
@@ -1159,16 +410,16 @@ internal class GameRepository : IGameRepository
             game.RecruitmentPcLimit = updateGame.RecruitmentPcLimit;
 
         if (!string.IsNullOrEmpty(updateGame.Title))
-            game.Title = updateGame.Title.Trim();
+            game.Title = updateGame.Title;
 
         if (!string.IsNullOrEmpty(updateGame.SystemName))
-            game.SystemName = updateGame.SystemName.Trim();
+            game.SystemName = updateGame.SystemName;
 
         if (!string.IsNullOrEmpty(updateGame.NarrativeSetting))
-            game.NarrativeSetting = updateGame.NarrativeSetting.Trim();
+            game.NarrativeSetting = updateGame.NarrativeSetting;
 
         if (!string.IsNullOrEmpty(updateGame.Info))
-            game.Info = updateGame.Info.Trim();
+            game.Info = updateGame.Info;
 
         if (updateGame.HideDiceResult.HasValue)
             game.HideDiceResult = updateGame.HideDiceResult.Value;
@@ -1182,25 +433,15 @@ internal class GameRepository : IGameRepository
         if (updateGame.CommentsAccessMode.HasValue)
             game.CommentsAccessMode = updateGame.CommentsAccessMode.Value;
 
-        if (updateGame.ActivatedUtc.HasValue)
-            game.ActivatedUtc = updateGame.ActivatedUtc.Value;
-
-        if (updateGame.ClosedUtc.HasValue)
-            game.ClosedUtc = updateGame.ClosedUtc.Value;
-
-        if (updateGame.ClearClosedUtc)
-            game.ClosedUtc = null;
-
-        if (updateGame.SetMentorId)
-            game.MentorId = updateGame.MentorId;
-
         if (updateGame.ClearRecruitmentStartedUtc)
             game.RecruitmentStartedUtc = null;
+    }
 
-        // Update tags if provided. Null and empty are not the same answer: null
-        // is the update saying nothing about tags, an empty list is the master
-        // taking them all off, and the `.Any()` this once also carried made the
-        // second one unsayable.
+    /// <summary>
+    /// The tags of the game, when the update names them
+    /// </summary>
+    private async Task ReplaceTags(UpdateGameEntity updateGame, CancellationToken ct)
+    {
         if (updateGame.TagIds != null)
         {
             // The difference, not a wholesale replacement: deleting a row and
@@ -1228,32 +469,12 @@ internal class GameRepository : IGameRepository
 
             _dbContext.GameTags.AddRange(newTags);
         }
-
-        await _dbContext.SaveChangesAsync(ct);
-
-        return await _dbContext.Games
-            .Where(g => g.GameId == updateGame.GameId)
-            .ProjectToGameDetails()
-            .AsSplitQuery()
-            .FirstAsync(ct);
     }
 
     /// <inheritdoc />
     /// <remarks>
-    /// The attachments of every post in the game go with it. Hiding the game hides
-    /// the posts and with them the only endpoint that would ever serve those
-    /// files, so leaving the rows live would leave objects in the bucket that
-    /// nothing reads and nothing collects — the orphan sweeper walks soft-deleted
-    /// upload rows, and a live row pointing into a removed game is not one.
-    ///
-    /// Both writes in one transaction, because the second is what turns a hidden
-    /// game into files that will actually be destroyed, and a failure between them
-    /// leaves the promise half kept with nothing to notice it.
-    ///
-    /// The subscriptions to the game go in the same transaction. Nothing brings a
-    /// deleted game back, so a subscription that outlived it could never deliver
-    /// anything: it only stood in the reader's list as a nameless row ("Игра n/a")
-    /// that was theirs to clean up.
+    /// The attachments of the posts and the subscriptions to the game go in the same
+    /// transaction: nothing would ever serve, collect or deliver them after it.
     /// </remarks>
     public async Task Delete(Guid gameId, Guid deletedByUserId, CancellationToken ct = default)
     {
@@ -1287,15 +508,13 @@ internal class GameRepository : IGameRepository
 
             // Live rows only, by the global soft-delete filter: a file already
             // taken off a post keeps the grace period it started with.
-            await _dbContext.Uploads
-                .Where(u => u.Type == UploadType.PostAttachment &&
-                            u.TargetPostId != null &&
-                            _dbContext.Posts.Any(p =>
-                                p.PostId == u.TargetPostId!.Value && p.Room.GameId == gameId))
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.IsRemoved, true)
-                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
-                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now), ct);
+            await AttachmentRows.RetireAsync(
+                _dbContext.Uploads
+                    .Where(u => u.Type == UploadType.PostAttachment &&
+                                u.TargetPostId != null &&
+                                _dbContext.Posts.Any(p =>
+                                    p.PostId == u.TargetPostId!.Value && p.Room.GameId == gameId)),
+                deletedByUserId, now, ct);
 
             await _dbContext.Subscriptions
                 .Where(s => s.TargetType == SubscriptionTargetType.Game && s.TargetId == gameId)
@@ -1304,6 +523,4 @@ internal class GameRepository : IGameRepository
             await transaction.CommitAsync(ct);
         });
     }
-
-    #endregion
 }

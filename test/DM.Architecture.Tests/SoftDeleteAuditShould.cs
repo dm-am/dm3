@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,34 +13,21 @@ namespace DM.Architecture.Tests;
 /// Who removed a row and when is written in one place.
 /// </summary>
 /// <remarks>
-/// ISoftDeletable declares the pair for twenty-five tables, and SoftDelete.Mark writes it
-/// together with the flag precisely so that a delete path cannot set one and forget the
-/// other. The class said as much about itself while eight methods - three in
-/// BlogRepository, the award revoke, the notepad entry and three upload sweeps - wrote the
-/// columns by hand, which is a guarantee that holds only as long as everybody remembers
-/// it. A promise nothing enforces is worse than no promise: the reader of the next delete
-/// path believes it.
-///
-/// The rule is over the two audit columns rather than over the flag alone. A table that
-/// carries neither an author nor a moment (IRemovable without ISoftDeletable: a warning, a
-/// moderator's note) has nothing to forget, and a rule that also covered those would need
-/// a list of exceptions - the same convention-by-agreement this one replaces. The columns
-/// exist only where the audit exists, so naming them names exactly the paths that can lose
-/// it.
+/// SoftDelete.Mark and MarkWhere write the pair with the flag so no delete path forgets one.
+/// Over the two audit columns, which exist only where the audit does.
 /// </remarks>
 public class SoftDeleteAuditShould
 {
     /// <summary>
-    /// An assignment to one of the audit columns. A comparison is not one, hence the
-    /// lookahead, and a declaration is not one either, hence the leading dot.
+    /// A write to one of the audit columns, an assignment or a bulk SetProperty: not a comparison
+    /// (the lookahead), not a declaration (the dot).
     /// </summary>
     private static readonly Regex AuditWrite = new(
-        @"\.(?<column>DeletedByUserId|DeletedUtc)\s*=(?!=)", RegexOptions.Compiled);
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
+        @"\.(?<column>DeletedByUserId|DeletedUtc)\s*=(?!=)|SetProperty\(\s*\w+\s*=>\s*\w+\.(?<column>DeletedByUserId|DeletedUtc)\b",
+        RegexOptions.Compiled);
 
     private static string PersistenceRoot => Path.Combine(
-        RepositoryRoot, "src", "DM.Infrastructure.Persistence");
+        RepositoryLayout.Root, "src", "DM.Infrastructure.Persistence");
 
     /// <summary>The one file allowed to write the columns.</summary>
     private static string MarkFile => Path.Combine(
@@ -67,7 +55,7 @@ public class SoftDeleteAuditShould
             {
                 var line = code[..write.Index].Count(character => character == '\n') + 1;
                 offenders.Add(
-                    $"{Path.GetRelativePath(RepositoryRoot, file)}:{line}: {write.Groups["column"].Value}");
+                    $"{Path.GetRelativePath(RepositoryLayout.Root, file)}:{line}: {write.Groups["column"].Value}");
             }
         }
 
@@ -80,27 +68,34 @@ public class SoftDeleteAuditShould
     [Fact]
     public void HaveASearchThatWouldFindOne()
     {
-        // The rule above is a scan, and a scan that stops matching passes in silence. This
-        // is the fixture that says it still recognises both the shape it looks for and the
-        // shape it must leave alone.
-        const string byHand = @"
-        blog.IsRemoved = true;
-        blog.DeletedByUserId = deletedByUserId;
-        blog.DeletedUtc = _dateTimeProvider.Now;";
-        const string marked = @"
-        SoftDelete.Mark(blog, deletedByUserId, _dateTimeProvider.Now);
-        if (blog.DeletedUtc == null) return;";
+        // The rule above is a scan, and a scan that stops matching passes in silence.
+        const string byHand = """
+            blog.IsRemoved = true;
+            blog.DeletedByUserId = deletedByUserId;
+            blog.DeletedUtc = _dateTimeProvider.Now;
+            """;
+        const string inBulk = """
+            rows.ExecuteUpdateAsync(s => s.SetProperty(x => x.DeletedUtc, now));
+            """;
+        const string marked = """
+            SoftDelete.Mark(blog, deletedByUserId, _dateTimeProvider.Now);
+            if (blog.DeletedUtc == null) return;
+            """;
 
         AuditWrite.IsMatch(byHand).Should().BeTrue("this is the shape the rule exists for");
+        AuditWrite.IsMatch(inBulk).Should().BeTrue("a bulk update writes the column as surely as an assignment");
         AuditWrite.IsMatch(marked).Should().BeFalse(
             "a call through Mark writes nothing itself, and a comparison is not an assignment");
     }
 
     [Fact]
-    public void FindTheFilesToSearch()
-    {
+    public void FindTheFilesToSearch() =>
         SourceFiles().Should().HaveCountGreaterThan(100,
             "a file walk that stops matching turns the rule above green by checking nothing");
+
+    [Fact]
+    public void KeepTheExemptedFileWhereTheRuleLooks()
+    {
         File.Exists(MarkFile).Should().BeTrue(
             "the rule exempts one file, and a renamed one would exempt nothing while the " +
             "assembly kept writing the columns somewhere else");

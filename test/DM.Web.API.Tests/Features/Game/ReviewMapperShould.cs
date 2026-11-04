@@ -1,6 +1,5 @@
 using System;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Uploads;
 using DM.Infrastructure.Core.Parsing;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
@@ -13,16 +12,14 @@ using DomainPostReview = DM.Domain.Game.Features.PostReviews.PostReview;
 namespace DM.Web.API.Tests.Features.Game;
 
 /// <summary>
-/// Both review texts are edited in place: the editor fetches them with
-/// X-Dm-Audience: author_edit, and the converter honors that only when the
-/// envelope names the author. A review without the envelope hands its author
-/// the display rendering, and saving it writes the typography back as text.
+/// Both review texts are edited in place with X-Dm-Audience: author_edit, honored only when the envelope
+/// names the author.
 /// </summary>
 public class ReviewMapperShould : UnitTestBase
 {
     private static readonly Guid AuthorId = Guid.Parse("00000000-0000-0000-0000-00000000000a");
 
-    private ReviewMapper CreateMapper() => new(new UserMapper(Mock<IImgproxyUrlBuilder>()));
+    private static ReviewMapper CreateMapper() => new(new UserMapper());
 
     [Fact]
     public void WrapTheGameReviewTextInAnAuthorAwareEnvelope()

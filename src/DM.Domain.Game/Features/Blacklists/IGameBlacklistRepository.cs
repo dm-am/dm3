@@ -12,20 +12,10 @@ namespace DM.Domain.Game.Features.Blacklists;
 /// </summary>
 public interface IGameBlacklistRepository
 {
-    /// <summary>
-    /// Get all blacklisted users for a game
-    /// </summary>
     Task<IEnumerable<GeneralUser>> Get(Guid gameId);
 
-    /// <summary>
-    /// Add user to game blacklist
-    /// </summary>
     /// <remarks>
-    /// Throws <see cref="DuplicateEntityException" /> when the pair is already on
-    /// the list: the caller checks first, and this is the race where two requests
-    /// both pass that check. Nothing but the unique index can hold the pair in the
-    /// meantime, and a second row would show the name twice with only one of them
-    /// removable.
+    /// Throws <see cref="DuplicateEntityException" /> when two requests both pass the caller's check.
     /// </remarks>
     Task<GeneralUser> Add(Guid gameId, Guid blockedUserId, Guid blockedByUserId);
 
@@ -33,19 +23,8 @@ public interface IGameBlacklistRepository
     /// Copy the owner's personal blacklist into the game's, skipping anyone
     /// already on it
     /// </summary>
-    /// <remarks>
-    /// One statement instead of a round trip per blocked user, and the same
-    /// method the blog side already has. Creating a game used to walk the list
-    /// and save once per entry, after the game itself was committed.
-    /// </remarks>
-    /// <param name="gameId">Game identifier</param>
-    /// <param name="ownerId">Owner whose personal list is copied</param>
-    /// <param name="ct">Cancellation token</param>
     /// <returns>How many entries were added</returns>
     Task<int> CopyFromPersonalBlacklist(Guid gameId, Guid ownerId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Remove user from game blacklist
-    /// </summary>
     Task Remove(Guid gameId, Guid userId);
 }

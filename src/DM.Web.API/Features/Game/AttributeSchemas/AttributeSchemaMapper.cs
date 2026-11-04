@@ -1,8 +1,8 @@
 using System;
 using Riok.Mapperly.Abstractions;
-using DomainAttributeSpecification = DM.Domain.Game.Features.Games.AttributeSpecification;
-using DomainCreateSpecification = DM.Domain.Game.Features.Games.CreateAttributeSpecification;
-using DomainUpdateSpecification = DM.Domain.Game.Features.Games.UpdateAttributeSpecification;
+using DomainAttributeSpecification = DM.Domain.Game.Features.AttributeSchemas.AttributeSpecification;
+using DomainCreateSpecification = DM.Domain.Game.Features.AttributeSchemas.CreateAttributeSpecification;
+using DomainUpdateSpecification = DM.Domain.Game.Features.AttributeSchemas.UpdateAttributeSpecification;
 
 namespace DM.Web.API.Features.Game.AttributeSchemas;
 
@@ -17,10 +17,9 @@ namespace DM.Web.API.Features.Game.AttributeSchemas;
 /// answer about what a specification is.
 /// </remarks>
 [Mapper]
-internal partial class AttributeSchemaMapper
+public partial class AttributeSchemaMapper
 {
-    // The read row drops Description, the create command drops the not yet
-    // existing Id; both were target-validated narrowings under AutoMapper.
+    // The create command drops the not yet existing Id.
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public partial AttributeSpecification ToSpecification(DomainAttributeSpecification specification);
 

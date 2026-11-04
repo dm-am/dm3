@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
@@ -17,13 +14,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 /// A publication gets its number within the blog when it is created, the way a
 /// topic gets its number within the board.
 /// </summary>
-/// <remarks>
-/// Only the seed numbered publications: the creation path never set the column,
-/// so every publication written by the site was stored as 0 and a blog's
-/// numbers named nothing. The number is allocated as MAX+1, which is only an
-/// allocation while the blog row is held, and the unique index on
-/// (BlogId, PublicationNumber) is the invariant that holds whoever writes.
-/// </remarks>
+/// <remarks>MAX+1 is an allocation only while the blog row is held; the unique index on (BlogId, PublicationNumber) holds whoever writes.</remarks>
 public class PublicationNumberAllocationShould : IntegrationTestBase
 {
     private const int Parallelism = 8;
@@ -92,9 +83,9 @@ public class PublicationNumberAllocationShould : IntegrationTestBase
             var insertDuplicate = async () => await dbContext.Database.ExecuteSqlRawAsync(
                 """
                 INSERT INTO "Publications" ("PublicationId", "BlogId", "PublicationNumber", "AuthorId", "Title",
-                                            "Content", "Preview", "IsPublished", "CreatedUtc",
+                                            "Content", "Preview", "CreatedUtc",
                                             "IsRemoved", "ViewCount", "CommentCount")
-                VALUES ({0}, {1}, 1, {2}, 'duplicate', '', '', true, now(), false, 0, 0)
+                VALUES ({0}, {1}, 1, {2}, 'duplicate', '', '', now(), false, 0, 0)
                 """,
                 Guid.NewGuid(), blogId, TestConstants.TestUserId);
 
@@ -121,7 +112,6 @@ public class PublicationNumberAllocationShould : IntegrationTestBase
             AuthorId = TestConstants.TestUserId,
             Title = $"Concurrent publication {index}",
             Content = "text",
-            PublishImmediately = true,
             CreatedUtc = DateTimeOffset.UtcNow
         });
         return publicationId;

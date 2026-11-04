@@ -4,19 +4,13 @@ using DM.Domain.Core.Dto;
 namespace DM.Domain.Community.Features.UserEndorsements;
 
 /// <summary>
-/// Domain DTO for user endorsement (positive recommendation of a user)
+/// Positive recommendation of a user, one per author-target pair
 /// </summary>
 /// <remarks>
-/// Text is plain text (owner decision) - no BBCode rendering.
-/// Only positive text is allowed.
-/// One endorsement per author-target pair.
-/// NO likes support.
+/// Plain text, no BBCode rendering, and no likes.
 /// </remarks>
 public class UserEndorsement
 {
-    /// <summary>
-    /// Endorsement identifier
-    /// </summary>
     public Guid Id { get; set; }
 
     /// <summary>
@@ -29,18 +23,12 @@ public class UserEndorsement
     /// </summary>
     public GeneralUser TargetUser { get; set; } = null!;
 
-    /// <summary>
-    /// Creation moment (UTC)
-    /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// Last modification moment (UTC)
-    /// </summary>
     public DateTimeOffset? ModifiedUtc { get; set; }
 
     /// <summary>
-    /// Endorsement text (plain text, positive only)
+    /// Plain text, positive only
     /// </summary>
     public string Text { get; set; } = string.Empty;
 }

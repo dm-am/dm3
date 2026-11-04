@@ -4,19 +4,20 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Account.Features.Authentication;
-using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
-using DbUserLoginRecord = DM.Infrastructure.Persistence.Entities.Account.UserLoginRecord;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
 /// <inheritdoc cref="ILoginRecordRepository" />
 internal class LoginRecordRepository : ILoginRecordRepository
 {
+    /// <summary>How far back the IP views of moderation look.</summary>
+    private const int IpLookbackDays = 365;
+
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public LoginRecordRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
@@ -28,43 +29,28 @@ internal class LoginRecordRepository : ILoginRecordRepository
     /// <inheritdoc />
     public async Task Record(UserLoginRecord record)
     {
-        var dbRecord = new DbUserLoginRecord
-        {
-            UserLoginRecordId = record.UserLoginRecordId,
-            UserId = record.UserId,
-            IpAddress = record.IpAddress,
-            UserAgent = record.UserAgent,
-            LoginUtc = record.LoginUtc,
-            IsSuccessful = record.IsSuccessful
-        };
-        await _dbContext.UserLoginRecords.AddAsync(dbRecord);
+        await _dbContext.UserLoginRecords.AddAsync(record.ToRow());
         await _dbContext.SaveChangesAsync();
     }
 
     /// <inheritdoc />
     public async Task<Guid?> TryResolveUserId(string identifier)
     {
-        // Check if identifier looks like an email
-        var isEmail = identifier.Contains('@');
-        var normalizedIdentifier = identifier.ToLower();
-
         return await _dbContext.Users
             .TagWith("DM.LoginRecord.TryResolveUserId")
-            .Where(u => isEmail
-                ? u.Email.ToLower() == normalizedIdentifier
-                : u.Username.ToLower() == normalizedIdentifier)
+            .Where(identifier.Contains('@')
+                ? AccountNames.EmailIs(identifier)
+                : AccountNames.UsernameIs(identifier))
             .Select(u => (Guid?)u.UserId)
             .FirstOrDefaultAsync();
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<UserIpInfo>> GetUserIps(Guid userId, int days = 365)
+    public async Task<IReadOnlyList<UserIpInfo>> GetUserIps(Guid userId)
     {
-        var cutoff = _dateTimeProvider.Now.AddDays(-days);
+        var cutoff = _dateTimeProvider.Now.AddDays(-IpLookbackDays);
 
-        // Aggregates go into an anonymous type, not straight into UserIpInfo:
-        // a constructor call inside a GroupBy projection has no translation,
-        // and the whole query threw — the moderated profile answered 500.
+        // An anonymous type: a constructor call inside a GroupBy projection has no translation.
         var grouped = await _dbContext.UserLoginRecords
             .TagWith("DM.LoginRecord.GetUserIps")
             .Where(r => r.UserId == userId && r.IsSuccessful && r.LoginUtc >= cutoff)
@@ -85,9 +71,9 @@ internal class LoginRecordRepository : ILoginRecordRepository
     }
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<LinkedProfile>> GetLinkedProfiles(Guid userId, int days = 365)
+    public async Task<IReadOnlyList<LinkedProfile>> GetLinkedProfiles(Guid userId)
     {
-        var cutoff = _dateTimeProvider.Now.AddDays(-days);
+        var cutoff = _dateTimeProvider.Now.AddDays(-IpLookbackDays);
 
         // Get all IPs used by the target user (successful logins only)
         var userIps = _dbContext.UserLoginRecords
@@ -95,11 +81,8 @@ internal class LoginRecordRepository : ILoginRecordRepository
             .Select(r => r.IpAddress)
             .Distinct();
 
-        // Other users who logged in from the same IPs, collapsed to one row per
-        // (user, ip) first. Counting distinct IPs inside the group projection —
-        // g.Select(r => r.IpAddress).Distinct().Count() — is what EF cannot
-        // translate: the whole query threw and the moderated profile answered
-        // 500. Grouping twice says the same thing in SQL the provider knows.
+        // Other users who logged in from the same IPs, one row per (user, ip) first:
+        // EF cannot translate a distinct count inside the group.
         var perUserAndIp = await _dbContext.UserLoginRecords
             .TagWith("DM.LoginRecord.GetLinkedProfiles")
             .Where(r => r.UserId != userId && r.IsSuccessful && r.LoginUtc >= cutoff)
@@ -113,12 +96,8 @@ internal class LoginRecordRepository : ILoginRecordRepository
             })
             .ToListAsync();
 
-        // The regroup is in memory on purpose. Counting distinct IPs inside a
-        // group projection has no translation, and grouping a second time over
-        // an already-grouped subquery has none either — both threw, and the
-        // moderated profile answered 500. One row per (linked user, shared IP)
-        // is a handful even for a busy address, so the set materialised above
-        // is small by construction.
+        // Regrouped in memory: neither a distinct count inside a group projection nor a
+        // second GroupBy has a translation, and the set above is small by construction.
         return perUserAndIp
             .GroupBy(x => new { x.UserId, x.Username })
             .Select(g => new LinkedProfile(
@@ -151,14 +130,6 @@ internal class LoginRecordRepository : ILoginRecordRepository
             .Take(take)
             .ToListAsync();
 
-        return dbRecords.Select(r => new UserLoginRecord
-        {
-            UserLoginRecordId = r.UserLoginRecordId,
-            UserId = r.UserId,
-            IpAddress = r.IpAddress,
-            UserAgent = r.UserAgent,
-            LoginUtc = r.LoginUtc,
-            IsSuccessful = r.IsSuccessful
-        }).ToList();
+        return dbRecords.Select(r => r.ToLoginRecord()).ToList();
     }
 }

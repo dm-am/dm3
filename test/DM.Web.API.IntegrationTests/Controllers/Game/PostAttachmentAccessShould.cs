@@ -3,6 +3,7 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence;
 using Microsoft.EntityFrameworkCore;
 using AwesomeAssertions;
 using Xunit;
@@ -12,31 +13,19 @@ using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 using DbRoomAccess = DM.Infrastructure.Persistence.Entities.Game.Links.RoomAccess;
 using DbUpload = DM.Infrastructure.Persistence.Entities.Shared.Upload;
+using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
 /// <summary>
 /// A file attached to a post in a closed room is reachable by exactly the people
-/// who may read the post, and by nobody else.
+/// who may read the post, and by nobody else. A file the game text shows only
+/// inside a hidden block is reachable by those who read the block.
 /// </summary>
 /// <remarks>
-/// This is the reason the feature has an endpoint of its own instead of a link.
-/// The bucket answers anonymous reads on the avatar prefixes and there is no
-/// signed address for anything else, so the only address an attachment has is
-/// the one asserted here — and it decides on every request rather than once,
-/// when it was handed out. A link that works because it is known would take the
-/// file out of the private room permanently, in the hands of whoever it reached.
-///
-/// The cases below are chosen so that each one passes or fails for a different
-/// reason: the anonymous caller has no identity, the outsider has one and no
-/// standing in the game, the player has standing in the game and none in the
-/// room, and the reader of the room has neither ownership of the file nor a
-/// moderator's rank, so a 200 for them can only come from the room rule.
-///
-/// Every request goes to the address the API itself puts in the post payload —
-/// asserted, not assumed, by the last test here. A suite that called the service
-/// directly would prove something about a method and nothing about the link the
-/// browser is given.
+/// The bucket answers anonymously only on avatar prefixes, so this endpoint is the only address an attachment
+/// has, and it decides on every request. Each case fails for a different reason, and every request goes to the
+/// address the API puts in the payload.
 /// </remarks>
 public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
 {
@@ -51,17 +40,23 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
     private static Guid OutsiderCharacterId => Guid.Parse("00000000-0000-0000-0000-00000000f104");
     private static Guid PostId => Guid.Parse("00000000-0000-0000-0000-00000000f105");
     private static Guid UploadId => Guid.Parse("00000000-0000-0000-0000-00000000f106");
+    private static Guid LetterPostId => Guid.Parse("00000000-0000-0000-0000-00000000f107");
+    private static Guid LetterUploadId => Guid.Parse("00000000-0000-0000-0000-00000000f108");
+    private static Guid AddresseeCharacterId => Guid.Parse("00000000-0000-0000-0000-00000000f109");
+
+    private const string AddresseeName = "Адресат письма";
 
     private const string ObjectKey = "posts/f100_attachment.png";
+    private const string LetterObjectKey = "posts/f100_letter.png";
     private static readonly byte[] FileBytes = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x01, 0x02];
 
     /// <summary>Master of the game: reads every room of it.</summary>
     private static GeneralUser Master => User(
-        TestConstants.SecondUserId, TestConstants.SecondUserUsername, UserRole.RegularUser);
+        TestConstants.SecondUserId, TestConstants.SecondUserLogin, UserRole.RegularUser);
 
     /// <summary>Author of the post and owner of the file.</summary>
     private static GeneralUser Author => User(
-        TestConstants.TestUserId, TestConstants.TestUserUsername, UserRole.RegularUser);
+        TestConstants.TestUserId, TestConstants.TestUserLogin, UserRole.RegularUser);
 
     /// <summary>
     /// In the private room by a character of theirs, and neither the owner of the
@@ -79,17 +74,22 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         TestConstants.TestimonialUserIds[2], TestConstants.TestimonialUsernames[2], UserRole.RegularUser);
 
     private static GeneralUser Moderator => User(
-        TestConstants.ModeratorUserId, TestConstants.ModeratorUserUsername, UserRole.Moderator);
+        TestConstants.ModeratorUserId, TestConstants.ModeratorUserLogin, UserRole.Moderator);
+
+    /// <summary>In the private room by the character the hidden block of the letter is addressed to.</summary>
+    private static GeneralUser Addressee => User(
+        TestConstants.TestimonialUserIds[3], TestConstants.TestimonialUsernames[3], UserRole.RegularUser);
 
     private static GeneralUser User(Guid id, string username, UserRole role) =>
         new() { UserId = id, Username = username, Role = role };
 
     private static string ContentUrl => $"/v1/uploads/{UploadId:D}/content";
 
+    private static string LetterContentUrl => $"/v1/uploads/{LetterUploadId:D}/content";
+
     /// <summary>
-    /// A game anybody may see, holding a room only its members may enter. The
-    /// game is approved and active on purpose: the only thing closing the room is
-    /// its own access type, so a refusal below cannot be the game being invisible.
+    /// The closed room and the file attached to a post in it, written once for
+    /// the whole class.
     /// </summary>
     public async ValueTask InitializeAsync()
     {
@@ -98,6 +98,7 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         // two are only in step by coincidence today - and the tests that expect
         // the bytes fail with a 404 the moment they fall out of step.
         InMemoryObjectStorage.Seed(ObjectKey, FileBytes, "image/png");
+        InMemoryObjectStorage.Seed(LetterObjectKey, FileBytes, "image/png");
 
         await using var db = DatabaseFixture.CreateDbContext();
 
@@ -106,6 +107,52 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
             return;
         }
 
+        AddClosedRoom(db);
+        db.Set<DbUpload>().Add(Attachment(UploadId, PostId, ObjectKey, "karta.png"));
+        AddLetter(db);
+
+        await db.SaveChangesAsync();
+    }
+
+    /// <summary>
+    /// A second post whose file the text shows only inside a block addressed to one
+    /// reader of the room, and a character of that reader let into the room.
+    /// </summary>
+    private static void AddLetter(DmDbContext db)
+    {
+        db.Set<DbCharacter>().Add(Character(AddresseeCharacterId, Addressee.UserId, AddresseeName));
+        db.Set<DbRoomAccess>().Add(new DbRoomAccess
+        {
+            AccessId = Guid.NewGuid(),
+            RoomId = PrivateRoomId,
+            CharacterId = AddresseeCharacterId,
+            Policy = RoomAccessPolicy.ReadOnly,
+        });
+
+        db.Set<DbPost>().Add(new DbPost
+        {
+            PostId = LetterPostId,
+            RoomId = PrivateRoomId,
+            CharacterId = AuthorCharacterId,
+            AuthorId = Author.UserId,
+            CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-30),
+            GameText = $"Передаю письмо.\n[private=\"{AddresseeName}\"]" +
+                       $"[img]https://dm.am{LetterContentUrl}[/img][/private]",
+            // The snapshot the save path freezes for the block: its one addressee.
+            PrivateAddresseeSnapshotJson =
+                $"{{\"{AddresseeName}\":[{{\"character\":\"{AddresseeCharacterId}\"," +
+                $"\"name\":\"{AddresseeName}\",\"owner\":\"{Addressee.UserId}\"}}]}}",
+            IsRemoved = false,
+        });
+
+        db.Set<DbUpload>().Add(Attachment(LetterUploadId, LetterPostId, LetterObjectKey, "pismo.png"));
+    }
+
+    /// <summary>
+    /// A visible game holding a room only its members may enter: only the room's access type closes it.
+    /// </summary>
+    private static void AddClosedRoom(DmDbContext db)
+    {
         db.Set<DbGame>().Add(new DbGame
         {
             GameId = GameId,
@@ -168,31 +215,32 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
             PrivateAddresseeSnapshotJson = "{}",
             IsRemoved = false,
         });
-
-        db.Set<DbUpload>().Add(new DbUpload
-        {
-            UploadId = UploadId,
-            UserId = Author.UserId,
-            Type = UploadType.PostAttachment,
-            Status = UploadStatus.Confirmed,
-            TargetPostId = PostId,
-            Original = true,
-            ContentType = "image/png",
-            SizeBytes = FileBytes.LongLength,
-            Width = 1600,
-            Height = 1200,
-            ObjectKey = ObjectKey,
-            // Null by construction for this type: the bucket answers nothing on
-            // the post prefix, so there is no public address to record.
-            FilePath = null,
-            FileName = "karta.png",
-            CreatedUtc = DateTimeOffset.UtcNow.AddHours(-1),
-            ConfirmedUtc = DateTimeOffset.UtcNow.AddHours(-1),
-            IsRemoved = false,
-        });
-
-        await db.SaveChangesAsync();
     }
+
+    /// <summary>
+    /// A file of the author, attached to a post by the one column that names its carrier.
+    /// </summary>
+    private static DbUpload Attachment(Guid uploadId, Guid postId, string objectKey, string fileName) => new()
+    {
+        UploadId = uploadId,
+        UserId = Author.UserId,
+        Type = UploadType.PostAttachment,
+        Status = UploadStatus.Confirmed,
+        TargetPostId = postId,
+        Original = true,
+        ContentType = "image/png",
+        SizeBytes = FileBytes.LongLength,
+        Width = 1600,
+        Height = 1200,
+        ObjectKey = objectKey,
+        // Null by construction for this type: the bucket answers nothing on
+        // the post prefix, so there is no public address to record.
+        FilePath = null,
+        FileName = fileName,
+        CreatedUtc = DateTimeOffset.UtcNow.AddHours(-1),
+        ConfirmedUtc = DateTimeOffset.UtcNow.AddHours(-1),
+        IsRemoved = false,
+    };
 
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
 
@@ -201,47 +249,23 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
     /// this API deciding who is asking.
     /// </summary>
     /// <remarks>
-    /// Three shapes, because there are three ways it leaks. The key itself is
-    /// what the bucket answers to. The camelCased field name catches a DTO that
-    /// grew the column even where the value happened to be empty. And an imgproxy
-    /// address hides the key inside base64url, where neither of the first two
-    /// would see it — that one is caught by the resize option, which every
-    /// thumbnail URL this project builds carries in clear text ahead of the
-    /// encoded source.
+    /// Two shapes: the key without its extension, which also covers the address of a thumbnail beside it, and
+    /// the camelCased field name.
     /// </remarks>
     private static void AssertNoAddressOfTheBytes(string body)
     {
-        body.Should().NotContain(ObjectKey, "the object key is the address the bucket answers to");
+        body.Should().NotContain(Path.ChangeExtension(ObjectKey, null),
+            "the object key is the address the bucket answers to, and a thumbnail lies beside it");
         body.Should().NotContain("objectKey", "the key must not reach any DTO at all");
-        body.Should().NotContain("rs:fill:", "an imgproxy link has no expiry and names nobody");
     }
 
-    private static DbCharacter Character(Guid id, Guid authorId, string name) => new()
-    {
-        CharacterId = id,
-        GameId = GameId,
-        AuthorId = authorId,
-        Name = name,
-        Status = CharacterStatus.Active,
-        IsNpc = false,
-        AccessPolicy = CharacterAccessPolicy.NoAccess,
-        CreatedUtc = DateTimeOffset.UtcNow.AddDays(-2),
-        IsRemoved = false,
-    };
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // Who gets the bytes
-    // ─────────────────────────────────────────────────────────────────────────
+    private static DbCharacter Character(Guid id, Guid authorId, string name) =>
+        CharacterRows.InPlay(id, GameId, authorId, name);
 
     /// <summary>
     /// The two refusals say the same words, not merely carry the same status.
     /// </summary>
-    /// <remarks>
-    /// The message travels in the body: a refusal naming the post says both that
-    /// a live row exists and what it hangs on, which is the difference this
-    /// endpoint exists not to expose. Asserted against a genuinely absent id, so
-    /// the pair is compared rather than one of them pinned to a literal.
-    /// </remarks>
+    /// <remarks>A refusal naming the post would say a live row exists; compared against a genuinely absent id.</remarks>
     [Fact]
     public async Task AnswerAClosedFileWithTheSameWordsAsAMissingOne()
     {
@@ -299,7 +323,7 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
     /// was keeping shut: whether there is a file here at all.
     /// </summary>
     [Fact]
-    public async Task NeverAnswerForbidden_WhichWouldConfirmTheFileExists()
+    public async Task NeverAnswerForbiddenWhichWouldConfirmTheFileExists()
     {
         foreach (var request in new[]
                  {
@@ -336,9 +360,8 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
     }
 
     /// <summary>
-    /// A moderator sees it wherever it is. Game content is out of reach of
-    /// warnings, which is a rule about judging what people write; a file the site
-    /// may have to remove is one the site has to be able to look at first.
+    /// A moderator sees it wherever the post is: a file the site may have to remove it has to be able to look at.
+    /// A file inside a hidden block is the exception, see KeepSuchAFileFromAModeratorWhomTheUploadRecordGivesItsAddress.
     /// </summary>
     [Fact]
     public async Task GiveTheFileToAModeratorOutsideTheGame()
@@ -349,13 +372,11 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    // ─────────────────────────────────────────────────────────────────────────
-    // How the bytes are served
-    // ─────────────────────────────────────────────────────────────────────────
-
     /// <summary>
     /// Served from the site's own origin, so the response has to say it is a
     /// download and must not be sniffed into something the browser will execute.
+    /// A file of a closed room is not kept even by the browser: the next account
+    /// signed in there would be served it from the copy.
     /// </summary>
     [Fact]
     public async Task ServeTheFileAsADownloadThatIsNeverSniffedOrSharedByACache()
@@ -369,24 +390,18 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
             .Should().ContainSingle().Which.Should().Be("nosniff");
         response.Headers.CacheControl!.Public.Should().BeFalse(
             "who may read this was decided for one caller, so a shared cache must not answer the next one");
-        response.Headers.CacheControl.Private.Should().BeTrue();
+        response.Headers.CacheControl.NoStore.Should().BeTrue(
+            "a guest does not read a closed room, so no copy may outlive this answer");
+        response.Headers.CacheControl.MaxAge.Should().BeNull();
     }
-
-    // ─────────────────────────────────────────────────────────────────────────
-    // What the payload says about the file
-    // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>
     /// The post carries the endpoint's address and nothing else about where the
     /// bytes live.
     /// </summary>
     /// <remarks>
-    /// The object key and an imgproxy address are the two ways this leaks. The
-    /// key is what the bucket answers to, and an imgproxy link is signed but
-    /// carries no identity and no expiry, so either one, once in a payload, is a
-    /// pass on the bearer's terms rather than the reader's. The check is over the
-    /// raw body: a field added to the DTO reaches this test without anybody
-    /// remembering to extend it.
+    /// The key and a thumbnail beside it are both passes on the bearer's terms. Checked over the raw body, so a
+    /// new DTO field is covered.
     /// </remarks>
     [Fact]
     public async Task NameTheContentEndpointAndNeitherTheObjectKeyNorAThumbnailService()
@@ -430,4 +445,96 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         post.GetProperty("attachments").EnumerateArray().Single()
             .GetProperty("url").GetString().Should().Be(ContentUrl);
     }
+
+    /// <summary>
+    /// A reader of the room the block of the letter is not addressed to: the file is
+    /// as absent to him as one that never existed, and is answered in the same words.
+    /// </summary>
+    [Fact]
+    public async Task AnswerAFileShownOnlyInABlockNotAddressedToTheReaderAsAMissingOne()
+    {
+        var hidden = await Client.SendAsync(
+            CreateAuthenticatedRequest(HttpMethod.Get, LetterContentUrl, RoomMember));
+        var missing = await Client.SendAsync(
+            CreateAuthenticatedRequest(HttpMethod.Get, $"/v1/uploads/{Guid.NewGuid()}/content", RoomMember));
+
+        hidden.StatusCode.Should().Be(HttpStatusCode.NotFound,
+            "a picture the block keeps from him is no more his than the text around it");
+        (await TitleOf(hidden)).Should().Be(await TitleOf(missing));
+    }
+
+    /// <summary>
+    /// Nor does the post list it for him, read alone or with the room: a file under the
+    /// post would say what the block keeps from him.
+    /// </summary>
+    [Fact]
+    public async Task LeaveSuchAFileOutOfThePostForThatReader()
+    {
+        (await AttachmentIdsOf(LetterPostId, RoomMember)).Should().BeEmpty();
+
+        var response = await Client.SendAsync(
+            CreateAuthenticatedRequest(HttpMethod.Get, $"/v1/rooms/{PrivateRoomId:D}/posts", RoomMember));
+        response.StatusCode.Should().Be(HttpStatusCode.OK);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var letter = document.RootElement.GetProperty("resources").EnumerateArray()
+            .Single(p => p.GetProperty("id").GetGuid() == LetterPostId);
+        IdsOf(letter).Should().BeEmpty();
+    }
+
+    /// <summary>
+    /// The addressee reads the block, the author wrote it and the master leads the
+    /// game: each gets the file and sees it under the post.
+    /// </summary>
+    [Fact]
+    public async Task GiveSuchAFileToTheAddresseeTheAuthorAndTheMaster()
+    {
+        foreach (var user in new[] { Addressee, Author, Master })
+        {
+            var response = await Client.SendAsync(
+                CreateAuthenticatedRequest(HttpMethod.Get, LetterContentUrl, user));
+
+            response.StatusCode.Should().Be(HttpStatusCode.OK, "{0} reads the block", user.Username);
+            (await AttachmentIdsOf(LetterPostId, user)).Should().Equal(
+                new[] { LetterUploadId }, "{0} reads the block", user.Username);
+        }
+    }
+
+    /// <summary>
+    /// Moderation has no way around a hidden block, and the address of a file is none either: the upload
+    /// record hands a moderator outside the game the address, and the address answers him as a missing file.
+    /// </summary>
+    [Fact]
+    public async Task KeepSuchAFileFromAModeratorWhomTheUploadRecordGivesItsAddress()
+    {
+        var record = await Client.SendAsync(
+            CreateAuthenticatedRequest(HttpMethod.Get, $"/v1/uploads/{LetterUploadId:D}", Moderator));
+        record.StatusCode.Should().Be(HttpStatusCode.OK, "a moderator reads the record of any upload");
+
+        var payload = await record.Content.ReadFromJsonAsync<JsonElement>();
+        var upload = payload.TryGetProperty("resource", out var resource) ? resource : payload;
+        var contentUrl = upload.GetProperty("contentUrl").GetString();
+        contentUrl.Should().Be(LetterContentUrl);
+
+        var response = await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, contentUrl!, Moderator));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NotFound,
+            "the block is not his to read, and the file goes with the block");
+    }
+
+    /// <summary>The attachments of a post as the reader gets it alone.</summary>
+    private async Task<Guid[]> AttachmentIdsOf(Guid postId, GeneralUser reader)
+    {
+        var response = await Client.SendAsync(
+            CreateAuthenticatedRequest(HttpMethod.Get, $"/v1/posts/{postId:D}", reader));
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "{0} reads the post", reader.Username);
+
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        return IdsOf(document.RootElement.GetProperty("resource"));
+    }
+
+    private static Guid[] IdsOf(JsonElement post) =>
+        post.TryGetProperty("attachments", out var attachments)
+            ? attachments.EnumerateArray().Select(a => a.GetProperty("id").GetGuid()).ToArray()
+            : [];
 }

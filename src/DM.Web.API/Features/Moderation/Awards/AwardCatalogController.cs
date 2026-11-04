@@ -29,15 +29,12 @@ namespace DM.Web.API.Features.Moderation.Awards;
 [RequireRole(UserRole.SeniorModerator)]
 public class AwardCatalogController : ControllerBase
 {
-    private readonly IAwardCatalogApiService _awardCatalogApiService;
+    private readonly AwardCatalogApiService _awardCatalogApiService;
 
-    /// <inheritdoc />
-    public AwardCatalogController(IAwardCatalogApiService awardCatalogApiService)
+    public AwardCatalogController(AwardCatalogApiService awardCatalogApiService)
     {
         _awardCatalogApiService = awardCatalogApiService;
     }
-
-    // ---- AwardType ----
 
     /// <summary>The full award type catalog, deactivated types included.</summary>
     /// <remarks>
@@ -113,8 +110,6 @@ public class AwardCatalogController : ControllerBase
         await _awardCatalogApiService.DeactivateType(id);
         return NoContent();
     }
-
-    // ---- ContestSeries ----
 
     /// <summary>Everyone awarded within a contest series.</summary>
     /// <remarks>

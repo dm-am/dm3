@@ -1,7 +1,6 @@
 using System;
 using DM.Domain.Core.Comments;
 using System.Threading.Tasks;
-using DM.Domain.Blog.Features.Comments;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
@@ -10,47 +9,27 @@ using DM.Web.API.Features.Blog.Blogs;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
 using Comment = DM.Web.API.Shared.Dto.Comment;
-using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
+using CommentRequest = DM.Web.API.Shared.Dto.CommentRequest;
 
 namespace DM.Web.API.Features.Blog.Comments;
 
 /// <summary>
 /// Blog discussion comment management endpoints
 /// </summary>
-/// <remarks>
-/// Provides CRUD operations for comments on the blog itself (Blog discussion).
-/// These are comments directly on the blog, not on individual publications.
-///
-/// ## Available Operations
-/// - List comments on a blog (with pagination)
-/// - Create, read, update, delete comments
-/// - Like/unlike comments
-/// - Mark all blog comments as read
-///
-/// ## Access Control
-/// - Viewing: Whoever may see the blog — its draft visibility, its status and premoderation decide
-/// - Creating: Authenticated users, except those on the blog's blacklist or silenced by a ban
-/// - Editing: Author or moderators
-/// - Deleting: Author or moderators
-/// - Liking: Authenticated users (cannot like own comments)
-/// </remarks>
 [ApiController]
 [Route("v1/blogs")]
 [ApiExplorerSettings(GroupName = "Blog")]
 [Tags("Comments")]
 public class BlogCommentController : ControllerBase
 {
-    private readonly IBlogCommentApiService _commentApiService;
-    private readonly IBlogLikeApiService _likeApiService;
-    private readonly IBlogApiService _blogApiService;
+    private readonly BlogCommentApiService _commentApiService;
+    private readonly BlogLikeApiService _likeApiService;
+    private readonly BlogApiService _blogApiService;
 
-    /// <summary>
-    /// Creates a new instance of BlogCommentController
-    /// </summary>
     public BlogCommentController(
-        IBlogCommentApiService commentApiService,
-        IBlogLikeApiService likeApiService,
-        IBlogApiService blogApiService)
+        BlogCommentApiService commentApiService,
+        BlogLikeApiService likeApiService,
+        BlogApiService blogApiService)
     {
         _commentApiService = commentApiService;
         _likeApiService = likeApiService;
@@ -63,16 +42,6 @@ public class BlogCommentController : ControllerBase
     /// <remarks>
     /// Returns paginated list of comments on the blog itself (Blog discussion).
     /// Supports filtering by author usernames, text search, date range and sorting.
-    ///
-    /// ## Query Parameters
-    /// - **skip**: Number of items to skip (pagination)
-    /// - **take**: Number of items to return (max 100, default 20)
-    /// - **search**: Text search in comment content (case-insensitive)
-    /// - **authorUsernames**: Filter by author usernames, repeated per author (`authorUsernames=alice&amp;authorUsernames=bob`), OR logic
-    /// - **createdFromUtc**: Filter by creation date start (ISO 8601)
-    /// - **createdToUtc**: Filter by creation date end (ISO 8601)
-    /// - **sortBy**: Sort field - "created" (default) or "likes"
-    /// - **sortOrder**: Sort direction - "asc" (default for created) or "desc"
     /// </remarks>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="q">Query parameters with filtering, sorting and pagination</param>
@@ -84,8 +53,7 @@ public class BlogCommentController : ControllerBase
     public async Task<IActionResult> GetBlogComments(string id, [FromQuery] CommentsQuery q)
     {
         var blogId = await _blogApiService.ResolveId(id);
-        var (comments, paging) = await _commentApiService.Get(blogId, q);
-        return Ok(new ListEnvelope<Comment>(comments, paging));
+        return Ok(await _commentApiService.Get(blogId, q));
     }
 
     /// <summary>
@@ -93,12 +61,6 @@ public class BlogCommentController : ControllerBase
     /// </summary>
     /// <remarks>
     /// Adds a new comment to the blog discussion.
-    ///
-    /// Example request:
-    ///     POST /v1/blogs/abcde/comments
-    ///     {
-    ///       "text": "Welcome to the blog!"
-    ///     }
     /// </remarks>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <param name="request">Comment creation request with text content</param>
@@ -114,7 +76,7 @@ public class BlogCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostBlogComment(string id, [FromBody] CreateCommentRequest request)
+    public async Task<IActionResult> PostBlogComment(string id, [FromBody] CommentRequest request)
     {
         var blogId = await _blogApiService.ResolveId(id);
         var result = await _commentApiService.Create(blogId, request);
@@ -124,15 +86,6 @@ public class BlogCommentController : ControllerBase
     /// <summary>
     /// Get blog comment
     /// </summary>
-    /// <remarks>
-    /// Returns detailed information about a specific blog comment including:
-    /// - Comment text and author
-    /// - Creation and last edit timestamps
-    /// - Like count
-    ///
-    /// Example request:
-    ///     GET /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
-    /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="200">Comment details</response>
     /// <response code="404">Comment not found, or it is not a comment of a blog the user may open</response>
@@ -148,12 +101,6 @@ public class BlogCommentController : ControllerBase
     /// Updates the comment text.
     /// Only the comment author or moderators can edit comments.
     /// Edit history is preserved.
-    ///
-    /// Example request:
-    ///     PATCH /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
-    ///     {
-    ///       "text": "Updated comment text"
-    ///     }
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <param name="request">Updated comment text</param>
@@ -169,7 +116,7 @@ public class BlogCommentController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchBlogComment(Guid id, [FromBody] UpdateCommentRequest request) =>
+    public async Task<IActionResult> PatchBlogComment(Guid id, [FromBody] CommentRequest request) =>
         Ok(await _commentApiService.Update(id, request));
 
     /// <summary>
@@ -179,9 +126,6 @@ public class BlogCommentController : ControllerBase
     /// Permanently deletes a blog comment.
     /// Only the comment author or moderators can delete comments.
     /// This action cannot be undone.
-    ///
-    /// Example request:
-    ///     DELETE /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="204">Comment deleted successfully</response>
@@ -207,9 +151,6 @@ public class BlogCommentController : ControllerBase
     /// Adds a like to the blog comment from the current user.
     /// Users cannot like their own comments.
     /// Each user can only like a comment once.
-    ///
-    /// Example request:
-    ///     POST /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="200">Like added, returns user who liked</response>
@@ -233,9 +174,6 @@ public class BlogCommentController : ControllerBase
     /// <remarks>
     /// Removes the current user's like from the blog comment.
     /// Can only remove your own likes.
-    ///
-    /// Example request:
-    ///     DELETE /v1/blogs/comments/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Comment identifier (GUID)</param>
     /// <response code="204">Like removed successfully</response>
@@ -262,9 +200,6 @@ public class BlogCommentController : ControllerBase
     /// <remarks>
     /// Marks all comments on the blog as read for the current user.
     /// Useful for clearing unread counters.
-    ///
-    /// Example request:
-    ///     DELETE /v1/blogs/abcde/comments/unread
     /// </remarks>
     /// <param name="id">Blog public ID (5 letters) or GUID</param>
     /// <response code="204">All comments marked as read</response>

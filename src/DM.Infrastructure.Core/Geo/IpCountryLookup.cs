@@ -1,4 +1,5 @@
 using System;
+using System.Buffers.Binary;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
@@ -15,24 +16,11 @@ namespace DM.Infrastructure.Core.Geo;
 
 /// <inheritdoc />
 /// <remarks>
-/// A sorted table of ranges and a binary search over it, held in memory. No
-/// package and no network call: the format is a line of three fields, and an
-/// address sent to somebody else's service on every suspicious login would be
-/// the reader's address leaving the site to answer a question about the reader.
-///
-/// Read from the file on the first question rather than at startup. Four hosts
-/// share this registration and one of them sends the letter; the other three
-/// would pay for a table they never ask. The one that sends it also runs the
-/// refresh, which reads the file as soon as the host is up.
-///
-/// The table can be replaced while the process runs (<see cref="Use"/>), which is
-/// how <see cref="CountryTableRefresher"/> keeps it fresh without a restart. A
-/// question takes the table once and answers from it, so a replacement landing
-/// mid-question never mixes the ranges of one table with the names of another.
-///
-/// IPv4 and IPv6 are kept apart. Sixteen bytes for an address that needs four
-/// triples what the table costs, and the two families never fall in one another's
-/// ranges, so a search that mixed them would only have to tell them apart again.
+/// A sorted table of ranges in memory: an address sent to a service would leave the
+/// site to answer a question about its reader. Read on the first question, since
+/// only one host asks. A question takes the table once, so a replacement
+/// (<see cref="Use"/>) never mixes two tables. IPv4 apart from IPv6, at a quarter
+/// of the size.
 /// </remarks>
 internal sealed class IpCountryLookup : IIpCountryLookup
 {
@@ -40,9 +28,7 @@ internal sealed class IpCountryLookup : IIpCountryLookup
     private readonly string _path;
 
     /// <summary>
-    /// Taken by the first read of the file and by every replacement, so a slow
-    /// first read cannot land over a table that was replaced while it ran.
-    /// Questions never take it once a table is held.
+    /// So that a slow first read cannot land over a table replaced while it ran.
     /// </summary>
     private readonly Lock _gate = new();
 
@@ -65,7 +51,6 @@ internal sealed class IpCountryLookup : IIpCountryLookup
     /// <inheritdoc />
     public string? Find(string? ipAddress)
     {
-        if (string.IsNullOrWhiteSpace(ipAddress)) return null;
         if (!IPAddress.TryParse(ipAddress, out var parsed)) return null;
 
         var table = Current;
@@ -99,10 +84,6 @@ internal sealed class IpCountryLookup : IIpCountryLookup
     /// <summary>
     /// Makes this table the one every later question is answered from.
     /// </summary>
-    /// <remarks>
-    /// One reference swapped: a question already under way finishes on the table
-    /// it took, the next one takes this.
-    /// </remarks>
     internal void Use(Table table)
     {
         lock (_gate)
@@ -131,10 +112,7 @@ internal sealed class IpCountryLookup : IIpCountryLookup
     /// Reads the configured table, or hands back an empty one and says why.
     /// </summary>
     /// <remarks>
-    /// A missing file is not a failure to start: this decides one line of one
-    /// letter, and refusing to boot over it would take the whole site down for a
-    /// stale download. It is worth a warning, because a silently absent country
-    /// looks exactly like a country nobody could determine.
+    /// A missing file is not worth a failed start, one line of one letter, but a warning.
     /// </remarks>
     private Table ReadConfigured()
     {
@@ -216,22 +194,9 @@ internal sealed class IpCountryLookup : IIpCountryLookup
     /// Country names in Russian, taken from the culture data of the runtime.
     /// </summary>
     /// <remarks>
-    /// Not written out here: two hundred and forty names by hand is two hundred
-    /// and forty chances to misspell one, and the list moves when a country does.
-    ///
-    /// Not RegionInfo either, which is the obvious way and the wrong one. Its
-    /// DisplayName hands back the name a country calls itself — "Deutschland",
-    /// "Việt Nam", "საქართველო" — whatever the interface culture is, and a
-    /// reader asked to recognise where they signed in from cannot read half of
-    /// them. The name of a culture can: "немецкий (Германия)" under ru-RU, where
-    /// the country stands in the parentheses, and what is in front of it is the
-    /// language, which this does not want. Several cultures name the same
-    /// country and they all name it the same way, so the first wins.
-    ///
-    /// A code no culture names is left out of the map, and the letter then
-    /// prints no country rather than printing "VN" at the reader. A runtime
-    /// built without culture data leaves the map empty, which is the same
-    /// outcome for every address.
+    /// Not RegionInfo, whose DisplayName is the country's own name ("Deutschland"):
+    /// the name of a culture under ru-RU, "немецкий (Германия)", holds the country in
+    /// Russian. A code no culture names is left out, and the letter names no country.
     /// </remarks>
     private static Dictionary<string, string> RussianCountryNames()
     {
@@ -270,9 +235,7 @@ internal sealed class IpCountryLookup : IIpCountryLookup
     /// The country out of a culture's name: the last thing in the parentheses.
     /// </summary>
     /// <remarks>
-    /// "немецкий (Германия)" is the plain shape. A culture that also names a
-    /// script puts it first — "сербский (латиница, Сербия)" — so the country is
-    /// what follows the last comma inside the brackets.
+    /// A script comes first: "сербский (латиница, Сербия)".
     /// </remarks>
     private static string? CountryOf(string cultureName)
     {
@@ -288,26 +251,19 @@ internal sealed class IpCountryLookup : IIpCountryLookup
     /// <summary>Some publishers quote every field, some quote none.</summary>
     private static string Unquote(string field) => field.Trim().Trim('"');
 
+    // Big-endian, so that numeric order is address order.
     private static uint ToV4(IPAddress address)
     {
         Span<byte> bytes = stackalloc byte[4];
         address.TryWriteBytes(bytes, out _);
-        return BitConverter.IsLittleEndian
-            ? BinaryPrimitivesReverse(bytes)
-            : BitConverter.ToUInt32(bytes);
+        return BinaryPrimitives.ReadUInt32BigEndian(bytes);
     }
-
-    /// <summary>Big-endian, so that numeric order is address order.</summary>
-    private static uint BinaryPrimitivesReverse(ReadOnlySpan<byte> bytes) =>
-        ((uint)bytes[0] << 24) | ((uint)bytes[1] << 16) | ((uint)bytes[2] << 8) | bytes[3];
 
     private static UInt128 ToV6(IPAddress address)
     {
         Span<byte> bytes = stackalloc byte[16];
         address.TryWriteBytes(bytes, out _);
-        UInt128 value = 0;
-        foreach (var part in bytes) value = (value << 8) | part;
-        return value;
+        return BinaryPrimitives.ReadUInt128BigEndian(bytes);
     }
 
     internal readonly record struct Range<T>(T First, T Last, string Code) where T : IComparable<T>;

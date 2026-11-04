@@ -95,7 +95,6 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 </script>
 
 <template>
-  <!-- The box the table stands in (see the styles). -->
   <div
     ref="scrollBox"
     class="data-table-scroll"
@@ -106,7 +105,6 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
       :aria-busy="loading ? 'true' : undefined"
       :aria-label="ariaLabel"
     >
-      <!-- Header -->
       <thead>
         <tr class="table-header">
           <th v-if="showRowNumbers" scope="col" class="col col-number">#</th>
@@ -119,10 +117,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
             :style="column.width ? { width: column.width } : undefined"
             :aria-sort="getAriaSort(column)"
           >
-            <!-- Headers are presentational labels. Sorting is driven solely by
-               the SortButton in each table's filter (per product decision);
-               aria-sort still announces the active sort column to screen
-               readers. -->
+            <!-- Sorting is the filter's SortButton alone; aria-sort still announces it. -->
             <span class="header-content">
               <slot :name="`header-${column.key}`" :column="column">
                 {{ column.label }}
@@ -132,20 +127,16 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
         </tr>
       </thead>
 
-      <!-- Skeleton loading state (rendered as real table rows for correct column widths).
-         Only shown on initial load — while reloading with stale rows present,
-         the rows stay visible (table carries aria-busy). -->
-      <tbody v-if="loading && !data?.length" aria-hidden="true">
+      <!-- Only on first load: reloading keeps the stale rows under aria-busy. -->
+      <tbody v-if="loading && !data.length" aria-hidden="true">
         <DataTableSkeleton
-          :rows="10"
           :columns="columns"
           :show-row-numbers="showRowNumbers"
         />
       </tbody>
 
       <tbody v-else>
-        <!-- Empty state -->
-        <tr v-if="!data?.length" class="table-empty-row">
+        <tr v-if="!data.length" class="table-empty-row">
           <td :colspan="span">
             <slot name="empty">
               <secondary-text class="table-empty">
@@ -155,8 +146,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
           </td>
         </tr>
 
-        <!-- Rows (no v-memo: row content can change while id stays the same,
-           e.g. online indicators or refreshed counters) -->
+        <!-- No v-memo: a row's content changes while its id stays. -->
         <template v-else>
           <template v-for="(row, index) in data" :key="row.id">
             <tr class="table-row" :class="rowClass?.(row)">
@@ -189,9 +179,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
         </template>
       </tbody>
 
-      <!-- Footer (pagination). Use $slots directly (re-evaluated each render) so
-         a footer whose v-if flips true after async paging loads still shows —
-         a cached computed(() => !!slots.footer) would not react to that. -->
+      <!-- $slots, not a computed: a footer whose v-if flips after paging loads has to show. -->
       <tfoot v-if="$slots.footer">
         <tr class="table-footer">
           <td :colspan="span">
@@ -206,23 +194,8 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
 <style scoped lang="sass">
 @use "@/assets/styles/Tables" as *
 
-// Table metrics are the module's, not this component's: _Tables.sass declares
-// $table-cell-padding-v/-h and $table-gap, and the mixins that size a desktop
-// cell (+table-header, +table-row, +expandable-row, +expandable-details) read
-// them. A copy of the numbers here parts from those mixins the moment the
-// declarations move.
-//
-// Every table lays out "auto", as the tables of DM2 do: a column starts from
-// the width it declares (Column.width, whose shares and px leave the main
-// column the rest) and is never narrower than its longest word. Every column
-// stands at every width of the window: no column goes, and the text of a cell
-// breaks between its words. Where the column of the page has the room, the
-// table fits it. Where it has not, the table keeps every word whole and stays
-// wider than the column, and the box around it scrolls sideways: the page
-// does not. Words broken inside to fit would cut a title of /games at 1366
-// into "Королевс" and "тв".
-// Inline-size containment keeps the width of the table from reaching the
-// ancestors of the box.
+// Layout auto, as on DM2: a column is never narrower than its longest word, and the box scrolls rather
+// than the page. Inline-size containment keeps the table's width from reaching the box's ancestors.
 .data-table-scroll
   overflow-x: auto
   contain: inline-size
@@ -234,17 +207,13 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
   border-spacing: $table-gap
   background-color: $border
 
-// Text in a table breaks between words only: a header of two words takes two
-// lines rather than running into the next header, a word is never cut into
-// syllables with a hyphen, and none is broken inside, a long login included.
+// Breaks between words only: no hyphens, no word cut inside, a long login included.
 :where(.data-table) th,
 :where(.data-table) td
   hyphens: none
   overflow-wrap: normal
 
-// And none of what a cell holds breaks a word either, whatever the component
-// that draws it says for itself (UserLink breaks a long login). :deep - the
-// content comes from the slots of the caller.
+// Whatever a cell's component says for itself (UserLink breaks a long login); :deep for slot content.
 .data-table :deep(:is(th, td) *)
   hyphens: none
   overflow-wrap: normal
@@ -312,13 +281,7 @@ function getAriaSort(column: Column): "ascending" | "descending" | undefined {
       padding: $table-cell-padding-v $table-cell-padding-h
       background-color: $bg-element-accent
 
-// The footer (the paging of a list) stands under the part of the table the
-// reader sees. A table wider than its column scrolls in its box, and a footer
-// as wide as the table centred its strip under the whole of it: on a phone the
-// strip measured the table, laid out numbers for it and left ">>" out of sight
-// until the table was scrolled. Held at the left edge of the box and as wide
-// as the box, less the cell's own sides, it is where it was whenever the table
-// fits. Without a measured box (before layout, in a test) it spans the table.
+// Sticky at the box's left and as wide as the box: under the visible part of a table that scrolls.
 .table-footer-line
   position: sticky
   left: $table-gap + $table-cell-padding-h

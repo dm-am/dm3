@@ -1,17 +1,4 @@
-/**
- * The set of possible values is an array in every draft, never null.
- *
- * The server declares the field on a specification and refuses a null with a
- * validation error, so a draft that means "this type has no list" has to say
- * it with an empty array. The stand found this the hard way: a template with a
- * single text attribute could not be saved at all, because the editor put null
- * there and the answer came back as an English framework message about a
- * required field.
- *
- * Held here rather than in a page spec because every writing screen builds its
- * draft through these helpers: the template editor, the game creation form and
- * the sheet section of game settings alike.
- */
+// The server refuses a null set of values, so every draft holds an array, through every helper.
 import { describe, it, expect } from "vitest";
 import {
   createEmptySpec,
@@ -22,14 +9,7 @@ import {
 import { AttributeSpecificationType } from "@/shared/api/models/game/attributeSchemas";
 
 /** Every type the editor offers, so a new one cannot slip in with a null. */
-const EVERY_TYPE = [
-  AttributeSpecificationType.Text,
-  AttributeSpecificationType.Number,
-  AttributeSpecificationType.TextList,
-  AttributeSpecificationType.NumberList,
-  AttributeSpecificationType.TextNumberList,
-  AttributeSpecificationType.BbCode,
-];
+const EVERY_TYPE = Object.values(AttributeSpecificationType);
 
 describe("a draft specification", () => {
   it("carries an empty set of values when it is fresh", () => {

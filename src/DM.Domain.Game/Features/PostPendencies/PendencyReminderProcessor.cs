@@ -29,8 +29,7 @@ internal class PendencyReminderProcessor : IPendencyReminderProcessor
     {
         var now = _dateTimeProvider.Now;
 
-        // Claimed - stamped and committed - before a single event goes out. The
-        // stamp is what stops the same reminder repeating every pass.
+        // Stamped and committed before a single event goes out.
         var claimed = await _repository.ClaimPendingReminders(
             now - PendencyPolicy.FirstReminderAfter,
             now - PendencyPolicy.ReminderInterval,

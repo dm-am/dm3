@@ -6,7 +6,6 @@ using System;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Domain.Personal.Features.ProfileNotes;
@@ -21,61 +20,54 @@ namespace DM.Domain.Personal.Tests.Features.ProfileNotes;
 
 public class UserProfileNoteServiceShould : UnitTestBase
 {
-    private readonly IUserProfileNoteRepository _repository;
-    private readonly IUserRepository _userRepository;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly UserProfileNoteService _service;
-    private readonly Guid _currentUserId = Guid.NewGuid();
-    private readonly Guid _subjectUserId = Guid.NewGuid();
-    private readonly Guid _noteId = Guid.NewGuid();
-    private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private readonly IUserProfileNoteRepository repository;
+    private readonly IUserRepository userRepository;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly UserProfileNoteService service;
+    private readonly Guid currentUserId = Guid.NewGuid();
+    private readonly Guid subjectUserId = Guid.NewGuid();
+    private readonly Guid noteId = Guid.NewGuid();
+    private readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
     public UserProfileNoteServiceShould()
     {
-        _repository = Mock<IUserProfileNoteRepository>();
-        _userRepository = Mock<IUserRepository>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        repository = Mock<IUserProfileNoteRepository>();
+        userRepository = Mock<IUserRepository>();
+        identityProvider = Mock<IIdentityProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
-        _identityProvider.Current.Returns(identity);
-        _dateTimeProvider.Now.Returns(_now);
-        _guidFactory.Create().Returns(_noteId);
+        var identity = Identities.User(currentUserId, "CurrentUser", UserRole.RegularUser);
+        identityProvider.Current.Returns(identity);
+        dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(noteId);
 
         var validator = Mock<IValidator<CreateUserProfileNote>>();
         validator
             .ValidateAsync(Arg.Any<ValidationContext<CreateUserProfileNote>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
 
-        _service = new UserProfileNoteService(
-            _repository,
-            _userRepository,
-            _identityProvider,
-            _guidFactory,
-            _dateTimeProvider,
+        service = new UserProfileNoteService(
+            repository,
+            userRepository,
+            identityProvider,
+            guidFactory,
+            dateTimeProvider,
             validator);
     }
 
-    [Fact]
     /// <summary>
     /// An anonymous viewer has no note of their own, and that is an answer.
     /// </summary>
-    /// <remarks>
-    /// This used to throw, and the profile page caught the exception to learn
-    /// that its viewer was not signed in — control flow across a layer boundary,
-    /// where the nullable return already said the same thing. The exception was
-    /// also one the error middleware does not map, so any other caller would
-    /// have met it as 500.
-    /// </remarks>
+    [Fact]
     public async Task ReturnNothingWhenGettingNoteWithoutAuthentication()
     {
         var guestIdentity = Identities.Guest();
-        _identityProvider.Current.Returns(guestIdentity);
+        identityProvider.Current.Returns(guestIdentity);
 
-        var note = await _service.GetNote("Subject");
+        var note = await service.GetNote("Subject");
 
         note.Should().BeNull();
     }
@@ -83,9 +75,9 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ReturnNullWhenGettingNoteForNonexistentUser()
     {
-        _userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
+        userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
 
-        var result = await _service.GetNote("Unknown");
+        var result = await service.GetNote("Unknown");
 
         result.Should().BeNull();
     }
@@ -93,12 +85,12 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task GetNoteSuccessfully()
     {
-        var note = new UserProfileNote { Id = _noteId };
+        var note = new UserProfileNote { Id = noteId };
 
-        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
-        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(note);
+        userRepository.FindUserIdAsync("Subject").Returns(subjectUserId);
+        repository.Get(currentUserId, subjectUserId, Arg.Any<CancellationToken>()).Returns(note);
 
-        var result = await _service.GetNote("Subject");
+        var result = await service.GetNote("Subject");
 
         result.Should().Be(note);
     }
@@ -107,10 +99,10 @@ public class UserProfileNoteServiceShould : UnitTestBase
     public async Task ThrowWhenUpsertingNoteWithoutAuthentication()
     {
         var guestIdentity = Identities.Guest();
-        _identityProvider.Current.Returns(guestIdentity);
+        identityProvider.Current.Returns(guestIdentity);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Note" };
-        var act = () => _service.UpsertNote(createNote);
+        var act = () => service.UpsertNote(createNote);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Unauthorized);
@@ -119,10 +111,10 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenUpsertingNoteForNonexistentUser()
     {
-        _userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
+        userRepository.FindUserIdAsync("Unknown").Returns((Guid?)null);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Unknown", Text = "Note" };
-        var act = () => _service.UpsertNote(createNote);
+        var act = () => service.UpsertNote(createNote);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound)
@@ -132,10 +124,10 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenCreatingNoteAboutYourself()
     {
-        _userRepository.FindUserIdAsync("CurrentUser").Returns(_currentUserId);
+        userRepository.FindUserIdAsync("CurrentUser").Returns(currentUserId);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "CurrentUser", Text = "Note" };
-        var act = () => _service.UpsertNote(createNote);
+        var act = () => service.UpsertNote(createNote);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.BadRequest)
@@ -145,41 +137,36 @@ public class UserProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task DeleteNoteWhenUpsertingWithEmptyText()
     {
-        var existingNote = new UserProfileNote { Id = _noteId };
+        var existingNote = new UserProfileNote { Id = noteId };
 
-        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
-        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(existingNote);
+        userRepository.FindUserIdAsync("Subject").Returns(subjectUserId);
+        repository.Get(currentUserId, subjectUserId, Arg.Any<CancellationToken>()).Returns(existingNote);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "" };
-        var result = await _service.UpsertNote(createNote);
+        var result = await service.UpsertNote(createNote);
 
         result.Should().BeNull();
-        await _repository.Received(1).Delete(_noteId, Arg.Any<CancellationToken>());
+        await repository.Received(1).Delete(noteId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task CreateNewNoteWhenNoneExists()
     {
-        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
+        userRepository.FindUserIdAsync("Subject").Returns(subjectUserId);
 
         CreateUserProfileNoteEntity? capturedEntity = null;
-        _repository.Create(Arg.Any<CreateUserProfileNoteEntity>(), Arg.Any<CancellationToken>())
-            .Returns(new UserProfileNote())
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<CreateUserProfileNoteEntity>(0);
-                capturedEntity = e;
-            });
+        repository.Create(Arg.Do<CreateUserProfileNoteEntity>(e => capturedEntity = e), Arg.Any<CancellationToken>())
+            .Returns(new UserProfileNote());
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Note text" };
-        await _service.UpsertNote(createNote);
+        await service.UpsertNote(createNote);
 
         capturedEntity.Should().NotBeNull();
-        capturedEntity!.Id.Should().Be(_noteId);
-        capturedEntity.OwnerId.Should().Be(_currentUserId);
-        capturedEntity.SubjectUserId.Should().Be(_subjectUserId);
+        capturedEntity!.Id.Should().Be(noteId);
+        capturedEntity.OwnerId.Should().Be(currentUserId);
+        capturedEntity.SubjectUserId.Should().Be(subjectUserId);
         capturedEntity.Text.Should().Be("Note text");
-        capturedEntity.CreatedUtc.Should().Be(_now);
+        capturedEntity.CreatedUtc.Should().Be(now);
     }
 
     /// <summary>
@@ -187,63 +174,59 @@ public class UserProfileNoteServiceShould : UnitTestBase
     /// new one, with no read of the note before it.
     /// </summary>
     /// <remarks>
-    /// The update used to follow a read, and a clear of the same note arriving
-    /// together with the save removed the row in between: the update of a note
-    /// that was gone answered 500. The write decides new or existing itself, so
-    /// there is nothing to read first.
+    /// The write decides new or existing itself, so there is nothing to read first.
     /// </remarks>
     [Fact]
     public async Task UpdateExistingNote()
     {
-        var existingNote = new UserProfileNote { Id = Guid.NewGuid(), Text = "Old text", CreatedUtc = _now.AddDays(-1) };
+        var existingNote = new UserProfileNote { Id = Guid.NewGuid(), Text = "Old text", CreatedUtc = now.AddDays(-1) };
         var savedNote = new UserProfileNote
         {
             Id = existingNote.Id,
             Text = "Updated text",
             CreatedUtc = existingNote.CreatedUtc,
-            ModifiedUtc = _now
+            ModifiedUtc = now
         };
 
-        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
-        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(existingNote);
+        userRepository.FindUserIdAsync("Subject").Returns(subjectUserId);
+        repository.Get(currentUserId, subjectUserId, Arg.Any<CancellationToken>()).Returns(existingNote);
 
         CreateUserProfileNoteEntity? capturedEntity = null;
-        _repository.Create(Arg.Any<CreateUserProfileNoteEntity>(), Arg.Any<CancellationToken>())
-            .Returns(savedNote)
-            .AndDoes(ci => capturedEntity = ci.ArgAt<CreateUserProfileNoteEntity>(0));
+        repository.Create(Arg.Do<CreateUserProfileNoteEntity>(e => capturedEntity = e), Arg.Any<CancellationToken>())
+            .Returns(savedNote);
 
         var createNote = new CreateUserProfileNote { SubjectUsername = "Subject", Text = "Updated text" };
-        var result = await _service.UpsertNote(createNote);
+        var result = await service.UpsertNote(createNote);
 
         result.Should().Be(savedNote, "the answer is the note as the write left it");
         capturedEntity.Should().NotBeNull();
-        capturedEntity!.OwnerId.Should().Be(_currentUserId);
-        capturedEntity.SubjectUserId.Should().Be(_subjectUserId);
+        capturedEntity!.OwnerId.Should().Be(currentUserId);
+        capturedEntity.SubjectUserId.Should().Be(subjectUserId);
         capturedEntity.Text.Should().Be("Updated text");
-        capturedEntity.CreatedUtc.Should().Be(_now, "on a note the pair already has this dates the modification");
-        await _repository.DidNotReceive().Get(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        capturedEntity.CreatedUtc.Should().Be(now, "on a note the pair already has this dates the modification");
+        await repository.DidNotReceive().Get(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task DeleteNoteSuccessfully()
     {
-        var note = new UserProfileNote { Id = _noteId };
+        var note = new UserProfileNote { Id = noteId };
 
-        _userRepository.FindUserIdAsync("Subject").Returns(_subjectUserId);
-        _repository.Get(_currentUserId, _subjectUserId, Arg.Any<CancellationToken>()).Returns(note);
+        userRepository.FindUserIdAsync("Subject").Returns(subjectUserId);
+        repository.Get(currentUserId, subjectUserId, Arg.Any<CancellationToken>()).Returns(note);
 
-        await _service.DeleteNote("Subject");
+        await service.DeleteNote("Subject");
 
-        await _repository.Received(1).Delete(_noteId, Arg.Any<CancellationToken>());
+        await repository.Received(1).Delete(noteId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ThrowWhenDeletingNoteWithoutAuthentication()
     {
         var guestIdentity = Identities.Guest();
-        _identityProvider.Current.Returns(guestIdentity);
+        identityProvider.Current.Returns(guestIdentity);
 
-        var act = () => _service.DeleteNote("Subject");
+        var act = () => service.DeleteNote("Subject");
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Unauthorized);

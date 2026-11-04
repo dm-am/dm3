@@ -1,24 +1,16 @@
 <script setup lang="ts">
 /**
- * The "Модерация" tab of a profile: what a moderator opens a profile for,
- * under the headings every section of the profile has ("Контакты").
- *
- * It used to be a red, collapsed bar of its own between the actions of the
- * profile and its contacts, which pushed the profile down by a screen and a
- * half when opened and kept the everyday actions under the addresses, the
- * linked accounts and an editor that stood open. The strip of the tabs is the
- * navigation of a profile, and moderation is one more place in it.
- *
- * The sections go by how often they are wanted: the violations and their two
- * actions, the notes, the watch, then the sign-ins and the accounts they tie
- * this one to, and last, apart and behind their windows, the two actions on
- * the account itself. Each section gates itself on what the server lets the
- * viewer see or do, and a section with nothing to show is not drawn.
+ * The "Модерация" tab of a profile. The sections go by how often they are
+ * wanted, the two actions on the account last; each gates itself on what the
+ * server lets the viewer see or do.
  */
 import { computed } from "vue";
 import type { ModeratedProfile } from "@/shared/api/models/moderation";
-import { userIsSeniorModerator } from "@/entities/user";
-import { useAuthStore } from "@/shared/stores";
+import {
+  useAuthStore,
+  userIsAdmin,
+  userIsSeniorModerator,
+} from "@/entities/user";
 import { BlockTitle } from "@/shared/ui/Layout";
 import { ButtonRow } from "@/shared/ui/ButtonRow";
 import ModerationViolations from "./ModerationViolations.vue";
@@ -40,10 +32,8 @@ const emit = defineEmits<{
 
 const auth = useAuthStore();
 
-// The two actions on the account are a senior moderator's and an
-// administrator's (the second factor the administrator's alone), and neither
-// is offered on the viewer's own profile. Each button gates itself; the
-// heading over them is drawn when at least one of them is.
+// The actions on the account are a senior moderator's, the second factor an
+// administrator's alone, and neither is offered on the viewer's own profile.
 const showAccount = computed(
   () =>
     userIsSeniorModerator(auth.user) &&
@@ -82,11 +72,12 @@ const showAccount = computed(
       v-if="profile.permissions.canViewLinkedProfiles"
       :profiles="profile.linkedProfiles"
     />
-    <section v-if="showAccount" class="mod-section">
+    <section v-if="showAccount">
       <BlockTitle>Аккаунт</BlockTitle>
-      <!-- Both in one line on every width (ButtonRow). -->
-      <ButtonRow class="mod-account_actions">
+      <!-- One line on every width (ButtonRow). -->
+      <ButtonRow>
         <ModerationTwoFactor
+          v-if="userIsAdmin(auth.user)"
           :target-username="targetUsername"
           @updated="emit('updated')"
         />
@@ -100,8 +91,7 @@ const showAccount = computed(
 </template>
 
 <style scoped lang="sass">
-// The first section stands right under the strip of the tabs, the rest a
-// heading's own step apart (BlockTitle).
+// The first section right under the tab strip, the rest a heading's step apart.
 .moderation-tab > :first-child :deep(h2)
   margin-top: 0
 </style>

@@ -1,30 +1,9 @@
 /**
- * FLIP reorder animation composable
- * @module shared/lib/composables/useFlipReorder
- *
- * Shared FLIP (First-Last-Invert-Play) mechanics for "active-first" strips
- * (profile Tabs, forum BoardNavigation): when the owning component reorders
- * its keyed items, each moved element animates from its old bounding box to
- * the new one instead of teleporting.
- *
- * How it hooks in: registers `onBeforeUpdate` / `onUpdated` on the CALLING
- * component, so it must run inside that component's `setup()`. The map is
- * keyed by DOM element — Vue's keyed diff reuses the same node for the same
- * `:key` across renders (it just moves the node to a new sibling position),
- * which is exactly what makes the measure-before / measure-after correlation
- * work.
- *
- * Focus restoration: Vue's keyed diff physically moves the minimal set of
- * elements; if the FOCUSED element is among the moved ones, the browser
- * drops focus to <body> on detach. When `focusSelector` is provided and
- * focus was inside `root` before the patch, it is restored onto the first
- * element matching that selector after the patch.
- *
- * Animation: Web Animations API — deterministic, decoupled from the CSS
- * transition pipeline (no race with the cascade or with the items' own
- * color transitions). In-flight animations are tracked per element so a
- * rapid reorder cancels the stale one and starts fresh — no stuck
- * transforms, no animation pile-up.
+ * FLIP animation of an "active-first" strip (profile Tabs, BoardNavigation):
+ * a moved keyed element animates from its old box. Registers its hooks on the
+ * calling component, so it runs in setup; elements are keyed by DOM node,
+ * which the keyed diff reuses. Focus a move dropped is restored onto
+ * `focusSelector`. Web Animations, with a stale flight cancelled per element.
  */
 import { onBeforeUpdate, onUpdated, type Ref } from "vue";
 import { prefersReducedMotion } from "@/shared/lib/utils/motion";
@@ -34,10 +13,7 @@ export interface FlipReorderOptions {
   root: Ref<HTMLElement | null>;
   /** Selector matching the items to FLIP-animate inside `root`. */
   itemSelector: string;
-  /**
-   * Selector of the element to refocus when the patch dropped focus out of
-   * `root` (e.g. the active item). Omit to skip focus restoration.
-   */
+  /** Refocused when the patch dropped focus out of root; omit to skip. */
   focusSelector?: string;
   /** Animation duration in ms. */
   durationMs?: number;
@@ -52,9 +28,7 @@ export function useFlipReorder(options: FlipReorderOptions): void {
   const duration = options.durationMs ?? DEFAULT_DURATION_MS;
   const easing = options.easing ?? DEFAULT_EASING;
 
-  // `onBeforeUpdate` runs while the DOM is still in the OLD layout — rects
-  // are snapshotted there. `onUpdated` runs after Vue commits the new
-  // layout — measure again and animate the delta back to identity.
+  // Rects before the patch in onBeforeUpdate, after it in onUpdated.
   let prevRects: Map<HTMLElement, DOMRect> | null = null;
 
   // Whether focus was inside the root before the patch (see module doc).
@@ -91,12 +65,8 @@ export function useFlipReorder(options: FlipReorderOptions): void {
 
     if (!prevRects || !root) return;
 
-    // The reorder is already committed — this flight between the two positions
-    // is decoration, and decoration is what the setting turns off. CSS cannot
-    // do it here: the site collapses every transition and animation under the
-    // media query (Reset.sass), but the Web Animations API is outside that
-    // reach, so the one caller of it asks. Focus restoration above runs either
-    // way: it is not motion, it is where the caret is.
+    // Reduced motion: the Web Animations API is outside the CSS rule of
+    // Reset.sass, so it asks; focus restoration runs either way.
     if (prefersReducedMotion()) {
       prevRects = null;
       return;

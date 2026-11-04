@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
+using BBCodeParser;
 using BBCodeParser.Nodes;
 using BBCodeParser.Tags;
 
@@ -13,24 +15,10 @@ namespace DM.Infrastructure.Core.Parsing.Tags;
 /// points at it or taps it.
 /// </summary>
 /// <remarks>
-/// The word is drawn as a span that carries what it shows in two attributes,
-/// and the client draws the small tooltip over the word from them. The picture
-/// is not in the markup: the tooltip loads it when a reader opens it, not every
-/// page that lists tags. The attribute names are the contract with the client,
-/// held by the pairs of hintMarkup.cases.ts on both sides.
-///
-/// The word is one line of text: markup inside it, a [tip] inside another
-/// among it, makes the tag the text that was typed, as it does for [link], and
-/// so does a line break. A tag that shows nothing - neither a text with a
-/// character in it nor a picture - is text as typed too, and so is one whose
-/// address is refused: the address follows the rule of [img], and besides it a
-/// path on this site, "/images/a.gif", written with one slash (see
-/// <see cref="BbAddress.ReadTipImage"/>).
-///
-/// Written as typed, the tag is its opening, its word and its closing, encoded
-/// the way the parser encodes text. That is what the parser prints for a tag it
-/// did not accept, for this surface: the word holds no line break and the hint
-/// has no typography, so the text of the word is the text a reader gets.
+/// A span carrying what it shows in two attributes, the contract with the client,
+/// held by shared cases on both sides. The picture is not in the markup: the
+/// tooltip loads it when opened. A word with markup or a line break in it, or a
+/// tag that shows nothing or names a refused address, is printed as typed.
 /// </remarks>
 internal sealed class TipTag : ContentTag
 {
@@ -52,15 +40,14 @@ internal sealed class TipTag : ContentTag
     /// The word: text with a character in it besides white space, on one line.
     /// </summary>
     public override string? ReadContent(string raw) =>
-        raw.Trim().Length == 0 || raw.AsSpan().IndexOfAny('\r', '\n') >= 0 ? null : raw;
+        string.IsNullOrWhiteSpace(raw) || raw.AsSpan().IndexOfAny('\r', '\n') >= 0 ? null : raw;
 
     /// <inheritdoc />
     public override string RenderHtml(TagNode node, string content)
     {
         if (!TryRead(node, out var text, out var image))
         {
-            return EncodeText(node.OpeningText ?? "[tip]") + EncodeText(content) +
-                   EncodeText(node.ClosingText ?? "[/tip]");
+            return EncodeText(AsTyped(node, content));
         }
 
         var html = new StringBuilder("<span class=\"bb-tip\" tabindex=\"0\"");
@@ -71,9 +58,10 @@ internal sealed class TipTag : ContentTag
 
     /// <inheritdoc />
     public override string RenderText(TagNode node, string content) =>
-        TryRead(node, out _, out _)
-            ? content
-            : (node.OpeningText ?? "[tip]") + content + (node.ClosingText ?? "[/tip]");
+        TryRead(node, out _, out _) ? content : AsTyped(node, content);
+
+    private static string AsTyped(TagNode node, string content) =>
+        (node.OpeningText ?? "[tip]") + content + (node.ClosingText ?? "[/tip]");
 
     /// <summary>
     /// What the tag shows: a text with a character in it besides white space,
@@ -82,7 +70,7 @@ internal sealed class TipTag : ContentTag
     /// </summary>
     private static bool TryRead(TagNode node, out string? text, out string? image)
     {
-        text = node.Parameters.TryGetValue(Text, out var written) && written.Trim().Length > 0
+        text = node.Parameters.TryGetValue(Text, out var written) && !string.IsNullOrWhiteSpace(written)
             ? written
             : null;
         image = null;
@@ -98,13 +86,11 @@ internal sealed class TipTag : ContentTag
 
     /// <summary>Text encoded the way the parser encodes text: ampersand and angle brackets.</summary>
     private static string EncodeText(string value) =>
-        value.Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;");
+        BbParser.SecuritySubstitutions.Aggregate(value, (text, pair) => text.Replace(pair.Key, pair.Value));
 
     /// <summary>
-    /// A value inside a quoted attribute: the text encoding and both quotes.
-    /// Written out rather than taken from HttpUtility, whose set differs from
-    /// the client's and moves with the framework: the client draws the same
-    /// span for its preview, and the pairs hold the two to one string.
+    /// A value inside a quoted attribute. Not HttpUtility, whose set differs from
+    /// the client's, which draws the same span for its preview.
     /// </summary>
     private static string EncodeAttribute(string value) =>
         EncodeText(value).Replace("\"", "&quot;").Replace("'", "&#39;");

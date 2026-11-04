@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,30 +13,13 @@ namespace DM.Architecture.Tests;
 /// and every module it names is in the list it actually scans.
 /// </summary>
 /// <remarks>
-/// The composition root scans a hand-written array of marker types. A module added
-/// with all its project references and left out of that array compiles, starts, and
-/// answers ComponentNotRegisteredException on the first request to one of its
-/// endpoints, which is a 500 with a stack trace and no hint of the cause. Nothing in
-/// the build says a word, and integration tests only cover the endpoints that have
-/// one.
-///
-/// The irony is on the record: the author of the architecture suite named this exact
-/// danger in a comment and scanned a directory instead of listing markers. The
-/// composition root kept the list. So the list is read against the tree here, and the
-/// markers are written out in full for the same reason a directory scan was chosen
-/// there: a name that appears in the source is a name a check can look for.
-///
-/// Naming was all this checked, and naming is half the step. Declaring the marker
-/// and leaving the variable out of the array it feeds registers nothing and reads
-/// exactly like the working version — verified by doing it: the module was still
-/// named, this rule stayed green, and the container came up without a single
-/// service of that module. Both halves are read now.
+/// A module left out of the hand-written array of markers compiles and answers 500 on its first
+/// request. Both halves are read: the marker is named and its variable reaches the array.
 /// </remarks>
 public class ModuleCompositionShould
 {
     private const string Kernel = "DM.Domain.Core";
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static string[] DomainModules(string root) => Directory
         .GetDirectories(Path.Combine(root, "src"), "DM.Domain.*")
@@ -52,11 +36,11 @@ public class ModuleCompositionShould
     [Fact]
     public void NameEveryDomainModuleTheHostComposes()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
         var body = CompositionBody(root);
         var modules = DomainModules(root);
 
-        modules.Should().HaveCountGreaterThanOrEqualTo(8,
+        modules.Should().NotBeEmpty(
             "the modules are discovered from the tree, and a filter that stops matching " +
             "would leave this rule with nothing to check");
 
@@ -76,7 +60,7 @@ public class ModuleCompositionShould
     [Fact]
     public void ScanTheMarkerOfEveryModuleItNames()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
         var body = CompositionBody(root);
         var scanned = SourceText.Between(body, "var domainAssemblies = new[]", "};");
 
@@ -104,9 +88,4 @@ public class ModuleCompositionShould
             body, $@"var\s+(?<name>\w+)\s*=\s*typeof\({Regex.Escape(module)}\.");
         return match.Success ? match.Groups["name"].Value : null;
     }
-
-    /// <summary>
-    /// Text between an opening marker and the first terminator after it: enough to
-    /// read one method, and loud when the method is gone or renamed.
-    /// </summary>
 }

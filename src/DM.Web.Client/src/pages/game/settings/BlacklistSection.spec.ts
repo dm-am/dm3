@@ -3,26 +3,8 @@
  */
 
 /**
- * The game's blacklist: what the section hands the shared list.
- *
- * The twin of pages/blog/settings/BlacklistSection.spec.ts, and it is a
- * separate file for the same reason the two sections are separate: they share
- * BlacklistEditor and nothing else. The game wrapper reads the list by the
- * game's public id and posts the block by its guid, so a wiring mistake here
- * cannot be caught over there.
- *
- * A name is put on with the field and "Добавить", the last line of the
- * table of the list, which wait
- * for the `add` the section hands them. What these catch:
- *  - `await` dropped from the reload: the field empties over the old list,
- *    and the row arrives a round trip later;
- *  - the reload dropped altogether: the name never appears without F5;
- *  - a refused add reported as a good one, or said in a plate in the corner
- *    as well as under the field;
- *  - the field suggesting the master, the assistants and the players, whom
- *    the server sends to the game's own tools;
- *  - a list that did not come said to be empty;
- *  - the line of what the list does in other words than the game's.
+ * What the game's section hands the shared BlacklistEditor: the list read by
+ * the public id, the block posted by the guid.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, RouterLinkStub } from "@vue/test-utils";
@@ -42,7 +24,6 @@ const aUser = (username: string): User =>
 const LANCELOT = aUser("Ланселот");
 const MORDRED = aUser("Мордред");
 
-/** A list request nobody has answered yet. */
 function pending<T>() {
   let settle: (value: T) => void = () => {};
   const promise = new Promise<T>((resolve) => {
@@ -54,11 +35,7 @@ function pending<T>() {
 const listOf = (users: User[]) =>
   ({ data: { resources: users }, error: null }) as never;
 
-/**
- * The blacklist of a game, open in front of its master: one name on screen,
- * and the second list request held back, so the test can look at the screen
- * between the answer to the block and the answer to the list.
- */
+// The second read of the list is held back by the test.
 async function mountSection(first: unknown = listOf([LANCELOT])) {
   setActivePinia(createPinia());
   const store = useGameDetailsStore();
@@ -93,7 +70,6 @@ const namesOnScreen = (wrapper: Section) =>
 
 const field = (wrapper: Section) => wrapper.getComponent(UserAutocomplete);
 
-/** Picks a name in the field and presses "Добавить". */
 async function addByField(wrapper: Section, username: string) {
   field(wrapper).vm.$emit("update:modelValue", username);
   await flushPromises();
@@ -102,7 +78,7 @@ async function addByField(wrapper: Section, username: string) {
   await flushPromises();
 }
 
-describe("BlacklistSection (игра)", () => {
+describe("BlacklistSection of a game", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
     [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));
@@ -110,7 +86,7 @@ describe("BlacklistSection (игра)", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("не очищает поле, пока список не показал новое имя", async () => {
+  it("keeps the field until the list shows the new name", async () => {
     const { wrapper, reload } = await mountSection();
     const add = vi.spyOn(gameApi, "addToBlacklist").mockResolvedValue({
       data: MORDRED,
@@ -119,8 +95,6 @@ describe("BlacklistSection (игра)", () => {
 
     await addByField(wrapper, "Мордред");
 
-    // The server took the block; the list has not answered yet. The field
-    // keeps the name, so it does not empty over a list that says nothing.
     expect(add).toHaveBeenCalledWith("the-game-guid", "Мордред");
     expect(namesOnScreen(wrapper)).toEqual(["Ланселот"]);
     expect(field(wrapper).props("modelValue")).toBe("Мордред");
@@ -134,7 +108,7 @@ describe("BlacklistSection (игра)", () => {
     expect(saidOutLoud()).toEqual([]);
   });
 
-  it("пишет отказ под полем и не трогает список", async () => {
+  it("says a refusal under the field and leaves the list alone", async () => {
     const { wrapper } = await mountSection();
     vi.spyOn(gameApi, "addToBlacklist").mockResolvedValue({
       data: null,
@@ -157,7 +131,7 @@ describe("BlacklistSection (игра)", () => {
     expect(saidOutLoud()).toEqual([]);
   });
 
-  it("не дает полю подсказывать тех, кто в игре", async () => {
+  it("does not suggest the people of the game in the field", async () => {
     const { wrapper } = await mountSection();
 
     expect([...(field(wrapper).props("exclude") as string[])]).toEqual(
@@ -165,9 +139,7 @@ describe("BlacklistSection (игра)", () => {
     );
   });
 
-  // The bin of a row answers under the row of the name it was pressed on,
-  // and the name stays in the list; it used to be a plate in the corner.
-  it("на отказе удаления оставляет имя и говорит об отказе под ним", async () => {
+  it("keeps a name whose removal was refused and says so under it", async () => {
     const { wrapper } = await mountSection();
     vi.spyOn(gameApi, "removeFromBlacklist").mockResolvedValue({
       data: null,
@@ -188,7 +160,7 @@ describe("BlacklistSection (игра)", () => {
     expect(saidOutLoud()).toEqual([]);
   });
 
-  it("говорит о неудачной загрузке, а не о пустом списке", async () => {
+  it("says a failed load, not an empty list", async () => {
     const { wrapper } = await mountSection({
       data: null,
       error: { status: 500, title: "", type: "", traceId: "t" },
@@ -198,9 +170,8 @@ describe("BlacklistSection (игра)", () => {
     expect(wrapper.text()).not.toContain("В черном списке пока никого нет");
   });
 
-  // What the list does, in this game's own words:
-  // the editor is shared, the line is the section's.
-  it("говорит под заголовком, что делает список", async () => {
+  // The editor is shared, the line is the section's.
+  it("says under the heading what the list does", async () => {
     const { wrapper } = await mountSection();
 
     expect(wrapper.get(".settings-section h2").text()).toBe("Черный список");

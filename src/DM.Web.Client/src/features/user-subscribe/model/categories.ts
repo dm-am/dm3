@@ -1,72 +1,51 @@
 import { SubscriptionSettings } from "@/shared/api/models/subscriptions";
+import { useApiList } from "@/shared/lib/composables/useApiResource";
+import userSubscriptionApi from "../api/userSubscriptionApi";
 
-/**
- * What a subscription to a person can be about: the three author-category bits
- * of SubscriptionSettings, each with the words the site says it in.
- *
- * `events` names what the server actually sends under the bit
- * (DM.Workers.NotificationDispatcher): a new game, a game started and a game
- * recruiting under "Игры"; a new blog and a blog opened under "Блоги"; a new
- * topic under "Топики". The bare word alone left a reader guessing whether
- * "Игры" meant every post in every game of that person.
- */
-export interface UserSubscriptionCategory {
+/** A box of the panel: the category's bit and its name. */
+interface PanelCategory {
   bit: SubscriptionSettings;
-  /** The checkbox caption. */
   label: string;
-  /** What arrives under it, as the line under the checkbox says. */
-  events: string;
-  /** The same category inside a sentence: "игры, блоги". */
-  word: string;
 }
 
-export const USER_SUBSCRIPTION_CATEGORIES: readonly UserSubscriptionCategory[] =
-  [
-    {
-      bit: SubscriptionSettings.AuthorGameEvents,
-      label: "Игры",
-      events: "Новая игра, начало игры, набор игроков",
-      word: "игры",
-    },
-    {
-      bit: SubscriptionSettings.AuthorBlogEvents,
-      label: "Блоги",
-      events: "Новый блог, открытие блога",
-      word: "блоги",
-    },
-    {
-      bit: SubscriptionSettings.AuthorTopicEvents,
-      label: "Топики",
-      events: "Новый топик на форуме",
-      word: "топики",
-    },
-  ];
+export const USER_SUBSCRIPTION_CATEGORIES: readonly PanelCategory[] = [
+  { bit: SubscriptionSettings.AuthorGameEvents, label: "Игры" },
+  { bit: SubscriptionSettings.AuthorBlogEvents, label: "Блоги" },
+  { bit: SubscriptionSettings.AuthorTopicEvents, label: "Топики" },
+];
 
-/** The three category bits together. */
 export const CATEGORY_BITS = USER_SUBSCRIPTION_CATEGORIES.reduce(
   (bits, category) => bits | category.bit,
   0,
 );
 
-/** "игры, блоги, топики": the categories a subscription holds, in order. */
 export function describeUserSubscription(settings: number): string {
   return USER_SUBSCRIPTION_CATEGORIES.filter(
     (category) => (settings & category.bit) !== 0,
   )
-    .map((category) => category.word)
+    .map((category) => category.label.toLowerCase())
     .join(", ");
 }
 
-/**
- * The number to send when the categories become `categories` on a
- * subscription that holds `settings`.
- *
- * The server replaces the whole number, so the bits outside the categories
- * (the channels, InApp and Email) are carried over from what the subscription
- * holds. A subscription that somehow holds no channel gets InApp, the one the
- * site delivers through, or it would be a subscription that never says a word.
- */
+// The server replaces the whole number: channels carry over, and a subscription with none gets InApp.
 export function withCategories(settings: number, categories: number): number {
   const channels = settings & ~CATEGORY_BITS || SubscriptionSettings.InApp;
   return channels | (categories & CATEGORY_BITS);
+}
+
+// The words are the server's, which knows what it sends under each bit: asked once a session.
+const categoryEvents = useApiList(() => userSubscriptionApi.getCategories(), {
+  cacheMs: Infinity,
+});
+
+/**
+ * The words under a box, which say what the category sends, so "Игры" is not
+ * read as every post: asked for unless known or on their way, and absent until
+ * they come.
+ */
+export function useCategoryEvents(): (bit: number) => string | undefined {
+  void categoryEvents.fetch();
+  return (bit) =>
+    categoryEvents.data.value?.find((category) => category.category === bit)
+      ?.events;
 }

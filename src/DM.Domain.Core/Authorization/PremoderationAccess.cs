@@ -7,15 +7,8 @@ namespace DM.Domain.Core.Authorization;
 /// who may pass the verdict, and which statuses the verdict is pending on.
 /// </summary>
 /// <remarks>
-/// Seeing a premoderated module and moving it along premoderation are one right
-/// and not two. They were two role comparisons for a while, and they disagreed:
-/// the verdict was a site-wide Mentor+ rank while the reading gates asked for a
-/// senior moderator, so a mentor was handed a moderation queue whose every entry
-/// answered 403 — or, for a game, 404, because the SQL scope hid the row before
-/// any gate was asked. The rank is written here once and read by both halves:
-/// the targetless SetStatusModeration intention of each module, and the read
-/// gates (<c>GameIntention.Read</c>, <c>BlogIntention.ViewPremoderationPending</c>)
-/// plus the storage scope the game list and the game page share.
+/// Seeing a premoderated module and passing the verdict on it are one right, so
+/// the verdict intention, the read gates and the storage scope read one rank.
 /// </remarks>
 public static class PremoderationAccess
 {

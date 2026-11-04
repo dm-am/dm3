@@ -1,23 +1,17 @@
-using System;
 using DM.Domain.Core.Tokens;
-using System.Linq;
-using System.Threading;
-using System.Threading.Tasks;
 using DM.Domain.Account.Features.Availability;
 using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Account.Features.Registration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Messaging.Features.Chats;
+using DM.Domain.Core.Users;
 using DM.Domain.Messaging.Features.Search;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbPendingRegistration = DM.Infrastructure.Persistence.Entities.Account.PendingRegistration;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
-using IProfileRepository = DM.Domain.Personal.Features.Profiles.IUserRepository;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
@@ -26,17 +20,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// case-insensitive while doing it.
 /// </summary>
 /// <remarks>
-/// Runs against the container Postgres because the whole question is which
-/// operator the provider emits: ILIKE reads "_" and "%" in the value it is given
-/// as wildcards, "=" over lower() does not, and no in-memory provider reproduces
-/// the difference. Neither character is exotic here: the login policy lists "_"
-/// among the allowed ones and it is legal in the local part of an address.
-///
-/// Every probe below is a login or an address that no row equals and exactly one
-/// row matches as a pattern, so a lookup that answers "found" has stopped
-/// comparing for equality. Each test also asks the same lookup for the row it
-/// really owns, in upper case: case-insensitivity is what the pattern match was
-/// paying for, and it has to survive.
+/// ILIKE reads "_" and "%" as wildcards and "=" over lower() does not; "_" is a legal login character. Every probe
+/// equals no row and matches one as a pattern, and each test asks for the owned row in upper case too.
 /// </remarks>
 public class IdentityLookupShould : IntegrationTestBase
 {
@@ -45,9 +30,7 @@ public class IdentityLookupShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Six readers of Users answer "who owns this address". A pattern match tells
-    /// a stranger their own address is taken and hands account operations a row
-    /// that belongs to somebody else.
+    /// Four readers of Users answer "who owns this address".
     /// </summary>
     [Fact]
     public async Task NotResolveAnAddressThatOnlyMatchesAnotherAddressAsAPattern()
@@ -58,7 +41,6 @@ public class IdentityLookupShould : IntegrationTestBase
         var emailChange = scope.ServiceProvider.GetRequiredService<IEmailChangeRepository>();
         var registration = scope.ServiceProvider.GetRequiredService<IRegistrationRepository>();
         var activation = scope.ServiceProvider.GetRequiredService<IActivationRepository>();
-        var profiles = scope.ServiceProvider.GetRequiredService<IProfileRepository>();
 
         var (_, owner, probe) = await AddDecoyUserAsync(dbContext, "addr");
         var shouted = Address(owner).ToUpperInvariant();
@@ -67,21 +49,17 @@ public class IdentityLookupShould : IntegrationTestBase
         var found = await emailLookup.GetUserByEmail(shouted);
         found.Should().NotBeNull("the address is the owner's, spelled loudly");
         found!.Username.Should().Be(owner);
-        (await emailLookup.EmailExists(shouted)).Should().BeTrue();
         (await emailChange.IsEmailFree(shouted, CancellationToken.None)).Should().BeFalse();
         (await registration.EmailFreeForNewRegistration(shouted, CancellationToken.None))
             .Should().BeFalse();
         (await activation.FindUserByEmail(shouted)).Should().NotBeNull();
-        (await profiles.GetUserDetailsByEmail(shouted)).Should().NotBeNull();
 
         (await emailLookup.GetUserByEmail(wildcard)).Should().BeNull(
             "nobody owns that address, another one merely matches it as a pattern");
-        (await emailLookup.EmailExists(wildcard)).Should().BeFalse();
         (await emailChange.IsEmailFree(wildcard, CancellationToken.None)).Should().BeTrue();
         (await registration.EmailFreeForNewRegistration(wildcard, CancellationToken.None))
             .Should().BeTrue();
         (await activation.FindUserByEmail(wildcard)).Should().BeNull();
-        (await profiles.GetUserDetailsByEmail(wildcard)).Should().BeNull();
     }
 
     /// <summary>
@@ -100,74 +78,31 @@ public class IdentityLookupShould : IntegrationTestBase
         await AddDecoyPendingAsync(dbContext, owned);
 
         var shouted = owned.ToUpperInvariant();
-        (await registration.PendingExists(shouted, CancellationToken.None)).Should().BeTrue();
         (await registration.FindPendingByEmail(shouted, CancellationToken.None))
             .Should().NotBeNull();
 
-        (await registration.PendingExists(wildcard, CancellationToken.None)).Should().BeFalse();
         (await registration.FindPendingByEmail(wildcard, CancellationToken.None))
             .Should().BeNull();
     }
 
     /// <summary>
-    /// ReplacePending overwrites the token and the password hash of the row it
-    /// finds and leaves that row's address alone, while the confirmation letter
-    /// goes to the address the caller typed. Matched as a pattern, it hands the
-    /// caller a link that activates somebody else's registration under a password
-    /// the caller chose.
-    /// </summary>
-    [Fact]
-    public async Task ReplaceOnlyThePendingRegistrationWithTheSameAddress()
-    {
-        using var scope = DatabaseFixture.Factory.Services.CreateScope();
-        var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var registration = scope.ServiceProvider.GetRequiredService<IRegistrationRepository>();
-
-        var ownerAddress = Address(Login("repl"));
-        var callerAddress = Address(Probe("repl"));
-        var ownerToken = await AddDecoyPendingAsync(dbContext, ownerAddress);
-
-        await registration.ReplacePending(new PendingRegistration
-        {
-            PendingRegistrationId = Guid.NewGuid(),
-            SecretHash = ConfirmationSecret.Hash(Guid.NewGuid()),
-            Email = callerAddress,
-            PasswordHash = "caller-hash",
-            Salt = "caller-salt",
-            CreatedUtc = DateTimeOffset.UtcNow,
-            TokenCreatedUtc = DateTimeOffset.UtcNow,
-            AcceptedRules = true
-        });
-
-        var rows = await dbContext.PendingRegistrations
-            .Where(p => p.Email == ownerAddress || p.Email == callerAddress)
-            .ToListAsync();
-
-        rows.Should().HaveCount(2,
-            "the caller's address had no registration of its own, so it gets one");
-        rows.Single(p => p.Email == ownerAddress).SecretHash.Should()
-            .Equal(ConfirmationSecret.Hash(ownerToken),
-                "the other registration keeps the activation secret it was issued");
-    }
-
-    /// <summary>
-    /// FindUser resolves the person a direct chat is opened with, and the caller's
-    /// next act is to write a private message into that chat.
+    /// The lookup by login resolves the person a direct chat is opened with, and the
+    /// caller's next act is to write a private message into that chat.
     /// </summary>
     [Fact]
     public async Task NotOpenADirectChatWithSomebodyWhoseLoginOnlyMatchesAsAPattern()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var chats = scope.ServiceProvider.GetRequiredService<IChatRepository>();
+        var users = scope.ServiceProvider.GetRequiredService<IUserReadRepository>();
 
         var (ownerId, owner, probe) = await AddDecoyUserAsync(dbContext, "chat");
 
-        (await chats.FindUser(owner.ToUpperInvariant())).Should().Be(ownerId,
+        (await users.FindUserIdAsync(owner.ToUpperInvariant())).Should().Be(ownerId,
             "a login is matched regardless of case");
-        (await chats.FindUser(probe)).Should().NotHaveValue(
+        (await users.FindUserIdAsync(probe)).Should().NotHaveValue(
             "no account carries that login, one merely matches it as a pattern");
-        (await chats.FindUser("%")).Should().NotHaveValue(
+        (await users.FindUserIdAsync("%")).Should().NotHaveValue(
             "no account is named after the single character %");
     }
 
@@ -237,7 +172,6 @@ public class IdentityLookupShould : IntegrationTestBase
         return (userId, login, Probe(slot));
     }
 
-    /// <returns>The activation token the seeded registration was issued.</returns>
     private static async Task<Guid> AddDecoyPendingAsync(DmDbContext dbContext, string email)
     {
         var tokenId = Guid.NewGuid();

@@ -1,4 +1,3 @@
-using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Authentication;
@@ -10,7 +9,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 using DM.Domain.Messaging.Features.Messages;
 using DM.Domain.Personal.Features.ProfileNotes;
-using DM.Infrastructure.Core.Parsing;
 using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using DM.Domain.Core.Dto;
@@ -20,7 +18,7 @@ namespace DM.Web.API.Features.Community.Users;
 /// <summary>
 /// API service for community users (public profiles)
 /// </summary>
-internal class CommunityUserApiService : ICommunityUserApiService
+public class CommunityUserApiService
 {
     private readonly ICommunityProfileService _profileService;
     private readonly IUserLookupService _userLookupService;
@@ -31,7 +29,6 @@ internal class CommunityUserApiService : ICommunityUserApiService
     private readonly IIdentityProvider _identityProvider;
     private readonly UserMapper _mapper;
 
-    /// <inheritdoc />
     public CommunityUserApiService(
         ICommunityProfileService profileService,
         IUserLookupService userLookupService,
@@ -52,48 +49,37 @@ internal class CommunityUserApiService : ICommunityUserApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<User>> GetUsers(UsersQuery query)
     {
-        // Parse sort order: default depends on sort field
-        // - Name: ascending (alphabetical)
-        // - Others: descending (best/newest first)
+        // The default direction depends on the field: ascending by name, descending otherwise.
         var sortAscending = query.SortOrder?.ToLowerInvariant() switch
         {
             "asc" => true,
             "desc" => false,
-            _ => query.SortBy == UserSort.Name // Default: asc for Name, desc for others
+            _ => query.SortBy == UserSort.Name
         };
 
-        // Mapped by name, so a filter added to the query string and the domain
-        // record needs no edit here. The direction is the one thing this layer
-        // decides, above.
         var filter = _mapper.ToUserFilter(query) with { SortAscending = sortAscending };
 
         var (users, paging) = await _profileService.GetUsers(query, filter);
         return new ListEnvelope<User>(users.Select(_mapper.ToUser), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<User>> GetUser(string username)
     {
         var user = await _userLookupService.GetAsync(username);
         var userDto = _mapper.ToUser(user);
 
-        // Populate username history
         var usernameHistory = await _profileService.GetUsernameHistory(user.UserId);
         userDto.UsernameHistory = usernameHistory.Select(_mapper.ToUsernameHistoryEntry).ToList();
 
         return new Envelope<User>(userDto);
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<UserProfile>> GetUserProfile(string username)
     {
-        // "Аккаунт удален" is no account: the name is reserved, no row answers to it,
-        // and its profile is the sum of every removed one. Asked here first, before a
-        // lookup that would find nobody and answer 404; every other endpoint that
-        // takes a name does exactly that with it.
+        // "Аккаунт удален" is no account: its profile is the sum of every removed
+        // one, asked before a lookup that would answer 404.
         if (RemovedAccount.Is(username))
         {
             var summary = await _profileService.GetRemovedAccountSummary();
@@ -102,42 +88,20 @@ internal class CommunityUserApiService : ICommunityUserApiService
 
         var user = await _profileService.GetProfile(username);
 
-        // Username history is public — always fetch. A personal note is
-        // per-viewer: each signed-in user keeps their own private note about
-        // this subject, and a profile page has to stay readable without a login.
         var usernameHistory = await _profileService.GetUsernameHistory(user.UserId);
 
-        // Null for an anonymous viewer, who has no note of their own to show.
-        // This used to be a try/catch around an exception the domain threw to
-        // mean exactly that.
+        // The viewer's own note about this user; null for an anonymous viewer.
         var personalNote = await _profileNoteService.GetNote(username);
 
         var profile = _mapper.ToUserProfile(user);
         profile.UsernameHistory = usernameHistory.Select(_mapper.ToUsernameHistoryEntry).ToList();
-        // GeneralUser→UserProfile mapping ignores Contacts and Info because
-        // the base domain type lacks them; UserDetails (the actual source
-        // returned here) carries both. Populate them after the base map.
+        // GeneralUser lacks Contacts and Info; UserDetails, the source here, has both.
         profile.Contacts = user.Contacts
             .OrderBy(c => c.SortOrder)
             .Select(_mapper.ToContact)
             .ToList();
-        // Owner of the profile bio is the profile subject. Populate the
-        // render-context envelope so the JSON converter honors the owner's
-        // AuthorEdit round-trip and downgrades any other viewer's author_edit
-        // request to permission-filtered Display. Profile surface allows
-        // neither [mod] nor [private], so this is round-trip integrity rather
-        // than a leak vector, but the owner id is set for correctness.
-        profile.Info = string.IsNullOrEmpty(user.Info)
-            ? null
-            : new InfoBbText
-            {
-                Value = user.Info,
-                Context = new RenderContextEnvelope
-                {
-                    Surface = BbSurface.Profile,
-                    PostAuthorUserId = user.UserId
-                }
-            };
+        profile.Info = string.IsNullOrEmpty(user.Info) ? null : new InfoBbText { Value = user.Info };
+        profile.Info?.BindAuthor(user.UserId);
 
         if (personalNote != null)
         {
@@ -150,9 +114,7 @@ internal class CommunityUserApiService : ICommunityUserApiService
             profile.BlockedByViewer = await _blacklistChecker.IsBlockedAsync(viewerId, user.UserId);
         }
 
-        // What the viewer may do with this user, asked of the code that refuses
-        // it: "Написать сообщение" leads to a conversation whose first message
-        // MessageService takes or refuses by the same rule.
+        // Asked of MessageService, which takes or refuses the first message by the same rule.
         profile.Viewer = new ProfileViewer
         {
             CanMessage = await _messageService.MayWriteToAsync(user.UserId)
@@ -161,7 +123,6 @@ internal class CommunityUserApiService : ICommunityUserApiService
         return new Envelope<UserProfile>(profile);
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<LoginHistoryDto>> GetLoginHistory(string username, PagingQuery query)
     {
         var user = await _userLookupService.GetAsync(username);

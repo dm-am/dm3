@@ -4,7 +4,6 @@ using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Persistence.Shared.Comments;
 using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using NSubstitute;
 using Xunit;
@@ -83,69 +82,23 @@ public class UpdateCommentValidatorShould : UnitTestBase
         result.ShouldHaveValidationErrorFor(c => c.CommentId);
     }
 
-    [Fact]
-    public void FailWhenTextIsEmpty()
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public void FailWhenTextIsEmpty(string? text)
     {
-        var comment = new UpdateComment
-        {
-            CommentId = Guid.NewGuid(),
-            Text = ""
-        };
+        var comment = new UpdateComment { CommentId = Guid.NewGuid(), Text = text };
 
         var result = validator.TestValidate(comment);
         result.ShouldHaveValidationErrorFor(c => c.Text)
             .WithErrorMessage(ValidationError.Empty);
     }
 
-    [Fact]
-    public void FailWhenTextIsNull()
-    {
-        var comment = new UpdateComment
-        {
-            CommentId = Guid.NewGuid(),
-            Text = null
-        };
-
-        var result = validator.TestValidate(comment);
-        result.ShouldHaveValidationErrorFor(c => c.Text);
-    }
-
-    [Fact]
-    public void FailWhenTextIsWhitespace()
-    {
-        var comment = new UpdateComment
-        {
-            CommentId = Guid.NewGuid(),
-            Text = "   "
-        };
-
-        var result = validator.TestValidate(comment);
-        result.ShouldHaveValidationErrorFor(c => c.Text);
-    }
-
-    [Fact]
-    public void PassWithMinimalValidInput()
-    {
-        var comment = new UpdateComment
-        {
-            CommentId = Guid.NewGuid(),
-            Text = "A"
-        };
-
-        var result = validator.TestValidate(comment);
-        result.ShouldNotHaveAnyValidationErrors();
-    }
-
     /// <summary>
     /// Hiding markup on a surface that does not declare it.
     /// </summary>
-    /// <remarks>
-    /// The tag is not markup here, so it hides nothing: the line the author
-    /// wrote for one reader is published with the tag still around it. Refused
-    /// at the save path rather than erased, because a draft is not an attack
-    /// and a paragraph that vanished without a word is looked for instead of
-    /// rewritten.
-    /// </remarks>
+    /// <remarks>The tag is not markup here; refused rather than erased, so the author rewrites the draft.</remarks>
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {

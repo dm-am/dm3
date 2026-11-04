@@ -5,19 +5,7 @@ import { WarningDialog } from "@/features/moderation-actions/@x/comment";
 import type { Comment } from "@/shared/api/models/common/comment";
 import { commentPermalink } from "./permalink";
 
-/**
- * Moderator warn dialog wiring for a comments page (doc 4.2.4.1) — shared by
- * the forum topic, blog discussion and game comments lists. The warn button
- * itself is gated by rank inside <CommentItem> (canWarn: a moderator warns
- * below his own rank and never an administrator); this composable owns the
- * dialog state and prefill.
- *
- * The window quotes the comment: its text as the list renders it, and its
- * number, the one the comment shows in its corner, linking to it. The link
- * keeps the whole query, the view of the list the moderator warns from, as
- * the number of the comment does (commentPermalink). The number comes with
- * the press, from the item that shows it; without it the quote stands alone.
- */
+// The rank gate is CommentItem's (canWarn); the link keeps the whole query, as the number does.
 export function useCommentWarnDialog(
   findComment: (id: string) => Comment | undefined,
 ) {

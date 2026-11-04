@@ -1,9 +1,4 @@
 <script setup lang="ts">
-/**
- * RulesAuthors - rules for content authors (game masters, blog authors).
- * Covers game modules, author blogs, and content retention policy.
- */
-
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import {
   ExpandableList,

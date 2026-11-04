@@ -5,17 +5,13 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 
 const props = defineProps<{
-  user: User | UserRef;
-  /**
-   * The rating when it does not travel inside the user: a game roster serves
-   * the character's author as a reference and the author's rating beside it.
-   * Left out wherever the user carries its own.
-   */
+  user: UserRef & Partial<Pick<User, "rating">>;
+  /** For a user served without one, as the author in a game roster. */
   rating?: Rating | null;
 }>();
 
 const shown = computed(() => {
-  const r = props.rating ?? (props.user as User).rating;
+  const r = props.rating ?? props.user.rating;
   if (!r) return null;
   return {
     reviewSum: r.postReviewScoreSum ?? 0,
@@ -63,14 +59,12 @@ const target = computed(() => ({
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .user-rating
   white-space: nowrap
 
-// A bold link that rests in the colour of the sum and, under the pointer,
-// turns the hover blue with the underline, whatever colour it rested in: the
-// way every link of DM2 answered.
+// Rests in the colour of the sum and hovers blue, as every link of DM2.
 .review-sum
   font-weight: bold
   +link-tone($link)

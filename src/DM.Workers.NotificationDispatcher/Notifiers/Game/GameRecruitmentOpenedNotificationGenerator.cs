@@ -19,7 +19,6 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public GameRecruitmentOpenedNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -53,14 +52,12 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
 
         var usersInterested = new HashSet<Guid>();
 
-        // Get subscribers of the Master
         var masterSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.User,
             gameData.MasterId,
             SubscriptionSettings.AuthorGameEvents);
         usersInterested.UnionWith(masterSubscriptions.Select(s => s.SubscriberId));
 
-        // Get subscribers of Assistants
         foreach (var assistantId in gameData.AssistantIds)
         {
             var assistantSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
@@ -70,14 +67,12 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
             usersInterested.UnionWith(assistantSubscriptions.Select(s => s.SubscriberId));
         }
 
-        // Get game readers (subscribers to this specific game)
         var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Game,
             gameData.GameId,
             SubscriptionSettings.StatusChanges);
         usersInterested.UnionWith(readerSubscriptions.Select(s => s.SubscriberId));
 
-        // Exclude game team members
         usersInterested.Remove(gameData.MasterId);
         foreach (var assistantId in gameData.AssistantIds)
         {
@@ -89,10 +84,7 @@ internal class GameRecruitmentOpenedNotificationGenerator : BaseNotificationGene
             yield break;
         }
 
-        // The actor is the master: this announcement goes to the people who
-        // subscribed to his game events and it is his name it carries. The game
-        // does not record which member of the team flipped the recruitment flag,
-        // and an assistant doing it does not make the game somebody else's.
+        // The master is the actor: the game does not record which team member opened recruitment.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested.ToArray(),

@@ -1,11 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
-import type { GeneralError } from "@/shared/api/models/common";
+import { problem } from "@/shared/lib/testing/problem";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { notifyFailure } from "./notifyFailure";
-
-function problem(status: number, title = ""): GeneralError {
-  return { type: "", title, status, traceId: "t" };
-}
 
 describe("notifyFailure", () => {
   beforeEach(() => {
@@ -40,18 +36,15 @@ describe("notifyFailure", () => {
     expect(toast.type).toBe("error");
   });
 
-  // The edge refuses a body over its limit and answers an html page, so the API
-  // never sees the request and there is no problem document to read: the status is
-  // the whole message. The fallback names the action ("не удалось загрузить"),
-  // which tells the reader nothing about why.
+  // The edge refuses a body over its limit with an html page: the status is the
+  // whole message.
   it("names the size of the file when the edge refused the body", () => {
     notifyFailure(problem(413), "не удалось загрузить");
 
     expect(useToast().toasts.value[0].message).toBe("Файл слишком большой");
   });
 
-  // Below the title, not above it: a 413 the API issues itself carries a document,
-  // and the sentence in it is more specific than the one this branch supplies.
+  // Below the title: a 413 the API issues itself carries a more specific one.
   it("still prefers a 413 the server described itself", () => {
     notifyFailure(
       problem(413, "Вложение больше, чем разрешено в этой игре"),
@@ -77,21 +70,16 @@ describe("notifyFailure", () => {
   it("reads out the field codes when the request failed validation", () => {
     const rejected = {
       ...problem(400),
-      errors: { title: ["TitleTooLong"] },
+      errors: { title: ["Long"] },
     };
 
     notifyFailure(rejected, "не удалось создать");
 
-    // The specific rule beats both the title and the fallback: it is the only
-    // one of the three that says what to correct.
-    expect(useToast().toasts.value[0].message).not.toBe("не удалось создать");
+    // The field rule beats the title and the fallback: it says what to correct.
+    expect(useToast().toasts.value[0].message).toBe("Слишком длинное значение");
   });
 
-  /**
-   * A plate is not under a field, and "Обязательное поле" on it left the
-   * reader to find which field it meant. The call knows the fields it sent,
-   * by the server's names for them, and hands their labels over.
-   */
+  // A plate is not under a field, so it names the fields by their labels.
   it("names the refused fields it was given labels for", () => {
     const rejected = {
       ...problem(400, "Некорректные данные"),
@@ -109,7 +97,7 @@ describe("notifyFailure", () => {
     });
 
     expect(useToast().toasts.value.map((t) => t.message)).toEqual([
-      "Система, Сеттинг: не заполнено. Название: слишком длинное значение",
+      "Система, Сеттинг: обязательное поле. Название: слишком длинное значение",
     ]);
   });
 
@@ -131,10 +119,7 @@ describe("notifyFailure", () => {
     ]);
   });
 
-  // send() maps a missing response to status 0, and the interceptor always
-  // speaks for that one: it is the only sentence that knows the other address
-  // of the site and offers the press that goes there. A second one from the
-  // call site was the same event said twice, in words that offer nothing.
+  // Status 0 is the interceptor's: only it offers the other address of the site.
   it("stays quiet when the request never reached the server", () => {
     notifyFailure(problem(0), "нет соединения с сервером");
 

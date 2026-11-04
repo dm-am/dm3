@@ -1,5 +1,4 @@
 using System;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
 using DM.Domain.Forum.Authorization;
@@ -70,15 +69,7 @@ public class TopicIntentionResolverShould
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Mentor).Please(),
             TopicIntention.Edit,
-            new Topic
-            {
-                Author = Create.User().Please(),
-                IsClosed = false,
-                Board = new Board
-                {
-                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
-                }
-            });
+            TopicOf(Guid.NewGuid(), Guid.NewGuid(), isClosed: false));
         actual.Should().BeFalse();
     }
 
@@ -88,15 +79,7 @@ public class TopicIntentionResolverShould
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Moderator).Please(),
             TopicIntention.Edit,
-            new Topic
-            {
-                Author = Create.User().Please(),
-                IsClosed = false,
-                Board = new Board
-                {
-                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
-                }
-            });
+            TopicOf(Guid.NewGuid(), Guid.NewGuid(), isClosed: false));
         actual.Should().BeTrue();
     }
 
@@ -107,15 +90,7 @@ public class TopicIntentionResolverShould
         var actual = resolver.IsAllowed(
             Create.User(userId).WithRole(UserRole.Moderator).Please(),
             TopicIntention.Edit,
-            new Topic
-            {
-                Author = Create.User(userId).Please(),
-                IsClosed = false,
-                Board = new Board
-                {
-                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
-                }
-            });
+            TopicOf(userId, Guid.NewGuid(), isClosed: false));
         actual.Should().BeTrue();
     }
 
@@ -126,15 +101,7 @@ public class TopicIntentionResolverShould
         var actual = resolver.IsAllowed(
             Create.User(userId).WithRole(UserRole.Moderator).Please(),
             TopicIntention.Edit,
-            new Topic
-            {
-                Author = Create.User().Please(),
-                IsClosed = false,
-                Board = new Board
-                {
-                    ModeratorIds = new[] { userId, Guid.NewGuid() }
-                }
-            });
+            TopicOf(Guid.NewGuid(), userId, isClosed: false));
         actual.Should().BeTrue();
     }
 
@@ -144,15 +111,7 @@ public class TopicIntentionResolverShould
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
             TopicIntention.Edit,
-            new Topic
-            {
-                Author = Create.User().Please(),
-                IsClosed = false,
-                Board = new Board
-                {
-                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
-                }
-            });
+            TopicOf(Guid.NewGuid(), Guid.NewGuid(), isClosed: false));
         actual.Should().BeTrue();
     }
 
@@ -163,33 +122,17 @@ public class TopicIntentionResolverShould
         var actual = resolver.IsAllowed(
             Create.User(userId).WithRole(UserRole.Admin).Please(),
             TopicIntention.Like,
-            new Topic
-            {
-                Author = Create.User(userId).Please(),
-                IsClosed = false,
-                Board = new Board
-                {
-                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
-                }
-            });
+            TopicOf(userId, Guid.NewGuid(), isClosed: false));
         actual.Should().BeFalse();
     }
 
     [Fact]
-    public void ForbidLikeWhenUserIsNotAuthor()
+    public void AllowLikeWhenUserIsNotAuthor()
     {
         var actual = resolver.IsAllowed(
             Create.User().WithRole(UserRole.Admin).Please(),
             TopicIntention.Like,
-            new Topic
-            {
-                Author = Create.User().Please(),
-                IsClosed = false,
-                Board = new Board
-                {
-                    ModeratorIds = new[] { Guid.NewGuid(), Guid.NewGuid() }
-                }
-            });
+            TopicOf(Guid.NewGuid(), Guid.NewGuid(), isClosed: false));
         actual.Should().BeTrue();
     }
 

@@ -1,16 +1,8 @@
 <script setup lang="ts">
 /**
- * AttributeSchemaSection: the character sheet of the game, in its settings.
- *
- * The sheet belongs to the game, not to whoever first wrote it, so the leads
- * and senior moderation edit it: the same audience the rooms and the blacklist
- * answer to (GameIntention.Edit). The page decides that and draws this section
- * only for them.
- *
- * A save replaces the whole set and drops the values of every specification it
- * leaves out, which is why two things guard it: the version the sheet was read
- * at, refused by the server when somebody else has saved in the meantime, and
- * the data-loss confirmation the editor raises while the game has characters.
+ * The character sheet of the game. A save replaces the whole set and drops the
+ * values of every specification it leaves out, so the version it was read at
+ * and the editor's data-loss confirmation guard it.
  */
 import { computed, nextTick, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
@@ -24,10 +16,11 @@ import {
   AttributeSchemaEditor,
   useSchemaSources,
 } from "@/features/attribute-schema-editor";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
+import { SettingsSection } from "@/shared/ui/SettingsSection";
 import { useSavedState } from "@/shared/lib/composables/useSavedState";
 import type { DialogActionResult } from "@/shared/lib/composables/useDialogAction";
 import { refusalHere } from "@/shared/lib/errors";
+import type { RequestOptions } from "@/shared/api/interceptor";
 
 const store = useGameDetailsStore();
 const { game, characters, charactersLoading, charactersError } =
@@ -41,43 +34,20 @@ const {
 
 const draft = ref<AttributeSchemaDraft | null>(null);
 
-/**
- * Whether the draft under the editor is the schema the server has.
- *
- * The section says it on the editor's own button rather than in a plate: the
- * list of attributes after a save is the list that was there before it, the
- * section does not move, and a message in the corner was the only thing that
- * ever answered.
- */
+// Said on the editor's own button, not in a plate.
 const { saved, remember } = useSavedState(() => draft.value);
-/**
- * The version the draft under it was built on, and the one the save carries.
- *
- * Read here rather than off the game at save time: the details are reloaded by
- * whatever else on the page saves, and a version picked up from such a reload
- * would call somebody else's sheet the one this draft was written against.
- * That is the whole of the guard, so it moves only where the sheet itself is
- * read again.
- */
+// Not off the game at save time: another section's save reloads the game.
 const readVersion = ref<number | null>(null);
 const saving = ref(false);
 const refusal = ref("");
-/** Whether a read of the roster has finished under this section. */
 const rosterRead = ref(false);
 
-/**
- * Whether the section knows what the roster holds. A read still on the wire,
- * and one that was refused, tell it nothing: the store empties the list for a
- * refusal, which reads exactly like a game nobody has applied to.
- */
+// The store empties the list for a refusal, which reads like an empty roster.
 const rosterKnown = computed(
   () => rosterRead.value && !charactersLoading.value && !charactersError.value,
 );
 
-/**
- * The sheet as the server last served it, identifiers kept: a specification
- * keeps its stored values only while the save sends its id back.
- */
+// Ids kept: a specification keeps its values only while the save sends its id.
 function resetDraft() {
   const schema = game.value?.schema;
   draft.value = {
@@ -87,18 +57,9 @@ function resetDraft() {
   readVersion.value = schema?.version ?? null;
 }
 
-/**
- * A declined application is not a filled sheet anybody loses: it never entered
- * the game. Everyone else counts, so the warning is raised.
- *
- * A roster that has not answered counts too. The save it guards cannot be taken
- * back, so not knowing whether there are sheets to lose is a reason to ask, not
- * a reason to go ahead.
- */
+// A roster that has not answered counts: the save cannot be taken back.
 const hasCharacters = computed(
-  () =>
-    !rosterKnown.value ||
-    characters.value.some((character) => character.status !== "Declined"),
+  () => !rosterKnown.value || characters.value.length > 0,
 );
 
 onMounted(async () => {
@@ -106,13 +67,11 @@ onMounted(async () => {
   loadSchemaSources();
   const current = game.value;
   if (!current) return;
-  // The rooms section reads the same roster, and both are drawn for the same
-  // audience; whichever mounts first is enough.
   if (characters.value.length) {
     rosterRead.value = true;
     return;
   }
-  await store.loadCharacters(current.publicId ?? current.id);
+  await store.loadCharacters(current.publicId);
   rosterRead.value = true;
 });
 
@@ -121,18 +80,10 @@ function cancel() {
   resetDraft();
 }
 
-/**
- * Sends the draft, and answers with what the server said.
- *
- * The editor's data-loss confirmation calls it with the refusal flags: the
- * window prints a refusal in itself and closes on success alone, so the flags
- * ride on the request and the section says nothing of its own. The action bar
- * calls it without them, and there the line under the editor carries every
- * refusal, the plate the interceptor held for it taken down.
- */
+// With the refusal flags from the confirmation window, which prints its own.
 async function save(
   next: AttributeSchemaDraft,
-  options?: { ownsRefusal?: boolean; ownsRateLimit?: boolean },
+  options?: RequestOptions,
 ): Promise<DialogActionResult> {
   const current = game.value;
   const version = readVersion.value;
@@ -149,40 +100,21 @@ async function save(
   saving.value = false;
 
   if (error) {
-    if (error.status === 409) {
-      // The refusal is a line and not a toast, because what the reader has to
-      // do next is in the editor under it. The sheet is read again so the next
-      // attempt carries the version it now has; the draft is deliberately left
-      // as typed. In the window the line is the window's, in the server's
-      // words, which are these (GameAttributeSchemaService).
-      if (!inWindow)
-        refusal.value =
-          "Схему только что изменили. Проверьте и сохраните снова";
-      await reread(current.publicId ?? current.id);
-      return { error };
-    }
     if (!inWindow)
       refusal.value =
         refusalHere(error, "Не удалось сохранить схему атрибутов") ?? "";
+    // Somebody saved first: the draft stays as typed, the next save carries the new version.
+    if (error.status === 409) await reread(current.publicId);
     return { error };
   }
 
-  // Remembered after the reread has rebuilt the draft from the answer: taken
-  // before it, the snapshot would be of what was sent, and any normalisation
-  // the server did would read as a change the author had made.
-  if (await reread(current.publicId ?? current.id)) resetDraft();
+  // After the reread, or the server's normalisation would read as an edit.
+  if (await reread(current.publicId)) resetDraft();
   await nextTick();
   remember();
 }
 
-/**
- * Reads the game again behind the section, and reports whether it answered.
- *
- * The version travels with the sheet, so the two move together or not at all:
- * a refused read leaves the draft, the line under it and the version it was
- * written against exactly as the reader left them, and the reader saves again
- * when the network lets them.
- */
+// The version moves with the sheet or not at all.
 async function reread(id: string): Promise<boolean> {
   const { ok } = await store.loadGame(id, { keepCurrentOnError: true });
   if (ok) readVersion.value = game.value?.schema?.version ?? null;
@@ -191,8 +123,7 @@ async function reread(id: string): Promise<boolean> {
 </script>
 
 <template>
-  <section class="settings-section">
-    <BlockTitle>Система атрибутов</BlockTitle>
+  <SettingsSection title="Схема атрибутов">
     <AttributeSchemaEditor
       v-model="draft"
       :sources="sources"
@@ -204,12 +135,5 @@ async function reread(id: string): Promise<boolean> {
       :save="save"
       @cancel="cancel"
     />
-  </section>
+  </SettingsSection>
 </template>
-
-<style scoped lang="sass">
-.settings-section
-  margin-bottom: $big
-  padding: $medium
-  background-color: $bg-element
-</style>

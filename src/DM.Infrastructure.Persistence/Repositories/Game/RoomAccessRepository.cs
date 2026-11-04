@@ -2,7 +2,6 @@ using System;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.RoomAccesses;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
@@ -20,8 +19,6 @@ internal class RoomAccessRepository : IRoomAccessRepository
     {
         _dbContext = dbContext;
     }
-
-    #region Read
 
     /// <inheritdoc />
     /// <remarks>
@@ -43,31 +40,25 @@ internal class RoomAccessRepository : IRoomAccessRepository
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> FindReaderUserId(Guid gameId, string readerUsername)
+    public Task<Guid?> FindReaderUserId(Guid gameId, string readerUsername)
     {
         var readerUsernameLower = readerUsername.ToLower();
-        var userWrapper = await _dbContext.Subscriptions
+        return _dbContext.Subscriptions
             .TagWith("DM.RoomAccess.FindReaderUserId")
             .Where(s => s.TargetType == SubscriptionTargetType.Game &&
                        s.TargetId == gameId &&
                        s.Subscriber.Username.ToLower() == readerUsernameLower)
-            .Select(s => new { s.SubscriberId })
+            .Select(s => (Guid?)s.SubscriberId)
             .FirstOrDefaultAsync();
-
-        return userWrapper?.SubscriberId;
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> FindCharacterGameId(Guid characterId)
-    {
-        var gameWrapper = await _dbContext.Characters
+    public Task<Guid?> FindCharacterGameId(Guid characterId) =>
+        _dbContext.Characters
             .TagWith("DM.RoomAccess.FindCharacterGameId")
             .Where(c => c.CharacterId == characterId)
-            .Select(c => new { c.GameId })
+            .Select(c => (Guid?)c.GameId)
             .FirstOrDefaultAsync();
-
-        return gameWrapper?.GameId;
-    }
 
     /// <inheritdoc />
     public Task<bool> AccessExists(Guid roomId, Guid? characterId, Guid? readerUserId)
@@ -78,10 +69,6 @@ internal class RoomAccessRepository : IRoomAccessRepository
                 ((characterId != null && a.CharacterId == characterId) ||
                  (readerUserId != null && a.ReaderUserId == readerUserId)));
     }
-
-    #endregion
-
-    #region Write
 
     /// <inheritdoc />
     public async Task<RoomAccess> Create(CreateRoomAccessEntity entity)
@@ -132,6 +119,4 @@ internal class RoomAccessRepository : IRoomAccessRepository
             await _dbContext.SaveChangesAsync();
         }
     }
-
-    #endregion
 }

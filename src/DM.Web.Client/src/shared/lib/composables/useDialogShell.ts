@@ -3,19 +3,10 @@ import { usePageScrollLock } from "./usePageScrollLock";
 import { useOpenWindow } from "./useOpenWindows";
 
 /**
- * The behaviour every self-rolled modal owes its user: focus moves in when it
- * opens, cannot leave while it is open, comes back where it was on close, and
- * Escape closes.
- *
- * It exists because the two dialogs in this tier had drifted. ConfirmDialog
- * trapped Tab and restored focus; the insert window of the markup editor did
- * neither, so tabbing out of it landed on the page behind the backdrop and the
- * caret never came back to whatever opened it. Copying the trap into the second one would have left two
- * copies to drift again.
- *
- * Enter is deliberately not handled here. A form submits on it from its own
- * field, which is the browser's behaviour and the dialog's to keep, and a
- * button that holds the focus answers Enter itself.
+ * What every self-rolled modal owes its user: focus moves in, cannot leave,
+ * comes back on close, and Escape closes. Enter is the form's and the button's.
+ * While open it holds the page still (usePageScrollLock), and it closes with
+ * the session (useOpenWindows).
  */
 export interface DialogShellOptions {
   /** Whether the dialog is currently open. */
@@ -26,15 +17,6 @@ export interface DialogShellOptions {
   initialFocus: () => HTMLElement | null | undefined;
   /** Called on Escape and on a click outside the container. */
   onDismiss: () => void;
-  /**
-   * Holds the page still while the dialog is open (usePageScrollLock). A
-   * window says so; the side column of a narrow screen (MobileDrawer) takes
-   * usePageScrollLock itself, since it is not a window.
-   *
-   * A window is also closed with the session (useOpenWindows), the way
-   * Escape closes it. The side column is not a window and stays.
-   */
-  holdPage?: boolean;
 }
 
 /** The fields a reader types into, in the order a form lists them. */
@@ -56,11 +38,8 @@ const isEmpty = (el: HTMLElement): boolean =>
     : !el.textContent?.trim();
 
 /**
- * Where the caret goes in a window that holds a form: the first field still
- * empty, so a form that arrives with its address filled in starts on the
- * password; the first field when every one is filled; null when there is none.
- * A list is not a field here: it always holds a value, and the reader who
- * opened the window came to type.
+ * Where the caret goes in a window with a form: the first empty field, else the
+ * first field, else null. A list always holds a value and is not a field here.
  */
 export function fieldToFocus(root: ParentNode): HTMLElement | null {
   const fields = Array.from(root.querySelectorAll<HTMLElement>(TYPED)).filter(
@@ -74,12 +53,10 @@ export function fieldToFocus(root: ParentNode): HTMLElement | null {
 
 export function useDialogShell(options: DialogShellOptions) {
   let previouslyFocused: HTMLElement | null = null;
-  const page = options.holdPage ? usePageScrollLock() : null;
-  if (options.holdPage) useOpenWindow(options.show, options.onDismiss);
+  const page = usePageScrollLock();
+  useOpenWindow(options.show, options.onDismiss);
 
-  // Where the caret was is read at once, before anything renders: the window
-  // under a question turns inert in the same render that shows the question,
-  // and an inert element lets go of the focus it held.
+  // Read at once: the window under a question turns inert in the same render.
   watch(
     options.show,
     (show) => {
@@ -89,18 +66,15 @@ export function useDialogShell(options: DialogShellOptions) {
     { immediate: options.show.value, flush: "sync" },
   );
 
-  // Given back after the render, so the caret returns to a page that is there
-  // again: the window under the question takes focus once it is not inert.
-  // The first place is taken without a scroll, so a dialog taller than the
-  // screen opens at its top and not at the control it focuses.
+  // After the render, without a scroll: a tall dialog opens at its top.
   watch(
     options.show,
     (show) => {
       if (show) {
-        page?.hold();
+        page.hold();
         nextTick(() => options.initialFocus()?.focus({ preventScroll: true }));
       } else {
-        page?.release();
+        page.release();
         previouslyFocused?.focus?.();
         previouslyFocused = null;
       }
@@ -108,8 +82,7 @@ export function useDialogShell(options: DialogShellOptions) {
     { immediate: options.show.value, flush: "post" },
   );
 
-  // Unmounting while open is the same event as closing, as far as the caret is
-  // concerned: a route change must not leave focus on a detached node.
+  // Unmounting while open is closing, for the caret.
   onBeforeUnmount(() => previouslyFocused?.focus?.());
 
   /** Focusable elements inside the dialog, in DOM order. */
@@ -123,13 +96,8 @@ export function useDialogShell(options: DialogShellOptions) {
   }
 
   /**
-   * Handles Escape and the Tab trap. Returns true when the event was consumed,
-   * so a caller can keep its own handling for the rest.
-   *
-   * Escape goes no further than the dialog that took it. A dialog can stand
-   * inside a window (the question over a window with typed text), and the
-   * press that answers the question would otherwise reach the window under it
-   * and ask the question again.
+   * Handles Escape and the Tab trap; true when the event was consumed. Escape
+   * stops at the dialog that took it, not the window under it.
    */
   function handleKeydown(e: KeyboardEvent): boolean {
     if (e.key === "Escape") {
@@ -161,17 +129,12 @@ export function useDialogShell(options: DialogShellOptions) {
     return false;
   }
 
-  /**
-   * Whether the latest press began on the backdrop itself. Unknown until a
-   * caller reports presses: the drawer reports none and keeps the plain rule.
-   */
+  /** Whether the latest press began on the backdrop; unknown until reported. */
   let pressedOnBackdrop: boolean | null = null;
 
   /**
-   * Records where a press began. A click is dispatched to the common ancestor
-   * of the press and the release, so a selection dragged out of the card and
-   * let go over the backdrop reads as a click on the backdrop; and a backdrop
-   * that scrolls a tall card takes presses on its own scrollbar.
+   * A drag out of the card released over the backdrop reads as a backdrop
+   * click, and the backdrop's own scrollbar takes presses too.
    */
   function handleBackdropPress(e: MouseEvent) {
     const backdrop = e.currentTarget as HTMLElement;

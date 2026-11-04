@@ -1,5 +1,4 @@
 using System;
-using System.Text.Json.Serialization;
 using DM.Domain.Core.Dto;
 
 namespace DM.Web.API.Shared.Dto;
@@ -7,20 +6,9 @@ namespace DM.Web.API.Shared.Dto;
 /// <summary>
 /// Offset-based pagination info in API response
 /// </summary>
-/// <remarks>
-/// Contains information about pagination state for paginated responses.
-/// Uses skip/take pattern per API standard.
-/// </remarks>
 public class PagingInfo
 {
-    /// <summary>
-    /// Creates pagination info from service result
-    /// </summary>
-    /// <remarks>
-    /// Both constructors are internal so the blanket assembly scan leaves the
-    /// type alone: this is a response shape the API services build by hand, and
-    /// nothing in the container answers for a PagingResult.
-    /// </remarks>
+    // Both constructors are internal, so the assembly scan leaves the response shape alone.
     internal PagingInfo(PagingResult pagingResult)
     {
         Skip = (pagingResult.CurrentPage - 1) * pagingResult.PageSize;
@@ -28,9 +16,6 @@ public class PagingInfo
         Total = pagingResult.TotalEntitiesCount;
     }
 
-    /// <summary>
-    /// Creates pagination info with explicit values
-    /// </summary>
     internal PagingInfo(int skip, int take, int total)
     {
         Skip = skip;

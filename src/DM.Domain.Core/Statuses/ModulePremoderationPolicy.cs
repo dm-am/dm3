@@ -1,4 +1,3 @@
-using System;
 using System.Net;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -41,16 +40,8 @@ public static class ModulePremoderationPolicy
     /// The premoderation status a module is created in.
     /// </summary>
     /// <remarks>
-    /// The whole reason premoderation exists, and until this method was called
-    /// from the creation paths it existed nowhere: both modules were created with
-    /// the default zero, which is Approved, so nothing was ever premoderated. The
-    /// rule is one rule and lives once — a game and a blog ask the same question
-    /// of the same author.
-    ///
-    /// Two kinds of author are held back. A newbie, which the site computes from
-    /// their post count, and a user moderation has put under watch by hand, which
-    /// nothing computes and nothing expires: that flag is set and cleared by a
-    /// moderator and outlives the warnings and bans that prompted it.
+    /// Two kinds of author are held back: a newbie, computed from the post count,
+    /// and a user a moderator put under watch by hand.
     /// </remarks>
     /// <param name="author">The user creating the game or the blog.</param>
     /// <returns>Premoderation status to store on the new module.</returns>

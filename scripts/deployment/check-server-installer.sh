@@ -1,31 +1,19 @@
 #!/usr/bin/env bash
-# Fails when the two guarantees the server installer is written around stop
-# holding: that it refuses a directory it would install over, and that it
-# carries a new variable of the template into an environment file that already
-# exists.
-#
-# Both are about a machine that is not this one, and neither can fail a test in
-# the solution: the first changes a running stand before it is discovered, the
-# second is discovered by a stand that does not come back up. Nothing here needs
-# docker or a network - it is grep, a temporary directory and the installer's own
-# scripts - so the whole file costs under a second.
-#
-# Why a script and not the commands in the workflow: they ran in the
-# compose-topology job and nowhere else. The workflow, scripts/gates.sh and
-# scripts/hooks/pre-push all call this now, so there is one command and one
-# version of it.
+# Fails when the two guarantees the server installer is written around stop holding: that it
+# refuses a directory it would install over, and that it carries a new variable of the
+# template into an environment file that already exists. Both are about a machine that is not
+# this one, and neither can fail a test in the solution. Nothing here needs docker or a
+# network (grep, a temporary directory and the installer's own scripts), so it costs under a
+# second.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=/dev/null
+. "$ROOT/scripts/lib/common.sh"
 cd "$ROOT"
 
 WORK="$(mktemp -d)"
 trap 'rm -rf "$WORK"' EXIT
-
-fail() {
-  echo "ERROR: $1" >&2
-  exit 1
-}
 
 echo "the installer refuses a directory it would install over"
 # The installer's first act, and the one that has to hold: run twice it reached a

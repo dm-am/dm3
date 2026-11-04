@@ -1,16 +1,11 @@
-import type { Upload } from "./models/common/upload";
-import type { ListEnvelope } from "./models/common";
+import type { Upload, UploadAudience } from "./models/common/upload";
+import type { Envelope, ListEnvelope } from "./models/common";
 import Api from "./client";
+import { pageSkip } from "./pageSkip";
 import type { AxiosProgressEvent } from "axios";
 
-/**
- * Upload API.
- *
- * Direct upload only: file → multipart/form-data → server side
- * processing → confirmed Upload. Used for avatars, portraits,
- * post attachments. No presigned URLs.
- */
-export default new (class uploadApi {
+/** Direct upload: multipart to the server, which answers with the Upload. */
+export default new (class UploadApi {
   public directUpload(
     file: File,
     type: string,
@@ -18,16 +13,19 @@ export default new (class uploadApi {
       targetId?: string;
       onProgress?: (e: AxiosProgressEvent) => void;
       /**
-       * Idempotency-Key for safe retries. If not provided, it is generated
-       * automatically via crypto.randomUUID(). The server caches the response for
-       * the same key for an hour, so duplicate retries (mobile
-       * network, axios-retry interceptor) do not create duplicate Upload records.
+       * Generated when absent. The server caches the answer for the same key
+       * for an hour, so a retried upload makes no second record.
        */
       idempotencyKey?: string;
+      /** A file of a post: who sees it, stored with the file. Every reader when absent. */
+      audience?: UploadAudience;
     },
   ) {
     const formData = new FormData();
     formData.append("file", file);
+    if (options?.audience) {
+      appendAudience(formData, options.audience);
+    }
     const query = new URLSearchParams({ type });
     if (options?.targetId) {
       query.set("targetId", options.targetId);
@@ -46,10 +44,8 @@ export default new (class uploadApi {
   }
 
   /**
-   * List uploads, newest first (GET /v1/uploads).
-   * Without `username` returns the CURRENT user's own uploads (any
-   * authenticated user). Passing `username` narrows to that user's uploads
-   * and is Admin-gated server-side (UploadIntention.ListUser).
+   * Newest first. Without username the reader's own; with it, that user's,
+   * which the server allows an admin only.
    */
   public getUploads(params?: {
     /** 1-based page number; the wire takes skip/take like every other list. */
@@ -62,18 +58,36 @@ export default new (class uploadApi {
     const pageNumber = params?.number ?? 1;
     return Api.get<ListEnvelope<Upload>>("uploads", {
       username: params?.username,
-      skip: pageNumber > 1 ? (pageNumber - 1) * pageSize : undefined,
+      skip: pageSkip(pageNumber, pageSize),
       take: pageSize,
     });
   }
 
-  /**
-   * Delete an upload (DELETE /v1/uploads/{id}, soft-delete).
-   * Allowed to the upload owner and admins server-side.
-   *
-   * @param options The refusal flags of a window that shows the failure itself.
-   */
+  /** Who sees a file of a post, changed by its author; acts from the next request. */
+  public updateAudience(id: string, audience: UploadAudience) {
+    return Api.patch<Envelope<Upload>>(`uploads/${id}`, audienceBody(audience));
+  }
+
+  /** Soft delete, allowed to the owner and admins. */
   public deleteUpload(id: string, options?: Parameters<typeof Api.delete>[2]) {
     return Api.delete(`uploads/${id}`, undefined, options);
   }
 })();
+
+// The characters are read for "Selected" only, so "All" sends none.
+function audienceBody(
+  audience: UploadAudience,
+): Pick<UploadAudience, "visibleTo"> & { characterIds?: string[] } {
+  return audience.visibleTo === "Selected"
+    ? { visibleTo: audience.visibleTo, characterIds: audience.characterIds }
+    : { visibleTo: audience.visibleTo };
+}
+
+// The form repeats the field per character, as the server binds a list.
+function appendAudience(formData: FormData, audience: UploadAudience) {
+  const body = audienceBody(audience);
+  formData.append("visibleTo", body.visibleTo);
+  for (const id of body.characterIds ?? []) {
+    formData.append("characterIds", id);
+  }
+}

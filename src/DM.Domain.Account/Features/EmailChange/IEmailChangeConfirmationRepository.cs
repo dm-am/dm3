@@ -26,10 +26,7 @@ public interface IEmailChangeConfirmationRepository
     /// </summary>
     /// <param name="secret">Value the confirmation letter carried</param>
     /// <remarks>
-    /// By the same hash the lookup above matches on. Written as a search by row
-    /// identifier, this spent nothing at all: the value in hand is the secret and
-    /// the identifier is a different value, so the lookup found no row and the
-    /// link stayed live.
+    /// By the same hash the lookup above matches on, not by row identifier.
     /// </remarks>
     Task MarkTokenUsed(Guid secret);
 }

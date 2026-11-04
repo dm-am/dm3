@@ -24,123 +24,143 @@ namespace DM.Domain.Forum.Tests.Features.Digests;
 /// </summary>
 public class PeriodDigestProcessorShould : UnitTestBase
 {
-    private readonly IPeriodDigestRepository _digestRepository;
-    private readonly ITopicRepository _topicRepository;
-    private readonly IUnreadCountersRepository _unreadCounters;
-    private readonly IEventProducer _eventProducer;
-    private readonly IGuidFactory _guidFactory;
-    private readonly PeriodDigestProcessor _processor;
+    private readonly IPeriodDigestRepository digestRepository;
+    private readonly ITopicRepository topicRepository;
+    private readonly IUnreadCountersRepository unreadCounters;
+    private readonly IEventProducer eventProducer;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly PeriodDigestProcessor processor;
 
-    private readonly List<(int Year, int? Month, Guid TopicId)> _claims = [];
-    private readonly List<Guid> _releases = [];
+    private readonly List<(int Year, int? Month, Guid TopicId)> claims = [];
+    private readonly List<Guid> releases = [];
 
     public PeriodDigestProcessorShould()
     {
-        _digestRepository = Mock<IPeriodDigestRepository>();
-        _topicRepository = Mock<ITopicRepository>();
-        _unreadCounters = Mock<IUnreadCountersRepository>();
-        _eventProducer = Mock<IEventProducer>();
-        _guidFactory = Mock<IGuidFactory>();
-        var dateTimeProvider = Mock<IDateTimeProvider>();
+        digestRepository = Mock<IPeriodDigestRepository>();
+        topicRepository = Mock<ITopicRepository>();
+        unreadCounters = Mock<IUnreadCountersRepository>();
+        eventProducer = Mock<IEventProducer>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
         dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
         // A fresh identifier per call, the way the real factory answers: the marker
         // and the topic are named by it, and a constant would hide a release that
         // took back the wrong claim.
-        _guidFactory.Create().Returns(_ => Guid.NewGuid());
+        guidFactory.Create().Returns(_ => Guid.NewGuid());
 
         // Neither period has been generated, so both are claimed by this pass.
-        _digestRepository.DigestExists(Arg.Any<int>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
+        digestRepository.DigestExists(Arg.Any<int>(), Arg.Any<int?>(), Arg.Any<CancellationToken>())
             .Returns(false);
-        _digestRepository.TryClaimPeriod(
+        digestRepository.TryClaimPeriod(
                 Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<int?>(),
                 Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
-                _claims.Add((ci.ArgAt<int>(1), ci.ArgAt<int?>(2), ci.ArgAt<Guid>(0)));
+                claims.Add((ci.ArgAt<int>(1), ci.ArgAt<int?>(2), ci.ArgAt<Guid>(0)));
                 return true;
             });
-        _digestRepository.ReleasePeriod(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        digestRepository.ReleasePeriod(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(ci =>
             {
-                _releases.Add(ci.ArgAt<Guid>(0));
+                releases.Add(ci.ArgAt<Guid>(0));
                 return Task.FromResult(1);
             });
 
-        _processor = new PeriodDigestProcessor(
-            _digestRepository,
-            _topicRepository,
-            _unreadCounters,
-            _eventProducer,
+        processor = new PeriodDigestProcessor(
+            digestRepository,
+            topicRepository,
+            unreadCounters,
+            eventProducer,
             dateTimeProvider,
-            _guidFactory,
+            guidFactory,
             Mock<ILogger<PeriodDigestProcessor>>());
+    }
+
+    [Theory]
+    [InlineData(1, "Итоги января 2026 года")]
+    [InlineData(2, "Итоги февраля 2026 года")]
+    [InlineData(3, "Итоги марта 2026 года")]
+    [InlineData(4, "Итоги апреля 2026 года")]
+    [InlineData(5, "Итоги мая 2026 года")]
+    [InlineData(6, "Итоги июня 2026 года")]
+    [InlineData(7, "Итоги июля 2026 года")]
+    [InlineData(8, "Итоги августа 2026 года")]
+    [InlineData(9, "Итоги сентября 2026 года")]
+    [InlineData(10, "Итоги октября 2026 года")]
+    [InlineData(11, "Итоги ноября 2026 года")]
+    [InlineData(12, "Итоги декабря 2026 года")]
+    public async Task NameTheMonthInTheGenitive(int month, string title)
+    {
+        dateTimeProvider.Now.Returns(new DateTimeOffset(2026, month, 15, 0, 0, 0, TimeSpan.Zero).AddMonths(1));
+        topicRepository.Create(
+                Arg.Any<CreateTopicEntity>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+            .Returns(ci => new Topic { Id = ci.Arg<CreateTopicEntity>().TopicId });
+
+        var created = await processor.EnsureClosedPeriodsAsync();
+
+        created.Should().Contain(title);
     }
 
     [Fact]
     public async Task GiveThePeriodBackWhenTheTopicCouldNotBeWritten()
     {
-        _topicRepository.Create(
+        topicRepository.Create(
                 Arg.Any<CreateTopicEntity>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("deadlock"));
 
-        var pass = async () => await _processor.EnsureClosedPeriodsAsync();
+        var pass = async () => await processor.EnsureClosedPeriodsAsync();
 
         await pass.Should().ThrowAsync<InvalidOperationException>(
             "the pass has to fail out loud rather than report a digest it did not create");
-        // The claim is a committed row taken before the topic exists. Left behind,
-        // it answers every later pass with "already generated" for a period that
-        // has no topic, and a monthly or yearly digest is never generated twice -
-        // so that issue would be lost for good.
-        _releases.Should().Equal(_claims[0].TopicId);
-        _eventProducer.ShouldHaveReceivedNoCalls();
+        // Left behind, the claim answers every later pass with "already generated".
+        releases.Should().Equal(claims[0].TopicId);
+        eventProducer.ShouldHaveReceivedNoCalls();
     }
 
     [Fact]
     public async Task KeepThePeriodWhenTheTopicWasWritten()
     {
-        _topicRepository.Create(
+        topicRepository.Create(
                 Arg.Any<CreateTopicEntity>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(ci => new Topic { Id = ci.Arg<CreateTopicEntity>().TopicId });
 
-        var created = await _processor.EnsureClosedPeriodsAsync();
+        var created = await processor.EnsureClosedPeriodsAsync();
 
-        // Past a written topic the marker is telling the truth, and giving it back
-        // would let the next pass post the same digest a second time.
+        // Given back, the marker would let the next pass post the same digest again.
         created.Should().HaveCount(2, "the last closed month and the last closed year");
-        _releases.Should().BeEmpty();
+        releases.Should().BeEmpty();
     }
 
     [Fact]
     public async Task GenerateNothingForAPeriodAnotherInstanceClaimed()
     {
-        _digestRepository.TryClaimPeriod(
+        digestRepository.TryClaimPeriod(
                 Arg.Any<Guid>(), Arg.Any<int>(), Arg.Any<int?>(),
                 Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(false);
 
-        var created = await _processor.EnsureClosedPeriodsAsync();
+        var created = await processor.EnsureClosedPeriodsAsync();
 
-        // The loser of the race wrote nothing, so it has nothing to take back:
-        // releasing here would take away the winner's claim.
+        // Releasing here would take away the winner's claim.
         created.Should().BeEmpty();
-        _releases.Should().BeEmpty();
-        await _topicRepository.DidNotReceive().Create(
+        releases.Should().BeEmpty();
+        await topicRepository.DidNotReceive().Create(
             Arg.Any<CreateTopicEntity>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task TakeBackTheUnreadMarkersOfATopicThatWasNotWritten()
     {
-        _topicRepository.Create(
+        topicRepository.Create(
                 Arg.Any<CreateTopicEntity>(), Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new InvalidOperationException("deadlock"));
 
-        var pass = async () => await _processor.EnsureClosedPeriodsAsync();
+        var pass = async () => await processor.EnsureClosedPeriodsAsync();
         await pass.Should().ThrowAsync<InvalidOperationException>();
 
-        // The markers are written ahead of the row and are only kept by a commit
-        // the failed creation never reaches.
-        await _unreadCounters.Received(1).DeleteAsync(_claims[0].TopicId, UnreadEntryType.Message);
+        // The markers are kept only by a commit the failed creation never reaches.
+        await unreadCounters.Received(1).DeleteAsync(claims[0].TopicId, UnreadEntryType.Message);
     }
 }

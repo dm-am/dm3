@@ -17,4 +17,10 @@ public class UsernameChangeApprovalInfo
     /// </summary>
     /// <example>reader</example>
     public string? CurrentUsername { get; set; }
+
+    /// <summary>
+    /// How long a link of this kind lives, in hours: the expired page says it
+    /// </summary>
+    /// <example>48</example>
+    public int LinkLifetimeHours { get; set; }
 }

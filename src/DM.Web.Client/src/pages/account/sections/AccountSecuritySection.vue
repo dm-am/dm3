@@ -3,24 +3,18 @@
     <h2 class="section-title">Безопасность</h2>
 
     <div class="security-content">
-      <!-- Email Change -->
       <div class="security-block">
-        <h3 class="subsection-title">Смена электронной почты</h3>
+        <h3>Смена электронной почты</h3>
 
-        <!-- The receipt the other six screens that send a letter already give,
-             in their words: the address it went to, in bold, and how long the
-             link inside it lives. It stands where the form stood, because the
-             block the reader is looking at is free to say this and a plate in
-             the corner is what a screen uses when it is not. -->
+        <!-- The receipt the other screens that send a letter give: the address in bold and how long the link lives, where the form stood. -->
         <template v-if="emailSentTo">
           <p class="state-line" role="status">
             Мы отправили письмо со ссылкой для смены почты на
             <strong>{{ emailSentTo }}</strong>
           </p>
-          <!-- TokenConfiguration.EmailChangeTokenLifetimeHours — 24, the same
-               day the two-factor removal letter lives, and said in its
-               words. -->
-          <p class="state-note">Ссылка действительна 24 часа</p>
+          <p v-if="emailLinkHours !== undefined" class="state-note">
+            {{ linkLifetimeNote(emailLinkHours) }}
+          </p>
         </template>
 
         <template v-else>
@@ -48,38 +42,29 @@
 
           <Button
             variant="primary"
-            :loading="changeEmailAction.loading.value"
-            :disabled="!emailForm.newEmail || !emailForm.password"
+            :loading="changingEmail"
+            :disabled="
+              !emailForm.newEmail ||
+              !emailForm.password ||
+              emailResult.waiting.value
+            "
             @click="changeEmail"
-            class="save-button"
           >
             Изменить почту
           </Button>
-          <ActionResult
-            :text="changeEmailAction.error.value"
-            class="error-text"
-          />
+          <ActionResult :result="emailResult" />
         </template>
       </div>
 
-      <!-- Password Change -->
       <div class="security-block">
-        <h3 class="subsection-title">Смена пароля</h3>
+        <h3>Смена пароля</h3>
 
-        <!-- What the press did, where the form was, the way the moderation
-             block states an outcome in place of its own controls. The ended
-             sessions belong in this line and not only in the list below it: the
-             server ends them inside the same call (PasswordChangeService), and
-             a reader who never scrolls down would otherwise learn about it from
-             the device that stopped working. -->
+        <!-- What the press did, where the form was; the other sessions end in the same call, so the line says so. -->
         <template v-if="passwordChanged">
           <p class="state-line" role="status">
             Пароль изменен, остальные сессии завершены
           </p>
-          <!-- The notice the server sends right after, named the way the
-               receipts above name a letter. An account without an address gets
-               no letter (the sender is handed an empty string), so the line is
-               not drawn for one. -->
+          <!-- The notice the server sends after, named by its address; an account without one gets no letter. -->
           <p v-if="user.email" class="state-note">
             Мы отправили письмо о смене пароля на
             <strong>{{ user.email }}</strong>
@@ -103,11 +88,12 @@
               type="password"
               autocomplete="new-password"
             />
+            <!-- The minimum in the scale's own line from the start, as on the registration: one line, not a hint over it. -->
             <PasswordStrengthIndicator
               :password="newPassword"
               :is-same-as-old="isSameAsOld"
+              always
             />
-            <template #hint>Минимум 8 символов</template>
           </FormField>
 
           <FormField
@@ -129,17 +115,13 @@
 
           <Button
             variant="primary"
-            :loading="changePasswordAction.loading.value"
-            :disabled="!isPasswordFormValid"
+            :loading="changingPassword"
+            :disabled="!isPasswordFormValid || passwordResult.waiting.value"
             @click="changePassword"
-            class="save-button"
           >
             Изменить пароль
           </Button>
-          <ActionResult
-            :text="changePasswordAction.error.value"
-            class="error-text"
-          />
+          <ActionResult :result="passwordResult" />
         </template>
       </div>
     </div>
@@ -153,50 +135,41 @@ import Button from "@/shared/ui/Button/Button.vue";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import { FormField } from "@/shared/ui/Form";
 import { PasswordStrengthIndicator } from "@/shared/ui/PasswordInput";
-import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { useNewPasswordField } from "@/shared/lib/composables/useNewPasswordField";
+import { unwrapResource } from "@/shared/api/envelope";
+import type { MailedLink } from "@/shared/api/models/account";
 import type { User } from "@/shared/api/models/community/users";
-import { refusalHere } from "@/shared/lib/errors";
+import { linkLifetimeNote } from "@/features/auth";
 
 defineProps<{
   user: User;
 }>();
 
 const emit = defineEmits<{
-  /**
-   * The letter for a new address is out. The request writes a journal entry of
-   * its own (EmailChangeService logs SecurityEventType.EmailChange), and the
-   * block that draws the journal read it once, on mount.
-   */
+  /** The letter for a new address is out, and the request wrote a journal entry. */
   emailChangeRequested: [];
-  /**
-   * The password is new. The same server call ends every other session and
-   * writes the journal entry (PasswordChangeService), so the two blocks under
-   * this one are left showing the account as it was before the press.
-   */
+  /** The password is new: the same call ended the other sessions and wrote the journal. */
   passwordChanged: [];
 }>();
 
-// Email form
 const emailForm = ref({
   newEmail: "",
   password: "",
 });
 
-/**
- * The address the letter went to, and the reason it is kept: the fields are
- * emptied on the way to the receipt, and the receipt has to name the address.
- */
+/** The address the letter went to: the fields are emptied before the receipt names it. */
 const emailSentTo = ref("");
+
+/** How long the link of that letter lives, as the answer named it. */
+const emailLinkHours = ref<number>();
 
 /** Whether this block has already changed the password in this visit. */
 const passwordChanged = ref(false);
 
-// Password form
 const oldPassword = ref("");
 const confirmPassword = ref("");
 
-// New password field with HIBP check and same-as-old validation
 const {
   password: newPassword,
   isSameAsOld,
@@ -215,77 +188,67 @@ const isPasswordFormValid = computed(
     passwordsMatch.value,
 );
 
-// Change email
-const changeEmailAction = useAsyncAction();
+const emailResult = useActionResult();
+const changingEmail = ref(false);
 
-const changeEmail = () => {
-  changeEmailAction.execute(async () => {
-    if (!emailForm.value.newEmail || !emailForm.value.password) return;
+async function changeEmail() {
+  if (!emailForm.value.newEmail || !emailForm.value.password) return;
 
-    // Read once, before the request, and sent from the same value: the receipt
-    // then names the address the letter actually went to and cannot drift from
-    // it while the fields are emptied below.
-    const sentTo = emailForm.value.newEmail;
+  // Read before the request and sent from the same value, so the receipt names the address the letter went to.
+  const sentTo = emailForm.value.newEmail;
 
-    const { error } = await accountApi.changeEmail({
-      password: emailForm.value.password,
-      email: sentTo,
-    });
-    // The server answers a 400 with per-field codes — a wrong password is
-    // "Invalid" on password, a taken address is "Taken" on email. Collapsing
-    // that into one sentence told the reader something was wrong and nothing
-    // about what.
-    //
-    // A refusal the interceptor speaks for (403, 429, 5xx) is said in the
-    // same line, and its plate is taken down: the two fields and the button
-    // stay exactly where they were, and the line is where the reader looks.
-    // No receipt either way - the letter did not go out.
-    if (error) {
-      const text = refusalHere(error, "Не удалось изменить почту");
-      if (text) throw new Error(text);
-      return;
-    }
-
-    emailForm.value = { newEmail: "", password: "" };
-    await fetchUser();
-    emailSentTo.value = sentTo;
-    emit("emailChangeRequested");
+  emailResult.clear();
+  // Held until the receipt takes the form's place.
+  changingEmail.value = true;
+  const { data, error } = await accountApi.changeEmail({
+    password: emailForm.value.password,
+    email: sentTo,
   });
-};
+  // A 400 carries per-field codes (a wrong password, a taken address), and every
+  // refusal the interceptor speaks for is said in the same line; no receipt.
+  if (error) {
+    changingEmail.value = false;
+    emailResult.refuse(error, "Не удалось изменить почту");
+    return;
+  }
 
-// Change password
-const changePasswordAction = useAsyncAction();
+  emailForm.value = { newEmail: "", password: "" };
+  await fetchUser();
+  emailLinkHours.value = unwrapResource<MailedLink>(data)?.linkLifetimeHours;
+  emailSentTo.value = sentTo;
+  changingEmail.value = false;
+  emit("emailChangeRequested");
+}
 
-const changePassword = () => {
-  changePasswordAction.execute(async () => {
-    if (!isPasswordFormValid.value) return;
+const passwordResult = useActionResult();
+const changingPassword = ref(false);
 
-    const { error } = await accountApi.changePassword({
-      oldPassword: oldPassword.value,
-      newPassword: newPassword.value,
-    });
-    // Same here, and it matters more: "Не удалось изменить пароль" reads
-    // identically whether the current password was wrong or the new one broke
-    // the policy, and those call for opposite corrections. The statuses the
-    // interceptor speaks for are said in the same line too, with its plate
-    // taken down: the three fields keep what was typed in them.
-    if (error) {
-      const text = refusalHere(error, "Не удалось изменить пароль");
-      if (text) throw new Error(text);
-      return;
-    }
+async function changePassword() {
+  if (!isPasswordFormValid.value) return;
 
-    oldPassword.value = "";
-    newPassword.value = "";
-    confirmPassword.value = "";
-    passwordChanged.value = true;
-    emit("passwordChanged");
+  passwordResult.clear();
+  changingPassword.value = true;
+  const { error } = await accountApi.changePassword({
+    oldPassword: oldPassword.value,
+    newPassword: newPassword.value,
   });
-};
+  changingPassword.value = false;
+  // Here it matters more: a wrong current password and a weak new one call for
+  // opposite corrections. The fields keep what was typed.
+  if (error) {
+    passwordResult.refuse(error, "Не удалось изменить пароль");
+    return;
+  }
+
+  oldPassword.value = "";
+  newPassword.value = "";
+  confirmPassword.value = "";
+  passwordChanged.value = true;
+  emit("passwordChanged");
+}
 </script>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
 @use "../AccountPage.styles" as *
 
 .security-content
@@ -296,6 +259,7 @@ const changePassword = () => {
 .security-block
   padding: $medium
   background-color: $bg-element
+  +account-fields
 
 .current-value
   margin-bottom: $medium
@@ -304,9 +268,7 @@ const changePassword = () => {
   strong
     color: $text
 
-// What a block says once its form has nothing left to do: the same quiet line
-// the two-factor block leaves behind (.state-line there), with the address it
-// names standing out of it the way the current address does above.
+// The quiet line a block leaves once its form is done, as the two-factor block's.
 .state-line
   margin: 0
   color: $text-muted
@@ -314,9 +276,7 @@ const changePassword = () => {
   strong
     color: $text
 
-// The second line of a receipt — a validity period or a letter that followed.
-// Secondary, exactly as .auth-note is under .auth-text on the six screens this
-// receipt is copied from.
+// The second line of a receipt, secondary as .auth-note under .auth-text.
 .state-note
   margin: $minor 0 0
   font-size: $secondary-font-size

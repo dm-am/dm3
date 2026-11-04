@@ -15,21 +15,9 @@ namespace DM.Architecture.Tests;
 /// row for a removed account says so by name.
 /// </summary>
 /// <remarks>
-/// The account row sits behind the soft-delete filter, and a required navigation to a
-/// filtered row is an INNER JOIN onto the filtered users: the row on the other side of
-/// the join goes with the account. That is how the games of removed masters, their
-/// posts, topics and comments fell out of every list while each read looked right on
-/// its own. The content reads now lift the account filter (RemovedAuthors in the
-/// persistence project) and nest a removed account as nobody.
-///
-/// The rule is read off the statement, the one place the join is visible: every
-/// projection entry point of the persistence layer is compiled to SQL against the real
-/// model, and an INNER JOIN onto the filtered users subquery is what losing a row looks
-/// like. A projection that reads what people wrote must have none; a projection that
-/// may have one is named below with the reason it is allowed to. A new projection that
-/// joins users that way fails here until somebody decides which of the two it is - the
-/// day a new kind of content is added, the question is asked before the first removed
-/// author makes its rows disappear, not after.
+/// A required navigation to a soft-deleted account is an INNER JOIN onto the filtered users, and the
+/// row goes with the account. Every projection entry point is compiled to SQL against the real model;
+/// a new one that joins that way fails until it is listed.
 /// </remarks>
 public class RemovedAuthorRowsShould
 {

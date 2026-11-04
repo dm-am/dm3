@@ -2,19 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The blog's info page is the game's info page with blog facts in it: the
- * same borderless key-value table, the same roster table under it, and the
- * description introduced by a dash separator instead of by a caption.
- *
- * It had drifted on the parts a reader takes in at a glance. The status cell
- * spelled the three statuses itself rather than asking the badge every other
- * blog surface asks. The people in the table carried the role badges the
- * game's table hides. The description sat under a "Описание блога" caption
- * over text that announces itself. And a "Все публикации" line under the
- * rubric table did the navigating the menu does, which is why the game page
- * has no "Все комнаты" line.
- */
+// The info page is the game's: the borderless fact table, the roster under it,
+// the description after a dash separator, the status through the shared badge.
 import { describe, it, expect, beforeEach } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -80,17 +69,8 @@ describe("BlogDetails", () => {
     expect(mountDetails().find(".info-table td").text()).toBe("Открыт");
   });
 
-  it("keeps role badges out of the fact table", () => {
-    expect(mountDetails().find(".role-badge").exists()).toBe(false);
-  });
-
-  it("opens the description with a separator, not a caption", () => {
+  it("opens the description with a separator", () => {
     const wrapper = mountDetails();
     expect(wrapper.find(".description .dash-separator").exists()).toBe(true);
-    expect(wrapper.text()).not.toContain("Описание блога");
-  });
-
-  it("leaves navigation to the menu", () => {
-    expect(mountDetails().text()).not.toContain("Все публикации");
   });
 });

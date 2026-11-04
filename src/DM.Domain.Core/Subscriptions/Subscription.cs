@@ -1,4 +1,3 @@
-using System;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Subscriptions;
@@ -14,7 +13,6 @@ public class Subscription
     /// <summary>Subscriber user identifier</summary>
     public Guid SubscriberId { get; set; }
 
-    /// <summary>Target type</summary>
     public SubscriptionTargetType TargetType { get; set; }
 
     /// <summary>Target entity identifier</summary>

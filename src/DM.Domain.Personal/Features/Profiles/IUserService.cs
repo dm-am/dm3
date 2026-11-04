@@ -18,7 +18,7 @@ public interface IUserService : IUserLookupService
     /// <summary>
     /// Get community users list (paginated)
     /// </summary>
-    Task<(IEnumerable<GeneralUser> users, PagingResult paging)> GetAsync(
+    Task<(IEnumerable<GeneralUser> Users, PagingResult Paging)> GetAsync(
         PagingQuery query,
         UserActivityFilter filter,
         string? search = null,
@@ -28,17 +28,17 @@ public interface IUserService : IUserLookupService
     /// <summary>
     /// Get user details by username
     /// </summary>
-    Task<Core.Users.UserDetails> GetDetailsAsync(string username);
+    Task<UserDetails> GetDetailsAsync(string username);
 
     /// <summary>
     /// Get user details by ID
     /// </summary>
-    Task<Core.Users.UserDetails> GetDetailsAsync(Guid userId);
+    Task<UserDetails> GetDetailsAsync(Guid userId);
 
     /// <summary>
     /// Update user details
     /// </summary>
-    Task<Core.Users.UserDetails> UpdateAsync(UpdateUser updateUser);
+    Task<UserDetails> UpdateAsync(UpdateUser updateUser);
 
     /// <summary>
     /// Reset the user's avatar. Idempotent (no avatar — no-op).

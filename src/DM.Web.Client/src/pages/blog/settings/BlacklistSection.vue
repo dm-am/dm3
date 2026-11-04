@@ -1,11 +1,7 @@
 <script setup lang="ts">
 /**
- * BlacklistSection — the blog blacklist: users who may not comment on the
- * blog or under its publications, and do everything else as anybody does
- * (BlogRoleExtensions.IsBlacklisted). The list is the shared BlacklistEditor;
- * this owns the blog store and api wiring, the line that says what the list
- * does, and who the field does not suggest: the people who run the blog,
- * whom the server refuses (BlogBlacklistService.Add). The server hands the
+ * The blog blacklist on the shared BlacklistEditor: the field does not suggest
+ * the people who run the blog, whom the server refuses. The server hands the
  * list oldest first, so a name put on is the last row, over the field.
  */
 import { computed, onMounted } from "vue";
@@ -46,11 +42,8 @@ onMounted(reload);
 async function add(username: string): Promise<GeneralError | null> {
   if (!blog.value) return null;
   const { error } = await blogApi.addToBlacklist(blog.value.id, username);
-  // The field says a refusal under itself, with the name kept in it.
   if (error) return error;
-  // Awaited, so the field empties onto the list that already holds the new
-  // row: "Добавить" waits shut until `add` settles. Left unawaited, the name
-  // left the field before it was in the list, a round trip early.
+  // Awaited, so the field empties onto a list that already holds the new row.
   await reload();
   return null;
 }
@@ -58,7 +51,6 @@ async function add(username: string): Promise<GeneralError | null> {
 async function remove(username: string): Promise<GeneralError | null> {
   if (!blog.value) return null;
   const { error } = await blogApi.removeFromBlacklist(blog.value.id, username);
-  // The editor says a refusal under the row of the name.
   if (error) return error;
   reload();
   return null;

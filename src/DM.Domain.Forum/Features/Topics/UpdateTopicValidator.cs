@@ -5,12 +5,9 @@ using FluentValidation;
 
 namespace DM.Domain.Forum.Features.Topics;
 
-/// <summary>
-/// Validator for topic modification DTO model
-/// </summary>
+/// <inheritdoc />
 internal class UpdateTopicValidator : AbstractValidator<UpdateTopic>
 {
-    /// <inheritdoc />
     public UpdateTopicValidator()
     {
         RuleFor(t => t.TopicId)

@@ -1,24 +1,10 @@
 import { nextTick, ref, type Ref } from "vue";
 
 /**
- * Smooth height animation for a container whose CONTENT is swapped by a
- * state flip (e.g. the digest boards teaser <-> full grid). Pin-and-animate:
- * pin the current rendered height, flip the state, measure the new natural
- * height, transition between the two concrete values, release the
- * constraint when the transition ends.
- *
- * The pin is the REAL `height`, not max-height: after the flip the old
- * height must genuinely hold the box in BOTH directions. A max-height pin
- * only constrains when the new content is taller (expand) — on collapse
- * the box would snap down instantly and the "animation" would run over an
- * already-shrunk element. (TruncatedContent animates max-height because its
- * content never changes; here the content swaps.)
- *
- * The caller owns the CSS: bind `pinnedHeight` as an inline height,
- * `transition: height $expand-duration $expand-easing` on the element (the
- * unified site tempo — the global `.expand-zone` class from Reset.sass) and
- * `overflow: hidden` while `pinnedHeight` is non-null; wire
- * `onTransitionEnd` to both @transitionend and @transitioncancel.
+ * Height animation for a container whose content is swapped by a flip: pin the
+ * real height (max-height would snap on collapse), flip, measure, transition,
+ * release. The caller binds `pinnedHeight` inline with the .expand-zone
+ * transition and wires `onTransitionEnd` to transitionend and transitioncancel.
  */
 export function useAnimatedHeightToggle(
   el: Ref<HTMLElement | null>,
@@ -52,28 +38,20 @@ export function useAnimatedHeightToggle(
 
     window.clearTimeout(releaseTimer);
 
-    // Pin BEFORE the flip so the patch that swaps the content already
-    // carries the old height as the constrained start state. A zone that is
-    // currently empty (closed tool form) legitimately pins at 0px.
+    // Pinned before the flip, so the patch starts from the old height.
     pinnedHeight.value = `${node.offsetHeight}px`;
     setState(next);
     await nextTick();
 
-    // Commit the pinned start state to the rendering pipeline so it is the
-    // "before-change" value of the upcoming transition, then animate to the
-    // new content's natural height.
+    // Committed as the start of the transition, then to the natural height.
     void node.offsetHeight;
     pinnedHeight.value = `${node.scrollHeight}px`;
 
-    // Safety net: release even when no transition event ever arrives —
-    // zero-duration transitions (reduced motion, jsdom) fire nothing, and
-    // a stuck pin would clip later natural reflows of the content.
+    // Released even when no transition event arrives (reduced motion, jsdom).
     releaseTimer = window.setTimeout(release, transitionDurationMs(node) + 150);
   }
 
-  /** Wire to BOTH @transitionend and @transitioncancel: an interrupted
-   * transition (mid-flight reverse toggle, element hidden) never fires
-   * transitionend. */
+  /** Both events: an interrupted transition never fires transitionend. */
   function onTransitionEnd(e: TransitionEvent) {
     if (e.propertyName !== "height") return;
     release();

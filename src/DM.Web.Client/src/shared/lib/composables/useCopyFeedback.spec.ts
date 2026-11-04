@@ -3,12 +3,8 @@
  */
 
 /**
- * The one answer every copy on the site gives.
- *
- * Three things have to hold or a copy goes silent again: a refused clipboard
- * must be told apart from a written one, the answer must go back on its own,
- * and a second press must not leave the first timer running - otherwise the
- * control drops back to its resting word in the middle of the second answer.
+ * The one answer of every copy: refused apart from written, back on its own,
+ * and a second press restarts the timer.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent } from "vue";

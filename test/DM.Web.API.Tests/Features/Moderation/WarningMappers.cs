@@ -1,6 +1,5 @@
 using System;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Uploads;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Moderation.Warnings;
 using NSubstitute;
@@ -19,9 +18,6 @@ internal static class WarningMappers
         var clock = Substitute.For<IDateTimeProvider>();
         clock.Now.Returns(moment);
 
-        // imgproxy behind the user mapper is never reached - no user is
-        // mapped below - but the constructor still has to be answered for.
-        return new WarningMapper(
-            new UserMapper(Substitute.For<IImgproxyUrlBuilder>()), clock);
+        return new WarningMapper(new UserMapper(), clock);
     }
 }

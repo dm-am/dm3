@@ -1,32 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * Who the warning dialog has to speak to, and when it has to keep quiet.
- *
- * A warning is a record in the violator's profile. Three of the four places
- * that open this dialog — a forum topic, a global-chat message, a comment
- * list — have nowhere to put such a record: the moderator presses "Выдать
- * предупреждение", the dialog closes and the page behind it is exactly what it
- * was. There the toast is the only evidence the warning exists, and it stays.
- *
- * The fourth is the moderation block of the profile, where the warning lands on
- * the very screen it was issued from: the counter and the active-points bracket
- * are refetched and the open list of warnings takes the new row. A toast on top
- * of that says a second time what the reader is already looking at, so that
- * opener asks for silence with `hideToast` (UI_STANDARDS, "Всплывающие
- * сообщения").
- *
- * Silence is asked for by the opener and never assumed: nothing here lets the
- * dialog go quiet on its own, and a refusal is said in both modes. It is said
- * in the window, which stays open over what the moderator wrote: the request
- * is the window's (Dialog's `action`), so the site's own window, form and
- * fields are mounted, and only the library tier, the lists and the editor are
- * reduced to what this dialog decides.
- */
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { defineComponent, h } from "vue";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
@@ -46,31 +21,28 @@ vi.mock("@/shared/lib/composables/useToast", () => ({
 }));
 
 const createWarning = vi.hoisted(() => vi.fn());
-const getUserWarnings = vi.hoisted(() => vi.fn());
+const getWarnings = vi.hoisted(() => vi.fn());
 const getQuotedText = vi.hoisted(() => vi.fn());
 
-vi.mock("../api", () => ({
-  default: { createWarning, getUserWarnings, getQuotedText },
+vi.mock("@/entities/moderation", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/entities/moderation")>()),
+  warningApi: { getWarnings },
 }));
 
-// The library tier is a box that holds the card: every closing the window
-// makes is its own decision, and that decision is what is read below.
-vi.mock("vue-final-modal", () => ({
-  VueFinalModal: defineComponent({
-    name: "VueFinalModal",
-    setup:
-      (_props, { slots }) =>
-      () =>
-        h("div", { class: "vfm-content" }, slots.default?.()),
-  }),
+vi.mock("../api", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("../api")>()),
+  default: { createWarning, getQuotedText },
 }));
+
+vi.mock("vue-final-modal", async () =>
+  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+);
 
 function render(props: Record<string, unknown> = {}) {
   return mount(WarningDialog, {
     attachTo: document.body,
     props: { username: "Нарушитель", ...props },
     global: {
-      // The quote reads the reader's switch "Перенос слов".
       plugins: [createPinia()],
       stubs: {
         RouterLink: { template: "<a><slot /></a>" },
@@ -78,8 +50,7 @@ function render(props: Record<string, unknown> = {}) {
         Select: {
           props: ["modelValue", "options", "id"],
           emits: ["update:modelValue"],
-          // Compiled at runtime, so the template is plain JS: a TypeScript
-          // cast on the event target is a syntax error here.
+          // Compiled at runtime: a TypeScript cast here is a syntax error.
           template: `<select :id="id" class='select-stub' :value="modelValue"
             @change="$emit('update:modelValue', $event.target.value)">
             <option v-for="o in options" :key="o.value" :value="o.value">{{ o.label }}</option>
@@ -101,7 +72,6 @@ type Wrapper = ReturnType<typeof render>;
 const shut = (w: Wrapper) =>
   w.findComponent(Dialog).emitted("update:modelValue") ?? [];
 
-/** Fills in the one required field and presses the one action. */
 async function issue(wrapper: Wrapper) {
   await wrapper.find(".reason-stub").setValue("Оскорбление в теме");
   await wrapper.get(".controls button.primary").trigger("click");
@@ -125,18 +95,13 @@ describe("the warning dialog", () => {
     success.mockReset();
     errorToast.mockReset();
     createWarning.mockReset();
-    getUserWarnings.mockReset();
+    getWarnings.mockReset();
     getQuotedText.mockReset();
-    getUserWarnings.mockResolvedValue({ data: { totalPoints: 2 } });
+    getWarnings.mockResolvedValue({ data: { totalPoints: 2 } });
     getQuotedText.mockResolvedValue(null);
     createWarning.mockResolvedValue(issued);
   });
 
-  /**
-   * The default, which is the topic, the chat and the comment list: the page
-   * behind the dialog cannot show a warning, so without this line the moderator
-   * presses the button and nothing at all happens on screen.
-   */
   it("raises the plate where the page behind it cannot show the warning", async () => {
     const wrapper = render();
     await issue(wrapper);
@@ -150,10 +115,6 @@ describe("the warning dialog", () => {
     expect(shut(wrapper)).toEqual([[false]]);
   });
 
-  /**
-   * The profile moderation block, which counts the warning on the screen the
-   * moderator is looking at. The plate would repeat that count in the corner.
-   */
   it("keeps quiet where the opener shows the warning itself", async () => {
     const wrapper = render({ hideToast: true });
     await issue(wrapper);
@@ -163,12 +124,6 @@ describe("the warning dialog", () => {
     expect(wrapper.emitted("success")).toBeTruthy();
   });
 
-  /**
-   * Silence is about the confirmation only. A refusal is never visible on the
-   * screen behind, whoever opened the dialog, so it is said in both modes, in
-   * the window that stays open over the reason — and the warning is not
-   * reported as issued.
-   */
   it("says a refusal in the window even when the plate is off", async () => {
     createWarning.mockResolvedValue({
       data: null,
@@ -205,11 +160,6 @@ describe("the warning dialog", () => {
     expect(wrapper.get(".reason-stub").attributes("disabled")).toBeUndefined();
   });
 
-  /**
-   * Whom the warning is for is said as the profile says it, the name a link
-   * and the points he carries now in the profile's line: the moderator weighs
-   * the warning against what the person already carries.
-   */
   it("names the violator as a link and counts his points as the profile does", async () => {
     const wrapper = render();
     await flushPromises();
@@ -224,7 +174,7 @@ describe("the warning dialog", () => {
   });
 
   it("writes no points in red where the person carries none", async () => {
-    getUserWarnings.mockResolvedValue({ data: { totalPoints: 0 } });
+    getWarnings.mockResolvedValue({ data: { totalPoints: 0 } });
     const wrapper = render();
     await flushPromises();
 
@@ -233,10 +183,6 @@ describe("the warning dialog", () => {
     expect(points.get(".value").classes()).not.toContain("negative");
   });
 
-  /**
-   * What for is the message itself, as a [quote] of the site, with its number
-   * under it linking to its place: never the address written out.
-   */
   it("quotes the message whole and links its number to its place", async () => {
     const link =
       "http://localhost:5173/forum/newbies/3?sortOrder=desc#comment-c1";
@@ -249,7 +195,10 @@ describe("the warning dialog", () => {
     });
     await flushPromises();
 
-    const quote = wrapper.get(".warn-evidence .bbcode-content > .quote");
+    // The text of a comment, as the comment draws it, with the quote frame inside.
+    const quote = wrapper.get(
+      ".warn-evidence .comment-text.bbcode-content > .quote",
+    );
     expect(quote.text()).toBe("Грубость в адрес мастера");
     expect(quote.get("strong").text()).toBe("мастера");
 
@@ -274,16 +223,10 @@ describe("the warning dialog", () => {
     expect(wrapper.get(".warn-evidence .quote").text()).toBe(
       "Реклама стороннего сайта",
     );
-    // A topic has no number in its discussion, so nothing stands for one.
     expect(wrapper.find(".warn-number").exists()).toBe(false);
     expect(wrapper.text()).not.toContain("http");
   });
 
-  /**
-   * The quote stands above the fields. Where the window asks for the text
-   * itself, the fields wait for it: drawn first, they would move down under
-   * the moderator's hand when the text lands.
-   */
   it("holds the fields back until the text it asked for is in", async () => {
     let answer: (text: string | null) => void = () => {};
     getQuotedText.mockReturnValue(new Promise((resolve) => (answer = resolve)));
@@ -320,10 +263,6 @@ describe("the warning dialog", () => {
     expect(wrapper.find(".warn-evidence").exists()).toBe(false);
   });
 
-  /**
-   * One field for the weight, as in the window that changes the points: the
-   * whole scale, zero the verbal warning.
-   */
   it("weighs the warning on one scale from a verbal one to six points", async () => {
     const wrapper = render();
     const options = wrapper.findAll("#warning-points option");

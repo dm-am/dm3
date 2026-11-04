@@ -11,16 +11,16 @@ namespace DM.Domain.Account.Features.Deactivation;
 internal class AccountRemover : IAccountRemover
 {
     private readonly IDeactivationRepository _repository;
-    private readonly IAuthenticationService _authenticationService;
+    private readonly ISessionService _sessionService;
     private readonly IEventProducer _eventProducer;
 
     public AccountRemover(
         IDeactivationRepository repository,
-        IAuthenticationService authenticationService,
+        ISessionService sessionService,
         IEventProducer eventProducer)
     {
         _repository = repository;
-        _authenticationService = authenticationService;
+        _sessionService = sessionService;
         _eventProducer = eventProducer;
     }
 
@@ -28,7 +28,7 @@ internal class AccountRemover : IAccountRemover
     public async Task Remove(Guid userId, CancellationToken cancellationToken = default)
     {
         await _repository.DeactivateUser(userId, cancellationToken);
-        await _authenticationService.LogoutAll(userId);
+        await _sessionService.LogoutAll(userId);
         await _eventProducer.SendAsync(EventType.AccountDeactivated, userId);
     }
 }

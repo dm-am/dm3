@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Invitations;
@@ -21,20 +18,8 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// invitation that was accepted a moment earlier is not a failure.
 /// </summary>
 /// <remarks>
-/// Issuing kills the live invitations of the pair first and inserts the new one
-/// after, and under READ COMMITTED neither statement sees the row the other
-/// transaction has not committed yet: two invitations sent at the same moment
-/// both killed nothing and both inserted, leaving two live links to one seat.
-/// Cancelling from the roster then killed whichever of them was read back and
-/// the other kept opening the game.
-///
-/// Accepting is the same shape from the other side - a read for "already an
-/// assistant", an insert after it - except that the schema refuses the second
-/// insert, so the loser of that race answered 500 and left the invitation live
-/// beside the assistant the winner had just created.
-///
-/// Only a live database can be asked whether one write waits for another, which
-/// is why these are here and not in the domain tests.
+/// Under READ COMMITTED neither the kill nor the "already an assistant" read sees the other transaction's row. Only a
+/// live database shows whether one write waits for another.
 /// </remarks>
 public class GameInvitationRacesShould : IntegrationTestBase
 {
@@ -98,17 +83,8 @@ public class GameInvitationRacesShould : IntegrationTestBase
     /// The accept that lost the race spends the invitation instead of failing.
     /// </summary>
     /// <remarks>
-    /// The winner is held open by hand, in the shape the repository writes it in,
-    /// because a row committed a moment earlier is not the interesting ordering:
-    /// what produced the 500 is a row invisible to the loser's "already an
-    /// assistant" read and committed before the loser's own insert lands. The
-    /// accept here is the real call, so what is under test is what it does with
-    /// the refusal.
-    ///
-    /// The invitation has to be spent either way: it authorises exactly the state
-    /// the loser found in place, so leaving it live hands the game a pending
-    /// invitation for somebody already staffed and the person a link that answers
-    /// 500 every time they follow it.
+    /// The winner is held open by hand in the repository's shape and the accept is the real call. The invitation is
+    /// spent either way: it authorises exactly the state the loser found.
     /// </remarks>
     [Fact]
     public async Task SpendTheInvitationWhoseAssistantRowWasTakenBesideIt()
@@ -182,14 +158,7 @@ public class GameInvitationRacesShould : IntegrationTestBase
     /// <summary>
     /// One of the simultaneous acceptances of a link answers that it spent it.
     /// </summary>
-    /// <remarks>
-    /// What the answer is for is the announcement the service makes off it: the
-    /// event carries the token, so an acceptance that spent nothing and announced
-    /// anyway tells the game a seat was taken as many times as the link was
-    /// followed. The invitation is spent by a conditional update, and a statement
-    /// of that shape matches once no matter how many callers run it - which is a
-    /// claim only a live database can be asked to make.
-    /// </remarks>
+    /// <remarks>The event carries the token, so only the acceptance that spent the link announces it.</remarks>
     [Fact]
     public async Task SpendTheInvitationInExactlyOneOfTheAcceptancesThatMeet()
     {
@@ -229,21 +198,9 @@ public class GameInvitationRacesShould : IntegrationTestBase
             .Should().Be(1, "a person assists a game once");
     }
 
-    /// <summary>
-    /// An invitation revoked beside the acceptance seats nobody.
-    /// </summary>
     /// <remarks>
-    /// The assistant row is written before the link is spent, and the "still live"
-    /// question at the top of the call is a read: it cannot see the revocation
-    /// running beside it. The revocation is held open by hand so that it settles
-    /// exactly between that read and the statement that spends the link - the one
-    /// ordering in which the acceptance writes a seat and then finds no link left
-    /// to spend for it. Keeping the seat would hand out assistant rights by a link
-    /// the master had just taken back, and in silence: the call answers that it
-    /// spent nothing, so the service announces nothing either.
-    ///
-    /// Only a live database can be asked whether one write waits for another, which
-    /// is why this is here and not in the domain tests.
+    /// The revocation is held open by hand to settle between the "still live" read and the spend, where the acceptance
+    /// has written a seat and finds no link to spend for it.
     /// </remarks>
     [Fact]
     public async Task SeatNobodyByAnInvitationRevokedBesideTheAcceptance()

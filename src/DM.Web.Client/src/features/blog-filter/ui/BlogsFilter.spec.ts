@@ -2,11 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Backspace in the empty search of the blogs filter takes the filters off one
- * at a time, the last bubble of the row first, and the address follows each
- * press.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import { onListPage, type Page } from "@/shared/lib/testing/urlFilter";
 import BlogsFilter from "./BlogsFilter.vue";

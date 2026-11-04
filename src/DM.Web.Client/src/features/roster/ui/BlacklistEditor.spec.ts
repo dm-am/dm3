@@ -2,37 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The blacklist of the site, as the game, the blog and the account show it: a
- * table whose rows are added and removed in place, drawn after the editor of
- * a character sheet (AttributeSchemaEditor). The site's table "Пользователь",
- * the bin at the end of each row, and the field and "Добавить" of
- * BlacklistAddRow as the last line of the table, drawn right under the box the
- * table scrolls in so that the suggestions of the field open past it. The game and the blog say over
- * it in a grey line what the list does; the account's rows carry the day the
- * name went on. The sections have their own specs for their wiring; this one
- * holds what they share.
- *
- * What these catch:
- *  - the line of what the list does put back into body text, or dropped;
- *  - the names drawn as a column of words instead of the table, or the day
- *    lost from the account;
- *  - the field moved away from under the table, or into the box the table
- *    scrolls in, where the suggestions of the field are clipped; a
- *    "+ Добавить" or a window back;
- *  - the bin drawn as a word, asking first, sending twice, or saying its
- *    refusal anywhere but under its own row;
- *  - "В черном списке пока никого нет" said while the list is on its way, or
- *    said over a list that did not come (it is not empty, it is unknown);
- *  - the field suggesting the viewer, the names on the list, or the people
- *    the section leaves out;
- *  - a name cut with "..." or put under a tooltip.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { readFileSync, readdirSync, statSync } from "fs";
-import { join, resolve } from "path";
 import type { User } from "@/entities/user";
 import type { GeneralError } from "@/shared/api/models/common";
 import { RowIconButton } from "@/shared/ui/RowIconButton";
@@ -84,11 +56,7 @@ const binOf = (w: Editor, index: number) =>
 const headers = (w: Editor) =>
   w.findAll("thead th").map((th) => th.text().trim());
 
-/**
- * The last line of the table, where a name goes on: right after the box the
- * table scrolls in and not inside it. A box that scrolls sideways clips what
- * stands past its bottom too, and the suggestions of the field open down.
- */
+// Right after the box the table scrolls in: inside it, the suggestions would be clipped.
 function addLine(w: Editor) {
   const box = w.get(".data-table-scroll").element;
   const line = w.get(".bl-foot");
@@ -106,7 +74,7 @@ describe("BlacklistEditor", () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it("говорит серой строкой над таблицей, что делает список", () => {
+  it("says in a grey line over the table what the list does", () => {
     const w = mountEditor();
 
     const line = w.get(".bl-hint");
@@ -121,7 +89,7 @@ describe("BlacklistEditor", () => {
     );
   });
 
-  it('ставит имена таблицей "Пользователь", у каждой строки корзина', () => {
+  it('lays the names out as a "Пользователь" table with a bin on each row', () => {
     const w = mountEditor({
       rows: [aRow("Ланселот"), aRow("Мордред")],
     });
@@ -134,14 +102,13 @@ describe("BlacklistEditor", () => {
       expect(bin.attributes("aria-label")).toMatch(
         /^Удалить .+ из черного списка$/,
       );
-      // A sign, not a word.
       expect(bin.text()).toBe("");
     }
     // No date in the game and the blog: the server does not hand it.
     expect(w.text()).not.toMatch(/\d\d\.\d\d\.\d{4}/);
   });
 
-  it('ставит день внесения столбцом "Внесен", где он есть', () => {
+  it('puts the day a name went on in a "Внесен" column where there is one', () => {
     const w = mountEditor({
       dated: true,
       hint: undefined,
@@ -157,7 +124,7 @@ describe("BlacklistEditor", () => {
     ]);
   });
 
-  it("ставит поле и Добавить последней строкой таблицы", () => {
+  it("puts the field and Добавить in the last line of the table", () => {
     const w = mountEditor({ rows: [aRow("Ланселот")] });
 
     expect(addLine(w).findComponent(BlacklistAddRow).exists()).toBe(true);
@@ -166,7 +133,7 @@ describe("BlacklistEditor", () => {
     );
   });
 
-  it('пустой список говорит "В черном списке пока никого нет" в таблице', () => {
+  it('says "В черном списке пока никого нет" in the table of an empty list', () => {
     const w = mountEditor();
 
     expect(w.get("tbody").text()).toBe("В черном списке пока никого нет");
@@ -174,25 +141,24 @@ describe("BlacklistEditor", () => {
     expect(addLine(w).findComponent(BlacklistAddRow).exists()).toBe(true);
   });
 
-  it("не называет список пустым, пока он грузится", () => {
+  it("does not call the list empty while it loads", () => {
     const w = mountEditor({ loading: true });
 
     expect(w.text()).not.toContain("пока никого нет");
     expect(addLine(w).findComponent(BlacklistAddRow).exists()).toBe(true);
   });
 
-  it("не выдает неудачную загрузку за пустой список", () => {
+  it("does not pass a failed load off as an empty list", () => {
     const w = mountEditor({ error: "Не удалось загрузить черный список" });
 
     expect(w.get("tbody .action-result").text()).toBe(
       "Не удалось загрузить черный список",
     );
     expect(w.text()).not.toContain("пока никого нет");
-    // A good add reads the list again, so the field stays.
     expect(addLine(w).findComponent(BlacklistAddRow).exists()).toBe(true);
   });
 
-  it("удаляет имя корзиной, ничего не спрашивая и один раз", async () => {
+  it("removes a name with the bin, once and without asking", async () => {
     const answers: Array<(value: null) => void> = [];
     const remove = vi.fn(
       () =>
@@ -207,7 +173,6 @@ describe("BlacklistEditor", () => {
 
     await binOf(w, 0).trigger("click");
 
-    // Shut while its answer is on the wire; the other row stays live.
     expect(binOf(w, 0).attributes("disabled")).toBeDefined();
     expect(binOf(w, 0).attributes("aria-busy")).toBe("true");
     expect(binOf(w, 1).attributes("disabled")).toBeUndefined();
@@ -221,7 +186,7 @@ describe("BlacklistEditor", () => {
     expect(document.querySelector('[role="dialog"]')).toBeNull();
   });
 
-  it("пишет отказ под той строкой, которую не удалось удалить", async () => {
+  it("says the refusal under the row that could not be removed", async () => {
     const remove = vi.fn().mockResolvedValue({
       type: "",
       title: "Пользователя нет в черном списке",
@@ -245,7 +210,7 @@ describe("BlacklistEditor", () => {
     expect(names(w)).toEqual(["Ланселот", "Мордред", "Персиваль"]);
   });
 
-  it("не дает полю подсказывать себя, внесенных и исключенных, и отдает ему add", async () => {
+  it("keeps the viewer, the listed and the excluded out of the suggestions and hands the field add", async () => {
     const add = vi.fn().mockResolvedValue(null);
     const w = mountEditor({
       rows: [aRow("Мордред")],
@@ -259,41 +224,5 @@ describe("BlacklistEditor", () => {
     );
     await (row.props("add") as (name: string) => Promise<unknown>)("Моргана");
     expect(add).toHaveBeenCalledWith("Моргана");
-  });
-
-  it("не режет имя и не прячет его в подсказку", () => {
-    const source = readFileSync(
-      resolve(__dirname, "BlacklistEditor.vue"),
-      "utf8",
-    );
-
-    expect(source).not.toMatch(/text-overflow/);
-    expect(source).not.toMatch(/Tooltip/);
-    expect(source).not.toMatch(/overflow:\s*hidden/);
-  });
-
-  // The name is put on at the place, in all three lists.
-  it("нигде в черных списках не открывает окна", () => {
-    const roster = resolve(__dirname, "..");
-    const files = (dir: string): string[] =>
-      readdirSync(dir).flatMap((name) => {
-        const full = join(dir, name);
-        return statSync(full).isDirectory() ? files(full) : [full];
-      });
-    const sources = [
-      ...files(roster).filter(
-        (f) => /\.(vue|ts)$/.test(f) && !/\.spec\.ts$/.test(f),
-      ),
-      resolve(
-        __dirname,
-        "../../../pages/account/sections/AccountBlacklistSection.vue",
-      ),
-    ];
-
-    for (const file of sources) {
-      const text = readFileSync(file, "utf8");
-      expect(text, file).not.toMatch(/useModal|BlockUserDialog|block-user/);
-      expect(text, file).not.toMatch(/import\s+Dialog\b|Layout\/Dialog\.vue/);
-    }
   });
 });

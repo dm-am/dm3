@@ -4,27 +4,15 @@ using DM.Domain.Core.Enums;
 namespace DM.Domain.Blog.Features.Blogs;
 
 /// <summary>
-/// DTO for updating a blog
+/// A null field is left as it is.
 /// </summary>
 public class UpdateBlog
 {
-    /// <summary>
-    /// Blog identifier
-    /// </summary>
     public Guid BlogId { get; set; }
 
-    /// <summary>
-    /// Blog title (null = not changed)
-    /// </summary>
-    public string Title { get; set; } = null!;
+    public string? Title { get; set; }
 
-    /// <summary>
-    /// Blog description (null = not changed)
-    /// </summary>
-    public string Description { get; set; } = null!;
+    public string? Description { get; set; }
 
-    /// <summary>
-    /// Draft visibility (null = not changed)
-    /// </summary>
     public DraftVisibility? DraftVisibility { get; set; }
 }

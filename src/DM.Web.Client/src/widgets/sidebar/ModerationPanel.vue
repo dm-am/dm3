@@ -1,23 +1,5 @@
 <script setup lang="ts">
-/**
- * ModerationPanel — the menu of moderation in the left sidebar (product doc
- * 4.2.1.5). Mounted first in the column and ONLY on /moderation/* routes for
- * Moderator+ viewers (the mount condition lives in LeftSidebar, the same
- * pattern as GamePanel's route.meta gate).
- *
- * Pure navigation, built from the one table of sections
- * (shared/config/moderationSections.ts): its groups in their order and in each
- * group its rows, each offered only to the viewer its page opens to, so the
- * menu cannot name a section the zone would answer with the 403 page. No
- * heading stands over a group: an empty line parts two groups, as on DM2 the
- * groups of the menu of a game are parted. A group the viewer has no row in
- * leaves no line behind it.
- *
- * The section the address names by its route is bold. A page inside a section
- * (a series of contests, the catalogue of award types, a template, a ticket)
- * marks nothing: its address names no row, and its heading says where the
- * reader is.
- */
+/** The menu of moderation, from the one table of sections; each row only for whom its page opens. */
 import { computed } from "vue";
 import { storeToRefs } from "pinia";
 import { useRoute } from "vue-router";
@@ -45,10 +27,7 @@ const HOLDS: Record<ModerationRole, (viewer: typeof user.value) => boolean> = {
   Admin: userIsAdmin,
 };
 
-/**
- * The rows the viewer is offered, group by group, the first row of every
- * group but the first marked: the empty line stands over it.
- */
+/** The rows offered, group by group, each group's first row marked for the empty line over it. */
 const rows = computed(() => {
   const visible = MODERATION_SECTIONS.filter((section) =>
     HOLDS[section.role](user.value),
@@ -83,8 +62,7 @@ function currentOf(name: string): "page" | undefined {
 </template>
 
 <style scoped lang="sass">
-// DM2's empty line between two groups of a menu: one line of the menu's
-// own height over the first row of a group.
+// DM2's empty line between two groups of a menu.
 .group-start
   margin-top: 1lh
 </style>

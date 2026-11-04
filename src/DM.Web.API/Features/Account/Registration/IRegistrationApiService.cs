@@ -11,5 +11,6 @@ public interface IRegistrationApiService
     /// Register new user
     /// </summary>
     /// <param name="registration">Registration information</param>
-    Task Register(RegistrationRequest registration);
+    /// <returns>How long the activation link in the letter lives</returns>
+    Task<MailedLink> Register(RegistrationRequest registration);
 }

@@ -11,10 +11,8 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
 /// nothing ever queried from inside - and stay one jsonb column.
 /// </summary>
 /// <remarks>
-/// Under the ordinary soft-delete filter, unlike the table it grew out of: that
-/// exemption existed because a game reached its schema through a reference, and
-/// a game carries a sheet of its own now. Nothing points at this row, so a
-/// hidden template is simply gone to every reader.
+/// Under the ordinary soft-delete filter: nothing points at this row, so a hidden
+/// template is gone to every reader.
 /// </remarks>
 [Table("AttributeSchemaTemplates")]
 public class AttributeSchemaTemplate : IRemovable

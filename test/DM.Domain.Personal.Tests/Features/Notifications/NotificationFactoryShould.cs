@@ -11,14 +11,14 @@ namespace DM.Domain.Personal.Tests.Features.Notifications;
 
 public class NotificationFactoryShould : UnitTestBase
 {
-    private readonly NotificationFactory _factory;
-    private readonly IGuidFactory _guidFactory;
+    private readonly NotificationFactory factory;
+    private readonly IGuidFactory guidFactory;
 
     public NotificationFactoryShould()
     {
-        _guidFactory = Mock<IGuidFactory>();
+        guidFactory = Mock<IGuidFactory>();
 
-        _factory = new NotificationFactory(_guidFactory);
+        factory = new NotificationFactory(guidFactory);
     }
 
     [Fact]
@@ -36,51 +36,15 @@ public class NotificationFactoryShould : UnitTestBase
             Metadata = metadata
         };
 
-        _guidFactory.Create().Returns(notificationId);
+        guidFactory.Create().Returns(notificationId);
 
-        var result = _factory.Create(createNotification, createDate);
+        var result = factory.Create(createNotification, createDate);
 
-        result.Should().NotBeNull();
         result.NotificationId.Should().Be(notificationId);
         result.CreatedUtc.Should().Be(createDate);
         result.EventType.Should().Be(EventType.NewTopicComment);
         result.UsersInterested.Should().BeEquivalentTo(usersInterested);
         result.Metadata.Should().Be(metadata);
-    }
-
-    [Fact]
-    public void PreserveEventType()
-    {
-        var createNotification = new CreateNotification
-        {
-            EventType = EventType.NewPost,
-            UsersInterested = new[] { Guid.NewGuid() },
-            Metadata = "{}"
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-
-        var result = _factory.Create(createNotification, DateTimeOffset.UtcNow);
-
-        result.EventType.Should().Be(EventType.NewPost);
-    }
-
-    [Fact]
-    public void PreserveUsersInterestedList()
-    {
-        var usersInterested = new[] { Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid() };
-        var createNotification = new CreateNotification
-        {
-            EventType = EventType.NewMessage,
-            UsersInterested = usersInterested,
-            Metadata = "{}"
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-
-        var result = _factory.Create(createNotification, DateTimeOffset.UtcNow);
-
-        result.UsersInterested.Should().BeEquivalentTo(usersInterested);
     }
 
     /// <summary>
@@ -100,28 +64,10 @@ public class NotificationFactoryShould : UnitTestBase
             Metadata = "{}"
         };
 
-        _guidFactory.Create().Returns(Guid.NewGuid());
+        guidFactory.Create().Returns(Guid.NewGuid());
 
-        var result = _factory.Create(createNotification, DateTimeOffset.UtcNow);
+        var result = factory.Create(createNotification, DateTimeOffset.UtcNow);
 
         result.EventId.Should().Be(eventId);
-    }
-
-    [Fact]
-    public void PreserveMetadata()
-    {
-        var metadata = "{ \"gameId\": \"123\", \"roomId\": \"456\" }";
-        var createNotification = new CreateNotification
-        {
-            EventType = EventType.PlayerInvitationCreated,
-            UsersInterested = new[] { Guid.NewGuid() },
-            Metadata = metadata
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-
-        var result = _factory.Create(createNotification, DateTimeOffset.UtcNow);
-
-        result.Metadata.Should().Be(metadata);
     }
 }

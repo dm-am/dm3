@@ -54,6 +54,41 @@ public static class DateRangeFilters
     }
 
     /// <summary>
+    /// Filter by an optional inclusive range over a date property
+    /// </summary>
+    public static IQueryable<T> WhereWithin<T>(
+        this IQueryable<T> source,
+        Expression<Func<T, DateTimeOffset>> property,
+        DateTimeOffset? from,
+        DateTimeOffset? to)
+    {
+        if (from.HasValue)
+        {
+            var bound = from.Value;
+            source = source.Where(Compose(property, d => d >= bound));
+        }
+        return to.HasValue ? source.WhereAtOrBefore(property, to.Value) : source;
+    }
+
+    /// <summary>
+    /// Filter by an optional inclusive range over an optional date property.
+    /// Entities without the date are excluded once either bound is set.
+    /// </summary>
+    public static IQueryable<T> WhereWithin<T>(
+        this IQueryable<T> source,
+        Expression<Func<T, DateTimeOffset?>> property,
+        DateTimeOffset? from,
+        DateTimeOffset? to)
+    {
+        if (from.HasValue)
+        {
+            var bound = from.Value;
+            source = source.Where(Compose(property, d => d.HasValue && d.Value >= bound));
+        }
+        return to.HasValue ? source.WhereAtOrBefore(property, to.Value) : source;
+    }
+
+    /// <summary>
     /// AddDays(1) operates on the clock part of the value, so the check
     /// must use it too: an offset instant can be below DateTimeOffset.MaxValue
     /// while its clock date is already the last representable day

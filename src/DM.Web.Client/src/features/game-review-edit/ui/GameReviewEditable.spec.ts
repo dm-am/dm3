@@ -2,18 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The pencil and the trash of a game review repeat what the server decides.
- * GameReviewIntentionResolver admits Edit to the author alone and Delete to the
- * author or to SeniorModerator and above; GameReviewService closes the author's
- * edit window a day after publication and lets an admin past it. An icon the
- * server would refuse is a promise the page cannot keep, and one it would allow
- * but the page hides is a right nobody can use, so the ladder is walked whole.
- *
- * The rest of the file is the two actions themselves: the edit goes to the
- * review's own address with the text the editor holds and hands the answer up,
- * and the delete asks first, then waits in the question for the server.
- */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -21,7 +9,6 @@ import { useAuthStore } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/common";
 import type { GameReview } from "@/shared/api/models/game/reviews";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import { htmlToBbcode } from "@/shared/lib/utils/bbcode";
 import GameReviewEditable from "./GameReviewEditable.vue";
 
 const { getGameReviewForEdit, updateGameReview, deleteGameReview, notify } =
@@ -32,11 +19,9 @@ const { getGameReviewForEdit, updateGameReview, deleteGameReview, notify } =
     notify: vi.fn(),
   }));
 
-// Only the three endpoints are replaced; the card and the stores the module
-// exports stay real.
 vi.mock("@/entities/game", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/entities/game")>()),
-  gameApi: { getGameReviewForEdit, updateGameReview, deleteGameReview },
+  gameReviewApi: { getGameReviewForEdit, updateGameReview, deleteGameReview },
 }));
 
 vi.mock("@/shared/lib/errors", async (importOriginal) => ({
@@ -45,36 +30,30 @@ vi.mock("@/shared/lib/errors", async (importOriginal) => ({
 }));
 
 const AUTHOR_ID = "u-author";
-const STRANGER_ID = "u-stranger";
 
-const hoursAgo = (hours: number) =>
-  new Date(Date.now() - hours * 3_600_000).toISOString();
+/** What the server answers the viewer may do with the review. */
+type Offer = { canEdit: boolean; canDelete: boolean };
 
-const review = (createdUtc: string) =>
+const review = (viewer: Offer) =>
   ({
     id: "r-1",
     gameId: "g-guid",
     gameTitle: "Песочница",
     author: { id: AUTHOR_ID, username: "Solohin" },
     text: "<p>Отличная игра</p>",
-    createdUtc,
+    createdUtc: "2026-08-01T10:00:00Z",
+    viewer,
   }) as unknown as GameReview;
 
-const FRESH = review(hoursAgo(1));
-/** An hour past the day the author has to correct the text. */
-const STALE = review(hoursAgo(25));
+const FRESH = review({ canEdit: true, canDelete: true });
 
-const viewer = (id: string, role: UserRole) =>
+const reader = (id: string, role: UserRole) =>
   ({ id, username: id, role }) as unknown as User;
 
 const PENCIL = 'button[aria-label="Редактировать"]';
 const TRASH = 'button[aria-label="Удалить"]';
 
-/**
- * The card is stubbed down to its #actions slot, the corner the icons stand
- * in, and the editor down to a field: the real ones drag in the bubble, the
- * router and tiptap, and this file is about who is offered what.
- */
+// The card is stubbed down to its #actions slot and the editor to a field.
 const render = (shown: GameReview = FRESH) =>
   mount(GameReviewEditable, {
     props: { review: shown, showGame: false },
@@ -93,7 +72,6 @@ const render = (shown: GameReview = FRESH) =>
     },
   });
 
-/** The icons a viewer is offered, by the name a screen reader reads. */
 const offered = (shown: GameReview = FRESH) => {
   const wrapper = render(shown);
   return {
@@ -102,7 +80,6 @@ const offered = (shown: GameReview = FRESH) => {
   };
 };
 
-/** A part of the delete question, which stands in <body> and not in the card. */
 const inQuestion = (selector: string) => {
   const found = document.body.querySelector<HTMLElement>(
     `.dialog-container ${selector}`,
@@ -120,52 +97,34 @@ beforeEach(() => {
 });
 
 describe("GameReviewEditable access", () => {
-  it("offers nothing to a guest", () => {
-    useAuthStore().user = null;
-    expect(offered()).toEqual({ edit: false, delete: false });
+  it.each([
+    { canEdit: false, canDelete: false },
+    { canEdit: false, canDelete: true },
+    { canEdit: true, canDelete: true },
+  ])("offers what the server answers: %o", (offer) => {
+    expect(offered(review(offer))).toEqual({
+      edit: offer.canEdit,
+      delete: offer.canDelete,
+    });
   });
 
-  it.each([UserRole.RegularUser, UserRole.Mentor, UserRole.Moderator])(
-    "offers nothing to a stranger with role %s",
-    (role) => {
-      useAuthStore().user = viewer(STRANGER_ID, role);
-      expect(offered()).toEqual({ edit: false, delete: false });
-    },
-  );
-
-  it.each([UserRole.SeniorModerator, UserRole.Admin])(
-    "offers %s who did not write it the trash and not the pencil",
-    (role) => {
-      // A moderator does not rewrite somebody else's opinion; taking it down
-      // is the moderation tool.
-      useAuthStore().user = viewer(STRANGER_ID, role);
-      expect(offered()).toEqual({ edit: false, delete: true });
-    },
-  );
-
-  it("offers the author both within the day", () => {
-    useAuthStore().user = viewer(AUTHOR_ID, UserRole.RegularUser);
-    expect(offered(FRESH)).toEqual({ edit: true, delete: true });
-  });
-
-  it("takes the pencil from the author once the day is out", () => {
-    useAuthStore().user = viewer(AUTHOR_ID, UserRole.RegularUser);
-    expect(offered(STALE)).toEqual({ edit: false, delete: true });
-  });
-
-  it("lets an admin past the day on their own review", () => {
-    useAuthStore().user = viewer(AUTHOR_ID, UserRole.Admin);
-    expect(offered(STALE)).toEqual({ edit: true, delete: true });
+  // The window, the author and the role are the server's to count.
+  it("offers its own admin author nothing the server did not answer", () => {
+    useAuthStore().user = reader(AUTHOR_ID, UserRole.Admin);
+    expect(offered(review({ canEdit: false, canDelete: false }))).toEqual({
+      edit: false,
+      delete: false,
+    });
   });
 });
 
 describe("GameReviewEditable editing", () => {
-  beforeEach(() => {
-    useAuthStore().user = viewer(AUTHOR_ID, UserRole.RegularUser);
-  });
+  const saveButton = (wrapper: ReturnType<typeof render>) =>
+    wrapper.findAll("button").find((b) => b.text() === "Сохранить")!;
 
   it("opens the editor on the source and saves to the review's address", async () => {
-    const source = "<p><strong>Песочница</strong> без рельсов</p>";
+    // "&amp;" as typed: read as HTML, it would come back as "&".
+    const source = "[b]Песочница[/b] без рельсов, Том &amp; Джерри";
     getGameReviewForEdit.mockResolvedValue({
       data: { resource: { ...FRESH, text: source } },
       error: null,
@@ -182,36 +141,72 @@ describe("GameReviewEditable editing", () => {
 
     expect(getGameReviewForEdit).toHaveBeenCalledWith("g-guid", "r-1");
     const field = wrapper.find("textarea");
-    // The author's source, not the display text the card was showing.
-    expect((field.element as HTMLTextAreaElement).value).toBe(
-      htmlToBbcode(source),
-    );
-    expect(htmlToBbcode(source)).not.toBe(htmlToBbcode(FRESH.text));
+    expect((field.element as HTMLTextAreaElement).value).toBe(source);
 
     await field.setValue("Переписано целиком");
-    await wrapper.find("button.save-btn").trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Сохранить")!
+      .trigger("click");
     await flushPromises();
 
     expect(updateGameReview).toHaveBeenCalledWith("g-guid", "r-1", {
       text: "Переписано целиком",
     });
-    // The page swaps the row for what the server answered.
     expect(wrapper.emitted("updated")).toEqual([[answer]]);
     expect(wrapper.find("textarea").exists()).toBe(false);
   });
 
-  it("holds a text shorter than the server keeps", async () => {
+  it("saves a text of one character", async () => {
+    getGameReviewForEdit.mockResolvedValue({ data: null, error: null });
+    updateGameReview.mockResolvedValue({
+      data: { resource: FRESH },
+      error: null,
+    });
+
+    const wrapper = render();
+    await wrapper.find(PENCIL).trigger("click");
+    await flushPromises();
+    expect(wrapper.find("textarea").attributes("placeholder")).toBe(
+      "Текст рецензии",
+    );
+    await wrapper.find("textarea").setValue("Я");
+    await saveButton(wrapper).trigger("click");
+    await flushPromises();
+
+    expect(updateGameReview).toHaveBeenCalledWith("g-guid", "r-1", {
+      text: "Я",
+    });
+  });
+
+  it("holds a text of nothing but spaces", async () => {
     getGameReviewForEdit.mockResolvedValue({ data: null, error: null });
 
     const wrapper = render();
     await wrapper.find(PENCIL).trigger("click");
     await flushPromises();
-    await wrapper.find("textarea").setValue("Коротко");
+    await wrapper.find("textarea").setValue("   ");
 
-    const save = wrapper.find("button.save-btn");
-    expect(save.attributes("disabled")).toBeDefined();
-    await save.trigger("click");
+    expect(saveButton(wrapper).attributes("disabled")).toBeDefined();
+    await saveButton(wrapper).trigger("click");
     expect(updateGameReview).not.toHaveBeenCalled();
+  });
+
+  // The card's text is drawn: an editor opened on it would save the drawing.
+  it("opens no editor when the text as typed does not come, and says so", async () => {
+    getGameReviewForEdit.mockResolvedValue({
+      data: null,
+      error: { type: "", title: "", status: 404, traceId: "t" },
+    });
+
+    const wrapper = render();
+    await wrapper.find(PENCIL).trigger("click");
+    await flushPromises();
+
+    expect(wrapper.find("textarea").exists()).toBe(false);
+    expect(wrapper.get(".edit-refusal").text()).toBe(
+      "Не удалось загрузить рецензию",
+    );
   });
 
   it("keeps the editor and the text when the server refuses", async () => {
@@ -228,10 +223,12 @@ describe("GameReviewEditable editing", () => {
     await wrapper.find(PENCIL).trigger("click");
     await flushPromises();
     await wrapper.find("textarea").setValue("Длинный новый текст рецензии");
-    await wrapper.find("button.save-btn").trigger("click");
+    await wrapper
+      .findAll("button")
+      .find((b) => b.text() === "Сохранить")!
+      .trigger("click");
     await flushPromises();
 
-    // Under the buttons of the editor, in the server's words; no plate.
     expect(wrapper.get(".edit-refusal").text()).toBe(
       "Рецензию можно править в течение суток после публикации",
     );
@@ -258,17 +255,12 @@ describe("GameReviewEditable editing", () => {
 });
 
 describe("GameReviewEditable deleting", () => {
-  beforeEach(() => {
-    useAuthStore().user = viewer(STRANGER_ID, UserRole.SeniorModerator);
-  });
-
   it("asks before it deletes, and reports the review gone", async () => {
     deleteGameReview.mockResolvedValue({ data: undefined, error: null });
     const wrapper = render();
 
     await wrapper.find(TRASH).trigger("click");
 
-    // Nothing is gone yet: the window is the question, not the answer.
     expect(deleteGameReview).not.toHaveBeenCalled();
     const dialog = wrapper.findComponent(ConfirmDialog);
     expect(dialog.props("show")).toBe(true);
@@ -276,7 +268,6 @@ describe("GameReviewEditable deleting", () => {
     inQuestion(".dialog-btn-submit").click();
     await flushPromises();
 
-    // The question prints a refusal in itself, so the interceptor stays quiet.
     expect(deleteGameReview).toHaveBeenCalledWith("g-guid", "r-1", {
       ownsRefusal: true,
       ownsRateLimit: true,
@@ -301,5 +292,38 @@ describe("GameReviewEditable deleting", () => {
     );
     expect(wrapper.findComponent(ConfirmDialog).props("show")).toBe(true);
     expect(wrapper.emitted("deleted")).toBeUndefined();
+  });
+});
+
+/**
+ * A review is a place a warning names. Whether the reader may warn its author is the page's to say (the
+ * ranks), and the card offers the control by that word alone, beside the pencil and the trash.
+ */
+describe("GameReviewEditable warning", () => {
+  const WARN = 'button[aria-label="Оставить предупреждение"]';
+  const NOTHING = review({ canEdit: false, canDelete: false });
+
+  const withWarn = (canWarn: boolean) =>
+    mount(GameReviewEditable, {
+      props: { review: NOTHING, showGame: false, canWarn },
+      global: {
+        stubs: {
+          GameReviewCard: {
+            template: '<div class="card-stub"><slot name="actions" /></div>',
+          },
+        },
+      },
+    });
+
+  it("offers the warning where the page allows it, and hands the review up", async () => {
+    const wrapper = withWarn(true);
+
+    await wrapper.get(WARN).trigger("click");
+
+    expect(wrapper.emitted("warn")).toEqual([[NOTHING]]);
+  });
+
+  it("offers no warning where the page does not allow it", () => {
+    expect(withWarn(false).find(WARN).exists()).toBe(false);
   });
 });

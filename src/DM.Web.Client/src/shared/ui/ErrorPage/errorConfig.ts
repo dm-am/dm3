@@ -1,11 +1,4 @@
-/**
- * Error page config resolution.
- * @module shared/ui/ErrorPage/errorConfig
- *
- * Pure lookup extracted from ErrorPage.vue so pages can resolve title/
- * description/illustration for a given HTTP code without mounting the
- * component (e.g. for document title composables).
- */
+// A pure lookup, so a page resolves an error's title without mounting the component.
 import img400 from "@/assets/images/errors/400.png";
 import img401 from "@/assets/images/errors/401.png";
 import img403 from "@/assets/images/errors/403.png";
@@ -25,41 +18,35 @@ export interface ErrorConfig {
   image: ErrorImage;
 }
 
-// TODO(round-2 art): dedicated illustrations for 404 / 409 / 410 are missing.
-// They currently fall back to general-error.png. Add 404 (empty chest),
-// 409 (fighting goblins), 410 (ashes) per docs/plans/ERROR_PAGES_AND_LORE.md
-// and extend this map. 404 is the most visited error page (catch-all route).
 const generalImage: ErrorImage = { src: imgGeneral, width: 400, height: 265 };
+
+/** The illustrations of their own are square. */
+const square = (src: string): ErrorImage => ({ src, width: 800, height: 800 });
 
 const errorDefaults: Record<number, ErrorConfig> = {
   400: {
     title: "Неверный запрос",
     description:
       "Сервер не понял запрос. Проверьте введенные данные и попробуйте снова.",
-    image: { src: img400, width: 800, height: 800 },
+    image: square(img400),
   },
   401: {
     title: "Требуется авторизация",
-    // No description here: the 401 template branch renders the sentence
-    // inline with router-links to login/register (see ErrorPage.vue), so a
-    // plain string would either duplicate or be unused. A custom
-    // `description` prop still overrides the inline branch when passed.
+    // The 401 sentence is the template's, with its links.
     description: "",
     showBack: false,
-    image: { src: img401, width: 800, height: 800 },
+    image: square(img401),
   },
   403: {
     title: "Доступ запрещен",
     description:
       "У вас недостаточно прав для просмотра этой страницы. Возможно, доступ ограничен автором или администрацией.",
-    image: { src: img403, width: 800, height: 800 },
+    image: square(img403),
   },
   404: {
     title: "Страница не найдена",
     description:
-      // Without the deletion clause: that is what 410 below says, and while
-      // both said it the two pages answered the same question. This one is the
-      // wrong address, nothing more.
+      // Not the deletion clause: that is 410's.
       "По этому адресу ничего нет. Проверьте ссылку, возможно, в ней ошибка.",
     image: generalImage,
   },
@@ -75,9 +62,7 @@ const errorDefaults: Record<number, ErrorConfig> = {
       "Этой страницы больше не существует. Возможно, она была удалена автором или модератором.",
     image: generalImage,
   },
-  // The rate limit of the API: the page is there, the reader only asked for
-  // it too often. Read as "не найдено", it sent him to check a link that was
-  // right all along.
+  // The rate limit: the page is there, the reader asked for it too often.
   429: {
     title: "Слишком много запросов",
     description: "Подождите немного и обновите страницу.",
@@ -86,7 +71,7 @@ const errorDefaults: Record<number, ErrorConfig> = {
   500: {
     title: "Произошла ошибка сервера",
     description: "Что-то сломалось на нашей стороне. Попробуйте немного позже.",
-    image: { src: img500, width: 800, height: 800 },
+    image: square(img500),
   },
 };
 
@@ -103,29 +88,8 @@ export function getErrorConfig(code: number): ErrorConfig {
 }
 
 /**
- * The page a failed load's HTTP status deserves.
- *
- * One mapping, because three had already diverged: the forum board page turned
- * every status but 404 into "ошибка сервера", and a missing board was answered
- * with 410 back then, so that is what a mistyped alias actually showed; the
- * topic page next to it mapped the same 410 to "Страница удалена"; the profile
- * page had a third spelling. A game and a blog had no mapping at all and drew
- * one paragraph for everything, so a reader refused access could not tell it
- * from a network failure.
- *
- * The API now spends 410 on one meaning: a resource that existed and was
- * deleted (API_DESIGN.md). A board, a game or a profile that is not there
- * answers 404. The topic endpoint is the one that still separates the two
- * (TopicService answers Gone for a deleted topic and 404 for one that never
- * existed), so `goneMeansRemoved` stays as the opt-in of the page that reads
- * 410 literally. The default keeps 410 as "не найдено" so a stray one from any
- * other endpoint never reports a deletion that did not happen.
- *
- * Every other status with a page of its own gets that page: 429 is the rate
- * limit and not a wrong address, 401 asks the reader to sign in. A status
- * without one gets the general page, never "не найдено": collapsing every 4xx
- * there sent a reader stopped by the rate limit off to check a link that was
- * right. A missing status or a 5xx is a fault on our side.
+ * The page a load's status deserves. 410 means deleted only where `goneMeansRemoved` opts in (topics),
+ * elsewhere it reads as 404. A status without a page of its own gets the general one; none or a 5xx is ours.
  */
 export function errorCodeForStatus(
   status: number | undefined,

@@ -8,14 +8,19 @@ $big: 8 * $grid-step
 $major: 16 * $grid-step
 $large: 32 * $grid-step
 
-/// Animations & Transitions
-$animation-time: .4s
-$transition-fast: 0.1s ease
-$transition-normal: 0.15s ease
+/// Animations: one scale of durations. A control answers the pointer in fast
+/// or normal; a window, a panel or a bar that slides, grows or fades takes
+/// slow; a reveal of content keeps its own tempo ($expand-duration in
+/// _Animations.sass, with the one curve of its own beside ease).
+$duration-fast: 0.1s
+$duration-normal: 0.15s
+$duration-slow: 0.3s
+$transition-fast: $duration-fast ease
+$transition-normal: $duration-normal ease
+$transition-slow: $duration-slow ease
 
-/// The tempo of a wait. Every placeholder that shimmers travels at it, so two
-/// waits on one screen keep the same time instead of beating against each
-/// other. It was one number written twice, in two files.
+/// One tempo for every shimmering placeholder, so two waits on one screen do
+/// not beat against each other.
 $loading-tempo: 1.5s
 
 /// Typography
@@ -25,64 +30,95 @@ $secondary-font-size: 14px
 $tertiary-font-size: 12px
 $menu-font-size: 25px
 
-/// Code font - ALWAYS Courier New, never change!
+/// Monospace, as DM2 sets [code].
 $code-font: "Courier New", Courier, monospace
 
 /// Layout
+$header-height: 100px
+$footer-height: 150px
 $sidebar-width: 330px
 $header-row-height: 55px
-// NOTE: $header-height and $footer-height defined in Layout.sass (grid-based)
 
-/// Width of the floating control rail pinned to the bottom-right corner
-/// (ScrollNav). Its buttons are <button>, which the browser lays out as
-/// border-box, so the frame is inside this number. It lives here and not in
-/// the component because the toasts pin themselves to the same corner: they
-/// step aside by exactly this much, and a rail that grew without telling them
-/// would go back under the stack.
+/// The side of the picture of a profile; ProfilePage asks AvatarImg for the
+/// same number (AVATAR_SIZE).
+$profile-avatar-size: 220px
+
+/// The least a search field over a list keeps before what stands beside it
+/// goes down a line.
+$search-field-min-width: 200px
+
+/// Width of the ScrollNav rail: the toasts in the same corner step aside by
+/// exactly this much.
 $scroll-nav-width: 24px
 
 $border-radius: $small
 $bubble-radius: 20px // testimonial speech bubble
 
-/// Side of an icon control in a speech bubble's corner (BubbleAction). Here
-/// and not in the component because the bubble holds a share of its first line
-/// for two of them (SpeechBubble), and the two numbers must move together.
+/// Side of an icon control in a speech bubble's corner: SpeechBubble holds
+/// room for two of them, so the two numbers move together.
 $bubble-action-size: 24px
 
-/// Height of every control on a page: a field of one line, a list, the search
-/// of a filter bar, a date field, a segmented pill and any button. One number,
-/// so a field and the button beside it stand level in one row. The field takes
-/// it by declaration (+input in Inputs.sass) and not from its padding: a height
-/// that came out of a font's line box moved whenever the font did.
-///
-/// The measure is the filter bar of the games list, the search, "Фильтры" and
-/// the sort as they stood before the 32 of 27 September: every other control of
-/// a page is drawn after them (owner's standard, 28 September 2026). A window
-/// keeps its own 52 ($dialog-control-height in _DialogSurface.sass), and a
-/// field of several lines grows with its rows.
+/// Height of every control on a page, so a field and the button beside it
+/// stand level. A window keeps its own ($dialog-control-height).
 $control-height: 38px
 
-/// The type of a page control: the caption of a button and the text typed
-/// into a field of one line. The filter bar's 14, and one size for both, so a
-/// field and a button in one row read as one row. A field of several lines
-/// keeps the body's 16, and a window its own 15.
+/// The side of a glyph inside a control: a chevron, a cross.
+$control-glyph-size: 14px
+
+/// The type of a page control: a button's caption and the text of a field of
+/// one line.
 $control-font-size: $secondary-font-size
 
-/// How far into a field of one line its text starts, the search of the filter
-/// bar included. A button centres its caption and takes $button-padding.
+/// How far into a field of one line its text starts.
 $field-inset: $small
 
-/// Pointer target floor, WCAG 2.5.8. The drawn glyph of an icon-only control
-/// may be smaller than this; the area that answers a finger may not. Grown by
-/// +icon-button (Inputs.sass) as an overlay, so the layout never sees it.
+/// The keyboard ring of a block control (+focus-ring in _Surfaces.sass).
+$focus-ring-width: 2px
+
+/// Pointer target floor, WCAG 2.5.8; +icon-button grows it as an overlay.
 $tap-target-min: 24px
 
-/// Opacity
-$disabled-opacity: 0.5
-$muted-opacity: 0.5
+/// Opacity: one scale of three steps, and every dimming takes one. Faint is
+/// barely there, half is out of reach or waiting, soft still reads but steps
+/// back.
+$opacity-faint: 0.25
+$opacity-half: 0.5
+$opacity-soft: 0.75
 
-/// The side padding of every button, the filter bar's "Фильтры" and sort. A
-/// field of one line has its own 8 ($field-inset above): its text starts at
-/// the frame, a caption is centred in its box.
+/// By meaning: a control out of reach, and a muted icon at rest; equal, but
+/// separate by meaning. A closed item of a list is dimmed less: it is still read.
+$disabled-opacity: $opacity-half
+$muted-opacity: $opacity-half
+$closed-opacity: $opacity-soft
+
+/// The side padding of every button.
 $button-padding: 0 $medium
-$button-border-radius: $border-radius
+
+/// The tiles of awards and achievements on a profile, and their hints
+
+/// Achievements to a row: eight hold the longest caption word ("Приключение")
+/// in a block from 600px wide, six in a narrower one.
+$achievement-columns: 8
+$achievement-columns-narrow: 6
+$achievements-narrow-width: 599px
+
+/// Awards to a row, and the icons: an award weighs more than an achievement.
+$award-columns: 5
+$achievement-icon-size: 52px
+$award-icon-size: 72px
+
+/// The tier pill in the corner of an icon, and the count of tiers in a hint.
+$tier-pill-size: 16px
+$tier-pill-letter-spacing: 0.5px
+
+/// The icon of an achievement category in the moderation catalogue, and the
+/// column it stands in, wider than the icon so the words keep off it.
+$catalog-icon-size: 36px
+$catalog-icon-box: 48px
+
+/// A chain with no tier earned: the icon fainter than the words.
+$locked-icon-opacity: $opacity-faint
+$locked-text-opacity: $opacity-half
+
+/// The step between the parts of the hint of an award or an achievement.
+$tile-hint-step: 6px

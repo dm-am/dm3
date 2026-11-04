@@ -1,8 +1,5 @@
-using System;
-using System.Linq;
 using System.Net;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -23,17 +20,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// says it has no owner rather than naming one.
 /// </summary>
 /// <remarks>
-/// The roster line used to declare its owner non-nullable while the character
-/// row carries no author identifier for an NPC at all. Mapperly answers a null
-/// arriving in a member that says it cannot be null by throwing, so the whole
-/// response died — every game with a single NPC in it, which on a populated
-/// stand is every game with posts, answered 500 to everybody including its own
-/// master. The failure was invisible to the mapper tests because none of them
-/// mapped an authorless roster line, and invisible to the controller tests
-/// because the fixture seeds only player characters.
-///
-/// The test seeds both kinds into one game on purpose: an NPC alone would pass
-/// against a mapper that dropped the owner from every line.
+/// The character row holds no author for an NPC, and Mapperly throws on a null into a non-nullable member. Both
+/// kinds are seeded into one game: an NPC alone passes a mapper that drops every owner.
 /// </remarks>
 public class GameNpcRosterShould : IntegrationTestBase
 {
@@ -87,10 +75,7 @@ public class GameNpcRosterShould : IntegrationTestBase
         string PlayerUsername);
 
     /// <summary>
-    /// One public game holding two roster lines: an NPC with no author
-    /// identifier, and a character its player owns. Fresh identifiers every
-    /// time - the fixture database is shared and both usernames and game public
-    /// identifiers are uniquely indexed.
+    /// One public game with an NPC and a character its player owns; fresh identifiers.
     /// </summary>
     private async Task<SeededGame> SeedAsync()
     {

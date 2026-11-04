@@ -1,19 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Blog.Features.Blacklists;
 using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.Users;
 using DM.Testing;
+using DM.Testing.Dsl;
 using DM.Domain.Account.Features.Authentication;
 using AwesomeAssertions;
 using NSubstitute;
@@ -23,43 +21,30 @@ namespace DM.Domain.Blog.Tests.Features.Subscriptions;
 
 public class BlogSubscriptionServiceShould : UnitTestBase
 {
-    private readonly ISubscriptionRepository _repository;
-    private readonly IUserLookupService _userLookupService;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly BlogSubscriptionService _service;
+    private readonly ISubscriptionRepository repository;
+    private readonly IUserLookupService userLookupService;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly BlogSubscriptionService service;
 
     public BlogSubscriptionServiceShould()
     {
-        _repository = Mock<ISubscriptionRepository>();
-        _userLookupService = Mock<IUserLookupService>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        repository = Mock<ISubscriptionRepository>();
+        userLookupService = Mock<IUserLookupService>();
+        identityProvider = Mock<IIdentityProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _identityProvider.Current.Returns(Identity.Guest());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        identityProvider.Current.Returns(Identity.Guest());
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _service = new BlogSubscriptionService(
-            _repository,
-            _userLookupService,
-            _identityProvider,
-            _guidFactory,
-            _dateTimeProvider);
-    }
-
-    /// <summary>
-    /// The blog's blacklist does not stand between anybody and a subscription:
-    /// it closes writing, and following the blog is reading. The behaviour end
-    /// to end is in BlacklistRuleShould.
-    /// </summary>
-    [Fact]
-    public void KnowNothingOfTheBlacklist()
-    {
-        typeof(BlogSubscriptionService).GetConstructors().Single().GetParameters()
-            .Select(parameter => parameter.ParameterType)
-            .Should().NotContain([typeof(IBlogBlacklistRepository), typeof(DM.Domain.Blog.Features.Blogs.IBlogService)]);
+        service = new BlogSubscriptionService(
+            repository,
+            userLookupService,
+            identityProvider,
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
@@ -68,18 +53,18 @@ public class BlogSubscriptionServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var subscriptionId = Guid.NewGuid();
-        var identity = AuthenticatedIdentities.Of(userId);
+        var identity = Identities.User(userId, "testuser");
         var createdSubscription = new Subscription { Id = subscriptionId };
 
-        _identityProvider.Current.Returns(identity);
-        _guidFactory.Create().Returns(subscriptionId);
-        _repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, default).Returns((Subscription?)null);
-        _repository.CreateAsync(Arg.Any<CreateSubscription>(), default).Returns(createdSubscription);
+        identityProvider.Current.Returns(identity);
+        guidFactory.Create().Returns(subscriptionId);
+        repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, default).Returns((Subscription?)null);
+        repository.CreateAsync(Arg.Any<CreateSubscription>(), default).Returns(createdSubscription);
 
-        var result = await _service.SubscribeAsync(blogId);
+        var result = await service.SubscribeAsync(blogId);
 
         result.Id.Should().Be(subscriptionId);
-        await _repository.Received(1).CreateAsync(
+        await repository.Received(1).CreateAsync(
             Arg.Is<CreateSubscription>(s =>
                 s.SubscriberId == userId &&
                 s.TargetType == SubscriptionTargetType.Blog &&
@@ -93,16 +78,16 @@ public class BlogSubscriptionServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var subscriptionId = Guid.NewGuid();
-        var identity = AuthenticatedIdentities.Of(userId);
+        var identity = Identities.User(userId, "testuser");
         var existingSubscription = new Subscription { Id = subscriptionId };
 
-        _identityProvider.Current.Returns(identity);
-        _repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, default).Returns(existingSubscription);
+        identityProvider.Current.Returns(identity);
+        repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, default).Returns(existingSubscription);
 
-        var result = await _service.SubscribeAsync(blogId);
+        var result = await service.SubscribeAsync(blogId);
 
         result.Should().Be(existingSubscription);
-        await _repository.DidNotReceive().CreateAsync(
+        await repository.DidNotReceive().CreateAsync(
             Arg.Any<CreateSubscription>(), Arg.Any<CancellationToken>());
     }
 
@@ -111,13 +96,13 @@ public class BlogSubscriptionServiceShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
-        var identity = AuthenticatedIdentities.Of(userId);
+        var identity = Identities.User(userId, "testuser");
 
-        _identityProvider.Current.Returns(identity);
+        identityProvider.Current.Returns(identity);
 
-        await _service.UnsubscribeAsync(blogId);
+        await service.UnsubscribeAsync(blogId);
 
-        await _repository.Received(1).DeleteAsync(userId, SubscriptionTargetType.Blog, blogId, default);
+        await repository.Received(1).DeleteAsync(userId, SubscriptionTargetType.Blog, blogId, default);
     }
 
     [Fact]
@@ -130,22 +115,22 @@ public class BlogSubscriptionServiceShould : UnitTestBase
         var user1 = new UserReference { UserId = userId1, Username = "user1" };
         var user2 = new UserReference { UserId = userId2, Username = "user2" };
 
-        _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Blog, blogId, default).Returns(subscriberIds);
+        repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Blog, blogId, default).Returns(subscriberIds);
 
         // Asked for all of them at once. One call per reader made the page cost
         // as much as it had readers, and the single-user form throws on a user
         // who is no longer there, so one removed reader answered the whole blog
         // with 404.
-        _userLookupService
+        userLookupService
             .GetReferencesAsync(Arg.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(subscriberIds)))
             .Returns(new[] { user1, user2 });
 
-        var result = await _service.GetReadersAsync(blogId);
+        var result = await service.GetReadersAsync(blogId);
 
         result.Should().HaveCount(2);
         result.Should().Contain(u => u.UserId == userId1);
         result.Should().Contain(u => u.UserId == userId2);
-        await _userLookupService.DidNotReceive().GetAsync(Arg.Any<Guid>());
+        await userLookupService.DidNotReceive().GetAsync(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -153,38 +138,10 @@ public class BlogSubscriptionServiceShould : UnitTestBase
     {
         var blogId = Guid.NewGuid();
 
-        _repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Blog, blogId, default).Returns(new List<Guid>());
+        repository.GetTargetSubscriberIdsAsync(SubscriptionTargetType.Blog, blogId, default).Returns(new List<Guid>());
 
-        var result = await _service.GetReadersAsync(blogId);
+        var result = await service.GetReadersAsync(blogId);
 
         result.Should().BeEmpty();
     }
-
-    [Fact]
-    public async Task ReturnTrueWhenUserIsSubscribed()
-    {
-        var blogId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-        var subscription = new Subscription { Id = Guid.NewGuid() };
-
-        _repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, default).Returns(subscription);
-
-        var result = await _service.IsSubscribedAsync(userId, blogId);
-
-        result.Should().BeTrue();
-    }
-
-    [Fact]
-    public async Task ReturnFalseWhenUserIsNotSubscribed()
-    {
-        var blogId = Guid.NewGuid();
-        var userId = Guid.NewGuid();
-
-        _repository.FindAsync(userId, SubscriptionTargetType.Blog, blogId, default).Returns((Subscription?)null);
-
-        var result = await _service.IsSubscribedAsync(userId, blogId);
-
-        result.Should().BeFalse();
-    }
-
 }

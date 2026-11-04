@@ -5,7 +5,7 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.GameAttributeSchemas;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Testing;
 using FluentValidation.TestHelper;
 using NSubstitute;
@@ -21,9 +21,6 @@ public class CreateCharacterValidatorShould : UnitTestBase
 
     public CreateCharacterValidatorShould()
     {
-        // Held in fields: Mock<T>() hands out a new substitute on every call, so
-        // a stub written through a second call would configure an instance the
-        // validator never saw.
         characterRepository = Mock<ICharacterRepository>();
         attributeValueValidator = Mock<IAttributeValueValidator>();
         // Every game carries a sheet, so every request reaches the read of one;
@@ -35,9 +32,6 @@ public class CreateCharacterValidatorShould : UnitTestBase
     [Fact]
     public async Task PassForValidInput()
     {
-        characterRepository
-            .GetGameSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
-
         var input = new CreateCharacter
         {
             GameId = Guid.NewGuid(),
@@ -92,9 +86,6 @@ public class CreateCharacterValidatorShould : UnitTestBase
     [Fact]
     public async Task PassWithMaxLengthValues()
     {
-        characterRepository
-            .GetGameSchema(Arg.Any<Guid>()).Returns(new GameAttributeSchema());
-
         var input = new CreateCharacter
         {
             GameId = Guid.NewGuid(),
@@ -107,9 +98,7 @@ public class CreateCharacterValidatorShould : UnitTestBase
 
     /// <summary>
     /// Two values for one specification cannot be stored: the character holds a
-    /// single row per pair. This used to answer 500 rather than 400 — the
-    /// required-attributes rule indexed the submitted values by identifier and
-    /// threw on the second one.
+    /// single row per pair.
     /// </summary>
     [Fact]
     public async Task FailWhenOneSpecificationIsSubmittedTwice()

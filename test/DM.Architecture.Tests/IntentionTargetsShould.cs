@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using Xunit;
@@ -12,17 +11,8 @@ namespace DM.Architecture.Tests;
 /// A permission check asks a question some resolver can answer.
 /// </summary>
 /// <remarks>
-/// The manager picks a resolver by the runtime type of the target. When nothing
-/// matches it logs and refuses, which reads as a permission refusal and is not
-/// one: reading the posts of any room answered 403 for everybody, anonymous and
-/// master alike, because the call passed the flat projection of a room while the
-/// only resolver for that intention takes the projection carrying the game. It
-/// failed closed, so nothing looked dangerous and the room page simply said it
-/// could not load its posts.
-///
-/// Asserted on the sources line by line: the target at a call site is a local
-/// variable, and the mismatch is invisible to the compiler because both types are
-/// legal arguments of the same generic method.
+/// The manager picks a resolver by the runtime type of the target and refuses when none matches,
+/// which reads as a permission refusal. Asserted on the sources: both types are legal arguments.
 /// </remarks>
 public class IntentionTargetsShould
 {
@@ -42,19 +32,11 @@ public class IntentionTargetsShould
         @"^\s*(?:public|private|internal|protected)[\w\s<>,\[\]\(\)\?]*?\s(?<name>\w+)\s*\(",
         RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
-    private static IEnumerable<string> AuthoredSources() =>
-        Directory
-            .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
-            .Where(path => !path
-                .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-                .Any(segment => segment is "obj" or "bin"));
 
     /// <summary>
-    /// Name of the method the given line sits in, by walking back to the nearest
-    /// declaration. Good enough for a file of ordinary C#, and it fails towards
-    /// reporting nothing rather than towards reporting the wrong method.
+    /// Name of the method the given line sits in, by walking back to the nearest declaration; it fails
+    /// towards reporting nothing.
     /// </summary>
     private static string EnclosingMethod(string[] lines, int at)
     {
@@ -75,7 +57,7 @@ public class IntentionTargetsShould
     {
         var offenders = new List<string>();
 
-        foreach (var path in AuthoredSources())
+        foreach (var path in RepositoryFiles.ProductionSources())
         {
             var lines = File.ReadAllLines(path);
             for (var i = 0; i < lines.Length; i++)
@@ -114,7 +96,7 @@ public class IntentionTargetsShould
     {
         var offenders = new List<string>();
 
-        foreach (var path in AuthoredSources())
+        foreach (var path in RepositoryFiles.ProductionSources())
         {
             var lines = File.ReadAllLines(path);
             for (var i = 0; i < lines.Length; i++)

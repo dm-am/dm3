@@ -2,29 +2,14 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The edit mode of a profile, and the one sentence it puts on the page when a
- * save comes back refused.
- *
- * That sentence has to be the only one about the refusal. The response
- * interceptor already raises a plate for a 403, a 429, a 5xx, an expired
- * session and a request that never left, and on a 5xx the plate carries the
- * API's own title - which is exactly what describeFailure hands this line. The
- * reader pressed "Сохранить" once and read the same words twice: under the
- * form and over it.
- *
- * The line is the half that goes, because it takes nothing with it. The fields
- * stay filled, the edit mode stays open and the save still reports failure to
- * the page, so nothing about the screen claims the profile was stored.
- *
- * Everything else - a rejected field, a conflict, a profile that is gone - is
- * this line's alone: the interceptor says nothing about those, and the server
- * named the field and the rule for the line to read out.
- */
+// The refusal is said once, under the form; the fields and the edit mode stay.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { ref } from "vue";
 import { createPinia, setActivePinia } from "pinia";
-import { personalApi } from "../api";
+import { useAuthStore } from "@/shared/stores";
+import { uploadApi } from "@/shared/api";
+import { personalApi, userApi } from "../api";
+import { useCommunityStore } from "../model/communityStore";
 import { useProfileEdit } from "./useProfileEdit";
 
 /** An edit mode with one pending change in it, ready for a save. */
@@ -42,15 +27,21 @@ function refusedWith(status: number, title = "Ошибка сервера") {
     .mockResolvedValue({ data: null, error: { status, title } } as never);
 }
 
+/** The profile the page reads back after a save, as the server now has it. */
+function readBackAs(profile: object) {
+  return vi
+    .spyOn(userApi, "getUserProfile")
+    .mockResolvedValue({ data: { resource: profile }, error: null } as never);
+}
+
 describe("saving a profile from its edit mode", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.restoreAllMocks();
+    readBackAs({ id: "reader-id", username: "reader" });
   });
 
-  // The refusals the interceptor used to plate stand under the form now, and
-  // the plate is taken down (refusalHere; the owner's rule of 26 September
-  // 2026). An expired session and a dead connection keep the plate.
+  // An expired session and a dead connection keep the plate.
   it.each([
     [403, "Ошибка сервера"],
     [429, "Слишком много попыток, попробуйте позже"],
@@ -104,5 +95,178 @@ describe("saving a profile from its edit mode", () => {
     expect(stored).toBe(true);
     expect(edit.saveError.value).toBeNull();
     expect(edit.isEditMode.value).toBe(false);
+  });
+});
+
+describe("who may edit a profile", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+  });
+
+  // The address of a profile may spell the name in another case than the session.
+  it("lets the owner edit at an address in another case", () => {
+    useAuthStore().user = { username: "Reader" } as never;
+
+    expect(useProfileEdit(ref("reader")).canEdit.value).toBe(true);
+    expect(useProfileEdit(ref("Other")).canEdit.value).toBe(false);
+  });
+
+  it("lets a guest edit nothing", () => {
+    expect(useProfileEdit(ref("reader")).canEdit.value).toBe(false);
+  });
+});
+
+/** The answers of a save that goes through, and the deletion of an upload left behind. */
+function letTheSaveThrough() {
+  return {
+    update: vi
+      .spyOn(personalApi, "updateMyProfile")
+      .mockResolvedValue({ data: {}, error: null } as never),
+    reset: vi
+      .spyOn(personalApi, "removeMyAvatar")
+      .mockResolvedValue({ data: null, error: null } as never),
+    dropUpload: vi
+      .spyOn(uploadApi, "deleteUpload")
+      .mockResolvedValue({ data: null, error: null } as never),
+  };
+}
+
+const aPicture = () => new File(["x"], "face.png", { type: "image/png" });
+
+describe("the avatar in the edit mode of a profile", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+    readBackAs({ id: "reader-id", username: "reader" });
+    // jsdom has no object URLs.
+    URL.createObjectURL = vi.fn(() => "blob:picked");
+    URL.revokeObjectURL = vi.fn();
+  });
+
+  it("shows the picked picture and sends it with Сохранить, not before", async () => {
+    const { update } = letTheSaveThrough();
+    const edit = useProfileEdit(ref("reader"));
+    edit.toggleEditMode();
+
+    edit.setAvatar({ uploadId: "upload-1", file: aPicture() });
+
+    expect(edit.avatarPreview.value).toBe("blob:picked");
+    expect(edit.hasChanges.value).toBe(true);
+    expect(update).not.toHaveBeenCalled();
+
+    await edit.saveChanges();
+
+    expect(update).toHaveBeenCalledWith({ avatarUploadId: "upload-1" });
+    expect(edit.avatarPreview.value).toBeNull();
+  });
+
+  // The PATCH takes no null for the avatar: the reset has its endpoint.
+  it("resets the stored picture with Сохранить, on its own endpoint", async () => {
+    const { update, reset } = letTheSaveThrough();
+    const edit = useProfileEdit(ref("reader"));
+    edit.toggleEditMode();
+    edit.setField("status", "новый статус");
+
+    edit.removeAvatar(true);
+    expect(reset).not.toHaveBeenCalled();
+    await edit.saveChanges();
+
+    expect(update).toHaveBeenCalledWith({ status: "новый статус" });
+    expect(reset).toHaveBeenCalledTimes(1);
+    expect(edit.isEditMode.value).toBe(false);
+  });
+
+  it("keeps the reset to send again when it is refused after the fields went", async () => {
+    const { reset } = letTheSaveThrough();
+    reset.mockResolvedValue({
+      data: null,
+      error: { status: 400, title: "" },
+    } as never);
+    const edit = useProfileEdit(ref("reader"));
+    edit.toggleEditMode();
+    edit.setField("status", "новый статус");
+    edit.removeAvatar(true);
+
+    expect(await edit.saveChanges()).toBe(false);
+
+    expect(edit.saveError.value).toBe("Не удалось сбросить аватар");
+    expect(edit.pendingChanges.value).toEqual({ avatarUploadId: null });
+  });
+
+  it("takes back the picked picture on Отмена and deletes its upload", () => {
+    const { update, dropUpload } = letTheSaveThrough();
+    const edit = useProfileEdit(ref("reader"));
+    edit.toggleEditMode();
+    edit.setAvatar({ uploadId: "upload-1", file: aPicture() });
+
+    edit.cancelEdit();
+
+    expect(edit.avatarPreview.value).toBeNull();
+    expect(edit.hasChanges.value).toBe(false);
+    expect(dropUpload).toHaveBeenCalledWith("upload-1", {
+      ownsRefusal: true,
+      ownsRateLimit: true,
+    });
+    expect(update).not.toHaveBeenCalled();
+  });
+
+  it("deletes a picked upload that another one replaces", () => {
+    const { dropUpload } = letTheSaveThrough();
+    const edit = useProfileEdit(ref("reader"));
+    edit.toggleEditMode();
+    edit.setAvatar({ uploadId: "upload-1", file: aPicture() });
+
+    edit.setAvatar({ uploadId: "upload-2", file: aPicture() });
+
+    expect(dropUpload).toHaveBeenCalledWith("upload-1", expect.anything());
+    expect(edit.pendingChanges.value).toEqual({ avatarUploadId: "upload-2" });
+  });
+
+  it("leaves nothing to save when a picture picked over none is reset", () => {
+    letTheSaveThrough();
+    const edit = useProfileEdit(ref("reader"));
+    edit.toggleEditMode();
+    edit.setAvatar({ uploadId: "upload-1", file: aPicture() });
+
+    edit.removeAvatar(false);
+
+    expect(edit.hasChanges.value).toBe(false);
+    expect(edit.avatarPreview.value).toBeNull();
+  });
+});
+
+// The page draws the public profile, which the PATCH does not touch.
+describe("the profile after a save", () => {
+  beforeEach(() => {
+    setActivePinia(createPinia());
+    vi.restoreAllMocks();
+  });
+
+  it("reads the profile back, so the page shows what was stored", async () => {
+    letTheSaveThrough();
+    const community = useCommunityStore();
+    community.selectedUser = { id: "reader-id", status: "старый" } as never;
+    readBackAs({ id: "reader-id", status: "новый статус" });
+    const edit = useProfileEdit(ref("reader"));
+    edit.toggleEditMode();
+    edit.setField("status", "новый статус");
+
+    await edit.saveChanges();
+
+    expect(community.selectedUser).toMatchObject({ status: "новый статус" });
+  });
+
+  it("does not put the saved profile over another one opened meanwhile", async () => {
+    letTheSaveThrough();
+    const community = useCommunityStore();
+    community.selectedUser = { id: "other-id", status: "чужой" } as never;
+    readBackAs({ id: "reader-id", status: "новый статус" });
+    const edit = useProfileEdit(ref("reader"));
+    edit.toggleEditMode();
+    edit.setField("status", "новый статус");
+
+    await edit.saveChanges();
+
+    expect(community.selectedUser).toMatchObject({ status: "чужой" });
   });
 });

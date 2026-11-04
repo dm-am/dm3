@@ -3,47 +3,26 @@
  */
 
 /**
- * The site respects "reduce motion" everywhere a media query can reach, and the
- * one place it could not reach was the only JavaScript animation in the tree:
- * the FLIP flight that plays when the profile tabs and the forum board strip
- * reorder themselves. 280ms of movement, at every switch, for exactly the
- * readers the setting exists to protect — and the discrepancy was invisible,
- * because everything ELSE in the project obeys.
- *
- * Two checks, because the defect has two halves. The helper has to read the
- * setting correctly, and the animation has to consult the helper. The second is
- * a fact about the sources, so it is read from them: a new `.animate(` call
- * added elsewhere would be the same defect again.
+ * "Reduce motion" for the one JavaScript animation, the FLIP flight of the
+ * profile tabs and the board strip, which no media query reaches: the helper
+ * reads the setting, and every `.animate(` call in the sources consults it.
  */
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { readdirSync, readFileSync, statSync } from "fs";
-import { dirname, join, relative, resolve } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
 import { prefersReducedMotion } from "./motion";
+import {
+  CLIENT_SRC,
+  asPath,
+  collect as collectAll,
+} from "@/shared/lib/testing/sourceTree";
 
-const HERE = dirname(fileURLToPath(import.meta.url));
-// utils -> lib -> shared -> src
-const CLIENT_SRC = resolve(HERE, "..", "..", "..");
-
-const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
-
-function collect(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      if (!SKIP_DIRS.has(name)) collect(full, out);
-    } else if (
-      (full.endsWith(".ts") || full.endsWith(".vue")) &&
-      !full.endsWith(".spec.ts")
-    ) {
-      out.push(full);
-    }
-  }
-  return out;
-}
-
-const asPath = (file: string): string =>
-  relative(CLIENT_SRC, file).split("\\").join("/");
+const collect = (dir: string): string[] =>
+  collectAll(
+    dir,
+    (name) =>
+      (name.endsWith(".ts") || name.endsWith(".vue")) &&
+      !name.endsWith(".spec.ts"),
+  );
 
 /** Replaces window.matchMedia with one that answers the given verdict. */
 function answerReducedMotion(reduce: boolean) {

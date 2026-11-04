@@ -1,14 +1,6 @@
 <script setup lang="ts">
-// Publication feed sub-page (dev doc 4.2.3.6.2 "Рубрика"): the latest
-// publications in reverse chronological order, optionally filtered by
-// rubric via the ?rubric= query (URL_STRUCTURE: /blogs/{id}/feed?rubric=).
-// The rubric page IS the feed page with a filter — one component serves
-// both. Publications render through PublicationCard (the topic-copy card;
-// its internals are the publication entity's concern, not this page's).
-//
-// States per UI_STANDARDS: skeleton -> error(retry) -> empty -> content.
-// GamePostSkeleton is the established stand-in for a publication card
-// (see ProfileBestPublication) — no new skeleton needed.
+// The publication feed, filtered by rubric through ?rubric=: the rubric page
+// is the feed with a filter.
 import { computed, ref } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
@@ -35,14 +27,12 @@ const {
 const blogId = computed(() => route.params.id as string);
 const rubricId = computed(() => (route.query.rubric as string) || undefined);
 
-// Page heading: the rubric title when filtered, the generic feed otherwise.
 const rubric = computed(() =>
   rubricId.value ? rubrics.value.find((r) => r.id === rubricId.value) : null,
 );
 const heading = computed(() => rubric.value?.title ?? "Лента публикаций");
 
-// The shared Paging widget writes the page as ?number= (codebase-wide
-// query-key convention) — read the same key back.
+// The shared Paging writes the page as ?number=.
 function getPage(): number {
   const page = route.query.number;
   return page ? parseInt(page as string) || 1 : 1;
@@ -62,11 +52,8 @@ function editRoute(pubId: string) {
   };
 }
 
-// Paging scrolls the feed back into view (not the page top)
+// Paging scrolls back to the feed, not to the page top.
 const feedRef = ref<HTMLElement | null>(null);
-function pagingAnchor(): HTMLElement | null {
-  return feedRef.value;
-}
 
 useFetchData(
   load,
@@ -91,32 +78,27 @@ useFetchData(
       </router-link>
     </div>
 
-    <!-- 1. loading -->
     <template v-if="publicationsLoading && !publications.length">
       <GamePostSkeleton v-for="i in 3" :key="i" />
     </template>
 
-    <!-- 2. error -->
     <ErrorState
       v-else-if="publicationsError"
       :message="publicationsError"
       :retry="load"
     />
 
-    <!-- 3. empty -->
     <SecondaryText v-else-if="!publications.length" class="feed-empty">
       Публикаций пока нет
     </SecondaryText>
 
-    <!-- 4. content -->
     <div v-else ref="feedRef" class="feed-list">
       <div
         v-for="publication in publications"
         :key="publication.id"
         class="feed-item"
       >
-        <!-- "Редактировать" is an action of the card's caption line, next to
-             the other actions and not on a row of its own under the card. -->
+        <!-- "Редактировать" is an action of the card's caption line. -->
         <PublicationCard
           :publication="publication"
           :blog-id="blogId"
@@ -126,7 +108,6 @@ useFetchData(
       </div>
     </div>
 
-    <!-- Paging -->
     <Paging
       v-if="publicationsPaging"
       :paging="publicationsPaging"
@@ -137,7 +118,7 @@ useFetchData(
       }"
       :use-query="true"
       query-key="number"
-      :scroll-anchor="pagingAnchor"
+      :scroll-anchor="() => feedRef"
     />
   </div>
 </template>
@@ -157,12 +138,7 @@ useFetchData(
   flex-wrap: wrap
 
 .create-link
-  color: $link
   font-size: $secondary-font-size
-
-  &:hover
-    color: $link-hover
-    text-decoration: underline
 
 .feed-empty
   padding: $big

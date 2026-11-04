@@ -20,7 +20,7 @@ export interface SelectOption {
  * list readable when one control has to offer two different intents at once —
  * support and complaints on the ticket form.
  */
-export interface SelectOptionGroup {
+interface SelectOptionGroup {
   label: string;
   options: SelectOption[];
 }
@@ -96,6 +96,7 @@ defineEmits<{
 
 <style scoped lang="sass">
 @use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
 // The wrapper draws the disabled state of the whole control, the list and its
 // chevron together: the site's half opacity and its hatch (+disabled-hatch),
@@ -119,7 +120,7 @@ defineEmits<{
   // +input(), so it must come after the mixin; the bare & block keeps it a
   // later same-specificity rule under CSS ordering semantics.
   &
-    padding-right: $small * 2 + 14px
+    padding-right: $small * 2 + $control-glyph-size
 
   // The wrapper dims the control once; dimmed here as well, the list would
   // stand at a quarter.
@@ -132,8 +133,8 @@ defineEmits<{
   right: $small
   top: 50%
   transform: translateY(-50%)
-  width: 14px
-  height: 14px
+  width: $control-glyph-size
+  height: $control-glyph-size
   color: $text-muted
   pointer-events: none
 </style>

@@ -1,6 +1,6 @@
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
 using System;
 using System.Linq;
 using DM.Domain.Core.Exceptions;
@@ -24,11 +24,8 @@ internal class AttributeValueValidator : IAttributeValueValidator
             return (false, AttributeValidationError.RequiredMissing);
         }
 
-        // A BBCode attribute of a character renders on the Profile surface,
-        // which declares neither [mod] nor [private]. The tag is not markup
-        // there, so it hides nothing and the line stands on the character sheet
-        // for whoever may open it. Checked against the value as submitted so the
-        // place named in the refusal is the place the author is looking at.
+        // The Profile surface declares no [private], so the tag would hide nothing on the sheet.
+        // Checked against the value as submitted, so the refusal points where the author looks.
         if (specification.Type == AttributeSpecificationType.BbCode &&
             PrivateBlockMarkup.ContainsPrivateMarkup(value))
         {
@@ -69,7 +66,6 @@ internal class AttributeValueValidator : IAttributeValueValidator
 
             case AttributeSpecificationType.Text:
             case AttributeSpecificationType.BbCode:
-                // Valid without additional constraints
                 break;
 
             default:

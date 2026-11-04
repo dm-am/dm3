@@ -29,14 +29,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// blog, under a publication and of a topic.
 /// </summary>
 /// <remarks>
-/// Comments cannot be switched off and are read by everybody, always: reading is
-/// closed only by a closed room of a game and by what is private. A blacklist and
-/// a ban forbid writing, in particular places, and never reading. So every reader below reads every discussion: the guest,
-/// a stranger, the person on the place's blacklist and on its owner's personal
-/// one, and a stranger under either ban.
-///
-/// The mode of a game's discussion decides who may write and nothing else, so no
-/// mode closes reading: a request that asks for one is refused.
+/// Reading is closed only by a closed room and by what is private; a blacklist and a ban forbid writing. The
+/// mode of a game's discussion decides who writes, so a mode closing reading is refused.
 /// </remarks>
 public class DiscussionReadingShould : IntegrationTestBase
 {
@@ -44,7 +38,6 @@ public class DiscussionReadingShould : IntegrationTestBase
     {
     }
 
-    /// <summary>Who reads.</summary>
     public enum Reader
     {
         Guest,
@@ -111,9 +104,7 @@ public class DiscussionReadingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A mode closing reading to everybody but the players is no mode: asked for
-    /// by the name "Private" or by the number 2 it is refused, and a mode that is
-    /// one is taken.
+    /// A mode closing reading is refused by the name "Private" and by the number 2.
     /// </summary>
     [Fact]
     public async Task RefuseADiscussionModeClosingReading()
@@ -166,8 +157,6 @@ public class DiscussionReadingShould : IntegrationTestBase
             .ToArray();
     }
 
-    // ═══ SEEDING ═══
-
     private sealed record World(
         GeneralUser Master,
         GeneralUser Stranger,
@@ -184,12 +173,7 @@ public class DiscussionReadingShould : IntegrationTestBase
         Guid TopicComment);
 
     /// <summary>
-    /// A master who leads a public game and a game only its people write in, keeps
-    /// a blog with a publication and opened a topic in a board of his own, each
-    /// with a comment of his; a stranger; and a user both games and the blog
-    /// blacklisted, whom the master also keeps on his personal list. Fresh
-    /// identifiers every time: the fixture database is shared and its usernames
-    /// and public ids are uniquely indexed.
+    /// A master with a discussion of every kind, a stranger, and a user blacklisted everywhere; fresh identifiers.
     /// </summary>
     private async Task<World> SeedAsync()
     {
@@ -201,83 +185,9 @@ public class DiscussionReadingShould : IntegrationTestBase
 
         var publicGame = AddGame(db, master.UserId, CommentsAccessMode.Public);
         var readOnlyGame = AddGame(db, master.UserId, CommentsAccessMode.Readonly);
-        var blogId = Guid.NewGuid();
-        db.Blogs.Add(new DbBlog
-        {
-            BlogId = blogId,
-            PublicId = Guid.NewGuid().ToString("N")[..10],
-            AuthorId = master.UserId,
-            Title = "Блог с обсуждением",
-            Description = "Блог для проверки чтения",
-            Status = ModuleStatus.Active,
-            PremoderationStatus = PremoderationStatus.Approved,
-            DraftVisibility = DraftVisibility.Public,
-            CreatedUtc = now.AddDays(-2),
-            ActivatedUtc = now.AddDays(-1)
-        });
-        var publicationId = Guid.NewGuid();
-        db.Publications.Add(new DbPublication
-        {
-            PublicationId = publicationId,
-            BlogId = blogId,
-            PublicationNumber = 1,
-            AuthorId = master.UserId,
-            Title = "Публикация с обсуждением",
-            Content = "Текст",
-            Preview = "Текст",
-            IsPublished = true,
-            PublishedUtc = now.AddHours(-3),
-            CreatedUtc = now.AddHours(-3)
-        });
-        var boardId = Guid.NewGuid();
-        db.Boards.Add(new DbBoard
-        {
-            BoardId = boardId,
-            Title = $"Reading board {boardId:N}",
-            Alias = $"drd-{boardId:N}",
-            Order = 0,
-            ViewPolicy = BoardAccessPolicy.Guest,
-            CreateTopicPolicy = BoardAccessPolicy.RegularUser
-        });
-        var topicId = Guid.NewGuid();
-        db.Topics.Add(new DbTopic
-        {
-            TopicId = topicId,
-            BoardId = boardId,
-            AuthorId = master.UserId,
-            Title = "Топик с обсуждением",
-            Text = "Текст топика",
-            TopicNumber = 1,
-            CreatedUtc = now.AddHours(-3)
-        });
-
-        foreach (var game in new[] { publicGame, readOnlyGame })
-        {
-            db.GameBlacklists.Add(new DbGameBlacklist
-            {
-                EntryId = Guid.NewGuid(),
-                GameId = game,
-                BlockedUserId = blacklisted.UserId,
-                BlockedByUserId = master.UserId,
-                CreatedUtc = now
-            });
-        }
-
-        db.BlogBlacklists.Add(new DbBlogBlacklist
-        {
-            EntryId = Guid.NewGuid(),
-            BlogId = blogId,
-            BlockedUserId = blacklisted.UserId,
-            BlockedByUserId = master.UserId,
-            CreatedUtc = now
-        });
-        db.UserBlacklists.Add(new DbUserBlacklist
-        {
-            EntryId = Guid.NewGuid(),
-            OwnerId = master.UserId,
-            BlockedUserId = blacklisted.UserId,
-            CreatedUtc = now
-        });
+        var (blogId, publicationId) = AddBlog(db, master.UserId, now);
+        var topicId = AddTopic(db, master.UserId, now);
+        AddLists(db, master.UserId, blacklisted.UserId, [publicGame, readOnlyGame], blogId, now);
 
         var comments = new[] { publicGame, readOnlyGame, blogId, publicationId, topicId }
             .Select(entityId => AddComment(db, entityId, master.UserId, now))
@@ -307,6 +217,100 @@ public class DiscussionReadingShould : IntegrationTestBase
         db.Games.Add(game);
         db.Set<DbGameAttributeSchema>().Add(GameSheetTestHelper.Sheet(game.GameId));
         return game.GameId;
+    }
+
+    /// <summary>The master's blog with a publication in it.</summary>
+    private static (Guid Blog, Guid Publication) AddBlog(DmDbContext db, Guid masterId, DateTimeOffset now)
+    {
+        var blogId = Guid.NewGuid();
+        db.Blogs.Add(new DbBlog
+        {
+            BlogId = blogId,
+            PublicId = Guid.NewGuid().ToString("N")[..10],
+            AuthorId = masterId,
+            Title = "Блог с обсуждением",
+            Description = "Блог для проверки чтения",
+            Status = ModuleStatus.Active,
+            PremoderationStatus = PremoderationStatus.Approved,
+            DraftVisibility = DraftVisibility.Public,
+            CreatedUtc = now.AddDays(-2),
+            ActivatedUtc = now.AddDays(-1)
+        });
+        var publicationId = Guid.NewGuid();
+        db.Publications.Add(new DbPublication
+        {
+            PublicationId = publicationId,
+            BlogId = blogId,
+            PublicationNumber = 1,
+            AuthorId = masterId,
+            Title = "Публикация с обсуждением",
+            Content = "Текст",
+            Preview = "Текст",
+            CreatedUtc = now.AddHours(-3)
+        });
+        return (blogId, publicationId);
+    }
+
+    /// <summary>A board of the case's own with the master's topic in it.</summary>
+    private static Guid AddTopic(DmDbContext db, Guid masterId, DateTimeOffset now)
+    {
+        var boardId = Guid.NewGuid();
+        db.Boards.Add(new DbBoard
+        {
+            BoardId = boardId,
+            Title = $"Reading board {boardId:N}",
+            Alias = $"drd-{boardId:N}",
+            Order = 0,
+            CreateTopicPolicy = BoardAccessPolicy.RegularUser
+        });
+        var topicId = Guid.NewGuid();
+        db.Topics.Add(new DbTopic
+        {
+            TopicId = topicId,
+            BoardId = boardId,
+            AuthorId = masterId,
+            Title = "Топик с обсуждением",
+            Text = "Текст топика",
+            TopicNumber = 1,
+            CreatedUtc = now.AddHours(-3)
+        });
+        return topicId;
+    }
+
+    /// <summary>
+    /// The blacklisted user on the lists of both games and of the blog, and on the
+    /// master's personal list.
+    /// </summary>
+    private static void AddLists(
+        DmDbContext db, Guid masterId, Guid blacklistedId, Guid[] games, Guid blogId, DateTimeOffset now)
+    {
+        foreach (var game in games)
+        {
+            db.GameBlacklists.Add(new DbGameBlacklist
+            {
+                EntryId = Guid.NewGuid(),
+                GameId = game,
+                BlockedUserId = blacklistedId,
+                BlockedByUserId = masterId,
+                CreatedUtc = now
+            });
+        }
+
+        db.BlogBlacklists.Add(new DbBlogBlacklist
+        {
+            EntryId = Guid.NewGuid(),
+            BlogId = blogId,
+            BlockedUserId = blacklistedId,
+            BlockedByUserId = masterId,
+            CreatedUtc = now
+        });
+        db.UserBlacklists.Add(new DbUserBlacklist
+        {
+            EntryId = Guid.NewGuid(),
+            OwnerId = masterId,
+            BlockedUserId = blacklistedId,
+            CreatedUtc = now
+        });
     }
 
     private static Guid AddComment(DmDbContext db, Guid entityId, Guid authorId, DateTimeOffset now)

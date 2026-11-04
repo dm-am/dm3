@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -11,19 +12,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// Nothing reaches the registry ahead of a check that could have stopped it.
 /// </summary>
-/// <remarks>
-/// The two publishing jobs waited on four checks out of ten. Two of the missing
-/// ones sat in the same file and were simply forgotten in <c>needs</c>; the other
-/// two — CodeQL and the ZAP scan — lived in a workflow triggered beside this one,
-/// where no <c>needs</c> can reach them at all. They ran on the same push and
-/// finished whenever they finished, so an image with a red scan reached the
-/// registry, took the <c>latest</c> tag on main, and watchtower installed it
-/// within five minutes.
-///
-/// Written as "every other job in the file", not as a list. A list is the thing
-/// that went stale: a job added tomorrow has to be named in <c>needs</c> or named
-/// here as a deliberate exception, and there is nowhere else to put it.
-/// </remarks>
+/// <remarks>"Every other job in the file", not a list: a new job is in <c>needs</c> or named here as an exception.</remarks>
 public class PublishGraphShould
 {
     private const string Workflow = ".github/workflows/dotnet.yml";
@@ -31,82 +20,24 @@ public class PublishGraphShould
     /// <summary>The job that gives the images their moving names.</summary>
     private const string Promotion = "promote-images";
 
-    /// <summary>
-    /// Jobs a publisher deliberately does not wait for.
-    /// </summary>
-    /// <remarks>
-    /// One entry, and it is the only shape that can ever be in here: a job that
-    /// runs after the publishers rather than before them. Waiting for it would be
-    /// a cycle, and it stops no release because there is nothing left to stop.
-    ///
-    /// Everything else in the file is a check that could, which is why the set is
-    /// written down rather than inferred: an exception has to be typed out.
-    /// </remarks>
-    private static readonly HashSet<string> NotAGate = new(StringComparer.Ordinal) { Promotion };
-
-    /// <summary>
-    /// A top-level job key: two spaces, a name, a colon, nothing after it.
-    /// </summary>
-    /// <remarks>
-    /// The character class is what YAML and GitHub allow in a job id, not what
-    /// this file happens to use today. Written as lowercase-and-hyphen only, a
-    /// job named <c>publish_docs</c> or <c>Publish</c> would be invisible to the
-    /// rule — and a check the rule cannot see is a check the publishers are not
-    /// held to waiting for, which is the whole defect this guards.
-    /// </remarks>
-    private static readonly Regex JobKey = new(@"^  ([A-Za-z_][A-Za-z0-9_-]*):\s*$", RegexOptions.Compiled);
-
     /// <summary>The needs list of the job it follows, in the inline form the file uses.</summary>
     private static readonly Regex NeedsList = new(@"^    needs:\s*\[([^\]]*)\]", RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
     /// <summary>Every job in the workflow, with the jobs each one waits for.</summary>
-    private static IReadOnlyDictionary<string, string[]> Jobs()
-    {
-        var lines = File.ReadAllLines(Path.Combine(RepositoryRoot, Workflow));
-        var jobs = new Dictionary<string, string[]>(StringComparer.Ordinal);
-        var inJobs = false;
-        string? current = null;
-
-        foreach (var line in lines)
-        {
-            if (line.StartsWith("jobs:", StringComparison.Ordinal))
-            {
-                inJobs = true;
-                continue;
-            }
-
-            if (!inJobs)
-            {
-                continue;
-            }
-
-            var key = JobKey.Match(line);
-            if (key.Success)
-            {
-                current = key.Groups[1].Value;
-                jobs[current] = Array.Empty<string>();
-                continue;
-            }
-
-            var needs = NeedsList.Match(line);
-            if (needs.Success && current != null)
-            {
-                jobs[current] = needs.Groups[1].Value
-                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-                    .ToArray();
-            }
-        }
-
-        return jobs;
-    }
+    private static IReadOnlyDictionary<string, string[]> Jobs() => WorkflowJobs.Read("dotnet.yml")
+        .ToDictionary(
+            job => job.Name,
+            job => job.Lines
+                .Select(line => NeedsList.Match(line))
+                .LastOrDefault(needs => needs.Success)?.Groups[1].Value
+                .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries) ?? [],
+            StringComparer.Ordinal);
 
     [Fact]
     public void WaitForEveryCheckTheWorkflowRuns()
     {
         var jobs = Jobs();
-        jobs.Should().HaveCountGreaterThan(5, "a reader that finds no jobs asserts nothing");
+        jobs.Should().NotBeEmpty("a reader that finds no jobs asserts nothing");
 
         var publishers = jobs.Keys.Where(name => name.StartsWith("publish", StringComparison.OrdinalIgnoreCase)).ToArray();
         publishers.Should().NotBeEmpty("the rule is about the jobs that push images");
@@ -116,7 +47,8 @@ public class PublishGraphShould
             var expected = jobs.Keys
                 .Where(name => name != publisher)
                 .Where(name => !name.StartsWith("publish", StringComparison.OrdinalIgnoreCase))
-                .Where(name => !NotAGate.Contains(name))
+                // The promotion runs after the publishers: waiting for it would be a cycle.
+                .Where(name => name != Promotion)
                 .OrderBy(name => name, StringComparer.Ordinal);
 
             jobs[publisher].OrderBy(name => name, StringComparer.Ordinal)
@@ -126,26 +58,98 @@ public class PublishGraphShould
         }
     }
 
+    /// <summary>The job that runs the end-to-end suite in shares, one leg of a matrix each.</summary>
+    private const string EndToEnd = "e2e";
+
+    /// <summary>The legs of that matrix, in the inline form the file uses.</summary>
+    private static readonly Regex ShardLegs = new(@"^shard:\s*\[([^\]]*)\]$", RegexOptions.Compiled);
+
+    /// <summary>The share a leg hands the suite: its own number out of the count of legs.</summary>
+    private static readonly Regex ShardFlag = new(
+        @"--shard=\$\{\{\s*matrix\.shard\s*\}\}/(\$\{\{\s*strategy\.job-total\s*\}\}|\d+)\s*$",
+        RegexOptions.Compiled);
+
+    /// <summary>The lines of one job, from its key to the next job's, comments out.</summary>
+    private static List<string> JobLines(string job) =>
+        WorkflowJobs.Body("dotnet.yml", job).Where(WorkflowJobs.IsCode).ToList();
+
+    private static int IndentOf(string line) => line.Length - line.TrimStart().Length;
+
+    /// <summary>
+    /// The legs of the end-to-end job run the whole suite between them.
+    /// </summary>
+    /// <remarks>
+    /// A share no leg runs gates nothing. The count is read from strategy.job-total, so the shard is the
+    /// only dimension of this matrix.
+    /// </remarks>
+    [Fact]
+    public void RunTheWholeEndToEndSuiteAcrossTheLegsItWaitsFor()
+    {
+        var job = JobLines(EndToEnd);
+
+        var matrix = job.FindIndex(line => line.Trim() == "matrix:");
+        matrix.Should().BeGreaterThan(-1,
+            $"{EndToEnd} runs the suite in shares, a leg of a matrix each, so that a pull request " +
+            "does not wait for one browser working through every spec in turn");
+
+        var dimensions = job
+            .Skip(matrix + 1)
+            .TakeWhile(line => line.Trim().Length == 0 || IndentOf(line) > IndentOf(job[matrix]))
+            .Where(line => line.Trim().Length > 0)
+            .Select(line => line.Trim())
+            .ToList();
+
+        dimensions.Should().ContainSingle(
+            "strategy.job-total counts every leg of the matrix, and a dimension beside the shard " +
+            "numbers makes the count larger than they are, so the shares past them are never run");
+
+        var legs = ShardLegs.Match(dimensions[0]);
+        legs.Success.Should().BeTrue(
+            $"the legs are read from the inline list \"shard: [1, 2, 3]\", and {dimensions[0]} is not one");
+
+        var numbers = legs.Groups[1].Value
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(number => int.TryParse(number, out var value) ? value : -1)
+            .ToArray();
+
+        numbers.Should().HaveCountGreaterThan(1, "a suite in one share is the job that was too long");
+        numbers.Should().Equal(Enumerable.Range(1, numbers.Length),
+            "Playwright numbers the shares from one to their count, and a number missing from " +
+            "the list is a share no leg runs");
+
+        var runs = job
+            .Where(line => line.Contains("npm run test:e2e:fast", StringComparison.Ordinal))
+            .Select(line => line.Trim())
+            .ToList();
+
+        runs.Should().ContainSingle($"{EndToEnd} runs the suite in one step");
+
+        var share = ShardFlag.Match(runs[0]);
+        share.Success.Should().BeTrue(
+            "every leg hands the suite its own number out of the count of legs, " +
+            "--shard=${{ matrix.shard }}/${{ strategy.job-total }}; without it every leg runs the " +
+            $"whole suite, and {runs[0]} is what this leg runs");
+
+        var count = share.Groups[1].Value;
+        if (count.All(char.IsAsciiDigit))
+        {
+            int.Parse(count).Should().Be(numbers.Length,
+                "a count of shares written down beside the list of legs has to be the length of " +
+                "that list, or some share is run by no leg");
+        }
+    }
+
     /// <summary>
     /// One tag means one commit, and the moving names are set once.
     /// </summary>
     /// <remarks>
-    /// The publish matrix is three legs plus the frontend, and each used to set
-    /// "latest", the branch name and the release tag for itself. They finish at
-    /// different moments and any of them can fail, so those names ended up
-    /// pointing at whatever mixture of commits the run happened to leave behind -
-    /// while compose pins all four images to one tag on the promise that they came
-    /// from a single commit, and nothing downstream ever checks.
-    ///
-    /// So a publisher pushes exactly one immutable tag, and the promotion job
-    /// moves the names afterwards by digest. Nothing about that is visible in a
-    /// green run: the registry is not read by any test, and the mixture is only
-    /// found by whoever deploys it.
+    /// Compose pins all four images to one tag, so a publisher pushes one immutable tag and the promotion
+    /// job moves the names by digest.
     /// </remarks>
     [Fact]
     public void GiveTheMovingNamesOnceAndAfterEveryPublisher()
     {
-        var workflow = File.ReadAllText(Path.Combine(RepositoryRoot, Workflow));
+        var workflow = File.ReadAllText(Path.Combine(RepositoryLayout.Root, Workflow));
         var jobs = Jobs();
 
         jobs.Should().ContainKey(Promotion,
@@ -178,9 +182,9 @@ public class PublishGraphShould
     [Fact]
     public void ReachTheSecurityScansThroughTheGraph()
     {
-        var workflow = File.ReadAllText(Path.Combine(RepositoryRoot, Workflow));
+        var workflow = File.ReadAllText(Path.Combine(RepositoryLayout.Root, Workflow));
         var security = File.ReadAllText(
-            Path.Combine(RepositoryRoot, ".github", "workflows", "security.yml"));
+            Path.Combine(RepositoryLayout.Root, ".github", "workflows", "security.yml"));
 
         workflow.Should().Contain("uses: ./.github/workflows/security.yml",
             "a job in another workflow cannot be named in needs, so it has to be called");

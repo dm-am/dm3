@@ -4,26 +4,21 @@ using System.Linq;
 using DM.Web.API.Features.Community.Achievements;
 using DM.Web.API.Shared.Dto;
 using IAchievementService = DM.Domain.Community.Features.Achievements.IAchievementService;
-using DomainCreateAchievementType = DM.Domain.Community.Features.Achievements.CreateAchievementType;
-using DomainUpdateAchievementCategory = DM.Domain.Community.Features.Achievements.UpdateAchievementCategory;
-using DomainUpdateAchievementType = DM.Domain.Community.Features.Achievements.UpdateAchievementType;
 
 namespace DM.Web.API.Features.Moderation.Achievements;
 
-/// <inheritdoc />
-internal class AchievementCatalogApiService : IAchievementCatalogApiService
+public class AchievementCatalogApiService
 {
     private readonly IAchievementService _achievementService;
     private readonly AchievementMapper _mapper;
 
-    /// <inheritdoc />
     public AchievementCatalogApiService(IAchievementService achievementService, AchievementMapper mapper)
     {
         _achievementService = achievementService;
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
+    /// <summary>Inactive included: the public catalog serves active categories only, and the admin page must keep a deactivated one to restore it.</summary>
     public async Task<ListEnvelope<AchievementCategory>> GetCategories()
     {
         var categories = await _achievementService.GetCategoriesAsync(includeInactive: true);
@@ -31,7 +26,6 @@ internal class AchievementCatalogApiService : IAchievementCatalogApiService
             categories.Select(_mapper.ToCategory));
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<AchievementType>> GetTypes()
     {
         var types = await _achievementService.GetTypesAsync(includeInactive: true);
@@ -39,7 +33,6 @@ internal class AchievementCatalogApiService : IAchievementCatalogApiService
             types.Select(_mapper.ToType));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<AchievementCategory>> UpdateCategory(
         Guid id, UpdateAchievementCategoryRequest request)
     {
@@ -49,7 +42,6 @@ internal class AchievementCatalogApiService : IAchievementCatalogApiService
         return new Envelope<AchievementCategory>(_mapper.ToCategory(updated));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<AchievementType>> CreateType(CreateAchievementTypeRequest request)
     {
         var domain = _mapper.ToCreateType(request);
@@ -57,7 +49,6 @@ internal class AchievementCatalogApiService : IAchievementCatalogApiService
         return new Envelope<AchievementType>(_mapper.ToType(created));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<AchievementType>> UpdateType(Guid id, UpdateAchievementTypeRequest request)
     {
         var domain = _mapper.ToUpdateType(request);
@@ -66,6 +57,5 @@ internal class AchievementCatalogApiService : IAchievementCatalogApiService
         return new Envelope<AchievementType>(_mapper.ToType(updated));
     }
 
-    /// <inheritdoc />
     public Task DeleteType(Guid id) => _achievementService.DeleteTypeAsync(id);
 }

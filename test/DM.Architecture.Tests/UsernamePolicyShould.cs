@@ -13,15 +13,8 @@ namespace DM.Architecture.Tests;
 /// What a username may be is decided in one place.
 /// </summary>
 /// <remarks>
-/// It was decided in six, under two models that answer differently. Three domain
-/// validators and the client said what a name may not contain; two request DTOs
-/// said what it may. Because [ApiController] runs model validation before the
-/// action, the DTO won on submission while the domain won on the availability
-/// check — so the site told a person their name was free and then refused it.
-///
-/// Read by reflection rather than by grepping the sources: this suite already
-/// carries one finding about text checks passing over commented-out code, and an
-/// attribute either is on a property or is not.
+/// [ApiController] validates the DTO before the action, so a DTO pattern overrides the domain one.
+/// Read by reflection: an attribute either is on a property or is not.
 /// </remarks>
 public class UsernamePolicyShould
 {
@@ -47,14 +40,7 @@ public class UsernamePolicyShould
     [Fact]
     public void KeepTheBoundsTheSchemaPublishes()
     {
-        // Dropping the pattern is not dropping the constraint: length and presence
-        // are simple limits, they belong on the DTO by convention, and they are
-        // what a generated client has left to go on.
-        //
-        // Only the requests where a name is being CHOSEN. A DTO that names an
-        // existing user — blocking one, inviting one — is not stating what a name
-        // may be, and holding it to these bounds would be the same mistake in the
-        // other direction.
+        // Length and presence stay on the DTO, only for the requests where a name is chosen.
         var chosen = new[] { "ActivationRequest", "UsernameChangeCompletionRequest" };
         var requests = Api.GetTypes()
             .Where(type => chosen.Contains(type.Name))
@@ -88,12 +74,9 @@ public class UsernamePolicyShould
         policy.IsMatch("trailing ").Should().BeFalse();
         policy.IsMatch("two  spaces").Should().BeFalse();
         policy.IsMatch("<script>").Should().BeFalse("HTML-unsafe characters are refused");
-        policy.IsMatch("zero​width").Should().BeFalse("a zero-width character is refused");
+        policy.IsMatch("zero\u200Bwidth").Should().BeFalse("a zero-width character is refused");
 
-        // A name is a path segment, and every HTTP client resolves dot-segments
-        // away before the request leaves: /users/.. is /users/, so an account
-        // called ".." has no address. The allow-list this replaced happened to
-        // refuse these by demanding an alphanumeric first and last character.
+        // A name is a path segment, and clients resolve dot-segments away.
         policy.IsMatch("..").Should().BeFalse();
         policy.IsMatch("...").Should().BeFalse();
         policy.IsMatch("-.-").Should().BeFalse();

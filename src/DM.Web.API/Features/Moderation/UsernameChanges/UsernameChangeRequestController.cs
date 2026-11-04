@@ -24,10 +24,9 @@ namespace DM.Web.API.Features.Moderation.UsernameChanges;
 [RequireRole(UserRole.SeniorModerator)]
 public class UsernameChangeRequestController : ControllerBase
 {
-    private readonly IUsernameChangeApiService _usernameChangeApiService;
+    private readonly UsernameChangeApiService _usernameChangeApiService;
 
-    /// <inheritdoc />
-    public UsernameChangeRequestController(IUsernameChangeApiService usernameChangeApiService)
+    public UsernameChangeRequestController(UsernameChangeApiService usernameChangeApiService)
     {
         _usernameChangeApiService = usernameChangeApiService;
     }

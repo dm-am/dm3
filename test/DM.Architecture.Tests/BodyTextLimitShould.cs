@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using DM.Domain.Core.Content;
 using DM.Domain.Moderation.Features.Tickets;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -11,14 +12,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The composers count against the same number the save refuses at.
 /// </summary>
-/// <remarks>
-/// The limit is the server's, and the browser cannot ask for it, so the client
-/// keeps a copy. Two copies of a number are two numbers as soon as one of them
-/// moves, and the direction that hurts is the client's being the larger one: the
-/// author writes a body the counter calls acceptable and the save refuses it.
-///
-/// Read out of the sources, because the client cannot be asked from here at all.
-/// </remarks>
+/// <remarks>The client keeps a copy of the server's limit, read out of the sources here.</remarks>
 public class BodyTextLimitShould
 {
     private static readonly Regex ClientLimit =
@@ -27,12 +21,11 @@ public class BodyTextLimitShould
     private static readonly Regex ClientTicketLimit =
         new(@"TICKET_TEXT_MAX_LENGTH\s*=\s*(\d+)", RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     [Fact]
     public void BeTheSameNumberOnBothSides()
     {
-        var source = File.ReadAllText(Path.Combine(RepositoryRoot,
+        var source = File.ReadAllText(Path.Combine(RepositoryLayout.Root,
             "src", "DM.Web.Client", "src", "shared", "lib", "constants", "content.ts"));
 
         var match = ClientLimit.Match(source);
@@ -52,7 +45,7 @@ public class BodyTextLimitShould
     [Fact]
     public void BeTheSameNumberOnBothSidesForATicket()
     {
-        var source = File.ReadAllText(Path.Combine(RepositoryRoot,
+        var source = File.ReadAllText(Path.Combine(RepositoryLayout.Root,
             "src", "DM.Web.Client", "src", "entities", "ticket", "lib", "limits.ts"));
 
         var match = ClientTicketLimit.Match(source);

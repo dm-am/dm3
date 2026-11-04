@@ -10,12 +10,8 @@ namespace DM.Infrastructure.Core.Tests;
 /// its value into its markup is declared: with an attribute, secure: false.
 /// </summary>
 /// <remarks>
-/// The product tag of that shape is [private], and it cannot show what the
-/// attribute tests are about. PrivateBlockMarkup.Normalise rewrites its every
-/// spelling to the quoted one before the extractions run, and strips the
-/// attribute whose value carries a bracket, so a broken encoder passes with
-/// it. A tag nothing else in the pipeline knows about leaves the encoder alone
-/// to answer for the value.
+/// [private] cannot show it: PrivateBlockMarkup.Normalise rewrites its every spelling first, so a tag
+/// nothing else knows about leaves the encoder alone to answer for the value.
 /// </remarks>
 internal static class BbAttributeTagParser
 {

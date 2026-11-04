@@ -27,7 +27,6 @@ internal class GameStatusChangedNotificationGenerator : INotificationGenerator
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public GameStatusChangedNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -42,7 +41,7 @@ internal class GameStatusChangedNotificationGenerator : INotificationGenerator
     /// <inheritdoc />
     public async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var data = await _dbContext.Games
+        var gameData = await _dbContext.Games
             .Where(g => g.GameId == entityId)
             .Select(g => new
             {
@@ -52,7 +51,6 @@ internal class GameStatusChangedNotificationGenerator : INotificationGenerator
                 g.MasterId,
                 AssistantIds = g.Assistants.Select(a => a.UserId).ToList(),
                 MasterUsername = g.Master!.Username,
-                // Get all active players (users who own active characters)
                 PlayerIds = g.Characters
                     .Where(c => !c.IsRemoved && c.Status == CharacterStatus.Active)
                     .Select(c => c.AuthorId!.Value)
@@ -61,43 +59,32 @@ internal class GameStatusChangedNotificationGenerator : INotificationGenerator
             })
             .FirstOrDefaultAsync();
 
-        if (data == null)
+        if (gameData == null)
         {
             yield break;
         }
 
-        // Get subscribers (readers) who have StatusChanges enabled
         var readerSubscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.Game,
             entityId,
             SubscriptionSettings.StatusChanges);
         var readerIds = readerSubscriptions.Select(s => s.SubscriberId);
 
-        // Combine all recipients: Master, Assistants, Players (always), Readers (with StatusChanges)
-        var usersInterested = new HashSet<Guid> { data.MasterId };
-        usersInterested.UnionWith(data.AssistantIds);
-        usersInterested.UnionWith(data.PlayerIds);
+        var usersInterested = new HashSet<Guid> { gameData.MasterId };
+        usersInterested.UnionWith(gameData.AssistantIds);
+        usersInterested.UnionWith(gameData.PlayerIds);
         usersInterested.UnionWith(readerIds);
 
-        if (usersInterested.Count == 0)
-        {
-            yield break;
-        }
-
-        // ActorId stays null because the schema does not keep who moved the game:
-        // a game stores its master, not the author of the transition. Two of the
-        // four events here are raised by GameInactivityProcessor on a schedule
-        // with no human at all, and a moderator may close somebody else's game,
-        // so MasterUsername below names the owner rather than the one who acted.
+        // No ActorId: the game does not record who moved it, and the schedule moves it too.
         yield return new CreateNotification
         {
             UsersInterested = usersInterested,
             Metadata = new
             {
-                GameTitle = data.Title,
-                GameId = data.GameId.EncodeToReadable(),
-                NewStatus = data.Status.ToString(),
-                MasterUsername = data.MasterUsername
+                GameTitle = gameData.Title,
+                GameId = gameData.GameId.EncodeToReadable(),
+                NewStatus = gameData.Status.ToString(),
+                gameData.MasterUsername
             }
         };
     }

@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Uploads;
@@ -9,11 +7,8 @@ namespace DM.Domain.Core.Uploads;
 /// object store serves to anyone who has the address.
 /// </summary>
 /// <remarks>
-/// The bucket policy used to grant anonymous reads on the whole bucket while its
-/// comment spoke only about avatars — true of the one type that had a producer,
-/// and a decision nobody made about the other two. Naming the readable prefixes
-/// here makes a type added to the enum private until someone says otherwise,
-/// instead of public because nobody said anything.
+/// Readable prefixes are named, so a type added to the enum stays private until
+/// someone says otherwise.
 /// </remarks>
 public static class UploadFolder
 {

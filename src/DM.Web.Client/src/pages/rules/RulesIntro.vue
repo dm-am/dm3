@@ -1,9 +1,3 @@
-<script setup lang="ts">
-/**
- * RulesIntro — static greeting and rules TL;DR
- */
-</script>
-
 <template>
   <section class="rules-intro" v-once>
     <p>
@@ -36,7 +30,7 @@
       <li>Не спамьте и не флудите</li>
     </ol>
 
-    <p class="outro">
+    <p>
       Если вам что-то непонятно в правилах, обратитесь к кому-нибудь из
       Администрации, мы всегда поможем разобраться.
     </p>
@@ -51,12 +45,10 @@
     margin: $medium 0
     line-height: 1.6
 
-  // Rendered as h3 (was h4) to avoid the h1 → h4 level skip; the local
-  // styling below keeps the exact prior appearance (plain body color,
-  // 600 weight) rather than the uppercase BlockTitle look.
+  // h3 to keep the outline without a skip, in the plain look rather than BlockTitle's.
   h3
     margin: $medium 0 $small
-    font-weight: 600
+    font-weight: 700
 
   ol
     margin: $small 0
@@ -70,13 +62,11 @@
   .highlight-link
     font-weight: bold
 
+  // The tag in the font [code] has in a post.
   .tag
-    font-family: monospace
+    font-family: $code-font
     background: $bg-element-accent
-    padding: 3px 2px
-    border-radius: 2px
+    padding: $tiny
+    border-radius: $tiny
     font-size: 0.9em
-
-  .outro
-    color: $text
 </style>

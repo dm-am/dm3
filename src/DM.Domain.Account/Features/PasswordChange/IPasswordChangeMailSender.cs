@@ -2,9 +2,6 @@ using System.Threading.Tasks;
 
 namespace DM.Domain.Account.Features.PasswordChange;
 
-/// <summary>
-/// Password change mail sender
-/// </summary>
 internal interface IPasswordChangeMailSender
 {
     /// <summary>

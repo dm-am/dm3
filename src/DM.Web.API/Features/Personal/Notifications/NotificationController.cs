@@ -14,17 +14,8 @@ namespace DM.Web.API.Features.Personal.Notifications;
 /// Notification management
 /// </summary>
 /// <remarks>
-/// Provides REST endpoints for reading and managing notifications.
-/// Real-time notifications are delivered over the SignalR hub; its path is
-/// declared where the hub is mapped and in API_DESIGN.md, and is not repeated
-/// here — this third copy named an endpoint that never existed.
-///
-/// ## Notification Types
-/// - New messages in conversations
-/// - New comments on subscribed topics
-/// - Character approval/rejection
-/// - Game invitations
-/// - And more (see EventType enum)
+/// Provides REST endpoints for reading and managing notifications. Real-time
+/// notifications are delivered over the SignalR hub (see API_DESIGN.md).
 ///
 /// ## Bot Integration
 /// Connect Telegram or Discord bots to receive notifications outside the website.
@@ -38,10 +29,9 @@ namespace DM.Web.API.Features.Personal.Notifications;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class NotificationController : ControllerBase
 {
-    private readonly INotificationApiService _notificationApiService;
+    private readonly NotificationApiService _notificationApiService;
 
-    /// <inheritdoc />
-    public NotificationController(INotificationApiService notificationApiService)
+    public NotificationController(NotificationApiService notificationApiService)
     {
         _notificationApiService = notificationApiService;
     }
@@ -74,7 +64,7 @@ public class NotificationController : ControllerBase
     /// <response code="200">Unread count</response>
     /// <response code="401">Authentication required</response>
     [HttpGet("unread", Name = nameof(GetUnreadCount))]
-    [ProducesResponseType(typeof(NotificationCount), StatusCodes.Status200OK)]
+    [ProducesResponseType(typeof(UnreadCount), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> GetUnreadCount()
     {
@@ -114,7 +104,7 @@ public class NotificationController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     public async Task<IActionResult> MarkNotificationsAsRead()
     {
-        await _notificationApiService.MarkAsRead();
+        await _notificationApiService.MarkAllAsRead();
         return NoContent();
     }
 
@@ -150,8 +140,6 @@ public class NotificationController : ControllerBase
     {
         return Ok(await _notificationApiService.UpdateNotificationSettings(request));
     }
-
-    #region Bot Integration
 
     /// <summary>
     /// Generate a linking code for notification bot
@@ -195,6 +183,4 @@ public class NotificationController : ControllerBase
         await _notificationApiService.DisconnectBot(type);
         return NoContent();
     }
-
-    #endregion
 }

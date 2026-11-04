@@ -1,3 +1,4 @@
+using System;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Uploads;
@@ -13,51 +14,42 @@ using DomainUsernameHistory = DM.Domain.Core.Users.UsernameHistoryEntry;
 namespace DM.Web.API.Features.Community.Users;
 
 /// <summary>
-/// Compile-time mapper for the full user DTO: imgproxy comes through the
-/// constructor, and other mappers compose this one via <c>[UseMapper]</c>.
-/// A narrowing projection by design, so only target members are required.
+/// Compile-time mapper for the full user DTO; other mappers compose this one
+/// via <c>[UseMapper]</c>. A narrowing projection by design, so only target
+/// members are required.
 /// </summary>
 [Mapper]
-internal partial class UserMapper
+public partial class UserMapper
 {
-    /// <summary>
-    /// Small thumbnail size - for inline avatars in lists/chat (24-64 px DOM).
-    /// Source of truth for thumbnail sizes at the API layer.
-    /// </summary>
-    public const int SmallAvatarSize = 100;
-
-    /// <summary>Medium thumbnail size - for card views (60-200 px DOM) + retina DPR.</summary>
-    public const int MediumAvatarSize = 400;
-
-    private readonly IImgproxyUrlBuilder _imgproxy;
-
-    public UserMapper(IImgproxyUrlBuilder imgproxy)
-    {
-        _imgproxy = imgproxy;
-    }
-
     /// <summary>
     /// General user to the list-level user DTO
     /// </summary>
     public User ToUser(GeneralUser user)
     {
-        // Domain DTOs hand users over from `= null!` members, so a declared
-        // non-null argument still arrives null at runtime. AutoMapper mapped
-        // that null to null and consumers rely on it; every composed mapper
-        // inherits the tolerance from this single guard.
+        // Domain DTOs hand users over from `= null!` members, and every composed
+        // mapper relies on null in, null out.
         if (user == null)
         {
             return null!;
         }
 
         var result = ToUserCore(user);
-        // A user may switch the rating off; the DTO then carries null rather
-        // than a zeroed block, and the client renders "rating disabled".
-        result.Rating = user.RatingDisabled
-            ? null
-            : new Rating { TotalPosts = user.QuantityRating, PostReviewScoreSum = user.QualityRating };
+        // Null, not a zeroed block: the client renders "rating disabled".
+        result.Rating = user.RatingDisabled ? null : RatingOf(user);
         return result;
     }
+
+    /// <summary>
+    /// The rating block of a user, whether shown or not being the caller's call
+    /// </summary>
+    internal static Rating RatingOf(GeneralUser user) =>
+        new() { TotalPosts = user.QuantityRating, PostReviewScoreSum = user.QualityRating };
+
+    /// <summary>
+    /// The birthday block of a date, null without one
+    /// </summary>
+    internal static Birthday? BirthdayOf(DateOnly? date) =>
+        date is { } day ? new Birthday { Day = day.Day, Month = day.Month, Year = day.Year } : null;
 
     /// <summary>
     /// Authenticated user to the list-level user DTO. The domain type only
@@ -119,39 +111,28 @@ internal partial class UserMapper
     {
         // Unlike the list-level DTO, the profile page always shows the
         // rating regardless of the owner's visibility setting.
-        result.Rating = new Rating { TotalPosts = user.QuantityRating, PostReviewScoreSum = user.QualityRating };
-        result.Birthday = user.ShowBirthday && user.BirthdayDate.HasValue
-            ? new Birthday
-            {
-                Day = user.BirthdayDate.Value.Day,
-                Month = user.BirthdayDate.Value.Month,
-                Year = user.BirthdayDate.Value.Year
-            }
-            : null;
+        result.Rating = RatingOf(user);
+        result.Birthday = user.ShowBirthday ? BirthdayOf(user.BirthdayDate) : null;
     }
 
     /// <summary>
-    /// Domain avatar (single source key) to the API picture (3 URLs). Builds
-    /// signed imgproxy square thumbnails on the fly (center-crop + resize +
-    /// format negotiation by the browser Accept header); the original stays
-    /// direct-served - it is already at the right size.
+    /// Domain avatar (single source) to the API picture (3 URLs): the square
+    /// thumbnails the upload stored next to the original are served from beside
+    /// its address, and the original itself is already at the right size.
     /// </summary>
     public UserPicture ToUserPicture(AvatarPicture picture)
     {
-        if (picture == null || string.IsNullOrEmpty(picture.SourceObjectKey))
+        if (picture?.SourceUrl is not { Length: > 0 } original)
         {
             return new UserPicture();
         }
 
         return new UserPicture
         {
-            SmallUrl = _imgproxy.BuildSquareThumbnail(picture.SourceObjectKey, SmallAvatarSize),
-            MediumUrl = _imgproxy.BuildSquareThumbnail(picture.SourceObjectKey, MediumAvatarSize),
-            OriginalUrl = picture.SourceUrl,
-            // Only for the original. The two thumbnails are square center-crops
-            // at a size the caller picks, so their dimensions are not news; the
-            // original keeps the uploaded aspect ratio and is the one a layout
-            // cannot size without being told.
+            SmallUrl = AvatarThumbnail.AddressOf(original, AvatarThumbnail.SmallSize),
+            MediumUrl = AvatarThumbnail.AddressOf(original, AvatarThumbnail.MediumSize),
+            OriginalUrl = original,
+            // Only for the original: the thumbnails are squares of a known size.
             OriginalWidth = picture.SourceWidth,
             OriginalHeight = picture.SourceHeight,
         };
@@ -172,32 +153,11 @@ internal partial class UserMapper
     [MapProperty(nameof(GeneralUser.PublicationsAuthoredCount), nameof(User.PublicationsAuthored))]
     [MapProperty(nameof(GeneralUser.LikesReceivedCount), nameof(User.LikesReceived))]
     [MapperIgnoreTarget(nameof(User.Rating))]
-    // Belongs to the identity of the request, not to the row being projected,
-    // so no projection here can fill it. The endpoints that answer about the
-    // caller set it after the map; for everybody else it stays absent, which is
-    // what tells a reader "this response is not about you".
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial User ToUserCore(GeneralUser user);
 
-    [MapProperty(nameof(GeneralUser.UserId), nameof(UserProfile.Id))]
-    [MapProperty(nameof(GeneralUser.PostReviewsGivenCount), nameof(UserProfile.ReviewsGiven))]
-    [MapProperty(nameof(GeneralUser.PostReviewsReceivedCount), nameof(UserProfile.ReviewsReceived))]
-    [MapProperty(nameof(GeneralUser.PostReviewsGivenCount), nameof(UserProfile.PostReviewsGiven))]
-    [MapProperty(nameof(GeneralUser.PostReviewsReceivedCount), nameof(UserProfile.PostReviewsReceived))]
-    [MapProperty(nameof(GeneralUser.EndorsementsGivenCount), nameof(UserProfile.EndorsementsGiven))]
-    [MapProperty(nameof(GeneralUser.EndorsementsReceivedCount), nameof(UserProfile.EndorsementsReceived))]
-    [MapProperty(nameof(GeneralUser.GameReviewsGivenCount), nameof(UserProfile.GameReviewsGiven))]
-    [MapProperty(nameof(GeneralUser.GameReviewsReceivedCount), nameof(UserProfile.GameReviewsReceived))]
-    [MapProperty(nameof(GeneralUser.TopicsAuthoredCount), nameof(UserProfile.TopicsAuthored))]
-    [MapProperty(nameof(GeneralUser.CommentsAuthoredCount), nameof(UserProfile.CommentsAuthored))]
-    [MapProperty(nameof(GeneralUser.GlobalChatMessagesCount), nameof(UserProfile.GlobalChatMessages))]
-    [MapProperty(nameof(GeneralUser.BansReceivedCount), nameof(UserProfile.BansReceived))]
-    [MapProperty(nameof(GeneralUser.GameDropsCount), nameof(UserProfile.GameDrops))]
-    [MapProperty(nameof(GeneralUser.PublicationsAuthoredCount), nameof(UserProfile.PublicationsAuthored))]
-    [MapProperty(nameof(GeneralUser.LikesReceivedCount), nameof(UserProfile.LikesReceived))]
-    // Composed in the wrapper: the rating is unconditional here and the
-    // birthday is privacy-gated.
-    [MapperIgnoreTarget(nameof(UserProfile.Rating))]
+    [IncludeMappingConfiguration(nameof(ToUserCore))]
+    // Composed in the wrapper: the birthday is privacy-gated.
     [MapperIgnoreTarget(nameof(UserProfile.Birthday))]
     // Filled by the endpoints that fetch them, not by this projection.
     [MapperIgnoreTarget(nameof(UserProfile.UsernameHistory))]
@@ -206,55 +166,23 @@ internal partial class UserMapper
     [MapperIgnoreTarget(nameof(UserProfile.Viewer))]
     [MapperIgnoreTarget(nameof(UserProfile.Contacts))]
     [MapperIgnoreTarget(nameof(UserProfile.Info))]
-    // A property of the caller's identity; see ToUserCore.
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial UserProfile ToUserProfileCore(GeneralUser user);
 
-    [MapProperty(nameof(GeneralUser.UserId), nameof(UserProfile.Id))]
-    [MapProperty(nameof(GeneralUser.PostReviewsGivenCount), nameof(UserProfile.ReviewsGiven))]
-    [MapProperty(nameof(GeneralUser.PostReviewsReceivedCount), nameof(UserProfile.ReviewsReceived))]
-    [MapProperty(nameof(GeneralUser.PostReviewsGivenCount), nameof(UserProfile.PostReviewsGiven))]
-    [MapProperty(nameof(GeneralUser.PostReviewsReceivedCount), nameof(UserProfile.PostReviewsReceived))]
-    [MapProperty(nameof(GeneralUser.EndorsementsGivenCount), nameof(UserProfile.EndorsementsGiven))]
-    [MapProperty(nameof(GeneralUser.EndorsementsReceivedCount), nameof(UserProfile.EndorsementsReceived))]
-    [MapProperty(nameof(GeneralUser.GameReviewsGivenCount), nameof(UserProfile.GameReviewsGiven))]
-    [MapProperty(nameof(GeneralUser.GameReviewsReceivedCount), nameof(UserProfile.GameReviewsReceived))]
-    [MapProperty(nameof(GeneralUser.TopicsAuthoredCount), nameof(UserProfile.TopicsAuthored))]
-    [MapProperty(nameof(GeneralUser.CommentsAuthoredCount), nameof(UserProfile.CommentsAuthored))]
-    [MapProperty(nameof(GeneralUser.GlobalChatMessagesCount), nameof(UserProfile.GlobalChatMessages))]
-    [MapProperty(nameof(GeneralUser.BansReceivedCount), nameof(UserProfile.BansReceived))]
-    [MapProperty(nameof(GeneralUser.GameDropsCount), nameof(UserProfile.GameDrops))]
-    [MapProperty(nameof(GeneralUser.PublicationsAuthoredCount), nameof(UserProfile.PublicationsAuthored))]
-    [MapProperty(nameof(GeneralUser.LikesReceivedCount), nameof(UserProfile.LikesReceived))]
-    [MapperIgnoreTarget(nameof(UserProfile.Rating))]
-    [MapperIgnoreTarget(nameof(UserProfile.Birthday))]
-    [MapperIgnoreTarget(nameof(UserProfile.UsernameHistory))]
-    [MapperIgnoreTarget(nameof(UserProfile.PersonalNote))]
-    [MapperIgnoreTarget(nameof(UserProfile.BlockedByViewer))]
-    [MapperIgnoreTarget(nameof(UserProfile.Viewer))]
-    [MapperIgnoreTarget(nameof(UserProfile.Contacts))]
-    [MapperIgnoreTarget(nameof(UserProfile.Info))]
-    // Filled by ModeratedProfileApiService after the map: each comes from a
-    // repository of its own, and half of them depend on the caller's role
-    // rather than on the user being read.
+    [IncludeMappingConfiguration(nameof(ToUserProfileCore))]
+    // Filled by ModeratedProfileApiService from repositories of their own.
     [MapperIgnoreTarget(nameof(ModeratedProfile.IpAddresses))]
     [MapperIgnoreTarget(nameof(ModeratedProfile.LoginHistory))]
     [MapperIgnoreTarget(nameof(ModeratedProfile.LinkedProfiles))]
     [MapperIgnoreTarget(nameof(ModeratedProfile.ModeratorNotes))]
     [MapperIgnoreTarget(nameof(ModeratedProfile.Violations))]
     [MapperIgnoreTarget(nameof(ModeratedProfile.Permissions))]
-    // Never filled on this projection at all: a moderated profile is about
-    // somebody else, and whether their rank is withheld is theirs to know.
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     private partial ModeratedProfile ToModeratedProfileCore(GeneralUser user);
 
     /// <summary>
-    /// Query string to the domain filter. Mapped by name so a filter added
-    /// to both sides needs no third edit here; the two members that do not
-    /// line up have to be named to be handled: the sort field is sortBy on
-    /// the wire and Sort in the domain, and the direction is derived from
-    /// SortOrder by CommunityUserApiService, which knows the per-field
-    /// default.
+    /// Query string to the domain filter, by name; the direction comes from
+    /// CommunityUserApiService, which knows the per-field default.
     /// </summary>
     [MapProperty(nameof(UsersQuery.SortBy), nameof(DomainUserFilter.Sort))]
     [MapperIgnoreTarget(nameof(DomainUserFilter.SortAscending))]

@@ -1,47 +1,48 @@
 using DM.Domain.Account;
-using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Security;
-using DM.Domain.Blog.Authorization;
-using DM.Domain.Community.Authorization;
-using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Configuration;
-using DM.Domain.Forum.Authorization;
-using DM.Domain.Game.Authorization;
-using DM.Domain.Messaging.Authorization;
 using DM.Domain.Messaging.Configuration;
 using DM.Domain.Moderation;
-using DM.Domain.Moderation.Authorization;
-using DM.Domain.Personal.Authorization;
 using DM.Infrastructure.Core;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Core.Logging;
 using DM.Infrastructure.Core.Parsing;
 using DM.Infrastructure.Mail;
-using DM.Infrastructure.Mail.Configuration;
 using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Persistence;
+using DM.Web.API.Features.General.Upload;
+using DM.Web.API.Notifications;
 using DM.Web.API.Shared.Binding;
 using DM.Web.API.Shared.Configuration;
 using DM.Web.API.Shared.Http;
 using DM.Web.API.Shared.RateLimiting;
+using DM.Web.API.Shared.BotTrap;
 using DM.Web.API.Shared.Sorting;
 using DM.Web.API.Middleware;
 using DM.Web.API.Realtime;
 using DM.Web.API.Swagger;
-using DM.Web.API.HostedServices;
 using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Cors.Infrastructure;
+using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.AspNetCore.ResponseCompression;
+using Microsoft.AspNetCore.Routing;
+using Microsoft.AspNetCore.Server.Kestrel.Core;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Options;
 using Serilog;
+using Serilog.AspNetCore;
 using System;
+using System.Collections.Generic;
+using System.IO.Compression;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -52,27 +53,22 @@ namespace DM.Web.API;
 /// </summary>
 internal class Startup(IConfiguration configuration, IWebHostEnvironment environment)
 {
-    private readonly IWebHostEnvironment _environment = environment;
-    private IHttpContextAccessor _httpContextAccessor = null!;
-    private IBbParserProvider _bbParserProvider = null!;
+    /// <summary>Request body limit, uploads included.</summary>
+    private const long MaxRequestBodySize = 30 * 1024 * 1024;
+
     private bool _migrateOnStart;
 
     /// <summary>
-    /// Response writer of every health endpoint. One field and not three literals:
-    /// the choice is a security one and must not be made per endpoint.
+    /// Response writer of every health endpoint, chosen once because the choice is
+    /// a security one.
     /// </summary>
     /// <remarks>
-    /// The plain writer copies the message of every failed check into the body, and
-    /// those messages belong to the drivers: Npgsql spells out host, port, database
-    /// and user, RabbitMQ does the same. These endpoints carry no
-    /// authentication of their own, so whoever reaches the port reads the report; it
-    /// has to say what is broken without saying where it lives. The response keeps
-    /// its shape either way - the exception field stays, only its text is replaced.
-    /// Internal so a test can hold the writer to that.
+    /// The endpoints carry no authentication, and the plain writer copies driver
+    /// messages naming host, port, database and user into the body. Internal so a
+    /// test can hold the writer to that.
     /// </remarks>
-    internal static readonly Func<HttpContext, Microsoft.Extensions.Diagnostics.HealthChecks.HealthReport, Task>
-        HealthReportWriter =
-            HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponseNoExceptionDetails;
+    internal static readonly Func<HttpContext, HealthReport, Task> HealthReportWriter =
+        HealthChecks.UI.Client.UIResponseWriter.WriteHealthCheckUIResponseNoExceptionDetails;
 
     /// <summary>
     /// Configure application services
@@ -82,10 +78,7 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     {
         _migrateOnStart = configuration.GetValue<bool>("MigrateOnStart");
 
-        // Each module binds and validates the options it reads. Restated here
-        // per host, four of these types were bound twice and two of them three
-        // times, and the workers bound a subset — which is how a worker came to
-        // start with no broker endpoint and report itself healthy.
+        // Each module binds and validates the options it reads.
         services
             .AddOptions()
             .AddDmCoreConfiguration(configuration)
@@ -93,147 +86,42 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AddDmMailConfiguration(configuration)
             .AddDmAccountConfiguration(configuration)
             .Configure<MessagingConfiguration>(configuration.GetSection(nameof(MessagingConfiguration)).Bind)
-            .AddDmLogging("DM.API", configuration, _environment)
+            .AddDmLogging("DM.API", configuration, environment)
             .RequireGeneratedLinks()
             .RequireRelationalStorage()
             .RequireObjectStorage();
 
-        // CORS is an API concern and no other host has an opinion on it, so this
-        // one stays with the host rather than moving into the core extension.
-        services.AddOptions<SiteAddressConfiguration>()
-            .Bind(configuration.GetSection(nameof(SiteAddressConfiguration)))
-            // Derived, so what is asserted is that something was declared to derive
-            // from. A deployment that names neither its public address nor any
-            // address of the site refuses every browser at the door, and the list it
-            // refuses against would be empty rather than wrong.
-            .Validate(s => s.BrowserOrigins().Count > 0,
-                "SiteAddressConfiguration:PublicUrl or SiteAddressConfiguration:Addresses must name at least one address")
-            // A typo drops an address out of the derived list silently, and the site
-            // then refuses the very address it is served on.
-            .Validate(
-                s => s.AdditionalOrigins.Prepend(s.PublicUrl)
-                    .Where(a => !string.IsNullOrWhiteSpace(a))
-                    .All(a => SiteAddressConfiguration.OriginOf(a) != null),
-                "SiteAddressConfiguration: every declared address must be an absolute http or https URL")
-            .ValidateOnStart();
+        AddSiteAddresses(services);
 
-        // The development server of the client, and only where one exists. A
-        // deployment declares its addresses and leaves this untouched.
-        if (_environment.IsDevelopment())
-        {
-            services.PostConfigure<SiteAddressConfiguration>(s =>
-                s.AdditionalOrigins = [.. s.AdditionalOrigins, "http://localhost:5173", "http://localhost:5174"]);
-        }
-
-        // X-Forwarded-* is honoured for the configured proxy networks only.
-        // Without this every caller could name its own address, and that address
-        // is what the login journal, the security audit and the suspicious-login
-        // detector record.
+        // X-Forwarded-* only from the configured proxy networks: the address it names
+        // is what the login journal and the security audit record.
         services.AddReverseProxySupport(configuration);
 
-        // A cookie is HTTP, and this host is the only process that writes one.
-        // The setting used to sit beside the session lifetimes in the account
-        // domain, which the seeder and the notification dispatcher bind as well
-        // and neither of them answers a request.
         services.Configure<SessionCookieConfiguration>(
             configuration.GetSection(nameof(SessionCookieConfiguration)).Bind);
 
-        services
-            .AddMemoryCache()
-            .AddResponseCompression(options =>
-            {
-                options.EnableForHttps = true;
-                options.Providers.Add<BrotliCompressionProvider>();
-                options.Providers.Add<GzipCompressionProvider>();
-                options.MimeTypes = System.Linq.Enumerable.Concat(
-                    ResponseCompressionDefaults.MimeTypes,
-                    new[] { ApiContentTypes.Json, ApiContentTypes.ProblemJson });
-            })
-            .Configure<BrotliCompressionProviderOptions>(options => options.Level = System.IO.Compression.CompressionLevel.Fastest)
-            .Configure<GzipCompressionProviderOptions>(options => options.Level = System.IO.Compression.CompressionLevel.Fastest)
-            .AddResponseCaching()
-            .AddDbContextPool<DmDbContext>(options =>
-            {
-                options.UseNpgsql(configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
-                    npgsqlOptions =>
-                    {
-                        npgsqlOptions.EnableRetryOnFailure(
-                            maxRetryCount: 3,
-                            maxRetryDelay: TimeSpan.FromSeconds(5),
-                            errorCodesToAdd: null);
-                        npgsqlOptions.CommandTimeout(30);
-                    });
-            });
+        services.AddMemoryCache();
+        AddResponseCompressionPolicy(services);
+        services.AddResponseCaching();
+        AddDatabase(services);
 
         // BFF Pattern: Cookie-based authentication via HttpOnly cookies
         // No Bearer tokens - sessions managed server-side
         services.AddAuthentication();
 
-        // HIBP (HaveIBeenPwned) password checker - NIST SP 800-63B compliance
-        services.AddHttpClient<ICompromisedPasswordChecker, HibpPasswordChecker>(client =>
-        {
-            client.DefaultRequestHeaders.Add("User-Agent", "DM3-PasswordChecker/1.0");
-            client.DefaultRequestHeaders.Add("Add-Padding", "true"); // Enhanced privacy
-            client.Timeout = TimeSpan.FromSeconds(5); // Don't block registration on slow API
-        });
-
-        // This host consumes too, and until it passed a pipeline of its own the
-        // realtime push was the one queue nothing counted. Measured, not retried:
-        // RealtimeConsumerMetricsMiddleware says why.
-        services.AddDmConsumerMiddleware<RealtimeConsumerMetricsMiddleware>();
-
-        if (!_migrateOnStart)
-        {
-            services.AddDmHostedServices();
-        }
+        AddCompromisedPasswordChecker(services);
+        AddBackgroundWork(services);
 
         services.AddDmHealthChecks(configuration);
-
-        // Request size limits to prevent DoS attacks via large payloads
-        // Default: 30MB for general requests, files handled separately by upload endpoints
-        services.Configure<Microsoft.AspNetCore.Server.Kestrel.Core.KestrelServerOptions>(options =>
-        {
-            options.Limits.MaxRequestBodySize = 30 * 1024 * 1024; // 30 MB
-        });
-        services.Configure<Microsoft.AspNetCore.Http.Features.FormOptions>(options =>
-        {
-            options.MultipartBodyLengthLimit = 30 * 1024 * 1024; // 30 MB for file uploads
-        });
-
+        AddRequestBodyLimits(services);
         services.AddDmRateLimiting(configuration);
-
-        _httpContextAccessor = new HttpContextAccessor();
-        _bbParserProvider = new BbParserProvider();
-
         services.AddDmSignalR();
+        AddApiControllers(services);
 
-        services
-            .AddSwaggerGen(c => c.ConfigureGen())
-            .AddMvc(config =>
-            {
-                config.ModelBinderProviders.Insert(0, new ReadableGuidBinderProvider());
-                // Every list endpoint answers 400 for a sort field it does not have.
-                // Without this line the vocabulary, the filter and the Swagger enum are
-                // all dead code and an unknown ?sortBy= comes back 200 in default order.
-                config.Filters.Add<SortVocabularyFilter>();
-            })
-            .AddJsonOptions(config => config.Setup(_httpContextAccessor, _bbParserProvider));
-
-        services.AddSingleton(_httpContextAccessor);
-        services.AddSingleton(_bbParserProvider);
-
-        // Singleton for SignalR user connection tracking. Safe only while the type
-        // takes no dependencies: a single instance is activated in the root scope,
-        // and every scoped service it took would be captured there for the life of
-        // the process — down to the pooled DbContext behind authentication.
         services.AddSingleton<IUserConnectionService, UserConnectionService>();
 
-        // The DI modules and the scans, after everything the host wires
-        // explicitly: the scans only fill gaps, so the pooled DbContext, the
-        // typed HttpClient and the singletons above must already be on the
-        // collection when they run. Lifetimes that differ from the scan default
-        // are declared by the assembly that owns the types, not restated here
-        // per host.
+        // After everything wired explicitly: the scans only fill gaps. Lifetimes
+        // that differ from the scan default are declared by the owning assembly.
         services
             .AddDmMail()
             .AddDmMessaging()
@@ -244,6 +132,109 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             .AddDefaultTypes(typeof(Startup).Assembly);
 
         RegisterDomainServices(services);
+    }
+
+    private void AddSiteAddresses(IServiceCollection services)
+    {
+        // CORS is an API concern and no other host has an opinion on it, so this
+        // one stays with the host rather than moving into the core extension.
+        services.AddOptions<SiteAddressConfiguration>()
+            .Bind(configuration.GetSection(nameof(SiteAddressConfiguration)))
+            // An empty list would refuse every browser at the door.
+            .Validate(s => s.BrowserOrigins().Count > 0,
+                "SiteAddressConfiguration:PublicUrl or SiteAddressConfiguration:Addresses must name at least one address")
+            // A typo drops an address out of the derived list silently.
+            .Validate(
+                s => s.AdditionalOrigins.Prepend(s.PublicUrl)
+                    .Where(a => !string.IsNullOrWhiteSpace(a))
+                    .All(a => SiteAddressConfiguration.OriginOf(a) != null),
+                "SiteAddressConfiguration: every declared address must be an absolute http or https URL")
+            .ValidateOnStart();
+
+        // The development server of the client, and only where one exists.
+        if (environment.IsDevelopment())
+        {
+            services.PostConfigure<SiteAddressConfiguration>(s =>
+                s.AdditionalOrigins = [.. s.AdditionalOrigins, "http://localhost:5173", "http://localhost:5174"]);
+        }
+    }
+
+    private static void AddResponseCompressionPolicy(IServiceCollection services) => services
+        .AddResponseCompression(options =>
+        {
+            options.EnableForHttps = true;
+            options.Providers.Add<BrotliCompressionProvider>();
+            options.Providers.Add<GzipCompressionProvider>();
+            options.MimeTypes = ResponseCompressionDefaults.MimeTypes
+                .Concat([ApiContentTypes.Json, ApiContentTypes.ProblemJson]);
+        })
+        .Configure<BrotliCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest)
+        .Configure<GzipCompressionProviderOptions>(options => options.Level = CompressionLevel.Fastest);
+
+    private void AddDatabase(IServiceCollection services) =>
+        services.AddDbContextPool<DmDbContext>(options =>
+        {
+            options.UseNpgsql(configuration.GetConnectionString(nameof(ConnectionStrings.Rdb)),
+                npgsqlOptions =>
+                {
+                    npgsqlOptions.EnableRetryOnFailure(
+                        maxRetryCount: 3,
+                        maxRetryDelay: TimeSpan.FromSeconds(5),
+                        errorCodesToAdd: null);
+                    npgsqlOptions.CommandTimeout(30);
+                });
+        });
+
+    // HIBP (HaveIBeenPwned) password checker - NIST SP 800-63B compliance
+    private static void AddCompromisedPasswordChecker(IServiceCollection services) =>
+        services.AddHttpClient<ICompromisedPasswordChecker, HibpPasswordChecker>(client =>
+        {
+            client.DefaultRequestHeaders.Add("User-Agent", "DM3-PasswordChecker/1.0");
+            client.DefaultRequestHeaders.Add("Add-Padding", "true"); // Enhanced privacy
+            client.Timeout = TimeSpan.FromSeconds(5); // Don't block registration on slow API
+        });
+
+    private void AddBackgroundWork(IServiceCollection services)
+    {
+        services.AddDmConsumerMiddleware<RealtimeConsumerMetricsMiddleware>();
+
+        if (!_migrateOnStart)
+        {
+            services.AddDmHostedServices();
+        }
+    }
+
+    private static void AddRequestBodyLimits(IServiceCollection services)
+    {
+        services.Configure<KestrelServerOptions>(options =>
+        {
+            options.Limits.MaxRequestBodySize = MaxRequestBodySize;
+        });
+        services.Configure<FormOptions>(options =>
+        {
+            options.MultipartBodyLengthLimit = MaxRequestBodySize;
+        });
+    }
+
+    private static void AddApiControllers(IServiceCollection services)
+    {
+        var httpContextAccessor = new HttpContextAccessor();
+        var bbParserProvider = new BbParserProvider();
+
+        services
+            .AddSwaggerGen(c => c.ConfigureGen())
+            .AddMvc(config =>
+            {
+                config.ModelBinderProviders.Insert(0, new ReadableGuidBinderProvider());
+                // Without it an unknown ?sortBy= answers 200 in default order.
+                config.Filters.Add<SortVocabularyFilter>();
+                // The trap field of the forms open to guests (IHoneypotForm).
+                config.Filters.Add<HoneypotFilter>();
+            })
+            .AddJsonOptions(config => config.Setup(httpContextAccessor, bbParserProvider));
+
+        services.AddSingleton<IHttpContextAccessor>(httpContextAccessor);
+        services.AddSingleton<IBbParserProvider>(bbParserProvider);
     }
 
     /// <summary>
@@ -258,177 +249,136 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
     {
         if (_migrateOnStart)
         {
-            // In a scope, not as a Configure parameter: the context is pooled, and
-            // a parameter here leases one from the root container for the whole
-            // process — never returned, so the pool runs one lease short forever.
-            using var migrationScope = appBuilder.ApplicationServices.CreateScope();
-            migrationScope.ServiceProvider.GetRequiredService<DmDbContext>().Database.Migrate();
-
-            // Environment.Exit runs no finally block and stops no host, so the
-            // flush in Main never happens on this path: the migration container
-            // would leave nothing behind about the run it just made.
-            Serilog.Log.CloseAndFlush();
-            Environment.Exit(0);
+            MigrateAndExit(appBuilder);
         }
 
-        // The only trace a deployment running without limits leaves. The setting
-        // is turned off by hand and defaults to on, so the unlimited mode is
-        // always somebody's decision - but nothing about a running instance says
-        // which mode it is in: no header, no health field, and every policy still
-        // resolves by name because they are registered as no-ops.
+        WarnWhenRateLimitingIsOff(logger);
+
+        // First: everything downstream reads the peer address.
+        appBuilder.UseForwardedHeaders();
+
+        // Ahead of anything that writes a response, Swagger's static assets included.
+        appBuilder.UseMiddleware<SecurityHeadersMiddleware>();
+
+        UseSwaggerInDevelopment(appBuilder);
+
+        appBuilder
+            .UseResponseCompression()
+            .UseMiddleware<CorrelationMiddleware>()
+            // The one line per request: after the token, so it is on the line, and
+            // above the error handler, so a failure is not logged twice.
+            .UseSerilogRequestLogging(EnrichRequestLine)
+            .UseMiddleware<ErrorHandlingMiddleware>()
+            // Before the response cache, as ASP.NET requires: a cached entry stored
+            // before CORS ran lacks Access-Control-Allow-Origin. Named origins give
+            // Vary: Origin, so the cache keys entries by it.
+            .UseCors(policy => SiteAddressCors(policy, siteAddresses.Value.BrowserOrigins()))
+            .UseResponseCaching()
+            .UseMiddleware<CsrfProtectionMiddleware>()
+            .UseRouting()
+            // The account the limiter counts by, read from the cookie: the
+            // partitioner is synchronous and runs before any identity exists.
+            .UseMiddleware<RateLimitAccountMiddleware>()
+            // After routing, which populates the endpoint metadata the policies come
+            // from; before authentication, so a flood costs no session lookup.
+            .UseRateLimiter()
+            .UseAuthentication()
+            .UseMiddleware<AuthenticationMiddleware>()
+            .UseAuthorization()
+            .UseEndpoints(MapEndpoints);
+    }
+
+    private static void MigrateAndExit(IApplicationBuilder appBuilder)
+    {
+        // In a scope: a Configure parameter would lease a pooled context forever.
+        using var migrationScope = appBuilder.ApplicationServices.CreateScope();
+        migrationScope.ServiceProvider.GetRequiredService<DmDbContext>().Database.Migrate();
+
+        // Environment.Exit runs no finally block, so the flush in Main never happens here.
+        Serilog.Log.CloseAndFlush();
+        Environment.Exit(0);
+    }
+
+    private void WarnWhenRateLimitingIsOff(ILogger<Startup> logger)
+    {
+        // The only trace of a deployment running without limits.
         if (!RateLimitingExtensions.IsEnabled(configuration))
         {
             logger.LogWarning(
                 "Rate limiting is off: every policy is registered as a no-op limiter");
         }
+    }
 
-        // First in the pipeline: everything downstream — the rate limiter
-        // partitions, the login journal, the security audit — reads the peer
-        // address, so it has to be the client's before any of them run.
-        appBuilder.UseForwardedHeaders();
-
-        // Ahead of anything that writes a response: a security header is only
-        // worth anything if it is on EVERY response. Registered after
-        // UseSwaggerUI it was skipped for every statically served Swagger asset,
-        // which is how the OWASP baseline scan found /swagger-ui.css with no
-        // headers at all.
-        appBuilder.UseMiddleware<SecurityHeadersMiddleware>();
-
-        // Swagger only in development (security: hide API documentation in production)
-        if (_environment.IsDevelopment())
+    // Swagger only in development (security: hide API documentation in production)
+    private void UseSwaggerInDevelopment(IApplicationBuilder appBuilder)
+    {
+        if (environment.IsDevelopment())
         {
             appBuilder
                 .UseSwagger(c => c.Configure())
                 .UseSwaggerUI(c => c.ConfigureUi());
         }
-
-        appBuilder
-            .UseResponseCompression()
-            .UseMiddleware<CorrelationMiddleware>()
-            // One line per request, and until now there were none. The framework's
-            // own request logging is at Information, which the source override cuts
-            // to Warning to keep the framework's noise out of the store - so the
-            // store held what the application chose to say and nothing about what was
-            // asked of it. A 404 nobody expected, a route answering 500 for one
-            // caller, the request behind a slow page: none of them left a trace.
-            //
-            // Above the error handler on purpose. Below it, an exception would pass
-            // through this middleware, which would log it as Error and rethrow - a
-            // second record on top of the one the handler already wrote, differing
-            // only in wording.
-            //
-            // After the correlation middleware, so the token is on the line: tying a
-            // refusal to its request is the whole reason that token exists.
-            .UseSerilogRequestLogging(options =>
-            {
-                options.EnrichDiagnosticContext = (diagnostic, context) =>
-                {
-                    diagnostic.Set("Host", context.Request.Host.Value);
-                    diagnostic.Set("Address", context.GetClientAddress());
-                };
-            })
-            .UseMiddleware<ErrorHandlingMiddleware>()
-            // Before the response cache, which is the order ASP.NET requires and
-            // the reverse of what stood here. A cacheable endpoint answered its
-            // first caller normally and every caller after that out of the
-            // cache, where the entry had been stored before CORS ever ran: no
-            // Access-Control-Allow-Origin on it, so the browser dropped a 200
-            // and the page showed an error for the five minutes the entry
-            // lived. /v1/games/tags is the one that made it visible, and every
-            // other public GET with a max-age had the same hole.
-            //
-            // The policy names its origins rather than allowing any, so the
-            // CORS middleware emits Vary: Origin and the cache keys entries by
-            // it - one caller's allowance is not served to another.
-            .UseCors(b => b
-                .WithOrigins([.. siteAddresses.Value.BrowserOrigins()])
-                // Two hand kept lists, both silent when wrong. A request header
-                // absent from the first never reaches the server at all: the
-                // preflight is answered without it and the browser drops the
-                // request, which is what Idempotency-Key hit on every
-                // cross-origin upload. A response header absent from the second
-                // does arrive and stays unreadable to the page, Location on 201
-                // and Retry-After on 429 among them. Same-origin proxying hides
-                // both faults; the published contract puts the API on its own
-                // host.
-                .WithHeaders("Content-Type", "Authorization", "X-Requested-With",
-                    "X-Dm-Correlation-Token", "Cache-Control", "X-Dm-Audience",
-                    "Idempotency-Key", "x-signalr-user-agent",
-                    // A token-gated endpoint reads its credential from a header, and a
-                    // custom request header forces a preflight: unnamed here, the browser
-                    // never sends the call at all in a cross-origin topology.
-                    TokenHeaders.Account, TokenHeaders.Ticket)
-                .WithExposedHeaders("Location", "Retry-After")
-                .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
-                .AllowCredentials()
-                .SetPreflightMaxAge(TimeSpan.FromHours(1)))
-            .UseResponseCaching()
-            .UseMiddleware<CsrfProtectionMiddleware>()
-            .UseRouting()
-            // Names the account the limiter counts by, which the limiter cannot
-            // do for itself: its partitioner is called synchronously and runs
-            // before any identity exists. Reads the session cookie and nothing
-            // else — no query, and no decision about the request.
-            .UseMiddleware<RateLimitAccountMiddleware>()
-            // After UseRouting on purpose: the limiter resolves its policy from
-            // endpoint metadata, which routing is what populates. Registered
-            // before it, every [EnableRateLimiting] attribute was inert and only
-            // the global limiter ever ran. Above authentication just as
-            // deliberately: a flood is refused before it costs a session lookup,
-            // which is exactly why the account it is counted by comes from the
-            // cookie read above and not from the identity built below.
-            .UseRateLimiter()
-            .UseAuthentication()
-            .UseMiddleware<AuthenticationMiddleware>()
-            .UseAuthorization()
-            .UseEndpoints(c =>
-            {
-                c.MapControllers();
-                c.MapHub<Notifications.NotificationHub>("/hubs/notifications");
-                c.MapPrometheusScrapingEndpoint("/metrics");
-
-                // Liveness - Docker health check (no dependency checks)
-                c.MapHealthChecks("/_health", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-                {
-                    Predicate = _ => false,
-                    ResponseWriter = HealthReportWriter
-                });
-
-                // Readiness - all "ready" dependencies (for load balancer)
-                c.MapHealthChecks("/_ready", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-                {
-                    Predicate = check => check.Tags.Contains("ready"),
-                    ResponseWriter = HealthReportWriter
-                });
-
-                // Detail - all checks (for monitoring dashboard)
-                c.MapHealthChecks("/_health/detail", new Microsoft.AspNetCore.Diagnostics.HealthChecks.HealthCheckOptions
-                {
-                    ResponseWriter = HealthReportWriter
-                });
-            });
     }
+
+    private static void EnrichRequestLine(RequestLoggingOptions options) =>
+        options.EnrichDiagnosticContext = (diagnostic, context) =>
+        {
+            diagnostic.Set("Host", context.Request.Host.Value);
+            diagnostic.Set("Address", context.GetClientAddress());
+        };
+
+    private static void SiteAddressCors(CorsPolicyBuilder policy, IReadOnlyList<string> origins) => policy
+        .WithOrigins([.. origins])
+        // Both lists fail silently: an unlisted request header fails the preflight,
+        // an unlisted response header stays unreadable to the page.
+        .WithHeaders("Content-Type", "Authorization",
+            CorrelationMiddleware.CorrelationTokenHeader, "Cache-Control", BbAudienceHeader.HeaderName,
+            UploadApiService.IdempotencyHeader,
+            // The SignalR client puts both on the negotiate call of the hub.
+            "X-Requested-With", "x-signalr-user-agent",
+            TokenHeaders.Account, TokenHeaders.Ticket)
+        .WithExposedHeaders("Location", "Retry-After")
+        .WithMethods("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS")
+        .AllowCredentials()
+        .SetPreflightMaxAge(TimeSpan.FromHours(1));
+
+    private static void MapEndpoints(IEndpointRouteBuilder endpoints)
+    {
+        endpoints.MapControllers();
+        endpoints.MapHub<NotificationHub>("/hubs/notifications");
+        endpoints.MapPrometheusScrapingEndpoint("/metrics");
+
+        // Liveness - Docker health check (no dependency checks)
+        endpoints.MapHealthChecks("/_health", HealthEndpoint(_ => false));
+
+        // Readiness - all "ready" dependencies (for load balancer)
+        endpoints.MapHealthChecks("/_ready",
+            HealthEndpoint(check => check.Tags.Contains(HealthCheckExtensions.ReadyTag)));
+
+        // Detail - all checks (for monitoring dashboard)
+        endpoints.MapHealthChecks("/_health/detail", HealthEndpoint(null));
+    }
+
+    private static HealthCheckOptions HealthEndpoint(Func<HealthCheckRegistration, bool>? predicate) => new()
+    {
+        Predicate = predicate,
+        ResponseWriter = HealthReportWriter
+    };
 
     /// <summary>
     /// Register all Domain layer services centrally.
     /// </summary>
     private static void RegisterDomainServices(IServiceCollection services)
     {
-        // Domain assemblies to scan for services.
-        // Any public type works as an assembly marker; the Intention enums are
-        // the one every Domain.* project is guaranteed to have.
-        //
-        // Written out in full rather than through a using, so that the list names
-        // every module it composes and can be read against the tree. A module left
-        // out compiles, starts, and fails resolution on the first request to one
-        // of its endpoints, which the compiler cannot report and only an
-        // integration test of that endpoint would catch.
+        // Written out in full, so the list names every module it composes: a module
+        // left out fails resolution only on the first request to it. The Intention
+        // enums are the marker every Domain.* project is guaranteed to have.
         var accountAssembly = typeof(DM.Domain.Account.Authorization.AccountIntention).Assembly;
         var personalAssembly = typeof(DM.Domain.Personal.Authorization.UserIntention).Assembly;
         var communityAssembly = typeof(DM.Domain.Community.Authorization.PollIntention).Assembly;
         var moderationAssembly = typeof(DM.Domain.Moderation.Authorization.ModerationIntention).Assembly;
         var messagingAssembly = typeof(DM.Domain.Messaging.Authorization.ChatIntention).Assembly;
-        var forumAssembly = typeof(DM.Domain.Forum.Authorization.ForumIntention).Assembly;
+        var forumAssembly = typeof(DM.Domain.Forum.Authorization.BoardIntention).Assembly;
         var blogAssembly = typeof(DM.Domain.Blog.Authorization.BlogIntention).Assembly;
         var gameAssembly = typeof(DM.Domain.Game.Authorization.GameIntention).Assembly;
 
@@ -438,12 +388,9 @@ internal class Startup(IConfiguration configuration, IWebHostEnvironment environ
             messagingAssembly, forumAssembly, blogAssembly, gameAssembly
         };
 
-        // Register types from all Domain assemblies
         foreach (var assembly in domainAssemblies)
         {
             services.AddDefaultTypes(assembly);
         }
-
     }
-
 }

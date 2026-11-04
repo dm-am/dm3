@@ -6,7 +6,6 @@ namespace DM.Domain.Game.Features.Rooms;
 /// <inheritdoc />
 internal class UpdateRoomValidator : AbstractValidator<UpdateRoom>
 {
-    /// <inheritdoc />
     public UpdateRoomValidator()
     {
         RuleFor(r => r.RoomId)
@@ -17,9 +16,7 @@ internal class UpdateRoomValidator : AbstractValidator<UpdateRoom>
                 .NotEmpty().WithMessage(ValidationError.Empty)
                 .MaximumLength(RoomFieldLimits.TitleMaxLength).WithMessage(ValidationError.Long));
 
-        // Both columns are read back by comparing against the named members, so
-        // an integer outside the enum is stored as a room that is of no known
-        // type and of no known access. Null passes: omitted keeps the stored value.
+        // An integer outside the enum would store a room of no known type; null keeps the stored value.
         RuleFor(r => r.Type)
             .IsInEnum().WithMessage(ValidationError.Invalid);
 

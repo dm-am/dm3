@@ -13,31 +13,15 @@ export interface KeyedCache<T> {
   /** True when an entry exists but has aged out. */
   isStale(key: string): boolean;
   set(key: string, value: T): void;
-  /**
-   * Ages an entry out without dropping it: what is stored is known to be out of
-   * date, but it is still what the reader is looking at. Dropping it instead
-   * would turn "stale" into "absent", and the caller would have to blank the
-   * screen or keep a second copy of the value to avoid that.
-   */
+  /** Ages an entry out without dropping it: stale is not absent. */
   expire(key: string): void;
   clear(): void;
 }
 
 /**
- * A keyed cache with an age limit and a size limit.
- *
- * Seven stores kept their own `Map<string, { data, timestamp }>` with the same
- * 30-second window, the same twenty-entry cap and the same insertion-order
- * eviction — the differences between the copies were spelling. What actually
- * varies between them is the flow around the cache (what to show while
- * refreshing, when to prefetch), so that stays with each store and only the
- * bookkeeping moves here.
- *
- * Eviction is insertion order rather than least-recently-used: a Map iterates in
- * insertion order, and re-setting a key keeps its original position. That is
- * what the copies did, and for a cache holding pages of one search it is the
- * right shape anyway — the oldest key is the page the reader has moved furthest
- * away from.
+ * A keyed cache with an age limit and a size limit, evicting in insertion
+ * order (the oldest key is the page furthest from the reader); the flow around
+ * it stays with each store.
  */
 export function createKeyedCache<T>(options: KeyedCacheOptions): KeyedCache<T> {
   const { ttlMs, maxEntries = 20 } = options;
@@ -47,9 +31,7 @@ export function createKeyedCache<T>(options: KeyedCacheOptions): KeyedCache<T> {
   >();
 
   function isFresh(entry: { storedAt: number; expired: boolean }): boolean {
-    // The expired flag rather than a doctored timestamp: ttlMs is allowed to be
-    // Infinity (a closed calendar period never has to be read again), and no
-    // timestamp is old enough to age out against that.
+    // A flag, not a doctored timestamp: ttlMs may be Infinity.
     return !entry.expired && Date.now() - entry.storedAt <= ttlMs;
   }
 
@@ -91,12 +73,8 @@ export function createKeyedCache<T>(options: KeyedCacheOptions): KeyedCache<T> {
 /** Whether a thing fetched once is still worth keeping, with no copy of it. */
 export interface Freshness {
   /**
-   * True while the thing has been recorded and has not yet aged out.
-   *
-   * Not the negation of isStale(): that one answers false both for something
-   * fresh and for something never recorded at all, so a caller asking "may I
-   * skip this read" cannot be answered by it. The two questions differ exactly
-   * where it matters, on the very first call.
+   * Recorded and not aged out. Not the negation of isStale(), which answers
+   * false for something never recorded too.
    */
   isFresh(): boolean;
   /** True once the thing has been recorded and has since aged out. */
@@ -109,28 +87,13 @@ export interface Freshness {
   clear(): void;
 }
 
-/**
- * The cache's clock, without the cache.
- *
- * useApiResource holds its payload in a reactive ref, because that is the thing
- * components render; what it needed from a cache was the answer to "is what I am
- * holding still fresh". It used to have its own `lastFetched` and its own
- * `now - lastFetched > cacheMs`, which is how a change to one implementation of
- * freshness silently stopped applying to half the screens.
- *
- * Built on createKeyedCache rather than beside it: one entry, one slot, and the
- * same arithmetic, boundary and expire() semantics — so this is a second way of
- * asking, not a second answer. It stores nothing, because a value written to a
- * cache nobody reads from is not a cache, it is a comment that compiles.
- */
+/** The cache's freshness for useApiResource, which keeps its payload in a ref. */
 export function createFreshness(ttlMs: number): Freshness {
   const SLOT = "it";
   const store = createKeyedCache<true>({ ttlMs, maxEntries: 1 });
 
   return {
-    // The slot holds `true` only while it is fresh: get() withholds an entry
-    // that has aged out and returns nothing for one that was never written, so
-    // both of the "no" cases answer the same way here.
+    // `true` only while fresh: aged out and never written answer alike.
     isFresh: () => store.get(SLOT) === true,
     isStale: () => store.isStale(SLOT),
     touch: () => store.set(SLOT, true),
@@ -143,29 +106,13 @@ export function createFreshness(ttlMs: number): Freshness {
 export interface Stopwatch {
   /** Milliseconds since the stopwatch was started. */
   elapsedMs(): number;
-  /**
-   * Milliseconds left of `totalMs` counted from that same moment, floored at
-   * zero: a deadline already behind us has nothing left rather than a negative
-   * amount of it, which every caller would otherwise clamp for itself.
-   */
+  /** Milliseconds left of `totalMs` from that moment, floored at zero. */
   remainingMs(totalMs: number): number;
 }
 
 /**
- * The clock arithmetic with nothing kept beside it.
- *
- * Two places in the client measure elapsed time while holding no answer at all.
- * The unread-count badge debounces its re-read and must not postpone it past a
- * ceiling however long the burst of pushes lasts; the first-start retry loop of
- * the shared socket tells the retry policy how long it has been trying. Both
- * wrote down a `Date.now()` of their own and subtracted it from the clock
- * later, which is the arithmetic this file exists to keep in one place: "how
- * long since" spelled out in three modules is three things to change and two to
- * forget, and forgetting one breaks nothing any test can see.
- *
- * So it lives here, beside the caches that do the same thing with a value
- * attached, and each caller keeps only what is its own: the ceiling, the retry
- * schedule, the timer.
+ * Elapsed time with nothing kept beside it, for the unread badge's debounce
+ * ceiling and the socket's first-start retries: "how long since" in one place.
  */
 export function startStopwatch(): Stopwatch {
   const startedAt = Date.now();
@@ -178,23 +125,12 @@ export function startStopwatch(): Stopwatch {
 }
 
 /**
- * A cache key for a set of search parameters that does not have to be maintained.
- *
- * The hand-written keys this replaces listed every parameter and its default by
- * name, which reads fine and fails quietly: a filter added to the search and not
- * to its key makes two different searches share one entry, and the reader gets
- * the other one's results. Sorting the keys here means a parameter is covered
- * because it exists, not because somebody remembered it.
- *
- * Empty, null and undefined values are dropped so an untouched filter and a
- * cleared one agree. Arrays are sorted: the same tags in a different order are
- * the same search.
+ * A cache key of search parameters, by sorted keys, so a new parameter is
+ * covered because it exists. Empty values are dropped and arrays sorted.
  */
 export function stableCacheKey(params: object): string {
   const normalized: Record<string, unknown> = {};
-  // `object` rather than Record<string, unknown>: the callers pass their own
-  // search-params interfaces, and an interface without an index signature is not
-  // assignable to a Record. Nothing here needs the declared shape.
+  // `object`: the callers' interfaces have no index signature for a Record.
   const source = params as Record<string, unknown>;
 
   for (const key of Object.keys(source).sort()) {

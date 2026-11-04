@@ -1,42 +1,40 @@
 <script setup lang="ts">
-// Tag picker over the game tag catalog, grouped the way the catalog groups it.
-// The catalog itself is moderation's (`/moderation/tags`): a master attaches
-// the tags it offers and invents none, so this control only ever toggles what
-// GET /games/tags returned. Both write paths of a game use it — the creation
-// form and the settings page — which is why it lives with the entity rather
-// than inside either feature.
-import { ref, computed, onMounted } from "vue";
+// Both write paths of a game use it, so it lives with the entity.
+import { computed, onMounted } from "vue";
 import { pluralize } from "@/shared/lib/utils/pluralize";
-import type { Tag } from "../model/types";
-import { gameApi } from "../api";
+import type { Tag } from "../model/gameTypes";
+import { useGamesStore } from "../model/store";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import TagSelectorSkeleton from "@/shared/ui/Skeleton/TagSelectorSkeleton.vue";
 import { Tooltip, TooltipContent } from "@/shared/ui/Tooltip";
 
 const model = defineModel<number[]>({ default: () => [] });
 
-const tags = ref<Tag[]>([]);
-const loading = ref(false);
-const error = ref<string | null>(null);
+withDefaults(
+  defineProps<{
+    /** The rows each group of the catalogue wraps into at the host's width, for the skeleton */
+    loadingRows?: number[];
+  }>(),
+  // The seeded catalogue in the game form, 600 wide.
+  { loadingRows: () => [5, 3, 1, 1, 1, 1, 1, 1] },
+);
 
-// Fixed group order
-// A group as this control works with it: the tags plus the number of them one
-// game may carry. The number is the catalog's, served with every tag, so
-// moderation can move it without the client being rebuilt.
+// The catalogue the tag cloud and the filter read: a form opened again finds it cached.
+const gamesStore = useGamesStore();
+const tags = computed<Tag[]>(() => gamesStore.tags ?? []);
+// No answer yet: a refusal empties the list as well, and has its own block.
+const waiting = computed(
+  () => gamesStore.tags === null && !gamesStore.tagsError,
+);
+
 type TagGroupView = {
   name: string;
   tags: Tag[];
   limit: number | null;
 };
 
-// Groups in the catalog's own order, not in a list kept here.
-//
-// A hard-coded order was a second copy of the catalog, and it had drifted: it
-// said "Новичкам" where the group is called "Новички", and did not mention
-// "Деликатный контент" at all. Since anything outside the list was dropped
-// rather than appended, two groups of eight never reached the screen - one of
-// them the group a master marks sensitive content with, so the warning could
-// not be given at all. Reading the order the catalog serves means a group
-// moderation adds shows up by itself instead of vanishing quietly.
+// In the catalog's own order, so a group moderation adds shows up by itself.
 const orderedGroups = computed<TagGroupView[]>(() => {
   const groups = new Map<string, Tag[]>();
   for (const tag of tags.value) {
@@ -74,11 +72,7 @@ function selectedCount(group: TagGroupView): number {
   return group.tags.filter((t) => isSelected(t.id)).length;
 }
 
-/**
- * A tag the master cannot add right now. Only ever true above a limit of one:
- * a group that takes a single tag is a switch, so its tags stay clickable and
- * a click moves the choice.
- */
+// Never for a limit of one: such a group is a switch, and a click moves the choice.
 function isBlocked(group: TagGroupView, tagId: number): boolean {
   if (group.limit === null || group.limit === 1 || isSelected(tagId)) {
     return false;
@@ -86,11 +80,7 @@ function isBlocked(group: TagGroupView, tagId: number): boolean {
   return selectedCount(group) >= group.limit;
 }
 
-/**
- * What the dimmed tag says when the pointer stops on it. Worded from the limit
- * and not from how many are ticked: a game imported over its group's limit
- * carries more than the limit, and a hint counting them would contradict itself.
- */
+// From the limit, not the ticked count: an imported game can carry more than the limit.
 function blockedHint(group: TagGroupView): string {
   const limit = group.limit ?? 0;
   const word = pluralize(limit, "тега", "тегов", "тегов");
@@ -103,9 +93,6 @@ function toggleTag(group: TagGroupView, tagId: number) {
     return;
   }
 
-  // One tag per group is a switch and not a refusal: picking a second one
-  // drops the first, the way a radio group behaves. Anything above one is a
-  // ceiling, and the tags over it are dimmed rather than silently ignored.
   if (group.limit === 1) {
     const others = new Set(group.tags.map((t) => t.id));
     model.value = [...model.value.filter((id) => !others.has(id)), tagId];
@@ -119,33 +106,18 @@ function toggleTag(group: TagGroupView, tagId: number) {
   model.value = [...model.value, tagId];
 }
 
-async function loadTags() {
-  loading.value = true;
-  error.value = null;
-
-  const { data, error: apiError } = await gameApi.getTags();
-
-  if (apiError) {
-    // UI_STANDARDS: error copy is Russian, and the server's raw title is not put
-    // in front of the reader. A tag list carries no per-field errors worth
-    // relaying, so the title could only ever be a generic server sentence this
-    // page already words better.
-    error.value = "Не удалось загрузить теги";
-  } else if (data) {
-    tags.value = data.resources;
-  }
-
-  loading.value = false;
-}
-
-onMounted(loadTags);
+onMounted(() => gamesStore.fetchTags());
 </script>
 
 <template>
   <div class="tag-selector">
-    <div v-if="error" class="selector-error">
-      {{ error }}
-    </div>
+    <TagSelectorSkeleton v-if="waiting" :groups="loadingRows" />
+
+    <ErrorState
+      v-else-if="gamesStore.tagsError && !tags.length"
+      message="Не удалось загрузить теги"
+      :retry="() => gamesStore.fetchTags(true)"
+    />
 
     <div v-else-if="tags.length === 0" class="selector-empty">
       <secondary-text>Нет доступных тегов</secondary-text>
@@ -163,7 +135,7 @@ onMounted(loadTags);
           </h4>
         </Tooltip>
         <div class="category-tags">
-          <Tooltip v-for="tag in group.tags" :key="tag.id" show-on-tap>
+          <Tooltip v-for="tag in group.tags" :key="tag.id">
             <template #content>
               <TooltipContent
                 :html="isBlocked(group, tag.id) ? null : tag.description"
@@ -197,14 +169,11 @@ onMounted(loadTags);
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
-@use "@/assets/styles/Filters" as filters
+@use "@/assets/styles/Buttons" as *
+@use "@/assets/styles/FilterBubbles" as bubbles
 
 .tag-selector
   min-height: $grid-step * 10
-
-.selector-error
-  color: $accent-red
 
 .tags-groups
   display: flex
@@ -224,42 +193,20 @@ onMounted(loadTags);
   flex-wrap: wrap
   gap: $small
 
-// A tag wears the bubble of an applied filter (.bubble of _Filters.sass), the
-// way the same tags stand under the filter bar of /games: its fill, frame,
-// corners and size, and its hover, the site's wash over the fill with the
-// frame left alone. The height is the bubble's own, so a tag to choose and a
-// chosen value stand as high. The spec holds the two to each other.
+// The bubble of an applied filter, as the same tags stand under the filter bar of /games.
 .tag-button
-  box-sizing: border-box
-  min-height: filters.$bubble-height
-  padding: 0 $small
-  line-height: filters.$bubble-height - 2px
-  background-color: $bg-element
-  border: 1px solid $border
-  border-radius: $border-radius
+  +bubbles.bubble-box
   color: $text
-  font-size: $secondary-font-size
   cursor: pointer
 
-  // Under a pointer that hovers only: a touch screen keeps the hover on the
-  // tag last pressed, and a tag just taken off would stand washed. A chosen
-  // tag does not answer, it already stands pressed.
-  @media (hover: hover)
-    &:hover:not(:disabled):not(.selected)
-      background-image: linear-gradient($hover-overlay, $hover-overlay)
+  &:hover:not(:disabled):not(.selected)
+    background-image: linear-gradient($hover-overlay, $hover-overlay)
 
-  // A chosen tag is a pressed button: the fill of the active segment of a
-  // SegmentedControl, the site's pressed look, in the tag's own weight, with
-  // the press wash over it. The wash keeps it out of the hover's reach: the
-  // hover over the bubble's fill comes within a few points of the bare
-  // segment fill, and a tag taken off under the pointer would read as chosen.
-  // It carries no cross, since a second press takes it off.
+  // The press wash keeps a chosen tag apart from a hovered one.
   &.selected
     background-color: $bg-element-accent
     background-image: linear-gradient($active-overlay, $active-overlay)
 
-  // The group is full: the tag stops answering, in the one disabled state of
-  // the site, half its opacity under the hatch.
   +disabled-hatch
 
 .selected-count

@@ -9,11 +9,14 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
 using DM.Domain.Core.Users;
 using DM.Domain.Personal.Features.Profiles;
+using DM.Domain.Core.Chats;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Account.Settings;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Repositories.Account;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
+using DbUserContact = DM.Infrastructure.Persistence.Entities.Account.UserContact;
 
 using DM.Infrastructure.Persistence.Shared.Users;
 
@@ -22,19 +25,16 @@ namespace DM.Infrastructure.Persistence.Repositories.Personal;
 /// <inheritdoc />
 internal class UserRepository : IUserRepository
 {
-    private readonly DmDbContext _dmDbContext;
+    private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public UserRepository(
-        DmDbContext dmDbContext,
+        DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
     {
-        _dmDbContext = dmDbContext;
+        _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
     }
-
-    // ═══ READ ═══
 
     /// <inheritdoc />
     public Task<int> CountUsersAsync(UserFilter filter) => GetQuery(filter).CountAsync();
@@ -56,8 +56,7 @@ internal class UserRepository : IUserRepository
     /// <remarks>
     /// Separated from the projection because the statement it composes is the thing
     /// under test — how many times a page counts a table is readable from
-    /// <c>ToQueryString</c> and from nothing else — and because ProjectTo needs a
-    /// configured mapper while this needs nothing but the context.
+    /// <c>ToQueryString</c> and from nothing else.
     /// </remarks>
     internal IQueryable<User> BuildPageQuery(PagingData paging, UserFilter filter)
     {
@@ -70,9 +69,7 @@ internal class UserRepository : IUserRepository
         // by a column of Users and needs no join at all.
         var sortCounter = CounterOf(sort);
 
-        // No Include: the query ends in ProjectTo, which builds its own Select and makes
-        // EF drop every Include with a warning. The avatar comes from the mapping
-        // expression and the username history from its own statement below.
+        // No Include: the query ends in a projection, which makes EF drop every Include.
         //
         // The range over the counter this page is sorted by is left out here and applied
         // to the join below: filtering and ordering by the same number through two joins
@@ -87,7 +84,7 @@ internal class UserRepository : IUserRepository
         IQueryable<UserCountQueries.CountedUser>? counted = null;
         if (sortCounter.HasValue)
         {
-            counted = UserCountQueries.Counted(_dmDbContext, sortCounter.Value, baseQuery,
+            counted = UserCountQueries.Counted(_dbContext, sortCounter.Value, baseQuery,
                 _dateTimeProvider.Now - ActivityPolicy.ActivePeriod);
             var (min, max) = RangeOf(filter, sortCounter.Value);
             counted = UserCountQueries.InRangeCounted(counted, min, max);
@@ -166,14 +163,14 @@ internal class UserRepository : IUserRepository
     /// <inheritdoc />
     public async Task<GeneralUser?> GetUserAsync(string username)
     {
-        var user = await _dmDbContext.Users
-            .Where(u => !u.IsRemoved && u.Username.ToLower() == username.ToLower())
+        var user = await _dbContext.Users
+            .Where(AccountNames.UsernameIs(username))
             .ProjectToGeneralUser()
             .FirstOrDefaultAsync();
 
         if (user != null)
         {
-            await PopulatePostReviewCounts(new[] { user });
+            await PopulateProfileCounters(new[] { user });
         }
 
         return user;
@@ -181,23 +178,23 @@ internal class UserRepository : IUserRepository
 
     /// <inheritdoc />
     public Task<Guid?> FindUserIdAsync(string username) =>
-        _dmDbContext.Users
+        _dbContext.Users
             .TagWith("DM.User.FindId")
-            .Where(u => !u.IsRemoved && u.Username.ToLower() == username.ToLower())
+            .Where(AccountNames.UsernameIs(username))
             .Select(u => (Guid?)u.UserId)
             .FirstOrDefaultAsync();
 
     /// <inheritdoc />
     public async Task<GeneralUser?> GetUserAsync(Guid userId)
     {
-        var user = await _dmDbContext.Users
-            .Where(u => !u.IsRemoved && u.UserId == userId)
+        var user = await _dbContext.Users
+            .Where(u => u.UserId == userId)
             .ProjectToGeneralUser()
             .FirstOrDefaultAsync();
 
         if (user != null)
         {
-            await PopulatePostReviewCounts(new[] { user });
+            await PopulateProfileCounters(new[] { user });
         }
 
         return user;
@@ -206,8 +203,8 @@ internal class UserRepository : IUserRepository
     /// <inheritdoc />
     public async Task<UserDetails?> GetUserDetailsAsync(string username)
     {
-        var userDetails = await _dmDbContext.Users
-            .Where(u => !u.IsRemoved && u.Username.ToLower() == username.ToLower())
+        var userDetails = await _dbContext.Users
+            .Where(AccountNames.UsernameIs(username))
             .ProjectToUserDetails()
             .FirstOrDefaultAsync();
 
@@ -216,7 +213,7 @@ internal class UserRepository : IUserRepository
             return null;
         }
 
-        await PopulatePostReviewCounts(new[] { userDetails });
+        await PopulateProfileCounters(new[] { userDetails });
 
         userDetails.Settings = await ReadSettings(userDetails.UserId);
         return userDetails;
@@ -225,8 +222,8 @@ internal class UserRepository : IUserRepository
     /// <inheritdoc />
     public async Task<UserDetails?> GetUserDetailsAsync(Guid userId)
     {
-        var userDetails = await _dmDbContext.Users
-            .Where(u => !u.IsRemoved && u.UserId == userId)
+        var userDetails = await _dbContext.Users
+            .Where(u => u.UserId == userId)
             .ProjectToUserDetails()
             .FirstOrDefaultAsync();
 
@@ -235,26 +232,7 @@ internal class UserRepository : IUserRepository
             return null;
         }
 
-        await PopulatePostReviewCounts(new[] { userDetails });
-
-        userDetails.Settings = await ReadSettings(userDetails.UserId);
-        return userDetails;
-    }
-
-    /// <inheritdoc />
-    public async Task<UserDetails?> GetUserDetailsByEmail(string email)
-    {
-        var userDetails = await _dmDbContext.Users
-            .Where(u => !u.IsRemoved && u.Email.ToLower() == email.ToLower())
-            .ProjectToUserDetails()
-            .FirstOrDefaultAsync();
-
-        if (userDetails == null)
-        {
-            return null;
-        }
-
-        await PopulatePostReviewCounts(new[] { userDetails });
+        await PopulateProfileCounters(new[] { userDetails });
 
         userDetails.Settings = await ReadSettings(userDetails.UserId);
         return userDetails;
@@ -263,13 +241,13 @@ internal class UserRepository : IUserRepository
     /// <inheritdoc />
     public async Task<IEnumerable<GeneralUser>> GetUsersByRoleAsync(UserRole role)
     {
-        var users = await _dmDbContext.Users
-            .Where(u => !u.IsRemoved && u.Role == role)
+        var users = await _dbContext.Users
+            .Where(u => u.Role == role)
             .OrderBy(u => u.Username)
             .ProjectToGeneralUser()
             .ToArrayAsync();
 
-        await PopulatePostReviewCounts(users);
+        await PopulateProfileCounters(users);
         return users;
     }
 
@@ -282,12 +260,12 @@ internal class UserRepository : IUserRepository
             return Array.Empty<GeneralUser>();
         }
 
-        var users = await _dmDbContext.Users
-            .Where(u => !u.IsRemoved && idsList.Contains(u.UserId))
+        var users = await _dbContext.Users
+            .Where(u => idsList.Contains(u.UserId))
             .ProjectToGeneralUser()
             .ToArrayAsync();
 
-        await PopulatePostReviewCounts(users);
+        await PopulateProfileCounters(users);
         return users;
     }
 
@@ -300,12 +278,10 @@ internal class UserRepository : IUserRepository
             return Array.Empty<UserReference>();
         }
 
-        // Written out rather than routed through ProjectTo: the mapping to
-        // GeneralUser is what drags the counter properties along, and the point
-        // here is to select five columns and stop.
-        return await _dmDbContext.Users
+        // Written out rather than through ProjectToGeneralUser, to select five columns only.
+        return await _dbContext.Users
             .TagWith("DM.User.References")
-            .Where(u => !u.IsRemoved && idsList.Contains(u.UserId))
+            .Where(u => idsList.Contains(u.UserId))
             .Select(u => new UserReference
             {
                 UserId = u.UserId,
@@ -319,7 +295,7 @@ internal class UserRepository : IUserRepository
 
     /// <inheritdoc />
     public Task<IReadOnlyCollection<Guid>> GetRemovedAccountIdsAsync() =>
-        RemovedAccountScope.Ids(_dmDbContext.Users);
+        RemovedAccountScope.Ids(_dbContext.Users);
 
     /// <inheritdoc />
     /// <remarks>
@@ -331,34 +307,32 @@ internal class UserRepository : IUserRepository
     /// </remarks>
     public async Task<GeneralUser> GetRemovedAccountSummaryAsync()
     {
-        var removed = await RemovedAccountScope.Ids(_dmDbContext.Users);
-        var (quality, quantity) = await RemovedAccountScope.RatingTotals(_dmDbContext.Users);
+        var removed = await RemovedAccountScope.Ids(_dbContext.Users);
+        var (quality, quantity) = await RemovedAccountScope.RatingTotals(_dbContext.Users);
 
-        var reviewsGiven = await _dmDbContext.PostReviews
+        var reviewsGiven = await _dbContext.PostReviews
             .TagWith("DM.User.RemovedAccountSummary")
-            .CountAsync(r => removed.Contains(r.AuthorId) && !r.IsRemoved);
-        var reviewsReceived = await _dmDbContext.PostReviews
+            .CountAsync(r => removed.Contains(r.AuthorId));
+        var reviewsReceived = await _dbContext.PostReviews
             .TagWith("DM.User.RemovedAccountSummary")
-            .CountAsync(r => removed.Contains(r.PostAuthorId) && !r.IsRemoved);
+            .CountAsync(r => removed.Contains(r.PostAuthorId));
 
-        var gamesHosting = await _dmDbContext.Games
+        var gamesHosting = await _dbContext.Games
             .TagWith("DM.User.RemovedAccountSummary")
-            .Where(g => !g.IsRemoved &&
-                        (removed.Contains(g.MasterId) || g.Assistants.Any(a => removed.Contains(a.UserId))))
+            .Where(g => removed.Contains(g.MasterId) || g.Assistants.Any(a => removed.Contains(a.UserId)))
             .GroupBy(g => g.Status)
             .Select(g => new StatusCountItem(Guid.Empty, g.Key, g.Count()))
             .ToListAsync();
-        var gamesPlaying = await _dmDbContext.Games
+        var gamesPlaying = await _dbContext.Games
             .TagWith("DM.User.RemovedAccountSummary")
-            .Where(g => !g.IsRemoved && g.Characters.Any(c =>
-                !c.IsRemoved && !c.IsNpc && c.AuthorId.HasValue && removed.Contains(c.AuthorId.Value)))
+            .Where(g => g.Characters.Any(c =>
+                !c.IsNpc && c.AuthorId.HasValue && removed.Contains(c.AuthorId.Value)))
             .GroupBy(g => g.Status)
             .Select(g => new StatusCountItem(Guid.Empty, g.Key, g.Count()))
             .ToListAsync();
-        var blogsHosting = await _dmDbContext.Blogs
+        var blogsHosting = await _dbContext.Blogs
             .TagWith("DM.User.RemovedAccountSummary")
-            .Where(b => !b.IsRemoved &&
-                        (removed.Contains(b.AuthorId) || b.Assistants.Any(a => removed.Contains(a.UserId))))
+            .Where(b => removed.Contains(b.AuthorId) || b.Assistants.Any(a => removed.Contains(a.UserId)))
             .GroupBy(b => b.Status)
             .Select(g => new StatusCountItem(Guid.Empty, g.Key, g.Count()))
             .ToListAsync();
@@ -385,8 +359,6 @@ internal class UserRepository : IUserRepository
         };
     }
 
-    // ═══ WRITE ═══
-
     /// <inheritdoc />
     /// <remarks>
     /// The settings write is load-modify-save with one retry on a lost insert
@@ -401,7 +373,7 @@ internal class UserRepository : IUserRepository
     /// </remarks>
     public async Task UpdateUser(UpdateUserEntity userUpdate, UpdateUserSettingsEntity settingsUpdate)
     {
-        var user = await _dmDbContext.Users.FindAsync(userUpdate.UserId);
+        var user = await _dbContext.Users.FindAsync(userUpdate.UserId);
         if (user == null) return;
 
         // Update user entity fields
@@ -409,13 +381,13 @@ internal class UserRepository : IUserRepository
         if (userUpdate.UpdateName) user.Name = userUpdate.Name;
         if (userUpdate.UpdateLocation) user.Location = userUpdate.Location;
         if (userUpdate.UpdateInfo) user.Info = userUpdate.Info;
-        if (userUpdate.RatingDisabled?.Value.HasValue == true) user.RatingDisabled = userUpdate.RatingDisabled.Value.Value;
-        if (userUpdate.ShowBirthday?.Value.HasValue == true) user.ShowBirthday = userUpdate.ShowBirthday.Value.Value;
-        if (userUpdate.AvatarUploadId?.Value.HasValue == true) user.AvatarUploadId = userUpdate.AvatarUploadId.Value;
+        if (userUpdate.RatingDisabled?.Value is { } ratingDisabled) user.RatingDisabled = ratingDisabled;
+        if (userUpdate.ShowBirthday?.Value is { } showBirthday) user.ShowBirthday = showBirthday;
+        if (userUpdate.AvatarUploadId?.Value is { } avatarUploadId) user.AvatarUploadId = avatarUploadId;
 
         // The settings row travels in the same SaveChanges as the user fields:
         // one transaction, both or neither.
-        var settings = await _dmDbContext.UserSettings.FindAsync(settingsUpdate.UserId);
+        var settings = await _dbContext.UserSettings.FindAsync(settingsUpdate.UserId);
         var inserting = settings == null;
         if (settings == null)
         {
@@ -423,56 +395,46 @@ internal class UserRepository : IUserRepository
             // partial row is unrepresentable (every paging column is NOT NULL),
             // so the rest has to be the default rather than empty.
             settings = UserSettings.CreateDefault(settingsUpdate.UserId);
-            _dmDbContext.UserSettings.Add(settings);
+            _dbContext.UserSettings.Add(settings);
         }
 
         ApplySettingsUpdate(settings, settingsUpdate);
 
         try
         {
-            await _dmDbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync();
         }
-        catch (DbUpdateException e) when (inserting && IsDuplicateKey(e))
+        catch (DbUpdateException e) when (inserting && e.IsDuplicateKey())
         {
             // Another writer created the row between the read and the insert.
             // The whole SaveChanges rolled back, so the user fields are still
             // pending on the tracked entity; the settings insert becomes an
             // update of the winner's row.
-            _dmDbContext.Entry(settings).State = EntityState.Detached;
-            var existing = await _dmDbContext.UserSettings
+            _dbContext.Entry(settings).State = EntityState.Detached;
+            var existing = await _dbContext.UserSettings
                 .TagWith("DM.User.Settings.RetryAfterLostInsert")
                 .FirstAsync(s => s.UserId == settingsUpdate.UserId);
             ApplySettingsUpdate(existing, settingsUpdate);
-            await _dmDbContext.SaveChangesAsync();
+            await _dbContext.SaveChangesAsync();
         }
     }
 
     private static void ApplySettingsUpdate(UserSettings settings, UpdateUserSettingsEntity settingsUpdate)
     {
-        if (settingsUpdate.Theme?.Value.HasValue == true) settings.Theme = settingsUpdate.Theme.Value.Value;
+        if (settingsUpdate.Theme?.Value is { } theme) settings.Theme = theme;
         // Blank is the same answer as absent - the reader asked for UTC - so it
         // is stored as absent and there is one spelling of "no zone" in the row.
         if (settingsUpdate.UpdateTimeZone)
             settings.TimeZoneId = string.IsNullOrWhiteSpace(settingsUpdate.TimeZoneId)
                 ? null
                 : settingsUpdate.TimeZoneId.Trim();
-        if (settingsUpdate.CommentsPerPage?.Value.HasValue == true) settings.CommentsPerPage = settingsUpdate.CommentsPerPage.Value.Value;
-        if (settingsUpdate.TopicsPerPage?.Value.HasValue == true) settings.TopicsPerPage = settingsUpdate.TopicsPerPage.Value.Value;
-        if (settingsUpdate.MessagesPerPage?.Value.HasValue == true) settings.MessagesPerPage = settingsUpdate.MessagesPerPage.Value.Value;
-        if (settingsUpdate.PostsPerPage?.Value.HasValue == true) settings.PostsPerPage = settingsUpdate.PostsPerPage.Value.Value;
-        if (settingsUpdate.EntitiesPerPage?.Value.HasValue == true) settings.EntitiesPerPage = settingsUpdate.EntitiesPerPage.Value.Value;
+        if (settingsUpdate.PageSize?.Value is { } pageSize) settings.PageSize = pageSize;
     }
 
-    /// <summary>
-    /// A unique-constraint refusal, the relational spelling of the duplicate-key
-    /// error the retry used to catch.
-    /// </summary>
-    private static bool IsDuplicateKey(DbUpdateException e) =>
-        e.InnerException is Npgsql.PostgresException { SqlState: Npgsql.PostgresErrorCodes.UniqueViolation };
 
     private async Task<DM.Domain.Core.Identity.UserSettings> ReadSettings(Guid userId)
     {
-        var userSettings = await _dmDbContext.UserSettings
+        var userSettings = await _dbContext.UserSettings
             .TagWith("DM.User.Settings")
             .FirstOrDefaultAsync(s => s.UserId == userId);
         return userSettings == null
@@ -484,13 +446,13 @@ internal class UserRepository : IUserRepository
     public async Task ReplaceUserContacts(Guid userId, IEnumerable<UserContactEntity> contacts)
     {
         // Remove existing contacts
-        var existingContacts = await _dmDbContext.UserContacts
+        var existingContacts = await _dbContext.UserContacts
             .Where(c => c.UserId == userId)
             .ToListAsync();
-        _dmDbContext.UserContacts.RemoveRange(existingContacts);
+        _dbContext.UserContacts.RemoveRange(existingContacts);
 
         // Add new contacts
-        var newContacts = contacts.Select(c => new Infrastructure.Persistence.Entities.Account.UserContact
+        var newContacts = contacts.Select(c => new DbUserContact
         {
             UserContactId = c.UserContactId,
             UserId = c.UserId,
@@ -498,33 +460,26 @@ internal class UserRepository : IUserRepository
             ContactValue = c.ContactValue,
             SortOrder = c.SortOrder
         });
-        _dmDbContext.UserContacts.AddRange(newContacts);
+        _dbContext.UserContacts.AddRange(newContacts);
 
-        await _dmDbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync();
     }
 
     /// <inheritdoc />
-    public async Task<Guid?> GetConfirmedAvatarUpload(Guid userId, Guid uploadId)
-    {
-        var upload = await _dmDbContext.Uploads
+    public Task<Guid?> GetConfirmedAvatarUpload(Guid userId, Guid uploadId) =>
+        _dbContext.Uploads
             .Where(u => u.UploadId == uploadId &&
                         u.UserId == userId &&
-                        u.Status == UploadStatus.Confirmed &&
-                        !u.IsRemoved)
+                        u.Status == UploadStatus.Confirmed)
             .Select(u => (Guid?)u.UploadId)
             .FirstOrDefaultAsync();
-
-        return upload;
-    }
 
     /// <inheritdoc />
     public async Task LinkAvatarUpload(Guid userId, Guid uploadId)
     {
-        // Mark old avatar uploads by setting status to Replaced
-        var oldUploads = await _dmDbContext.Uploads
+        var oldUploads = await _dbContext.Uploads
             .Where(u => u.UserId == userId &&
                         u.UploadId != uploadId &&
-                        !u.IsRemoved &&
                         u.Type == UploadType.UserAvatar)
             .ToListAsync();
 
@@ -535,31 +490,27 @@ internal class UserRepository : IUserRepository
             SoftDelete.Mark(oldUpload, null, _dateTimeProvider.Now);
         }
 
-        // Link new upload to user
-        var user = await _dmDbContext.Users.FindAsync(userId);
+        var user = await _dbContext.Users.FindAsync(userId);
         if (user != null)
         {
             user.AvatarUploadId = uploadId;
         }
 
-        await _dmDbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync();
     }
 
     /// <inheritdoc />
     public async Task UnlinkAvatarUpload(Guid userId)
     {
-        var user = await _dmDbContext.Users.FindAsync(userId);
+        var user = await _dbContext.Users.FindAsync(userId);
         if (user == null) return;
         if (user.AvatarUploadId == null) return; // Idempotent: no avatar already
 
         user.AvatarUploadId = null;
 
-        // Soft-delete all UserAvatar-type Upload records of this user.
-        // The GC worker (UploadOrphanCleanupService) sweeps the S3 objects after the grace period.
-        var avatarUploads = await _dmDbContext.Uploads
-            .Where(u => u.UserId == userId
-                && u.Type == UploadType.UserAvatar
-                && !u.IsRemoved)
+        // The objects stay for the sweeper's grace period.
+        var avatarUploads = await _dbContext.Uploads
+            .Where(u => u.UserId == userId && u.Type == UploadType.UserAvatar)
             .ToListAsync();
 
         foreach (var upload in avatarUploads)
@@ -567,10 +518,8 @@ internal class UserRepository : IUserRepository
             SoftDelete.Mark(upload, null, _dateTimeProvider.Now);
         }
 
-        await _dmDbContext.SaveChangesAsync();
+        await _dbContext.SaveChangesAsync();
     }
-
-    // ═══ PRIVATE ═══
 
     private record StatusCountItem(Guid UserId, ModuleStatus Status, int Count);
 
@@ -650,12 +599,8 @@ internal class UserRepository : IUserRepository
         // analysis narrows a local, not a property.
         var search = filter.Search;
 
-        IQueryable<User> query = filter.Activity switch
-        {
-            UserActivityFilter.Pending => _dmDbContext.Users.Where(u => false),
-            // Exclude removed users and system users from public lists
-            _ => _dmDbContext.Users.Where(u => !u.IsRemoved && u.Role != UserRole.System)
-        };
+        // Exclude removed users and system users from public lists
+        IQueryable<User> query = _dbContext.Users.Where(u => u.Role != UserRole.System);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -666,10 +611,10 @@ internal class UserRepository : IUserRepository
             // This finds both exact/partial matches and typo-tolerant matches
             query = query.Where(u =>
                 EF.Functions.ILike(u.Username, searchPattern) ||
-                EF.Functions.TrigramsSimilarity(u.Username, searchLower) > 0.3 ||
+                EF.Functions.TrigramsSimilarity(u.Username, searchLower) > LikePatterns.TrigramThreshold ||
                 u.UsernameHistories.Any(h =>
                     EF.Functions.ILike(h.OldUsername, searchPattern) ||
-                    EF.Functions.TrigramsSimilarity(h.OldUsername, searchLower) > 0.3));
+                    EF.Functions.TrigramsSimilarity(h.OldUsername, searchLower) > LikePatterns.TrigramThreshold));
         }
 
         var now = _dateTimeProvider.Now;
@@ -744,7 +689,7 @@ internal class UserRepository : IUserRepository
             if (min.HasValue || max.HasValue)
             {
                 query = UserCountQueries.InRange(
-                    UserCountQueries.Counted(_dmDbContext, counter, query,
+                    UserCountQueries.Counted(_dbContext, counter, query,
                         _dateTimeProvider.Now - ActivityPolicy.ActivePeriod),
                     min, max);
             }
@@ -775,29 +720,27 @@ internal class UserRepository : IUserRepository
 
         var userIds = usersList.Select(u => u.UserId).ToList();
 
-        var endorsementsReceivedCounts = await _dmDbContext.UserEndorsements
-            .Where(e => userIds.Contains(e.TargetUserId) && !e.IsRemoved)
-            .GroupBy(e => e.TargetUserId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var endorsementsReceived = await CountByUser(_dbContext.UserEndorsements
+            .Where(e => userIds.Contains(e.TargetUserId))
+            .Select(e => e.TargetUserId));
 
         // Games hosting: user is master (count games where user is MasterId) - with status breakdown
-        var gamesMasterByStatus = await _dmDbContext.Games
-            .Where(g => !g.IsRemoved && userIds.Contains(g.MasterId))
+        var gamesMasterByStatus = await _dbContext.Games
+            .Where(g => userIds.Contains(g.MasterId))
             .GroupBy(g => new { g.MasterId, g.Status })
             .Select(g => new StatusCountItem(g.Key.MasterId, g.Key.Status, g.Count()))
             .ToListAsync();
 
         // Games assistant: with status breakdown
-        var gamesAssistantByStatus = await _dmDbContext.Set<Entities.Game.Links.GameAssistant>()
+        var gamesAssistantByStatus = await _dbContext.GameAssistants
             .Where(a => userIds.Contains(a.UserId) && !a.Game.IsRemoved)
             .GroupBy(a => new { a.UserId, a.Game.Status })
             .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
             .ToListAsync();
 
         // Games playing: user has active character - with status breakdown
-        var gamesPlayingByStatus = await _dmDbContext.Characters
-            .Where(c => !c.IsRemoved && !c.IsNpc && c.AuthorId.HasValue && userIds.Contains(c.AuthorId.Value) && !c.Game.IsRemoved)
+        var gamesPlayingByStatus = await _dbContext.Characters
+            .Where(c => !c.IsNpc && c.AuthorId.HasValue && userIds.Contains(c.AuthorId.Value) && !c.Game.IsRemoved)
             .Select(c => new { AuthorId = c.AuthorId!.Value, c.Game.GameId, c.Game.Status })
             .Distinct()
             .GroupBy(c => new { c.AuthorId, c.Status })
@@ -805,32 +748,24 @@ internal class UserRepository : IUserRepository
             .ToListAsync();
 
         // Blogs hosting: user is owner - with status breakdown
-        var blogsOwnerByStatus = await _dmDbContext.Blogs
-            .Where(b => !b.IsRemoved && userIds.Contains(b.AuthorId))
+        var blogsOwnerByStatus = await _dbContext.Blogs
+            .Where(b => userIds.Contains(b.AuthorId))
             .GroupBy(b => new { b.AuthorId, b.Status })
             .Select(g => new StatusCountItem(g.Key.AuthorId, g.Key.Status, g.Count()))
             .ToListAsync();
 
         // Blogs assistant: with status breakdown
-        var blogsAssistantByStatus = await _dmDbContext.Set<Entities.Blog.BlogAssistant>()
+        var blogsAssistantByStatus = await _dbContext.BlogAssistants
             .Where(a => userIds.Contains(a.UserId) && !a.Blog.IsRemoved)
             .GroupBy(a => new { a.UserId, a.Blog.Status })
             .Select(g => new StatusCountItem(g.Key.UserId, g.Key.Status, g.Count()))
             .ToListAsync();
 
-        // Game reviews received: the community table grew a "Рецензии" column,
-        // and this is the only populator the paged /users list goes through.
-        // The predicate is the same one PopulatePostReviewCounts uses for the
-        // profile counter — the number in the table and the length of the list
-        // it links to have to be answers to one question.
-        var gameReviewsReceivedCounts = await _dmDbContext.GameReviews
-            .Where(r => !r.IsRemoved && !r.Game.IsRemoved && userIds.Contains(r.Game.MasterId))
-            .GroupBy(r => r.Game.MasterId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
-
-        var endorsementsReceivedDict = endorsementsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var gameReviewsReceivedDict = gameReviewsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
+        // A game review received lands on the game's master, the relation
+        // GameReviewFilter.GmId selects by, so the counter agrees with its list.
+        var gameReviewsReceived = await CountByUser(_dbContext.GameReviews
+            .Where(r => !r.Game.IsRemoved && userIds.Contains(r.Game.MasterId))
+            .Select(r => r.Game.MasterId));
 
         // Build status breakdown dictionaries
         var gamesHostingByStatusDict = BuildStatusBreakdownDict(gamesMasterByStatus, gamesAssistantByStatus);
@@ -839,8 +774,8 @@ internal class UserRepository : IUserRepository
 
         foreach (var user in usersList)
         {
-            user.EndorsementsReceivedCount = endorsementsReceivedDict.TryGetValue(user.UserId, out var er) ? er : 0;
-            user.GameReviewsReceivedCount = gameReviewsReceivedDict.TryGetValue(user.UserId, out var grr) ? grr : 0;
+            user.EndorsementsReceivedCount = endorsementsReceived.GetValueOrDefault(user.UserId);
+            user.GameReviewsReceivedCount = gameReviewsReceived.GetValueOrDefault(user.UserId);
 
             // Games hosting = sum from status breakdown
             user.GamesHostingByStatus = gamesHostingByStatusDict.TryGetValue(user.UserId, out var gh) ? gh : null;
@@ -856,7 +791,7 @@ internal class UserRepository : IUserRepository
         }
     }
 
-    private async Task PopulatePostReviewCounts(IEnumerable<GeneralUser> users)
+    private async Task PopulateProfileCounters(IEnumerable<GeneralUser> users)
     {
         var usersList = users.ToList();
         if (!usersList.Any())
@@ -869,157 +804,84 @@ internal class UserRepository : IUserRepository
         // Everything the list needs is the first part of everything the profile needs.
         await PopulateListCounts(usersList);
 
-        // Run statistics queries sequentially (DbContext is not thread-safe)
-        var givenCounts = await _dmDbContext.PostReviews
-            .Where(r => userIds.Contains(r.AuthorId) && !r.IsRemoved)
-            .GroupBy(r => r.AuthorId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        // Sequential: DbContext is not thread-safe.
+        var given = await CountByUser(_dbContext.PostReviews
+            .Where(r => userIds.Contains(r.AuthorId))
+            .Select(r => r.AuthorId));
 
-        var receivedCounts = await _dmDbContext.PostReviews
-            .Where(r => userIds.Contains(r.PostAuthorId) && !r.IsRemoved)
-            .GroupBy(r => r.PostAuthorId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var received = await CountByUser(_dbContext.PostReviews
+            .Where(r => userIds.Contains(r.PostAuthorId))
+            .Select(r => r.PostAuthorId));
 
-        // Endorsements (user-to-user recommendations) — two batched
-        // COUNT queries, symmetrical to PostReviews above. AuthorId =
-        // wrote-by-user, TargetUserId = wrote-about-user.
-        var endorsementsGivenCounts = await _dmDbContext.UserEndorsements
-            .Where(e => userIds.Contains(e.AuthorId) && !e.IsRemoved)
-            .GroupBy(e => e.AuthorId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var endorsementsGiven = await CountByUser(_dbContext.UserEndorsements
+            .Where(e => userIds.Contains(e.AuthorId))
+            .Select(e => e.AuthorId));
 
-        // Game reviews — the same pair of batched COUNTs, over the other kind of
-        // review. "Given" is authorship, as everywhere else. "Received" is not:
-        // a game review is about a game, so it lands on the game's master, which
-        // is the relation GameReviewFilter.GmId already selects by. Both sides
-        // have to agree with the endpoints behind the two profile counters, or
-        // the number on the profile and the length of the list it links to are
-        // answers to different questions.
-        var gameReviewsGivenCounts = await _dmDbContext.GameReviews
-            .Where(r => userIds.Contains(r.AuthorId) && !r.IsRemoved)
-            .GroupBy(r => r.AuthorId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var gameReviewsGiven = await CountByUser(_dbContext.GameReviews
+            .Where(r => userIds.Contains(r.AuthorId))
+            .Select(r => r.AuthorId));
 
-        var gameReviewsReceivedCounts = await _dmDbContext.GameReviews
-            .Where(r => !r.IsRemoved && !r.Game.IsRemoved && userIds.Contains(r.Game.MasterId))
-            .GroupBy(r => r.Game.MasterId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var topicsAuthored = await CountByUser(_dbContext.Topics
+            .Where(t => userIds.Contains(t.AuthorId))
+            .Select(t => t.AuthorId));
 
-        // Topics / Comments / GlobalChat counters — drive the achievement
-        // metrics TopicsAuthored / CommentsAuthored / GlobalChatMessages.
-        // Same batched-GROUP-BY pattern, no per-user N+1.
-        var topicsAuthoredCounts = await _dmDbContext.Topics
-            .Where(t => userIds.Contains(t.AuthorId) && !t.IsRemoved)
-            .GroupBy(t => t.AuthorId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var commentsAuthored = await CountByUser(_dbContext.Comments
+            .Where(c => userIds.Contains(c.AuthorId))
+            .Select(c => c.AuthorId));
 
-        var commentsAuthoredCounts = await _dmDbContext.Comments
-            .Where(c => userIds.Contains(c.AuthorId) && !c.IsRemoved)
-            .GroupBy(c => c.AuthorId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var globalChatId = WellKnownChats.GlobalChatId;
+        var globalChatMessages = await CountByUser(_dbContext.Messages
+            .Where(m => m.ChatId == globalChatId && userIds.Contains(m.UserId))
+            .Select(m => m.UserId));
 
-        var globalChatId = Entities.Messaging.Chat.GlobalChatId;
-        var globalChatMessageCounts = await _dmDbContext.Messages
-            .Where(m => m.ChatId == globalChatId && userIds.Contains(m.UserId) && !m.IsRemoved)
-            .GroupBy(m => m.UserId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
-
-        // Bans received — drives the "резиновая уточка" chain. Same
-        // batched-GROUP-BY pattern. A ban lifted early does not count: it was taken
-        // back, and the count is of bans a user served. Spelled as LiftedUtc == null
-        // rather than as the soft-delete flag the ban no longer has; the behaviour
-        // is the same as before.
-        var bansReceivedCounts = await _dmDbContext.Set<Entities.Moderation.Ban>()
+        // A ban lifted early was taken back: the count is of bans a user served.
+        var bansReceived = await CountByUser(_dbContext.Bans
             .Where(b => userIds.Contains(b.TargetUserId) && b.LiftedUtc == null)
-            .GroupBy(b => b.TargetUserId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+            .Select(b => b.TargetUserId));
 
-        // Game drops — drives the "дропы" chain. The player left voluntarily
-        // (IsPlayerLeft=true), the character is Retired, not an NPC; deleted
-        // characters and games are excluded. Death and GM exile are not drops.
-        var gameDropsCounts = await _dmDbContext.Set<Entities.Game.Characters.Character>()
+        // A drop is a player leaving on their own: a retired non-NPC with IsPlayerLeft.
+        // Death and exile by the master are not drops.
+        var gameDrops = await CountByUser(_dbContext.Characters
             .Where(c => c.AuthorId.HasValue
                 && userIds.Contains(c.AuthorId.Value)
                 && !c.IsNpc
-                && !c.IsRemoved
                 && !c.Game.IsRemoved
-                && c.Status == DM.Domain.Core.Enums.CharacterStatus.Retired
+                && c.Status == CharacterStatus.Retired
                 && c.IsPlayerLeft)
-            .GroupBy(c => c.AuthorId!.Value)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+            .Select(c => c.AuthorId!.Value));
 
-        // Publications authored — drives the "публикации" chain. Drafts
-        // also count (see the enum doc) because filtering is only
-        // by IsRemoved.
-        var publicationsAuthoredCounts = await _dmDbContext.Set<Entities.Blog.Publication>()
-            .Where(p => userIds.Contains(p.AuthorId) && !p.IsRemoved)
-            .GroupBy(p => p.AuthorId)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        // Drafts count too.
+        var publicationsAuthored = await CountByUser(_dbContext.Publications
+            .Where(p => userIds.Contains(p.AuthorId))
+            .Select(p => p.AuthorId));
 
-        // Likes received — drives the "лайки" chain. Likes are polymorphic
-        // (Like.EntityType + Like.EntityId), so we do 4 separate
-        // JOINs with each content type (Topic / Publication / Comment /
-        // Message) and sum in .NET. The alternative (one SQL with UNION ALL)
-        // would be more complex and less readable.
-        // Game posts and PostReviews are not counted — they have their
-        // own quality signal "Рейтинг" via PostReview.SignValue.
-        var likesOnTopicsCounts = await _dmDbContext.Set<Entities.Shared.Like>()
-            .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Topic)
-            .Join(_dmDbContext.Topics.Where(t => !t.IsRemoved && userIds.Contains(t.AuthorId)),
-                l => l.EntityId, t => t.TopicId, (l, t) => t.AuthorId)
-            .GroupBy(uid => uid)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        // Likes are polymorphic, so one join per kind of content, summed below. Game
+        // posts are not counted: their quality signal is the rating.
+        var likesOnTopics = await CountByUser(_dbContext.Likes
+            .Where(l => l.EntityType == LikeEntityType.Topic)
+            .Join(_dbContext.Topics.Where(t => userIds.Contains(t.AuthorId)),
+                l => l.EntityId, t => t.TopicId, (l, t) => t.AuthorId));
 
-        var likesOnPublicationsCounts = await _dmDbContext.Set<Entities.Shared.Like>()
-            .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Publication)
-            .Join(_dmDbContext.Set<Entities.Blog.Publication>().Where(p => !p.IsRemoved && userIds.Contains(p.AuthorId)),
-                l => l.EntityId, p => p.PublicationId, (l, p) => p.AuthorId)
-            .GroupBy(uid => uid)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var likesOnPublications = await CountByUser(_dbContext.Likes
+            .Where(l => l.EntityType == LikeEntityType.Publication)
+            .Join(_dbContext.Publications.Where(p => userIds.Contains(p.AuthorId)),
+                l => l.EntityId, p => p.PublicationId, (l, p) => p.AuthorId));
 
-        var likesOnCommentsCounts = await _dmDbContext.Set<Entities.Shared.Like>()
-            .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Comment)
-            .Join(_dmDbContext.Comments.Where(c => !c.IsRemoved && userIds.Contains(c.AuthorId)),
-                l => l.EntityId, c => c.CommentId, (l, c) => c.AuthorId)
-            .GroupBy(uid => uid)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var likesOnComments = await CountByUser(_dbContext.Likes
+            .Where(l => l.EntityType == LikeEntityType.Comment)
+            .Join(_dbContext.Comments.Where(c => userIds.Contains(c.AuthorId)),
+                l => l.EntityId, c => c.CommentId, (l, c) => c.AuthorId));
 
-        var likesOnMessagesCounts = await _dmDbContext.Set<Entities.Shared.Like>()
-            .Where(l => !l.IsRemoved && l.EntityType == DM.Domain.Core.Enums.LikeEntityType.Message)
-            .Join(_dmDbContext.Messages.Where(m => !m.IsRemoved && userIds.Contains(m.UserId)),
-                l => l.EntityId, m => m.MessageId, (l, m) => m.UserId)
-            .GroupBy(uid => uid)
-            .Select(g => new { UserId = g.Key, Count = g.Count() })
-            .ToListAsync();
+        var likesOnMessages = await CountByUser(_dbContext.Likes
+            .Where(l => l.EntityType == LikeEntityType.Message)
+            .Join(_dbContext.Messages.Where(m => userIds.Contains(m.UserId)),
+                l => l.EntityId, m => m.MessageId, (l, m) => m.UserId));
 
-        // Subscribers: the total plus a capped preview carrying username, last
-        // activity and the settings bitmask the profile UI filters tabs by
-        // (games / blogs / topics). Every subscriber row used to be materialised
-        // to produce a count and a slice of twenty; the slice is now taken in SQL
-        // by ROW_NUMBER() OVER (PARTITION BY TargetId), so the transfer is bounded
-        // by the cap instead of by how popular the users on the page are.
-        //
-        // The Join, rather than relying on the navigation, keeps the count over the
-        // same rows the preview comes from: the subscriber's soft-delete filter
-        // reaches the join and so removes a departed subscriber from both, which
-        // is what the previous single materialised list did.
-        var subscriberSummaries = await _dmDbContext.Subscriptions
+        // Subscribers: the total and a capped preview taken in SQL (ROW_NUMBER per target). The
+        // Join keeps both over the same rows: the filter of the subscriber reaches it.
+        var subscriberSummaries = await _dbContext.Subscriptions
             .Where(s => s.TargetType == SubscriptionTargetType.User && userIds.Contains(s.TargetId))
-            .Join(_dmDbContext.Users, s => s.SubscriberId, u => u.UserId,
+            .Join(_dbContext.Users, s => s.SubscriberId, u => u.UserId,
                 (s, u) => new
                 {
                     s.TargetId,
@@ -1055,7 +917,7 @@ internal class UserRepository : IUserRepository
                     .ThenByDescending(x => x.LastActivityUtc)
                     .ThenBy(x => x.SubscriptionId)
                     .Take(SubscriptionPolicy.PreviewCap)
-                    .Select(x => new Domain.Core.Dto.SubscriberInfo
+                    .Select(x => new SubscriberInfo
                     {
                         Username = x.Username,
                         LastActivityUtc = x.LastActivityUtc,
@@ -1066,68 +928,36 @@ internal class UserRepository : IUserRepository
             .ToDictionaryAsync(x => x.UserId);
 
         // Username history: fetch and group by user
-        var usernameHistoryData = await _dmDbContext.Set<Entities.Account.UsernameHistory>()
+        var usernameHistoryData = await _dbContext.UsernameHistories
             .Where(h => userIds.Contains(h.UserId))
             .OrderByDescending(h => h.ChangedUtc)
-            .Select(h => new
-            {
-                h.UserId,
-                Entry = new Domain.Core.Users.UsernameHistoryEntry
-                {
-                    UsernameHistoryId = h.UsernameHistoryId,
-                    OldUsername = h.OldUsername,
-                    NewUsername = h.NewUsername,
-                    ChangedUtc = h.ChangedUtc,
-                    ApprovedByUsername = h.ApprovedBy != null ? h.ApprovedBy.Username : null
-                }
-            })
+            .SelectSpliced(h => new { h.UserId, Entry = UsernameHistoryRepository.Projection.Splice(h) })
             .ToListAsync();
 
         var usernameHistoryDict = usernameHistoryData
             .GroupBy(h => h.UserId)
             .ToDictionary(g => g.Key, g => g.Select(x => x.Entry).ToList());
 
-        var givenDict = givenCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var receivedDict = receivedCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var endorsementsGivenDict = endorsementsGivenCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var gameReviewsGivenDict = gameReviewsGivenCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var gameReviewsReceivedDict = gameReviewsReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var topicsAuthoredDict = topicsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var commentsAuthoredDict = commentsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var globalChatMessagesDict = globalChatMessageCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var bansReceivedDict = bansReceivedCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var gameDropsDict = gameDropsCounts.ToDictionary(x => x.UserId, x => x.Count);
-        var publicationsAuthoredDict = publicationsAuthoredCounts.ToDictionary(x => x.UserId, x => x.Count);
-
-        // Stitch the 4 like sources into one dictionary (UserId → sum).
-        var likesReceivedDict = new Dictionary<Guid, int>();
-        foreach (var x in likesOnTopicsCounts)
-            likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
-        foreach (var x in likesOnPublicationsCounts)
-            likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
-        foreach (var x in likesOnCommentsCounts)
-            likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
-        foreach (var x in likesOnMessagesCounts)
-            likesReceivedDict[x.UserId] = (likesReceivedDict.TryGetValue(x.UserId, out var v) ? v : 0) + x.Count;
-
         foreach (var user in usersList)
         {
-            user.PostReviewsGivenCount = givenDict.TryGetValue(user.UserId, out var given) ? given : 0;
-            user.PostReviewsReceivedCount = receivedDict.TryGetValue(user.UserId, out var received) ? received : 0;
-            user.EndorsementsGivenCount = endorsementsGivenDict.TryGetValue(user.UserId, out var eg) ? eg : 0;
-            user.GameReviewsGivenCount = gameReviewsGivenDict.TryGetValue(user.UserId, out var grg) ? grg : 0;
-            user.GameReviewsReceivedCount = gameReviewsReceivedDict.TryGetValue(user.UserId, out var grr) ? grr : 0;
-            user.TopicsAuthoredCount = topicsAuthoredDict.TryGetValue(user.UserId, out var ta) ? ta : 0;
-            user.CommentsAuthoredCount = commentsAuthoredDict.TryGetValue(user.UserId, out var ca) ? ca : 0;
-            user.GlobalChatMessagesCount = globalChatMessagesDict.TryGetValue(user.UserId, out var gc) ? gc : 0;
-            user.BansReceivedCount = bansReceivedDict.TryGetValue(user.UserId, out var br) ? br : 0;
-            user.GameDropsCount = gameDropsDict.TryGetValue(user.UserId, out var gd) ? gd : 0;
-            user.PublicationsAuthoredCount = publicationsAuthoredDict.TryGetValue(user.UserId, out var pa) ? pa : 0;
-            user.LikesReceivedCount = likesReceivedDict.TryGetValue(user.UserId, out var lr) ? lr : 0;
+            user.PostReviewsGivenCount = given.GetValueOrDefault(user.UserId);
+            user.PostReviewsReceivedCount = received.GetValueOrDefault(user.UserId);
+            user.EndorsementsGivenCount = endorsementsGiven.GetValueOrDefault(user.UserId);
+            user.GameReviewsGivenCount = gameReviewsGiven.GetValueOrDefault(user.UserId);
+            user.TopicsAuthoredCount = topicsAuthored.GetValueOrDefault(user.UserId);
+            user.CommentsAuthoredCount = commentsAuthored.GetValueOrDefault(user.UserId);
+            user.GlobalChatMessagesCount = globalChatMessages.GetValueOrDefault(user.UserId);
+            user.BansReceivedCount = bansReceived.GetValueOrDefault(user.UserId);
+            user.GameDropsCount = gameDrops.GetValueOrDefault(user.UserId);
+            user.PublicationsAuthoredCount = publicationsAuthored.GetValueOrDefault(user.UserId);
+            user.LikesReceivedCount = likesOnTopics.GetValueOrDefault(user.UserId) +
+                                      likesOnPublications.GetValueOrDefault(user.UserId) +
+                                      likesOnComments.GetValueOrDefault(user.UserId) +
+                                      likesOnMessages.GetValueOrDefault(user.UserId);
 
             var subscribers = subscriberSummaries.GetValueOrDefault(user.UserId);
             user.Subscribers = subscribers?.Preview ?? [];
-            user.SubscribersByCategory = new Domain.Core.Dto.SubscribersByCategory
+            user.SubscribersByCategory = new SubscribersByCategory
             {
                 Games = subscribers?.GameSubscribers ?? 0,
                 Blogs = subscribers?.BlogSubscribers ?? 0,
@@ -1136,4 +966,13 @@ internal class UserRepository : IUserRepository
             user.UsernameHistory = usernameHistoryDict.TryGetValue(user.UserId, out var history) ? history : [];
         }
     }
+
+    /// <summary>
+    /// How many rows each user owns, in one GROUP BY; a user without rows is absent.
+    /// </summary>
+    private static Task<Dictionary<Guid, int>> CountByUser(IQueryable<Guid> userIdOfEachRow) =>
+        userIdOfEachRow
+            .GroupBy(userId => userId)
+            .Select(g => new { UserId = g.Key, Count = g.Count() })
+            .ToDictionaryAsync(x => x.UserId, x => x.Count);
 }

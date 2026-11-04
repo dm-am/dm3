@@ -11,17 +11,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 /// Who changed a topic, taken off the whole PATCH chain rather than off a mock.
 /// </summary>
 /// <remarks>
-/// A topic row carries its author and nothing else, so the schema answers "who
-/// changed this" with the TopicEdits history alone — declared since InitialCreate
-/// and, until this, written by nobody. The consequence was not an empty table but
-/// a hole in the blacklist: the ChangedTopic notification takes its actor from
-/// this history, and with the history empty every topic edit was delivered to
-/// subscribers who had blocked the person making it, while the mirror-image edit
-/// of a blog publication was filtered.
-///
-/// Driven over HTTP because the field is set in the service and written in the
-/// repository: a test that called either one alone would keep passing while the
-/// two disagreed about who fills it.
+/// TopicEdits is the only answer to who changed a topic, and the ChangedTopic notification takes its actor
+/// there. Over HTTP: the service sets the field, the repository writes it.
 /// </remarks>
 public class TopicEditHistoryShould : IntegrationTestBase
 {
@@ -87,12 +78,7 @@ public class TopicEditHistoryShould : IntegrationTestBase
     /// A request that round-trips the values the topic already holds leaves no
     /// edit behind.
     /// </summary>
-    /// <remarks>
-    /// The client PATCHes the fields it has, so the same values come back on
-    /// every save the user cancels out of. Recording those would turn the
-    /// history into a request log and hand the ChangedTopic notification an
-    /// actor for a change nobody made.
-    /// </remarks>
+    /// <remarks>The client PATCHes the fields it has on every save, cancelled ones included.</remarks>
     [Fact]
     public async Task LeaveNoEditBehindWhenNothingChanges()
     {

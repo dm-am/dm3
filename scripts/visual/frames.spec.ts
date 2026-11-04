@@ -2,40 +2,34 @@ import { test, type Browser, type Page } from "@playwright/test";
 import { readFileSync } from "fs";
 import { join } from "path";
 import { captureState, pinRandomness, settle } from "./capture";
+import { env } from "./env";
 import type { Fixture } from "./fixture";
 import { masksFor } from "./masks";
-import { COMMON_KEYS, STATES, type Project, type State } from "./states";
-import { addressOf, UNORDERED } from "./unordered.mjs";
+import { COMMON_KEYS, STATES, type State } from "./states";
+import { routePattern, UNORDERED } from "./unordered.mjs";
 import { collapseRepeated, REPEATED } from "./api-volatile.mjs";
 
-const AUTH = process.env.VISUAL_AUTH!;
-const EPOCH = process.env.VISUAL_EPOCH!;
+const AUTH = env("VISUAL_AUTH");
+const EPOCH = env("VISUAL_EPOCH");
 const THEME = process.env.VISUAL_THEME === "dark" ? "dark" : "light";
 
 /** Hosts the page may reach: the build and the stack. Nothing on the internet. */
 const LOCAL = /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\//;
 
 /**
- * The tallest window a frame is taken in, in CSS pixels. A phone frame is
- * three device pixels to one, and a frame much taller than this is beyond what
- * the browser rasterises in one piece; the rest of such a page is still in the
- * tree and the styles.
+ * The tallest window a frame is taken in, in CSS pixels. A frame much taller
+ * than this is beyond what the browser rasterises in one piece; the rest of
+ * such a page is still in the tree and the styles.
  */
-const TALLEST: Record<Project, number> = { desktop: 12_000, phone: 4_000 };
+const TALLEST = 12_000;
 
 const fixture = (): Fixture =>
   JSON.parse(readFileSync(join(AUTH, "fixture.json"), "utf8"));
 
-async function open(browser: Browser, state: State, project: Project) {
+async function open(browser: Browser, state: State) {
   const context = await browser.newContext({
-    ...(project === "phone"
-      ? {
-          viewport: { width: 390, height: 844 },
-          deviceScaleFactor: 3,
-          isMobile: true,
-          hasTouch: true,
-        }
-      : { viewport: { width: 1920, height: 911 }, deviceScaleFactor: 1 }),
+    viewport: { width: 1920, height: 911 },
+    deviceScaleFactor: 1,
     locale: "ru-RU",
     timezoneId: "Europe/Moscow",
     colorScheme: THEME,
@@ -55,34 +49,31 @@ async function open(browser: Browser, state: State, project: Project) {
       ? route.continue()
       : route.abort("internetdisconnected"),
   );
-  // The lists the API returns in no order reach the page in the order the API
-  // snapshot compares them in (unordered.mjs): otherwise a list drawn as the
-  // server happened to return it differs between two runs of one commit.
+  // The answers of a route reach the page the way the API snapshot compares them, so that
+  // two runs of one commit see the same page.
   const runWritten = (moment: unknown) =>
     typeof moment === "string" &&
     Date.parse(moment) > Date.parse(EPOCH) + 24 * 60 * 60_000;
+  const reshaped = (pattern: string, reshape: (json: unknown) => void) =>
+    context.route(routePattern(pattern), async (route) => {
+      if (route.request().method() !== "GET") return route.fallback();
+      const response = await route.fetch();
+      if (!response.ok()) return route.fulfill({ response });
+      const json = await response.json();
+      reshape(json);
+      await route.fulfill({ response, json });
+    });
+  // The lists the API returns in no order, in the order of unordered.mjs: otherwise a list
+  // drawn as the server happened to return it differs between two runs.
   for (const rule of UNORDERED) {
-    await context.route(addressOf(rule.route), async (route) => {
-      if (route.request().method() !== "GET") return route.fallback();
-      const response = await route.fetch();
-      if (!response.ok()) return route.fulfill({ response });
-      const json = await response.json();
-      rule.order(json, runWritten);
-      await route.fulfill({ response, json });
-    });
+    await reshaped(rule.route, (json) => rule.order(json, runWritten));
   }
-  // The rows every sign-in of a stand's run adds (sessions, the security
-  // log) reach the page folded as the API snapshot folds them
-  // (api-volatile.mjs): otherwise each run lists one row more than the last.
+  // The rows every sign-in of a stand's run adds (sessions, the security log), folded as
+  // api-volatile.mjs folds them: otherwise each run lists one row more than the last.
   for (const rule of REPEATED) {
-    await context.route(addressOf(rule.route), async (route) => {
-      if (route.request().method() !== "GET") return route.fallback();
-      const response = await route.fetch();
-      if (!response.ok()) return route.fulfill({ response });
-      const json = await response.json();
-      collapseRepeated(json, rule, runWritten);
-      await route.fulfill({ response, json });
-    });
+    await reshaped(rule.route, (json) =>
+      collapseRepeated(json, rule, runWritten),
+    );
   }
   await context.addInitScript(pinRandomness);
   await context.addInitScript(
@@ -119,7 +110,7 @@ function refuseRateLimited(state: State, refused: string[]) {
  * would hold only the first screen. Repeated, because a taller window can
  * bring in more (a list that loads the next part when its end comes into view).
  */
-async function stretch(page: Page, project: Project) {
+async function stretch(page: Page) {
   for (let round = 0; round < 3; round++) {
     const size = page.viewportSize()!;
     const { overflow, scale } = await page.evaluate(() => {
@@ -136,9 +127,8 @@ async function stretch(page: Page, project: Project) {
       return { overflow: most, scale: innerHeight };
     });
     if (overflow <= 0) return;
-    // innerHeight is in layout pixels, which a phone scales to its screen.
     const height = Math.min(
-      TALLEST[project],
+      TALLEST,
       Math.ceil(size.height + (overflow * size.height) / scale),
     );
     if (height === size.height) return;
@@ -149,18 +139,12 @@ async function stretch(page: Page, project: Project) {
 
 for (const state of STATES) {
   test(state.name, async ({ browser }, info) => {
-    const project = info.project.name as Project;
-    test.skip(
-      !!state.projects && !state.projects.includes(project),
-      `${state.name} is not a state of ${project}`,
-    );
-
-    const { page, refused } = await open(browser, state, project);
+    const { page, refused } = await open(browser, state);
     const url =
       typeof state.url === "function" ? state.url(fixture()) : state.url;
     await page.goto(url, { waitUntil: "load" });
     await settle(page);
-    if (state.whole !== false) await stretch(page, project);
+    if (state.whole !== false) await stretch(page);
     if (state.act) {
       await state.act(page);
       await settle(page);

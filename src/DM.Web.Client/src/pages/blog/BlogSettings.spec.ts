@@ -2,26 +2,11 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The blog settings page is the twin of the game one, and it has the same
- * problem: the sections behind it do not share an audience, so a single page
- * flag would either lock people out of what they may do or offer them saves
- * the server answers with 403. This spec pins each section to the intention
- * that enforces it:
- *  - BlogIntention.EditSettings (the information form, the invitation list,
- *    and admission to the page): owner, assistants, senior moderation;
- *  - BlogIntention.Edit (the blacklist including its read, and assistant
- *    removal): the owner and administration — no senior-moderator clause on
- *    this one, unlike the game side;
- *  - CreateRubric / InviteAssistant / CancelInvitation: the owner alone;
- *  - InviteReader: the owner and the assistants.
- *
- * The roles are read from useBlogDetailsStore (derived from the blog's author
- * and assistants) plus the viewer's site role — never a check invented here.
- *
- * A viewer the page admits to nothing has no page: the address opens the
- * site's own "not found", decided once the session is settled.
- */
+// Each section pinned to the intention that enforces it: EditSettings (owner,
+// assistants, senior moderation; also admission), Edit (owner and admins, no
+// senior-moderator clause, unlike the game), ManageRubrics, InviteAssistant and
+// CancelInvitation (owner), InviteReader (owner and assistants). A viewer
+// admitted to nothing gets "not found" once the session is settled.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
@@ -38,10 +23,7 @@ const { push, replace, session } = vi.hoisted(() => ({
   session: { settled: Promise.resolve() as Promise<void> },
 }));
 
-// Only the navigations the page holds: the delete action and the way out for
-// a viewer it refuses. The rest of the router stays real, as in the game
-// settings spec. One spy across the file, so the delete tests below can read
-// the address the page left for.
+// Only the navigations the page holds; the rest of the router stays real.
 vi.mock("vue-router", async (importOriginal) => ({
   ...(await importOriginal<typeof import("vue-router")>()),
   useRoute: () => ({
@@ -53,8 +35,7 @@ vi.mock("vue-router", async (importOriginal) => ({
   useRouter: () => ({ push, replace }),
 }));
 
-// The answer about the session the start of the page asks for, held by the
-// test: settled at once unless a test keeps it out.
+// The session answer, settled at once unless a test keeps it out.
 vi.mock("@/entities/user", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/entities/user")>()),
   restoreSession: () => session.settled,
@@ -72,15 +53,11 @@ const marker = (className: string) => ({
   setup: () => () => h("div", { class: className }),
 });
 
-// The DOM lowercases attribute names, so the recorded flags go out in kebab
-// case or `attributes()` would never find them again.
+// The DOM lowercases attribute names, so the flags go out in kebab case.
 const kebab = (name: string) =>
   name.replace(/[A-Z]/g, (c) => `-${c.toLowerCase()}`);
 
-/**
- * A section drawn for a wider audience than it accepts writes from: the stub
- * records the two flags the page hands it.
- */
+/** A section drawn for a wider audience than it accepts writes from: the stub records both flags. */
 const gatedMarker = (className: string, first: string, second: string) =>
   defineComponent({
     props: {
@@ -105,8 +82,7 @@ const stubs = {
     "canInvite",
     "canCancel",
   ),
-  // The confirmation is the real window, drawn in place: the deletion is its
-  // request, and a refusal is printed in it.
+  // The confirmation is the real window, drawn in place.
   Teleport: true,
   RouterLink: { template: "<a><slot /></a>" },
 };
@@ -123,8 +99,7 @@ function render(standing: Standing, viewer?: UserRole) {
     ? ({ username: THE_VIEWER, role: viewer } as User)
     : null;
   const store = useBlogDetailsStore();
-  // The blog roles are not served as flags: the store derives them by matching
-  // the signed-in username against the blog's author and assistants.
+  // The store derives the roles from the blog's author and assistants.
   store.blog = {
     id: "the-blog",
     title: "Дневник",
@@ -197,8 +172,7 @@ describe("BlogSettings admission", () => {
   });
 
   it("waits for the answer about the session before sending anybody away", async () => {
-    // A session the browser kept no copy of: the store holds nobody until the
-    // server names the viewer, and the owner then stays.
+    // A session the browser kept no copy of: the owner stays once the server names him.
     let answer = () => {};
     session.settled = new Promise((resolve) => (answer = resolve));
     render("owner");
@@ -230,9 +204,7 @@ describe("BlogSettings sections", () => {
   });
 
   it("gives the assistant the settings and the reader invites, nothing else", () => {
-    // Rubrics, the blacklist, assistant management and cancelling an
-    // invitation are all the owner's; the assistant would collect a 403 on
-    // every one of them, the blacklist READ included.
+    // Rubrics, the blacklist, assistants and cancelling are the owner's.
     expect(seenBy("assistant")).toEqual({
       info: true,
       rubrics: false,
@@ -248,8 +220,7 @@ describe("BlogSettings sections", () => {
   });
 
   it("gives a senior moderator the settings without the blacklist", () => {
-    // BlogIntention.Edit stops at the administration here, so the section the
-    // game side opens for senior moderation stays shut on the blog.
+    // BlogIntention.Edit stops at the administration here.
     expect(seenBy("stranger", UserRole.SeniorModerator)).toEqual({
       info: true,
       rubrics: false,
@@ -280,15 +251,7 @@ describe("BlogSettings sections", () => {
   });
 });
 
-/**
- * Where the author is put down once the blog is gone.
- *
- * The page left for "blogs" — the site-wide catalogue, with its filters and
- * its pages, where one blog missing from among all of them is nothing anybody
- * can see. The author's own list of blogs is on their profile, and there the
- * absence is the whole of it. The toast that used to carry the news is gone
- * with the change: the list is the news.
- */
+// The author lands on his own list of blogs: the missing row there is the news.
 describe("BlogSettings — after the blog is deleted", () => {
   const toast = useToast();
   const saidOutLoud = () => toast.toasts.value.map((t) => t.message);

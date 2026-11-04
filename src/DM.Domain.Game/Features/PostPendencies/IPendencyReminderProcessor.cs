@@ -8,10 +8,6 @@ namespace DM.Domain.Game.Features.PostPendencies;
 /// </summary>
 public interface IPendencyReminderProcessor
 {
-    /// <summary>
-    /// Runs one pass.
-    /// </summary>
-    /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>Number of reminders sent.</returns>
     Task<int> SendDueRemindersAsync(CancellationToken cancellationToken = default);
 }

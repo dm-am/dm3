@@ -38,35 +38,23 @@ internal class SubscriptionService : ISubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        return await _repository.GetUserSubscriptionsAsync(userId, ct);
-    }
+    public Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(CancellationToken ct = default) =>
+        _repository.GetUserSubscriptionsAsync(_identityProvider.Current.User.UserId, ct);
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(SubscriptionTargetType targetType, CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        return await _repository.GetUserSubscriptionsAsync(userId, targetType, ct);
-    }
+    public Task<IEnumerable<Subscription>> GetMySubscriptionsAsync(SubscriptionTargetType targetType, CancellationToken ct = default) =>
+        _repository.GetUserSubscriptionsAsync(_identityProvider.Current.User.UserId, targetType, ct);
 
     /// <inheritdoc />
     public async Task<Subscription> SubscribeAsync(SubscriptionTargetType targetType, Guid targetId, SubscriptionSettings? settings = null, CancellationToken ct = default)
     {
         var userId = _identityProvider.Current.User.UserId;
 
-        // Prevent self-subscription for User type
         if (targetType == SubscriptionTargetType.User && targetId == userId)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Нельзя подписаться на себя");
         }
-        // No target puts a rule on being subscribed to. The one that did, the
-        // blacklist of a game or a blog, closes writing and not following: a
-        // subscription delivers what its holder may read anyway, and every write
-        // the list guards asks the list itself.
 
-        // Check if already subscribed
         var existing = await _repository.FindAsync(userId, targetType, targetId, ct);
         if (existing != null)
         {
@@ -97,7 +85,6 @@ internal class SubscriptionService : ISubscriptionService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.SubscriptionNotFound);
         }
 
-        // Verify ownership
         var userId = _identityProvider.Current.User.UserId;
         if (subscription.SubscriberId != userId)
         {
@@ -121,10 +108,9 @@ internal class SubscriptionService : ISubscriptionService
 
         if (subscription == null)
         {
-            return; // Already unsubscribed
+            return;
         }
 
-        // Verify ownership
         var userId = _identityProvider.Current.User.UserId;
         if (subscription.SubscriberId != userId)
         {
@@ -135,31 +121,24 @@ internal class SubscriptionService : ISubscriptionService
     }
 
     /// <inheritdoc />
-    public async Task UnsubscribeByTargetAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        await _repository.DeleteAsync(userId, targetType, targetId, ct);
-    }
+    public Task UnsubscribeByTargetAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default) =>
+        _repository.DeleteAsync(_identityProvider.Current.User.UserId, targetType, targetId, ct);
 
     /// <inheritdoc />
-    public async Task<Subscription?> GetSubscriptionAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default)
-    {
-        var userId = _identityProvider.Current.User.UserId;
-        return await _repository.FindAsync(userId, targetType, targetId, ct);
-    }
+    public Task<Subscription?> GetSubscriptionAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default) =>
+        _repository.FindAsync(_identityProvider.Current.User.UserId, targetType, targetId, ct);
 
     /// <inheritdoc />
     public async Task<Subscription?> GetByIdAsync(Guid subscriptionId, CancellationToken ct = default)
     {
         var subscription = await _repository.GetAsync(subscriptionId, ct);
 
-        // Verify ownership
         if (subscription != null)
         {
             var userId = _identityProvider.Current.User.UserId;
             if (subscription.SubscriberId != userId)
             {
-                return null; // Hide subscriptions belonging to other users
+                return null;
             }
         }
 
@@ -180,11 +159,6 @@ internal class SubscriptionService : ISubscriptionService
         // subscriber of a popular account to answer with twenty of them is one
         // round trip per subscriber for a page nobody asked for.
         var subscriberIdList = subscriberIds.Skip(query.Skip).Take(query.Take).ToList();
-
-        if (!subscriberIdList.Any())
-        {
-            return Enumerable.Empty<GeneralUser>();
-        }
 
         var users = new List<GeneralUser>();
         foreach (var subscriberId in subscriberIdList)

@@ -4,11 +4,7 @@ namespace DM.Domain.Core.Enums;
 /// Which part of the security journal a caller is asking for.
 /// </summary>
 /// <remarks>
-/// Named so the binder can refuse anything else. Spelled as a free string, the
-/// filter fell past all three arms on an unrecognised word and answered with the
-/// whole journal — read by the caller as the filtered slice they asked for. The
-/// client was sending one of those words: "logins" for what the server calls
-/// "login".
+/// An enum so the binder refuses an unknown filter.
 /// </remarks>
 public enum SecurityLogType
 {

@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -22,19 +21,16 @@ namespace DM.Web.API.Features.Game.Users;
 [Tags("Users")]
 public class GameUserController : ControllerBase
 {
-    private readonly IGameUserApiService _userApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly GameUserApiService _userApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <inheritdoc />
     public GameUserController(
-        IGameUserApiService userApiService,
-        IGameApiService gameApiService)
+        GameUserApiService userApiService,
+        GameApiService gameApiService)
     {
         _userApiService = userApiService;
         _gameApiService = gameApiService;
     }
-
-    #region Users
 
     /// <summary>
     /// Get all users of a game
@@ -44,7 +40,7 @@ public class GameUserController : ControllerBase
     /// - master, assistant, mentor - game staff
     /// - player - users with active characters, one entry per character
     /// - reader - subscribed users without other roles
-    /// An unrecognised value returns every user. Applicants and former players are
+    /// An unrecognised value is refused with 400. Applicants and former players are
     /// not on the roster, so there is nothing to filter them by.
     ///
     /// An entry is a role and not a person: a user who holds two of them is on the
@@ -68,36 +64,6 @@ public class GameUserController : ControllerBase
         var users = await _userApiService.GetUsers(gameId, role);
         return Ok(new ListEnvelope<GameUser>(users));
     }
-
-    /// <summary>
-    /// Remove assistant from the game by user ID
-    /// </summary>
-    /// <remarks>
-    /// Only the game master can remove assistants.
-    /// Players are removed by deleting their characters. Readers cannot be removed.
-    /// </remarks>
-    /// <param name="id">Game public ID (5 letters) or GUID</param>
-    /// <param name="userId">Assistant user ID to remove</param>
-    /// <response code="204">Assistant removed</response>
-    /// <response code="401">User must be authenticated</response>
-    /// <response code="403">User is not game master</response>
-    /// <response code="404">Game or assistant not found</response>
-    [HttpDelete("{userId:guid}", Name = nameof(RemoveGameUser))]
-    [AuthenticationRequired]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveGameUser(string id, Guid userId)
-    {
-        var gameId = await _gameApiService.ResolveId(id);
-        await _userApiService.RemoveUser(gameId, userId);
-        return NoContent();
-    }
-
-    #endregion
-
-    #region Assistants
 
     /// <summary>
     /// Get list of game assistants
@@ -136,8 +102,6 @@ public class GameUserController : ControllerBase
         await _userApiService.RemoveAssistantByUsername(gameId, username);
         return NoContent();
     }
-
-    #endregion
 
     // Note: Readers endpoints are at /v1/games/{id}/readers (see GameReaderController)
 }

@@ -1,7 +1,7 @@
 using System.Linq;
 using DM.Domain.Core.Subscriptions;
 using Riok.Mapperly.Abstractions;
-using SubscriptionEntity = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
+using DbSubscription = DM.Infrastructure.Persistence.Entities.Subscriptions.Subscription;
 
 namespace DM.Infrastructure.Persistence.Shared.Subscriptions;
 
@@ -21,17 +21,17 @@ public static partial class SubscriptionMapper
     /// EF projection to the domain DTO
     /// </summary>
     public static partial IQueryable<Subscription> ProjectToSubscription(
-        this IQueryable<SubscriptionEntity> query);
+        this IQueryable<DbSubscription> query);
 
     /// <summary>
     /// Tracked entity to the domain DTO, for the write path that already
     /// holds the row
     /// </summary>
-    [MapProperty(nameof(SubscriptionEntity.SubscriptionId), nameof(Subscription.Id))]
+    [MapProperty(nameof(DbSubscription.SubscriptionId), nameof(Subscription.Id))]
     [MapperIgnoreTarget(nameof(Subscription.TargetTitle))]
     [MapperIgnoreTarget(nameof(Subscription.TargetUsername))]
     [MapperIgnoreTarget(nameof(Subscription.TargetStatus))]
     [MapperIgnoreTarget(nameof(Subscription.TargetActivatedUtc))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
-    public static partial Subscription ToSubscription(this SubscriptionEntity subscription);
+    public static partial Subscription ToSubscription(this DbSubscription subscription);
 }

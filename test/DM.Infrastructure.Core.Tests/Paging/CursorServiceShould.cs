@@ -1,5 +1,4 @@
 using System;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Paging;
 using AwesomeAssertions;
@@ -11,27 +10,6 @@ public class CursorServiceShould
 {
     private readonly CursorService cursorService = new();
 
-    [Fact]
-    public void CreateValidBeforeCursor()
-    {
-        var entityId = Guid.NewGuid();
-        var timestamp = DateTimeOffset.UtcNow;
-
-        var cursor = cursorService.CreateBeforeCursor(entityId, timestamp);
-
-        cursor.Should().NotBeNullOrEmpty();
-    }
-
-    [Fact]
-    public void CreateValidAfterCursor()
-    {
-        var entityId = Guid.NewGuid();
-        var timestamp = DateTimeOffset.UtcNow;
-
-        var cursor = cursorService.CreateAfterCursor(entityId, timestamp);
-
-        cursor.Should().NotBeNullOrEmpty();
-    }
 
     [Fact]
     public void DecodeBeforeCursor()
@@ -43,7 +21,7 @@ public class CursorServiceShould
         var success = cursorService.TryDecode(cursor, out var data);
 
         success.Should().BeTrue();
-        data.EntityId.Should().Be(entityId);
+        data!.EntityId.Should().Be(entityId);
         data.Direction.Should().Be(CursorDirection.Before);
         data.TimestampUtc.Should().BeCloseTo(timestamp, TimeSpan.FromSeconds(1));
     }
@@ -58,7 +36,7 @@ public class CursorServiceShould
         var success = cursorService.TryDecode(cursor, out var data);
 
         success.Should().BeTrue();
-        data.EntityId.Should().Be(entityId);
+        data!.EntityId.Should().Be(entityId);
         data.Direction.Should().Be(CursorDirection.After);
         data.TimestampUtc.Should().BeCloseTo(timestamp, TimeSpan.FromSeconds(1));
     }
@@ -105,8 +83,8 @@ public class CursorServiceShould
         cursorService.TryDecode(cursor1, out var data1);
         cursorService.TryDecode(cursor2, out var data2);
 
-        data1.EntityId.Should().Be(entityId1);
-        data2.EntityId.Should().Be(entityId2);
+        data1!.EntityId.Should().Be(entityId1);
+        data2!.EntityId.Should().Be(entityId2);
     }
 
     [Fact]
@@ -124,8 +102,8 @@ public class CursorServiceShould
         cursorService.TryDecode(cursor1, out var data1);
         cursorService.TryDecode(cursor2, out var data2);
 
-        data1.TimestampUtc.Should().BeCloseTo(timestamp1, TimeSpan.FromSeconds(1));
-        data2.TimestampUtc.Should().BeCloseTo(timestamp2, TimeSpan.FromSeconds(1));
+        data1!.TimestampUtc.Should().BeCloseTo(timestamp1, TimeSpan.FromSeconds(1));
+        data2!.TimestampUtc.Should().BeCloseTo(timestamp2, TimeSpan.FromSeconds(1));
     }
 
     [Fact]
@@ -150,6 +128,16 @@ public class CursorServiceShould
         var success = cursorService.TryDecode(cursor, out var data);
 
         success.Should().BeTrue();
-        data.TimestampUtc.Offset.Should().Be(TimeSpan.Zero);
+        data!.TimestampUtc.Offset.Should().Be(TimeSpan.Zero);
+    }
+
+    [Fact]
+    public void ReturnFalseForBase64ThatIsNotJson()
+    {
+        // "not json": the base64 reads, the JSON in it does not.
+        var success = cursorService.TryDecode("bm90IGpzb24=", out var data);
+
+        success.Should().BeFalse();
+        data.Should().BeNull();
     }
 }

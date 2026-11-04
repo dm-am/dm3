@@ -1,22 +1,24 @@
-// Branded type
 type InternalServed<T> = T & { __type: T };
 
-// Idempotent generics (Served<number> = Served<Served<number>>)
-//
-// A null stays null. The brand is an intersection, and `null & { __type }` is
-// never, so Served<User | null> used to read as a plain Served<User>: the null
-// the mirror declared was erased, and a reader of a removed author's comment
-// was typed as if the author were always there.
+// Idempotent: Served<number> = Served<Served<number>>. A null stays null, since
+// null & { __type } is never and would erase it.
 export type Served<T> = T extends null
   ? null
   : T extends InternalServed<infer U>
     ? InternalServed<U>
     : InternalServed<T>;
 
+/**
+ * A value taken for what the API serves: the like the client has just added,
+ * an answer drawn as a comment, the data of a spec. The brand has no value of
+ * its own to check, so this is the one cast that makes it.
+ */
+export function asServed<T>(value: T): Served<T> {
+  return value as Served<T>;
+}
+
 type IfEquals<X, Y, A, B> =
   (<T>() => T extends X ? 1 : 2) extends <T>() => T extends Y ? 1 : 2 ? A : B;
-
-export type Id<T> = Served<T>;
 
 export type Post<T> = {
   [P in keyof T as IfEquals<T[P], Served<T[P]>, never, P>]: T[P];

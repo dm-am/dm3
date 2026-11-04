@@ -1,10 +1,6 @@
 <script setup lang="ts">
-// Resolver route for forum-topic deep links that only carry a topic id
-// (notification "Перейти"). The canonical topic route is /forum/:alias/:num,
-// but a notification payload does not carry the board alias or per-board
-// number — so we fetch the topic by id (the backend Guid binder also accepts
-// the readable-guid form used in payloads) and replace the URL with the
-// canonical route. On failure we hand off to the error page.
+// /forum-topic/{id}, the link of a notification (NotificationDestination.cs):
+// the payload carries no board alias or number, so the topic is read first.
 import { onMounted } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { forumApi, type TopicId } from "@/entities/forum";

@@ -1,5 +1,3 @@
-using System;
-
 namespace DM.Domain.Core.Exceptions;
 
 /// <summary>
@@ -16,12 +14,10 @@ namespace DM.Domain.Core.Exceptions;
 /// </remarks>
 public class DuplicateEntityException : Exception
 {
-    /// <inheritdoc />
     public DuplicateEntityException(string message) : base(message)
     {
     }
 
-    /// <inheritdoc />
     public DuplicateEntityException(string message, Exception innerException)
         : base(message, innerException)
     {

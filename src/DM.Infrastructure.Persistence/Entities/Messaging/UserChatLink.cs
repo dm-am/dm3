@@ -48,9 +48,6 @@ public class UserChatLink : ISoftDeletable
     [ForeignKey(nameof(UserId))]
     public virtual User User { get; set; } = null!;
 
-    /// <summary>
-    /// Chat
-    /// </summary>
     [ForeignKey(nameof(ChatId))]
     public virtual Chat Chat { get; set; } = null!;
 

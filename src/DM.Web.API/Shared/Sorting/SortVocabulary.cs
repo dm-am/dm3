@@ -2,11 +2,7 @@ using System;
 using DM.Domain.Core.Comments;
 using System.Collections.Generic;
 using System.Linq;
-using DM.Domain.Blog.Features.Comments;
-using DM.Domain.Blog.Features.PublicationComments;
 using DM.Domain.Community.Features.WebsiteTestimonials;
-using DM.Domain.Forum.Features.Comments;
-using DM.Domain.Game.Features.Comments;
 using DM.Domain.Game.Features.Posts;
 using DM.Web.API.Features.Game.Reviews;
 using DM.Web.API.Features.Blog.Blogs;
@@ -22,77 +18,47 @@ namespace DM.Web.API.Shared.Sorting;
 /// The sort fields each list endpoint accepts, in one place.
 /// </summary>
 /// <remarks>
-/// API_DESIGN says an unknown sort field is a validation error and not a
-/// silently different order, and that the allowed fields are declared beside
-/// the endpoint rather than listed in the document. One endpoint kept that
-/// promise — <c>GET /v1/games</c>, through GamesQueryValidator — and the other
-/// twelve answered 200 with the default order, because the repositories all
-/// end their sort switch in a default arm and nothing rejects the input
-/// before it gets there.
-///
-/// A whitelist per bound query type is what the repositories actually
-/// implement: their switches are over lowercase strings, so the values here
-/// are those strings and nothing has to be kept in step by hand beyond
-/// adding a case. Two consumers read this table — the action filter that
-/// answers 400, and the swagger parameter filter that publishes the same
-/// values as the parameter's <c>enum</c> — so the contract and the behaviour
-/// cannot drift apart.
-///
-/// The list is keyed by the type the controller binds, which is sometimes an
-/// API DTO and sometimes the domain query itself. Adding a list endpoint
-/// without adding it here is caught by the contract test: a sortBy parameter
-/// whose schema declares no enum fails
-/// <c>OpenApiContractShould.DeclareTheSortFieldsOfEveryListEndpoint</c>.
+/// An unknown sort field is a validation error, not a silently different order
+/// (API_DESIGN). The values are the lowercase strings the repositories switch on,
+/// keyed by the type the controller binds. The action filter refuses with them
+/// and the swagger filter publishes them, so contract and behaviour cannot drift;
+/// a list endpoint missing here fails
+/// <c>OpenApiParametersShould.DeclareTheSortFieldsOfEveryListEndpoint</c>.
 /// </remarks>
 public static class SortVocabulary
 {
+    /// <summary>The property a query names its sort field with.</summary>
+    public const string SortByProperty = "SortBy";
+
+    /// <summary>The property a query names its sort direction with.</summary>
+    public const string SortOrderProperty = "SortOrder";
+
     /// <summary>The only two directions, everywhere.</summary>
     public static readonly IReadOnlyList<string> SortOrders = ["asc", "desc"];
-
-    /// <summary>Comment lists are the same three ways round wherever they hang.</summary>
-    private static readonly string[] CommentFields = ["created", "likes"];
 
     private static readonly IReadOnlyDictionary<Type, IReadOnlyList<string>> Fields =
         new Dictionary<Type, IReadOnlyList<string>>
         {
-            // GET /v1/blogs — BlogRepository.ApplySorting
             [typeof(BlogsQuery)] =
                 ["created", "title", "status", "popularity", "activated", "closed"],
-            // The four comment lists — GET /v1/{blogs,publications,topics,games}/{id}/comments,
-            // sorted by the shared block in CommentQueries — ask the same query type
-            // and therefore hold one entry, not four.
-            [typeof(CommentsQuery)] = CommentFields,
-            // GET /v1/polls — PollRepository.BuildSort (plus the "status" order it
-            // handles before the switch)
+            // One query type for all four comment lists.
+            [typeof(CommentsQuery)] = ["created", "likes"],
             [typeof(PollsQuery)] = ["status", "starts", "ends"],
-            // GET /v1/users/{username}/endorsements and .../written-endorsements
-            // — UserEndorsementRepository.ApplySort
             [typeof(UserEndorsementsQuery)] = ["created", "author"],
-            // GET /v1/users/{username}/game-reviews and .../written-game-reviews
-            // — GameReviewRepository.ApplySort, where "author" means the other side
-            // of the pair: the review author for reviews received, the game title
-            // for reviews written
+            // "author" is the other side of the pair: the review author for reviews
+            // received, the game title for reviews written.
             [typeof(UserGameReviewsQuery)] = ["created", "author"],
-            // GET /v1/testimonials — WebsiteTestimonialRepository.ApplySorting
             [typeof(WebsiteTestimonialsQuery)] = ["created", "author"],
-            // GET /v1/topics and GET /v1/boards/{id}/topics — TopicRepository
             [typeof(TopicsQuery)] = ["lastActivity", "created", "title", "likes"],
-            // GET /v1/games — GameRepository.ApplySorting, the same eight values
-            // GamesQueryValidator has always enforced
             [typeof(GamesQuery)] =
             [
                 "created", "recruitmentstarted", "title", "popularity",
                 "status", "availableslots", "activated", "closed"
             ],
-            // GET /v1/posts — PostRepository.GetRatedPosts
             [typeof(PostsQuery)] = ["rating", "created", "lastreview", "reviewcount"],
-            // GET /v1/rooms/{id}/posts — PostRepository.SortRoomPosts
             [typeof(RoomPostsQuery)] = ["created", "rating", "reviewcount", "lastreview"],
-            // GET /v1/users names its sort field with the UserSort enum, which
-            // model binding already refuses an unknown value for; the field is
-            // spelled sortBy like the thirteen lists beside it (API_DESIGN.md),
-            // the direction beside it is a plain string like everywhere else,
-            // and this entry is what holds it to asc/desc.
+            // The UserSort enum names the field, and model binding refuses an unknown
+            // one; the entry holds the direction to asc/desc.
             [typeof(UsersQuery)] = []
         };
 
@@ -106,5 +72,5 @@ public static class SortVocabulary
 
     /// <summary>Case-insensitive membership, the way the repositories read it.</summary>
     public static bool Allows(IReadOnlyList<string> allowed, string value) =>
-        allowed.Any(a => string.Equals(a, value, StringComparison.OrdinalIgnoreCase));
+        allowed.Contains(value, StringComparer.OrdinalIgnoreCase);
 }

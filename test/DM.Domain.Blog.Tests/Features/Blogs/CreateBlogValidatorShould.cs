@@ -1,20 +1,14 @@
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
 
-public class CreateBlogValidatorShould : UnitTestBase
+public class CreateBlogValidatorShould
 {
-    private readonly CreateBlogValidator validator;
-
-    public CreateBlogValidatorShould()
-    {
-        validator = new CreateBlogValidator();
-    }
+    private readonly CreateBlogValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -54,7 +48,7 @@ public class CreateBlogValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenTitleExceedsMaxLength()
     {
-        var input = new CreateBlog { Title = new string('a', 201) };
+        var input = new CreateBlog { Title = new string('a', BlogFieldLimits.BlogTitleMaxLength + 1) };
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
             .WithErrorMessage(ValidationError.Long);
@@ -65,7 +59,7 @@ public class CreateBlogValidatorShould : UnitTestBase
     {
         var input = new CreateBlog
         {
-            Title = new string('a', 200),
+            Title = new string('a', BlogFieldLimits.BlogTitleMaxLength),
             Description = "Description"
         };
         var result = validator.TestValidate(input);

@@ -1,12 +1,7 @@
 <script setup lang="ts">
 /**
- * UsernameChangeRejectDialog — reject a username change request with a
- * required reason. Dialog twin of the former hand-rolled modal in
- * ModerationUsernameChanges.vue.
- *
- * The window runs the request (Dialog `action`): it waits for the answer,
- * prints a refusal in itself and closes on success alone. The reason is typed
- * text, so the window asks before it is dropped.
+ * Rejects a username change with a required reason. The window runs the
+ * request; the typed reason is asked about before it is dropped.
  */
 import { ref, computed } from "vue";
 import {
@@ -18,6 +13,7 @@ import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{
   request: UsernameChangeRequest;
@@ -39,7 +35,7 @@ async function send() {
       status: UsernameChangeRequestStatus.Rejected,
       comment: comment.value,
     },
-    { ownsRefusal: true, ownsRateLimit: true },
+    OWNS_REFUSAL,
   );
   if (!result.error) emit("success", props.request);
   return result;

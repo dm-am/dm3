@@ -40,10 +40,7 @@ public interface IBotLinkRepository
     /// may be null when the channel is not connected.
     /// </summary>
     /// <remarks>
-    /// The counterpart of <see cref="SetChannelId"/>. Without it the API layer
-    /// read these two columns straight from the DbContext while the repository
-    /// owned every write to them — an asymmetry with nothing holding it in
-    /// place.
+    /// The counterpart of <see cref="SetChannelId"/>.
     /// </remarks>
     Task<BotChannelIds> GetChannelIds(Guid userId, CancellationToken ct = default);
 

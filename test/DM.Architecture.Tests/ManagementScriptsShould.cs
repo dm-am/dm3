@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -10,49 +11,61 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The two scripts that run the development stack have to mean the same thing.
 /// </summary>
-/// <remarks>
-/// scripts/dm.ps1 and scripts/dm.sh document one set of commands and are the
-/// only way anybody starts, resets or seeds a local stack, so a defect in one of
-/// them is found by the developer on that platform and by nobody else. They
-/// drifted exactly that way: seeding restarted the API on Windows and did not on
-/// Linux, and the two asked different routes to decide the API was up.
-///
-/// Nothing here duplicates a value the scripts own. Each assertion names a
-/// behaviour that had already been lost once and would be lost again silently.
-/// </remarks>
+/// <remarks>The two scripts are the only way to run a local stack, so a defect in one is found on one platform.</remarks>
 public class ManagementScriptsShould
 {
     private const string PowerShellScript = "dm.ps1";
     private const string ShellScript = "dm.sh";
 
     /// <summary>
-    /// The liveness route the container healthcheck asks for. Read from the
-    /// compose file rather than repeated here: the point of the assertion is
-    /// that the scripts use the same route as the stack, so the stack has to be
-    /// the one that says what it is.
+    /// The liveness route the container healthcheck asks for, read from the compose file.
     /// </summary>
     private static string LivenessRoute
     {
         get
         {
-            var compose = File.ReadAllText(Path.Combine(RepositoryRoot, "docker", "docker-compose.yml"));
+            var compose = File.ReadAllText(Path.Combine(RepositoryLayout.Root, "docker", "docker-compose.yml"));
             var match = Regex.Match(compose, @"curl -f http://localhost:5000(/[A-Za-z0-9_/-]+)");
             match.Success.Should().BeTrue("the API healthcheck in docker-compose.yml names the liveness route");
             return match.Groups[1].Value;
         }
     }
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    private static string Read(string script) =>
-        File.ReadAllText(Path.Combine(RepositoryRoot, "scripts", script));
 
     /// <summary>
-    /// A service deleted from the compose file leaves its container behind, and
-    /// a plain "down" walks past it. The search worker and its Elasticsearch
-    /// were removed from the stack and survived every reset for months after,
-    /// holding their names and their place on the network, while the command
-    /// whose whole job is to leave nothing behind reported success.
+    /// The line scripts/dm.ps1 loads one of its parts from scripts/dm with.
+    /// </summary>
+    private static readonly Regex PartLoad = new(
+        @"^\. \(Join-Path \$PSScriptRoot ""dm\\(?<part>\w+\.ps1)""\)\r?$", RegexOptions.Multiline);
+
+    /// <summary>
+    /// A script under scripts/, with each part scripts/dm.ps1 dot-sources put
+    /// in place of the line that loads it.
+    /// </summary>
+    /// <remarks>Read in the order PowerShell runs it; a load line naming a missing part fails the read.</remarks>
+    internal static string Read(string script) =>
+        PartLoad.Replace(
+            File.ReadAllText(Path.Combine(RepositoryLayout.Root, "scripts", script)),
+            load => File.ReadAllText(Path.Combine(RepositoryLayout.Root, "scripts", "dm", load.Groups["part"].Value)));
+
+    /// <summary>
+    /// The addresses of the local services are written once, in scripts/dm/addresses.txt.
+    /// </summary>
+    /// <remarks>A third copy in either script is the drift this exists to close.</remarks>
+    [Theory]
+    [InlineData(PowerShellScript)]
+    [InlineData(ShellScript)]
+    public void ReadTheAddressesFromOneFile(string script)
+    {
+        var source = Read(script);
+
+        source.Should().Contain("addresses.txt", $"scripts/{script} reads the shared list of addresses");
+        Regex.IsMatch(source, @"https?://localhost:\d+").Should().BeFalse(
+            $"scripts/{script} must not spell an address of its own beside the shared list");
+    }
+
+    /// <summary>
+    /// A service deleted from the compose file leaves its container behind, and a plain "down" walks past it.
     /// </summary>
     [Theory]
     [InlineData(PowerShellScript)]
@@ -72,21 +85,17 @@ public class ManagementScriptsShould
     }
 
     /// <summary>
-    /// Both scripts wait on the same route, and it is the one the container
-    /// healthcheck already asks for. Pinned to a product route instead, the
-    /// seed command depended on one controller keeping its path and staying
-    /// anonymous - and the two scripts named two different controllers.
+    /// Both scripts wait on the route the container healthcheck asks for.
     /// </summary>
     [Theory]
     [InlineData(PowerShellScript)]
     [InlineData(ShellScript)]
     public void AskTheHealthcheckRouteWhetherTheApiIsUp(string script)
     {
-        // A curl invocation, not every mention of the address: both scripts
-        // print the API address in their help and in their messages, and those
-        // are text rather than a probe.
+        // A curl invocation, not every mention of the address; the address itself is read
+        // by both scripts from scripts/dm/addresses.txt into $apiUrl and $API_URL.
         var source = Read(script);
-        var probes = Regex.Matches(source, @"curl[^\r\n]*?http://localhost:5000(?<route>/[A-Za-z0-9_/-]*)");
+        var probes = Regex.Matches(source, @"curl[^\r\n]*?\$(?:apiUrl|API_URL)(?<route>/[A-Za-z0-9_/-]*)");
 
         probes.Should().NotBeEmpty($"scripts/{script} waits for the API");
         foreach (Match probe in probes)
@@ -97,11 +106,7 @@ public class ManagementScriptsShould
     }
 
     /// <summary>
-    /// The API computes its periodic projections at start - popularity, the best
-    /// post of the week - so a stack seeded without a restart keeps showing what
-    /// it worked out over the empty database, with nothing on screen to say so.
-    /// dm.ps1 restarted it and dm.sh did not, which is two outcomes from one
-    /// documented command.
+    /// The API computes its periodic projections at start, so seeding restarts it.
     /// </summary>
     [Theory]
     [InlineData(PowerShellScript)]
@@ -120,13 +125,7 @@ public class ManagementScriptsShould
     /// itself in the form README gives, the one that starts from cmd as well as
     /// from PowerShell.
     /// </summary>
-    /// <remarks>
-    /// A bare .\scripts\dm.ps1 is a PowerShell-only spelling: pasted into cmd it
-    /// does not start the script at all. The script printed that form after every
-    /// start, in its help, and in each of its "run this first" refusals, so the
-    /// next command a reader typed came from a line that did not run where he
-    /// typed it.
-    /// </remarks>
+    /// <remarks>A bare .\scripts\dm.ps1 does not start from cmd.</remarks>
     [Fact]
     public void NameItselfTheWayEveryShellRunsIt()
     {
@@ -150,11 +149,7 @@ public class ManagementScriptsShould
     /// <summary>
     /// No line the Windows script prints chains two commands with &amp;&amp;.
     /// </summary>
-    /// <remarks>
-    /// The script runs under Windows PowerShell, and that shell rejects &amp;&amp;
-    /// as a statement separator: the hint for the frontend, printed at the end of
-    /// every start, failed to parse in the window it was printed in.
-    /// </remarks>
+    /// <remarks>Windows PowerShell rejects &amp;&amp; as a statement separator.</remarks>
     [Fact]
     public void PrintNoCommandChainTheWindowsShellRejects()
     {
@@ -172,17 +167,11 @@ public class ManagementScriptsShould
     /// The stand "e2e" prepares is switched the way CI switches its own, and the
     /// check the pre-push hook runs reads back that same switch.
     /// </summary>
-    /// <remarks>
-    /// Under the default limits one page load spends a dozen and more requests
-    /// of a hundred a minute, so the suite fails on 429s that look exactly like
-    /// stale selectors. The key is read out of the workflow rather than written
-    /// here: the point is that three places agree with the one CI runs under,
-    /// and a renamed key there has to take the scripts with it.
-    /// </remarks>
+    /// <remarks>Under the default limits the suite fails on 429s; the key is read out of the workflow.</remarks>
     [Fact]
     public void SwitchRateLimitingOffForTheSuiteTheWayContinuousIntegrationDoes()
     {
-        var workflow = File.ReadAllText(Path.Combine(RepositoryRoot, ".github", "workflows", "dotnet.yml"));
+        var workflow = File.ReadAllText(Path.Combine(RepositoryLayout.Root, ".github", "workflows", "dotnet.yml"));
         var overlay = Regex.Match(workflow, @"(?<key>DM_RateLimiting__\w+):\s*""false""");
         overlay.Success.Should().BeTrue("the e2e job of dotnet.yml turns rate limiting off with a compose overlay");
         var key = overlay.Groups["key"].Value;
@@ -202,13 +191,7 @@ public class ManagementScriptsShould
     /// check the pre-push hook runs refuses an API built before the server
     /// changes being pushed.
     /// </summary>
-    /// <remarks>
-    /// The image is built once, by "e2e", and nothing rebuilds it after that.
-    /// Without the record the check found the API up and unlimited and let the
-    /// suite measure whichever server had been built last, so a server change
-    /// committed after it went out with a verdict about the code before it,
-    /// wrong in either direction.
-    /// </remarks>
+    /// <remarks>The image is built once by "e2e", so without the record the suite measures an older server.</remarks>
     [Fact]
     public void RefuseASuiteAgainstAnApiBuiltBeforeTheServerBeingPushed()
     {
@@ -232,10 +215,7 @@ public class ManagementScriptsShould
     }
 
     /// <summary>
-    /// The environment is prepared and then checked, in that order. The check
-    /// used to run first and on its own, so a fresh clone was told to copy the
-    /// template by hand while the script that owns that file sat unused - the
-    /// documented first run, dead on Windows and working everywhere else.
+    /// The environment is prepared and then checked, in that order.
     /// </summary>
     [Fact]
     public void PrepareTheEnvironmentBeforeAssertingIt()
@@ -263,14 +243,7 @@ public class ManagementScriptsShould
     /// The status screen tells a client test run and a client build from a dev
     /// server.
     /// </summary>
-    /// <remarks>
-    /// A dev server was any node whose command line said "vite", and every
-    /// vitest worker says it too: one test run listed a dozen dev servers and
-    /// warned that two were up while the one the tab shows stood alone. The
-    /// rules are read out of the script and applied the way PowerShell applies
-    /// them, the first match winning and case ignored, to the command lines the
-    /// two really run with.
-    /// </remarks>
+    /// <remarks>Every vitest worker says "vite" too; the rules are applied as PowerShell applies them, first match, case ignored.</remarks>
     [Theory]
     [InlineData(@"""node""   ""D:\Projects\Web\dm3\src\DM.Web.Client\node_modules\.bin\\..\vite\bin\vite.js"" ", "vite dev server")]
     [InlineData(@"""node""   ""D:\Projects\Web\dm3\src\DM.Web.Client\node_modules\.bin\\..\vite\bin\vite.js"" preview --config vite.preview.config.ts --port 5174", "vite dev server")]
@@ -283,7 +256,7 @@ public class ManagementScriptsShould
                 @"\$command -match '(?<pattern>[^']+)'\) \{ \$kind = '(?<kind>[^']+)' \}")
             .Select(rule => (Pattern: rule.Groups["pattern"].Value, Kind: rule.Groups["kind"].Value))
             .ToArray();
-        rules.Should().NotBeEmpty("Show-HostProcesses names each process it lists by its command line");
+        rules.Should().NotBeEmpty("Get-HostProcesses names each process it lists by its command line");
 
         var named = rules.FirstOrDefault(rule => Regex.IsMatch(commandLine, rule.Pattern, RegexOptions.IgnoreCase)).Kind;
 

@@ -7,8 +7,7 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.General.Search;
 
-/// <inheritdoc />
-internal class ForumSearchApiService : IForumSearchApiService
+public class ForumSearchApiService
 {
     private readonly IForumSearchService _searchService;
 
@@ -17,7 +16,6 @@ internal class ForumSearchApiService : IForumSearchApiService
         _searchService = searchService;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<ForumSearchResult>> Search(
         string query, PagingQuery pagingQuery, CancellationToken ct = default)
     {

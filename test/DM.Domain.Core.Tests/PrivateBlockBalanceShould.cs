@@ -8,14 +8,7 @@ namespace DM.Domain.Core.Tests;
 /// A private block that is not a block is refused before it is stored.
 /// </summary>
 /// <remarks>
-/// Everything downstream — the stored search vector, the room search filter, the
-/// snippet on the results page — cuts private text out by matching a whole block.
-/// An unclosed tag matches nothing, so the text after it is indexed, searchable
-/// and shown in a preview, while the page itself renders it as private and hides
-/// it: the author sees a line nobody should read, and search shows it to
-/// everybody. A block opened inside another is the same failure from the other
-/// side — the cut stops at the first closing tag and the rest of the outer block
-/// comes back out as public text.
+/// Search cuts private text out by matching whole blocks, so an unclosed or nested one would leak.
 /// </remarks>
 public class PrivateBlockBalanceShould
 {
@@ -54,14 +47,7 @@ public class PrivateBlockBalanceShould
     /// Hiding markup written after a [noparse] the author never closed.
     /// </summary>
     /// <remarks>
-    /// The count agrees with itself here — one opening tag, one closing tag —
-    /// and the page reads the block as a block, because a [noparse] nobody
-    /// closed is no example and what follows it is read as any other text. The
-    /// author almost always wrote an example and forgot the closing tag, and
-    /// without a refusal that example would quietly become a secret: a block the
-    /// author did close is a written instruction to show the markup literally,
-    /// and an unclosed one carries no instruction at all, so the save path
-    /// refuses and asks. The name of the block is a name in any case.
+    /// An unclosed [noparse] carries no instruction to show markup literally, so the save path asks.
     /// </remarks>
     [Theory]
     [InlineData("[noparse][private=\"Чак\"]СЕКРЕТ[/private]")]
@@ -78,11 +64,6 @@ public class PrivateBlockBalanceShould
     /// [code] is no example: it changes the font, as on DM2, and a hidden block
     /// inside it, closed or not, is read as a block and judged as one.
     /// </summary>
-    /// <remarks>
-    /// It used to be read as [noparse] is. A block inside a closed [code] was an
-    /// example the count skipped, and one after a [code] nobody closed was
-    /// refused as a forgotten example.
-    /// </remarks>
     [Theory]
     [InlineData("[code][private=\"Чак\"]СЕКРЕТ[/private]", true)]
     [InlineData("[Code]пример [b]жирно[/b] [private=\"Чак\"]СЕКРЕТ[/private] хвост", true)]
@@ -119,7 +100,7 @@ public class PrivateBlockBalanceShould
     /// nobody.
     /// </summary>
     [Fact]
-    public void ReadTheBlockInsideACode_AndNotTheOneInsideANoparse()
+    public void ReadTheBlockInsideACodeAndNotTheOneInsideANoparse()
     {
         PrivateBlockMarkup.ReadAddresseeAttributes(
                 "[code][private=\"Вася\"]раз[/private][/code] [noparse][private=\"Петя\"]два[/private][/noparse]")
@@ -149,13 +130,11 @@ public class PrivateBlockBalanceShould
 
     /// <summary>
     /// A block the grammar does not accept is refused, and the refusal quotes
-    /// the spelling, names its place and shows the right one.
+    /// the spelling and shows the right one. It names no character number: a
+    /// person does not count characters, and the editor's check points at the line.
     /// </summary>
     /// <remarks>
-    /// On the page such a block is a block that addresses nobody, which the
-    /// author did not mean: the unquoted name among them is the form the editor
-    /// used to write, and a name read out of it would be a guess at where the
-    /// name ends.
+    /// On the page such a block addresses nobody, and a name read out of it would be a guess.
     /// </remarks>
     [Theory]
     [InlineData("[private=Вася]тайна[/private]", "[private=Вася]")]
@@ -167,16 +146,15 @@ public class PrivateBlockBalanceShould
     [InlineData("[PRIVATE=Вася]тайна[/private]", "[PRIVATE=Вася]")]
     [InlineData("[private]", "[private]")]
     [InlineData("текст [private", "[private")]
-    public void RefuseAMisspelledBlock_AndSayHowToWriteIt(string source, string spelling)
+    public void RefuseAMisspelledBlockAndSayHowToWriteIt(string source, string spelling)
     {
         PrivateBlockMarkup.IsBalanced(source).Should().BeFalse();
 
-        var place = source.IndexOf('[', System.StringComparison.Ordinal) + 1;
         var refusal = PrivateBlockMarkup.DescribeBalanceRefusal(source);
-        refusal.Should().Contain(spelling).And.Contain($"символ {place}");
+        refusal.Should().Contain(spelling).And.NotContain("символ");
         if (spelling != "[private]")
         {
-            refusal.Should().Contain("[private=\"Имя\"]").And.Contain("[private] без имени");
+            refusal.Should().EndWith(" записан неверно, скрытый блок пишется [private=\"Имя\"] или [private].");
         }
     }
 
@@ -188,13 +166,11 @@ public class PrivateBlockBalanceShould
     [Theory]
     [InlineData("[private]тайна[/private=\"x\"] хвост", "[/private=\"x\"]")]
     [InlineData("[private=\"Вася\"]тайна[/PRIVATE =\"x\"] и [/private =\"y\"] хвост", "[/PRIVATE =\"x\"]")]
-    public void NameTheMisspelledClosingTag_WhenItLeavesTheBlockOpen(string source, string spelling)
+    public void NameTheMisspelledClosingTagWhenItLeavesTheBlockOpen(string source, string spelling)
     {
         var refusal = PrivateBlockMarkup.DescribeBalanceRefusal(source);
 
-        refusal.Should().Contain(spelling)
-            .And.Contain($"символ {source.IndexOf(spelling, System.StringComparison.Ordinal) + 1}")
-            .And.Contain("[/private]");
+        refusal.Should().Be($"{spelling} не закрывает скрытый блок, закрывает только [/private].");
     }
 
     /// <summary>
@@ -202,12 +178,12 @@ public class PrivateBlockBalanceShould
     /// block open, so the refusal, if any, is about something else.
     /// </summary>
     [Fact]
-    public void KeepTheUnclosedRefusal_WhenTheMisspelledClosingTagStandsOutsideTheBlock()
+    public void KeepTheUnclosedRefusalWhenTheMisspelledClosingTagStandsOutsideTheBlock()
     {
         const string source = "[private]раз[/private] [/private=\"x\"] [private]два";
 
         PrivateBlockMarkup.DescribeBalanceRefusal(source)
-            .Should().StartWith("Скрытый блок не закрыт: [private], символ 39.");
+            .Should().Be("Скрытый блок не закрыт: [private]. Добавьте [/private].");
     }
 
     /// <summary>

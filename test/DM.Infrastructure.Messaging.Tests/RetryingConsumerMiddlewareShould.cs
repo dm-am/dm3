@@ -72,12 +72,7 @@ public class RetryingConsumerMiddlewareShould
 
         var attempts = 0;
         var result = await new RetryingConsumerMiddleware(Queue, logger).InvokeAsync(
-            // The pipeline hands the context to the next step and reads nothing out of
-            // it. The client builds one inside its own consume loop, out of constructors
-            // it keeps internal, and fabricating one here through reflection would
-            // assert nothing this does not.
-            context: null!,
-            next: (_, _) =>
+            next: _ =>
             {
                 attempts++;
                 return attempts == 1

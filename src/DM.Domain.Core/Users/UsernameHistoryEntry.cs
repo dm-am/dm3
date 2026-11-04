@@ -1,5 +1,3 @@
-using System;
-
 namespace DM.Domain.Core.Users;
 
 /// <summary>

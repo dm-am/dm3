@@ -19,30 +19,13 @@ namespace DM.Web.API.HostedServices;
 /// transactional outbox.
 /// </summary>
 /// <remarks>
-/// Hosted in the API rather than in a worker on purpose: the outbox is written
-/// by this process's requests, so the relay lives and dies with the writer -
-/// hanging the producing half on a consuming worker would make delivery depend
-/// on somebody else's deployment. The exchange is already declared by this
-/// host, and every other background processor already runs here.
-///
-/// The one producer of this process for the events exchange, built once in the
-/// constructor and closed in Dispose - one long-lived channel instead of the
-/// channel-per-scope the direct producer used to open. It waits for a publisher
-/// confirm, unlike the rest of the bus: not because the message is the whole
-/// obligation - the outbox row is - but because marking the row published
-/// without the broker's confirm would be recording "delivered" about a message
-/// the broker may not have taken. The wait is affordable here because the relay
-/// is background work: the rule "nobody waits on the bus" protected an HTTP
-/// caller this loop does not have.
-///
-/// A second on the timer is the whole latency the outbox adds to the happy
-/// path, realtime badge included; each tick keeps draining while batches come
-/// back full, so a backlog accumulated behind a broker restart leaves in
-/// hundreds per second rather than one batch per second.
+/// Hosted in the API, which writes the outbox, so delivery does not depend on a
+/// worker's deployment. It waits for a publisher confirm, unlike the rest of the
+/// bus: marking a row published without one would record a delivery the broker
+/// may not have taken, and no HTTP caller waits on this loop.
 /// </remarks>
 internal class OutboxRelayService : PeriodicHostedService
 {
-    private readonly ILogger<OutboxRelayService> _logger;
     private readonly IDmProducer<InvokedEvent> _producer;
 
     public OutboxRelayService(
@@ -52,7 +35,6 @@ internal class OutboxRelayService : PeriodicHostedService
         IOptions<RabbitMqConfiguration> brokerConfiguration)
         : base(serviceProvider, logger)
     {
-        _logger = logger;
         _producer = producerBuilder.Build<InvokedEvent>(
             new DmProducerParameters(InvokedEventsTransport.ExchangeName)
             {
@@ -83,10 +65,8 @@ internal class OutboxRelayService : PeriodicHostedService
             MessagingMetrics.OutboxPending.Record(result.Pending);
             MessagingMetrics.OutboxLag.Record(result.OldestPendingAge.TotalSeconds);
 
-            // Drain until the batch comes back short of full: a full one means
-            // more may be waiting. A faulted batch stops the tick instead - the
-            // refusal is almost always the broker being down, and the next tick
-            // is the retry.
+            // A full batch means more may be waiting. A faulted one is almost
+            // always the broker being down, and the next tick is the retry.
             if (result.Faulted || result.Published < IOutboxRelayProcessor.BatchSize)
             {
                 return;
@@ -117,20 +97,18 @@ internal class OutboxRelayService : PeriodicHostedService
         }
         catch (Exception exception)
         {
-            // A delay, not a loss: the row stays in the outbox and will be
-            // retried. The irrecoverable losses stay on publish_failed.
+            // A delay, not a loss: the row is retried, irrecoverable losses stay on publish_failed.
             MessagingMetrics.OutboxPublishFailed.Add(1,
                 new KeyValuePair<string, object?>("reason", exception.GetType().Name));
-            _logger.LogWarning(exception,
-                "[Outbox Relay] Failed to publish {EventType} for {EntityId}; the row stays pending",
-                envelope.EventType, envelope.EntityId);
+            Logger.LogWarning(exception,
+                "{Tag} Failed to publish {EventType} for {EntityId}; the row stays pending",
+                Tag, envelope.EventType, envelope.EntityId);
             throw;
         }
     }
 
     /// <summary>
-    /// Closes the AMQP channel this relay opened. BackgroundService is already
-    /// IDisposable, so the producer ownership rule holds without a second base.
+    /// Closes the AMQP channel this relay opened.
     /// </summary>
     public override void Dispose()
     {

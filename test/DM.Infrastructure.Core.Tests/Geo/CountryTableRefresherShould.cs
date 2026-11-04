@@ -7,7 +7,6 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using AwesomeAssertions;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Geo;
 using DM.Infrastructure.Core.Geo;
@@ -24,12 +23,7 @@ namespace DM.Infrastructure.Core.Tests.Geo;
 /// The country table is downloaded and put in use by the running process, and a
 /// download that is not a table changes nothing.
 /// </summary>
-/// <remarks>
-/// The tables here are made to pass the size check with real ranges, so what
-/// decides each case is the check under test and not the padding around it. The
-/// address 203.0.113.42 is the probe: one table puts it in Russia, the other in
-/// Germany, so which table answers is visible from outside.
-/// </remarks>
+/// <remarks>203.0.113.42 is in Russia in one table and in Germany in the other, so which answers is visible.</remarks>
 public class CountryTableRefresherShould : IDisposable
 {
     private const string Probe = "203.0.113.42";
@@ -224,10 +218,6 @@ public class CountryTableRefresherShould : IDisposable
         GC.SuppressFinalize(this);
     }
 
-    private sealed class FixedClock(DateTimeOffset now) : IDateTimeProvider
-    {
-        public DateTimeOffset Now { get; } = now;
-    }
 
     /// <summary>Answers every request the same way and counts them.</summary>
     private sealed class StubHandler : HttpMessageHandler

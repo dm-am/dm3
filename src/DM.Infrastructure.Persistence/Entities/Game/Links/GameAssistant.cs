@@ -34,15 +34,9 @@ public class GameAssistant
 
     #region Navigation Properties
 
-    /// <summary>
-    /// Game
-    /// </summary>
     [ForeignKey(nameof(GameId))]
     public virtual Game Game { get; set; } = null!;
 
-    /// <summary>
-    /// User
-    /// </summary>
     [ForeignKey(nameof(UserId))]
     public virtual User User { get; set; } = null!;
 

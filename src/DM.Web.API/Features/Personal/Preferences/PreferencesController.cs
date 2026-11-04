@@ -25,10 +25,9 @@ namespace DM.Web.API.Features.Personal.Preferences;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class PreferencesController : ControllerBase
 {
-    private readonly IPreferencesApiService _preferencesApiService;
+    private readonly PreferencesApiService _preferencesApiService;
 
-    /// <inheritdoc />
-    public PreferencesController(IPreferencesApiService preferencesApiService)
+    public PreferencesController(PreferencesApiService preferencesApiService)
     {
         _preferencesApiService = preferencesApiService;
     }

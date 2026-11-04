@@ -1,8 +1,5 @@
-using System;
 using System.Net;
-using System.Net.Http;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Exceptions;
 using AwesomeAssertions;
 using Xunit;
@@ -13,14 +10,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// The two refusals every endpoint can answer with look like every other refusal.
 /// </summary>
 /// <remarks>
-/// Both were assembled by the authorization filters out of an anonymous object:
-/// right status, right media type, no traceId — so neither could be matched to a
-/// line in the log — and an English title. The title is what the client shows the
-/// reader as it stands, and 401 and 403 are the two statuses no controller can
-/// avoid, so that was English copy reachable from every screen of a Russian site.
-///
-/// Asserted over HTTP rather than on the filters: the property under test is what
-/// leaves the host, and it is the middleware that decides it.
+/// The client shows the title as it stands, and no controller avoids 401 and 403. Over HTTP: the middleware
+/// decides what leaves the host.
 /// </remarks>
 public class AuthorizationRefusalShould : IntegrationTestBase
 {

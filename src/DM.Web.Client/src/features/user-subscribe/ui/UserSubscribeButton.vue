@@ -1,28 +1,5 @@
 <script setup lang="ts">
-/**
- * UserSubscribeButton — the subscription to a person, in the row of actions of
- * their profile.
- *
- * "Подписаться" subscribes in one press to all three kinds of news, as the
- * subscription to a game does, and the button turns into "Подписан" with the
- * arrow of a dropdown: the answer is the word the reader pressed. It used to
- * open a form with a second "Подписаться" in it, which made the one thing a
- * reader came for take two presses and a decision they had not asked for.
- *
- * "Подписан" opens UserSubscriptionPanel, where the kinds are changed one box
- * at a time and the subscription is ended. Pressed again, it closes the panel,
- * whatever the word on it has become meanwhile: clearing every box in the
- * panel ends the subscription and the button reads "Подписаться" over the
- * still open panel, and a press there is taken as leaving, not as a second
- * subscribe.
- *
- * A refused one-press subscribe is said in `result`, the refusal line the row
- * of actions keeps under itself: the button is one item of a row of buttons
- * (shared/ui/ButtonRow), and a line under it inside that row would stand
- * between the buttons.
- * The panel hangs from the button's own box at every width: the row never
- * puts the button away, so there is nothing else to hang from.
- */
+// A refused subscribe goes to the row's refusal line: a line inside the row would stand between buttons.
 import { computed, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useSubscriptionsStore } from "@/entities/subscription";
@@ -33,12 +10,13 @@ import {
 import type { ActionResult } from "@/shared/lib/composables/useActionResult";
 import Button from "@/shared/ui/Button/Button.vue";
 import { SvgIcon } from "@/shared/ui/Icon";
+import { useCategoryEvents } from "../model/categories";
+import { SUBSCRIBE_FAILED } from "../model/refusals";
 import UserSubscriptionPanel from "./UserSubscriptionPanel.vue";
 
 const props = defineProps<{
   userId: string;
   username: string;
-  /** Where a refused press is said: the line under the row of actions. */
   result: ActionResult;
 }>();
 
@@ -54,8 +32,10 @@ const panel = ref<InstanceType<typeof UserSubscriptionPanel> | null>(null);
 const open = ref(false);
 const subscribing = ref(false);
 
-/** The control opens a panel whenever it is "Подписан" or the panel is up. */
 const opensPanel = computed(() => isSubscribed.value || open.value);
+
+// Asked with the button, so the panel opens with the words under its boxes.
+useCategoryEvents();
 
 async function press() {
   if (open.value) {
@@ -76,7 +56,7 @@ async function press() {
   );
   subscribing.value = false;
   if (error) {
-    props.result.refuse(error, "Не удалось подписаться на пользователя");
+    props.result.refuse(error, SUBSCRIBE_FAILED);
   }
 }
 
@@ -119,11 +99,9 @@ function close(returnFocus: boolean) {
   display: inline-flex
   flex-shrink: 0
 
-// The arrow of the site's dropdowns (the field of a list, the calendar's
-// month): it says a panel is behind the word.
 .user-subscribe-chevron
-  width: 14px
-  height: 14px
+  width: $control-glyph-size
+  height: $control-glyph-size
   margin-left: $small
   color: $text-muted
 </style>

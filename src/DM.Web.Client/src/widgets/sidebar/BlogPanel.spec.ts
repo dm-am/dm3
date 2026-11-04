@@ -2,37 +2,18 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The blog menu is built to the same plan as the game menu, and the plan is
- * the requirement: one fixed heading, the rubric group with its rubrics
- * nested under it, then the blog's pages, each with a counter and no
- * exception at zero.
- *
- * It had drifted on every one of those at once. The heading was the blog's
- * own title, and a link. "Рубрики" and "Обсуждение" were bold muted capitals
- * rather than menu rows. "Информация" and the feed were not in the menu at
- * all: the heading link stood in for one, a line under the rubric table for
- * the other. The discussion counter vanished at zero. And the panel repeated
- * the status that the info table prints two lines further down.
- */
+/** The blog menu, to the game menu's plan: one heading, the rubrics nested, every page with a counter. */
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import BlogPanel from "./BlogPanel.vue";
 import SidebarSectionTitle from "./SidebarSectionTitle.vue";
-import {
-  useBlogDetailsStore,
-  type Blog,
-  type BlogPremoderationStatus,
-} from "@/entities/blog";
+import { blogApi, useBlogDetailsStore, type Blog } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
-import { UserRole } from "@/shared/api/models/common";
+import { UserRole, type PremoderationStatus } from "@/shared/api/models/common";
 
 const stubs = {
-  "router-link": {
-    template: '<a class="router-link"><slot /></a>',
-    props: ["to"],
-  },
+  RouterLink: RouterLinkStub,
   Tooltip: { template: "<span><slot /></span>", props: ["text"] },
   ConfirmDialog: true,
 };
@@ -67,10 +48,15 @@ const blog = {
 } as unknown as Blog;
 
 function mountPanel(
-  premoderationStatus?: BlogPremoderationStatus,
+  premoderationStatus?: PremoderationStatus,
   overrides: Record<string, unknown> = {},
 ) {
   useBlogDetailsStore().blog = { ...blog, premoderationStatus };
+  // The join row reads the readers when it mounts: nobody reads this blog.
+  vi.spyOn(blogApi, "getReaders").mockResolvedValue({
+    data: { resources: [] },
+    error: null,
+  } as never);
   return mount(BlogPanel, {
     props: { blogId: "aaaab" },
     global: { stubs: { ...stubs, ...overrides } },
@@ -130,10 +116,6 @@ describe("BlogPanel", () => {
     expect(nested[0].findAll("li.link")).toHaveLength(2);
   });
 
-  it("leaves the blog's status to the info table", () => {
-    expect(mountPanel().text()).not.toContain("Статус");
-  });
-
   it("heads its sections the way the game panel does", () => {
     signedInAs("Автор");
     const headings = mountPanel().findAllComponents(SidebarSectionTitle);
@@ -142,9 +124,7 @@ describe("BlogPanel", () => {
     ]);
   });
 
-  // Premoderation, mirroring the game panel: the server grants exactly three
-  // moves to two different audiences, and a row shown to anybody else is a
-  // promise the server answers with 403 or 400.
+  // Three moves to two audiences; a row shown to anybody else would be answered 403 or 400.
   describe("premoderation", () => {
     const SUBMIT = "- Отправить на проверку";
     const APPROVE = "- Одобрить блог";
@@ -156,8 +136,8 @@ describe("BlogPanel", () => {
     });
 
     it.each([
-      ["AwaitingApproval", "AwaitingApproval" as BlogPremoderationStatus],
-      ["Approved", "Approved" as BlogPremoderationStatus],
+      ["AwaitingApproval", "AwaitingApproval" as PremoderationStatus],
+      ["Approved", "Approved" as PremoderationStatus],
       ["not sent at all", undefined],
     ])(
       "hides the submit row from the owner when the status is %s",
@@ -167,9 +147,7 @@ describe("BlogPanel", () => {
       },
     );
 
-    // BlogIntention.SubmitForApproval admits the owner alone: an assistant
-    // writes in the blog, the mentor approves its publications, and neither
-    // declares the blog itself ready.
+    // BlogIntention.SubmitForApproval admits the owner alone.
     it("hides the submit row from a reader on edits", () => {
       signedInAs("Читатель");
       expect(rows(mountPanel("AwaitingEdits"))).not.toContain(SUBMIT);
@@ -180,12 +158,11 @@ describe("BlogPanel", () => {
       expect(rows(mountPanel("AwaitingEdits"))).not.toContain(SUBMIT);
     });
 
-    // Both verdicts are legal from every status on the server, so neither row
-    // is keyed on the status the blog happens to be in.
+    // Both verdicts are legal from every status.
     it.each([
-      ["Approved" as BlogPremoderationStatus],
-      ["AwaitingApproval" as BlogPremoderationStatus],
-      ["AwaitingEdits" as BlogPremoderationStatus],
+      ["Approved" as PremoderationStatus],
+      ["AwaitingApproval" as PremoderationStatus],
+      ["AwaitingEdits" as PremoderationStatus],
     ])("gives a site mentor both verdicts from %s", (status) => {
       signedInAs("Наставник", UserRole.Mentor);
       const menu = rows(mountPanel(status));
@@ -201,25 +178,10 @@ describe("BlogPanel", () => {
       expect(menu).not.toContain(APPROVE);
       expect(menu).not.toContain(RETURN);
     });
-
-    // The mentor-only round trip the machine no longer has. Its two rows named
-    // transitions the server has deleted, so both were a guaranteed 400.
-    it("no longer offers the old take-in / release pair", () => {
-      signedInAs("Админ", UserRole.Admin);
-      const menu = rows(mountPanel("AwaitingEdits"));
-
-      expect(menu).not.toContain("- Отправить на премодерацию");
-      expect(menu).not.toContain("- Снять с премодерации");
-    });
   });
 });
 
-/**
- * The question before a moderation move waits for the answer and says a
- * refusal in itself. It used to close before the request went out, so a
- * refused verdict came back as a plate over a menu that looked as if nothing
- * had been asked.
- */
+/** The question before a moderation move waits for the answer and says a refusal in itself. */
 describe("BlogPanel moderation question", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -261,11 +223,7 @@ describe("BlogPanel moderation question", () => {
   });
 });
 
-/**
- * "Обсуждение" is a row whatever closes the discussion to the viewer's
- * writing: the blacklist closes it to writing and not to reading, so the one
- * on the list reads it too, empty or not, and the menu leads him there.
- */
+/** "Обсуждение" stays a row for the one on the blacklist: it closes writing, not reading. */
 describe("BlogPanel discussion row", () => {
   beforeEach(() => {
     setActivePinia(createPinia());

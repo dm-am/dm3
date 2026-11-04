@@ -6,7 +6,6 @@ using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
-using OtpNet;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
@@ -14,25 +13,17 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// <summary>
 /// The one door a privileged account has when both its devices are gone.
 /// </summary>
-/// <remarks>
-/// The administrator is handed nothing by this: no session of the other
-/// account and none of its rights. What the action does is end every session that
-/// account had and leave its owner a way in by password, and it says so in both
-/// journals - an administrator can already ban, demote and delete anybody, so the
-/// authority is not new, but the noise is.
-/// </remarks>
+/// <remarks>The administrator gets no session or right of the account; its sessions end and both journals say so.</remarks>
 public class AdministratorClearingTwoFactorShould : IntegrationTestBase
 {
     public AdministratorClearingTwoFactorShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    private const string Password = "TestPass123ok";
-
     private async Task<(string Login, string Email, string Session)> CreateUser(
         string prefix, UserRole role)
     {
-        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, prefix, Password);
+        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, prefix, TestConstants.Password);
 
         if (role != UserRole.RegularUser)
         {
@@ -42,17 +33,17 @@ public class AdministratorClearingTwoFactorShould : IntegrationTestBase
             await db.SaveChangesAsync();
         }
 
-        return (login, email, await UserTestHelper.Login(Client, email, Password));
+        return (login, email, await UserTestHelper.Login(Client, email, TestConstants.Password));
     }
 
     [Fact]
     public async Task TakeAColleaguesFactorOffAndEndTheirSessions()
     {
         var target = await CreateUser("tfvictim", UserRole.SeniorModerator);
-        await UserTestHelper.EnableSecondFactor(Client, target.Session, Password);
+        await UserTestHelper.EnableSecondFactor(Client, target.Session, TestConstants.Password);
 
         var admin = await CreateUser("tfadmin", UserRole.Admin);
-        await UserTestHelper.EnableSecondFactor(Client, admin.Session, Password);
+        await UserTestHelper.EnableSecondFactor(Client, admin.Session, TestConstants.Password);
 
         var request = UserTestHelper.CreateCookieAuthRequest(
             HttpMethod.Delete, $"/v1/account/two-factor/users/{target.Login}", admin.Session);
@@ -85,7 +76,7 @@ public class AdministratorClearingTwoFactorShould : IntegrationTestBase
 
         // The owner gets back in by password, and owes no factor any more.
         var login = await Client.PostAsJsonAsync(
-            "/v1/account/login", new { email = target.Email, password = Password });
+            "/v1/account/login", new { email = target.Email, password = TestConstants.Password });
         login.StatusCode.Should().Be(HttpStatusCode.OK);
         JsonNode.Parse(await login.Content.ReadAsStringAsync())!["twoFactorRequired"]!
             .GetValue<bool>().Should().BeFalse();
@@ -95,7 +86,7 @@ public class AdministratorClearingTwoFactorShould : IntegrationTestBase
     public async Task RefuseAnybodyBelowAdministrator()
     {
         var target = await CreateUser("tfnovictim", UserRole.SeniorModerator);
-        await UserTestHelper.EnableSecondFactor(Client, target.Session, Password);
+        await UserTestHelper.EnableSecondFactor(Client, target.Session, TestConstants.Password);
 
         var moderator = await CreateUser("tfmod", UserRole.Moderator);
 

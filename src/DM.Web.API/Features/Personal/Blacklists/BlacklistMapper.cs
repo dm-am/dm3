@@ -8,7 +8,7 @@ namespace DM.Web.API.Features.Personal.Blacklists;
 /// Compile-time mapper for the user blacklist
 /// </summary>
 [Mapper]
-internal partial class BlacklistMapper
+public partial class BlacklistMapper
 {
     /// <summary>
     /// Domain blacklist entry to its response DTO
@@ -16,12 +16,10 @@ internal partial class BlacklistMapper
     public partial BlacklistEntry ToBlacklistEntry(DomainBlacklistEntry entry);
 
     /// <summary>
-    /// Settings flags to the response DTO. There is deliberately no reverse
-    /// map: the write model is UpdateBlacklistSettingsRequest, and folding it
-    /// onto the current flags needs the current value, which a mapper does
-    /// not have.
+    /// Settings flags to the response DTO. No reverse map: folding a request onto
+    /// the flags needs their current value (UpdateBlacklistSettingsRequest.ApplyTo).
     /// </summary>
-    public BlacklistSettings ToBlacklistSettings(UserBlacklistSettings flags) => new()
+    public static BlacklistSettings ToBlacklistSettings(UserBlacklistSettings flags) => new()
     {
         HideComments = flags.HasFlag(UserBlacklistSettings.HideComments),
         HideMessages = flags.HasFlag(UserBlacklistSettings.HideMessages),

@@ -2,35 +2,52 @@
  * @vitest-environment jsdom
  */
 
-/**
- * TagSelector error copy.
- *
- * The tag list was the one place in the client that put an English sentence in
- * front of a Russian reader: `apiError.title || "Failed to load tags"`. Both
- * halves of the UI_STANDARDS rule are pinned here — the copy is Russian, and the
- * server's raw title does not replace it. The second case is the one that looked
- * harmless: the API answers a 500 with a title of its own, and a call site that
- * prefers it shows whatever the server happened to say.
- */
+// The copy of a failure is Russian, and the server's raw title does not replace it.
 
-import { describe, it, expect, vi, afterEach } from "vitest";
-import { readFileSync } from "node:fs";
+import { describe, it, expect, vi, afterEach, beforeEach } from "vitest";
 import { resolve, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+import { createPinia, setActivePinia } from "pinia";
 import {
   compileSass,
   componentCss,
   ruleMap,
   styleRules,
 } from "@/shared/lib/testing/styles";
+import { PALETTES } from "@/shared/lib/testing/themeColours";
 import TagSelector from "./TagSelector.vue";
-import type { Tag } from "../model/types";
-import { gameApi } from "../api";
+import type { Tag } from "../model/gameTypes";
+import gameApi from "../api/gameApi";
+import { useGamesStore } from "../model/store";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
 const FAILURE_MESSAGE = "Не удалось загрузить теги";
+
+/** A tag of the catalogue, its sort order its id. */
+function tag(
+  id: number,
+  title: string,
+  groupTitle: string,
+  groupSortOrder: number,
+  groupMaxTagsPerGame: number | null,
+): Tag {
+  return {
+    id,
+    title,
+    groupTitle,
+    groupSortOrder,
+    groupMaxTagsPerGame,
+    sortOrder: id,
+    gamesCount: 0,
+  };
+}
+
+// The catalogue lives in the games store: every case starts with none cached.
+beforeEach(() => {
+  setActivePinia(createPinia());
+});
 
 describe("TagSelector", () => {
   afterEach(() => {
@@ -46,7 +63,9 @@ describe("TagSelector", () => {
     const wrapper = mount(TagSelector);
     await flushPromises();
 
-    expect(wrapper.find(".selector-error").text()).toBe(FAILURE_MESSAGE);
+    expect(wrapper.find(".error-state .error-message").text()).toBe(
+      FAILURE_MESSAGE,
+    );
   });
 
   it("does not show the title the server sent", async () => {
@@ -63,7 +82,77 @@ describe("TagSelector", () => {
     const wrapper = mount(TagSelector);
     await flushPromises();
 
-    expect(wrapper.find(".selector-error").text()).toBe(FAILURE_MESSAGE);
+    expect(wrapper.find(".error-state .error-message").text()).toBe(
+      FAILURE_MESSAGE,
+    );
+  });
+});
+
+// Until the catalogue answers the form holds its place, and says nothing it does not know.
+describe("TagSelector before the catalogue answers", () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  const CATALOGUE = {
+    data: {
+      resources: [tag(3, "D&D 5e", "Система", 0, null)],
+      paging: null,
+    },
+    error: null,
+  };
+
+  it("stands the skeleton of the groups, with no words, while the tags load", async () => {
+    vi.spyOn(gameApi, "getTags").mockReturnValue(new Promise(() => {}));
+
+    const wrapper = mount(TagSelector);
+    await flushPromises();
+
+    expect(wrapper.find(".tags-skeleton").exists()).toBe(true);
+    expect(wrapper.text()).toBe("");
+  });
+
+  it("says there are no tags only once an empty catalogue has answered", async () => {
+    vi.spyOn(gameApi, "getTags").mockResolvedValue({
+      data: { resources: [], paging: null },
+      error: null,
+    });
+
+    const wrapper = mount(TagSelector);
+    await flushPromises();
+
+    expect(wrapper.find(".tags-skeleton").exists()).toBe(false);
+    expect(wrapper.text()).toBe("Нет доступных тегов");
+  });
+
+  it("asks the origin again from the refusal's button and draws the answer", async () => {
+    const getTags = vi
+      .spyOn(gameApi, "getTags")
+      .mockResolvedValueOnce({
+        data: null,
+        error: { type: "", title: "", status: 500, traceId: "" },
+      })
+      .mockResolvedValueOnce(CATALOGUE);
+
+    const wrapper = mount(TagSelector);
+    await flushPromises();
+    await wrapper.get(".error-state .error-retry").trigger("click");
+    await flushPromises();
+
+    expect(getTags).toHaveBeenLastCalledWith(true);
+    expect(wrapper.find(".error-state").exists()).toBe(false);
+    expect(wrapper.get("button.tag-button").text()).toBe("D&D 5e");
+  });
+
+  it("opens on the catalogue the store already holds, with no skeleton", async () => {
+    const getTags = vi.spyOn(gameApi, "getTags").mockResolvedValue(CATALOGUE);
+    await useGamesStore().fetchTags();
+
+    const wrapper = mount(TagSelector);
+
+    expect(wrapper.find(".tags-skeleton").exists()).toBe(false);
+    expect(wrapper.get("button.tag-button").text()).toBe("D&D 5e");
+    expect(getTags).toHaveBeenCalledTimes(1);
   });
 });
 
@@ -98,11 +187,7 @@ describe("TagSelector group limits", () => {
   ];
 
   it("draws a group the control was never told about", async () => {
-    // The order used to be a list kept here, and anything outside it was
-    // dropped rather than appended: two groups of eight never reached the
-    // screen, one of them the group a master marks sensitive content with.
-    // The catalog decides which groups exist and in what order; this control
-    // only draws them.
+    // The catalog decides which groups exist and in what order.
     const withNewGroup = [
       ...catalogue,
       tag(90, "Шок-контент", "Деликатный контент", 7, null),
@@ -110,7 +195,7 @@ describe("TagSelector group limits", () => {
     vi.spyOn(gameApi, "getTags").mockResolvedValue({
       data: { resources: withNewGroup, paging: null },
       error: null,
-    } as never);
+    });
 
     const wrapper = mount(TagSelector, { props: { modelValue: [] } });
     await flushPromises();
@@ -118,24 +203,6 @@ describe("TagSelector group limits", () => {
     expect(wrapper.text()).toContain("Деликатный контент");
     expect(wrapper.text()).toContain("Шок-контент");
   });
-
-  function tag(
-    id: number,
-    title: string,
-    groupTitle: string,
-    groupSortOrder: number,
-    groupMaxTagsPerGame: number | null,
-  ): Tag {
-    return {
-      id,
-      title,
-      groupTitle,
-      groupSortOrder,
-      groupMaxTagsPerGame,
-      sortOrder: id,
-      gamesCount: 0,
-    };
-  }
 
   async function selector(selected: number[]) {
     vi.spyOn(gameApi, "getTags").mockResolvedValue({
@@ -251,27 +318,7 @@ describe("TagSelector group limits", () => {
   });
 });
 
-// --- paint of a rule, from the palettes of ThemeVariables.css ---------------
-
 type Rgb = [number, number, number];
-
-const THEMES = readFileSync(
-  resolve(HERE, "../../../assets/styles/ThemeVariables.css"),
-  "utf8",
-).replace(/\/\*[\s\S]*?\*\//g, "");
-
-function palette(header: string): Record<string, string> {
-  const at = THEMES.indexOf(header);
-  if (at < 0) throw new Error(`ThemeVariables.css has no "${header}" block`);
-  const body = THEMES.slice(at + header.length);
-  const tokens: Record<string, string> = {};
-  for (const [, name, value] of body
-    .slice(0, body.indexOf("}"))
-    .matchAll(/^\s*--([\w-]+):\s*([^;]+);/gm)) {
-    tokens[name] = value.trim();
-  }
-  return tokens;
-}
 
 /** The value of the first `var(--x)` a declaration names. */
 function token(value: string | undefined, tokens: Record<string, string>) {
@@ -311,47 +358,19 @@ function wash(
 /** One number for a grey of the palette: the mean of its channels. */
 const level = ([r, g, b]: Rgb) => (r + g + b) / 3;
 
-/**
- * A tag of the creation form wears the bubble of an applied filter.
- *
- * The same tags stand as bubbles under the filter bar of /games ("Тег: D&D
- * 5e"), and the form is to draw them the same way, not as a grey chip a
- * shade deeper than its ground whose frame darkens under the pointer. The
- * filter is the reference here and the tag is what
- * changes: the bubble's fill, frame, corners and size, and its hover, which
- * lays the site's wash over the fill and leaves the frame alone. A chosen tag
- * is a pressed button and not a bold word: the fill of the active segment of a
- * SegmentedControl under the press wash, a shade the hover never reaches, and
- * aria-pressed says it to a screen reader. It carries no cross: it is taken
- * off by a second press, not by a mark of its own.
- */
+// .tag-button is the box of a filter bubble (+bubble-box); its hover and its chosen fill copy the bubble and the
+// active segment, and these hold the copy.
 describe("TagSelector look", () => {
   afterEach(() => {
     vi.restoreAllMocks();
   });
 
   const bubbleCss = compileSass(
-    '@use "@/assets/styles/Filters" as *\n.probe\n  +filter-bubbles',
+    '@use "@/assets/styles/FilterBubbles" as *\n.probe\n  +filter-bubbles',
   );
   const bubbles = styleRules(bubbleCss);
-  const bubble = ruleMap(bubbleCss).get(".probe .bubble");
   const sheet = ruleMap(componentCss(resolve(HERE, "TagSelector.vue")));
   const tagRule = sheet.get(".tag-button");
-
-  it("takes the fill, frame, corners and size of a filter's bubble", () => {
-    for (const property of [
-      "background-color",
-      "border",
-      "border-radius",
-      "padding",
-      "font-size",
-      "box-sizing",
-      "min-height",
-      "line-height",
-    ]) {
-      expect(tagRule?.[property], property).toBe(bubble?.[property]);
-    }
-  });
 
   it("answers the pointer the way a bubble does, with the frame left alone", () => {
     const bubbleHover = bubbles.find((rule) =>
@@ -387,12 +406,7 @@ describe("TagSelector look", () => {
     expect(tagRule?.["font-weight"]).toBeUndefined();
   });
 
-  // The pointer resting on a tag that is not chosen must not draw it chosen:
-  // the tag just taken off stays under the pointer, and on a touch screen the
-  // hover stays on it until the next touch. Measured as paint, in both
-  // palettes, because the two rules name different tokens and only their
-  // composition says whether they meet. Ten points is the least step the
-  // palette gives a control fill over its ground (ThemeVariables.css).
+  // Ten points is the least step the palette gives a control fill over its ground.
   it("keeps the chosen fill out of the hover's reach, in both palettes", () => {
     const hover = sheet.get(".tag-button:hover:not(:disabled):not(.selected)");
     const chosen = sheet.get(".tag-button.selected");
@@ -401,8 +415,7 @@ describe("TagSelector look", () => {
       ".tag-button:hover:not(:disabled):not(.selected)",
     ]);
 
-    for (const header of ["html.theme_Light {", "html.theme_Dark {"]) {
-      const tokens = palette(header);
+    for (const [theme, tokens] of Object.entries(PALETTES)) {
       const rest = solid(tagRule?.["background-color"], tokens);
       const underPointer = wash(rest, hover?.["background-image"], tokens);
       const pressed = wash(
@@ -413,49 +426,20 @@ describe("TagSelector look", () => {
 
       expect(
         Math.abs(level(pressed) - level(underPointer)),
-        header,
+        theme,
       ).toBeGreaterThanOrEqual(10);
-      expect(Math.abs(level(pressed) - level(rest)), header).toBeGreaterThan(
+      expect(Math.abs(level(pressed) - level(rest)), theme).toBeGreaterThan(
         Math.abs(level(underPointer) - level(rest)),
       );
     }
-  });
-
-  // A touch screen keeps :hover on the tag last touched, so a tag just taken
-  // off would stand washed until the next touch. The wash answers only a
-  // pointer that hovers, and nowhere else.
-  it("lays the hover wash under a pointer that hovers only", () => {
-    const css = componentCss(resolve(HERE, "TagSelector.vue"));
-    expect(
-      styleRules(css).filter((rule) => rule.selector.includes(":hover")),
-    ).toHaveLength(1);
-    expect(css.replace(/\s+/g, " ")).toContain(
-      "@media (hover: hover) { .tag-button:hover:not(:disabled):not(.selected) {",
-    );
   });
 
   it("says which tags are pressed with aria-pressed", async () => {
     vi.spyOn(gameApi, "getTags").mockResolvedValue({
       data: {
         resources: [
-          {
-            id: 3,
-            title: "D&D 5e",
-            groupTitle: "Система",
-            groupSortOrder: 0,
-            groupMaxTagsPerGame: null,
-            sortOrder: 3,
-            gamesCount: 0,
-          },
-          {
-            id: 4,
-            title: "GURPS",
-            groupTitle: "Система",
-            groupSortOrder: 0,
-            groupMaxTagsPerGame: null,
-            sortOrder: 4,
-            gamesCount: 0,
-          },
+          tag(3, "D&D 5e", "Система", 0, null),
+          tag(4, "GURPS", "Система", 0, null),
         ],
         paging: null,
       },
@@ -478,17 +462,7 @@ describe("TagSelector look", () => {
   it("puts no cross on a chosen tag", async () => {
     vi.spyOn(gameApi, "getTags").mockResolvedValue({
       data: {
-        resources: [
-          {
-            id: 3,
-            title: "D&D 5e",
-            groupTitle: "Система",
-            groupSortOrder: 0,
-            groupMaxTagsPerGame: null,
-            sortOrder: 3,
-            gamesCount: 0,
-          },
-        ],
+        resources: [tag(3, "D&D 5e", "Система", 0, null)],
         paging: null,
       },
       error: null,

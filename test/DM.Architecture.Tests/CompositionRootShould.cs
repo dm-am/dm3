@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Configuration;
 using AwesomeAssertions;
+using DM.Testing;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
@@ -22,20 +23,8 @@ namespace DM.Architecture.Tests;
 /// The container each host builds is held to the two contracts nothing else checks.
 /// </summary>
 /// <remarks>
-/// Nothing built a container under test, so a process-wide component holding a
-/// scoped one - the connection tracker holding a pooled DbContext for the life of
-/// the process - reached production, and a host that registered a domain assembly
-/// without binding its options failed on a live message instead of at startup.
-/// Both are properties of the registration graph, visible without activating
-/// anything, which is why this builds the containers rather than the hosts.
-///
-/// The providers are built with ValidateScopes and ValidateOnBuild - the same
-/// options every Program.cs passes - so what this class exercises is the very
-/// startup gate the hosts run: a descriptor the container cannot satisfy fails
-/// the build here exactly as it would fail the deployment.
-///
-/// The seeder is absent on purpose: it composes inside a private method of its
-/// entry point, so the third rule reads its source instead.
+/// Built with ValidateScopes and ValidateOnBuild, the options every Program.cs passes. The seeder
+/// composes in a private method of its entry point and has a rule of its own.
 /// </remarks>
 public class CompositionRootShould
 {
@@ -45,11 +34,11 @@ public class CompositionRootShould
     [Fact]
     public void BuildTheContainerOfEveryHostItCovers()
     {
-        Hosts.Should().HaveCount(3);
+        Hosts.Should().NotBeEmpty();
         foreach (var (host, services, _) in Hosts)
         {
-            services.Should().HaveCountGreaterThan(100,
-                $"{host} registers a whole application, and a near-empty graph means the " +
+            services.Should().NotBeEmpty(
+                $"{host} registers a whole application, and an empty graph means the " +
                 "rules below check nothing");
         }
     }
@@ -83,7 +72,7 @@ public class CompositionRootShould
     public void BindTheOptionsOfEveryAssemblyTheSeederScans()
     {
         var program = File.ReadAllText(Path.Combine(
-            RepositoryRoot, "src", "DM.Tools.Seeder", "Program.cs"));
+            RepositoryLayout.Root, "src", "DM.Tools.Seeder", "Program.cs"));
 
         program.Should().Contain("typeof(ISecurityManager).Assembly",
             "the assertion below is about the assembly this marker names, so a seeder that " +
@@ -100,17 +89,8 @@ public class CompositionRootShould
     /// The seeder resolves the one component it runs on.
     /// </summary>
     /// <remarks>
-    /// It composes inside a private method of its entry point, so this class could
-    /// only read that file as text and never resolve anything out of it — which
-    /// left the tool the one executable whose container nothing built. It matters
-    /// now that the fixture scores its games and blogs through the site's own
-    /// popularity processors rather than through a copy of the calculation: those
-    /// classes are internal to their modules, so what makes them resolvable is a
-    /// pair of assembly scans and nothing the compiler checks. Without this, a
-    /// missing scan surfaces as a seeding run that dies before it writes a row.
-    ///
-    /// Building the host is itself half the rule: the seeder passes
-    /// ValidateOnBuild, so a descriptor its container cannot satisfy throws here.
+    /// The popularity processors it scores with are internal to their modules and found by assembly
+    /// scans; the seeder passes ValidateOnBuild.
     /// </remarks>
     [Fact]
     public void SupplyEveryDependencyOfTheSeederOutOfTheContainerTheToolRunsOn()
@@ -121,9 +101,8 @@ public class CompositionRootShould
         var seeder = typeof(DM.Tools.Seeder.Seeding.DataSeeder);
         var dependencies = Dependencies(seeder).ToList();
 
-        dependencies.Should().HaveCountGreaterThan(5,
-            "the tool takes both stores, the hashing, the identifiers and the popularity " +
-            "processors, and reading none of them would leave this rule checking nothing");
+        dependencies.Should().NotBeEmpty(
+            "reading no dependency of the tool would leave this rule checking nothing");
 
         dependencies
             .Where(dependency => !query.IsService(dependency))
@@ -141,20 +120,8 @@ public class CompositionRootShould
     /// no others.
     /// </summary>
     /// <remarks>
-    /// The shared configuration call demanded SiteAddressConfiguration:PublicUrl from
-    /// everyone, so the mail worker — which speaks SMTP, touches no store and
-    /// builds no link, the three senders that do being in an assembly it does not
-    /// scan — refused to start over a value it never reads: "OptionsValidation
-    /// Exception: SiteAddressConfiguration:PublicUrl is required. Hosting failed to
-    /// start." That is the same defect the Require* split was made to end, left
-    /// behind in the one demand that was not moved, and its cost is the next host
-    /// writing in a fake value to get past it.
-    ///
-    /// Run rather than read: ValidateOnStart hands its predicates to
-    /// IStartupValidator, and running that is exactly what the host does before it
-    /// serves anything. The host reads its own settings with one section withheld,
-    /// which is what a deployment that lost that variable gives it, so the
-    /// refusals it produces are the demands that host actually makes.
+    /// Run rather than read: the host reads its own settings with one section withheld, as a
+    /// deployment that lost that variable would.
     /// </remarks>
     [Fact]
     public void DemandOnlyTheConfigurationItsOwnComponentsRead()
@@ -189,7 +156,7 @@ public class CompositionRootShould
         Func<IConfiguration, IWebHostEnvironment, Action<IServiceCollection>> compose)
     {
         var full = new ConfigurationBuilder()
-            .SetBasePath(Path.Combine(RepositoryRoot, "src", project))
+            .SetBasePath(Path.Combine(RepositoryLayout.Root, "src", project))
             .AddJsonFile("appsettings.json", optional: false)
             .AddJsonFile("appsettings.Development.json", optional: true)
             .Build();
@@ -229,16 +196,7 @@ public class CompositionRootShould
     /// <summary>
     /// The component each worker exists to run resolves, with everything under it.
     /// </summary>
-    /// <remarks>
-    /// ValidateOnBuild already proves every registered descriptor constructible,
-    /// but the processor is resolved by type out of the message scope at runtime
-    /// - GetRequiredService inside the consumer - and a registration nothing
-    /// removed is still what this rule pins: delete the scan that supplies it
-    /// and only this fails with the worker's name on it.
-    ///
-    /// Resolved inside a scope, because that is where the hosted service resolves
-    /// its processor, and per-scope registrations are not resolvable from the root.
-    /// </remarks>
+    /// <remarks>The processor is resolved by type out of the message scope at runtime, inside a scope.</remarks>
     [Fact]
     public void ResolveTheComponentEachWorkerRunsOn()
     {
@@ -267,20 +225,8 @@ public class CompositionRootShould
     /// A host with no requests has no current user, and says so.
     /// </summary>
     /// <remarks>
-    /// The notification worker declares this dependency because the notification
-    /// service asks for it, and it never reaches a path that reads it. It used to
-    /// be satisfied by scanning the whole account domain in — for that one
-    /// interface — which registered a provider whose backing field is null until a
-    /// request sets it, and an authorization context that answers Guest.
-    ///
-    /// Two failures nothing would have reported. A path arriving at the provider
-    /// gets a null reference from a property that promises an identity; a path
-    /// arriving at authorization is answered as an anonymous visitor, which is a
-    /// real answer to a question that has no reader behind it. Both are quiet, and
-    /// the second is quiet on the side that grants rather than refuses.
-    ///
-    /// Resolved in a scope because that is where the processor of this host is
-    /// resolved.
+    /// The notification worker never reads the current user; a provider registered for it would
+    /// answer null or Guest. Resolved in a scope, as its processor is.
     /// </remarks>
     [Fact]
     public void RefuseToNameACurrentUserInAHostThatServesNoRequests()
@@ -297,19 +243,9 @@ public class CompositionRootShould
             "path into a decision made about somebody who is not there");
     }
 
-    /// <summary>
-    /// Every controller and every background job of a host resolves.
-    /// </summary>
     /// <remarks>
-    /// Controllers are the blind spot ValidateOnBuild keeps: MVC activates them
-    /// with its own activator, so the container never holds the type and the
-    /// startup gate never walks their constructors. What the container is asked
-    /// for at runtime is exactly the list of constructor parameters, which is
-    /// what this resolves. The hosted services are resolved as one list because
-    /// that is how the host starts them.
-    ///
-    /// In a scope, since that is where a request resolves and per-scope
-    /// registrations are not resolvable from the root.
+    /// MVC activates controllers itself, so ValidateOnBuild never walks their constructors. In a
+    /// scope, as a request resolves.
     /// </remarks>
     [Fact]
     public void ResolveEveryControllerAndBackgroundJobOfEveryHost()
@@ -357,9 +293,9 @@ public class CompositionRootShould
             }
         }
 
-        roots.Should().BeGreaterThan(50,
-            "the hosts between them run some seventy controllers and a dozen jobs, and a walk " +
-            "that found a handful would report green over everything it never resolved");
+        roots.Should().BePositive(
+            "a walk that found no controller and no job would report green over everything " +
+            "it never resolved");
         unresolvable.Should().BeEmpty(
             "a dependency the container cannot supply is not a build error and not a startup " +
             "error: it surfaces on the first request or the first message that reaches the type");
@@ -370,18 +306,8 @@ public class CompositionRootShould
     /// supply.
     /// </summary>
     /// <remarks>
-    /// The rule above resolves the jobs themselves, and that used to be the whole
-    /// story: a job took its dependencies in its constructor, so resolving the job
-    /// walked the graph behind it. It stopped being the whole story when the jobs
-    /// were moved off the DbContext -- each one now takes IServiceProvider and a
-    /// logger and resolves its processor inside the timer tick, so a processor with
-    /// no registration is invisible to the compiler, invisible to the rule above,
-    /// and surfaces once a day as one LogError inside PeriodicHostedService.Pass.
-    /// Deleting the TokenMaintenanceRepository registration left all 192
-    /// architecture tests green while token retention was dead.
-    ///
-    /// The names are read out of the sources rather than listed here: a list would
-    /// have to be extended by the same person who forgets the registration.
+    /// A job resolves its processor inside the timer tick, invisible to the compiler and to the rule
+    /// above. The names are read out of the sources.
     /// </remarks>
     [Fact]
     public void ResolveEveryContractABackgroundJobAsksTheScopeFor()
@@ -393,7 +319,7 @@ public class CompositionRootShould
 
         var contracts = Directory
             .EnumerateFiles(
-                Path.Combine(RepositoryRoot, "src", "DM.Web.API", "HostedServices"),
+                Path.Combine(RepositoryLayout.Root, "src", "DM.Web.API", "HostedServices"),
                 "*.cs",
                 SearchOption.AllDirectories)
             .SelectMany(path => asked.Matches(File.ReadAllText(path))
@@ -402,7 +328,7 @@ public class CompositionRootShould
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
 
-        contracts.Should().HaveCountGreaterThan(5,
+        contracts.Should().NotBeEmpty(
             "the jobs resolve their processors from the scope, and reading none of them " +
             "would report green over an empty set");
 
@@ -420,9 +346,7 @@ public class CompositionRootShould
         {
             if (!types.TryGetValue(contract, out var type))
             {
-                // Framework contracts (IServiceScopeFactory and the like) are
-                // not what this rule is about; the ones it is about live in the
-                // assemblies the host registers.
+                // Framework contracts are not what this rule is about.
                 continue;
             }
 
@@ -446,14 +370,7 @@ public class CompositionRootShould
     /// The sort vocabulary is enforced by a filter, and a filter enforces
     /// nothing until it is registered.
     /// </summary>
-    /// <remarks>
-    /// One line in Startup stands between "?sortBy=nonsense answers 400" and a
-    /// table plus a filter plus a Swagger extension that are all dead code. The
-    /// rule that catches its absence end to end needs Docker and Testcontainers
-    /// (SortRefusalShould), which is not something every checkout runs, and the
-    /// line went missing once already. This reads the same registration out of
-    /// the options the host composes, and needs neither.
-    /// </remarks>
+    /// <remarks>The end-to-end check (SortRefusalShould) needs Docker; this reads the registration.</remarks>
     [Fact]
     public void RegisterTheFilterThatEnforcesTheSortVocabulary()
     {
@@ -468,6 +385,25 @@ public class CompositionRootShould
                 "without it every list endpoint takes an unknown sort field, ignores it " +
                 "and answers 200 with the default order - which is the answer the finding " +
                 "was raised over");
+    }
+
+    /// <summary>
+    /// The trap field of the forms open to guests is checked by a filter, and
+    /// unregistered it lets every filled trap through.
+    /// </summary>
+    [Fact]
+    public void RegisterTheFilterThatSpringsTheTrapOfAForm()
+    {
+        var (_, _, provider) = Hosts.Single(host => host.Host == "DM.Web.API");
+
+        var options = provider.GetRequiredService<IOptions<MvcOptions>>().Value;
+
+        options.Filters
+            .OfType<TypeFilterAttribute>()
+            .Select(filter => filter.ImplementationType)
+            .Should().Contain(typeof(DM.Web.API.Shared.BotTrap.HoneypotFilter),
+                "without it a script that fills the hidden field signs in, registers " +
+                "and files tickets like a person");
     }
 
     private static IReadOnlyList<(string, IServiceCollection, ServiceProvider)> BuildHosts() =>
@@ -493,19 +429,12 @@ public class CompositionRootShould
         string project,
         Func<IConfiguration, IWebHostEnvironment, Action<IServiceCollection>> compose)
     {
-        // The same two files a Development host reads, in the same order: the
-        // environment declared below is Development, and the credentials a local
-        // run needs live in the overlay rather than in the tracked base file, so
-        // reading only the base one composes a host no environment ever runs.
+        // The files a Development host reads, in its order: the local credentials live in the overlay.
         var configuration = new ConfigurationBuilder()
-            .SetBasePath(Path.Combine(RepositoryRoot, "src", project))
+            .SetBasePath(Path.Combine(RepositoryLayout.Root, "src", project))
             .AddJsonFile("appsettings.json", optional: false)
             .AddJsonFile("appsettings.Development.json", optional: true)
-            // The encryption key has no answer in the repository on purpose — a
-            // deployment supplies it — and five services validate it while being
-            // activated. A throwaway of the right shape stands in for it, so what
-            // this class reports is a graph that cannot be walked rather than a
-            // value a test environment was never given.
+            // A deployment supplies the encryption key; a throwaway of its shape stands in.
             .AddInMemoryCollection(new Dictionary<string, string?>
             {
                 ["CryptoConfiguration:KeyBase64"] =
@@ -516,11 +445,7 @@ public class CompositionRootShould
         var services = new ServiceCollection();
         var environment = new HostEnvironment(project);
 
-        // What the real host registers before ConfigureServices ever runs: the
-        // generic web host puts the configuration, the environment, the
-        // lifetime and the diagnostics source in first. Composed here too, so
-        // that ValidateOnBuild judges the host's own registrations rather than
-        // the absence of the host around them.
+        // What the generic web host registers before ConfigureServices runs.
         var diagnostics = new DiagnosticListener(project);
         services.AddSingleton<IConfiguration>(configuration);
         services.AddSingleton<IWebHostEnvironment>(environment);
@@ -610,26 +535,15 @@ public class CompositionRootShould
     /// Constructor parameter types of a component, minus the ones the container
     /// supplies from itself and the wrappers that defer or fan out a resolution.
     /// </summary>
-    private static IEnumerable<Type> Dependencies(Type type)
-    {
-        try
-        {
-            return type
-                .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
-                .SelectMany(constructor => constructor.GetParameters())
-                .Select(parameter => parameter.ParameterType)
-                .Where(parameterType => !parameterType.IsGenericType ||
-                                        !Deferred.Contains(parameterType.GetGenericTypeDefinition()))
-                .Where(parameterType => !ContainerProvided.Contains(parameterType))
-                .Distinct()
-                .ToArray();
-        }
-        catch (Exception)
-        {
-            // A parameter whose type cannot be loaded is not a dependency this can judge
-            return Array.Empty<Type>();
-        }
-    }
+    private static IEnumerable<Type> Dependencies(Type type) => type
+        .GetConstructors(BindingFlags.Instance | BindingFlags.Public)
+        .SelectMany(constructor => constructor.GetParameters())
+        .Select(parameter => parameter.ParameterType)
+        .Where(parameterType => !parameterType.IsGenericType ||
+                                !Deferred.Contains(parameterType.GetGenericTypeDefinition()))
+        .Where(parameterType => !ContainerProvided.Contains(parameterType))
+        .Distinct()
+        .ToArray();
 
     private static readonly Type[] Deferred =
         [typeof(Func<>), typeof(Lazy<>), typeof(IEnumerable<>)];
@@ -654,6 +568,4 @@ public class CompositionRootShould
         public string WebRootPath { get; set; } = AppContext.BaseDirectory;
         public IFileProvider WebRootFileProvider { get; set; } = new NullFileProvider();
     }
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

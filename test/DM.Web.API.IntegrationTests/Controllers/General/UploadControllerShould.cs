@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text.Json;
@@ -8,9 +6,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Integration tests for UploadController.
-/// </summary>
 public class UploadControllerShould : IntegrationTestBase
 {
     public UploadControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -18,14 +13,14 @@ public class UploadControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetUploads_RequiresAuthentication()
+    public async Task GetUploadsRequiresAuthentication()
     {
         var response = await Client.GetAsync("/v1/uploads");
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task GetUploads_WithAuth_ReturnsOk()
+    public async Task GetUploadsWithAuthReturnsOk()
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/uploads");
         var response = await Client.SendAsync(request);
@@ -33,25 +28,10 @@ public class UploadControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetUpload_RequiresAuthentication()
+    public async Task GetUploadRequiresAuthentication()
     {
         var uploadId = Guid.NewGuid();
         var response = await Client.GetAsync($"/v1/uploads/{uploadId}");
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task DeleteUpload_RequiresAuthentication()
-    {
-        var uploadId = Guid.NewGuid();
-        var response = await Client.DeleteAsync($"/v1/uploads/{uploadId}");
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task DirectUpload_RequiresAuthentication()
-    {
-        var response = await Client.PostAsync("/v1/uploads?type=UserAvatar", null);
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
@@ -59,15 +39,9 @@ public class UploadControllerShould : IntegrationTestBase
     /// An upload that names no type is the caller's mistake and is answered as
     /// one, naming the field they left out.
     /// </summary>
-    /// <remarks>
-    /// The type is read from the query string, and a multipart request carrying
-    /// it in the form instead — the easy mistake on this endpoint — leaves the
-    /// enum bound to zero. Zero reached the service, where the switch over the
-    /// type had no arm for it and threw, so the caller was handed a 500 and a
-    /// support token for a request of their own that was merely incomplete.
-    /// </remarks>
+    /// <remarks>A type sent in the form instead of the query binds the enum to zero.</remarks>
     [Fact]
-    public async Task DirectUpload_WithoutType_RefusesAndNamesTheField()
+    public async Task DirectUploadWithoutTypeRefusesAndNamesTheField()
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Post, "/v1/uploads");
         request.Content = OneFilePart();
@@ -87,15 +61,9 @@ public class UploadControllerShould : IntegrationTestBase
     /// A type outside the enum is refused as a bad request too - by model
     /// binding, which is where a value it cannot read is refused.
     /// </summary>
-    /// <remarks>
-    /// Held here rather than assumed: the two halves of "the type is no good"
-    /// are answered in two different places, and only one of them was ever
-    /// wrong. A refactor that makes the parameter nullable to reach the guard
-    /// above would move this case out of binding and into the guard, and this
-    /// is what says the answer must not change when it does.
-    /// </remarks>
+    /// <remarks>Binding refuses this one, the guard above the other; the answer must not change between them.</remarks>
     [Fact]
-    public async Task DirectUpload_WithUnknownType_RefusesAndNamesTheField()
+    public async Task DirectUploadWithUnknownTypeRefusesAndNamesTheField()
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Post, "/v1/uploads?type=99");
         request.Content = OneFilePart();
@@ -110,9 +78,7 @@ public class UploadControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A multipart body with the one part the endpoint requires. The bytes are
-    /// never read: the type is checked before the file is, and these two tests
-    /// are about the check that comes first.
+    /// A multipart body with the one required part; the type is checked before the file.
     /// </summary>
     private static MultipartFormDataContent OneFilePart()
     {

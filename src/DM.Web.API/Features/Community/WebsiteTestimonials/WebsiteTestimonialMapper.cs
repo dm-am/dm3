@@ -1,6 +1,7 @@
 using DM.Web.API.Features.Community.Users;
 using Riok.Mapperly.Abstractions;
 using DomainWebsiteTestimonial = DM.Domain.Community.Features.WebsiteTestimonials.WebsiteTestimonial;
+using DomainCreateWebsiteTestimonial = DM.Domain.Community.Features.WebsiteTestimonials.CreateWebsiteTestimonial;
 
 namespace DM.Web.API.Features.Community.WebsiteTestimonials;
 
@@ -10,7 +11,7 @@ namespace DM.Web.API.Features.Community.WebsiteTestimonials;
 /// URLs.
 /// </summary>
 [Mapper]
-internal partial class WebsiteTestimonialMapper
+public partial class WebsiteTestimonialMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -24,4 +25,9 @@ internal partial class WebsiteTestimonialMapper
     /// Domain testimonial to its response DTO
     /// </summary>
     public partial WebsiteTestimonialDto ToTestimonial(DomainWebsiteTestimonial testimonial);
+
+    /// <summary>
+    /// Create request to the domain command
+    /// </summary>
+    public partial DomainCreateWebsiteTestimonial ToCreateTestimonial(CreateWebsiteTestimonialRequest request);
 }

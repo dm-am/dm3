@@ -16,11 +16,9 @@ namespace DM.Domain.Community.Features.Achievements;
 public static class AchievementMetricResolver
 {
     /// <summary>
-    /// Get the metric value for a user. <paramref name="now"/>
-    /// is only needed for time-based metrics (DaysSinceRegistration);
-    /// AchievementService passes <c>_clock.Now</c>. Returns 0
-    /// for unknown enum values — a safe fallback that never
-    /// triggers a threshold.
+    /// Get the metric value for a user. <paramref name="now"/> is only needed for
+    /// time-based metrics (DaysSinceRegistration). Returns 0 for unknown enum
+    /// values — a safe fallback that never triggers a threshold.
     /// </summary>
     public static int GetValue(AchievementMetric metric, GeneralUser user, DateTimeOffset now)
     {
@@ -29,11 +27,7 @@ public static class AchievementMetricResolver
             AchievementMetric.GamePostsAuthored => user.QuantityRating,
             AchievementMetric.DaysSinceRegistration => DaysSinceRegistration(user, now),
             AchievementMetric.PostReviewScoreSum => Math.Max(0, user.QualityRating),
-            // The counters are nullable because a user can arrive without them
-            // counted. Here that is unreachable — the caller resolves the user
-            // through the lookup service, which goes to the repository that runs
-            // the batch — and an uncounted metric must not clear a threshold, so
-            // the fallback is the same zero the field used to default to.
+            // Counted on this path; an uncounted metric must not clear a threshold.
             AchievementMetric.GamesHosted => user.GamesHosting ?? 0,
             AchievementMetric.GamesPlayed => user.GamesPlaying ?? 0,
             AchievementMetric.BlogsHosted => user.BlogsHosting ?? 0,

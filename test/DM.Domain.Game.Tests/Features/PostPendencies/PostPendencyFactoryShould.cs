@@ -1,6 +1,5 @@
 using System;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostPendencies;
 using DM.Testing;
 using AwesomeAssertions;
@@ -11,18 +10,18 @@ namespace DM.Domain.Game.Tests.Features.PostPendencies;
 
 public class PostPendencyFactoryShould : UnitTestBase
 {
-    private readonly PostPendencyFactory _factory;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
+    private readonly PostPendencyFactory factory;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
 
     public PostPendencyFactoryShould()
     {
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _factory = new PostPendencyFactory(
-            _guidFactory,
-            _dateTimeProvider);
+        factory = new PostPendencyFactory(
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
@@ -41,10 +40,10 @@ public class PostPendencyFactoryShould : UnitTestBase
             CharacterId = characterId
         };
 
-        _guidFactory.Create().Returns(pendencyId);
-        _dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(pendencyId);
+        dateTimeProvider.Now.Returns(now);
 
-        var result = _factory.Create(createPostPendency, createdById, waitingForUserId);
+        var result = factory.Create(createPostPendency, createdById, waitingForUserId);
 
         result.Should().NotBeNull();
         result.PendencyId.Should().Be(pendencyId);
@@ -53,60 +52,5 @@ public class PostPendencyFactoryShould : UnitTestBase
         result.CreatedById.Should().Be(createdById);
         result.WaitingForUserId.Should().Be(waitingForUserId);
         result.CreatedUtc.Should().Be(now);
-    }
-
-    [Fact]
-    public void AssignCreatedByIdCorrectly()
-    {
-        var createdById = Guid.NewGuid();
-        var waitingForUserId = Guid.NewGuid();
-        var createPostPendency = new CreatePostPendency
-        {
-            RoomId = Guid.NewGuid(),
-            CharacterId = Guid.NewGuid()
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.Create(createPostPendency, createdById, waitingForUserId);
-
-        result.CreatedById.Should().Be(createdById);
-    }
-
-    [Fact]
-    public void AssignWaitingForUserIdCorrectly()
-    {
-        var createdById = Guid.NewGuid();
-        var waitingForUserId = Guid.NewGuid();
-        var createPostPendency = new CreatePostPendency
-        {
-            RoomId = Guid.NewGuid(),
-            CharacterId = Guid.NewGuid()
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.Create(createPostPendency, createdById, waitingForUserId);
-
-        result.WaitingForUserId.Should().Be(waitingForUserId);
-    }
-
-    [Fact]
-    public void GenerateUniquePendencyId()
-    {
-        var createPostPendency = new CreatePostPendency
-        {
-            RoomId = Guid.NewGuid(),
-            CharacterId = Guid.NewGuid()
-        };
-
-        _guidFactory.Create().Returns(Guid.NewGuid());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        var result = _factory.Create(createPostPendency, Guid.NewGuid(), Guid.NewGuid());
-
-        result.PendencyId.Should().NotBeEmpty();
     }
 }

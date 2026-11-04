@@ -2,29 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Deep links into the rules page: /rules#points has to open "Механика баллов",
- * not merely scroll past a closed row.
- *
- * Both halves of the arrival matter, and only one of them used to work:
- *
- *   - the document loads at the address (a link from outside, a reload) — the
- *     section component mounts with the hash already in place;
- *   - the hash changes inside a document that is already open (an address-bar
- *     paste onto the page one is standing on, an in-page anchor, back/forward
- *     between two anchors) — vue-router updates `route.hash` and nothing
- *     remounts, so anything that runs only in `onMounted` never runs again.
- *
- * Measured in Chromium against the running preview server before the fix:
- * a cold load of /rules#points expanded the row, while `location.hash =
- * "#points"` on an already-open /rules left `route.hash` at "#points" with
- * zero expanded rows.
- *
- * The two negative cases are the rule, not an accident: an id belonging to no
- * row (#nothing-here) and the anchor of a page SECTION (#bans, the <section>
- * wrapping RulesBans) must leave every row closed — four sections share one
- * hash, and without the check each would open a row of another one's list.
- */
+// /rules#points opens its row on a load at the address and on a hash change
+// without a remount; a hash of no row or of a page section opens nothing.
 import { describe, it, expect } from "vitest";
 import { mount, RouterLinkStub, type VueWrapper } from "@vue/test-utils";
 import { createMemoryHistory, createRouter, type Router } from "vue-router";
@@ -36,7 +15,7 @@ import RulesBans from "./RulesBans.vue";
 import RulesAuthors from "./RulesAuthors.vue";
 import RulesExternalLinks from "./RulesExternalLinks.vue";
 
-/** One row id per consumer of the composable — all four rules sections. */
+// One row id per consumer of the composable
 const consumers = [
   { name: "RulesPage", component: RulesPage as Component, itemId: "hacking" },
   { name: "RulesBans", component: RulesBans as Component, itemId: "points" },
@@ -63,8 +42,7 @@ async function mountAt(component: Component, hash: string) {
     global: {
       plugins: [router, createPinia()],
       stubs: {
-        // Links are not what is under test, and the staff table would reach
-        // for the network on mount.
+        // The staff table would reach for the network on mount.
         RouterLink: RouterLinkStub,
         RulesStaffTable: true,
       },

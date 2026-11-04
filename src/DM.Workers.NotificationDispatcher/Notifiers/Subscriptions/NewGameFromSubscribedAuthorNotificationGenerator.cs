@@ -11,18 +11,14 @@ using Microsoft.EntityFrameworkCore;
 namespace DM.Workers.NotificationDispatcher.Notifiers.Subscriptions;
 
 /// <summary>
-/// Generates "new game from subscribed author" notifications at game-creation
-/// time — but only for games whose draft visibility is <see cref="DraftVisibility.Public"/>.
-/// Private drafts stay invisible to non-team users; they get the notification
-/// later, when the game transitions to Active (see
-/// <c>GameActivatedNotificationGenerator</c>).
+/// Generates "new game from subscribed author" notifications at game creation, only for a
+/// <see cref="DraftVisibility.Public"/> draft; the activation generator covers the others.
 /// </summary>
 internal class NewGameFromSubscribedAuthorNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public NewGameFromSubscribedAuthorNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -69,7 +65,7 @@ internal class NewGameFromSubscribedAuthorNotificationGenerator : BaseNotificati
         yield return new CreateNotification
         {
             EventType = EventType.NewGameFromSubscribedAuthor,
-            UsersInterested = usersInterested.ToArray(),
+            UsersInterested = usersInterested,
             ActorId = gameData.MasterId,
             Metadata = new
             {

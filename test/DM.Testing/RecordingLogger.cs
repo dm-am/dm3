@@ -10,15 +10,8 @@ namespace DM.Testing;
 /// Keeps what was written to it, for the tests that assert about the log itself.
 /// </summary>
 /// <remarks>
-/// Some of what this suite holds in place is a property of the log and of nothing
-/// else: that a retry says which queue it happened on, and that the line written per
-/// letter carries neither the letter nor the credentials it goes out under. A null
-/// logger cannot answer either question, and a mock of ILogger answers about the
-/// state-and-formatter overload rather than about the line a reader would see - so
-/// the formatter is run here, once, and what it returned is what the assertions read.
-///
-/// Concurrent because a message can be handled on a pool thread while the test that
-/// asserts about it waits on another.
+/// The formatter is run once, so assertions read the line a reader would see. Concurrent: a message may
+/// be handled on a pool thread.
 /// </remarks>
 /// <typeparam name="T">Type the logger is resolved for.</typeparam>
 public sealed class RecordingLogger<T> : ILogger<T>

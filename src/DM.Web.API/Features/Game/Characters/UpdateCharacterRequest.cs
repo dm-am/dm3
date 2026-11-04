@@ -7,14 +7,8 @@ namespace DM.Web.API.Features.Game.Characters;
 /// API DTO for editing an existing character
 /// </summary>
 /// <remarks>
-/// Content only, and only the editable part of it. The endpoint used to take
-/// CharacterDetails, the response DTO, so the contract asked for an author
-/// reference, a picture, post counters and a rating to change a name — and the
-/// server's defence against the rest was per-field Ignore() in the mapping
-/// profile. That arrangement has already cost one defect: a PATCH with no
-/// privacy block mapped to a plain false and demoted an NPC to a player
-/// character. A character's place in the game is changed by
-/// POST /v1/characters/{id}/status, which names the transition.
+/// The editable content only; the place of a character in the game changes
+/// through POST /v1/characters/{id}/status.
 /// </remarks>
 public class UpdateCharacterRequest
 {
@@ -39,9 +33,7 @@ public class UpdateCharacterRequest
 /// A single attribute value submitted with a character edit
 /// </summary>
 /// <remarks>
-/// The specification's own title, type and rendered BBCode are the server's
-/// answer, not the client's input: only the specification id and the raw value
-/// have ever reached the domain.
+/// Only the specification id and the raw value reach the domain.
 /// </remarks>
 public class UpdateCharacterAttribute
 {

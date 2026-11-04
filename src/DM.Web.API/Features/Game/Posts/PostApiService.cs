@@ -2,22 +2,19 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.PostReviews;
 using DM.Domain.Game.Features.Posts;
 using DM.Web.API.Shared.Dto;
-using DomainPost = DM.Domain.Game.Features.Games.Post;
+using DomainPost = DM.Domain.Game.Features.Posts.Post;
 
 namespace DM.Web.API.Features.Game.Posts;
 
-/// <inheritdoc />
-internal class PostApiService : IPostApiService
+public class PostApiService
 {
     private readonly IPostService _postService;
     private readonly IPostReviewService _reviewService;
     private readonly PostMapper _mapper;
 
-    /// <inheritdoc />
     public PostApiService(
         IPostService postService,
         IPostReviewService reviewService,
@@ -28,21 +25,18 @@ internal class PostApiService : IPostApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Post>> Get(Guid roomId, RoomPostsQuery query)
     {
         var (posts, paging) = await _postService.GetAllAsync(roomId, query);
         return new ListEnvelope<Post>(await PostsForViewer(posts), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Post>> Get(Guid postId)
     {
         var post = await _postService.GetAsync(postId);
         return new Envelope<Post>((await PostsForViewer([post])).Single());
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Post>> Create(Guid roomId, CreatePostRequest post)
     {
         var createPost = _mapper.ToCreatePost(post);
@@ -51,7 +45,6 @@ internal class PostApiService : IPostApiService
         return new Envelope<Post>((await PostsForViewer([createdPost])).Single());
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Post>> Update(Guid postId, UpdatePostRequest request)
     {
         var updatePost = _mapper.ToUpdatePost(request);
@@ -60,13 +53,10 @@ internal class PostApiService : IPostApiService
         return new Envelope<Post>((await PostsForViewer([updatedPost])).Single());
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid postId) => _postService.DeleteAsync(postId);
 
-    /// <inheritdoc />
     public Task MarkAsRead(Guid roomId) => _postService.MarkAsReadAsync(roomId);
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Post>> GetRated(PostsQuery query)
     {
         var (posts, paging) = await _postService.GetRatedAsync(query);
@@ -85,10 +75,15 @@ internal class PostApiService : IPostApiService
         var page = posts.ToArray();
         var reviewable = await _reviewService.ReviewableAsync(
             page.Select(p => new ReviewCandidate(p.Id, p.AuthorUserId, p.GameId)).ToArray());
+        var editable = _postService.Editable(page);
         return page.Select(p =>
         {
             var mapped = _mapper.ToPost(p);
-            mapped.Viewer = new PostViewer { CanReview = reviewable.Contains(p.Id) };
+            mapped.Viewer = new PostViewer
+            {
+                CanReview = reviewable.Contains(p.Id),
+                CanEdit = editable.Contains(p.Id),
+            };
             return mapped;
         }).ToArray();
     }

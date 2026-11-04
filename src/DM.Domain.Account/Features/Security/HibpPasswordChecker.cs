@@ -22,9 +22,6 @@ public class HibpPasswordChecker : ICompromisedPasswordChecker
     private readonly ILogger<HibpPasswordChecker> _logger;
     private const string HibpApiUrl = "https://api.pwnedpasswords.com/range/";
 
-    /// <summary>
-    /// Creates a new HIBP password checker
-    /// </summary>
     /// <param name="httpClient">HTTP client for API calls</param>
     /// <param name="logger">Logger instance</param>
     public HibpPasswordChecker(
@@ -50,46 +47,16 @@ public class HibpPasswordChecker : ICompromisedPasswordChecker
             var suffix = sha1Hash[5..];
 
             var response = await _httpClient.GetAsync($"{HibpApiUrl}{prefix}");
-
-            if (!response.IsSuccessStatusCode)
-            {
-                _logger.LogWarning(
-                    "HIBP API returned {StatusCode}. Allowing password (fail-open)",
-                    response.StatusCode);
-                return false;
-            }
+            response.EnsureSuccessStatusCode();
 
             var content = await response.Content.ReadAsStringAsync();
-            var lines = content.Split('\n', StringSplitOptions.RemoveEmptyEntries);
-
-            // Check if our suffix is in the response
-            var isCompromised = lines.Any(line =>
-            {
-                var parts = line.Split(':');
-                return parts.Length > 0 &&
-                       parts[0].Trim().Equals(suffix, StringComparison.OrdinalIgnoreCase);
-            });
-
-            if (isCompromised)
-            {
-                _logger.LogInformation("Password found in HIBP database (compromised)");
-            }
-
-            return isCompromised;
-        }
-        catch (HttpRequestException ex)
-        {
-            _logger.LogWarning(ex, "HIBP API unavailable. Allowing password (fail-open)");
-            return false;
-        }
-        catch (TaskCanceledException ex)
-        {
-            _logger.LogWarning(ex, "HIBP API timeout. Allowing password (fail-open)");
-            return false;
+            return content
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries)
+                .Any(line => line.Split(':')[0].Trim().Equals(suffix, StringComparison.OrdinalIgnoreCase));
         }
         catch (Exception ex)
         {
-            _logger.LogError(ex, "Unexpected error checking HIBP. Allowing password (fail-open)");
+            _logger.LogWarning(ex, "HIBP API unavailable. Allowing password (fail-open)");
             return false;
         }
     }

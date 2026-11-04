@@ -45,6 +45,14 @@ describe("the other addresses of the site", () => {
       expect(address.name.trim()).toBe(address.name);
     }
   });
+
+  it("gives each address a full name for a sentence, which keeps the short one", () => {
+    // Under the heading "Серверы сайта" the row says "Основной"; a toast has no heading.
+    expect(SITE_ADDRESSES.map((a) => [a.name, a.title])).toEqual([
+      ["Основной", "Основной сервер"],
+      ["RU-прокси", "RU-прокси"],
+    ]);
+  });
 });
 
 /**

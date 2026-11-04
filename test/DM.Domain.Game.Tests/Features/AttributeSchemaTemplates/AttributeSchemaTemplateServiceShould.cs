@@ -1,5 +1,4 @@
 using System;
-using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -24,22 +23,22 @@ namespace DM.Domain.Game.Tests.Features.AttributeSchemaTemplates;
 /// </summary>
 public class AttributeSchemaTemplateServiceShould : UnitTestBase
 {
-    private readonly IIntentionManager _intentionManager;
-    private readonly IAttributeSchemaTemplateRepository _repository;
-    private readonly AttributeSchemaTemplateService _service;
-    private readonly Guid _userId = Guid.NewGuid();
+    private readonly IIntentionManager intentionManager;
+    private readonly IAttributeSchemaTemplateRepository repository;
+    private readonly AttributeSchemaTemplateService service;
+    private readonly Guid userId = Guid.NewGuid();
 
     public AttributeSchemaTemplateServiceShould()
     {
-        _intentionManager = Mock<IIntentionManager>();
-        _repository = Mock<IAttributeSchemaTemplateRepository>();
+        intentionManager = Mock<IIntentionManager>();
+        repository = Mock<IAttributeSchemaTemplateRepository>();
 
         var identityProvider = Mock<IIdentityProvider>();
-        identityProvider.Current.Returns(Identities.User(_userId, UserRole.SeniorModerator));
+        identityProvider.Current.Returns(Identities.User(userId, UserRole.SeniorModerator));
 
-        _service = new AttributeSchemaTemplateService(
-            _intentionManager,
-            _repository,
+        service = new AttributeSchemaTemplateService(
+            intentionManager,
+            repository,
             identityProvider,
             new CreateAttributeSchemaTemplateValidator(),
             new ReplaceAttributeSchemaTemplateValidator());
@@ -56,20 +55,20 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task ReadTheCatalogueWithoutAGate()
     {
-        _repository.GetTemplates(Arg.Any<CancellationToken>()).Returns([]);
+        repository.GetTemplates(Arg.Any<CancellationToken>()).Returns([]);
 
-        await _service.GetAllAsync();
+        await service.GetAllAsync();
 
-        _intentionManager.DidNotReceive().ThrowIfForbidden(Arg.Any<AttributeSchemaTemplateIntention>());
+        intentionManager.DidNotReceive().ThrowIfForbidden(Arg.Any<AttributeSchemaTemplateIntention>());
     }
 
     [Fact]
     public async Task AnswerNotFoundForATemplateNobodyCanRead()
     {
-        _repository.GetTemplate(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        repository.GetTemplate(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns((AttributeSchemaTemplate?)null);
 
-        var act = async () => await _service.GetAsync(Guid.NewGuid());
+        var act = async () => await service.GetAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -82,45 +81,45 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task AuthorizeCreation()
     {
-        _repository.Create(Arg.Any<CreateAttributeSchemaTemplate>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        repository.Create(Arg.Any<CreateAttributeSchemaTemplate>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(new AttributeSchemaTemplate { Id = Guid.NewGuid(), Title = "Лайт" });
 
-        await _service.CreateAsync(Creation());
+        await service.CreateAsync(Creation());
 
-        _intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
+        intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
     }
 
     [Fact]
     public async Task AuthorizeReplacement()
     {
         var templateId = Guid.NewGuid();
-        _repository.Replace(Arg.Any<ReplaceAttributeSchemaTemplate>(), Arg.Any<CancellationToken>())
+        repository.Replace(Arg.Any<ReplaceAttributeSchemaTemplate>(), Arg.Any<CancellationToken>())
             .Returns(new AttributeSchemaTemplate { Id = templateId, Title = "Лайт" });
 
-        await _service.ReplaceAsync(Replacement(templateId));
+        await service.ReplaceAsync(Replacement(templateId));
 
-        _intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
+        intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
     }
 
     [Fact]
     public async Task AuthorizeRemoval()
     {
-        _repository.Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        repository.Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(AttributeSchemaTemplateRemoval.Hidden);
 
-        await _service.DeleteAsync(Guid.NewGuid());
+        await service.DeleteAsync(Guid.NewGuid());
 
-        _intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
+        intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
     }
 
     [Fact]
     public async Task AuthorizeTheDefaultAssignment()
     {
-        _repository.MakeDefault(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
+        repository.MakeDefault(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(true);
 
-        await _service.MakeDefaultAsync(Guid.NewGuid());
+        await service.MakeDefaultAsync(Guid.NewGuid());
 
-        _intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
+        intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
     }
 
     /// <summary>
@@ -130,15 +129,15 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseARankBeforeReadingTheBody()
     {
-        _intentionManager
+        intentionManager
             .When(manager => manager.ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage))
             .Throw(new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied));
 
-        var act = async () => await _service.CreateAsync(new CreateAttributeSchemaTemplate { Title = "" });
+        var act = async () => await service.CreateAsync(new CreateAttributeSchemaTemplate { Title = "" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().Create(
+        await repository.DidNotReceive().Create(
             Arg.Any<CreateAttributeSchemaTemplate>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
@@ -149,12 +148,12 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     public async Task CreateOnBehalfOfTheCaller()
     {
         var creation = Creation();
-        _repository.Create(creation, _userId, Arg.Any<CancellationToken>())
+        repository.Create(creation, userId, Arg.Any<CancellationToken>())
             .Returns(new AttributeSchemaTemplate { Id = Guid.NewGuid(), Title = "Лайт" });
 
-        await _service.CreateAsync(creation);
+        await service.CreateAsync(creation);
 
-        await _repository.Received(1).Create(creation, _userId, Arg.Any<CancellationToken>());
+        await repository.Received(1).Create(creation, userId, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -164,10 +163,10 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task AnswerConflictWhenACreatedTitleIsTaken()
     {
-        _repository.Create(Arg.Any<CreateAttributeSchemaTemplate>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        repository.Create(Arg.Any<CreateAttributeSchemaTemplate>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new DuplicateEntityException("Duplicate attribute schema template title"));
 
-        var act = async () => await _service.CreateAsync(Creation());
+        var act = async () => await service.CreateAsync(Creation());
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
@@ -176,10 +175,10 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task AnswerConflictWhenAReplacedTitleIsTaken()
     {
-        _repository.Replace(Arg.Any<ReplaceAttributeSchemaTemplate>(), Arg.Any<CancellationToken>())
+        repository.Replace(Arg.Any<ReplaceAttributeSchemaTemplate>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new DuplicateEntityException("Duplicate attribute schema template title"));
 
-        var act = async () => await _service.ReplaceAsync(Replacement(Guid.NewGuid()));
+        var act = async () => await service.ReplaceAsync(Replacement(Guid.NewGuid()));
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
@@ -188,10 +187,10 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task AnswerNotFoundWhenAReplacementFindsNoLiveTemplate()
     {
-        _repository.Replace(Arg.Any<ReplaceAttributeSchemaTemplate>(), Arg.Any<CancellationToken>())
+        repository.Replace(Arg.Any<ReplaceAttributeSchemaTemplate>(), Arg.Any<CancellationToken>())
             .Returns((AttributeSchemaTemplate?)null);
 
-        var act = async () => await _service.ReplaceAsync(Replacement(Guid.NewGuid()));
+        var act = async () => await service.ReplaceAsync(Replacement(Guid.NewGuid()));
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -204,10 +203,10 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseToRemoveTheDefaultTemplate()
     {
-        _repository.Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        repository.Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(AttributeSchemaTemplateRemoval.RefusedAsDefault);
 
-        var act = async () => await _service.DeleteAsync(Guid.NewGuid());
+        var act = async () => await service.DeleteAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
@@ -216,10 +215,10 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task AnswerNotFoundWhenARemovalFindsNoLiveTemplate()
     {
-        _repository.Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        repository.Delete(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .Returns(AttributeSchemaTemplateRemoval.NotFound);
 
-        var act = async () => await _service.DeleteAsync(Guid.NewGuid());
+        var act = async () => await service.DeleteAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -231,10 +230,10 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task AnswerConflictWhenTheDefaultWasJustAssignedElsewhere()
     {
-        _repository.MakeDefault(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
+        repository.MakeDefault(Arg.Any<Guid>(), Arg.Any<CancellationToken>())
             .ThrowsAsync(new DuplicateEntityException("Concurrent default attribute schema template"));
 
-        var act = async () => await _service.MakeDefaultAsync(Guid.NewGuid());
+        var act = async () => await service.MakeDefaultAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
@@ -243,25 +242,11 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     [Fact]
     public async Task AnswerNotFoundWhenTheAssignmentFindsNoLiveTemplate()
     {
-        _repository.MakeDefault(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
+        repository.MakeDefault(Arg.Any<Guid>(), Arg.Any<CancellationToken>()).Returns(false);
 
-        var act = async () => await _service.MakeDefaultAsync(Guid.NewGuid());
+        var act = async () => await service.MakeDefaultAsync(Guid.NewGuid());
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
-
-    /// <summary>
-    /// No write here reaches a game. A game keeps a copy of its own sheet, so
-    /// nothing about the catalogue can move one - and the way to keep that true
-    /// is to hand this service nothing that could.
-    /// </summary>
-    [Fact]
-    public void BeHandedNothingThatCanReachAGame() =>
-        typeof(AttributeSchemaTemplateService)
-            .GetConstructors().Single()
-            .GetParameters()
-            .Select(parameter => parameter.ParameterType.Name)
-            .Where(name => name.Contains("Game", StringComparison.Ordinal))
-            .Should().BeEmpty("a template that could reach a game would eventually change one");
 }

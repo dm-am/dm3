@@ -1,13 +1,6 @@
 <script setup lang="ts">
-/**
- * ModerationAwards — the contest series list + create form + a link to
- * the award-type catalog. The main admin page for the "Награды" block.
- *
- * Reuses `useContestSeries()` (singleton cache) — after create/edit we
- * call reload() so every consumer (profile, other admin views) sees the
- * fresh list.
- */
-import { computed, onMounted, reactive } from "vue";
+/** The contest series; after a write reload() refreshes the shared cache of useContestSeries. */
+import { computed, onMounted, reactive, ref } from "vue";
 import { useModal } from "vue-final-modal";
 import {
   achievementApi,
@@ -19,14 +12,15 @@ import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import Button from "@/shared/ui/Button/Button.vue";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import { refusalHere } from "@/shared/lib/errors";
+import { ActionResult } from "@/shared/ui/ActionResult";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import ContestSeriesCreateDialog from "./dialogs/ContestSeriesCreateDialog.vue";
-import { useRoleGate } from "./lib/useRoleGate";
-import { sectionRole } from "./lib/sections";
 
-const { hasAccess, deniedText } = useRoleGate(sectionRole("moderation-awards"));
 const {
   adminSeries: series,
   loading,
+  adminFailed: failed,
   loadAdmin: load,
   reload,
 } = useContestSeries();
@@ -43,8 +37,7 @@ const sortedSeries = computed(() =>
   }),
 );
 
-// The site's table, as a table whose rows are added in place is drawn
-// (AttributeSchemaEditor): "+ Новая серия" right under it.
+// "+ Новая серия" under the table, as in AttributeSchemaEditor.
 const columns: Column[] = [
   { key: "title", label: "Конкурс", align: "left" },
   { key: "year", label: "Год", align: "left" },
@@ -58,7 +51,6 @@ function seriesRowClass(s: ContestSeries): string | undefined {
   return s.isActive ? undefined : "is-inactive";
 }
 
-// --- Create dialog (shared Dialog idiom) ---
 const seriesList = computed(() => series.value ?? []);
 
 const { open: openCreate, close: closeCreate } = useModal({
@@ -73,8 +65,22 @@ const { open: openCreate, close: closeCreate } = useModal({
   }),
 });
 
+/** A refused "Скрыть" or "Вернуть", on a line under the row it was pressed in. */
+const toggleRefusal = ref<{ id: string; text: string } | null>(null);
+
 async function toggleActive(id: string, isActive: boolean) {
-  await achievementApi.updateContestSeries(id, { isActive: !isActive });
+  toggleRefusal.value = null;
+  const { error } = await achievementApi.updateContestSeries(id, {
+    isActive: !isActive,
+  });
+  if (error) {
+    const text = refusalHere(
+      error,
+      isActive ? "Не удалось скрыть серию" : "Не удалось вернуть серию",
+    );
+    if (text) toggleRefusal.value = { id, text };
+    return;
+  }
   await reload();
 }
 </script>
@@ -82,11 +88,8 @@ async function toggleActive(id: string, isActive: boolean) {
 <template>
   <page-title>Награды</page-title>
 
-  <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
-
-  <section v-else class="awards-admin">
-    <!-- The heading, and the way to the catalogue of the award types right
-         under it. -->
+  <section class="awards-admin">
+    <!-- The heading, and the way to the catalogue of award types under it. -->
     <header class="awards-admin__header">
       <BlockTitle>Серии конкурсов</BlockTitle>
       <router-link :to="{ name: 'moderation-award-types' }" class="link-button">
@@ -94,17 +97,27 @@ async function toggleActive(id: string, isActive: boolean) {
       </router-link>
     </header>
 
-    <SecondaryText v-if="loading && !series">Загрузка...</SecondaryText>
-    <SecondaryText v-else-if="sortedSeries.length === 0">
+    <ErrorState
+      v-if="failed"
+      message="Не удалось загрузить серии конкурсов"
+      :retry="() => load(true)"
+    />
+
+    <SecondaryText
+      v-else-if="series !== null && !loading && !sortedSeries.length"
+    >
       Нет серий конкурсов
     </SecondaryText>
 
+    <!-- Unread, the table draws its skeleton rows. -->
     <DataTable
       v-else
       class="series-table"
       :columns="columns"
       :data="sortedSeries"
+      :loading="loading || series === null"
       :row-class="seriesRowClass"
+      :details-for="toggleRefusal?.id ?? null"
       aria-label="Серии конкурсов"
     >
       <template #cell-title="{ row }">
@@ -137,9 +150,11 @@ async function toggleActive(id: string, isActive: boolean) {
           {{ row.isActive ? "Скрыть" : "Вернуть" }}
         </button>
       </template>
+      <template #details>
+        <ActionResult :text="toggleRefusal?.text" class="series-refusal" />
+      </template>
     </DataTable>
 
-    <!-- Opens the window that creates a series, where the main button is. -->
     <Button type="button" class="new-series" @click="openCreate">
       + Новая серия
     </Button>
@@ -147,32 +162,34 @@ async function toggleActive(id: string, isActive: boolean) {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
+@use "@/assets/styles/Links" as *
 
 .awards-admin
   display: flex
   flex-direction: column
   gap: $medium
 
-// The heading over its row of buttons, the heading's own step under it.
 .awards-admin__header
   display: block
 
-// The site's table in the size this list has always had, its headers on the
-// left as its cells are (Column.align).
+// Headers on the left, as the cells are (Column.align).
 .series-table
   font-size: $secondary-font-size
 
   :deep(.is-inactive)
-    opacity: 0.5
+    opacity: $muted-opacity
 
   .muted
     color: $text-muted
 
-// The shared secondary button, under the table it adds a row to, at its left
-// edge.
+// Under the table it adds a row to, at its left edge.
 .new-series
   align-self: flex-start
+
+// The line is the cell's only content: the cell's padding stands around it.
+.series-refusal
+  --action-result-margin: 0
 
 .link-button
   text-decoration: none

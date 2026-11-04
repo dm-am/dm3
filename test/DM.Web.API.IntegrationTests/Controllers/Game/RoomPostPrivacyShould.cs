@@ -13,14 +13,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// closed for everybody else.
 /// </summary>
 /// <remarks>
-/// The rule lives at serialization time: the mapper puts the frozen
-/// addressee snapshot into the render-context envelope, and the JSON
-/// converter combines it with the current viewer. Losing the envelope
-/// anywhere on that path fails in one of two directions - the addressee
-/// stops seeing what was written to them, or the whole room starts seeing
-/// it - and neither direction is visible to a unit test of either half.
-/// This is the real HTTP path over the seeded room: one post, read by its
-/// addressee, by a signed-in stranger, and by nobody at all.
+/// The mapper puts the frozen snapshot into the envelope and the converter combines it with the viewer; one post
+/// read over HTTP by its addressee, a stranger and nobody.
 /// </remarks>
 public class RoomPostPrivacyShould : IntegrationTestBase
 {
@@ -71,18 +65,8 @@ public class RoomPostPrivacyShould : IntegrationTestBase
     /// with either audience.
     /// </summary>
     /// <remarks>
-    /// Both endpoints serve the same post through different projections, and
-    /// only one of them was ever covered. The rated listing built its own post
-    /// by hand: it filled the text and left the author, the game, the master,
-    /// the assistants and both private-text overrides at their defaults, all of
-    /// which are the empty Guid — which is the id an anonymous reader carries.
-    /// The rule "a game lead sees every [private] block" then fired for every
-    /// reader who was not signed in, and the same coincidence turned the
-    /// author_edit header into a way to ask for the unfiltered source.
-    ///
-    /// The listings are enumerated rather than sampled: a post that reaches a
-    /// reader one row at a time and a post that reaches them twenty at a time
-    /// are the same post, and the reader has the same right to it.
+    /// Both listings serve the post through different projections; a lead id left as the empty Guid matches the
+    /// anonymous reader. Enumerated rather than sampled.
     /// </remarks>
     [Fact]
     public async Task HideThePrivateBlockFromAnAnonymousReaderOnEveryPostListing()
@@ -138,11 +122,7 @@ public class RoomPostPrivacyShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A post by the game master into the seeded open room, with one
-    /// [private] block whose frozen snapshot resolves the addressed
-    /// character name to SecondUser - exactly what the save path writes.
-    /// The room keeps ViewPrivateText = false and the post does not share
-    /// private text, so neither override opens the block.
+    /// A post by the master with one [private] block whose snapshot resolves to SecondUser; neither override opens it.
     /// </summary>
     private Task<Guid> CreatePrivatePost() =>
         PostTestHelper.CreatePrivatePost(DatabaseFixture, PublicText, PrivateText);

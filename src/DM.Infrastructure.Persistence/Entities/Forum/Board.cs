@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Domain.Core.Enums;
 
@@ -39,11 +38,6 @@ public class Board
     /// Display order number
     /// </summary>
     public int Order { get; set; }
-
-    /// <summary>
-    /// Role restrictions to view the board content and the board itself
-    /// </summary>
-    public BoardAccessPolicy ViewPolicy { get; set; }
 
     /// <summary>
     /// Role restrictions to create topics within the board

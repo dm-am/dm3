@@ -3,20 +3,10 @@ import { ref, nextTick } from "vue";
 import { useCodeInput, type CodeMode } from "./useCodeInput";
 
 /**
- * The second-factor field, read against the parse it repeats.
- *
- * The server takes six digits as a device code and offers everything else to
- * the recovery set, where RecoveryCodeFactory.Normalize raises the case, reads
- * I and L as one and O as zero, and drops every symbol outside Crockford's
- * alphabet. A field that let anything else through would produce entries the
- * server refuses on shape alone, and the reader would be told his code is wrong
- * when what is wrong is the field.
- *
- * Everything here goes through a real <input> and real events, because that is
- * where the two hard parts live: the filter has to run on `input` rather than
- * on `keydown` to catch a paste, an autofill and a soft keyboard, and the caret
- * has to survive an edit made in the middle of a code that grows dashes as it
- * is typed.
+ * The second-factor field against the server's parse
+ * (RecoveryCodeFactory.Normalize), through a real <input> and real events:
+ * the filter runs on input to catch paste, autofill and soft keyboards, and
+ * the caret survives the dashes.
  */
 const field = (mode: CodeMode = "digits") => {
   const modeRef = ref<CodeMode>(mode);
@@ -194,10 +184,7 @@ describe("Backspace in front of a dash", () => {
   });
 });
 
-/**
- * The same illness as Backspace's, aimed the other way: the caret in front of a
- * dash, and the key eating the one symbol the reformat puts straight back.
- */
+// Delete in front of a dash, the mirror of Backspace.
 describe("Delete in front of a dash", () => {
   it("takes the symbol after the dash and not the dash", () => {
     const { element } = field("recovery");
@@ -226,14 +213,7 @@ describe("Delete in front of a dash", () => {
   });
 });
 
-/**
- * An edit the composable makes on its own has to reach the screen the way every
- * other edit does. The screen hangs two things on the field's `input` event —
- * it drops the refusal the server gave the previous code, and it decides
- * whether to check the new one — and neither ran for an edit the browser was
- * never allowed to make, so "Код не подошел" stayed under a code that had
- * already changed.
- */
+// An edit made here reaches the screen through the field's input event.
 describe("an edit the composable made itself", () => {
   const withRefusal = (mode: CodeMode = "recovery") => {
     const built = field(mode);
@@ -269,13 +249,7 @@ describe("an edit the composable made itself", () => {
   });
 });
 
-/**
- * A recovery code pasted into the digit field holds exactly six digits, so the
- * field fills up and reads as a code from the authenticator. A screen that
- * checks a full code by itself would spend one of the five attempts the server
- * allows on an entry nobody meant to send, and answer "Код не подошел" to a
- * reader who pasted the right code into the wrong mode.
- */
+// A recovery code pasted into the digit field fills it and reads as a device code.
 describe("what the parse threw away", () => {
   it("is nothing when the digits arrive as digits", () => {
     const { code, element } = field("digits");

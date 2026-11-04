@@ -1,35 +1,18 @@
 <script setup lang="ts">
-/**
- * "Изменение баллов" — the only thing that can still be done to a warning.
- *
- * A warning is a record of a decision and is never withdrawn, so what used to
- * be a delete is a correction of the points instead: the record keeps its place
- * in the log and in the profile, and the number it weighs on the violation
- * scale is what moves. The correction is signed and carries an explanation,
- * both of which the card then shows to every reader — which is why the
- * explanation is required here and not merely asked for.
- *
- * The rules mirror ChangeWarningPointsValidator: points 0-6, explanation
- * present and no longer than 2000 characters. Who may open this at all is the
- * server's answer, not this dialog's: the row carries `canChangePoints`.
- *
- * The window runs the request itself (Dialog's `action`): it waits shut,
- * prints a refusal over its buttons or under the field the server named, and
- * closes on success alone. A typed explanation is asked about before it is
- * dropped.
- */
+// A warning is never withdrawn: its points are corrected, signed and explained instead.
 import { computed, ref } from "vue";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
 import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select, type SelectOption } from "@/shared/ui/Select";
-import { moderationApi, type Warning } from "@/entities/moderation";
+import { warningApi, type Warning } from "@/entities/moderation";
+import { WARNING_LIMIT } from "../api";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
+import { REASON_MAX_LENGTH } from "../lib/limits";
 
 const props = defineProps<{
-  /** The warning being corrected. */
   warningId: string;
-  /** Points it currently carries — where the field starts. */
   currentPoints: number;
 }>();
 
@@ -38,28 +21,25 @@ const emit = defineEmits<{
   (e: "cancel"): void;
 }>();
 
-/** The whole scale, zero included: zero is a correction, not an absence of one. */
-const pointsOptions: SelectOption[] = ["0", "1", "2", "3", "4", "5", "6"].map(
-  (value) => ({ value, label: value }),
+// Zero included: zero is a correction, not an absence of one.
+const pointsOptions: SelectOption[] = Array.from(
+  { length: WARNING_LIMIT + 1 },
+  (_, points) => ({ value: String(points), label: String(points) }),
 );
 
 const points = ref(String(props.currentPoints));
 const reason = ref("");
 
-const reasonTooLong = computed(() => reason.value.length > 2000);
+const reasonTooLong = computed(() => reason.value.length > REASON_MAX_LENGTH);
 const canSubmit = computed(
   () => reason.value.trim().length > 0 && !reasonTooLong.value,
 );
 
-/**
- * The window's action. An empty or overlong explanation never gets here: the
- * main button is shut by `canSubmit`, and a shut button submits nothing.
- */
 async function send() {
-  const result = await moderationApi.changeWarningPoints(
+  const result = await warningApi.changeWarningPoints(
     props.warningId,
-    { points: Number(points.value), reason: reason.value.trim() },
-    { ownsRefusal: true, ownsRateLimit: true },
+    { points: Number(points.value), reason: reason.value },
+    OWNS_REFUSAL,
   );
   if (!result.error) emit("success", result.data?.resource ?? null);
   return result;

@@ -3,17 +3,10 @@
  * their own line: the row of a list, a field of a form.
  */
 import { describe, expect, it, vi } from "vitest";
-import type { GeneralError } from "@/shared/api/models/common";
+import { problem } from "@/shared/lib/testing/problem";
+import { endOfTask } from "@/shared/lib/testing/tasks";
 import { announceWorded } from "./generalPlate";
 import { refusalHere } from "./refusalHere";
-
-const problem = (
-  status: number,
-  title = "",
-  extra: Partial<GeneralError> = {},
-): GeneralError => ({ type: "", title, status, traceId: "t", ...extra });
-
-const endOfTask = () => new Promise((resolve) => setTimeout(resolve, 0));
 
 describe("refusalHere", () => {
   it("says the server's sentence and takes down the plate held for it", async () => {

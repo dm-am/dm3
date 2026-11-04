@@ -1,8 +1,5 @@
-using System;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Characters;
@@ -23,15 +20,6 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// <summary>
 /// Taking a character out of a game answers over HTTP at all.
 /// </summary>
-/// <remarks>
-/// It did not. Retiring went through PATCH of the whole character with a target
-/// status and three booleans; the mapping dropped the booleans, the service had
-/// to guess the intent from what arrived, and the combination that arrived
-/// matched no arm, so the endpoint answered 500. The request never got that far
-/// in practice either — the body requires a privacy block the status-only client
-/// call did not send, so it answered 400 first. Every way out of a game was
-/// unreachable, and the exile right had no caller at all.
-/// </remarks>
 public class CharacterStatusShould : IntegrationTestBase
 {
     public CharacterStatusShould(DatabaseFixture databaseFixture) : base(databaseFixture)

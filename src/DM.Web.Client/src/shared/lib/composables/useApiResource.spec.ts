@@ -1,21 +1,13 @@
 import { describe, it, expect, vi } from "vitest";
 import { useApiResource } from "./useApiResource";
+import { deferred } from "@/shared/lib/testing/tasks";
 import type { ApiResult } from "@/shared/api/models/common";
-
-/** A fetcher whose response the test releases by hand. */
-function deferred<T>() {
-  let release!: (value: ApiResult<T>) => void;
-  const promise = new Promise<ApiResult<T>>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
-}
 
 const ok = <T>(data: T): ApiResult<T> => ({ data, error: null });
 
 describe("useApiResource", () => {
   it("makes a joined caller wait for the data, not for nothing", async () => {
-    const first = deferred<string[]>();
+    const first = deferred<ApiResult<string[]>>();
     const fetcher = vi.fn(() => first.promise);
     const resource = useApiResource(fetcher);
 
@@ -32,7 +24,7 @@ describe("useApiResource", () => {
     await Promise.resolve();
     expect(joinedSettled).toBe(false);
 
-    first.release(ok(["a"]));
+    first.resolve(ok(["a"]));
     await initial;
     await joined;
 
@@ -41,8 +33,8 @@ describe("useApiResource", () => {
   });
 
   it("keeps the answer of the newest request when an older one lands later", async () => {
-    const slow = deferred<string>();
-    const fast = deferred<string>();
+    const slow = deferred<ApiResult<string>>();
+    const fast = deferred<ApiResult<string>>();
     const fetcher = vi
       .fn<() => Promise<ApiResult<string>>>()
       .mockReturnValueOnce(slow.promise)
@@ -52,23 +44,23 @@ describe("useApiResource", () => {
     const stale = resource.fetch();
     const fresh = resource.fetch(true);
 
-    fast.release(ok("new"));
+    fast.resolve(ok("new"));
     await fresh;
     expect(resource.data.value).toBe("new");
 
-    slow.release(ok("old"));
+    slow.resolve(ok("old"));
     await stale;
     expect(resource.data.value).toBe("new");
   });
 
   it("does not repopulate state that reset cleared", async () => {
-    const inFlight = deferred<string>();
+    const inFlight = deferred<ApiResult<string>>();
     const resource = useApiResource(() => inFlight.promise);
 
     const pending = resource.fetch();
     resource.reset();
 
-    inFlight.release(ok("late"));
+    inFlight.resolve(ok("late"));
     await pending;
 
     // reset() is what logout calls: an answer still on the wire must not put the
@@ -78,15 +70,15 @@ describe("useApiResource", () => {
   });
 
   it("keeps the old data on screen while invalidate refetches", async () => {
-    const first = deferred<string[]>();
-    const second = deferred<string[]>();
+    const first = deferred<ApiResult<string[]>>();
+    const second = deferred<ApiResult<string[]>>();
     const fetcher = vi
       .fn<() => Promise<ApiResult<string[]>>>()
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise);
     const resource = useApiResource(fetcher);
 
-    first.release(ok(["one game"]));
+    first.resolve(ok(["one game"]));
     await resource.fetch();
 
     // The sidebar blocks fetch on mount and the shell mounts once per session.
@@ -95,14 +87,14 @@ describe("useApiResource", () => {
     const refreshing = resource.invalidate();
     expect(resource.data.value).toEqual(["one game"]);
 
-    second.release(ok(["one game", "the new one"]));
+    second.resolve(ok(["one game", "the new one"]));
     await refreshing;
     expect(resource.data.value).toEqual(["one game", "the new one"]);
   });
 
   it("makes a caller wait for the refetch invalidate started", async () => {
-    const first = deferred<string[]>();
-    const second = deferred<string[]>();
+    const first = deferred<ApiResult<string[]>>();
+    const second = deferred<ApiResult<string[]>>();
     const fetcher = vi
       .fn<() => Promise<ApiResult<string[]>>>()
       .mockReturnValueOnce(first.promise)
@@ -111,15 +103,12 @@ describe("useApiResource", () => {
     // plain fetch() would return at the freshness check.
     const resource = useApiResource(fetcher, { cacheMs: 60_000 });
 
-    first.release(ok(["one game"]));
+    first.resolve(ok(["one game"]));
     await resource.fetch();
 
     const refreshing = resource.invalidate();
 
-    // invalidate() means "what is on screen is known to be wrong", so the
-    // entry has to be aged out rather than dropped: dropped, it reads as
-    // absent, and a joining caller is told the data is fresh while the
-    // correcting request is still on the wire.
+    // Aged out, not dropped: dropped, a joining caller would be told it is fresh.
     let joinedSettled = false;
     const joined = resource.fetch();
     void joined.then(() => {
@@ -128,7 +117,7 @@ describe("useApiResource", () => {
     await Promise.resolve();
     expect(joinedSettled).toBe(false);
 
-    second.release(ok(["one game", "the new one"]));
+    second.resolve(ok(["one game", "the new one"]));
     await refreshing;
     await joined;
 
@@ -149,10 +138,10 @@ describe("useApiResource", () => {
   });
 
   it("keeps refreshing in the background after a forced fetch overtook one", async () => {
-    const first = deferred<string>();
-    const background = deferred<string>();
-    const forced = deferred<string>();
-    const later = deferred<string>();
+    const first = deferred<ApiResult<string>>();
+    const background = deferred<ApiResult<string>>();
+    const forced = deferred<ApiResult<string>>();
+    const later = deferred<ApiResult<string>>();
     const queue = [
       first.promise,
       background.promise,
@@ -165,7 +154,7 @@ describe("useApiResource", () => {
     const resource = useApiResource(fetcher, { cacheMs: -1 });
 
     const initial = resource.fetch();
-    first.release(ok("first"));
+    first.resolve(ok("first"));
     await initial;
 
     // Stale: this one takes the background branch and raises the flag.
@@ -174,8 +163,8 @@ describe("useApiResource", () => {
     // A mutation invalidates the same resource while that refresh is still on
     // the wire, so the guard moves on and the background answer is dropped.
     const invalidated = resource.invalidate();
-    forced.release(ok("forced"));
-    background.release(ok("background"));
+    forced.resolve(ok("forced"));
+    background.resolve(ok("background"));
     await invalidated;
 
     // Stale again. With the flag left raised this call returned without a
@@ -186,7 +175,7 @@ describe("useApiResource", () => {
   });
 
   it("raises loading synchronously, before the first await", () => {
-    const never = deferred<string>();
+    const never = deferred<ApiResult<string>>();
     const resource = useApiResource(() => never.promise);
 
     void resource.fetch();

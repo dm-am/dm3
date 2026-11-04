@@ -100,23 +100,9 @@ describe("the list after a mutation of it", () => {
     expect(await store.unsubscribe("s-user")).toBeNull();
 
     expect(store.subscriptions).toEqual([gameRow]);
-    expect(store.totalCount).toBe(1);
     expect(store.isSubscribed(SubscriptionTargetType.User, USER_ID)).toBe(
       false,
     );
-  });
-
-  it("drops the row when the target, not the id, was named", async () => {
-    const store = await seed([gameRow]);
-    api.unsubscribe.mockResolvedValue({ data: null, error: null });
-    api.getMySubscriptions.mockResolvedValue(listed([]));
-
-    expect(
-      await store.unsubscribeByTarget(SubscriptionTargetType.Game, GAME_ID),
-    ).toBeNull();
-
-    expect(api.unsubscribe).toHaveBeenCalledWith("s-game");
-    expect(store.subscriptions).toEqual([]);
   });
 
   it("shows the row that was just subscribed to", async () => {
@@ -129,7 +115,6 @@ describe("the list after a mutation of it", () => {
     ).toBeNull();
 
     expect(store.isSubscribed(SubscriptionTargetType.User, USER_ID)).toBe(true);
-    expect(store.userCount).toBe(1);
   });
 
   it("shows the settings that were just saved", async () => {

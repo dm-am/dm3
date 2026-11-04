@@ -1,10 +1,6 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Features.Tickets;
-using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,21 +12,12 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// The conversation of a ticket and its closing are decided by the database:
-/// a comment does not land in a ticket closed beside it, a ticket is closed once,
-/// a conversation holds no more than its ceiling, and the queue leaves out the
-/// complaints about its reader in the list and in the counters alike. Beside them,
-/// the two reads that tell a removed account from the guest, which only the
-/// soft-delete filter of a live database can blur.
+/// The conversation of a ticket and its closing are decided by the database, the queue leaves out complaints about
+/// its reader, and a removed account is told from the guest.
 /// </summary>
 /// <remarks>
-/// Each of these is a read followed by a write, and under READ COMMITTED a read
-/// holds nothing (DATA_STORAGE.md, "Транзакция — не снимок"): the service reads an
-/// open ticket, another moderator closes it, and the comment the service then
-/// writes is a comment in a closed ticket, or its closing is the second one of the
-/// same ticket. Only a live database can be asked what a
-/// conditional UPDATE does under another writer, which is why these are here and
-/// not in the domain tests.
+/// Under READ COMMITTED a read holds nothing (DATA_STORAGE.md, "Транзакция не снимок"), so these are conditional
+/// UPDATEs under another writer.
 /// </remarks>
 public class TicketConversationRacesShould : IntegrationTestBase
 {
@@ -61,7 +48,7 @@ public class TicketConversationRacesShould : IntegrationTestBase
         using (var closing = DatabaseFixture.Factory.Services.CreateScope())
         {
             (await closing.ServiceProvider.GetRequiredService<ITicketRepository>()
-                    .Close(ticketId, TicketStatus.Closed, TestConstantsModerator, DateTimeOffset.UtcNow))
+                    .Close(ticketId, TicketStatus.Closed, TestConstants.ModeratorUserId, DateTimeOffset.UtcNow))
                 .Should().BeTrue();
         }
 
@@ -140,11 +127,11 @@ public class TicketConversationRacesShould : IntegrationTestBase
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ITicketRepository>();
 
-        var (outcome, comment) = await repository.AddComment(Comment(ticketId, TestConstantsModerator),
+        var (outcome, comment) = await repository.AddComment(Comment(ticketId, TestConstants.ModeratorUserId),
             TicketStatus.WaitingForUser, TicketTextLimits.MaxComments);
 
         outcome.Should().Be(TicketCommentOutcome.Added);
-        comment!.Author!.UserId.Should().Be(TestConstantsModerator);
+        comment!.Author!.UserId.Should().Be(TestConstants.ModeratorUserId);
         comment.IsGuest.Should().BeFalse();
         var ticket = await repository.Get(ticketId);
         ticket!.Status.Should().Be(TicketStatus.WaitingForUser);
@@ -152,10 +139,7 @@ public class TicketConversationRacesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A comment that ends the ticket closes it in the name of its author, in the
-    /// statement that moves the status: the last word and the closing land
-    /// together, and of such answers sent at once one lands and the rest find the
-    /// ticket closed, with nothing of theirs written.
+    /// A comment that ends the ticket closes it in its author's name in one statement; of such answers at once one lands.
     /// </summary>
     [Fact]
     public async Task CloseTheTicketOnceWithTheCommentThatEndsIt()
@@ -195,7 +179,7 @@ public class TicketConversationRacesShould : IntegrationTestBase
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
         var repository = scope.ServiceProvider.GetRequiredService<ITicketRepository>();
 
-        await repository.AddComment(Comment(ticketId, TestConstantsModerator),
+        await repository.AddComment(Comment(ticketId, TestConstants.ModeratorUserId),
             TicketStatus.WaitingForUser, TicketTextLimits.MaxComments);
 
         await using var db = DatabaseFixture.CreateDbContext();
@@ -205,9 +189,7 @@ public class TicketConversationRacesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The comment of a removed account stays in the conversation signed by nobody,
-    /// and is not taken for the guest's: the guest is the comment without an author
-    /// at all.
+    /// A removed account's comment is signed by nobody, and the guest's has no author at all.
     /// </summary>
     [Fact]
     public async Task TellTheCommentOfARemovedAccountFromTheGuests()
@@ -280,9 +262,7 @@ public class TicketConversationRacesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The queue of a moderator leaves out the complaints that name him, and its
-    /// counters do too: a counter that counts a ticket the list does not show sends
-    /// the moderator looking for a ticket that is not there.
+    /// The queue and its counters leave out the complaints that name the moderator.
     /// </summary>
     [Fact]
     public async Task LeaveTheComplaintsAboutTheReaderOutOfTheQueueAndItsCounters()
@@ -309,8 +289,6 @@ public class TicketConversationRacesShould : IntegrationTestBase
         counted[TicketStatus.WaitingForModeration].Should().Be(paging.TotalEntitiesCount,
             "the counter of the queue is the length of the queue");
     }
-
-    private static readonly Guid TestConstantsModerator = TestConstants.ModeratorUserId;
 
     private static CreateTicketCommentEntity Comment(Guid ticketId, Guid? authorId) => new()
     {

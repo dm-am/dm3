@@ -3,13 +3,8 @@
  */
 
 /**
- * The page stands still under a window, and does not jump sideways doing it.
- *
- * The page scrolls in App.vue's `.main`, which the scroll registry hands out;
- * `body` never scrolls on this site. What is asked here is the count and the
- * give-back: a question standing over a window must not let the page go when
- * it closes, and the navigation drawer, which locks the same container its own
- * way, must not find its value overwritten by a window that opened over it.
+ * The count and the give-back of the lock on `.main`: a question over a window
+ * keeps the page held, and a value written over the lock meanwhile stays.
  */
 import { afterEach, describe, it, expect } from "vitest";
 import { defineComponent } from "vue";
@@ -95,13 +90,13 @@ describe("the page under a window", () => {
     expect(el.style.overflow).toBe("");
   });
 
-  it("leaves the drawer's own value where the drawer changed it meanwhile", () => {
+  it("leaves a value written over the lock while the page was held", () => {
     const el = page();
-    el.style.overflow = "hidden"; // the drawer is open
+    el.style.overflow = "hidden"; // held by somebody else
     const { lock, wrapper } = holder();
 
     lock.hold();
-    el.style.overflow = ""; // the drawer closed under the window
+    el.style.overflow = ""; // let go by them under the window
     lock.release();
 
     expect(el.style.overflow).toBe("");

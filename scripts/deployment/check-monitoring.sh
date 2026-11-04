@@ -1,48 +1,31 @@
 #!/usr/bin/env bash
-# Fails when the monitoring of the deployment would not do what it is written to
-# do: a configuration Prometheus cannot read, a rule that does not fire on the
-# state it was written for, an alert that reaches no receiver, or a receiver that
-# does not start.
+# Fails when the monitoring of the deployment would not do what it is written to do: a
+# configuration Prometheus cannot read, a rule that does not fire on the state it was
+# written for, an alert that reaches no receiver, or a receiver that does not start.
 #
-# Why all four and not just the parse: promtool is happy with rules that go
-# nowhere, and that is what this repository ran - rule_files with no alerting
-# section and no alertmanager to name in one. Every rule reached a firing state
-# inside Prometheus and stayed there, so an outage was found by opening /alerts
-# through a tunnel. An expression that reads the wrong series parses exactly as
-# well as the right one, too: the backlog rule counted only the messages still
-# waiting, so a worker holding a thousand of them read as an empty queue.
-#
-# Why a script and not the commands in the workflow: they ran in the
-# compose-topology job and nowhere else. The workflow, scripts/gates.sh and
-# scripts/hooks/pre-push all call this now, so there is one command and one
-# version of both images.
+# All four and not just the parse, because promtool is happy with rules that go nowhere
+# (rule_files with no alerting section and no alertmanager to name in one), and an
+# expression that reads the wrong series parses as well as the right one.
 set -euo pipefail
 
-PROMETHEUS_IMAGE="prom/prometheus:v2.51.0"
-ALERTMANAGER_IMAGE="prom/alertmanager:v0.27.0"
 CONTAINER="alert-receiver-gate"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+# shellcheck source=/dev/null
+. "$ROOT/scripts/lib/common.sh"
 cd "$ROOT"
 
-# Git Bash rewrites anything that looks like a Unix path in an argument before
-# the Windows docker client sees it, which turns the container side of -v and
-# every path handed to promtool into a directory under the Git installation. The
-# variable switches that off, and host() hands docker the native path it wants.
-# On Linux and macOS cygpath does not exist and the value passes through.
-export MSYS_NO_PATHCONV=1
-host() {
-  if command -v cygpath > /dev/null 2>&1; then
-    cygpath -m "$1"
-  else
-    printf '%s' "$1"
-  fi
-}
+# The images the stack runs, read from the compose file: the answer has to be about what is
+# deployed, not about an older release of the tools.
+PROMETHEUS_IMAGE="$(grep -oE 'prom/prometheus:[A-Za-z0-9.-]+' docker/docker-compose.yml | head -1)"
+ALERTMANAGER_IMAGE="$(grep -oE 'prom/alertmanager:[A-Za-z0-9.-]+' docker/docker-compose.yml | head -1)"
+test -n "$PROMETHEUS_IMAGE" || fail "docker-compose.yml names no prom/prometheus image"
+test -n "$ALERTMANAGER_IMAGE" || fail "docker-compose.yml names no prom/alertmanager image"
 
-fail() {
-  echo "ERROR: $1" >&2
-  exit 1
-}
+# MSYS_NO_PATHCONV: Git Bash would otherwise rewrite the container side of -v and every
+# path handed to promtool into a directory under the Git installation (host() hands docker
+# the native path).
+export MSYS_NO_PATHCONV=1
 
 echo "the Prometheus configuration and its alert rules parse"
 docker run --rm \

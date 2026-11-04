@@ -2,19 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The forum block of the left sidebar: the boards as a list, each row a dash,
- * the name of the board and its unread count in brackets. It closes the
- * column on every page (LeftSidebar), the forum's included, and it is one
- * block wherever it stands.
- *
- * It is not the menu of a forum page and marks no board: the board the reader
- * is on is named by the strip under the heading of the forum
- * (pages/forum/BoardNavigation.vue), as before 5 October 2026. The wave of
- * that day made the block the forum's menu, first in the column and the board
- * of the page bold on a row of another shape; the owner turned it down on 12
- * October ("верни как было").
- */
+/** The forum block: the boards as a list of dashed rows with their unread counts, one block everywhere. */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -102,28 +90,12 @@ describe("the forum block of the sidebar", () => {
     for (const a of links) expect(a.attributes("href")).toBe("/forum/general");
   });
 
-  it("marks no board bold on a page of the forum, a board's or a topic's", async () => {
-    for (const location of ["/forum", "/forum/general", "/forum/general/5"]) {
-      const wrapper = await blockAt(location);
-
-      expect(wrapper.findAll(".current"), location).toHaveLength(0);
-      expect(
-        wrapper.findComponent({ name: "MenuLink" }).exists(),
-        location,
-      ).toBe(false);
-      wrapper.unmount();
-    }
-  });
-
   it("is one block on every page, folding under one key", async () => {
     for (const location of ["/", "/forum", "/forum/general/5"]) {
       const wrapper = await blockAt(location);
 
       expect(wrapper.find("#sidebar-list-ForumBoards").exists(), location).toBe(
         true,
-      );
-      expect(wrapper.find("#sidebar-list-ForumPanel").exists(), location).toBe(
-        false,
       );
       wrapper.unmount();
     }

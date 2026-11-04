@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,23 +13,8 @@ namespace DM.Architecture.Tests;
 /// A number the owner of a game typed in is not recalculated behind their back.
 /// </summary>
 /// <remarks>
-/// RecruitmentPcLimit is what a master announces: "I am taking five players".
-/// Nothing reads it as a gate — whether recruitment is open is its own flag — so
-/// the number exists to be read beside the count of active characters.
-///
-/// Storage kept it consistent in both directions. Raising it when the roster
-/// outgrew it has a reason: a stated three beside six active characters is a
-/// state no reader can make sense of. Lowering it had none, and it was done by
-/// arithmetic — Math.Max(activeCount, limit - 1) — every time somebody left. A
-/// game recruiting five began claiming four the moment one player retired, with
-/// nobody asked and nobody told.
-///
-/// The rule is written as a search over the source because that is the shape the
-/// defect had: no test covered it, and none would have, since the behaviour
-/// lived inside a private method of a repository and was correct in every
-/// direction the tests happened to look. What can be checked cheaply and
-/// exactly is that the assignment never derives the new value by subtracting
-/// from the old one.
+/// RecruitmentPcLimit is what a master announces and gates nothing. Searched in the source: the new value
+/// is never derived by subtracting from the old one.
 /// </remarks>
 public class StatedNumbersShould
 {
@@ -38,10 +24,9 @@ public class StatedNumbersShould
     /// </summary>
     private static readonly string[] StatedByTheOwner = { "RecruitmentPcLimit" };
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static IEnumerable<string> SourceFiles() => Directory
-        .EnumerateFiles(Path.Combine(RepositoryRoot, "src"), "*.cs", SearchOption.AllDirectories)
+        .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src"), "*.cs", SearchOption.AllDirectories)
         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"))
         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}Migrations{Path.DirectorySeparatorChar}"));
@@ -73,7 +58,7 @@ public class StatedNumbersShould
                 }
 
                 var line = source[..found.Index].Count(c => c == '\n') + 1;
-                offenders.Add($"{Path.GetRelativePath(RepositoryRoot, file)}:{line}: {found.Value.Trim()}");
+                offenders.Add($"{Path.GetRelativePath(RepositoryLayout.Root, file)}:{line}: {found.Value.Trim()}");
             }
         }
 

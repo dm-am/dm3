@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Configuration;
@@ -15,9 +16,9 @@ internal class BlogPopularityProcessor : IBlogPopularityProcessor
 
     /// <inheritdoc />
     public async Task<(int Updated, int Total)> UpdateScoresAsync(
-        DateTimeOffset now, CancellationToken cancellationToken = default)
+        DateTimeOffset now, CancellationToken ct = default)
     {
-        var blogIds = await _repository.GetScorableBlogIds(cancellationToken);
+        var blogIds = await _repository.GetScorableBlogIds(ct);
         if (blogIds.Count == 0)
         {
             return (0, 0);
@@ -27,16 +28,11 @@ internal class BlogPopularityProcessor : IBlogPopularityProcessor
         // side of the same score reads the same constant.
         var activeSince = now - ActivityPolicy.ActivePeriod;
 
-        var readers = await _repository.CountActiveReaders(blogIds, activeSince, cancellationToken);
+        var readers = await _repository.CountActiveReaders(blogIds, activeSince, ct);
 
-        var scores = new Dictionary<Guid, int>(blogIds.Count);
-        foreach (var blogId in blogIds)
-        {
-            readers.TryGetValue(blogId, out var readerCount);
-            scores[blogId] = readerCount;
-        }
+        var scores = blogIds.ToDictionary(id => id, id => readers.GetValueOrDefault(id));
 
-        var updated = await _repository.ApplyScores(scores, now, cancellationToken);
+        var updated = await _repository.ApplyScores(scores, now, ct);
         return (updated, blogIds.Count);
     }
 }

@@ -11,7 +11,6 @@ public interface ITwoFactorService
     /// <summary>
     /// What the account area says about the factor.
     /// </summary>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<TwoFactorStatus> GetStatus(CancellationToken cancellationToken = default);
 
     /// <summary>

@@ -1,21 +1,11 @@
 <script setup lang="ts">
-/**
- * RulesHelpLinks - Quick help links for the rules page
- *
- * Displays common problems and where to get help.
- * Uses unified table styling from _Tables.sass.
- */
-
 import { computed } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
-import HelpIcon from "@/shared/ui/Icon/HelpIcon.vue";
+import HelpIcon from "./HelpIcon.vue";
 import { HELP_LINKS, type HelpLink } from "@/shared/config/helpLinks";
 
-/**
- * Splits solution text around linkText for partial linking.
- * Returns [before, linkText, after] parts.
- */
+/** [before, linkText, after] of a solution linked in part, or null. */
 function splitSolution(link: HelpLink): [string, string, string] | null {
   if (!link.linkText || !link.url) return null;
   const idx = link.solution.indexOf(link.linkText);
@@ -25,7 +15,7 @@ function splitSolution(link: HelpLink): [string, string, string] | null {
   return [before, link.linkText, after];
 }
 
-// Pre-compute split solutions to avoid calling splitSolution 4x per link in template
+// Split once per link, not once per use in the template
 const linksWithSplit = computed(() =>
   HELP_LINKS.map((link) => ({
     link,
@@ -52,7 +42,6 @@ const linksWithSplit = computed(() =>
           symbols.arrowRight
         }}</span>
         <span class="help-solution-col">
-          <!-- Partial link: only linkText is linked -->
           <template v-if="split">
             {{ split[0]
             }}<router-link
@@ -69,7 +58,6 @@ const linksWithSplit = computed(() =>
               >{{ split[1] }}</a
             >{{ split[2] }}
           </template>
-          <!-- Full link: entire solution is linked -->
           <template v-else-if="link.url && link.external">
             <a
               :href="link.url"
@@ -85,7 +73,6 @@ const linksWithSplit = computed(() =>
               {{ link.solution }}
             </router-link>
           </template>
-          <!-- No link: plain text -->
           <template v-else>
             {{ link.solution }}
           </template>
@@ -106,7 +93,7 @@ const linksWithSplit = computed(() =>
 
 .help-row
   display: grid
-  grid-template-columns: 32px auto max-content 1fr
+  grid-template-columns: $big auto max-content 1fr
   align-items: center
   gap: $small
   +table-row
@@ -124,9 +111,7 @@ const linksWithSplit = computed(() =>
   color: $text-muted
 
 .help-solution-col
-  // Global `a` (Reset.sass) already provides color/hover — only the bold
-  // weight for links-inside-sentences (LeadText convention) is local here, at
-  // the site's one bold.
+  // The color comes from the global `a` rule; only the bold of links inside sentences is local.
   .help-link
     font-weight: 700
 </style>

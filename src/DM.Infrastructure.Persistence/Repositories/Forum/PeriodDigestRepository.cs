@@ -5,7 +5,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Forum.Features.Digests;
 using Microsoft.EntityFrameworkCore;
-using TopicEntity = DM.Infrastructure.Persistence.Entities.Forum.Topic;
+using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 
@@ -75,7 +75,7 @@ internal class PeriodDigestRepository : IPeriodDigestRepository
         // Set-based rather than through the tracker: the topic was created a
         // moment earlier by another repository, over the same context, and a
         // tracked copy read back here would carry whatever that path left on it.
-        _dbContext.Set<TopicEntity>()
+        _dbContext.Set<DbTopic>()
             .Where(t => t.TopicId == topicId)
             .ExecuteUpdateAsync(s => s.SetProperty(t => t.CreatedUtc, periodEndUtc), cancellationToken);
 }

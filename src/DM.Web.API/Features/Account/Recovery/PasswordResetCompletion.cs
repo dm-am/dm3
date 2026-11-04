@@ -16,6 +16,7 @@ public class PasswordResetCompletion
     /// New password (minimum 8 characters)
     /// </summary>
     [Required(ErrorMessage = "Новый пароль обязателен")]
+    // PasswordPolicyConfiguration's bounds: a shorter password falls to guessing, a longer one loads the hash.
     [StringLength(128, MinimumLength = 8, ErrorMessage = "Пароль должен быть от 8 до 128 символов")]
     public string NewPassword { get; set; } = "";
 }

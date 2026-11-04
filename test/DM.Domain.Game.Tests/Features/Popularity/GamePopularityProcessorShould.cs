@@ -15,13 +15,7 @@ namespace DM.Domain.Game.Tests.Features.Popularity;
 /// What the site means by a popular game.
 /// </summary>
 /// <remarks>
-/// Two statements, and until this existed neither could be made without starting
-/// the HTTP host: the score is the number of active people who play plus the
-/// number who read, and "active" is the product's window rather than this
-/// calculation's own. The definition lived twice, written out query for query in
-/// a background job and in the seeder, and the two windows had already drifted
-/// apart — the fixture said thirty days in figures while the site read the
-/// constant.
+/// The score is active players plus active readers, and "active" is the product's window, not this calculation's.
 /// </remarks>
 public class GamePopularityProcessorShould : UnitTestBase
 {
@@ -31,48 +25,53 @@ public class GamePopularityProcessorShould : UnitTestBase
     private static readonly Guid Read = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid Ignored = Guid.Parse("33333333-3333-3333-3333-333333333333");
 
-    private readonly IGamePopularityRepository _repository;
-    private readonly GamePopularityProcessor _processor;
+    private readonly IGamePopularityRepository repository;
+    private readonly GamePopularityProcessor processor;
 
-    private IReadOnlyDictionary<Guid, int>? _written;
+    private IReadOnlyDictionary<Guid, int>? written;
 
     public GamePopularityProcessorShould()
     {
-        _repository = Mock<IGamePopularityRepository>();
-        _repository
+        repository = Mock<IGamePopularityRepository>();
+        repository
             .GetScorableGameIds(Arg.Any<CancellationToken>()).Returns(new[] { Played, Read, Ignored });
-        _repository
+        repository
             .CountActivePlayers(
-                Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, int> { [Played] = 4, [Read] = 1 });
-        _repository
+                Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, int> { [Played] = 4, [Read] = 1 });
+        repository
             .CountActiveReaders(
-                Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(new Dictionary<Guid, int> { [Played] = 3, [Read] = 9 });
-        _repository
+                Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
+            .Returns(new Dictionary<Guid, int> { [Played] = 3, [Read] = 9 });
+        repository
             .ApplyScores(
-                Arg.Any<IReadOnlyDictionary<Guid, int>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>()).Returns(2).AndDoes(ci => { var scores = ci.ArgAt<IReadOnlyDictionary<Guid, int>>(0); _written = scores; });
+                Arg.Do<IReadOnlyDictionary<Guid, int>>(scores => written = scores),
+                Arg.Any<DateTimeOffset>(),
+                Arg.Any<CancellationToken>())
+            .Returns(2);
 
-        _processor = new GamePopularityProcessor(_repository);
+        processor = new GamePopularityProcessor(repository);
     }
 
     [Fact]
     public async Task AddPlayersAndReadersTogether()
     {
-        await _processor.UpdateScoresAsync(Now);
+        await processor.UpdateScoresAsync(Now);
 
-        _written.Should().NotBeNull();
-        _written![Played].Should().Be(7, "four people play it and three read it");
-        _written[Read].Should().Be(10, "one person plays it and nine read it");
+        written.Should().NotBeNull();
+        written![Played].Should().Be(7, "four people play it and three read it");
+        written[Read].Should().Be(10, "one person plays it and nine read it");
     }
 
     [Fact]
     public async Task ScoreZeroForAGameNobodyActiveTouches()
     {
-        await _processor.UpdateScoresAsync(Now);
+        await processor.UpdateScoresAsync(Now);
 
-        _written.Should().ContainKey(Ignored,
+        written.Should().ContainKey(Ignored,
             "a game that fell to zero has to be written down as zero, or it keeps the " +
             "score it had when it was busy");
-        _written![Ignored].Should().Be(0);
+        written![Ignored].Should().Be(0);
     }
 
     /// <summary>
@@ -82,13 +81,13 @@ public class GamePopularityProcessorShould : UnitTestBase
     [Fact]
     public async Task CountAsActiveExactlyWhatTheProductCallsActive()
     {
-        await _processor.UpdateScoresAsync(Now);
+        await processor.UpdateScoresAsync(Now);
 
         var expected = Now - ActivityPolicy.ActivePeriod;
 
-        await _repository.Received(1).CountActivePlayers(
+        await repository.Received(1).CountActivePlayers(
             Arg.Any<IReadOnlyCollection<Guid>>(), expected, Arg.Any<CancellationToken>());
-        await _repository.Received(1).CountActiveReaders(
+        await repository.Received(1).CountActiveReaders(
             Arg.Any<IReadOnlyCollection<Guid>>(), expected, Arg.Any<CancellationToken>());
     }
 
@@ -102,27 +101,27 @@ public class GamePopularityProcessorShould : UnitTestBase
     {
         var seedEpoch = new DateTimeOffset(2020, 6, 15, 0, 0, 0, TimeSpan.Zero);
 
-        await _processor.UpdateScoresAsync(seedEpoch);
+        await processor.UpdateScoresAsync(seedEpoch);
 
-        await _repository.Received(1).CountActiveReaders(
+        await repository.Received(1).CountActiveReaders(
             Arg.Any<IReadOnlyCollection<Guid>>(),
             seedEpoch - ActivityPolicy.ActivePeriod,
             Arg.Any<CancellationToken>());
-        await _repository.Received(1).ApplyScores(
+        await repository.Received(1).ApplyScores(
             Arg.Any<IReadOnlyDictionary<Guid, int>>(), seedEpoch, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task CountNothingWhenThereIsNothingToScore()
     {
-        _repository
+        repository
             .GetScorableGameIds(Arg.Any<CancellationToken>()).Returns(Array.Empty<Guid>());
 
-        var (updated, total) = await _processor.UpdateScoresAsync(Now);
+        var (updated, total) = await processor.UpdateScoresAsync(Now);
 
         updated.Should().Be(0);
         total.Should().Be(0);
-        await _repository.DidNotReceive().ApplyScores(
+        await repository.DidNotReceive().ApplyScores(
             Arg.Any<IReadOnlyDictionary<Guid, int>>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 }

@@ -1,4 +1,3 @@
-using System;
 using System.Net;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
@@ -44,17 +43,9 @@ public sealed record ModuleStatusChange(
 /// and what state it produces.
 /// </summary>
 /// <remarks>
-/// A game and a blog run on this one machine. What stays with each module is
-/// what only it answers for — the intention that guards the move, the event it
-/// publishes, and, for a game, the recruitment flag a blog has no counterpart
-/// for. Both modules used to carry the whole machine instead, branch for branch
-/// and down to the wording of the refusal, and nothing checked that the two
-/// copies still said the same thing.
-///
-/// Pure, which is what lets it live in the kernel: no storage, no clock of its
-/// own (the caller hands it the moment), nothing called outward. It answers an
-/// illegal move with BadRequest whether or not the caller could have made a
-/// legal one — authorization is the module's own step and runs after this one.
+/// One machine for a game and a blog; each module keeps its intention, its event
+/// and, for a game, the recruitment flag. Pure: the caller hands it the moment.
+/// An illegal move is BadRequest, authorization is the module's own later step.
 /// </remarks>
 public static class ModuleStatusPolicy
 {

@@ -6,20 +6,17 @@ using DM.Web.API.Shared.Dto;
 
 namespace DM.Web.API.Features.Moderation.Warnings;
 
-/// <inheritdoc />
-internal class WarningApiService : IWarningApiService
+public class WarningApiService
 {
     private readonly IWarningService _warningService;
     private readonly WarningMapper _mapper;
 
-    /// <inheritdoc />
     public WarningApiService(IWarningService warningService, WarningMapper mapper)
     {
         _warningService = warningService;
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<UserWarningsInfo> GetUserWarnings(string login)
     {
         var warnings = await _warningService.GetUserWarnings(login);
@@ -37,7 +34,6 @@ internal class WarningApiService : IWarningApiService
         };
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<WarningLogEntry>> GetWarningLog(WarningsQuery query)
     {
         var (warnings, paging) = await _warningService.GetLog(query.Username, query);
@@ -45,7 +41,6 @@ internal class WarningApiService : IWarningApiService
             warnings.Select(_mapper.ToLogEntry).ToList(), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Warning>> GetAllWarnings(WarningsQuery query)
     {
         var (warnings, paging) = await _warningService.GetAllWarnings(query.Username, query);
@@ -53,32 +48,20 @@ internal class WarningApiService : IWarningApiService
             warnings.Select(_mapper.ToWarning).ToList(), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Warning>> CreateWarning(CreateWarningRequest request)
     {
-        var createWarning = new CreateWarning
-        {
-            Username = request.Username,
-            EntityId = request.EntityId,
-            EntityType = request.EntityType,
-            Points = request.Points,
-            Reason = request.Reason
-        };
-
-        var warning = await _warningService.CreateWarning(createWarning);
+        var warning = await _warningService.CreateWarning(_mapper.ToCreateWarning(request));
         return new Envelope<Warning>(_mapper.ToWarning(warning));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Warning>> ChangeWarningPoints(
         Guid warningId, ChangeWarningPointsRequest request)
     {
         var warning = await _warningService.ChangeWarningPoints(
-            warningId, request.Points, request.Reason);
+            warningId, new ChangeWarningPoints { Points = request.Points, Reason = request.Reason });
         return new Envelope<Warning>(_mapper.ToWarning(warning));
     }
 
-    /// <inheritdoc />
     public Task DeleteProfilePicture(Guid warningId) =>
         _warningService.DeleteProfilePicture(warningId);
 }

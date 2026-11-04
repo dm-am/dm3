@@ -7,8 +7,6 @@ using DM.Domain.Blog.Features.Comments;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Comments;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Comments;
 using Microsoft.EntityFrameworkCore;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;

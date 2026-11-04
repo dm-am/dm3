@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,27 +14,9 @@ namespace DM.Architecture.Tests;
 /// The Node that writes the lock file is the Node that reads it back.
 /// </summary>
 /// <remarks>
-/// npm is not installed next to Node, it is installed inside it: a Node release
-/// carries one npm and no other. So the Node version is the npm version, and the
-/// npm version decides whether package-lock.json is accepted or refused - `npm ci`
-/// rejects a file whose shape its own npm would not have written.
-///
-/// Nothing pinned it. The workflow asked setup-node for '24' three times, the SPA
-/// image built on node:24-alpine, and package.json named no version at all, so the
-/// lock file was written by the 11.6.2 that ships in 24.13.0 and read in CI by the
-/// 11.17.0 that had arrived in a later patch of the same major. Three jobs went
-/// red on a file nobody had touched.
-///
-/// This is the rule CompilerPolicyShould.PinTheSdkToTheBandContinuousIntegrationInstalls
-/// already writes for the .NET SDK, with one difference that is the whole point:
-/// the SDK is pinned to a band because a band is what setup-dotnet installs and
-/// what the images carry. Here the divergence happened inside the band, so the pin
-/// is exact down to the patch.
-///
-/// package.json is the source of truth because it is the file npm itself reads -
-/// engines is checked on every install and warns when the machine disagrees. The
-/// workflow and the Dockerfile are held to it rather than to a number written
-/// here, so this rule cannot go stale on its own.
+/// A Node release carries one npm, and `npm ci` refuses a lock file its npm would not have written,
+/// so the pin is exact to the patch. package.json is the source; the workflow and the Dockerfile
+/// are held to it.
 /// </remarks>
 public class FrontendToolchainShould
 {
@@ -45,10 +28,9 @@ public class FrontendToolchainShould
     private static readonly Regex NodeImage = new(
         @"FROM\s+node:(?<version>[0-9][^\s-]*)", RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static string ClientPath(string file) =>
-        Path.Combine(RepositoryRoot, "src", "DM.Web.Client", file);
+        Path.Combine(RepositoryLayout.Root, "src", "DM.Web.Client", file);
 
     [Fact]
     public void InstallTheSameNodeEverywhereItIsInstalled()
@@ -70,7 +52,7 @@ public class FrontendToolchainShould
         var declarations = new List<(string Where, string Version)>();
 
         foreach (var workflow in Directory.EnumerateFiles(
-                     Path.Combine(RepositoryRoot, ".github", "workflows"), "*.yml"))
+                     Path.Combine(RepositoryLayout.Root, ".github", "workflows"), "*.yml"))
         {
             declarations.AddRange(NodeVersion
                 .Matches(File.ReadAllText(workflow))
@@ -85,9 +67,7 @@ public class FrontendToolchainShould
                 "src/DM.Web.Client/Dockerfile",
                 match.Groups["version"].Value)));
 
-        // Each source named separately, because a rule that stops matching passes
-        // in silence: a renamed key or a rewritten FROM line would leave this
-        // comparing one place against itself and reporting agreement.
+        // Each source named separately: a rule that stops matching passes in silence.
         declarations.Should().Contain(
             declaration => declaration.Where.StartsWith(".github/", StringComparison.Ordinal),
             "the workflows install Node before they touch the lock file");
@@ -102,10 +82,7 @@ public class FrontendToolchainShould
             .OrderBy(offender => offender, StringComparer.Ordinal)
             .ToArray();
 
-        // Joined rather than asserted as a collection: an empty-collection failure
-        // prints the first item, and the whole point of this list is that it names
-        // every place that has drifted, not the first one somebody has to fix
-        // before seeing the next.
+        // Joined, so the message names every place that has drifted.
         string.Join("; ", divergent).Should().BeEmpty(
             "package.json pins Node {0}, and these install another one, so the lock file is " +
             "written by one npm and read by a different one",
@@ -115,14 +92,7 @@ public class FrontendToolchainShould
     /// <summary>
     /// The npm named next to it is the npm that Node actually carries.
     /// </summary>
-    /// <remarks>
-    /// engines.npm is what makes the warning legible: without it npm reports
-    /// nothing when the machine drifts, and the first sign is a lock file CI
-    /// refuses. It is only worth writing while it names the npm bundled in the
-    /// pinned Node - a second number to keep in step, and one that cannot be
-    /// derived from anything in this tree, so what is asserted is that it exists
-    /// and is exact rather than which value it holds.
-    /// </remarks>
+    /// <remarks>Without engines.npm npm reports nothing when the machine drifts; its value cannot be derived here.</remarks>
     [Fact]
     public void NameTheNpmThatComesWithThatNode()
     {

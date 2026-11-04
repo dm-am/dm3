@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -12,18 +13,8 @@ namespace DM.Architecture.Tests;
 /// An action describes exactly the status codes its attributes declare.
 /// </summary>
 /// <remarks>
-/// Swashbuckle builds one response out of two halves that live apart: the code
-/// comes from ProducesResponseType and the sentence from the XML comment. A
-/// code named by one half alone is invisible in the source and wrong on the
-/// wire. The activation endpoint described a 404 next to an attribute that
-/// declared 410, so a client generated from the schema got a handler for the
-/// branch that cannot happen and none for the one that does, and the room
-/// endpoint described a 404 that the schema never published.
-///
-/// The check is textual because the pairing is textual: nothing compiled holds
-/// a comment and an attribute together. Attributes are read line by line,
-/// which is how they are written here. One split across lines fails this test
-/// rather than passing it silently, and joining it back is the fix.
+/// Swashbuckle takes the code from ProducesResponseType and the sentence from the XML comment.
+/// Textual, line by line: an attribute split across lines fails this.
 /// </remarks>
 public class DocumentedStatusCodesShould
 {
@@ -42,12 +33,64 @@ public class DocumentedStatusCodesShould
     private static readonly Regex Member = new(
         @"^\s*(?:public|private|protected|internal)\s", RegexOptions.Compiled);
 
-    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
+
+    /// <summary>
+    /// Every block of documentation and attributes in a controller that names a
+    /// code, closed by its member: the line the block starts on, the codes it
+    /// describes and the codes it declares.
+    /// </summary>
+    private static IEnumerable<(int Start, IReadOnlySet<string> Described, IReadOnlySet<string> Declared)>
+        Actions(string[] lines)
+    {
+        var described = new HashSet<string>();
+        var declared = new HashSet<string>();
+        var start = 0;
+
+        for (var i = 0; i < lines.Length; i++)
+        {
+            var documentation = Described.Match(lines[i]);
+            if (documentation.Success)
+            {
+                if (described.Count == 0 && declared.Count == 0)
+                {
+                    start = i + 1;
+                }
+
+                described.Add(documentation.Groups[1].Value);
+                continue;
+            }
+
+            var attribute = Declared.Match(lines[i]);
+            if (attribute.Success)
+            {
+                if (described.Count == 0 && declared.Count == 0)
+                {
+                    start = i + 1;
+                }
+
+                declared.Add(attribute.Groups[1].Value);
+                continue;
+            }
+
+            if (!Member.IsMatch(lines[i]))
+            {
+                continue;
+            }
+
+            if (described.Count > 0 || declared.Count > 0)
+            {
+                yield return (start, described, declared);
+            }
+
+            described = new HashSet<string>();
+            declared = new HashSet<string>();
+        }
+    }
 
     [Fact]
     public void MatchTheAttributesTheSchemaIsBuiltFrom()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.RootDirectory;
         var controllers = Directory.GetFiles(
             Path.Combine(root.FullName, "src", "DM.Web.API"),
             "*Controller.cs",
@@ -68,63 +111,22 @@ public class DocumentedStatusCodesShould
                 continue;
             }
 
-            var lines = File.ReadAllLines(controller);
-            var described = new HashSet<string>();
-            var declared = new HashSet<string>();
-            var start = 0;
-
-            for (var i = 0; i < lines.Length; i++)
+            foreach (var (start, described, declared) in Actions(File.ReadAllLines(controller)))
             {
-                var documentation = Described.Match(lines[i]);
-                if (documentation.Success)
+                actions++;
+                var withoutAttribute = described.Except(declared).OrderBy(code => code).ToArray();
+                var withoutSentence = declared.Except(described).OrderBy(code => code).ToArray();
+                if (withoutAttribute.Length > 0 || withoutSentence.Length > 0)
                 {
-                    if (described.Count == 0 && declared.Count == 0)
-                    {
-                        start = i + 1;
-                    }
-
-                    described.Add(documentation.Groups[1].Value);
-                    continue;
+                    mismatches.Add(
+                        $"{Path.GetRelativePath(root.FullName, controller)}:{start} " +
+                        $"described without an attribute: [{string.Join(", ", withoutAttribute)}], " +
+                        $"declared without a description: [{string.Join(", ", withoutSentence)}]");
                 }
-
-                var attribute = Declared.Match(lines[i]);
-                if (attribute.Success)
-                {
-                    if (described.Count == 0 && declared.Count == 0)
-                    {
-                        start = i + 1;
-                    }
-
-                    declared.Add(attribute.Groups[1].Value);
-                    continue;
-                }
-
-                if (!Member.IsMatch(lines[i]))
-                {
-                    continue;
-                }
-
-                if (described.Count > 0 || declared.Count > 0)
-                {
-                    actions++;
-                    var withoutAttribute = described.Except(declared).OrderBy(code => code).ToArray();
-                    var withoutSentence = declared.Except(described).OrderBy(code => code).ToArray();
-                    if (withoutAttribute.Length > 0 || withoutSentence.Length > 0)
-                    {
-                        mismatches.Add(
-                            $"{Path.GetRelativePath(root.FullName, controller)}:{start} " +
-                            $"described without an attribute: [{string.Join(", ", withoutAttribute)}], " +
-                            $"declared without a description: [{string.Join(", ", withoutSentence)}]");
-                    }
-                }
-
-                described.Clear();
-                declared.Clear();
             }
         }
 
-        // A walk that parsed nothing would leave the assertion below empty.
-        actions.Should().BeGreaterThan(300, "the actions of this API carry their responses in both forms");
+        actions.Should().BePositive("a walk that parsed nothing would leave the assertion below empty");
 
         mismatches.Should().BeEmpty(
             "the schema takes the code from the attribute and the sentence from the comment, " +

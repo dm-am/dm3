@@ -40,9 +40,7 @@ internal class PublicationService : IPublicationService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IEventProducer _eventProducer;
-    private readonly IBbTagNameCase _tagNames;
 
-    /// <inheritdoc />
     public PublicationService(
         IPublicationRepository repository,
         IBlogService blogService,
@@ -54,8 +52,7 @@ internal class PublicationService : IPublicationService
         IValidator<UpdatePublication> updatePublicationValidator,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IEventProducer eventProducer,
-        IBbTagNameCase tagNames)
+        IEventProducer eventProducer)
     {
         _repository = repository;
         _blogService = blogService;
@@ -68,7 +65,6 @@ internal class PublicationService : IPublicationService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _eventProducer = eventProducer;
-        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -77,21 +73,10 @@ internal class PublicationService : IPublicationService
     {
         await _blogService.GetAsync(blogId, ct);
 
-        // An unpublished publication is its author's draft, and the list shows it
-        // to whoever may open it on its own (PublicationIntention.ViewDraft): its
-        // author, and the rank that reads every draft. Asked of a draft written by
-        // nobody, the intention answers for the rank alone; the author's own drafts
-        // are the repository's to add. The blog's draft visibility is another
-        // question, whether the blog itself may be opened, and opens no draft.
-        var viewerId = _identityProvider.Current.User.UserId;
-        var everyUnpublished = _intentionManager.IsAllowed(
-            PublicationIntention.ViewDraft, new Publication { BlogId = blogId, IsPublished = false });
+        var totalCount = await _repository.CountPublications(blogId, rubricId, ct);
+        var pagingData = new PagingData(query, _identityProvider.Current.Settings.PageSize, totalCount);
 
-        var totalCount = await _repository.CountPublications(blogId, rubricId, viewerId, everyUnpublished, ct);
-        var pagingData = new PagingData(query, _identityProvider.Current.Settings.Paging.EntitiesPerPage, totalCount);
-
-        var publications = (await _repository.GetPublications(
-            blogId, rubricId, viewerId, everyUnpublished, pagingData, ct)).ToArray();
+        var publications = (await _repository.GetPublications(blogId, rubricId, pagingData, ct)).ToArray();
         await FillPublicationUnreadCounters(publications);
         return (publications, pagingData.Result);
     }
@@ -101,26 +86,13 @@ internal class PublicationService : IPublicationService
     {
         var publication = await _repository.GetPublication(publicationId, ct);
 
-        // The row is only half the answer: a publication is read inside a blog,
-        // and a blog the reader may not open hides everything in it. The listing
-        // above has always known that: it reads the blog through the gated
-        // GetAsync first, while this read asked the publication alone, so a
-        // published publication in a private-draft blog, or in one still waiting
-        // on premoderation, was handed to anybody holding its id, guest included.
-        // Nothing had to be guessed: the profile widget below hands the id out.
-        //
-        // Absent and hidden answer with one and the same sentence on purpose. A
-        // 403 here would confirm that the publication exists, which is the half
-        // of the leak that closing the read alone does not close.
+        // A blog the reader may not open hides everything in it, and the profile
+        // widget hands the id out. Absent and hidden answer with one sentence: a 403
+        // would confirm that the publication exists.
         if (publication == null ||
             !await _blogService.IsVisibleToViewerAsync(publication.BlogId, ct))
         {
             throw new HttpException(HttpStatusCode.NotFound, "Публикация не найдена");
-        }
-
-        if (!publication.IsPublished)
-        {
-            _intentionManager.ThrowIfForbidden(PublicationIntention.ViewDraft, publication);
         }
 
         await FillPublicationUnreadCounters(new[] { publication });
@@ -130,30 +102,18 @@ internal class PublicationService : IPublicationService
     /// <inheritdoc />
     public async Task<Publication?> GetBestUserPublication(string username, CancellationToken ct = default)
     {
-        // Resolve username → UserId via the cross-module lookup so we keep
-        // the repository's parameter typed (Guid) — repositories never
-        // take usernames directly. An unknown name throws HttpException(410),
-        // and 410 is what the caller receives: the error middleware passes an
-        // HttpException status through untouched.
-        //
+        // An unknown name throws a 410, which reaches the caller untouched.
         // "Аккаунт удален" is no account: its best publication is the best of
-        // everything removed accounts published, and the identifiers it is
-        // chosen among stay here.
+        // everything removed accounts published.
         IReadOnlyCollection<Guid> authorIds = RemovedAccount.Is(username)
             ? await _userLookupService.GetRemovedAccountIdsAsync()
             : [(await _userLookupService.GetAsync(username)).UserId];
 
         var publication = await _repository.GetBestUserPublication(authorIds, ct);
 
-        // The widget names one publication and links to it, so the one it names
-        // has to be one the reader could open. The repository filters removals and
-        // drafts, and nothing there can know the blog underneath is a private
-        // draft or is still waiting on premoderation: the rule is about the
-        // reader, not about the row.
-        //
-        // A hidden best is no answer rather than the next best one: walking down
-        // the list would cost a blog read per candidate, and an author whose blogs
-        // are all hidden has nothing to show here in any case.
+        // The widget links to the one it names, so it has to be one the reader could
+        // open. A hidden best is no answer rather than the next best one: walking down
+        // the list would cost a blog read per candidate.
         if (publication == null ||
             !await _blogService.IsVisibleToViewerAsync(publication.BlogId, ct))
         {
@@ -183,11 +143,9 @@ internal class PublicationService : IPublicationService
             RubricId = createPublication.RubricId,
             AuthorId = userId,
             Title = createPublication.Title,
-            // Publication bodies render on the Comment surface where [mod] is a
-            // green mod block; strip it when authored by a non-moderator.
-            Content = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createPublication.Content, user.Role), BbTagSet.WithModBlock),
+            // Bodies render on the Comment surface, where [mod] is a mod block.
+            Content = ModBlockSanitizer.SanitizeForAuthor(createPublication.Content, user.Role),
             Preview = createPublication.Preview,
-            PublishImmediately = createPublication.PublishImmediately,
             CreatedUtc = now
         };
         // Markers first, row second, commit on the line after it returns.
@@ -209,25 +167,16 @@ internal class PublicationService : IPublicationService
         var publication = await GetPublication(updatePublication.PublicationId, ct);
         _intentionManager.ThrowIfForbidden(PublicationIntention.Edit, publication);
 
-        // Check if publishing for the first time
-        if (updatePublication.IsPublished == true && !publication.IsPublished)
-        {
-            _intentionManager.ThrowIfForbidden(PublicationIntention.Publish, publication);
-        }
-
         var entity = new UpdatePublicationEntity
         {
             PublicationId = updatePublication.PublicationId,
             RubricId = updatePublication.RubricId,
             ClearRubric = updatePublication.ClearRubric,
             Title = updatePublication.Title,
-            // Publication bodies render on the Comment surface where [mod] is a
-            // green mod block; strip it when the editor is a non-moderator.
-            Content = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(
-                updatePublication.Content, _identityProvider.Current.User.Role), BbTagSet.WithModBlock),
+            // Bodies render on the Comment surface, where [mod] is a mod block.
+            Content = ModBlockSanitizer.SanitizeForAuthor(updatePublication.Content, _identityProvider.Current.User.Role),
             Preview = updatePublication.Preview,
-            IsPublished = updatePublication.IsPublished,
-            UpdatedUtc = _dateTimeProvider.Now,
+            ModifiedUtc = _dateTimeProvider.Now,
             ModifiedByUserId = _identityProvider.Current.User.UserId
         };
         var updatedPublication = await _repository.UpdatePublication(entity, ct);
@@ -255,7 +204,7 @@ internal class PublicationService : IPublicationService
 
         var identity = _identityProvider.Current;
 
-        // Anonymous users: show total counts
+        // A guest cannot mark anything read, so a guest is shown the totals
         if (!identity.User.IsAuthenticated)
         {
             foreach (var publication in publications)
@@ -265,7 +214,6 @@ internal class PublicationService : IPublicationService
             return;
         }
 
-        // Authenticated users: show actual unread counts
         await _unreadCountersRepository.FillEntityCounters(publications, identity.User.UserId,
             p => p.Id, p => p.UnreadCommentsCount);
     }

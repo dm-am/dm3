@@ -1,7 +1,5 @@
-// Shared helpers for the upload tables (profile "Загруженное" and moderation
-// "Все загруженные файлы"). SSOT for the preview/extension logic and the column
-// specs both tables share; page-specific columns (uploader, widths) stay in
-// the pages since they legitimately differ.
+// The preview, extension and shared columns of both upload tables; the pages
+// keep what differs.
 import type { Column } from "@/shared/ui/DataTable";
 import type { Upload } from "@/shared/api/models/common/upload";
 import { apiUrl } from "@/shared/api/client";
@@ -12,13 +10,8 @@ export function isImage(upload: Upload): boolean {
 }
 
 /**
- * Where the file itself is.
- *
- * The public URL when the type has one, and otherwise the authorizing content
- * endpoint. Both tables used to read `url` alone and render nothing for a file
- * without one, which is every post attachment: the preview cell fell back to an
- * extension label and the name cell stopped being a link, so the one screen
- * moderation has for looking at an uploaded file could not open half of them.
+ * The public URL where the type has one, otherwise the authorizing content
+ * endpoint: a post attachment has no public URL.
  */
 export function uploadHref(upload: Upload): string {
   return upload.url ?? apiUrl(upload.contentUrl);

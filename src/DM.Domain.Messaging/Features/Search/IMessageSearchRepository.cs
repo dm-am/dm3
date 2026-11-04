@@ -15,8 +15,5 @@ public interface IMessageSearchRepository
     /// Run a keyset-paginated full-text search across every source the user
     /// may read, restricted by the query's scopes/operators.
     /// </summary>
-    /// <param name="userId">Authenticated user identifier (access is derived from it).</param>
-    /// <param name="query">Parsed search query.</param>
-    /// <param name="ct">Cancellation token.</param>
     Task<CursorResult<MessageSearchHit>> Search(Guid userId, MessageSearchQuery query, CancellationToken ct = default);
 }

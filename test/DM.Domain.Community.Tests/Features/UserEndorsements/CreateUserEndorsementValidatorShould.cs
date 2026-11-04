@@ -1,22 +1,24 @@
 using System;
 using DM.Domain.Community.Features.UserEndorsements;
-using DM.Testing;
+using DM.Domain.Core.Exceptions;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.UserEndorsements;
 
-public class CreateUserEndorsementValidatorShould : UnitTestBase
+public class CreateUserEndorsementValidatorShould
 {
     private readonly CreateUserEndorsementValidator validator = new();
 
-    [Fact]
-    public void PassForValidInput()
+    [Theory]
+    [InlineData("Reliable game master")]
+    [InlineData("Я")]
+    public void PassForValidInput(string text)
     {
         var input = new CreateUserEndorsement
         {
             TargetUserId = Guid.NewGuid(),
-            Text = "Reliable game master"
+            Text = text
         };
 
         var result = validator.TestValidate(input);
@@ -33,20 +35,22 @@ public class CreateUserEndorsementValidatorShould : UnitTestBase
         };
 
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(x => x.TargetUserId);
+        result.ShouldHaveValidationErrorFor(x => x.TargetUserId).WithErrorMessage(ValidationError.Empty);
     }
 
-    [Fact]
-    public void FailWhenTextIsEmpty()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void FailWhenTextIsBlank(string text)
     {
         var input = new CreateUserEndorsement
         {
             TargetUserId = Guid.NewGuid(),
-            Text = ""
+            Text = text
         };
 
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(x => x.Text);
+        result.ShouldHaveValidationErrorFor(x => x.Text).WithErrorMessage(ValidationError.Empty);
     }
 
     [Fact]
@@ -55,11 +59,11 @@ public class CreateUserEndorsementValidatorShould : UnitTestBase
         var input = new CreateUserEndorsement
         {
             TargetUserId = Guid.NewGuid(),
-            Text = new string('a', 5001)
+            Text = new string('a', UserEndorsementFieldLimits.TextMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(x => x.Text);
+        result.ShouldHaveValidationErrorFor(x => x.Text).WithErrorMessage(ValidationError.Long);
     }
 
     [Fact]
@@ -68,7 +72,7 @@ public class CreateUserEndorsementValidatorShould : UnitTestBase
         var input = new CreateUserEndorsement
         {
             TargetUserId = Guid.NewGuid(),
-            Text = new string('a', 5000)
+            Text = new string('a', UserEndorsementFieldLimits.TextMaxLength)
         };
 
         var result = validator.TestValidate(input);

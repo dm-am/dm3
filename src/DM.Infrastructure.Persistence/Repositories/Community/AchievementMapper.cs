@@ -3,9 +3,9 @@ using System.Linq;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
 using Riok.Mapperly.Abstractions;
-using EntityAchievementCategory = DM.Infrastructure.Persistence.Entities.Community.AchievementCategory;
-using EntityAchievementType = DM.Infrastructure.Persistence.Entities.Community.AchievementType;
-using EntityUserAchievement = DM.Infrastructure.Persistence.Entities.Community.UserAchievement;
+using DbAchievementCategory = DM.Infrastructure.Persistence.Entities.Community.AchievementCategory;
+using DbAchievementType = DM.Infrastructure.Persistence.Entities.Community.AchievementType;
+using DbUserAchievement = DM.Infrastructure.Persistence.Entities.Community.UserAchievement;
 using DomainAchievementCategory = DM.Domain.Community.Features.Achievements.AchievementCategory;
 using DomainAchievementType = DM.Domain.Community.Features.Achievements.AchievementType;
 using DomainUserAchievement = DM.Domain.Community.Features.Achievements.UserAchievement;
@@ -28,13 +28,13 @@ internal static partial class AchievementMapper
     /// object mapping of its element type.
     /// </summary>
     public static partial IQueryable<DomainAchievementCategory> ProjectToCategory(
-        this IQueryable<EntityAchievementCategory> query);
+        this IQueryable<DbAchievementCategory> query);
 
     /// <summary>
     /// EF projection to the domain tier, category inlined
     /// </summary>
     public static partial IQueryable<DomainAchievementType> ProjectToType(
-        this IQueryable<EntityAchievementType> query);
+        this IQueryable<DbAchievementType> query);
 
     /// <summary>
     /// EF projection for a user's earnings. Written out because the user half
@@ -42,8 +42,8 @@ internal static partial class AchievementMapper
     /// inline into a generated queryable.
     /// </summary>
     public static IQueryable<DomainUserAchievement> ProjectToUserAchievement(
-        this IQueryable<EntityUserAchievement> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<EntityUserAchievement, DomainUserAchievement>>(
+        this IQueryable<DbUserAchievement> query) =>
+        query.Select(ExpressionSplicer.Expand<Func<DbUserAchievement, DomainUserAchievement>>(
             a => new DomainUserAchievement
             {
                 Id = a.UserAchievementId,
@@ -74,12 +74,12 @@ internal static partial class AchievementMapper
     /// Tracked entity to the domain category, for the write path that
     /// already holds the row
     /// </summary>
-    [MapProperty(nameof(EntityAchievementCategory.AchievementCategoryId), nameof(DomainAchievementCategory.Id))]
+    [MapProperty(nameof(DbAchievementCategory.AchievementCategoryId), nameof(DomainAchievementCategory.Id))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
-    public static partial DomainAchievementCategory ToCategory(this EntityAchievementCategory category);
+    public static partial DomainAchievementCategory ToCategory(this DbAchievementCategory category);
 
-    [MapProperty(nameof(EntityAchievementType.AchievementTypeId), nameof(DomainAchievementType.Id))]
-    [MapProperty(nameof(EntityAchievementType.Category), nameof(DomainAchievementType.Category))]
+    [MapProperty(nameof(DbAchievementType.AchievementTypeId), nameof(DomainAchievementType.Id))]
+    [MapProperty(nameof(DbAchievementType.Category), nameof(DomainAchievementType.Category))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
-    private static partial DomainAchievementType ToType(EntityAchievementType type);
+    private static partial DomainAchievementType ToType(DbAchievementType type);
 }

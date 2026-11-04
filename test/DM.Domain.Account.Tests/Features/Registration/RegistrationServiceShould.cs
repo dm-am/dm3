@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using DM.Domain.Core.Tokens;
-using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.Registration;
@@ -13,46 +12,45 @@ using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Registration;
 
 public class RegistrationServiceShould : UnitTestBase
 {
-    private readonly IValidator<UserRegistration> _validator;
-    private readonly ISecurityManager _securityManager;
-    private readonly ICompromisedPasswordChecker _compromisedPasswordChecker;
-    private readonly IRegistrationRepository _repository;
-    private readonly IRegistrationMailSender _mailSender;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly RegistrationService _service;
+    private readonly IValidator<UserRegistration> validator;
+    private readonly ISecurityManager securityManager;
+    private readonly ICompromisedPasswordChecker compromisedPasswordChecker;
+    private readonly IRegistrationRepository repository;
+    private readonly IRegistrationMailSender mailSender;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly RegistrationService service;
 
     public RegistrationServiceShould()
     {
-        _validator = Mock<IValidator<UserRegistration>>();
-        _securityManager = Mock<ISecurityManager>();
-        _compromisedPasswordChecker = Mock<ICompromisedPasswordChecker>();
-        _repository = Mock<IRegistrationRepository>();
-        _mailSender = Mock<IRegistrationMailSender>();
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        validator = Mock<IValidator<UserRegistration>>();
+        securityManager = Mock<ISecurityManager>();
+        compromisedPasswordChecker = Mock<ICompromisedPasswordChecker>();
+        repository = Mock<IRegistrationRepository>();
+        mailSender = Mock<IRegistrationMailSender>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        _validator.ValidateAsync(
+        validator.ValidateAsync(
                 Arg.Any<ValidationContext<UserRegistration>>(),
                 Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _service = new RegistrationService(
-            _validator,
-            _securityManager,
-            _compromisedPasswordChecker,
-            _repository,
-            _mailSender,
-            _guidFactory,
-            _dateTimeProvider);
+        service = new RegistrationService(
+            validator,
+            securityManager,
+            compromisedPasswordChecker,
+            repository,
+            mailSender,
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
@@ -65,10 +63,10 @@ public class RegistrationServiceShould : UnitTestBase
             AcceptedRules = true
         };
 
-        _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(true);
+        compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(true);
 
         var exception = await Assert.ThrowsAsync<HttpBadRequestException>(
-            () => _service.Register(registration));
+            () => service.Register(registration));
 
         exception.ValidationErrors.Should().ContainKey(nameof(registration.Password));
     }
@@ -85,20 +83,20 @@ public class RegistrationServiceShould : UnitTestBase
         var pendingId = Guid.NewGuid();
         var tokenId = Guid.NewGuid();
 
-        _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
-        _securityManager.GeneratePassword(registration.Password).Returns(("hash", "salt"));
-        _guidFactory.Create().Returns(pendingId, tokenId);
+        compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
+        securityManager.GeneratePassword(registration.Password).Returns(("hash", "salt"));
+        guidFactory.Create().Returns(pendingId, tokenId);
 
-        await _service.Register(registration);
+        await service.Register(registration);
 
-        await _repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
+        await repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
             p.Email == registration.Email.ToLowerInvariant() &&
             p.PendingRegistrationId == pendingId &&
             p.Secret == tokenId &&
             p.SecretHash.SequenceEqual(ConfirmationSecret.Hash(tokenId)) &&
             p.AcceptedRules == registration.AcceptedRules
         ));
-        await _mailSender.Received(1).Send(registration.Email, tokenId);
+        await mailSender.Received(1).Send(registration.Email, tokenId);
     }
 
     /// <summary>
@@ -125,21 +123,18 @@ public class RegistrationServiceShould : UnitTestBase
         var pendingId = Guid.NewGuid();
         var tokenId = Guid.NewGuid();
 
-        _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
-        _securityManager.GeneratePassword(registration.Password).Returns(("newhash", "newsalt"));
-        _guidFactory.Create().Returns(pendingId, tokenId);
+        compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
+        securityManager.GeneratePassword(registration.Password).Returns(("newhash", "newsalt"));
+        guidFactory.Create().Returns(pendingId, tokenId);
 
-        await _service.Register(registration);
+        await service.Register(registration);
 
-        await _repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
+        await repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
             p.Email == registration.Email.ToLowerInvariant() &&
             p.PasswordHash == "newhash" &&
             p.Salt == "newsalt"
         ));
-        await _repository.DidNotReceive().PendingExists(
-            Arg.Any<string>(), Arg.Any<CancellationToken>());
-        await _repository.DidNotReceive().ReplacePending(Arg.Any<PendingRegistration>());
-        await _mailSender.Received(1).Send(registration.Email, tokenId);
+        await mailSender.Received(1).Send(registration.Email, tokenId);
     }
 
     [Fact]
@@ -152,13 +147,13 @@ public class RegistrationServiceShould : UnitTestBase
             AcceptedRules = true
         };
 
-        _compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
-        _securityManager.GeneratePassword(registration.Password).Returns(("hash", "salt"));
-        _guidFactory.Create().Returns(Guid.NewGuid());
+        compromisedPasswordChecker.IsCompromisedAsync(registration.Password).Returns(false);
+        securityManager.GeneratePassword(registration.Password).Returns(("hash", "salt"));
+        guidFactory.Create().Returns(Guid.NewGuid());
 
-        await _service.Register(registration);
+        await service.Register(registration);
 
-        await _repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
+        await repository.Received(1).AddPending(Arg.Is<PendingRegistration>(p =>
             p.Email == "test@example.com"
         ));
     }

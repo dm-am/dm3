@@ -1,4 +1,3 @@
-using System;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Notepads;
@@ -29,7 +28,6 @@ public class NotepadEntry
     /// <summary>Entry content</summary>
     public string Content { get; set; } = null!;
 
-    /// <summary>Sort order</summary>
     public int SortOrder { get; set; }
 
     /// <summary>Creation date</summary>

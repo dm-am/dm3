@@ -10,11 +10,7 @@ namespace DM.Domain.Core.Tests.Authorization;
 /// The one place that says the empty user id may not be compared.
 /// </summary>
 /// <remarks>
-/// The rule exists because two habits of this codebase meet on Guid.Empty: the
-/// guest subject carries it as its own id, and so does every field a projection
-/// left unset. Compared as if it were an identity, those two match — which is
-/// how a post projection that filled the text and forgot the game master handed
-/// a reader who is nobody the master's sight of every [private] block.
+/// The guest and every unset projection field both carry Guid.Empty, so as an identity they match.
 /// </remarks>
 public class AnonymousIdentityShould
 {
@@ -38,8 +34,7 @@ public class AnonymousIdentityShould
     [Fact]
     public void GiveNoIdForASignedInSubjectCarryingTheEmptyId()
     {
-        // Nothing builds such a subject today, and the comparisons that read it
-        // must not be the reason that stays true.
+        // Nothing builds such a subject today, and the rule must not rely on that.
         AnonymousIdentity.Of(Subject(Guid.Empty, authenticated: true)).Should().BeNull();
     }
 

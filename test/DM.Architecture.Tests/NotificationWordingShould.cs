@@ -11,19 +11,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// Every notification channel takes its wording from one table.
 /// </summary>
-/// <remarks>
-/// The email sender and the bot sender each owned a private copy of the same
-/// forty-eight event titles and of the same two metadata formatters. Nothing
-/// linked the copies, so they drifted: the email formatter knew the IsReminder
-/// metadata key and the bot formatter did not, and only a diff of the two files
-/// could show it. Duplication of this shape is invisible to the compiler and to
-/// a reviewer reading one file at a time, so it needs a rule rather than a habit.
-///
-/// The list in the application is the third reader of the same words, and the
-/// table moved into the domain so that the API could read it. The rule looks
-/// wherever a notification is put into words: the dispatcher that sends it, the
-/// API that lists it, and the domain both of them read the shared table from.
-/// </remarks>
+/// <remarks>Read wherever a notification is put into words: the dispatcher, the API and the domain table both read.</remarks>
 public class NotificationWordingShould
 {
     private const string EventTypeName = "DM.Domain.Core.Enums.EventType";

@@ -1,19 +1,13 @@
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.UsernameChange;
 
-public class CreateUsernameChangeRequestValidatorShould : UnitTestBase
+public class CreateUsernameChangeRequestValidatorShould
 {
-    private readonly CreateUsernameChangeRequestValidator validator;
-
-    public CreateUsernameChangeRequestValidatorShould()
-    {
-        validator = new CreateUsernameChangeRequestValidator();
-    }
+    private readonly CreateUsernameChangeRequestValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -22,6 +16,14 @@ public class CreateUsernameChangeRequestValidatorShould : UnitTestBase
         {
             Reason = "I need to change my username because of privacy concerns"
         };
+        var result = validator.TestValidate(input);
+        result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    [Fact]
+    public void PassWhenReasonIsASingleCharacter()
+    {
+        var input = new CreateUsernameChangeRequest { Reason = "Я" };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
     }

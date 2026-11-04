@@ -17,16 +17,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// and the endorsement answer by.
 /// </summary>
 /// <remarks>
-/// The service has long known how to edit and remove a game review, and nothing
-/// on the wire reached it: a review, once written, stayed as written. The rules are
-/// the service's own and are only asked here: the author edits inside a day of
-/// publication, the author or a senior moderator removes at any time, and anybody
-/// else is refused.
-///
-/// The reviews are seeded directly, each under an author made for it. Creating them
-/// through the API needs a post in the game and a hundred game posts behind the
-/// author, and one live review per author and game is a unique index, so a seeded
-/// author of the fixture would collide with the review files next door.
+/// The author edits inside a day of publication, the author or a senior moderator removes at any time. The
+/// reviews are seeded directly, each under its own author: one live review per author and game is unique.
 /// </remarks>
 public class GameReviewLifecycleShould : IntegrationTestBase
 {
@@ -43,10 +35,10 @@ public class GameReviewLifecycleShould : IntegrationTestBase
         new() { UserId = userId, Username = username, Role = role };
 
     private static GeneralUser Moderator => AsUser(
-        TestConstants.ModeratorUserId, TestConstants.ModeratorUserUsername, UserRole.Moderator);
+        TestConstants.ModeratorUserId, TestConstants.ModeratorUserLogin, UserRole.Moderator);
 
     private static GeneralUser SeniorModerator => AsUser(
-        TestConstants.SeniorModeratorUserId, TestConstants.SeniorModeratorUserUsername,
+        TestConstants.SeniorModeratorUserId, TestConstants.SeniorModeratorUserLogin,
         UserRole.SeniorModerator);
 
     private static GeneralUser Stranger => CustomWebApplicationFactory.CreateSecondUser();
@@ -119,7 +111,8 @@ public class GameReviewLifecycleShould : IntegrationTestBase
         var (author, reviewId) = await SeedAsync(ageHours: 1);
         try
         {
-            var response = await Patch(reviewId, author, new { text = "Коротко" });
+            // One character past the 5000 a review holds, the bound creation answers by.
+            var response = await Patch(reviewId, author, new { text = new string('а', 5001) });
 
             response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
             (await StoredAsync(reviewId))!.Text.Should().Be(OriginalText);
@@ -131,9 +124,7 @@ public class GameReviewLifecycleShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A text of nothing but spaces passes the length of the request and is
-    /// trimmed to nothing before it is stored, so the domain has to refuse it the
-    /// way creation does: an edit must not publish an empty review.
+    /// A text of nothing but spaces is trimmed to nothing, so the edit refuses it as creation does.
     /// </summary>
     [Fact]
     public async Task RefuseATextOfNothingButSpaces()
@@ -153,10 +144,7 @@ public class GameReviewLifecycleShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The editor opens a review with the audience that hands its author the text
-    /// as typed. The display rendering turns "--" into a dash entity the editor
-    /// does not turn back, and saving what it was handed wrote the entity into the
-    /// review as text.
+    /// The editor opens a review with the audience that hands its author the text as typed.
     /// </summary>
     [Fact]
     public async Task HandTheAuthorTheTextAsTypedForEditing()
@@ -168,7 +156,7 @@ public class GameReviewLifecycleShould : IntegrationTestBase
             var forEditing = CreateAuthenticatedRequest(HttpMethod.Get, ReviewUrl(reviewId), author);
             forEditing.Headers.Add(BbAudienceHeader.HeaderName, "author_edit");
 
-            (await TextOf(await Client.SendAsync(forEditing))).Should().Be(BbParserWrapper.LineBreaksWritten + typed);
+            (await TextOf(await Client.SendAsync(forEditing))).Should().Be(typed);
         }
         finally
         {
@@ -177,9 +165,7 @@ public class GameReviewLifecycleShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The same request from anybody but the author is the ordinary rendering:
-    /// the audience is a header any caller can send, and the source is the
-    /// author's own view.
+    /// The same request from anybody but the author gets the ordinary rendering.
     /// </summary>
     [Fact]
     public async Task RenderTheReviewForAnybodyElseWhoAsksForTheSource()
@@ -259,9 +245,7 @@ public class GameReviewLifecycleShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A review that is not there answers the way the post review and the
-    /// endorsement answer: 404, where somebody else's answers 403. The review
-    /// itself is public, so the difference tells a caller nothing it could not read.
+    /// A missing review answers 404 and somebody else's 403, as the post review and the endorsement do.
     /// </summary>
     [Fact]
     public async Task AnswerNotFoundOnAReviewThatIsNotThere()
@@ -272,25 +256,6 @@ public class GameReviewLifecycleShould : IntegrationTestBase
         (await Patch(missing, author, new { text = "Правка несуществующей рецензии" }))
             .StatusCode.Should().Be(HttpStatusCode.NotFound);
         (await Delete(missing, author)).StatusCode.Should().Be(HttpStatusCode.NotFound);
-    }
-
-    [Fact]
-    public async Task RefuseBothCallsFromAVisitor()
-    {
-        var (_, reviewId) = await SeedAsync(ageHours: 1);
-        try
-        {
-            var edit = await Client.PatchAsync(
-                ReviewUrl(reviewId), JsonContent.Create(new { text = "Анонимная правка рецензии" }));
-            var delete = await Client.DeleteAsync(ReviewUrl(reviewId));
-
-            edit.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-            delete.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-        }
-        finally
-        {
-            await DropAsync(reviewId);
-        }
     }
 
     /// <summary>

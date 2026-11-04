@@ -3,9 +3,9 @@ using System.Linq;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
 using Riok.Mapperly.Abstractions;
-using EntityAwardType = DM.Infrastructure.Persistence.Entities.Community.AwardType;
-using EntityContestSeries = DM.Infrastructure.Persistence.Entities.Community.ContestSeries;
-using EntityUserAward = DM.Infrastructure.Persistence.Entities.Community.UserAward;
+using DbAwardType = DM.Infrastructure.Persistence.Entities.Community.AwardType;
+using DbContestSeries = DM.Infrastructure.Persistence.Entities.Community.ContestSeries;
+using DbUserAward = DM.Infrastructure.Persistence.Entities.Community.UserAward;
 using DomainAwardType = DM.Domain.Community.Features.Awards.AwardType;
 using DomainContestSeries = DM.Domain.Community.Features.Awards.ContestSeries;
 using DomainUserAward = DM.Domain.Community.Features.Awards.UserAward;
@@ -21,10 +21,10 @@ namespace DM.Infrastructure.Persistence.Repositories.Community;
 internal static partial class AwardMapper
 {
     public static partial IQueryable<DomainAwardType> ProjectToAwardType(
-        this IQueryable<EntityAwardType> query);
+        this IQueryable<DbAwardType> query);
 
     public static partial IQueryable<DomainContestSeries> ProjectToContestSeries(
-        this IQueryable<EntityContestSeries> query);
+        this IQueryable<DbContestSeries> query);
 
     /// <summary>
     /// EF projection for granted awards. Written out because the user half
@@ -32,8 +32,8 @@ internal static partial class AwardMapper
     /// inline into a generated queryable.
     /// </summary>
     public static IQueryable<DomainUserAward> ProjectToUserAward(
-        this IQueryable<EntityUserAward> query) =>
-        query.Select(ExpressionSplicer.Expand<Func<EntityUserAward, DomainUserAward>>(
+        this IQueryable<DbUserAward> query) =>
+        query.Select(ExpressionSplicer.Expand<Func<DbUserAward, DomainUserAward>>(
             a => new DomainUserAward
             {
                 Id = a.UserAwardId,
@@ -68,11 +68,11 @@ internal static partial class AwardMapper
     /// Tracked entity to the domain DTO, for the write path that already
     /// holds the row
     /// </summary>
-    [MapProperty(nameof(EntityAwardType.AwardTypeId), nameof(DomainAwardType.Id))]
+    [MapProperty(nameof(DbAwardType.AwardTypeId), nameof(DomainAwardType.Id))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
-    public static partial DomainAwardType ToAwardType(this EntityAwardType type);
+    public static partial DomainAwardType ToAwardType(this DbAwardType type);
 
-    [MapProperty(nameof(EntityContestSeries.ContestSeriesId), nameof(DomainContestSeries.Id))]
+    [MapProperty(nameof(DbContestSeries.ContestSeriesId), nameof(DomainContestSeries.Id))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
-    public static partial DomainContestSeries ToContestSeries(this EntityContestSeries series);
+    public static partial DomainContestSeries ToContestSeries(this DbContestSeries series);
 }

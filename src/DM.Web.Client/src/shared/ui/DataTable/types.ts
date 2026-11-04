@@ -17,21 +17,6 @@ export interface Column {
   width?: string;
   /** Text alignment */
   align?: "left" | "center" | "right";
-  /** Whether column is sortable */
-  sortable?: boolean;
-  /** Sort direction applied when first sorting by this column (default "asc") */
-  defaultDirection?: "asc" | "desc";
-  /**
-   * Place in the order of need, at any width (DataTable): where the table
-   * does not fit its box, whole columns go from the largest rank down, one by
-   * one, until it fits. 1 is the main column of the table (a title, a name, a
-   * file), never hidden. A column without a rank is never hidden either: a
-   * column of an action ("Удалить", "Восстановить") is declared without one,
-   * and so is every column of a table nobody ranked, which then scrolls in its
-   * box where it does not fit. The column the table is sorted by stands
-   * whatever its rank.
-   */
-  rank?: number;
 }
 
 /**

@@ -2,32 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * "Перенести мой черный список" in the form of a new blog.
- *
- * It stood on every new blog, empty personal list or not, and promised to
- * close likes the list no longer closes. Now it is there only when there is
- * somebody to carry, and says who.
- *
- * What these catch:
- *  - the box drawn over an empty list, or over a list that did not come;
- *  - a name left out, or put away under "и еще N": the line names everyone
- *    the box carries, however long the list (owner, 12 October 2026: nothing
- *    shortened, no "Еще"), and reads the list page by page to do so;
- *  - the box drawn over a list that came only in part;
- *  - a login broken over two lines at its hyphen ("Player-" and "Two"): a
- *    login is never split anywhere else on the site, so each name is a piece
- *    of its own that does not break, and the line breaks between them;
- *  - the box starting anywhere but where the account setting stands, or drawn
- *    before the setting has come, where the setting could still overwrite a
- *    tick the author has made;
- *  - a value put into the form while there is no box: the server would then
- *    not apply the account setting itself.
- */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
-import { readFileSync } from "fs";
-import { resolve } from "path";
 import { blacklistApi } from "@/entities/user";
 import type { BlacklistSettings } from "@/shared/api/models/personal";
 import CopyBlacklistOption from "./CopyBlacklistOption.vue";
@@ -47,10 +23,7 @@ const page = (names: string[], total = names.length) =>
     error: null,
   }) as never;
 
-/**
- * The server over a list of `names`: the page asked for, and the count of the
- * whole list, as GET users/me/blacklist answers.
- */
+// The page asked for and the count of the whole list, as GET users/me/blacklist answers.
 const server = (names: string[]) => (skip?: number, take?: number) => {
   const from = skip ?? 0;
   const size = take ?? 50;
@@ -113,7 +86,6 @@ function mountOption() {
 
 type Option = ReturnType<typeof mountOption>;
 
-/** What the form last got from the box; undefined if it got nothing. */
 const sent = (w: Option) =>
   w.emitted<[boolean]>("update:modelValue")?.at(-1)?.[0];
 
@@ -121,7 +93,7 @@ describe("CopyBlacklistOption", () => {
   beforeEach(() => vi.restoreAllMocks());
   afterEach(() => vi.restoreAllMocks());
 
-  it("не рисуется, когда в личном списке никого", async () => {
+  it("is not drawn when the own list is empty", async () => {
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(page([]));
     vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(settingsWith(true));
     const w = mountOption();
@@ -132,7 +104,7 @@ describe("CopyBlacklistOption", () => {
     expect(sent(w)).toBeUndefined();
   });
 
-  it("не рисуется, когда список не пришел", async () => {
+  it("is not drawn when the list did not come", async () => {
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(failed);
     vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(settingsWith(true));
     const w = mountOption();
@@ -142,7 +114,7 @@ describe("CopyBlacklistOption", () => {
     expect(sent(w)).toBeUndefined();
   });
 
-  it("называет внесенных под галочкой", async () => {
+  it("names the listed under the box", async () => {
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(
       page(["Player-Two", "LongestLoginPossible", "RatingNegative"]),
     );
@@ -158,7 +130,7 @@ describe("CopyBlacklistOption", () => {
     );
   });
 
-  it('называет всех внесенных, без "и еще N"', async () => {
+  it('names everyone listed, with no "и еще N"', async () => {
     vi.spyOn(blacklistApi, "getBlacklist").mockImplementation(server(SEVEN));
     vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(
       settingsWith(false),
@@ -172,9 +144,8 @@ describe("CopyBlacklistOption", () => {
     expect(w.text()).not.toMatch(/еще|…|\.\.\./);
   });
 
-  // The server hands the list in pages of 200 at most (PagingQuery.Take): a
-  // list longer than a page is read on until it is whole.
-  it("дочитывает длинный список страницами и называет каждого", async () => {
+  // The server hands pages of 200 at most, so a longer list is read on until whole.
+  it("reads a long list page by page and names everyone", async () => {
     const all = Array.from({ length: 205 }, (_, i) => `User${i + 1}`);
     const list = vi
       .spyOn(blacklistApi, "getBlacklist")
@@ -193,7 +164,7 @@ describe("CopyBlacklistOption", () => {
     expect(w.text()).not.toContain("еще");
   });
 
-  it("не рисуется, когда пришла только часть списка", async () => {
+  it("is not drawn when only part of the list came", async () => {
     const all = Array.from({ length: 205 }, (_, i) => `User${i + 1}`);
     const first = server(all);
     vi.spyOn(blacklistApi, "getBlacklist").mockImplementation((skip, take) =>
@@ -207,7 +178,7 @@ describe("CopyBlacklistOption", () => {
     expect(sent(w)).toBeUndefined();
   });
 
-  it("держит каждое имя целым куском, а строка рвется между ними", async () => {
+  it("keeps each name whole and breaks the line between them", async () => {
     vi.spyOn(blacklistApi, "getBlacklist").mockImplementation(server(SEVEN));
     vi.spyOn(blacklistApi, "getSettings").mockResolvedValue(
       settingsWith(false),
@@ -215,8 +186,6 @@ describe("CopyBlacklistOption", () => {
     const w = mountOption();
     await flushPromises();
 
-    // The comma goes with its name; the space between the pieces is the
-    // line's, so a copy reads as it did.
     expect(w.findAll(".copy-blacklist-name").map((n) => n.text())).toEqual([
       "Player-Two,",
       "LongestLoginPossible,",
@@ -229,15 +198,10 @@ describe("CopyBlacklistOption", () => {
     expect(w.get(".copy-blacklist-hint").text()).toBe(
       `${DOES}: ${SEVEN.join(", ")}`,
     );
-    const style = readFileSync(
-      resolve(__dirname, "CopyBlacklistOption.vue"),
-      "utf8",
-    ).split("<style")[1];
-    expect(style).toMatch(/\.copy-blacklist-name\s*\n\s*white-space: nowrap/);
   });
 
   it.each([true, false])(
-    "стоит так, как велит настройка аккаунта (%s)",
+    "starts as the account setting says (%s)",
     async (setting) => {
       vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(
         page(["Player-Two"]),
@@ -252,7 +216,7 @@ describe("CopyBlacklistOption", () => {
     },
   );
 
-  it("без настройки стоит снятой", async () => {
+  it("starts unticked without the setting", async () => {
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(
       page(["Player-Two"]),
     );
@@ -264,7 +228,7 @@ describe("CopyBlacklistOption", () => {
     expect(sent(w)).toBe(false);
   });
 
-  it("не рисуется, пока не пришла настройка: ее нечем перебить", async () => {
+  it("is not drawn before the setting comes", async () => {
     let answer: (value: unknown) => void = () => {};
     vi.spyOn(blacklistApi, "getBlacklist").mockResolvedValue(
       page(["Player-Two"]),

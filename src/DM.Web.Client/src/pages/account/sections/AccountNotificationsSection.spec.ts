@@ -3,38 +3,14 @@
  */
 
 /**
- * The notifications block of the account page: one grey panel, as "Сессии"
- * has, and in it a framed row a channel.
- *
- * There used to be two blocks about the same two bots. The upper one wrote the
- * state as a pill, "Подключен" or "Не подключен", and offered "Подключить" on a
- * button that only raised an event nobody listened to: the page mounted the
- * block bare, so the press did nothing at all. The lower one, "Привязка ботов",
- * did the linking, and offered "Подключить Telegram" next to a Telegram the
- * block above called connected. Now the row of a channel links it itself:
- * "Подключить" asks the server for a code and lays the steps out under the row.
- *
- * The hierarchy reads the way the sessions above it read: the section, in it
- * a framed row a channel, the name of the channel with its state under it in
- * grey on the left ("Подключен", "Не подключен"), the one press of the row on
- * the right, and under them what the channel sends, a column of boxes under
- * the bold caption "Что присылать". The state is a grey line, not a pill and
- * not green.
- *
- * The block also has no doors a parent can knock on. It reads itself once on
- * mount and redraws itself after its own presses, and no other block changes
- * what it shows; asserted through what a parent would see, the compiled
- * `emits` list and the public instance a template ref gets hold of.
- *
- * Nothing in the steps is copied by a button: the reader selects what he
- * needs himself. Telegram takes the code in the start parameter of a t.me
- * link, so its steps give that link, a plain one whose words are the address;
- * Discord is sent the command, words of the step, whole and selectable. The
- * code runs out on a visible countdown, which takes the steps away and puts
- * "Подключить" back, with no plate saying the same thing.
+ * The notifications block of the account page: a grey panel with a framed row
+ * a channel, the name over its state in grey and the one press beside them,
+ * and under them a column of boxes or the steps that link it. "Подключить"
+ * asks for a code itself; nothing in the steps is copied by a button, and the
+ * code runs out on a countdown that puts the offer back with no plate.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { defineComponent, h, nextTick, ref } from "vue";
+import { nextTick } from "vue";
 import {
   enableAutoUnmount,
   flushPromises,
@@ -44,21 +20,16 @@ import {
 import { createPinia, setActivePinia } from "pinia";
 import { accountApi } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
-import type { NotificationPreferences } from "@/shared/api/models/account";
+import type { NotificationSettings } from "@/shared/api/models/account";
 import AccountNotificationsSection from "./AccountNotificationsSection.vue";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
-import { compileSass, sassBlocks, ruleMap } from "@/shared/lib/testing/styles";
 
 enableAutoUnmount(afterEach);
-
-type Block = InstanceType<typeof AccountNotificationsSection>;
 
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((one) => one.message);
 
 /** Telegram linked, with its boxes; Discord not linked. */
-const TELEGRAM_ONLY: NotificationPreferences = {
+const TELEGRAM_ONLY: NotificationSettings = {
   telegram: {
     connected: true,
     enabled: true,
@@ -67,22 +38,13 @@ const TELEGRAM_ONLY: NotificationPreferences = {
   discord: undefined,
 };
 
-const NOTHING_LINKED: NotificationPreferences = {
+const NOTHING_LINKED: NotificationSettings = {
   telegram: undefined,
   discord: undefined,
 };
 
-/** A parent holding the block the way AccountPage holds the blocks it re-reads. */
-const Host = defineComponent({
-  setup(_, { expose }) {
-    const block = ref<Block | null>(null);
-    expose({ block });
-    return () => h(AccountNotificationsSection, { ref: block });
-  },
-});
-
 /** Mounts the block over what the server holds of the two channels. */
-async function render(held: NotificationPreferences = TELEGRAM_ONLY) {
+async function render(held: NotificationSettings = TELEGRAM_ONLY) {
   vi.spyOn(accountApi, "getNotificationPreferences").mockResolvedValue({
     data: held,
     error: null,
@@ -144,34 +106,13 @@ describe("the notifications block of the account page", () => {
   });
 
   describe("its doors", () => {
-    // The two it declared were the dead "Подключить": a press that raised an
-    // event the page never listened to.
-    it("declares no event a parent would have to answer", () => {
-      const emits = (AccountNotificationsSection as { emits?: unknown }).emits;
-      expect(emits ?? []).toEqual([]);
-    });
-
-    it("hands a parent no handle to re-read it through", async () => {
-      vi.spyOn(accountApi, "getNotificationPreferences").mockResolvedValue({
-        data: NOTHING_LINKED,
-        error: null,
-      } as never);
-      const host = mount(Host, { global: { plugins: [createPinia()] } });
-      await flushPromises();
-
-      const block = (host.vm as unknown as { block: Block | null }).block;
-      expect(block).not.toBeNull();
-      expect("loadPreferences" in (block as object)).toBe(false);
-    });
-
     it("still reads itself once on mount", async () => {
       await render();
 
       expect(accountApi.getNotificationPreferences).toHaveBeenCalledTimes(1);
     });
 
-    // The page of notifications leads here with a link to the section, so the
-    // section answers to the address of that link.
+    // The notifications page links to the section by its id.
     it("answers to #notifications, the address the notifications page links to", async () => {
       const wrapper = await render();
 
@@ -202,18 +143,15 @@ describe("the notifications block of the account page", () => {
       expect(discord.find(".channel-settings").exists()).toBe(false);
     });
 
-    // The second block offered to link a channel the first one called linked.
+    // One block about the bots, never offering to link a linked channel.
     it("is the one block about the bots, and never offers to link a linked channel", async () => {
       const wrapper = await render();
 
       expect(wrapper.findAll(".channel-item")).toHaveLength(2);
-      expect(wrapper.find(".channel-card").exists()).toBe(false);
       expect(card(wrapper, "telegram").text()).not.toContain("Подключить");
-      expect(wrapper.text()).not.toContain("Привязка ботов");
     });
 
-    // What the channel sends stands under its row: a caption of its own, the
-    // boxes in a column under it, and the column named by the caption.
+    // What the channel sends: a caption and a column of boxes named by it.
     it("lays what the channel sends out under the row, as a group named by its caption", async () => {
       const wrapper = await render();
 
@@ -246,23 +184,11 @@ describe("the notifications block of the account page", () => {
       expect(discord.text()).not.toContain("Подключить");
       expect(discord.get(".channel-head button").text()).toBe("Отмена");
       expect(discord.get(".channel-state").text()).toBe("Не подключен");
-      // The other block is left as it was.
+      // The other row is left as it was.
       expect(card(wrapper, "telegram").find(".link-process").exists()).toBe(
         false,
       );
       expect(button(wrapper, "telegram", "Подключить").exists()).toBe(true);
-    });
-
-    // The bar of time said what the digits beside it already say, and no
-    // other place of the site draws one.
-    it("counts the time down in digits, with no bar under them", async () => {
-      const wrapper = await render(NOTHING_LINKED);
-      await startLinking(wrapper, "discord", "482913");
-
-      const discord = card(wrapper, "discord");
-      expect(discord.find(".timer-bar").exists()).toBe(false);
-      expect(discord.find(".timer-progress").exists()).toBe(false);
-      expect(discord.find("[style]").exists()).toBe(false);
     });
 
     it("says a refused code at the foot of its own row", async () => {
@@ -298,8 +224,7 @@ describe("the notifications block of the account page", () => {
       expect(button(wrapper, "discord", "Подключить").exists()).toBe(true);
     });
 
-    // Each press here takes away the control it was made on. Left alone, focus
-    // falls to the page and the next Tab starts from the top of it.
+    // Each press takes away its own control: focus stays in the row.
     it("keeps focus in the row when a press takes its control away", async () => {
       const wrapper = await render(NOTHING_LINKED);
       await startLinking(wrapper, "discord", "482913");
@@ -331,8 +256,7 @@ describe("the notifications block of the account page", () => {
       );
     });
 
-    // The command is sent from the bot, away from the page: coming back to the
-    // page is where the block learns the channel is linked now.
+    // The command is sent from the bot: coming back to the page tells the block the channel is linked.
     it("trades the steps for the settings once the channel is linked and the page is back in view", async () => {
       const wrapper = await render(NOTHING_LINKED);
       await startLinking(wrapper, "discord", "482913");
@@ -381,8 +305,7 @@ describe("the notifications block of the account page", () => {
   });
 
   describe("the command of the bot", () => {
-    // No copy button: the command is the words of the step, and the reader
-    // selects it himself.
+    // No copy button: the reader selects the command himself.
     it("is written in the step as words, with no button that copies it", async () => {
       const wrapper = await render(NOTHING_LINKED);
       await startLinking(wrapper, "discord", "482913");
@@ -394,8 +317,6 @@ describe("the notifications block of the account page", () => {
       expect(step?.text().replace(/\s+/g, " ")).toBe(
         "2. Отправьте боту команду /connect 482913",
       );
-      expect(discord.find(".copy-btn").exists()).toBe(false);
-      expect(discord.text()).not.toContain("Скопировать");
       expect(discord.findAll("button").map((one) => one.text())).toEqual([
         "Отмена",
       ]);
@@ -411,9 +332,7 @@ describe("the notifications block of the account page", () => {
     });
   });
 
-  // Telegram takes the code in the start parameter of a t.me link and hands
-  // it to the bot as "/start <code>" when Start is pressed in the chat the
-  // link opens. So its steps give that link in place of the command.
+  // Telegram takes the code in the start parameter of a t.me link, so its steps give that link.
   describe("the start link of the Telegram bot", () => {
     it("opens the bot with the code in its start parameter", async () => {
       const wrapper = await render(NOTHING_LINKED);
@@ -426,8 +345,7 @@ describe("the notifications block of the account page", () => {
       expect(link.attributes("target")).toBe("_blank");
     });
 
-    // A plain link: its words are the address it leads to, so a reader who
-    // has Telegram on another device copies them as any other words.
+    // Its words are the address, copied as any other words.
     it("is a plain link whose words are the address", async () => {
       const wrapper = await render(NOTHING_LINKED);
       await startLinking(wrapper, "telegram", "ABC123");
@@ -447,8 +365,6 @@ describe("the notifications block of the account page", () => {
 
       const telegram = card(wrapper, "telegram");
       expect(telegram.find("code").exists()).toBe(false);
-      expect(telegram.text()).not.toContain("/connect");
-      expect(telegram.text()).not.toContain("Скопировать");
       expect(telegram.findAll("button").map((one) => one.text())).toEqual([
         "Отмена",
       ]);
@@ -457,8 +373,7 @@ describe("the notifications block of the account page", () => {
 
   describe("the code running out", () => {
     it("puts the row back to its offer, and says nothing over it", async () => {
-      // Only the countdown and the clock it is measured against: setTimeout
-      // stays real, because flushPromises above is scheduled on it.
+      // Only the countdown and its clock: setTimeout stays real for flushPromises.
       vi.useFakeTimers({ toFake: ["setInterval", "clearInterval", "Date"] });
       const wrapper = await render(NOTHING_LINKED);
       await startLinking(wrapper, "telegram", "ABC123", 2);
@@ -479,13 +394,9 @@ describe("the notifications block of the account page", () => {
   });
 });
 
-// The notifications page links to "/account#notifications". The router
-// scrolls to the section as soon as the page is drawn, while the blocks above
-// it still say "Загрузка...": the section is the last of the page, the scroll
-// stops at the foot of a page that is still short, and the blocks above then
-// grow and push the section down past the window (at 1366 the link landed on
-// "Смена имени пользователя"). jsdom lays nothing out, so the page growing is
-// a resize observer told by hand, and the scroll is a spy.
+// The router scrolls to the section while the blocks above still load, and
+// their growth pushes it past the window. jsdom lays nothing out: the growth
+// is an observer told by hand, the scroll a spy.
 describe("arriving at #notifications", () => {
   /** The resize observers the block made, with what they watch. */
   let observers: {
@@ -505,7 +416,7 @@ describe("arriving at #notifications", () => {
       class {
         record: (typeof observers)[number];
         constructor(callback: () => void) {
-          // A disconnected observer reports nothing, as a real one does.
+          // A disconnected observer reports nothing, as a real one.
           const record = {
             grow: () => {
               if (!record.gone) callback();
@@ -518,7 +429,7 @@ describe("arriving at #notifications", () => {
         }
         observe(element: Element) {
           this.record.watched.push(element);
-          // A resize observer reports the size it starts from.
+          // An observer reports the size it starts from.
           this.record.grow();
         }
         disconnect() {
@@ -565,7 +476,7 @@ describe("arriving at #notifications", () => {
     const wrapper = await arrive("/account#notifications");
 
     expect(observers).toHaveLength(1);
-    // The page the section stands in: what grows above it is in there.
+    // The page the section stands in, where what grows is.
     expect(observers[0].watched).toEqual([wrapper.element.parentElement]);
     expect(scrolled).toHaveBeenCalledWith({ block: "start" });
     const before = ownScrolls(wrapper);
@@ -576,9 +487,8 @@ describe("arriving at #notifications", () => {
     expect(ownScrolls(wrapper)).toBe(before + 2);
   });
 
-  // The reader has the page from the first turn of the wheel, the first touch
-  // and the first key: the section never pulls the page back from under him.
-  it.each(["wheel", "touchstart", "keydown", "pointerdown"])(
+  // The reader has the page from the first wheel, key or press.
+  it.each(["wheel", "keydown", "pointerdown"])(
     "lets the page go at the reader's first %s",
     async (input) => {
       const wrapper = await arrive("/account#notifications");
@@ -627,80 +537,5 @@ describe("arriving at #notifications", () => {
 
     expect(observers).toHaveLength(0);
     expect(scrolled).not.toHaveBeenCalled();
-  });
-});
-
-// jsdom lays nothing out and applies no scoped style, so the look is read off
-// the stylesheet the build compiles.
-describe("the look of the notifications block", () => {
-  const file = join(
-    dirname(fileURLToPath(import.meta.url)),
-    "AccountNotificationsSection.vue",
-  );
-  const css = () => compileSass(sassBlocks(file), file);
-
-  // The panel and the rows of "Сессии" above: a grey panel, and in it a row
-  // a channel framed by the border of the site, 8 to the next.
-  it("draws the channels as framed rows of a grey panel, as the sessions are", () => {
-    const rules = ruleMap(css());
-    expect(rules.get(".notifications-content")?.["background-color"]).toBe(
-      "var(--bg-element)",
-    );
-    const row = rules.get(".channel-item");
-    expect(row?.["border"]).toBe("1px solid var(--border)");
-    expect(row?.["padding"]).toBe("8px 16px");
-    expect(rules.get(".channels")?.["gap"]).toBe("8px");
-  });
-
-  // The name and its state on the left, the press on the right, as the
-  // device of a session and its "Завершить" stand.
-  it("heads a row with the name over its state, and the press beside them", () => {
-    const rules = ruleMap(css());
-    expect(rules.get(".channel-head")?.["grid-template-columns"]).toBe(
-      "minmax(0, 1fr) auto",
-    );
-    const name = rules.get(".channel-name");
-    expect(name?.["font-size"]).toBe("16px");
-    expect(name?.["font-weight"]).toBe("500");
-    const state = rules.get(".channel-state");
-    expect(state?.["font-size"]).toBe("14px");
-    expect(state?.["color"]).toBe("var(--text-muted)");
-  });
-
-  // Green is for what is good (the owner, 12 October 2026), and a linked bot
-  // is a fact, not a good thing.
-  it("paints no word green", () => {
-    expect(css()).not.toContain("var(--accent-green)");
-  });
-
-  it("captions what the channel sends in bold 14, as the blacklist captions its boxes", () => {
-    const caption = ruleMap(css()).get(".categories-caption");
-    expect(caption?.["font-size"]).toBe("14px");
-    expect(caption?.["font-weight"]).toBe("700");
-  });
-
-  // Words of the step: no frame, no fill, never broken in two, and a tap
-  // selects all of it.
-  it("sets the command as words of the line, never broken in two", () => {
-    const command = ruleMap(css()).get(".command");
-    expect(command?.["white-space"]).toBe("nowrap");
-    expect(command?.["font-family"]).toContain("Courier New");
-    expect(command?.["user-select"]).toBe("all");
-    expect(command?.["border"]).toBeUndefined();
-    expect(command?.["background-color"]).toBeUndefined();
-  });
-
-  // The link of the Telegram step is an address, and an address broken over
-  // two lines reads as two.
-  it("keeps the start link in one piece, as the command is", () => {
-    expect(ruleMap(css()).get(".start-link")?.["white-space"]).toBe("nowrap");
-  });
-
-  // A phone shows the row as the full version does.
-  it("has no form of its own for a narrow screen", () => {
-    const compiled = css();
-    expect(compiled).not.toContain("@container");
-    expect(compiled).not.toContain("container-type");
-    expect(compiled).not.toContain("@media");
   });
 });

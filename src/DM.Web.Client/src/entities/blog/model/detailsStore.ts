@@ -1,14 +1,8 @@
-// Store for a single blog: the zone shell, its sub-pages and the blog panel.
-//
-// Its own module rather than a second store next to the list store, for the
-// reason the game zone was split for: the sidebar blocks that draw the blog
-// lists are reachable from the entry, and a store declared at the top level of
-// a module is not something the bundler may drop, so sharing one file put every
-// publication, comment, notepad and blacklist request of the blog zone into the
-// entry chunk with them.
+// Kept apart from the list store, which the entry reaches through the sidebar:
+// in one module the whole blog zone landed in the entry chunk.
 
 import { defineStore } from "pinia";
-import { computed, ref } from "vue";
+import { computed, ref, type ComputedRef, type Ref } from "vue";
 import type {
   GeneralError,
   PagingInfo,
@@ -23,53 +17,41 @@ import type {
   Publication,
 } from "./types";
 import blogApi from "../api/blogApi";
-// The envelope reader is a pure function over a payload shape, so it comes from
-// its own module instead of the transport barrel: this store talks to blogApi
-// and not to the HTTP client, and pulling a helper through the barrel made it
-// depend on the client for nothing.
+// From its own module, so the store does not depend on the HTTP client.
 import { unwrapResource } from "@/shared/api/envelope";
 import { useAuthStore } from "@/shared/stores";
 import { createRequestGuard } from "@/shared/lib/utils/requestGuard";
 import { createCommentSection } from "@/shared/lib/composables/createCommentSection";
 import { requestNotSent } from "@/shared/lib/errors";
-// One edge, and it points this way on purpose: deleting a blog has to drop the
-// list caches. The list store must not import this one back — that is what put
-// the whole blog zone in the entry chunk in the first place.
+// Deleting a blog drops the list caches; the list store must not import this one back.
 import { useBlogsStore } from "./store";
+import type { RequestOptions } from "@/shared/api/interceptor";
 
-/**
- * Store for single blog details (blog page) — mirrors useGameDetailsStore.
- * The blog page loads the blog; sub-pages and the sidebar BlogPanel add
- * their own slices (publications, comments, notepad, blacklist, users,
- * readers) and call the mutation actions.
- */
 export const useBlogDetailsStore = defineStore("blogDetails", () => {
-  // Blog data
-  const blog = ref<Blog | null>(null);
-  const blogLoading = ref(false);
-  const blogError = ref<string | null>(null);
-  /**
-   * HTTP status of the refusal, kept alongside the sentence (twin of
-   * gameErrorStatus).
-   *
-   * The shell cannot keep this in a local ref: loadBlog is called from five
-   * places outside it (PublicationCreate, PublicationEdit, BlogInfoSection and
-   * RolesSection twice), and a refusal from any of them nulls `blog` while a
-   * shell-local code stays null — the blog zone then holds its title skeleton
-   * forever instead of drawing the refusal.
-   */
-  const blogErrorStatus = ref<number | null>(null);
+  const {
+    blog,
+    blogLoading,
+    blogError,
+    blogErrorStatus,
+    blogGuard,
+    loadBlog,
+    resetBlog,
+  } = createBlogSlice();
+  const {
+    publications,
+    publicationsPaging,
+    publicationsLoading,
+    publicationsError,
+    publicationsGuard,
+    loadPublications,
+    resetPublications,
+  } = createPublicationsSlice();
 
-  // Publications (feed) data
-  const publications = ref<Publication[]>([]);
-  const publicationsPaging = ref<PagingInfo | null>(null);
-  const publicationsLoading = ref(false);
-  const publicationsError = ref<string | null>(null);
+  // The reader the roles and the discussion are read against.
+  const auth = useAuthStore();
+  const currentUsername = computed(() => auth.user?.username ?? null);
 
-  // Discussion comments: state, guarded loader and single-comment mutations
-  // come from the shared section factory — the game details store runs the
-  // same code against its own endpoints. The username getter is a closure on
-  // purpose: currentUsername is declared below and read at unlike time.
+  // The username goes in as a getter: the section reads it at unlike time.
   const {
     comments,
     commentsPaging,
@@ -90,28 +72,20 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     currentUsername: () => currentUsername.value,
   });
 
-  // Blacklist data
   const blacklist = ref<User[]>([]);
   const blacklistLoading = ref(false);
   const blacklistError = ref<string | null>(null);
 
-  // Blog users data (role-filtered lists come through blogApi.getUsers)
   const users = ref<BlogUser[]>([]);
   const usersLoading = ref(false);
   const usersError = ref<string | null>(null);
 
-  // Readers (subscribers) — separate slice because isSubscribed derives
-  // from it (unlike games, the blog DTO carries no participation flags).
+  // isSubscribed is read off the readers: the blog carries no participation flags.
   const readers = ref<BlogUser[]>([]);
   const readersLoading = ref(false);
   const readersError = ref<string | null>(null);
 
-  // One monotonic token per independent slice — same reason as in the game
-  // details store: this store is a single bag for "the current blog", and a
-  // slower reply for the blog (or rubric, or page) the reader already left
-  // would otherwise win simply by landing last.
-  const blogGuard = createRequestGuard();
-  const publicationsGuard = createRequestGuard();
+  // One token per slice, so a slower reply for the blog already left cannot win by landing last.
   const blacklistGuard = createRequestGuard();
   const usersGuard = createRequestGuard();
   const readersGuard = createRequestGuard();
@@ -124,118 +98,15 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     readersGuard,
   ];
 
-  // Rubrics sorted for display (panel list, feed filter, settings)
-  const rubrics = computed(() =>
-    [...(blog.value?.rubrics ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
-  );
+  const {
+    isOwner,
+    isAssistant,
+    canManage,
+    isMentor,
+    canUseNotepad,
+    isSubscribed,
+  } = createBlogRoles(blog, readers, currentUsername);
 
-  // --- Current-user role flags — single source of truth for the panel and
-  // pages. Blogs serve no participation flags, so roles are derived from the
-  // author/assistants fields against the authenticated user.
-  const auth = useAuthStore();
-  const currentUsername = computed(() => auth.user?.username ?? null);
-
-  const isOwner = computed(
-    () =>
-      !!currentUsername.value &&
-      blog.value?.author?.username === currentUsername.value,
-  );
-  const isAssistant = computed(
-    () =>
-      !!currentUsername.value &&
-      !isOwner.value &&
-      (blog.value?.assistants ?? []).some(
-        (a) => a.username === currentUsername.value,
-      ),
-  );
-  /** Owner or assistant — may edit/manage the blog. */
-  const canManage = computed(() => isOwner.value || isAssistant.value);
-  /** Assigned blog mentor ("наставник") — oversight, not edit rights. */
-  const isMentor = computed(
-    () =>
-      !!currentUsername.value &&
-      blog.value?.mentor?.username === currentUsername.value,
-  );
-  /**
-   * Owner, assistant, or mentor — may open the blog notepad (mirrors the
-   * backend BlogNotepadService gate). Mentors get notepad oversight without
-   * the owner/assistant edit rights carried by canManage.
-   */
-  const canUseNotepad = computed(
-    () => isOwner.value || isAssistant.value || isMentor.value,
-  );
-  const isSubscribed = computed(
-    () =>
-      !!currentUsername.value &&
-      readers.value.some((r) => r.user?.username === currentUsername.value),
-  );
-
-  /**
-   * Load the blog the URL names.
-   *
-   * Returns `{ ok, status }` for the same reason loadGame does: a missing blog,
-   * a refused one and a broken server are three pages. `blogError` stays for
-   * the sidebar panel.
-   */
-  async function loadBlog(
-    id: string,
-  ): Promise<{ ok: boolean; status?: number }> {
-    const requestId = blogGuard.next();
-    blogLoading.value = true;
-    blogError.value = null;
-    blogErrorStatus.value = null;
-
-    const { data, error } = await blogApi.getBlog(id);
-
-    // A newer load owns the visible state, and reports ok as a no-op - see the
-    // guards above.
-    if (!blogGuard.isCurrent(requestId)) return { ok: true };
-
-    if (error) {
-      blogError.value = "Не удалось загрузить блог";
-      blogErrorStatus.value = error.status ?? null;
-      blog.value = null;
-      blogLoading.value = false;
-      return { ok: false, status: error.status };
-    }
-    if (data) {
-      blog.value = unwrapResource<Blog>(data);
-    }
-
-    blogLoading.value = false;
-    return { ok: true };
-  }
-
-  // Load publications (optionally filtered by rubric)
-  async function loadPublications(
-    blogId: string,
-    options?: { rubricId?: string; page?: number },
-  ): Promise<void> {
-    const requestId = publicationsGuard.next();
-    publicationsLoading.value = true;
-    publicationsError.value = null;
-
-    const { data, error } = await blogApi.getPublications(blogId, {
-      rubricId: options?.rubricId,
-      paging: { number: options?.page ?? 1 },
-    });
-
-    // Stale continuation — the newer request owns the visible state.
-    if (!publicationsGuard.isCurrent(requestId)) return;
-
-    if (error) {
-      publicationsError.value = "Не удалось загрузить публикации";
-      publications.value = [];
-      publicationsPaging.value = null;
-    } else if (data) {
-      publications.value = data.resources;
-      publicationsPaging.value = data.paging ?? null;
-    }
-
-    publicationsLoading.value = false;
-  }
-
-  // Load blacklist
   async function loadBlacklist(blogId: string): Promise<void> {
     const requestId = blacklistGuard.next();
     blacklistLoading.value = true;
@@ -243,7 +114,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
     const { data, error } = await blogApi.getBlacklist(blogId);
 
-    // Stale continuation — the newer request owns the visible state.
     if (!blacklistGuard.isCurrent(requestId)) return;
 
     if (error) {
@@ -256,7 +126,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     blacklistLoading.value = false;
   }
 
-  // Load blog users
   async function loadUsers(blogId: string): Promise<void> {
     const requestId = usersGuard.next();
     usersLoading.value = true;
@@ -264,7 +133,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
     const { data, error } = await blogApi.getUsers(blogId);
 
-    // Stale continuation — the newer request owns the visible state.
     if (!usersGuard.isCurrent(requestId)) return;
 
     if (error) {
@@ -277,7 +145,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     usersLoading.value = false;
   }
 
-  // Load readers (drives isSubscribed)
   async function loadReaders(blogId: string): Promise<void> {
     const requestId = readersGuard.next();
     readersLoading.value = true;
@@ -285,9 +152,6 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
 
     const { data, error } = await blogApi.getReaders(blogId);
 
-    // Stale continuation — the newer request owns the visible state. This slice
-    // decides isSubscribed, so a reply for another blog flips the subscribe
-    // button rather than only the list under it.
     if (!readersGuard.isCurrent(requestId)) return;
 
     if (error) {
@@ -300,113 +164,20 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     readersLoading.value = false;
   }
 
-  // === Mutations ===
-  // Each mutation calls the API, re-syncs the affected slices on success, and
-  // returns the problem document on failure — null when it worked. A boolean
-  // here threw away what the server said, so every rejection reached the reader
-  // as the caller's own generic sentence.
+  const { rubrics, createRubric, deleteRubric } = createRubrics(blog, loadBlog);
+  const { transitionStatus, changePremoderation, deleteBlog } =
+    createBlogChanges(blog, loadBlog);
+  const { subscribe, unsubscribe } = createSubscriptionChanges(
+    blog,
+    loadReaders,
+  );
 
-  /** @param options The refusal flags of a window that shows the failure itself. */
-  async function transitionStatus(
-    transition: BlogStatusTransition,
-    options?: Parameters<typeof blogApi.transitionStatus>[2],
-  ): Promise<GeneralError | null> {
-    if (!blog.value) return requestNotSent;
-    const id = blog.value.id;
-    const { error } = await blogApi.transitionStatus(id, transition, options);
-    if (error) return error;
-    await loadBlog(id);
-    return null;
-  }
-
-  /** @param options The refusal flags of a window that shows the failure itself. */
-  async function changePremoderation(
-    transition: BlogPremoderationTransition,
-    options?: Parameters<typeof blogApi.changePremoderation>[2],
-  ): Promise<GeneralError | null> {
-    if (!blog.value) return requestNotSent;
-    const id = blog.value.id;
-    const { error } = await blogApi.changePremoderation(
-      id,
-      transition,
-      options,
-    );
-    if (error) return error;
-    await loadBlog(id);
-    return null;
-  }
-
-  /** @param options The refusal flags of a window that shows the failure itself. */
-  async function deleteBlog(
-    options?: Parameters<typeof blogApi.deleteBlog>[1],
-  ): Promise<GeneralError | null> {
-    if (!blog.value) return requestNotSent;
-    const { error } = await blogApi.deleteBlog(blog.value.id, options);
-    if (error) return error;
-    // Same as games: without this the deleted blog stays in every list.
-    await useBlogsStore().invalidateBlogLists();
-    return null;
-  }
-
-  async function createRubric(
-    input: CreateRubricInput,
-  ): Promise<GeneralError | null> {
-    if (!blog.value) return requestNotSent;
-    const id = blog.value.id;
-    const { error } = await blogApi.createRubric(id, input);
-    if (error) return error;
-    await loadBlog(id);
-    return null;
-  }
-
-  /** @param options As in deleteBlog. */
-  async function deleteRubric(
-    rubricId: string,
-    options?: Parameters<typeof blogApi.deleteRubric>[2],
-  ): Promise<GeneralError | null> {
-    if (!blog.value) return requestNotSent;
-    const id = blog.value.id;
-    const { error } = await blogApi.deleteRubric(id, rubricId, options);
-    if (error) return error;
-    await loadBlog(id);
-    return null;
-  }
-
-  // Subscribe to blog (become a reader)
-  async function subscribe(): Promise<GeneralError | null> {
-    if (!blog.value) return requestNotSent;
-    const id = blog.value.id;
-    const { error } = await blogApi.subscribe(id);
-    if (error) return error;
-    await loadReaders(id);
-    return null;
-  }
-
-  // Unsubscribe from blog
-  async function unsubscribe(): Promise<GeneralError | null> {
-    if (!blog.value) return requestNotSent;
-    const id = blog.value.id;
-    const { error } = await blogApi.unsubscribe(id);
-    if (error) return error;
-    await loadReaders(id);
-    return null;
-  }
-
-  // Reset all data (when leaving the blog zone)
   function reset(): void {
-    // Replies still on the wire belong to the blog being left — bump every
-    // token so none of them repopulates the store after the wipe.
+    // Replies still on the wire belong to the blog being left.
     detailGuards.forEach((guard) => guard.next());
 
-    blog.value = null;
-    blogLoading.value = false;
-    blogError.value = null;
-    blogErrorStatus.value = null;
-
-    publications.value = [];
-    publicationsPaging.value = null;
-    publicationsLoading.value = false;
-    publicationsError.value = null;
+    resetBlog();
+    resetPublications();
 
     comments.value = [];
     commentsPaging.value = null;
@@ -480,3 +251,221 @@ export const useBlogDetailsStore = defineStore("blogDetails", () => {
     reset,
   };
 });
+
+function createBlogSlice() {
+  const blog = ref<Blog | null>(null);
+  const blogLoading = ref(false);
+  const blogError = ref<string | null>(null);
+  // Kept in the store: loadBlog has callers outside the shell, and any refusal nulls `blog`.
+  const blogErrorStatus = ref<number | null>(null);
+  const blogGuard = createRequestGuard();
+
+  /** A missing blog, a refused one and a broken server are three different pages. */
+  async function loadBlog(
+    id: string,
+  ): Promise<{ ok: boolean; status?: number }> {
+    const requestId = blogGuard.next();
+    blogLoading.value = true;
+    blogError.value = null;
+    blogErrorStatus.value = null;
+
+    const { data, error } = await blogApi.getBlog(id);
+
+    if (!blogGuard.isCurrent(requestId)) return { ok: true };
+
+    if (error) {
+      blogError.value = "Не удалось загрузить блог";
+      blogErrorStatus.value = error.status ?? null;
+      blog.value = null;
+      blogLoading.value = false;
+      return { ok: false, status: error.status };
+    }
+    if (data) {
+      blog.value = unwrapResource<Blog>(data);
+    }
+
+    blogLoading.value = false;
+    return { ok: true };
+  }
+
+  function resetBlog(): void {
+    blog.value = null;
+    blogLoading.value = false;
+    blogError.value = null;
+    blogErrorStatus.value = null;
+  }
+
+  return {
+    blog,
+    blogLoading,
+    blogError,
+    blogErrorStatus,
+    blogGuard,
+    loadBlog,
+    resetBlog,
+  };
+}
+
+function createPublicationsSlice() {
+  const publications = ref<Publication[]>([]);
+  const publicationsPaging = ref<PagingInfo | null>(null);
+  const publicationsLoading = ref(false);
+  const publicationsError = ref<string | null>(null);
+  const publicationsGuard = createRequestGuard();
+
+  async function loadPublications(
+    blogId: string,
+    options?: { rubricId?: string; page?: number },
+  ): Promise<void> {
+    const requestId = publicationsGuard.next();
+    publicationsLoading.value = true;
+    publicationsError.value = null;
+
+    const { data, error } = await blogApi.getPublications(blogId, {
+      rubricId: options?.rubricId,
+      paging: { number: options?.page ?? 1 },
+    });
+
+    if (!publicationsGuard.isCurrent(requestId)) return;
+
+    if (error) {
+      publicationsError.value = "Не удалось загрузить публикации";
+      publications.value = [];
+      publicationsPaging.value = null;
+    } else if (data) {
+      publications.value = data.resources;
+      publicationsPaging.value = data.paging ?? null;
+    }
+
+    publicationsLoading.value = false;
+  }
+
+  function resetPublications(): void {
+    publications.value = [];
+    publicationsPaging.value = null;
+    publicationsLoading.value = false;
+    publicationsError.value = null;
+  }
+
+  return {
+    publications,
+    publicationsPaging,
+    publicationsLoading,
+    publicationsError,
+    publicationsGuard,
+    loadPublications,
+    resetPublications,
+  };
+}
+
+// The blog serves no participation flags, so roles are read off its author fields.
+function createBlogRoles(
+  blog: Ref<Blog | null>,
+  readers: Ref<BlogUser[]>,
+  currentUsername: ComputedRef<string | null>,
+) {
+  const isViewer = (username: string | undefined) =>
+    !!currentUsername.value && username === currentUsername.value;
+
+  const isOwner = computed(() => isViewer(blog.value?.author?.username));
+  const isAssistant = computed(
+    () =>
+      !isOwner.value &&
+      (blog.value?.assistants ?? []).some((a) => isViewer(a.username)),
+  );
+  const canManage = computed(() => isOwner.value || isAssistant.value);
+  const isMentor = computed(() => isViewer(blog.value?.mentor?.username));
+  // The mentor reads the notepad without the rights canManage carries.
+  const canUseNotepad = computed(
+    () => isOwner.value || isAssistant.value || isMentor.value,
+  );
+  const isSubscribed = computed(() =>
+    readers.value.some((r) => isViewer(r.user?.username)),
+  );
+
+  return {
+    isOwner,
+    isAssistant,
+    canManage,
+    isMentor,
+    canUseNotepad,
+    isSubscribed,
+  };
+}
+
+// A mutation answers the problem document or null, so the caller can say what the server said.
+
+type LoadBlog = (id: string) => Promise<unknown>;
+
+// Sent for the blog on screen; the reload follows only a change the server took.
+async function onBlog(
+  blog: Ref<Blog | null>,
+  send: (id: string) => Promise<{ error: GeneralError | null }>,
+  reload: (id: string) => Promise<unknown>,
+): Promise<GeneralError | null> {
+  if (!blog.value) return requestNotSent;
+  const id = blog.value.id;
+  const { error } = await send(id);
+  if (error) return error;
+  await reload(id);
+  return null;
+}
+
+function createRubrics(blog: Ref<Blog | null>, loadBlog: LoadBlog) {
+  const rubrics = computed(() =>
+    [...(blog.value?.rubrics ?? [])].sort((a, b) => a.sortOrder - b.sortOrder),
+  );
+
+  const createRubric = (input: CreateRubricInput) =>
+    onBlog(blog, (id) => blogApi.createRubric(id, input), loadBlog);
+
+  const deleteRubric = (rubricId: string, options?: RequestOptions) =>
+    onBlog(blog, (id) => blogApi.deleteRubric(id, rubricId, options), loadBlog);
+
+  return { rubrics, createRubric, deleteRubric };
+}
+
+function createBlogChanges(blog: Ref<Blog | null>, loadBlog: LoadBlog) {
+  const transitionStatus = (
+    transition: BlogStatusTransition,
+    options?: RequestOptions,
+  ) =>
+    onBlog(
+      blog,
+      (id) => blogApi.transitionStatus(id, transition, options),
+      loadBlog,
+    );
+
+  const changePremoderation = (
+    transition: BlogPremoderationTransition,
+    options?: RequestOptions,
+  ) =>
+    onBlog(
+      blog,
+      (id) => blogApi.changePremoderation(id, transition, options),
+      loadBlog,
+    );
+
+  // Without the lists' reload the deleted blog stays in every list.
+  const deleteBlog = (options?: RequestOptions) =>
+    onBlog(
+      blog,
+      (id) => blogApi.deleteBlog(id, options),
+      () => useBlogsStore().invalidateBlogLists(),
+    );
+
+  return { transitionStatus, changePremoderation, deleteBlog };
+}
+
+function createSubscriptionChanges(
+  blog: Ref<Blog | null>,
+  loadReaders: (blogId: string) => Promise<void>,
+) {
+  const subscribe = () =>
+    onBlog(blog, (id) => blogApi.subscribe(id), loadReaders);
+
+  const unsubscribe = () =>
+    onBlog(blog, (id) => blogApi.unsubscribe(id), loadReaders);
+
+  return { subscribe, unsubscribe };
+}

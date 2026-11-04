@@ -15,13 +15,7 @@ namespace DM.Web.API.Tests.Features.Game;
 /// The catalogue of starting character sheets is read by everybody and written
 /// by the senior moderation.
 /// </summary>
-/// <remarks>
-/// Asked of the attributes rather than of a running host, because that is where
-/// the rule lives: the rank is declared on each action, and an action added
-/// later without one answers whoever asks. The service asks the same question a
-/// second time, and that half is covered by its own tests - this one is about
-/// the door.
-/// </remarks>
+/// <remarks>Asked of the attributes: the rank is declared on each action; the service's own check has its own tests.</remarks>
 public class AttributeSchemaTemplateControllerShould
 {
     private static MethodInfo[] Actions() =>

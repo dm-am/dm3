@@ -16,13 +16,7 @@ namespace DM.Web.API.Tests.Shared.Binding;
 /// An identifier in a route or a query binds from either of the two spellings
 /// the site hands out, and nothing else binds.
 /// </summary>
-/// <remarks>
-/// Every Guid parameter of every action goes through this binder, and the links
-/// the site writes carry the identifier either as is or in the short readable
-/// form, with or without the words before it. An identifier that stops binding
-/// answers 400 on one kind of link only, and a value that starts binding to
-/// something answers with somebody else's row.
-/// </remarks>
+/// <remarks>Every Guid parameter goes through this binder, and the site's links carry either spelling.</remarks>
 public class ReadableGuidBinderShould
 {
     private static readonly Guid Identifier = Guid.Parse("8b1e4c2a-37d5-4f61-9a0b-c3d4e5f60718");
@@ -69,12 +63,7 @@ public class ReadableGuidBinderShould
     /// <summary>
     /// A value that is neither spelling is refused, an optional identifier included.
     /// </summary>
-    /// <remarks>
-    /// The optional one is where the refusal is easiest to lose: the body
-    /// converter answers the same value with "no identifier", and a parse shared
-    /// between the two would turn a mistyped link into a request that asked for
-    /// nothing in particular.
-    /// </remarks>
+    /// <remarks>Read as "no identifier", a mistyped link would ask for nothing in particular; the body converter refuses alike.</remarks>
     [Theory]
     [MemberData(nameof(Garbage))]
     public async Task RefuseAValueThatIsNeitherSpelling(Type modelType, string value)

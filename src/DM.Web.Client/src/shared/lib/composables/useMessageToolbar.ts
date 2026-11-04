@@ -1,50 +1,29 @@
 import { getCurrentInstance, onBeforeUnmount, ref, type Ref } from "vue";
+import { MEDIUM, SMALL } from "@/shared/lib/constants/geometry";
 
 /**
- * The hover toolbar that appears beside a chat message.
- *
- * Both chat views grew their own copy, and the copies drifted: the global chat
- * gained keyboard reachability — messages are `tabindex="0"`, focusin reveals
- * the toolbar and focusout starts the same hide countdown mouseleave does —
- * and the messenger never did, so a keyboard user could reach every message
- * action in one view and none in the other. Whatever the toolbar learns next
- * should reach both, which is what this file is for.
- *
- * The domain actions the toolbar triggers are deliberately not here: liking,
- * editing and deleting are one API call each and differ per view. What is
- * shared is when the toolbar appears, where, and when it goes away.
+ * The hover toolbar beside a chat message, shared by both chat views so the
+ * keyboard reaches it in both: when it appears, where, and when it goes. The
+ * actions it triggers differ per view and stay there.
  */
 export interface MessageToolbarOptions {
   /**
-   * Element the toolbar is positioned inside. The global chat's toolbar is
-   * absolutely positioned within its scroll container, so its coordinates are
-   * relative to that box; the messenger's is fixed, so it wants the viewport.
-   * Omit for the viewport.
+   * The global chat positions within its scroll container, the messenger in
+   * the viewport (omit).
    */
   container?: Ref<HTMLElement | null>;
 
-  /**
-   * The toolbar element. Needed to tell "focus moved into the toolbar" from
-   * "focus left": the toolbar is a sibling of the message row, not a
-   * descendant, so focus-within cannot answer that on its own.
-   */
+  /** A sibling of the row, so focus-within cannot tell focus moving into it. */
   toolbar: Ref<HTMLElement | null>;
 
-  /**
-   * True while the list is scrolling. Hover is ignored then — otherwise the
-   * toolbar chases the cursor down the list as messages slide past it.
-   */
+  /** Hover is ignored while scrolling, or the toolbar chases the cursor. */
   isScrolling: () => boolean;
 }
 
 /** Milliseconds the toolbar survives after the pointer leaves the message. */
 const MESSAGE_LEAVE_DELAY = 150;
 
-/**
- * Milliseconds after leaving the toolbar itself. Shorter than the message
- * delay: the pointer is already on its way out, and the grace period only has
- * to cover travel between the toolbar's own buttons.
- */
+/** Shorter: it only covers travel between the toolbar's own buttons. */
 const TOOLBAR_LEAVE_DELAY = 100;
 
 export function useMessageToolbar(options: MessageToolbarOptions) {
@@ -81,10 +60,13 @@ export function useMessageToolbar(options: MessageToolbarOptions) {
     const bounds = origin?.getBoundingClientRect();
     toolbarPosition.value = bounds
       ? {
-          top: rect.top - bounds.top - 16,
-          right: bounds.right - rect.right + 8,
+          top: rect.top - bounds.top - MEDIUM,
+          right: bounds.right - rect.right + SMALL,
         }
-      : { top: rect.top - 16, right: window.innerWidth - rect.right + 8 };
+      : {
+          top: rect.top - MEDIUM,
+          right: window.innerWidth - rect.right + SMALL,
+        };
 
     hoveredMessageId.value = messageId;
   }
@@ -94,11 +76,7 @@ export function useMessageToolbar(options: MessageToolbarOptions) {
     showFor(event.currentTarget as HTMLElement, messageId);
   }
 
-  /**
-   * Keyboard counterpart to hover. Not gated on isScrolling: focus does not
-   * arrive by accident, and a keyboard user never scrolls past the message
-   * they just tabbed to.
-   */
+  /** Not gated on isScrolling: focus does not arrive by accident. */
   function handleMessageFocusIn(event: FocusEvent, messageId: string): void {
     showFor(event.currentTarget as HTMLElement, messageId);
   }
@@ -117,6 +95,7 @@ export function useMessageToolbar(options: MessageToolbarOptions) {
     handleMessageMouseLeave();
   }
 
+  /** Also the answer to tabbing into a button: focus cancels the hide as hovering does. */
   function handleToolbarMouseEnter(): void {
     cancelHide();
     isToolbarHovered.value = true;
@@ -131,20 +110,7 @@ export function useMessageToolbar(options: MessageToolbarOptions) {
     }, TOOLBAR_LEAVE_DELAY);
   }
 
-  /**
-   * Tabbing into a toolbar button must cancel the message's pending hide the
-   * way hovering it does, or the timer fires mid-Tab and takes the toolbar
-   * away before the button can be pressed.
-   */
-  function handleToolbarFocusIn(): void {
-    handleToolbarMouseEnter();
-  }
-
-  /**
-   * Leaving the toolbar entirely, as opposed to moving between its own
-   * buttons. A null relatedTarget means focus left the document — the address
-   * bar, say — which counts as leaving.
-   */
+  /** Leaving the toolbar; a null relatedTarget is focus leaving the document. */
   function handleToolbarFocusOut(event: FocusEvent): void {
     const next = event.relatedTarget as Node | null;
     if (next && options.toolbar.value?.contains(next)) return;
@@ -158,9 +124,7 @@ export function useMessageToolbar(options: MessageToolbarOptions) {
     isToolbarHovered.value = false;
   }
 
-  // Guarded so the composable can be exercised on its own: a pending timer
-  // fires into a torn-down component otherwise, and registering the hook
-  // outside setup() is a warning rather than a mechanism.
+  // Guarded so the composable runs on its own in a test.
   if (getCurrentInstance()) onBeforeUnmount(cancelHide);
 
   return {
@@ -176,7 +140,6 @@ export function useMessageToolbar(options: MessageToolbarOptions) {
     handleMessageFocusOut,
     handleToolbarMouseEnter,
     handleToolbarMouseLeave,
-    handleToolbarFocusIn,
     handleToolbarFocusOut,
     handleScrollStart,
   };

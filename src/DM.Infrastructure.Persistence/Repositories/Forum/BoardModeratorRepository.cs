@@ -15,22 +15,21 @@ namespace DM.Infrastructure.Persistence.Repositories.Forum;
 /// <inheritdoc />
 internal class BoardModeratorRepository : IBoardModeratorRepository
 {
-    private readonly DmDbContext _dmDbContext;
+    private readonly DmDbContext _dbContext;
     private readonly IGuidFactory _guidFactory;
 
-    /// <inheritdoc />
     public BoardModeratorRepository(
-        DmDbContext dmDbContext,
+        DmDbContext dbContext,
         IGuidFactory guidFactory)
     {
-        _dmDbContext = dmDbContext;
+        _dbContext = dbContext;
         _guidFactory = guidFactory;
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<GeneralUser>> Get(Guid boardId)
     {
-        return await _dmDbContext.BoardModerators
+        return await _dbContext.BoardModerators
             .TagWith("DM.Forum.ModeratorsList")
             .Where(m => m.BoardId == boardId)
             .Select(m => m.User)
@@ -47,26 +46,26 @@ internal class BoardModeratorRepository : IBoardModeratorRepository
             BoardId = boardId,
             UserId = userId
         };
-        await _dmDbContext.BoardModerators.AddAsync(boardModerator);
-        await _dmDbContext.SaveChangesAsync();
+        await _dbContext.BoardModerators.AddAsync(boardModerator);
+        await _dbContext.SaveChangesAsync();
     }
 
     /// <inheritdoc />
     public async Task Remove(Guid boardId, Guid userId)
     {
-        var moderator = await _dmDbContext.BoardModerators
+        var moderator = await _dbContext.BoardModerators
             .FirstOrDefaultAsync(m => m.BoardId == boardId && m.UserId == userId);
         if (moderator != null)
         {
-            _dmDbContext.BoardModerators.Remove(moderator);
-            await _dmDbContext.SaveChangesAsync();
+            _dbContext.BoardModerators.Remove(moderator);
+            await _dbContext.SaveChangesAsync();
         }
     }
 
     /// <inheritdoc />
     public async Task<bool> IsModerator(Guid boardId, Guid userId)
     {
-        return await _dmDbContext.BoardModerators
+        return await _dbContext.BoardModerators
             .AnyAsync(m => m.BoardId == boardId && m.UserId == userId);
     }
 }

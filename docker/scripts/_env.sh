@@ -1,19 +1,10 @@
 #!/bin/bash
 # Loads docker/.env for a script started by cron.
 #
-# Cron gives a job almost no environment: no PATH beyond the bare minimum, and
-# nothing from the shell that installed the crontab. Every backup script here
-# requires credentials — STORAGE_BACKUP_PASSWORD, and the AWS variables that
-# switch offsite replication on — and the object storage one exits 1 when its
-# password is unset. Before this file the nightly run of that backup failed every
-# night, and the only watchman did not look at its directory at all and kept
-# reporting that everything was fine.
-#
-# Sourced by the scripts rather than written into the crontab line so that it
-# holds however the script is started: by cron, by hand, or from the installer.
-#
-# Values already in the environment win: a run that sets BACKUP_DIR or points at
-# another host must not be overwritten by the file.
+# Cron starts a job with almost no environment, and every backup script needs credentials
+# (STORAGE_BACKUP_PASSWORD, the AWS variables of the offsite replication). Sourced rather
+# than written into the crontab line, so it holds however the script is started. Values
+# already in the environment win.
 
 _ENV_FILE="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)/.env"
 
@@ -23,12 +14,12 @@ if [ -f "$_ENV_FILE" ]; then
             ''|'#'*) continue ;;
         esac
         _key="${_line%%=*}"
-        # Не строка вида KEY=VALUE — пропускаем, а не пытаемся разобрать.
+        # Not a KEY=VALUE line.
         [ "$_key" = "$_line" ] && continue
         _key="${_key#export }"
         _key="$(echo "$_key" | tr -d '[:space:]')"
         [ -z "$_key" ] && continue
-        # Уже задано снаружи — не трогаем.
+        # Already set outside.
         [ -n "${!_key+x}" ] && continue
         _value="${_line#*=}"
         _value="${_value%\"}"; _value="${_value#\"}"

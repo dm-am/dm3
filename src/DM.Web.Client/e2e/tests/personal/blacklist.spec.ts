@@ -1,21 +1,10 @@
-import { test, expect, type APIRequestContext } from "@playwright/test";
-import { authenticatedContext } from "../../fixtures/auth";
-
-const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
-
-let authContext: APIRequestContext;
-
-test.beforeAll(async () => {
-  authContext = await authenticatedContext();
-});
-
-test.afterAll(async () => {
-  if (authContext) await authContext.dispose();
-});
+import { test, expect, API_BASE_URL } from "../../fixtures/auth";
 
 test.describe("Blacklist API", () => {
-  test("should get my blacklist", async () => {
-    const response = await authContext.get(`${API_URL}/v1/users/me/blacklist`);
+  test("should get my blacklist", async ({ authContext }) => {
+    const response = await authContext.get(
+      `${API_BASE_URL}/v1/users/me/blacklist`,
+    );
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
@@ -23,9 +12,9 @@ test.describe("Blacklist API", () => {
     expect(Array.isArray(data.resources)).toBeTruthy();
   });
 
-  test("should get blacklist settings", async () => {
+  test("should get blacklist settings", async ({ authContext }) => {
     const response = await authContext.get(
-      `${API_URL}/v1/users/me/blacklist/settings`,
+      `${API_BASE_URL}/v1/users/me/blacklist/settings`,
     );
 
     expect(response.ok()).toBeTruthy();
@@ -36,11 +25,10 @@ test.describe("Blacklist API", () => {
     expect(data).toHaveProperty("autoPopulateContentBlacklist");
   });
 
-  test("should update blacklist settings", async () => {
+  test("should update blacklist settings", async ({ authContext }) => {
     const response = await authContext.patch(
-      `${API_URL}/v1/users/me/blacklist/settings`,
+      `${API_BASE_URL}/v1/users/me/blacklist/settings`,
       {
-        headers: { "Content-Type": "application/json" },
         data: {
           hideComments: true,
           blockDirectMessages: false,
@@ -52,7 +40,7 @@ test.describe("Blacklist API", () => {
   });
 
   test("should require authentication", async ({ request }) => {
-    const response = await request.get(`${API_URL}/v1/users/me/blacklist`);
+    const response = await request.get(`${API_BASE_URL}/v1/users/me/blacklist`);
     expect(response.status()).toBe(401);
   });
 });

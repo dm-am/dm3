@@ -1,5 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -10,15 +8,10 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
 /// <summary>
-/// API_DESIGN.md declares the response shapes, and nothing held the code to them:
-/// five list endpoints promised ListEnvelope in their OpenAPI attribute and put a
-/// bare array on the wire, and the hand-written client believed the attribute.
-/// Two screens rendered permanently empty because of it — the notification list
-/// and every subscription list — with no test failing anywhere.
+/// API_DESIGN.md declares the response shapes, and an endpoint's body matches its declared envelope.
 /// </summary>
 public class ResponseEnvelopeShould : IntegrationTestBase
 {
-    // System is needed for StringComparison in the enumeration below.
     public ResponseEnvelopeShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
@@ -30,18 +23,8 @@ public class ResponseEnvelopeShould : IntegrationTestBase
     /// Every GET that declares an envelope puts one on the wire.
     /// </summary>
     /// <remarks>
-    /// Three URLs stood here, and they were the three that had already broken.
-    /// The rule behind them covers 75 list declarations and 130 single ones, and
-    /// the contract snapshot cannot hold it: the snapshot records the declared
-    /// schema, and the defect is that the declaration and the body disagree. So
-    /// the check calls the endpoint, and enumerates from the published document
-    /// the way DescribeEveryFailureResponseAsAProblemDocument does - an endpoint
-    /// added tomorrow is covered without anybody remembering a list.
-    ///
-    /// Only operations that need no argument are called, and only a 200 is
-    /// examined: an endpoint answering 404 because the seed holds no such row
-    /// says nothing about the shape of a body it did not send. The floor is what
-    /// keeps that from quietly becoming "nothing was checked".
+    /// The endpoints are enumerated from the published document and called; only argument-free operations, only a
+    /// 200 examined, and a floor so that nothing checked is no pass.
     /// </remarks>
     [Fact]
     public async Task WrapEveryDeclaredEnvelopeOnTheWire()

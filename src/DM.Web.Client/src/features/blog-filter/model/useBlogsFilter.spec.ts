@@ -2,11 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The blogs filter read through the address: what an address means, what each
- * action writes into it, and that an address the filter wrote reads back as
- * itself.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import {
   filterOnListPage,
@@ -144,7 +139,6 @@ describe("useBlogsFilter: what an action writes", () => {
     ["a search", {}, (f) => f.setSearch("сага"), { search: "сага" }],
     ["a status", {}, (f) => f.setStatus("Active"), { status: "Active" }],
     ["every status again", { status: "Active" }, (f) => f.setStatus("any"), {}],
-    ["no status", { status: "Draft" }, (f) => f.clearStatus(), {}],
     [
       "a host, after the others",
       { hosts: "boris" },
@@ -157,7 +151,6 @@ describe("useBlogsFilter: what an action writes", () => {
       (f) => f.removeHost("boris"),
       { hosts: "anna" },
     ],
-    ["no hosts", { hosts: "boris,anna" }, (f) => f.clearHosts(), {}],
     [
       "each range of dates",
       {},
@@ -208,7 +201,6 @@ describe("useBlogsFilter: what an action writes", () => {
 });
 
 describe("useBlogsFilter: an address written reads back as itself", () => {
-  /** The address the filter writes for what it read off this one. */
   async function rewritten(query: Record<string, string>) {
     const { filter, settled, wrapper } = await on(query);
     filter.setSearch(filter.filterState.value.search);

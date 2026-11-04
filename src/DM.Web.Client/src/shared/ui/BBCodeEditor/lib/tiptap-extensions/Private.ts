@@ -12,12 +12,9 @@
  */
 
 import { Mark, isMarkActive, mergeAttributes } from "@tiptap/core";
+import { kept } from "./kept";
 
-export interface PrivateOptions {
-  HTMLAttributes: Record<string, unknown>;
-}
-
-export interface PrivateAttributes {
+interface PrivateAttributes {
   /** Addressee names as written, comma-separated; null for a bare block. */
   character: string | null;
 }
@@ -25,23 +22,12 @@ export interface PrivateAttributes {
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     private: {
-      /**
-       * Set a private mark
-       */
-      setPrivate: (attributes: PrivateAttributes) => ReturnType;
-      /**
-       * Toggle a private mark
-       */
       togglePrivate: (attributes: PrivateAttributes) => ReturnType;
-      /**
-       * Unset a private mark
-       */
-      unsetPrivate: () => ReturnType;
     };
   }
 }
 
-export const Private = Mark.create<PrivateOptions>({
+export const Private = Mark.create({
   name: "private",
 
   // The outermost mark: the block is written around everything it holds, and
@@ -59,57 +45,20 @@ export const Private = Mark.create<PrivateOptions>({
   // one in place of another, as before.
   excludes: "",
 
-  addOptions() {
-    return {
-      HTMLAttributes: {},
-    };
-  },
-
   addAttributes() {
     return {
-      "data-bb-tag": {
-        default: "private",
-        parseHTML: () => "private",
-        renderHTML: () => ({ "data-bb-tag": "private" }),
-      },
       character: {
         default: null,
         // data-bb-character is what the editor writes, present for an
-        // addressed block and absent for a bare one. data-bb-addressees is
-        // what the server writes on the AuthorEdit rendering, empty for a bare
-        // block; without it the recipients were read as empty and the tag
-        // came back addressed to nobody.
-        parseHTML: (element) => {
-          if (element.hasAttribute("data-bb-character")) {
-            return element.getAttribute("data-bb-character");
-          }
-          if (element.hasAttribute("data-bb-addressees")) {
-            return element.getAttribute("data-bb-addressees") || null;
-          }
-          return (
-            element.getAttribute("data-bb-users") ??
-            element.getAttribute("data-users")
-          );
-        },
+        // addressed block and absent for a bare one.
+        parseHTML: (element) => element.getAttribute("data-bb-character"),
         renderHTML: (attributes) =>
           attributes.character === null
             ? {}
             : { "data-bb-character": attributes.character },
       },
-      open: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-bb-open"),
-        renderHTML: (attributes) =>
-          attributes.open === null ? {} : { "data-bb-open": attributes.open },
-      },
-      close: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-bb-close"),
-        renderHTML: (attributes) =>
-          attributes.close === null
-            ? {}
-            : { "data-bb-close": attributes.close },
-      },
+      open: kept("data-bb-open"),
+      close: kept("data-bb-close"),
       unclosed: {
         default: false,
         parseHTML: (element) =>
@@ -120,19 +69,9 @@ export const Private = Mark.create<PrivateOptions>({
     };
   },
 
-  // The server renders [private] as a span in the line. The div forms are what
-  // it drew while the text was a block of its own, and they stay for text saved
-  // then: matching only one shape meant the author's own edit view saw an
-  // ordinary element, the mark was never applied, and saving published the
-  // private text to the whole room.
+  // Every shape a span of private text comes in: a missed one published the text to the whole room.
   parseHTML() {
     return [
-      {
-        tag: 'div[data-bb-tag="private"]',
-      },
-      {
-        tag: "div.private-message",
-      },
       {
         tag: 'span[data-bb-tag="private"]',
       },
@@ -148,9 +87,8 @@ export const Private = Mark.create<PrivateOptions>({
   renderHTML({ HTMLAttributes }) {
     return [
       "span",
-      mergeAttributes(this.options.HTMLAttributes, HTMLAttributes, {
+      mergeAttributes({ "data-bb-tag": "private" }, HTMLAttributes, {
         class: "bb-private",
-        "data-bb-tag": "private",
       }),
       0,
     ];
@@ -158,14 +96,6 @@ export const Private = Mark.create<PrivateOptions>({
 
   addCommands() {
     return {
-      // The block the author sets replaces the one the text had, and does
-      // not go inside it.
-      setPrivate:
-        (attributes) =>
-        ({ commands }) => {
-          commands.unsetMark(this.name);
-          return commands.setMark(this.name, attributes);
-        },
       togglePrivate:
         (attributes) =>
         ({ state, commands }) => {
@@ -175,13 +105,6 @@ export const Private = Mark.create<PrivateOptions>({
           commands.unsetMark(this.name);
           return commands.setMark(this.name, attributes);
         },
-      unsetPrivate:
-        () =>
-        ({ commands }) => {
-          return commands.unsetMark(this.name);
-        },
     };
   },
 });
-
-export default Private;

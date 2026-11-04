@@ -1,0 +1,12 @@
+# The client ships what tsconfig.app.json compiles, and this list leaves out the same files:
+# specs and their harness. The e2e suite and the scripts of the frame stand and the documents
+# run only on a developer machine or in CI over the repository itself. None of them reaches the
+# server or a visitor, so a finding there is not an attack surface.
+paths-ignore:
+  - src/DM.Web.Client/src/**/*.spec.ts
+  - src/DM.Web.Client/src/**/*.fixtures.ts
+  - src/DM.Web.Client/src/**/*.doubles.ts
+  - src/DM.Web.Client/src/shared/lib/testing
+  - src/DM.Web.Client/e2e
+  - scripts/visual
+  - scripts/docs

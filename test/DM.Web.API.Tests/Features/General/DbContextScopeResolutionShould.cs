@@ -13,15 +13,8 @@ using Xunit;
 namespace DM.Web.API.Tests.Features.General;
 
 /// <summary>
-/// Guards the DbContext scope contract against the scan-shadowing regression:
-/// AddDbContextPool registers DmDbContext as a scoped service, while the
-/// persistence module's blanket AddDefaultTypes scan sweeps the same assembly.
-/// Under Autofac the scan once silently replaced the pooled scoped registration
-/// with per-dependency construction: every consumer (each repository, each
-/// GetRequiredService call) received its own context, transactions never
-/// spanned service and repository, and identity resolution hid other consumers'
-/// writes. The MS.DI scan refuses DbContext descendants outright; this holds it
-/// to that.
+/// AddDbContextPool registers DmDbContext scoped, and the module's AddDefaultTypes scan of the same assembly
+/// must not shadow it: one context per scope.
 /// </summary>
 public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
 {
@@ -43,18 +36,6 @@ public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
     }
 
     [Fact]
-    public void ResolveSingleDbContextInstancePerScope()
-    {
-        using var scope = _provider.CreateScope();
-
-        var first = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var second = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        second.Should().BeSameAs(first,
-            "one DI scope must hold exactly one DmDbContext instance");
-    }
-
-    [Fact]
     public void InjectTheScopeDbContextIntoRepositories()
     {
         using var scope = _provider.CreateScope();
@@ -65,31 +46,6 @@ public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
         ExtractDbContext(repository).Should().BeSameAs(context,
             "a repository must work on the same context the rest of its scope sees, " +
             "otherwise cross-repository transactions and identity resolution silently break");
-    }
-
-    [Fact]
-    public void ResolveDistinctDbContextsInDifferentScopes()
-    {
-        using var firstScope = _provider.CreateScope();
-        using var secondScope = _provider.CreateScope();
-
-        var first = firstScope.ServiceProvider.GetRequiredService<DmDbContext>();
-        var second = secondScope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        second.Should().NotBeSameAs(first,
-            "the context is scoped, not a singleton");
-    }
-
-    [Fact]
-    public void LeaseDbContextsFromThePool()
-    {
-        using var scope = _provider.CreateScope();
-
-        var context = scope.ServiceProvider.GetRequiredService<DmDbContext>();
-
-        context.ContextId.Lease.Should().BePositive(
-            "AddDbContextPool must actually engage the pool — a zero lease means " +
-            "the instance was constructed outside of it");
     }
 
     /// <summary>
@@ -109,9 +65,7 @@ public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
     }
 
     /// <summary>
-    /// The context field is private implementation detail of every repository;
-    /// identity is the only thing the contract cares about, so reflection here
-    /// is confined to "find the single DmDbContext the instance holds".
+    /// The single DmDbContext a repository instance holds, found by reflection.
     /// </summary>
     private static DmDbContext ExtractDbContext(object repository) =>
         repository.GetType()

@@ -2,30 +2,10 @@
  * @vitest-environment jsdom
  */
 
-/**
- * "Подписки": what the reader follows, in sections of the site's lists.
- *
- * The page used to be one mixed column behind a filter, a badge of the type on
- * every row and a button on every row, and "Отписаться" took the row away with
- * no way back but the game's own page. What is held here:
- *
- * - the sections, each counted, a section with nothing in it not drawn, and
- *   the rows by name;
- * - every name a named route (the hand-written paths led nowhere: /games/<id>
- *   is not a route, a topic by id goes through the resolver, and a profile is
- *   addressed by name), and a target that is gone named in words, not "n/a",
- *   a removed account by the link every surface names it with;
- * - "Отписаться" leaves the row and turns into "Подписаться", which puts the
- *   subscription back with the settings it had, and the count follows;
- * - a person's row says what it sends and opens the panel of the profile;
- * - a game and a blog named in the colour of their status, as everywhere on
- *   the site: green while new, grey once closed (grey first);
- * - a failed load said as one, not as "no subscriptions".
- *
- * The rows come off the wire as the server writes them (enum names), so the
- * transport is the only thing faked: the page once showed every row as
- * "Неизвестно" to a test that handed it numbers.
- */
+// The sections, counted, rows by name, named routes only, a gone target in
+// words; "Отписаться" keeps the row and turns into "Подписаться" with the old
+// settings; colours by status; a failed load said as one. The rows come as the
+// server writes them (enum names): only the transport is faked.
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import {
   enableAutoUnmount,
@@ -37,6 +17,7 @@ import {
 import { createPinia, setActivePinia } from "pinia";
 import { Api } from "@/shared/api";
 import { removedAccountRoute } from "@/entities/user";
+import { deferred } from "@/shared/lib/testing/tasks";
 import SubscriptionsPage from "./SubscriptionsPage.vue";
 
 const GUID = "11111111-1111-1111-1111-111111111111";
@@ -152,17 +133,17 @@ describe("SubscriptionsPage", () => {
   it("reads each row as a line of the site: the name, then the action after a bar", async () => {
     const { wrapper } = await render();
 
-    // By name, and the target that is gone at the end, named in words.
+    // By name, the target that is gone at the end.
     expect(rowsOf(wrapper, 0)).toEqual([
       "- Врата Бездны | Отписаться",
       "- Последний Рубеж | Отписаться",
       "- Игра удалена | Отписаться",
     ]);
-    // A blog is followed by reading it, as its own panel says.
+    // A blog is followed by reading it.
     expect(rowsOf(wrapper, 1)).toEqual([
       "- Новости ролевок | Убрать из читаемого",
     ]);
-    // A person's row says what it sends, and opens the panel instead.
+    // A person's row says what it sends and opens the panel.
     expect(rowsOf(wrapper, 2)).toEqual([
       "- SolohinLex | игры, топики | Настроить",
     ]);
@@ -256,13 +237,8 @@ describe("SubscriptionsPage", () => {
     });
   });
 
-  /**
-   * A person whose account was removed is named "Аккаунт удален" as everywhere
-   * on the site: a link of the ordinary colour to the profile that gathers what
-   * removed accounts left, not a grey word with nowhere to go (owner, 12 October
-   * 2026). A game, a blog or a topic that is gone stays a grey word: those have
-   * no page left to open.
-   */
+  // A removed person is "Аккаунт удален", a link as everywhere; a gone game, blog
+  // or topic stays a grey word, with no page left to open.
   it("names a removed account the way the site does, as a link", async () => {
     const { wrapper } = await render([
       wire({
@@ -282,12 +258,7 @@ describe("SubscriptionsPage", () => {
     expect(link.classes()).not.toContain("muted");
   });
 
-  /**
-   * A press on the wrong row is put right in the same place. The row stays,
-   * its word turns into the way back, and the count in the heading follows;
-   * the way back restores the subscription with the settings it had, not a
-   * default the reader never chose.
-   */
+  // A wrong press is put right in place, with the settings it had.
   it("keeps the row it unsubscribes, and puts the subscription back as it was", async () => {
     const { wrapper, del, post } = await render();
 
@@ -380,5 +351,26 @@ describe("SubscriptionsPage", () => {
       "Не удалось загрузить подписки",
     );
     expect(wrapper.text()).not.toContain("Подписок нет");
+  });
+  it("stands the skeleton of the list until it answers, then says it is empty", async () => {
+    const pinia = createPinia();
+    setActivePinia(pinia);
+    const pending = deferred<unknown>();
+    vi.spyOn(Api, "get").mockReturnValue(pending.promise as never);
+
+    const wrapper = mount(SubscriptionsPage, {
+      global: { plugins: [pinia], stubs: { RouterLink: RouterLinkStub } },
+    });
+    await flushPromises();
+
+    expect(wrapper.find(".subscription-list-skeleton").exists()).toBe(true);
+    expect(wrapper.text()).not.toContain("Подписок нет");
+    expect(wrapper.text()).not.toContain("Загрузка");
+
+    pending.resolve({ data: { resources: [] }, error: null });
+    await flushPromises();
+
+    expect(wrapper.find(".subscription-list-skeleton").exists()).toBe(false);
+    expect(wrapper.text()).toContain("Подписок нет");
   });
 });

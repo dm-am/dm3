@@ -9,7 +9,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Messages;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Shared.Likes;
-using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
 
@@ -23,7 +22,6 @@ internal class MessageRepository : IMessageRepository
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IGuidFactory _guidFactory;
 
-    /// <inheritdoc />
     public MessageRepository(
         DmDbContext dbContext,
         ICursorService cursorService,
@@ -103,8 +101,6 @@ internal class MessageRepository : IMessageRepository
     /// Position of a message in the total page order
     /// </summary>
     private sealed record Anchor(Guid MessageId, DateTimeOffset CreatedUtc);
-
-    // ═══ READ ═══
 
     /// <inheritdoc />
     public async Task<Message?> Get(Guid messageId, Guid userId, CancellationToken ct = default)
@@ -330,8 +326,6 @@ internal class MessageRepository : IMessageRepository
         };
     }
 
-    // ═══ LIKES ═══
-
     /// <summary>
     /// Single-message overload of the backfill below.
     /// </summary>
@@ -350,8 +344,6 @@ internal class MessageRepository : IMessageRepository
         LikeBackfill.Fill(_dbContext, messages, LikeEntityType.Message,
             m => m.Id, (m, likes) => m.Likes = likes,
             "DM.Messaging.MessageLikes", "DM.Messaging.MessageLikers", ct);
-
-    // ═══ WRITE ═══
 
     /// <inheritdoc />
     public async Task<Message> Create(CreateMessageEntity message, UpdateChatLastMessageEntity updateChat, CancellationToken ct = default)
@@ -446,8 +438,6 @@ internal class MessageRepository : IMessageRepository
 
         if (update.Text != null)
             dbMessage.Text = update.Text;
-        if (update.IsRemoved.HasValue)
-            dbMessage.IsRemoved = update.IsRemoved.Value;
 
         // Modification tracking is handled via Edit history, not inline
         // ModifiedUtc, and nothing used to write that history: the table stayed
@@ -531,12 +521,9 @@ internal class MessageRepository : IMessageRepository
                 .FirstOrDefaultAsync(cancellation);
 
             // Mark message as removed
-            await _dbContext.Messages
-                .Where(m => m.MessageId == messageId)
-                .ExecuteUpdateAsync(s => s
-                    .SetProperty(m => m.IsRemoved, true)
-                    .SetProperty(m => m.DeletedByUserId, deletedByUserId)
-                    .SetProperty(m => m.DeletedUtc, _dateTimeProvider.Now), cancellation);
+            await SoftDelete.MarkWhere(
+                _dbContext.Messages.Where(m => m.MessageId == messageId),
+                deletedByUserId, _dateTimeProvider.Now, cancellation);
 
             // If this was the last message in chat, update LastMessageId
             if (messageInfo?.LastMessageId == messageId)

@@ -13,7 +13,7 @@ namespace DM.Web.API.Features.Forum.Boards;
 [Mapper]
 [UseStaticMapper(typeof(BbTextMappers))]
 [UseStaticMapper(typeof(UserRefMappers))]
-internal partial class BoardMapper
+public partial class BoardMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;

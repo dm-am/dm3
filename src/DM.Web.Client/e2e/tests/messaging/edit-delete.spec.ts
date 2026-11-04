@@ -7,51 +7,67 @@ import {
 } from "../../fixtures/auth";
 
 /**
- * ".message-item", ".message-editor" and the data-testids this file clicked
- * are in no template. A message is `.chat-feed__message` (the feed both chats
- * are drawn with); the edit and delete controls live in the hover toolbar
- * `.msg-toolbar` inside the frame as `.toolbar-btn`
- * buttons labelled "Редактировать" and "Удалить". Two nested `if`s meant
- * none of it ever ran.
+ * A message is `.chat-feed__message` (the feed both chats are drawn with); the
+ * edit and delete controls live in the hover toolbar `.msg-toolbar` as buttons
+ * labelled "Редактировать" and "Удалить".
  */
 test.describe("Message Edit/Delete", () => {
-  // This one runs: opening the editor is not a write, so nothing here has to be
-  // put back afterwards, and a file whose only test is skipped runs nothing at
-  // all. The save is what the shared seed cannot take, and that is the test
-  // below.
-  test("should open the editor on a message of one's own", async ({
+  // A moderator edits only where moderation reaches, the global chat: in a
+  // private chat a message of the other side carries no edit control for him.
+  // The signed-in account is the administrator of the seed, so this holds the
+  // rule and not the plain "not the author". The chat is the seed's own.
+  test("offers no edit on a message of the other side of a private chat", async ({
     authenticatedPage,
+    authContext,
   }) => {
-    await authenticatedPage.goto("/messenger");
+    const chatResponse = await authContext.post(
+      `${API_BASE_URL}/v1/chats/direct/${secondaryUser.username}`,
+    );
+    expect(chatResponse.ok(), "the direct chat must open").toBeTruthy();
+    const chat = await chatResponse.json();
+    const chatId = chat.resource?.id ?? chat.id;
 
-    const firstChat = authenticatedPage.locator(".chat-preview").first();
-    await expect(firstChat).toBeVisible({ timeout: 10000 });
-    await firstChat.click();
+    const messagesResponse = await authContext.get(
+      `${API_BASE_URL}/v1/chats/${chatId}/messages`,
+    );
+    expect(messagesResponse.ok()).toBeTruthy();
+    const { resources } = await messagesResponse.json();
+    const theirs = (resources ?? []).find(
+      (message: { isRemoved?: boolean; author?: { username?: string } }) =>
+        !message.isRemoved &&
+        message.author?.username === secondaryUser.username,
+    );
+    expect(
+      theirs,
+      `the seeded chat with ${secondaryUser.username} holds a message of his`,
+    ).toBeTruthy();
 
-    // The toolbar is rendered once, next to whichever message is hovered, and
-    // it only carries the edit control for a message the viewer may edit — so
-    // the button being there is the whole precondition.
-    const messages = authenticatedPage.locator(".chat-feed__message");
-    await expect(messages.first()).toBeVisible({ timeout: 10000 });
+    await authenticatedPage.goto(`/messenger/user/${secondaryUser.username}`);
+    const message = authenticatedPage.locator(
+      `.chat-feed__message[data-id="${theirs.id}"]`,
+    );
+    await expect(message).toBeVisible({ timeout: 10000 });
 
+    // The toolbar answering at all is the precondition: the link to the
+    // message stands on every one, the edit and delete controls are missing.
     const toolbar = authenticatedPage.locator(".msg-toolbar");
-    const edit = toolbar.getByRole("button", { name: "Редактировать" });
-
-    const count = await messages.count();
-    for (let index = 0; index < count; index++) {
-      await messages.nth(index).hover();
-      if (await edit.isVisible()) break;
-    }
-
-    await expect(edit).toBeVisible();
-    await edit.click();
-
-    await expect(authenticatedPage.locator(".msg-edit")).toBeVisible();
+    await expect(async () => {
+      await authenticatedPage.mouse.move(0, 0);
+      await message.hover();
+      await expect(
+        toolbar.getByRole("link", { name: "Ссылка на сообщение" }),
+      ).toBeVisible({ timeout: 1000 });
+    }).toPass({ timeout: 10000 });
+    await expect(
+      toolbar.getByRole("button", { name: "Редактировать" }),
+    ).toHaveCount(0);
+    await expect(toolbar.getByRole("button", { name: "Удалить" })).toHaveCount(
+      0,
+    );
   });
 
-  // Runs without touching the seed: the body posts its own message, edits
-  // that, and deletes it in a finally with a context of its own, so the seed
-  // is untouched whether the test passes or fails.
+  // The body posts its own message, edits that, and deletes it in a finally
+  // with a context of its own, so the seed is untouched either way.
   //
   // The editor behind .msg-edit is the BBCode editor, which opens in its
   // visual mode, a contenteditable surface and not a textarea. The text is
@@ -72,7 +88,6 @@ test.describe("Message Edit/Delete", () => {
     const created = await authContext.post(
       `${API_BASE_URL}/v1/chats/${chatId}/messages`,
       {
-        headers: { "Content-Type": "application/json" },
         data: { text: marker },
       },
     );
@@ -106,7 +121,10 @@ test.describe("Message Edit/Delete", () => {
       const editor = authenticatedPage.locator(".msg-edit");
       await expect(editor).toBeVisible();
       await editor.getByRole("button", { name: "Режим BBCode" }).click();
-      await editor.locator("textarea.bbcode-textarea").fill(`${marker} правка`);
+      // The box opens holding the text of the message, not empty with the text on its way.
+      const field = editor.locator("textarea.bbcode-textarea");
+      await expect(field).toHaveValue(marker);
+      await field.fill(`${marker} правка`);
       await editor.getByRole("button", { name: "Сохранить" }).click();
 
       await expect(editor).toBeHidden();

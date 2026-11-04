@@ -1,5 +1,3 @@
-using System;
-
 namespace DM.Domain.Core.Extensions;
 
 /// <summary>
@@ -13,7 +11,6 @@ public class EventRoutingKeyAttribute : Attribute
     /// </summary>
     public string RoutingKey { get; }
 
-    /// <inheritdoc />
     public EventRoutingKeyAttribute(string routingKey)
     {
         RoutingKey = routingKey;

@@ -68,27 +68,14 @@ public class Message
 }
 
 /// <summary>
-/// Input DTO for creating a message
+/// Input DTO for creating or editing a message
 /// </summary>
-public class CreateMessageInput
+public class MessageInput
 {
     /// <summary>
     /// Message text content (BBCode)
     /// </summary>
     [Required(ErrorMessage = "Введите текст сообщения")]
-    [StringLength(10000, MinimumLength = 1, ErrorMessage = "Сообщение от 1 до 10000 символов")]
-    public string Text { get; set; } = "";
-}
-
-/// <summary>
-/// Input DTO for updating a message
-/// </summary>
-public class UpdateMessageInput
-{
-    /// <summary>
-    /// Updated message text content (BBCode)
-    /// </summary>
-    [Required(ErrorMessage = "Введите текст сообщения")]
-    [StringLength(10000, MinimumLength = 1, ErrorMessage = "Сообщение от 1 до 10000 символов")]
+    [StringLength(10000, ErrorMessage = "Сообщение от 1 до 10000 символов")]
     public string Text { get; set; } = "";
 }

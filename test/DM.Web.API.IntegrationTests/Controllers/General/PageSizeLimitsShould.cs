@@ -1,6 +1,4 @@
 using System.Net;
-using System.Net.Http;
-using System.Threading.Tasks;
 using AwesomeAssertions;
 using Xunit;
 
@@ -10,20 +8,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// A page size outside the declared range is a caller mistake, not a clipped page.
 /// </summary>
 /// <remarks>
-/// API_DESIGN states it: take runs from 1 to PagingPolicy.MaxPageSize, and a value
-/// outside that is a validation error, because a caller who asked for a thousand has
-/// to learn that a thousand is not on offer instead of taking a clipped page for the
-/// whole set.
-///
-/// The security journal clipped only the top. Below the range nothing looked,
-/// and its limit used to go straight into a driver where zero means "no
-/// limit" — so ?take=0 answered with the whole login and password history of an
-/// account, on a free request, from an endpoint whose own documentation promises
-/// a maximum.
-///
-/// The journal declares a take of its own. The warning log is the shared PagingQuery
-/// on an endpoint open to visitors, which nothing held until it had one: both ends of
-/// take and the bottom of skip are asked of it here.
+/// API_DESIGN states it: take runs from 1 to PagingPolicy.MaxPageSize. The security journal declares a take of
+/// its own, and the warning log is the shared PagingQuery on a public endpoint.
 /// </remarks>
 public class PageSizeLimitsShould : IntegrationTestBase
 {

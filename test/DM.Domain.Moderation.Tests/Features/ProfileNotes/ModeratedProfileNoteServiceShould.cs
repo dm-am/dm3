@@ -1,9 +1,6 @@
-using System.Threading;
-using FluentValidation.Results;
-using FluentValidation;
 using System;
+using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Dto;
@@ -14,7 +11,10 @@ using DM.Domain.Core.Users;
 using DM.Domain.Moderation.Authorization;
 using DM.Domain.Moderation.Features.ProfileNotes;
 using DM.Testing;
+using DM.Testing.Dsl;
 using AwesomeAssertions;
+using FluentValidation;
+using FluentValidation.Results;
 using NSubstitute;
 using Xunit;
 
@@ -22,35 +22,30 @@ namespace DM.Domain.Moderation.Tests.Features.ProfileNotes;
 
 public class ModeratedProfileNoteServiceShould : UnitTestBase
 {
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IUserLookupService _userLookupService;
-    private readonly IModeratedProfileNoteRepository _noteRepository;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly ModeratedProfileNoteService _service;
-    private readonly Guid _moderatorUserId = Guid.NewGuid();
-    private readonly Guid _targetUserId = Guid.NewGuid();
-    private readonly Guid _noteId = Guid.NewGuid();
-    private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IIntentionManager intentionManager;
+    private readonly IUserLookupService userLookupService;
+    private readonly IModeratedProfileNoteRepository noteRepository;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IGuidFactory guidFactory;
+    private readonly ModeratedProfileNoteService service;
+    private readonly Guid moderatorUserId = Guid.NewGuid();
+    private readonly Guid targetUserId = Guid.NewGuid();
+    private readonly Guid noteId = Guid.NewGuid();
+    private readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
     public ModeratedProfileNoteServiceShould()
     {
-        _identityProvider = Mock<IIdentityProvider>();
-        _intentionManager = Mock<IIntentionManager>();
-        _userLookupService = Mock<IUserLookupService>();
-        _noteRepository = Mock<IModeratedProfileNoteRepository>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _guidFactory = Mock<IGuidFactory>();
+        identityProvider = Mock<IIdentityProvider>();
+        intentionManager = Mock<IIntentionManager>();
+        userLookupService = Mock<IUserLookupService>();
+        noteRepository = Mock<IModeratedProfileNoteRepository>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
+        guidFactory = Mock<IGuidFactory>();
 
-        var moderatorIdentity = Identity.Success(
-            new AuthenticatedUser { UserId = _moderatorUserId, Role = UserRole.Moderator, Username = "Moderator" },
-            new Session { Id = Guid.NewGuid() },
-            new UserSettings(),
-            "token");
-        _identityProvider.Current.Returns(moderatorIdentity);
-        _dateTimeProvider.Now.Returns(_now);
-        _guidFactory.Create().Returns(_noteId);
+        identityProvider.Current.Returns(Identities.User(moderatorUserId, "Moderator", UserRole.Moderator));
+        dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(noteId);
 
         var createValidator = Mock<IValidator<CreateModeratedProfileNote>>();
         createValidator
@@ -62,13 +57,13 @@ public class ModeratedProfileNoteServiceShould : UnitTestBase
             .ValidateAsync(Arg.Any<ValidationContext<UpdateModeratedProfileNote>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
 
-        _service = new ModeratedProfileNoteService(
-            _identityProvider,
-            _intentionManager,
-            _userLookupService,
-            _noteRepository,
-            _dateTimeProvider,
-            _guidFactory,
+        service = new ModeratedProfileNoteService(
+            identityProvider,
+            intentionManager,
+            userLookupService,
+            noteRepository,
+            dateTimeProvider,
+            guidFactory,
             createValidator,
             updateValidator);
     }
@@ -76,61 +71,56 @@ public class ModeratedProfileNoteServiceShould : UnitTestBase
     [Fact]
     public async Task AuthorizeViewModNotesWhenGettingNotes()
     {
-        var user = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.GetAsync("Target").Returns(user);
-        _noteRepository.GetNotes(_targetUserId).Returns([]);
+        var user = new GeneralUser { UserId = targetUserId, Username = "Target" };
+        userLookupService.GetAsync("Target").Returns(user);
+        noteRepository.GetNotes(targetUserId).Returns([]);
 
-        await _service.GetNotes("Target");
+        await service.GetNotes("Target");
 
-        _intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.ViewModNotes);
+        intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.ViewModNotes);
     }
 
     [Fact]
     public async Task AuthorizeCreateModNoteWhenCreatingNote()
     {
-        var user = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.GetAsync("Target").Returns(user);
-        _noteRepository.Create(Arg.Any<CreateModeratedProfileNoteEntity>()).Returns(new ModeratedProfileNote());
+        var user = new GeneralUser { UserId = targetUserId, Username = "Target" };
+        userLookupService.GetAsync("Target").Returns(user);
+        noteRepository.Create(Arg.Any<CreateModeratedProfileNoteEntity>()).Returns(new ModeratedProfileNote());
 
         var createNote = new CreateModeratedProfileNote { Username = "Target", Text = "Note text" };
-        await _service.Create(createNote);
+        await service.Create(createNote);
 
-        _intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.CreateModNote);
+        intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.CreateModNote);
     }
 
     [Fact]
     public async Task CreateNoteWithCorrectData()
     {
-        var user = new GeneralUser { UserId = _targetUserId, Username = "Target" };
-        _userLookupService.GetAsync("Target").Returns(user);
+        var user = new GeneralUser { UserId = targetUserId, Username = "Target" };
+        userLookupService.GetAsync("Target").Returns(user);
 
         CreateModeratedProfileNoteEntity? capturedEntity = null;
-        _noteRepository.Create(Arg.Any<CreateModeratedProfileNoteEntity>())
-            .Returns(new ModeratedProfileNote())
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<CreateModeratedProfileNoteEntity>(0);
-                capturedEntity = e;
-            });
+        noteRepository.Create(Arg.Do<CreateModeratedProfileNoteEntity>(e => capturedEntity = e))
+            .Returns(new ModeratedProfileNote());
 
         var createNote = new CreateModeratedProfileNote { Username = "Target", Text = "Note text" };
-        await _service.Create(createNote);
+        await service.Create(createNote);
 
         capturedEntity.Should().NotBeNull();
-        capturedEntity!.Id.Should().Be(_noteId);
-        capturedEntity.UserId.Should().Be(_targetUserId);
-        capturedEntity.AuthorId.Should().Be(_moderatorUserId);
+        capturedEntity!.Id.Should().Be(noteId);
+        capturedEntity.UserId.Should().Be(targetUserId);
+        capturedEntity.AuthorId.Should().Be(moderatorUserId);
         capturedEntity.Text.Should().Be("Note text");
-        capturedEntity.CreatedUtc.Should().Be(_now);
+        capturedEntity.CreatedUtc.Should().Be(now);
     }
 
     [Fact]
     public async Task ThrowWhenUpdatingNonexistentNote()
     {
-        _noteRepository.GetNote(_noteId).Returns((ModeratedProfileNote?)null);
+        noteRepository.GetNote(noteId).Returns((ModeratedProfileNote?)null);
 
-        var updateNote = new UpdateModeratedProfileNote { Id = _noteId, Text = "Updated text" };
-        var act = () => _service.Update(updateNote);
+        var updateNote = new UpdateModeratedProfileNote { Id = noteId, Text = "Updated text" };
+        var act = () => service.Update(updateNote);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("не найдена"));
@@ -141,15 +131,15 @@ public class ModeratedProfileNoteServiceShould : UnitTestBase
     {
         var note = new ModeratedProfileNote
         {
-            Id = _noteId,
+            Id = noteId,
             Author = new GeneralUser { UserId = Guid.NewGuid() },
-            User = new GeneralUser { UserId = _targetUserId, Username = "Target" }
+            User = new GeneralUser { UserId = targetUserId, Username = "Target" }
         };
-        _noteRepository.GetNote(_noteId).Returns(note);
-        _userLookupService.GetAsync(_targetUserId).Returns(note.User);
+        noteRepository.GetNote(noteId).Returns(note);
+        userLookupService.GetAsync(targetUserId).Returns(note.User);
 
-        var updateNote = new UpdateModeratedProfileNote { Id = _noteId, Text = "Updated text" };
-        var act = () => _service.Update(updateNote);
+        var updateNote = new UpdateModeratedProfileNote { Id = noteId, Text = "Updated text" };
+        var act = () => service.Update(updateNote);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("только свои заметки"));
@@ -160,16 +150,16 @@ public class ModeratedProfileNoteServiceShould : UnitTestBase
     {
         var note = new ModeratedProfileNote
         {
-            Id = _noteId,
-            Author = new GeneralUser { UserId = _moderatorUserId },
-            User = new GeneralUser { UserId = _targetUserId, Username = "Target" }
+            Id = noteId,
+            Author = new GeneralUser { UserId = moderatorUserId },
+            User = new GeneralUser { UserId = targetUserId, Username = "Target" }
         };
-        _noteRepository.GetNote(_noteId).Returns(note);
-        _userLookupService.GetAsync(_targetUserId).Returns(note.User);
+        noteRepository.GetNote(noteId).Returns(note);
+        userLookupService.GetAsync(targetUserId).Returns(note.User);
 
-        await _service.Delete(_noteId);
+        await service.Delete(noteId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.DeleteModNote);
-        await _noteRepository.Received(1).Delete(_noteId);
+        intentionManager.Received(1).ThrowIfForbidden(ModerationIntention.DeleteModNote);
+        await noteRepository.Received(1).Delete(noteId);
     }
 }

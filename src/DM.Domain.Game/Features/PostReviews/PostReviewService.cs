@@ -12,7 +12,6 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.Games;
 using FluentValidation;
 
 namespace DM.Domain.Game.Features.PostReviews;
@@ -21,12 +20,7 @@ namespace DM.Domain.Game.Features.PostReviews;
 internal class PostReviewService : IPostReviewService
 {
     /// <summary>
-    /// How long the author may correct what they published. The same quarter of
-    /// an hour a game post and a comment give their author (PostIntentionResolver,
-    /// CommentIntentionResolver and the two clients that mirror them): an opinion
-    /// somebody else has already read is not a draft, and the correction window
-    /// is for a typo, not for a change of mind. Deleting is the way out after it
-    /// closes, and it has no window.
+    /// For a typo, not a change of mind; deleting has no window.
     /// </summary>
     private static readonly TimeSpan EditWindow = TimeSpan.FromMinutes(15);
 
@@ -41,7 +35,6 @@ internal class PostReviewService : IPostReviewService
     private readonly IIdentityProvider _identityProvider;
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IBbTagNameCase _tagNames;
 
     public PostReviewService(
         IValidator<CreatePostReview> createValidator,
@@ -50,8 +43,7 @@ internal class PostReviewService : IPostReviewService
         IPostReviewRepository repository,
         IIdentityProvider identityProvider,
         IGuidFactory guidFactory,
-        IDateTimeProvider dateTimeProvider,
-        IBbTagNameCase tagNames)
+        IDateTimeProvider dateTimeProvider)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -60,7 +52,6 @@ internal class PostReviewService : IPostReviewService
         _identityProvider = identityProvider;
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
-        _tagNames = tagNames;
     }
 
     /// <inheritdoc />
@@ -73,42 +64,34 @@ internal class PostReviewService : IPostReviewService
         var authorId = author.UserId;
         var postId = createReview.PostId;
 
-        // Get post information for authorization and denormalization
         var postInfo = await _repository.GetPostInfoAsync(postId, authorId);
         if (postInfo == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
         }
 
-        // ReviewableAsync judges by the same method, so the form the page offers
-        // and these refusals cannot part.
+        // ReviewableAsync judges by the same method, so the form and these refusals cannot part.
         var verdict = (await JudgeAsync(authorId,
             [new ReviewCandidate(postId, postInfo.AuthorId, postInfo.GameId)]))[postId];
 
-        // Can't review own post
         if (verdict == Verdict.OwnPost)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Нельзя оценивать собственный пост");
         }
 
-        // Newbies can only create neutral post reviews. A question of the sign
-        // and not of the post: the form offers a newbie "=" alone.
+        // A question of the sign, not of the post: the form offers a newbie "=" alone.
         if (createReview.Sign != ReviewSign.Neutral && await IsNewbieAsync(authorId))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
                 RefusalMessage.SignedReviewNeedsExperience(ProbationPolicy.NewbiePostThreshold));
         }
 
-        // Check if already reviewed this post
         if (verdict == Verdict.AlreadyReviewed)
         {
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyReviewedPost);
         }
 
-        // Check cooldown: can't review posts in the same game within 3 days.
-        // A conflict with the state of things, not a rate limit: the page that
-        // offered the form did not know of a review written since, and the
-        // reader is told this rule in its own words, not "too many attempts".
+        // A conflict with the state of things, not a rate limit.
         if (verdict == Verdict.InCooldown)
         {
             throw new HttpException(HttpStatusCode.Conflict,
@@ -124,16 +107,12 @@ internal class PostReviewService : IPostReviewService
             GameId = postInfo.GameId,
             CreatedUtc = _dateTimeProvider.Now,
             Sign = createReview.Sign,
-            // Review bodies render on the Comment surface where [mod] is a green
-            // mod block; strip it when authored by a non-moderator.
-            Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createReview.Text, author.Role), BbTagSet.WithModBlock)
+            Text = ModBlockSanitizer.SanitizeForAuthor(createReview.Text, author.Role)
         };
 
         try
         {
-            // The post author's QualityRating moves with the row, in the one call
-            // that writes both. Neutral is zero, so the sign is the delta.
-            return await _repository.CreateAsync(entity, (int)createReview.Sign);
+            return await _repository.CreateAsync(entity);
         }
         catch (DuplicateEntityException)
         {
@@ -144,10 +123,7 @@ internal class PostReviewService : IPostReviewService
     /// <inheritdoc />
     public async Task<PostReview> GetAsync(Guid postId, Guid reviewId)
     {
-        // Through the post, under the same room scope the create path reads it
-        // with. By review identifier alone this answered on posts the caller
-        // cannot open — a private room, a game they are not in — and handed out
-        // the review body, the post author and the game along with it.
+        // Through the post, under the room scope the create path reads it with.
         var postInfo = await _repository.GetPostInfoAsync(postId, _identityProvider.Current.User.UserId);
         if (postInfo == null)
         {
@@ -156,9 +132,6 @@ internal class PostReviewService : IPostReviewService
 
         var review = await GetByIdAsync(reviewId);
 
-        // The route names both. A review of a different post reached through
-        // this post's address is not this post's review, and answering with it
-        // made the post identifier decoration.
         if (review.PostId != postId)
         {
             throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
@@ -168,31 +141,16 @@ internal class PostReviewService : IPostReviewService
     }
 
     /// <summary>
-    /// The review itself, with no scope of its own.
+    /// No scope of its own: editing and removal carry their own gates.
     /// </summary>
-    /// <remarks>
-    /// For the two paths that carry their own gate: editing asks for the author
-    /// and their window, removal asks for the author or a senior moderator, and
-    /// neither is reached from a route that names the post.
-    /// </remarks>
-    private async Task<PostReview> GetByIdAsync(Guid id)
-    {
-        var review = await _repository.GetAsync(id);
-        if (review == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
-        }
-
-        return review;
-    }
+    private async Task<PostReview> GetByIdAsync(Guid id) =>
+        await _repository.GetAsync(id) ?? throw new HttpException(HttpStatusCode.NotFound, ReviewNotFound);
 
     /// <inheritdoc />
     public async Task<(IEnumerable<PostReview> Reviews, PagingResult Paging)> GetListAsync(
         Guid postId, PagingQuery query)
     {
-        // Through the post, under the same room scope GetAsync reads it with: a
-        // post the reader cannot open has no reviews to list, and answers as a
-        // post that is not there.
+        // Through the post, under the room scope GetAsync reads it with.
         if (await _repository.GetPostInfoAsync(postId, _identityProvider.Current.User.UserId) == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.PostNotFound);
@@ -201,7 +159,7 @@ internal class PostReviewService : IPostReviewService
         var totalCount = await _repository.CountAsync(postId);
         var pagingData = new PagingData(
             query,
-            _identityProvider.Current.Settings.Paging.EntitiesPerPage,
+            _identityProvider.Current.Settings.PageSize,
             totalCount);
 
         var reviews = await _repository.GetAsync(postId, pagingData);
@@ -215,16 +173,12 @@ internal class PostReviewService : IPostReviewService
         var totalCount = await _repository.CountAllAsync(filter);
         var pagingData = new PagingData(
             query,
-            _identityProvider.Current.Settings.Paging.EntitiesPerPage,
+            _identityProvider.Current.Settings.PageSize,
             totalCount);
 
         var reviews = await _repository.GetAllAsync(pagingData, filter);
         return (reviews, pagingData.Result);
     }
-
-    /// <inheritdoc />
-    public Task<PostReview?> GetByAuthorAsync(Guid postId, Guid authorId) =>
-        _repository.GetByAuthorAsync(postId, authorId);
 
     /// <inheritdoc />
     public async Task<PostReview> UpdateAsync(UpdatePostReview updateReview)
@@ -234,21 +188,17 @@ internal class PostReviewService : IPostReviewService
 
         _intentionManager.ThrowIfForbidden(PostReviewIntention.Edit, review);
 
-        // Check the author's edit window (admins can edit anytime)
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role != UserRole.Admin && !CanEdit(review))
         {
             throw new HttpException(HttpStatusCode.Forbidden,
-                $"Оценку можно править в течение {EditWindow.TotalMinutes:0} минут после публикации");
+                $"Оценку можно править в течение {EditWindow.TotalMinutes:0} минут после отправки");
         }
 
-        // Handle sign change impact on QualityRating
         var oldSign = review.Sign;
         var newSign = updateReview.Sign ?? oldSign;
 
-        // The same probation the create path applies. Without it a newbie
-        // published the neutral review the form allows them and then moved it
-        // to a plus or a minus with an edit, which is the whole rule undone.
+        // The probation of the create path, or an edit would move a neutral review to a sign.
         if (newSign != oldSign && newSign != ReviewSign.Neutral &&
             await IsNewbieAsync(currentUser.UserId))
         {
@@ -259,18 +209,11 @@ internal class PostReviewService : IPostReviewService
         var entity = new UpdatePostReviewEntity(
             review.Id,
             Sign: updateReview.Sign,
-            // Same treatment the text gets on the way in: the body renders on
-            // the Comment surface, where [mod] is a green mod block.
-            Text: updateReview.Text == null
-                ? null
-                : _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(updateReview.Text, currentUser.Role), BbTagSet.WithModBlock),
+            Text: ModBlockSanitizer.SanitizeForAuthor(updateReview.Text, currentUser.Role),
             ModifiedUtc: _dateTimeProvider.Now,
             ModifiedByUserId: currentUser.UserId);
 
-        // What the post author's counter owes is worked out by the write, from the
-        // row it locks: the sign this edit asks for is the whole of what the
-        // service knows, and a difference computed here would be a difference from
-        // the review as it was read, which another change may already have moved.
+        // The rating difference is worked out by the write, from the row it locks.
         return await _repository.UpdateAsync(entity);
     }
 
@@ -280,18 +223,14 @@ internal class PostReviewService : IPostReviewService
         var review = await GetByIdAsync(id);
         _intentionManager.ThrowIfForbidden(PostReviewIntention.Delete, review);
 
-        // Who removed it and when: a senior moderator may remove somebody
-        // else's review, and a removal with no hand behind it cannot be
-        // reviewed afterwards.
+        // A senior moderator may remove somebody else's review, so the hand is recorded.
         var entity = new UpdatePostReviewEntity(
             id,
             IsRemoved: true,
             DeletedUtc: _dateTimeProvider.Now,
             DeletedByUserId: _identityProvider.Current.User.UserId);
 
-        // The post author's QualityRating gives back what the review gave it, in
-        // the same write as the removal and worked out there: a review already
-        // taken down by somebody else gives nothing back a second time.
+        // The write gives the rating back, and nothing a second time for a review already removed.
         await _repository.UpdateAsync(entity);
     }
 
@@ -308,14 +247,10 @@ internal class PostReviewService : IPostReviewService
     }
 
     /// <summary>
-    /// What stands between the rater and a review of each post: his own post,
-    /// a review of his already on it, a review of his in the same game during
-    /// the last three days. In that order, the order CreateAsync tells them in.
+    /// In the order CreateAsync tells the refusals.
     /// </summary>
     /// <remarks>
-    /// One method for the write and for the flags on a page of posts, two
-    /// queries for the whole page. Sequential on purpose: both read the one
-    /// DmDbContext of the scope, and a context refuses parallel operations.
+    /// Sequential: both queries read the one DmDbContext of the scope, which refuses parallel operations.
     /// </remarks>
     private async Task<IReadOnlyDictionary<Guid, Verdict>> JudgeAsync(
         Guid raterId, IReadOnlyCollection<ReviewCandidate> posts)
@@ -354,12 +289,7 @@ internal class PostReviewService : IPostReviewService
     }
 
     /// <inheritdoc />
-    public bool CanEdit(PostReview review)
-    {
-        var now = _dateTimeProvider.Now;
-        var editDeadline = review.CreatedUtc + EditWindow;
-        return now <= editDeadline;
-    }
+    public bool CanEdit(PostReview review) => _dateTimeProvider.Now <= review.CreatedUtc + EditWindow;
 
     private async Task<bool> IsNewbieAsync(Guid userId) =>
         ProbationPolicy.IsNewbie(await _repository.GetUserPostCountAsync(userId));

@@ -10,10 +10,7 @@ namespace DM.Domain.Personal.Tests.Features.Notifications;
 /// about the account itself leads nowhere.
 /// </summary>
 /// <remarks>
-/// A notification without a path is a line nobody can click, and the list in the
-/// application marks a line read by the click on it, so a notification that could
-/// have led somewhere and does not stays bold until the reader clears the whole
-/// list. The paths are asserted as the bag arrives from the generator.
+/// The list marks a line read by the click on it, so a line with no path stays unread.
 /// </remarks>
 public class NotificationDestinationShould
 {

@@ -4,13 +4,18 @@ namespace DM.Domain.Community.Features.WebsiteTestimonials;
 /// How long a testimonial text may be.
 /// </summary>
 /// <remarks>
-/// One declaration because creation and editing must agree. They already
-/// disagreed once, for games: the create validator read a shared constant while
-/// the edit validator kept its own numbers, so a title creation accepted could
-/// not be saved again after any change to the row.
+/// As long as the text of a ticket: a testimonial is shown whole, never cut, so
+/// the bound only keeps one entry from filling the page. The client keeps a copy
+/// for its counter (TESTIMONIAL_TEXT_MAX_LENGTH), held to this one by
+/// ClientFieldLimitsShould.
 /// </remarks>
-internal static class WebsiteTestimonialFieldLimits
+public static class WebsiteTestimonialFieldLimits
 {
-    /// <summary>Longest testimonial text.</summary>
     public const int TextMaxLength = 10000;
+
+    /// <summary>
+    /// The refusal of a length out of bounds; StringLength puts the maximum in {1}
+    /// and the minimum in {2}, so the numbers are the bounds themselves.
+    /// </summary>
+    public const string LengthRefusal = "Отзыв от {2} до {1} символов";
 }

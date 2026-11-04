@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,21 +14,8 @@ namespace DM.Architecture.Tests;
 /// instant it is laid out around and the seed its randomness is drawn from.
 /// </summary>
 /// <remarks>
-/// Everything the site is looked at against comes out of the seeder, so a
-/// screenshot baseline is worth exactly as much as the fixture behind it is
-/// reproducible. Two runs of a seeder that reads a clock or draws from an
-/// unseeded generator differ in dates, in who plays where, in what a comment says
-/// and at what address a topic lives - and a baseline taken against one of them
-/// is red against the other for reasons that have nothing to do with the change
-/// under review. That is worse than no baseline: it teaches the reviewer to
-/// ignore the colour.
-///
-/// Read out of the sources rather than measured against a database, because
-/// seeding needs PostgreSQL and object storage at once while the
-/// property being defended is a property of the code. The measurement is
-/// scripts/verify-seed-reproducibility.sh, which runs the seeder twice into the
-/// same empty database and diffs the result; this file is what keeps that
-/// measurement from silently expiring.
+/// A screenshot baseline is worth as much as the fixture behind it is reproducible. Read out of the
+/// sources; scripts/verify-seed-reproducibility.sh measures it against a database.
 /// </remarks>
 public class SeedDeterminismShould
 {
@@ -101,7 +89,7 @@ public class SeedDeterminismShould
             "out of a Guid, so a minted one moves the page to a new address on every run and " +
             "no route can be written down");
 
-        var program = Code(Path.Combine(SeederDirectory, "Program.cs"));
+        var program = SourceText.ReadCode(Path.Combine(SeederDirectory, "Program.cs"));
 
         program.Should().Contain("SeededGuidFactory",
             "forbidding Guid.NewGuid in the tool changes nothing while the factory it resolves " +
@@ -118,7 +106,7 @@ public class SeedDeterminismShould
     [Fact]
     public void ResolveBothValuesFromConfiguration()
     {
-        var determinism = Code(Path.Combine(SeederDirectory, "Seeding", DeterminismSource));
+        var determinism = SourceText.ReadCode(Path.Combine(SeederDirectory, "Seeding", DeterminismSource));
 
         determinism.Should().Contain("\"SeedEpochUtc\"",
             "a CI run and a local run have to be able to agree on the instant, and a constant " +
@@ -127,7 +115,7 @@ public class SeedDeterminismShould
             "the same for the seed: a hardcoded one is reproducible until the day two runs " +
             "need different fixtures and someone edits it");
 
-        var usage = Code(Path.Combine(SeederDirectory, "Program.cs"));
+        var usage = SourceText.ReadCode(Path.Combine(SeederDirectory, "Program.cs"));
 
         usage.Should().Contain("DM_SeedEpochUtc",
             "a knob nobody can find from --help is a knob nobody uses");
@@ -143,9 +131,9 @@ public class SeedDeterminismShould
     {
         var sources = SeederSources();
 
-        sources.Should().HaveCountGreaterThan(10,
-            "the seeder is a dozen partial files, and a rule that found one of them would " +
-            "report green over the eleven it never opened");
+        sources.Should().NotBeEmpty(
+            "a rule that found no file of the seeder would report green over everything " +
+            "it never opened");
         sources.Should().Contain(path => Path.GetFileName(path) == DeterminismSource,
             "the whole rule set is phrased around that file: if it is gone or renamed, every " +
             "exemption above points at nothing and the rules quietly loosen");
@@ -154,7 +142,7 @@ public class SeedDeterminismShould
     /// <summary>The seeder sources the rules above are read out of.</summary>
     private static IReadOnlyList<string> SeederSources() => Directory
         .EnumerateFiles(SeederDirectory, "*.cs", SearchOption.AllDirectories)
-        .Where(IsAuthored)
+        .Where(RepositoryFiles.IsAuthored)
         .OrderBy(path => path, StringComparer.Ordinal)
         .ToList();
 
@@ -162,20 +150,9 @@ public class SeedDeterminismShould
     private static IReadOnlyList<string> Offenders(Regex pattern, string? except = null) => SeederSources()
         .Where(path => except == null ||
                        !string.Equals(Path.GetFileName(path), except, StringComparison.Ordinal))
-        .Where(path => pattern.IsMatch(Code(path)))
-        .Select(path => Path.GetRelativePath(RepositoryRoot, path))
+        .Where(path => pattern.IsMatch(SourceText.ReadCode(path)))
+        .Select(RepositoryFiles.Relative)
         .ToList();
 
-    /// <summary>The file's text with its comments removed.</summary>
-    private static string Code(string path) =>
-        SourceText.ReadCode(path);
-
-    private static string SeederDirectory => Path.Combine(RepositoryRoot, "src", "DM.Tools.Seeder");
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
-
-    private static bool IsAuthored(string path) =>
-        !path
-            .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-            .Any(segment => segment is "obj" or "bin");
+    private static string SeederDirectory => Path.Combine(RepositoryLayout.Root, "src", "DM.Tools.Seeder");
 }

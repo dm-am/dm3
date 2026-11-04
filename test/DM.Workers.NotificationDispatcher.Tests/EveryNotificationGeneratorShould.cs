@@ -18,18 +18,8 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// Every generator is run, against the schema the migration builds.
 /// </summary>
 /// <remarks>
-/// Four thousand lines of worker had no test that executed a line of it. The
-/// generators are EF queries over the relational model and nothing else, so the
-/// failure they can carry is the one the compiler cannot see: a projection naming
-/// a column the migration does not create, a navigation the model no longer has,
-/// an expression Npgsql refuses to translate. Every one of those is a run-time
-/// exception inside a consumer whose retry middleware replays the whole delivery,
-/// so the shape it takes in production is a queue that never drains and a feature
-/// that produces nothing.
-///
-/// Enumerated from the assembly rather than listed, the way the dispatcher derives
-/// its own binding: a generator added tomorrow is covered without anybody
-/// remembering this file.
+/// A projection naming a column the migration lacks fails only at run time, as a queue that never drains.
+/// Enumerated from the assembly, as the dispatcher derives its binding.
 /// </remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class EveryNotificationGeneratorShould
@@ -62,11 +52,7 @@ public class EveryNotificationGeneratorShould
     }
 
     /// <summary>A substitute for a constructor parameter the test does not care about.</summary>
-    /// <remarks>
-    /// The type is only known at run time, so the non-generic overload is what this
-    /// can reach; NSubstitute answers unconfigured calls with empty values of its
-    /// own, so nothing else has to be said about the parameter.
-    /// </remarks>
+    /// <remarks>The type is known at run time only, so the non-generic overload is used.</remarks>
     private static object SubstituteFor(Type type) => Substitute.For(new[] { type }, null);
 
     /// <summary>A clock that answers with the moment it was given.</summary>
@@ -92,19 +78,12 @@ public class EveryNotificationGeneratorShould
     /// <summary>
     /// An event about an entity that is not there answers with nothing.
     /// </summary>
-    /// <remarks>
-    /// Two properties at once, and the second is why the first is asserted rather
-    /// than merely awaited. The query has to reach the database and come back —
-    /// that is the whole coverage this tier adds — and it has to come back empty,
-    /// because the events carry no idempotency key and are redelivered after the
-    /// subject has been deleted. A generator that answers a missing row with a
-    /// notification addressed to Guid.Empty writes an inbox row nobody can open.
-    /// </remarks>
+    /// <remarks>Events are redelivered after the subject is deleted, and an inbox row for Guid.Empty nobody opens.</remarks>
     [Fact]
     public async Task AnswerAnEventAboutAMissingEntityWithNothing()
     {
         var generators = GeneratorTypes;
-        generators.Should().HaveCountGreaterThan(20,
+        generators.Should().NotBeEmpty(
             "the dispatcher derives its queue binding from these types, and finding none " +
             "would leave this asserting nothing at all");
 

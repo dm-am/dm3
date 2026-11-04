@@ -1,9 +1,5 @@
 <script setup lang="ts">
-/**
- * "Связанные профили", a section of the profile's "Модерация" tab: the
- * accounts that signed in from an address this one used, as a list the way the
- * site draws its lists ("- " and the name) with what ties them in brackets.
- */
+/** "Связанные профили": the accounts that signed in from an address this one used. */
 import type { LinkedProfile } from "@/shared/api/models/moderation";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { formatDate } from "@/shared/lib/utils/datetime";
@@ -20,7 +16,7 @@ function sharedIpsLabel(count: number): string {
 </script>
 
 <template>
-  <section class="mod-section">
+  <section>
     <BlockTitle>Связанные профили</BlockTitle>
 
     <ul v-if="profiles.length" class="mod-linked-list">

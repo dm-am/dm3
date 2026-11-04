@@ -15,7 +15,6 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public UserBlacklistRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -76,7 +75,7 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     /// <inheritdoc />
     public async Task Delete(Guid entryId, CancellationToken ct = default)
     {
-        var entry = await _dbContext.UserBlacklists.FindAsync(new object[] { entryId }, ct);
+        var entry = await _dbContext.UserBlacklists.FindAsync([entryId], ct);
         if (entry != null)
         {
             _dbContext.UserBlacklists.Remove(entry);
@@ -150,7 +149,7 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     }
 
     /// <inheritdoc />
-    public async Task<UserBlacklistSettings> GetSettings(Guid userId, CancellationToken ct = default)
+    public async Task<UserBlacklistSettings> GetSettingsAsync(Guid userId, CancellationToken ct = default)
     {
         var settings = await _dbContext.Users
             .Where(u => u.UserId == userId)
@@ -161,12 +160,10 @@ internal class UserBlacklistRepository : IUserBlacklistRepository
     }
 
     /// <inheritdoc />
-    public async Task<UserBlacklistSettings> UpdateSettings(Guid userId, UserBlacklistSettings settings, CancellationToken ct = default)
+    public async Task UpdateSettings(Guid userId, UserBlacklistSettings settings, CancellationToken ct = default)
     {
         await _dbContext.Users
             .Where(u => u.UserId == userId)
             .ExecuteUpdateAsync(u => u.SetProperty(x => x.BlacklistSettings, settings), ct);
-
-        return settings;
     }
 }

@@ -11,7 +11,6 @@ internal class TokenFactory : ITokenFactory
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public TokenFactory(
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider)

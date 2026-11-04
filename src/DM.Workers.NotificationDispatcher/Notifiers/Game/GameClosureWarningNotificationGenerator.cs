@@ -18,7 +18,6 @@ internal class GameClosureWarningNotificationGenerator : BaseNotificationGenerat
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public GameClosureWarningNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -30,7 +29,7 @@ internal class GameClosureWarningNotificationGenerator : BaseNotificationGenerat
     /// <inheritdoc />
     public override async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        var data = await _dbContext.Games
+        var gameData = await _dbContext.Games
             .Where(g => g.GameId == entityId)
             .Select(g => new
             {
@@ -42,26 +41,23 @@ internal class GameClosureWarningNotificationGenerator : BaseNotificationGenerat
             })
             .FirstOrDefaultAsync();
 
-        if (data == null)
+        if (gameData == null)
         {
             yield break;
         }
 
-        // Notify Master and Assistants
-        var usersInterested = new HashSet<Guid> { data.MasterId };
-        usersInterested.UnionWith(data.AssistantIds);
+        var usersInterested = new HashSet<Guid> { gameData.MasterId };
+        usersInterested.UnionWith(gameData.AssistantIds);
 
-        // No ActorId: nobody performed this. The warning comes from the schedule
-        // that closes a game gone quiet, and MasterUsername below names the game's
-        // master for the text — he is a recipient here, not an actor.
+        // No ActorId: the warning comes from a schedule.
         yield return new CreateNotification
         {
-            UsersInterested = usersInterested.ToArray(),
+            UsersInterested = usersInterested,
             Metadata = new
             {
-                GameId = data.GameId.EncodeToReadable(data.Title),
-                GameTitle = data.Title,
-                MasterUsername = data.MasterUsername
+                GameId = gameData.GameId.EncodeToReadable(gameData.Title),
+                GameTitle = gameData.Title,
+                gameData.MasterUsername
             }
         };
     }

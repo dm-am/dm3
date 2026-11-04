@@ -1,7 +1,6 @@
 using System;
 using System.Linq;
 using DM.Infrastructure.Persistence.Shared.Queries;
-using DM.Testing;
 using AwesomeAssertions;
 using Xunit;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
@@ -9,11 +8,9 @@ using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Queries;
 
-public class DateRangeFiltersShould : UnitTestBase
+public class DateRangeFiltersShould
 {
     private static readonly DateTimeOffset Day = new(2026, 7, 1, 0, 0, 0, TimeSpan.Zero);
-
-    // ═══ Queryable filters (relational repositories) ═══
 
     [Fact]
     public void IncludeWholeSelectedDayForDateOnlyBound()
@@ -90,8 +87,6 @@ public class DateRangeFiltersShould : UnitTestBase
             .Should().Be(new DateTimeOffset(2026, 7, 1, 20, 59, 0, TimeSpan.Zero));
     }
 
-    // ═══ Calendar edge: whole-day bound cannot extend past the max date ═══
-
     private static readonly DateTimeOffset MaxDay = new(9999, 12, 31, 0, 0, 0, TimeSpan.Zero);
 
     [Fact]
@@ -125,6 +120,64 @@ public class DateRangeFiltersShould : UnitTestBase
         var result = topics.WhereAtOrBefore(t => t.CreatedUtc, localMaxDay).ToArray();
 
         result.Should().ContainSingle().Which.CreatedUtc.Should().Be(localMaxDay);
+    }
+
+    [Fact]
+    public void IncludeTheLowerBoundOfARange()
+    {
+        var from = Day.AddHours(12);
+        var topics = new[] { Topic(from.AddTicks(-1)), Topic(from), Topic(from.AddTicks(1)) }.AsQueryable();
+
+        var result = topics.WhereWithin(t => t.CreatedUtc, from, null).ToArray();
+
+        result.Select(t => t.CreatedUtc).Should().BeEquivalentTo(new[] { from, from.AddTicks(1) });
+    }
+
+    [Fact]
+    public void KeepBothBoundsOfARangeInclusive()
+    {
+        var from = Day.AddHours(6);
+        var to = Day.AddHours(18);
+        var topics = new[]
+        {
+            Topic(from.AddTicks(-1)), Topic(from), Topic(to), Topic(to.AddTicks(1))
+        }.AsQueryable();
+
+        var result = topics.WhereWithin(t => t.CreatedUtc, from, to).ToArray();
+
+        result.Select(t => t.CreatedUtc).Should().BeEquivalentTo(new[] { from, to });
+    }
+
+    [Fact]
+    public void KeepEveryRowWhenARangeHasNoBounds()
+    {
+        var topics = new[] { Topic(Day), Topic(Day.AddYears(1)) }.AsQueryable();
+        var games = new[] { Game(null), Game(Day) }.AsQueryable();
+
+        topics.WhereWithin(t => t.CreatedUtc, null, null).Should().HaveCount(2);
+        games.WhereWithin(g => g.ActivatedUtc, null, null).Should().HaveCount(2);
+    }
+
+    [Fact]
+    public void DropRowsWithoutTheDateAsSoonAsAnyBoundIsSet()
+    {
+        var games = new[] { Game(null), Game(Day.AddHours(1)) }.AsQueryable();
+
+        var fromOnly = games.WhereWithin(g => g.ActivatedUtc, Day, null).ToArray();
+        var toOnly = games.WhereWithin(g => g.ActivatedUtc, null, Day.AddDays(1)).ToArray();
+
+        fromOnly.Should().ContainSingle().Which.ActivatedUtc.Should().Be(Day.AddHours(1));
+        toOnly.Should().ContainSingle().Which.ActivatedUtc.Should().Be(Day.AddHours(1));
+    }
+
+    [Fact]
+    public void IncludeTheLowerBoundOfAnOptionalDateRange()
+    {
+        var games = new[] { Game(Day.AddTicks(-1)), Game(Day), Game(Day.AddTicks(1)) }.AsQueryable();
+
+        var result = games.WhereWithin(g => g.ActivatedUtc, Day, Day.AddDays(1)).ToArray();
+
+        result.Select(g => g.ActivatedUtc).Should().BeEquivalentTo(new DateTimeOffset?[] { Day, Day.AddTicks(1) });
     }
 
     private static DbTopic Topic(DateTimeOffset createdUtc) => new() { CreatedUtc = createdUtc };

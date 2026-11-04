@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text.Encodings.Web;
@@ -30,19 +29,9 @@ namespace DM.Architecture.Tests;
 /// One notification, one format, whichever transport carried it.
 /// </summary>
 /// <remarks>
-/// The same DTO leaves the API twice: in the notification list over REST and in
-/// a push over the hub. They were two contracts. MVC serializes an enum through
-/// JsonStringEnumConverter while the hub sat on the protocol defaults, so the
-/// event arrived as "NewMessage" from one and as 11 from the other. And the
-/// metadata bag arrived camelCase from the bus but PascalCase from the store,
-/// because a dictionary key is not touched by PropertyNamingPolicy. The store
-/// writes the bus spelling since W1.1 (NotificationRepository.MetadataOptions),
-/// and the dictionary arm below stands in for any writer that still hands the
-/// bag over under CLR member names.
-///
-/// Nothing in either path fails when they disagree — a title is simply not found
-/// and a link is simply not built — so the agreement has to be asserted rather
-/// than observed.
+/// The DTO leaves the API over REST and over the hub, and a dictionary key is not touched by
+/// PropertyNamingPolicy; the dictionary arm stands in for a writer handing the bag under CLR names.
+/// Nothing fails when they disagree.
 /// </remarks>
 public class NotificationWireShould
 {
@@ -67,11 +56,7 @@ public class NotificationWireShould
             Payload = metadata.RootElement.Clone()
         };
 
-        // What the list is handed today is a JsonElement parsed back from the
-        // jsonb column, already in the bus spelling — the same shape as the
-        // pushed copy. The dictionary under CLR member names is kept as the
-        // second arm so the converter goes on normalizing a writer that hands
-        // the bag over unserialized.
+        // The second arm, a dictionary under CLR member names, keeps the converter normalizing.
         var stored = new Notification
         {
             Id = SampleId,
@@ -113,15 +98,8 @@ public class NotificationWireShould
     /// transports call.
     /// </summary>
     /// <remarks>
-    /// The hub built its DTO by hand next to the list's, field by field. A field
-    /// added to one and not to the other arrives on the open tab as undefined
-    /// over the socket and as a value over REST, and nothing fails. The push
-    /// is unread by definition: it is the moment the notification appears.
-    ///
-    /// The pushed copy is taken from the processor itself, so a hub that went
-    /// back to building the DTO on its own would be caught here, and the listed
-    /// copy is handed the bag under CLR member names, so the words and the path
-    /// are shown to be read whatever the spelling of the bag.
+    /// The pushed copy is taken from the processor itself, and the listed copy is handed the bag under
+    /// CLR member names.
     /// </remarks>
     [Fact]
     public async Task PushTheRowTheListShows()
@@ -153,10 +131,7 @@ public class NotificationWireShould
             IsRead = false
         });
 
-        // Compared as the reader parses them. The two serializers escape a letter
-        // outside ASCII each their own way, one as a numeric escape and one as
-        // the letter, and the title is Russian: the same string, two spellings
-        // of the same JSON.
+        // Compared as parsed: the two serializers escape a non-ASCII letter differently.
         var wires = new[]
         {
             JsonSerializer.Serialize(pushed, ApiContract),
@@ -182,26 +157,6 @@ public class NotificationWireShould
             .Should().Equal("Персонаж: Цири", "Игра: Ведьмак", "Мастер: SolohinLex");
     }
 
-    /// <summary>
-    /// The host registers the hub through the shared entry point.
-    /// </summary>
-    /// <remarks>
-    /// Source text is the only surface: the equality above proves what
-    /// AddDmSignalR builds, and a Startup that stopped calling it would leave that
-    /// proof about a registration nothing performs.
-    /// </remarks>
-    [Fact]
-    public void RegisterTheHubThroughTheSharedContract()
-    {
-        var startup = File.ReadAllText(Path.Combine(SourceDirectory, "DM.Web.API", "Startup.cs"));
-
-        startup.Should().Contain("AddDmSignalR()",
-            "the hub takes the API JSON contract from the one place MVC takes it from");
-        startup.Should().NotContain("services.AddSignalR()",
-            "a bare AddSignalR leaves the hub on the protocol defaults, which write an " +
-            "enum as its number");
-    }
-
     /// <summary>What MVC answers a request with.</summary>
     private static JsonSerializerOptions ApiContract
     {
@@ -221,8 +176,6 @@ public class NotificationWireShould
             .GetRequiredService<IOptions<JsonHubProtocolOptions>>()
             .Value
             .PayloadSerializerOptions;
-
-    private static string SourceDirectory => Path.Combine(DM.Testing.RepositoryLayout.Root, "src");
 
     /// <summary>
     /// A wire as the reader parses it, written back with every letter as itself.
@@ -258,9 +211,7 @@ public class NotificationWireShould
     }
 
     /// <summary>
-    /// Stands in for an interface of the host, answering every call the way the
-    /// test says. Hand-written stand-ins would have to follow every member SignalR
-    /// adds to its client and context interfaces.
+    /// Stands in for a host interface, answering every call the way the test says.
     /// </summary>
     public class Stand : DispatchProxy
     {

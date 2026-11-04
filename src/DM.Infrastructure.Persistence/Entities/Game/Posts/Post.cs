@@ -2,11 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Game.Characters;
 using DM.Infrastructure.Persistence.Entities.Account;
-using GameEntities = DM.Infrastructure.Persistence.Entities.Game;
 
 namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
 
@@ -14,7 +12,7 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Posts;
 /// DAL model for game post
 /// </summary>
 [Table("Posts")]
-public class Post : ISoftDeletable, IHasEditHistory<PostEdit>
+public class Post : ISoftDeletable
 {
     /// <summary>
     /// Post identifier
@@ -52,12 +50,6 @@ public class Post : ISoftDeletable, IHasEditHistory<PostEdit>
     /// </summary>
     public string? MetagameText { get; set; }
 
-    /// <summary>
-    /// Per-post override for [private] visibility. When true, every viewer
-    /// who can read the post's room sees all [private] blocks in the post
-    /// regardless of tag addressees. Still gated by room read access.
-    /// </summary>
-    public bool SharePrivateWithAll { get; set; }
 
     /// <summary>
     /// Snapshot of owner-user ids allowed to see each [private] block in
@@ -78,9 +70,6 @@ public class Post : ISoftDeletable, IHasEditHistory<PostEdit>
     /// <inheritdoc />
     public DateTimeOffset? DeletedUtc { get; set; }
 
-    /// <summary>
-    /// Room
-    /// </summary>
     [ForeignKey(nameof(RoomId))]
     public virtual Room Room { get; set; } = null!;
 
@@ -90,9 +79,6 @@ public class Post : ISoftDeletable, IHasEditHistory<PostEdit>
     [ForeignKey(nameof(CharacterId))]
     public virtual Character? Character { get; set; }
 
-    /// <summary>
-    /// Author
-    /// </summary>
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;
 
@@ -108,11 +94,10 @@ public class Post : ISoftDeletable, IHasEditHistory<PostEdit>
     [InverseProperty(nameof(PostEdit.Post))]
     public virtual ICollection<PostEdit> Edits { get; set; } = [];
 
-    // NOTE: Attachments navigation removed - Upload.EntityId is polymorphic without FK constraints
 
     /// <summary>
     /// Reviews for this post
     /// </summary>
-    [InverseProperty(nameof(GameEntities.PostReview.Post))]
-    public virtual ICollection<GameEntities.PostReview> Reviews { get; set; } = [];
+    [InverseProperty(nameof(PostReview.Post))]
+    public virtual ICollection<PostReview> Reviews { get; set; } = [];
 }

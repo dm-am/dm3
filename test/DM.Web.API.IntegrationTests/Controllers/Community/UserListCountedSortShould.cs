@@ -10,16 +10,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Community;
 /// nobody for having none of it.
 /// </summary>
 /// <remarks>
-/// Games hosted, games played, blogs hosted and active subscribers are not columns
-/// of Users. They used to be counted by a subquery correlated to the user row inside
-/// the ORDER BY, which Postgres evaluates once per registration and before OFFSET;
-/// they are now one aggregate per counted table, left-joined to the page.
-///
-/// Two independent computations meet here, which is what makes the assertion worth
-/// making: the order comes from the join in SQL, and the number each row carries is
-/// produced afterwards by a separate batched GROUP BY over the same tables. A counter
-/// wired to the wrong table orders the list against the numbers it shows, and a join
-/// that stopped being a left one silently drops everyone whose count is zero.
+/// The order comes from a left join in SQL and the number from a separate batched GROUP BY, so a counter wired
+/// to the wrong table orders against the numbers it shows.
 /// </remarks>
 public class UserListCountedSortShould : IntegrationTestBase
 {
@@ -63,10 +55,7 @@ public class UserListCountedSortShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Counted by the total the envelope reports rather than by the page: the registry
-    /// the suite leaves behind is longer than one page and holds more than a page of
-    /// hosts, so a page says nothing about who was admitted. The total does, and the
-    /// ascending list opens with the ones an inner join would have dropped.
+    /// Counted by the reported total: the ascending list opens with the users an inner join would drop.
     /// </summary>
     [Theory]
     [InlineData("GamesHosting")]
@@ -91,17 +80,8 @@ public class UserListCountedSortShould : IntegrationTestBase
     /// page his hosting count entitles him to, and that page is short.
     /// </summary>
     /// <remarks>
-    /// Position is the whole claim, so the page has to be short enough for position to
-    /// mean something. This test used to ask for a hundred rows, which is longer than
-    /// the registry the suite leaves behind — and on a page that holds everybody,
-    /// "he is on it" and "he hosts three games" are true whatever the sort was wired
-    /// to. It stayed green under the very defect it is named for.
-    ///
-    /// So the window is computed rather than guessed: read the whole list once to learn
-    /// how many users out-host him and how many tie with him, then ask for exactly that
-    /// many rows. A correct descending sort must place him inside that window; a sort
-    /// wired to the neighbouring counter puts him where his games PLAYED puts him, and
-    /// he plays none.
+    /// The window is computed from the whole list, so a sort wired to the neighbouring counter puts him outside
+    /// the short page.
     /// </remarks>
     [Fact]
     public async Task SortByTheHostingCounterAndNotByANeighbouringOne()

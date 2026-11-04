@@ -17,50 +17,50 @@ namespace DM.Domain.Personal.Tests.Features.Notepads;
 
 public class UserNotepadServiceShould : UnitTestBase
 {
-    private readonly INotepadRepository _repository;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly UserNotepadService _service;
-    private readonly Guid _currentUserId = Guid.NewGuid();
-    private readonly Guid _entryId = Guid.NewGuid();
-    private readonly DateTimeOffset _now = DateTimeOffset.UtcNow;
+    private readonly INotepadRepository repository;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IGuidFactory guidFactory;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly UserNotepadService service;
+    private readonly Guid currentUserId = Guid.NewGuid();
+    private readonly Guid entryId = Guid.NewGuid();
+    private readonly DateTimeOffset now = DateTimeOffset.UtcNow;
 
     public UserNotepadServiceShould()
     {
-        _repository = Mock<INotepadRepository>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _guidFactory = Mock<IGuidFactory>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
+        repository = Mock<INotepadRepository>();
+        identityProvider = Mock<IIdentityProvider>();
+        guidFactory = Mock<IGuidFactory>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
 
-        var identity = Identities.User(_currentUserId, "CurrentUser", UserRole.RegularUser);
-        _identityProvider.Current.Returns(identity);
-        _dateTimeProvider.Now.Returns(_now);
-        _guidFactory.Create().Returns(_entryId);
+        var identity = Identities.User(currentUserId, "CurrentUser", UserRole.RegularUser);
+        identityProvider.Current.Returns(identity);
+        dateTimeProvider.Now.Returns(now);
+        guidFactory.Create().Returns(entryId);
 
-        _service = new UserNotepadService(
-            _repository,
-            _identityProvider,
-            _guidFactory,
-            _dateTimeProvider);
+        service = new UserNotepadService(
+            repository,
+            identityProvider,
+            guidFactory,
+            dateTimeProvider);
     }
 
     [Fact]
     public async Task GetEntriesForCurrentUser()
     {
-        _repository.GetEntriesAsync(NotepadType.User, _currentUserId, null, Arg.Any<CancellationToken>()).Returns([]);
+        repository.GetEntriesAsync(NotepadType.User, currentUserId, null, Arg.Any<CancellationToken>()).Returns([]);
 
-        await _service.GetEntries();
+        await service.GetEntries();
 
-        await _repository.Received(1).GetEntriesAsync(NotepadType.User, _currentUserId, null, Arg.Any<CancellationToken>());
+        await repository.Received(1).GetEntriesAsync(NotepadType.User, currentUserId, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ThrowWhenGettingNonexistentEntry()
     {
-        _repository.GetEntryAsync(_entryId, Arg.Any<CancellationToken>()).Returns((NotepadEntry?)null);
+        repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns((NotepadEntry?)null);
 
-        var act = () => _service.GetEntry(_entryId);
+        var act = () => service.GetEntry(entryId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("не найдена"));
@@ -71,13 +71,13 @@ public class UserNotepadServiceShould : UnitTestBase
     {
         var entry = new NotepadEntry
         {
-            Id = _entryId,
+            Id = entryId,
             NotepadType = NotepadType.User,
             ContainerId = Guid.NewGuid()
         };
-        _repository.GetEntryAsync(_entryId, Arg.Any<CancellationToken>()).Returns(entry);
+        repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
 
-        var act = () => _service.GetEntry(_entryId);
+        var act = () => service.GetEntry(entryId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("Недостаточно прав"));
@@ -87,13 +87,8 @@ public class UserNotepadServiceShould : UnitTestBase
     public async Task CreateEntryWithCorrectData()
     {
         CreateNotepadEntryInternal? capturedEntity = null;
-        _repository.CreateEntryAsync(Arg.Any<CreateNotepadEntryInternal>(), Arg.Any<CancellationToken>())
-            .Returns(new NotepadEntry())
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<CreateNotepadEntryInternal>(0);
-                capturedEntity = e;
-            });
+        repository.CreateEntryAsync(Arg.Do<CreateNotepadEntryInternal>(e => capturedEntity = e), Arg.Any<CancellationToken>())
+            .Returns(new NotepadEntry());
 
         var createEntry = new CreateNotepadEntry
         {
@@ -101,16 +96,16 @@ public class UserNotepadServiceShould : UnitTestBase
             Content = "Test Content"
         };
 
-        await _service.CreateEntry(createEntry);
+        await service.CreateEntry(createEntry);
 
         capturedEntity.Should().NotBeNull();
-        capturedEntity!.EntryId.Should().Be(_entryId);
+        capturedEntity!.EntryId.Should().Be(entryId);
         capturedEntity.NotepadType.Should().Be(NotepadType.User);
-        capturedEntity.ContainerId.Should().Be(_currentUserId);
-        capturedEntity.AuthorId.Should().Be(_currentUserId);
+        capturedEntity.ContainerId.Should().Be(currentUserId);
+        capturedEntity.AuthorId.Should().Be(currentUserId);
         capturedEntity.Title.Should().Be("Test Entry");
         capturedEntity.Content.Should().Be("Test Content");
-        capturedEntity.CreatedUtc.Should().Be(_now);
+        capturedEntity.CreatedUtc.Should().Be(now);
     }
 
     [Fact]
@@ -118,20 +113,15 @@ public class UserNotepadServiceShould : UnitTestBase
     {
         var entry = new NotepadEntry
         {
-            Id = _entryId,
+            Id = entryId,
             NotepadType = NotepadType.User,
-            ContainerId = _currentUserId
+            ContainerId = currentUserId
         };
-        _repository.GetEntryAsync(_entryId, Arg.Any<CancellationToken>()).Returns(entry);
+        repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
 
         UpdateNotepadEntryInternal? capturedEntity = null;
-        _repository.UpdateEntryAsync(Arg.Any<UpdateNotepadEntryInternal>(), Arg.Any<CancellationToken>())
-            .Returns(entry)
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdateNotepadEntryInternal>(0);
-                capturedEntity = e;
-            });
+        repository.UpdateEntryAsync(Arg.Do<UpdateNotepadEntryInternal>(e => capturedEntity = e), Arg.Any<CancellationToken>())
+            .Returns(entry);
 
         var updateEntry = new UpdateNotepadEntry
         {
@@ -140,13 +130,13 @@ public class UserNotepadServiceShould : UnitTestBase
             SortOrder = 5
         };
 
-        await _service.UpdateEntry(_entryId, updateEntry);
+        await service.UpdateEntry(entryId, updateEntry);
 
         capturedEntity.Should().NotBeNull();
-        capturedEntity!.EntryId.Should().Be(_entryId);
+        capturedEntity!.EntryId.Should().Be(entryId);
         capturedEntity.Title.Should().Be("Updated Title");
         capturedEntity.Content.Should().Be("Updated Content");
-        capturedEntity.ModifiedUtc.Should().Be(_now);
+        capturedEntity.ModifiedUtc.Should().Be(now);
     }
 
     [Fact]
@@ -154,24 +144,24 @@ public class UserNotepadServiceShould : UnitTestBase
     {
         var entry = new NotepadEntry
         {
-            Id = _entryId,
+            Id = entryId,
             NotepadType = NotepadType.User,
-            ContainerId = _currentUserId
+            ContainerId = currentUserId
         };
-        _repository.GetEntryAsync(_entryId, Arg.Any<CancellationToken>()).Returns(entry);
+        repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns(entry);
 
-        await _service.DeleteEntry(_entryId);
+        await service.DeleteEntry(entryId);
 
-        await _repository.Received(1).DeleteEntryAsync(_entryId, _currentUserId, Arg.Any<CancellationToken>());
+        await repository.Received(1).DeleteEntryAsync(entryId, currentUserId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task DoNothingWhenDeletingNonexistentEntry()
     {
-        _repository.GetEntryAsync(_entryId, Arg.Any<CancellationToken>()).Returns((NotepadEntry?)null);
+        repository.GetEntryAsync(entryId, Arg.Any<CancellationToken>()).Returns((NotepadEntry?)null);
 
-        await _service.DeleteEntry(_entryId);
+        await service.DeleteEntry(entryId);
 
-        await _repository.DidNotReceive().DeleteEntryAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await repository.DidNotReceive().DeleteEntryAsync(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 }

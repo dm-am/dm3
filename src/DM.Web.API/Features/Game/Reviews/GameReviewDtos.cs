@@ -49,18 +49,48 @@ public class GameReviewDto
     /// Last modification timestamp (UTC)
     /// </summary>
     public DateTimeOffset? ModifiedUtc { get; set; }
+
+    /// <summary>
+    /// What the viewer may do with this review, answered by the same code that
+    /// refuses the request
+    /// </summary>
+    public GameReviewViewer Viewer { get; set; } = new();
+}
+
+/// <summary>
+/// What the viewer may do with a game review. Each flag is asked by the same
+/// code the write it stands for is refused by, so a page that offers by it
+/// offers only what the server takes; the server refuses all the same.
+/// </summary>
+public class GameReviewViewer
+{
+    /// <summary>
+    /// Whether the viewer may edit the review: its author within a day of
+    /// writing it, an admin author at any time. False for a guest
+    /// </summary>
+    public bool CanEdit { get; set; }
+
+    /// <summary>
+    /// Whether the viewer may delete the review: its author or senior
+    /// moderation. False for a guest
+    /// </summary>
+    public bool CanDelete { get; set; }
 }
 
 /// <summary>
 /// Request to create a game review
 /// </summary>
+/// <remarks>
+/// The length of the text is the domain's rule, the same for an edit and
+/// counted as the text is stored. A bound of the request's own would answer
+/// first, with its own number and message.
+/// </remarks>
 public class CreateGameReviewRequest
 {
     /// <summary>
-    /// Review text (10-10000 characters, BBCode supported)
+    /// Review text (up to 5000 characters, BBCode supported)
     /// </summary>
     [Required]
-    [StringLength(10000, MinimumLength = 10, ErrorMessage = "Рецензия от 10 до 10000 символов")]
     public string Text { get; set; } = string.Empty;
 }
 
@@ -68,14 +98,12 @@ public class CreateGameReviewRequest
 /// Request to update a game review
 /// </summary>
 /// <remarks>
-/// The upper bound is the one the domain enforces on both paths; the lower one
-/// keeps an edit from saving a text creation would have refused.
+/// The length is checked by the domain, as on creation.
 /// </remarks>
 public class UpdateGameReviewRequest
 {
     /// <summary>
-    /// New review text (10-5000 characters, BBCode supported). Omit to keep the current one
+    /// New review text (up to 5000 characters, BBCode supported). Omit to keep the current one
     /// </summary>
-    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Рецензия от 10 до 5000 символов")]
     public string? Text { get; set; }
 }

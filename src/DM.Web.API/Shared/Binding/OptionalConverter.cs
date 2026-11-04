@@ -14,15 +14,11 @@ internal class OptionalConverterFactory : JsonConverterFactory
         typeToConvert.IsGenericType && typeToConvert.GetGenericTypeDefinition() == typeof(Optional<>);
 
     /// <inheritdoc />
-    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options)
-    {
-        var optionalType = typeToConvert.GetGenericArguments()[0];
-        var converter = (JsonConverter)Activator.CreateInstance(
-            typeof(OptionalConverter<>).MakeGenericType(optionalType),
+    public override JsonConverter CreateConverter(Type typeToConvert, JsonSerializerOptions options) =>
+        (JsonConverter)Activator.CreateInstance(
+            typeof(OptionalConverter<>).MakeGenericType(typeToConvert.GetGenericArguments()[0]),
             BindingFlags.Instance | BindingFlags.Public,
             null, Array.Empty<object>(), null)!;
-        return converter;
-    }
 }
 
 /// <inheritdoc />
@@ -32,13 +28,9 @@ internal class OptionalConverter<TValue> : JsonConverter<Optional<TValue>> where
     /// A JSON null is a value here, not an absent property.
     /// </summary>
     /// <remarks>
-    /// Three states have to survive the wire: property missing (leave alone),
-    /// property null (clear it), property set (assign it). Optional is a class,
-    /// so with the default HandleNull the serialiser never called Read on a null
-    /// and assigned null to the property itself — which the domain reads as
-    /// "absent". Nothing could be cleared through PATCH: a room could not be
-    /// moved to the head of the chain, because {"previousRoomId": null} meant
-    /// "do not reorder".
+    /// Three states survive the wire: missing (leave alone), null (clear), set
+    /// (assign). Without HandleNull the serializer would assign null to the
+    /// property itself, which the domain reads as "absent".
     /// </remarks>
     public override bool HandleNull => true;
 
@@ -51,10 +43,7 @@ internal class OptionalConverter<TValue> : JsonConverter<Optional<TValue>> where
             return Optional<TValue>.WithValue(null);
         }
 
-        // Read by the value's own converter, whatever its token. Taking a string
-        // first worked only because every Optional in the contract happens to
-        // wrap a Guid: the first Optional<int> or Optional<bool> would have
-        // thrown on a number or a boolean and left the caller with a 500.
+        // By the value's own converter, whatever its token.
         var value = JsonSerializer.Deserialize<TValue>(ref reader, options);
         return Optional<TValue>.WithValue(value);
     }

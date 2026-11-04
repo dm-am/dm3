@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Net;
@@ -16,17 +17,14 @@ namespace DM.Domain.Forum.Features.Boards;
 internal class BoardService : IBoardService
 {
     private readonly IIdentityProvider _identityProvider;
-    private readonly IAccessPolicyConverter _accessPolicyConverter;
     private readonly IBoardRepository _boardRepository;
     private readonly IBoardModeratorRepository _moderatorRepository;
     private readonly IUserReadRepository _userRepository;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly ICache _cache;
 
-    /// <inheritdoc />
     public BoardService(
         IIdentityProvider identityProvider,
-        IAccessPolicyConverter accessPolicyConverter,
         IBoardRepository boardRepository,
         IBoardModeratorRepository moderatorRepository,
         IUserReadRepository userRepository,
@@ -34,7 +32,6 @@ internal class BoardService : IBoardService
         ICache cache)
     {
         _identityProvider = identityProvider;
-        _accessPolicyConverter = accessPolicyConverter;
         _boardRepository = boardRepository;
         _moderatorRepository = moderatorRepository;
         _userRepository = userRepository;
@@ -48,7 +45,7 @@ internal class BoardService : IBoardService
         var boards = await GetBoards();
         var identity = _identityProvider.Current;
 
-        // Anonymous users: show total counts (they can't mark anything as read)
+        // A guest cannot mark anything read, so a guest is shown the totals
         if (!identity.User.IsAuthenticated)
         {
             foreach (var board in boards)
@@ -59,36 +56,20 @@ internal class BoardService : IBoardService
             return boards;
         }
 
-        var boardsCopy = boards.Select(b => new Board
-        {
-            Id = b.Id,
-            Title = b.Title,
-            Alias = b.Alias,
-            Description = b.Description,
-            CreateTopicPolicy = b.CreateTopicPolicy,
-            ViewPolicy = b.ViewPolicy,
-            ModeratorIds = b.ModeratorIds,
-            TopicsCount = b.TopicsCount,
-            CommentsCount = b.CommentsCount,
-            UnreadTopicsCount = 0,
-            UnreadCommentsCount = 0,
-            LastComment = b.LastComment
-        }).ToArray();
-
         // Sequential on purpose: both fills query the one DmDbContext of this
         // scope, and a context refuses parallel operations.
-        await _unreadCountersRepository.FillParentCounters(boardsCopy, identity.User.UserId,
+        await _unreadCountersRepository.FillParentCounters(boards, identity.User.UserId,
             b => b.Id, b => b.UnreadTopicsCount);
-        await _unreadCountersRepository.FillTotalUnreadCounters(boardsCopy, identity.User.UserId,
+        await _unreadCountersRepository.FillTotalUnreadCounters(boards, identity.User.UserId,
             b => b.Id, b => b.UnreadCommentsCount);
 
-        return boardsCopy;
+        return boards;
     }
 
     /// <inheritdoc />
-    public async Task<Board> GetSingleBoard(string boardTitle)
+    public async Task<Board> GetBoardWithCounters(string aliasOrTitle)
     {
-        var board = await GetBoard(boardTitle);
+        var board = await GetBoard(aliasOrTitle);
         var identity = _identityProvider.Current;
         if (identity.User.IsAuthenticated)
         {
@@ -104,7 +85,6 @@ internal class BoardService : IBoardService
         }
         else
         {
-            // Anonymous users: show total counts
             board.UnreadTopicsCount = board.TopicsCount;
             board.UnreadCommentsCount = board.CommentsCount;
         }
@@ -113,18 +93,17 @@ internal class BoardService : IBoardService
     }
 
     /// <inheritdoc />
-    public async Task<Board> GetBoard(string aliasOrTitle, bool onlyAvailable = true)
+    public async Task<Board> GetBoard(string aliasOrTitle)
     {
-        var boards = await GetBoards(onlyAvailable);
+        var boards = await GetBoards();
 
-        // Accept a board GUID as well as alias/title so endpoints that pass
-        // the board id (e.g. GET boards/{id}/moderators) resolve correctly.
-        var byId = System.Guid.TryParse(aliasOrTitle, out var boardId);
+        // A board GUID too, for the endpoints that pass the board id (GET boards/{id}/moderators).
+        var byId = Guid.TryParse(aliasOrTitle, out var boardId);
 
         var board = boards.FirstOrDefault(b =>
             (byId && b.Id == boardId) ||
-            string.Equals(b.Alias, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(b.Title, aliasOrTitle, System.StringComparison.OrdinalIgnoreCase));
+            string.Equals(b.Alias, aliasOrTitle, StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(b.Title, aliasOrTitle, StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BoardNotFound(aliasOrTitle));
@@ -134,19 +113,19 @@ internal class BoardService : IBoardService
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<GeneralUser>> GetModerators(string boardTitle)
+    public async Task<IEnumerable<GeneralUser>> GetModerators(string aliasOrTitle)
     {
-        var board = await GetBoard(boardTitle);
+        var board = await GetBoard(aliasOrTitle);
         return await _cache.GetOrCreateAsync(
-            $"board_moderators_{board.Id}",
+            ModeratorsCacheKey(board.Id),
             () => _moderatorRepository.Get(board.Id),
             CachePolicy.LongLived);
     }
 
     /// <inheritdoc />
-    public async Task<GeneralUser> AddModerator(string boardTitle, string username)
+    public async Task<GeneralUser> AddModerator(string aliasOrTitle, string username)
     {
-        var board = await GetBoard(boardTitle, onlyAvailable: false);
+        var board = await GetBoard(aliasOrTitle);
         var user = await _userRepository.GetUserAsync(username);
         if (user == null)
         {
@@ -160,14 +139,14 @@ internal class BoardService : IBoardService
         }
 
         await _moderatorRepository.Add(board.Id, user.UserId);
-        await _cache.InvalidateAsync($"board_moderators_{board.Id}");
+        await _cache.InvalidateAsync(ModeratorsCacheKey(board.Id));
         return user;
     }
 
     /// <inheritdoc />
-    public async Task RemoveModerator(string boardTitle, string username)
+    public async Task RemoveModerator(string aliasOrTitle, string username)
     {
-        var board = await GetBoard(boardTitle, onlyAvailable: false);
+        var board = await GetBoard(aliasOrTitle);
         // Only the identifier leaves this method, and GetUserAsync pays for the whole
         // achievement profile to hand it over.
         var userId = await _userRepository.FindUserIdAsync(username);
@@ -183,26 +162,22 @@ internal class BoardService : IBoardService
         }
 
         await _moderatorRepository.Remove(board.Id, userId.Value);
-        await _cache.InvalidateAsync($"board_moderators_{board.Id}");
+        await _cache.InvalidateAsync(ModeratorsCacheKey(board.Id));
     }
+
+    private static string ModeratorsCacheKey(Guid boardId) => $"board_moderators_{boardId}";
 
     /// <inheritdoc />
-    public async Task<IEnumerable<Board>> GetAvailableBoards() => await GetBoards();
+    public async Task<IEnumerable<Board>> GetBoardsWithoutCounters() => await GetBoards();
 
-    private async Task<Board[]> GetBoards(bool onlyAvailable = true)
-    {
-        var accessPolicy = onlyAvailable
-            ? _accessPolicyConverter.Convert(_identityProvider.Current.User.Role)
-            : (BoardAccessPolicy?)null;
-        return (await _boardRepository.SelectBoards(accessPolicy)).ToArray();
-    }
+    private async Task<Board[]> GetBoards() => (await _boardRepository.SelectBoards()).ToArray();
 
     /// <inheritdoc />
     public async Task<Board> GetBoardByAlias(string alias)
     {
         var boards = await GetBoards();
         var board = boards.FirstOrDefault(b =>
-            string.Equals(b.Alias, alias, System.StringComparison.OrdinalIgnoreCase));
+            string.Equals(b.Alias, alias, StringComparison.OrdinalIgnoreCase));
         if (board == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BoardNotFound(alias));

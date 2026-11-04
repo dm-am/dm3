@@ -1,28 +1,24 @@
 using System;
-using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Comments;
-using DM.Domain.Core.Dto;
 using DM.Domain.Forum.Features.Comments;
 using DM.Web.API.Shared.Comments;
 using DM.Web.API.Shared.Dto;
 using Comment = DM.Web.API.Shared.Dto.Comment;
-using CreateCommentRequest = DM.Web.API.Shared.Dto.CreateCommentRequest;
+using CommentRequest = DM.Web.API.Shared.Dto.CommentRequest;
 
 namespace DM.Web.API.Features.Forum.Comments;
 
-/// <inheritdoc />
-internal class TopicCommentApiService : ITopicCommentApiService
+public class TopicCommentApiService
 {
     private readonly ITopicCommentService _commentService;
     private readonly IIdentityProvider _identityProvider;
     private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly CommentMapper _mapper;
 
-    /// <inheritdoc />
     public TopicCommentApiService(
         ITopicCommentService commentService,
         IIdentityProvider identityProvider,
@@ -35,17 +31,15 @@ internal class TopicCommentApiService : ITopicCommentApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
-    public async Task<(IEnumerable<Comment> Comments, PagingInfo Paging)> Get(Guid topicId, CommentsQuery query)
+    public async Task<ListEnvelope<Comment>> Get(Guid topicId, CommentsQuery query)
     {
         var excludeUserIds = await CommentReading.HiddenAuthorsAsync(
             _blacklistChecker, _identityProvider.Current);
         var (comments, paging) = await _commentService.GetAsync(topicId, query, excludeUserIds);
-        return (comments.Select(_mapper.ToComment), new PagingInfo(paging));
+        return new ListEnvelope<Comment>(comments.Select(_mapper.ToComment), new PagingInfo(paging));
     }
 
-    /// <inheritdoc />
-    public async Task<Envelope<Comment>> Create(Guid topicId, CreateCommentRequest request)
+    public async Task<Envelope<Comment>> Create(Guid topicId, CommentRequest request)
     {
         var createComment = _mapper.ToCreateComment(request);
         createComment.EntityId = topicId;
@@ -53,15 +47,13 @@ internal class TopicCommentApiService : ITopicCommentApiService
         return new Envelope<Comment>(_mapper.ToComment(createdComment));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Comment>> Get(Guid commentId)
     {
         var comment = await _commentService.GetAsync(commentId);
         return new Envelope<Comment>(_mapper.ToComment(comment));
     }
 
-    /// <inheritdoc />
-    public async Task<Envelope<Comment>> Update(Guid commentId, UpdateCommentRequest request)
+    public async Task<Envelope<Comment>> Update(Guid commentId, CommentRequest request)
     {
         var updateComment = _mapper.ToUpdateComment(request);
         updateComment.CommentId = commentId;
@@ -69,6 +61,5 @@ internal class TopicCommentApiService : ITopicCommentApiService
         return new Envelope<Comment>(_mapper.ToComment(updatedComment));
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid commentId) => _commentService.DeleteAsync(commentId);
 }

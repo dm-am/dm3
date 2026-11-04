@@ -21,52 +21,32 @@ namespace DM.Domain.Forum.Tests.Features.Boards;
 
 public class BoardServiceShould : UnitTestBase
 {
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IAccessPolicyConverter _accessPolicyConverter;
-    private readonly IBoardRepository _boardRepository;
-    private readonly IBoardModeratorRepository _moderatorRepository;
-    private readonly IUserReadRepository _userRepository;
-    private readonly IUnreadCountersRepository _unreadCountersRepository;
-    private readonly ICache _cache;
-    private readonly BoardService _service;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IBoardRepository boardRepository;
+    private readonly IBoardModeratorRepository moderatorRepository;
+    private readonly IUserReadRepository userRepository;
+    private readonly IUnreadCountersRepository unreadCountersRepository;
+    private readonly ICache cache;
+    private readonly BoardService service;
 
     public BoardServiceShould()
     {
-        _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Current.Returns(Identities.Guest());
+        identityProvider = Mock<IIdentityProvider>();
+        identityProvider.Current.Returns(Identities.Guest());
 
-        _accessPolicyConverter = Mock<IAccessPolicyConverter>();
-        _accessPolicyConverter.Convert(Arg.Any<UserRole>()).Returns(BoardAccessPolicy.Guest);
+        boardRepository = Mock<IBoardRepository>();
+        moderatorRepository = Mock<IBoardModeratorRepository>();
+        userRepository = Mock<IUserReadRepository>();
+        unreadCountersRepository = Mock<IUnreadCountersRepository>();
+        cache = Mock<ICache>();
 
-        _boardRepository = Mock<IBoardRepository>();
-        _moderatorRepository = Mock<IBoardModeratorRepository>();
-        _userRepository = Mock<IUserReadRepository>();
-        _unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        _cache = Mock<ICache>();
-
-        _service = new BoardService(
-            _identityProvider,
-            _accessPolicyConverter,
-            _boardRepository,
-            _moderatorRepository,
-            _userRepository,
-            _unreadCountersRepository,
-            _cache);
-    }
-
-    [Fact]
-    public async Task ReturnBoardsListForGuestUser()
-    {
-        var boards = new[]
-        {
-            new Board { Id = Guid.NewGuid(), Title = "General", Description = "General discussion" },
-            new Board { Id = Guid.NewGuid(), Title = "News", Description = "News and updates" }
-        };
-        _boardRepository.SelectBoards(Arg.Any<BoardAccessPolicy?>()).Returns(boards);
-
-        var result = await _service.GetBoardsList();
-
-        result.Should().BeEquivalentTo(boards);
+        service = new BoardService(
+            identityProvider,
+            boardRepository,
+            moderatorRepository,
+            userRepository,
+            unreadCountersRepository,
+            cache);
     }
 
     [Fact]
@@ -74,24 +54,65 @@ public class BoardServiceShould : UnitTestBase
     {
         var userId = Guid.NewGuid();
         var identity = Identities.User(userId, UserRole.RegularUser);
-        _identityProvider.Current.Returns(identity);
+        identityProvider.Current.Returns(identity);
 
         var boards = new[]
         {
             new Board { Id = Guid.NewGuid(), Title = "General" }
         };
-        _boardRepository.SelectBoards(Arg.Any<BoardAccessPolicy?>()).Returns(boards);
+        boardRepository.SelectBoards().Returns(boards);
 
         var emptyCounters = new Dictionary<Guid, int> { { boards[0].Id, 0 } };
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>()).Returns(emptyCounters);
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectTotalUnreadByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>()).Returns(emptyCounters);
 
-        await _service.GetBoardsList();
+        await service.GetBoardsList();
 
-        await _unreadCountersRepository.Received(1).SelectByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>());
-        await _unreadCountersRepository.Received(1).SelectTotalUnreadByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>());
+        await unreadCountersRepository.Received(1).SelectByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>());
+        await unreadCountersRepository.Received(1).SelectTotalUnreadByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>());
+    }
+
+    /// <summary>
+    /// The reader who signed in gets the same board as a guest does, with the counters of his own.
+    /// </summary>
+    [Fact]
+    public async Task KeepEveryFieldOfTheBoardForAuthenticatedUser()
+    {
+        var userId = Guid.NewGuid();
+        identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
+
+        var moderator = new GeneralUser { UserId = Guid.NewGuid(), Username = "Moderator1" };
+        var board = new Board
+        {
+            Id = Guid.NewGuid(),
+            Title = "General",
+            Alias = "general",
+            Description = "Talk",
+            CreateTopicPolicy = BoardAccessPolicy.RegularUser,
+            ModeratorIds = [moderator.UserId],
+            Moderators = [moderator],
+            TopicsCount = 4,
+            CommentsCount = 9,
+            LastComment = new BoardLastComment { Id = Guid.NewGuid(), TopicTitle = "Hello" },
+            LastTopic = new BoardLastTopic { Id = Guid.NewGuid(), TopicNumber = 4, Title = "Hello" }
+        };
+        boardRepository.SelectBoards().Returns(new[] { board });
+        unreadCountersRepository
+            .SelectByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>())
+            .Returns(new Dictionary<Guid, int> { { board.Id, 2 } });
+        unreadCountersRepository
+            .SelectTotalUnreadByParentsAsync(userId, UnreadEntryType.Message, Arg.Any<Guid[]>())
+            .Returns(new Dictionary<Guid, int> { { board.Id, 3 } });
+
+        var listed = (await service.GetBoardsList()).Should().ContainSingle().Subject;
+
+        listed.Should().BeEquivalentTo(board, options => options
+            .Excluding(b => b.UnreadTopicsCount)
+            .Excluding(b => b.UnreadCommentsCount));
+        listed.UnreadTopicsCount.Should().Be(2);
+        listed.UnreadCommentsCount.Should().Be(3);
     }
 
     [Fact]
@@ -100,18 +121,18 @@ public class BoardServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var boardId = Guid.NewGuid();
         var identity = Identities.User(userId, UserRole.RegularUser);
-        _identityProvider.Current.Returns(identity);
+        identityProvider.Current.Returns(identity);
 
         var board = new Board { Id = boardId, Title = "General" };
-        _boardRepository.SelectBoards(Arg.Any<BoardAccessPolicy?>()).Returns(new[] { board });
+        boardRepository.SelectBoards().Returns(new[] { board });
 
         var unreadCounters = new Dictionary<Guid, int> { { boardId, 5 } };
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectByParentsAsync(userId, UnreadEntryType.Message, boardId).Returns(unreadCounters);
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectTotalUnreadByParentsAsync(userId, UnreadEntryType.Message, boardId).Returns(unreadCounters);
 
-        var result = await _service.GetSingleBoard("General");
+        var result = await service.GetBoardWithCounters("General");
 
         result.UnreadTopicsCount.Should().Be(5);
         result.UnreadCommentsCount.Should().Be(5);
@@ -129,10 +150,10 @@ public class BoardServiceShould : UnitTestBase
     {
         var userId = Guid.NewGuid();
         var boardId = Guid.NewGuid();
-        _identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
+        identityProvider.Current.Returns(Identities.User(userId, UserRole.RegularUser));
 
         var board = new Board { Id = boardId, Title = "General" };
-        _boardRepository.SelectBoards(Arg.Any<BoardAccessPolicy?>()).Returns(new[] { board });
+        boardRepository.SelectBoards().Returns(new[] { board });
 
         var busy = 0;
         Task<IDictionary<Guid, int>> OneAtATime(int counter)
@@ -151,14 +172,14 @@ public class BoardServiceShould : UnitTestBase
             });
         }
 
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectByParentsAsync(userId, UnreadEntryType.Message, boardId)
             .Returns(_ => OneAtATime(3));
-        _unreadCountersRepository
+        unreadCountersRepository
             .SelectTotalUnreadByParentsAsync(userId, UnreadEntryType.Message, boardId)
             .Returns(_ => OneAtATime(7));
 
-        var result = await _service.GetSingleBoard("General");
+        var result = await service.GetBoardWithCounters("General");
 
         result.UnreadTopicsCount.Should().Be(3);
         result.UnreadCommentsCount.Should().Be(7);
@@ -167,9 +188,9 @@ public class BoardServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenBoardNotFound()
     {
-        _boardRepository.SelectBoards(Arg.Any<BoardAccessPolicy?>()).Returns(Array.Empty<Board>());
+        boardRepository.SelectBoards().Returns(Array.Empty<Board>());
 
-        var act = async () => await _service.GetBoard("NonExistent");
+        var act = async () => await service.GetBoard("NonExistent");
 
         var exception = await act.Should().ThrowAsync<HttpException>();
         exception.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
@@ -181,21 +202,21 @@ public class BoardServiceShould : UnitTestBase
     {
         var boardId = Guid.NewGuid();
         var board = new Board { Id = boardId, Title = "General" };
-        _boardRepository.SelectBoards(Arg.Any<BoardAccessPolicy?>()).Returns(new[] { board });
+        boardRepository.SelectBoards().Returns(new[] { board });
 
         var moderators = new[]
         {
             new GeneralUser { UserId = Guid.NewGuid(), Username = "Moderator1" }
         };
-        _cache.GetOrCreateAsync(
+        cache.GetOrCreateAsync(
                 Arg.Any<string>(),
                 Arg.Any<Func<Task<IEnumerable<GeneralUser>>>>(),
                 Arg.Any<TimeSpan>()).Returns(moderators);
 
-        var result = await _service.GetModerators("General");
+        var result = await service.GetModerators("General");
 
         result.Should().BeEquivalentTo(moderators);
-        await _cache.Received(1).GetOrCreateAsync(
+        await cache.Received(1).GetOrCreateAsync(
             $"board_moderators_{boardId}",
             Arg.Any<Func<Task<IEnumerable<GeneralUser>>>>(),
             CachePolicy.LongLived);

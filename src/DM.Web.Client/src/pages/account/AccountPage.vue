@@ -2,42 +2,34 @@
   <page-title>Настройки аккаунта</page-title>
 
   <div v-if="user" class="account-page">
-    <!--
-      /account = account-level only: security, sessions, notifications
-      (and the bots that deliver them), privacy, username change.
-      Avatar, status, name, bio, contacts are profile attrs, edited
-      on the profile page (/profile/me → "Редактировать").
-    -->
+    <!-- The account only; what the profile shows is edited on the profile. -->
     <p class="profile-link-hint">
-      Аватар, статус, имя, биография и контакты редактируются на
+      Аватар, статус, имя, пол, местоположение, день рождения, контакты и "О
+      себе" правятся
       <router-link
         :to="{ name: 'profile', params: { username: user.username } }"
         class="profile-link"
+        >в профиле</router-link
       >
-        странице профиля</router-link
-      >
+      кнопкой "Редактировать"
     </p>
 
+    <!-- Invitations first: they wait for an answer. -->
     <account-invitations-section />
+    <account-settings-section />
+    <account-notifications-section />
+    <account-blacklist-section />
+    <account-username-change-section :user="user" />
     <account-security-section
       :user="user"
       @password-changed="onPasswordChanged"
       @email-change-requested="onEmailChangeRequested"
     />
-    <!-- Between the credentials it belongs with and the device list its
-         confirmation empties: confirming the factor ends every other session,
-         and the block below is where that shows. -->
+    <!-- Before the device list: confirming the factor ends every other session there. -->
     <account-two-factor-section />
     <account-sessions-section ref="sessionsSection" />
     <account-security-history-section ref="securityHistorySection" />
-    <account-settings-section :user="user" />
-    <account-username-change-section :user="user" />
-    <account-blacklist-section />
-    <account-notifications-section />
-    <!-- The account is removed by moderation and by nothing else, so this page
-         has nothing to offer but the sentence saying who removes it and on
-         what. A control here would promise an action the site no longer
-         performs. -->
+    <!-- The account is removed by moderation alone, so there is a sentence and no control. -->
     <p class="removal-hint">
       Аккаунт удаляет модерация по обращению в поддержку
     </p>
@@ -64,42 +56,30 @@ type SessionsBlock = InstanceType<typeof AccountSessionsSection>;
 type SecurityHistoryBlock = InstanceType<typeof AccountSecurityHistorySection>;
 
 /**
- * The two blocks that the security block changes from a distance.
- *
- * Both read themselves once, in onMounted, and both own their data: the page
- * has none of it to hand down. So each of them exposes a way to read itself
- * again and the page holds the handle. It is the smallest of the ways the
- * project has to do this: a store would move state
- * nobody else reads out of the block that reads it, and a `:key` would throw
- * a whole block away to fetch what one request brings back.
+ * The two blocks the security block changes from a distance. Each reads
+ * itself and owns its data, so each exposes a re-read and the page holds it.
  */
 const sessionsSection = ref<SessionsBlock | null>(null);
 const securityHistorySection = ref<SecurityHistoryBlock | null>(null);
 
-/**
- * Changing the password ends every other session and writes the journal entry
- * in one server call (PasswordChangeService), and neither of those shows in the
- * block that did it. Until both are re-read, the device list still offers to
- * sign out of devices that are already signed out.
- */
+/** A new password ends every other session and writes the journal in one call; both blocks read again. */
 function onPasswordChanged() {
   sessionsSection.value?.reload();
   securityHistorySection.value?.reload();
 }
 
-/**
- * Asking for a new address writes a journal entry too, and only that: the
- * address itself moves when the link in the letter is followed, and no session
- * is touched, so the device list has nothing to re-read.
- */
+/** Asking for a new address writes the journal only: no session is touched. */
 function onEmailChangeRequested() {
   securityHistorySection.value?.reload();
 }
 </script>
 
 <style scoped lang="sass">
+// The reading column of the account sections, narrower than the content area.
+$account-column-width: 800px
+
 .account-page
-  max-width: 800px
+  max-width: $account-column-width
   margin: 0 auto
 
 .profile-link-hint
@@ -109,8 +89,7 @@ function onEmailChangeRequested() {
   font-size: $secondary-font-size
   color: $text-muted
 
-// A footnote, not a section: no card, no heading and no rounding, because
-// there is no control here for any of that to frame.
+// A footnote, not a section: there is no control for a card to frame.
 .removal-hint
   margin: 0
   font-size: $secondary-font-size

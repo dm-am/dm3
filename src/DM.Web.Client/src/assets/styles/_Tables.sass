@@ -1,26 +1,9 @@
-// Table styling mixins
-// Unified with DataTable visual style: uses border-spacing to create gaps
-//
-// Usage:
-//   .my-table
-//     +table                    // container with gap background
-//   .my-header
-//     +table-header             // header row styling
-//   .my-row
-//     +table-row                // data row styling
-//   .my-row (expandable)
-//     +expandable-row           // clickable expandable row
-//   .my-details
-//     +expandable-details       // expanded content
-//   .my-info-table
-//     +info-table               // key-value fact table of an entity page
-//
-// Note: For full-featured data tables with sorting/pagination, use DataTable component
+// Table mixins in the look of DataTable.
 
 @use "Themes" as *
 @use "Variables" as *
+@use "Surfaces" as *
 
-// Shared spacing/sizing
 $table-cell-padding-v: $small
 $table-cell-padding-h: 12px
 $table-gap: 1px
@@ -42,23 +25,21 @@ $table-gap: 1px
   padding: $table-cell-padding-v $table-cell-padding-h
   background-color: $bg-element
 
-// Row hover effect (for interactive tables)
+// The hover of an interactive row
 =table-row-hover
   transition: background-image $transition-normal
   &:hover
     background-image: linear-gradient($hover-overlay, $hover-overlay)
 
-// Key-value fact table of an entity's info page: borderless, compact, no card.
-// Labels are not colour-differentiated from values (the old site's module-info
-// block reads as one run of facts). Two pages each kept their own copy of this
-// rule and drifted on exactly that declaration, which is why it lives here.
+// The fact table of an entity page: borderless, compact, the labels in the
+// colour of the values, as DM2 reads them as one run of facts.
 =info-table
   border-collapse: collapse
   width: 100%
 
   th,
   td
-    padding: 2px $small 2px 0
+    padding: $tiny $small $tiny 0
     text-align: left
     vertical-align: top
     font-weight: normal
@@ -69,35 +50,25 @@ $table-gap: 1px
     padding-right: $big
     color: $text
 
-// Expandable row/details mixins (for interactive tables with click-to-expand)
+// Rows that open their details on a click
 $expand-icon-size: 10px
 $expand-icon-width: 12px
 $details-offset: 20px
 
-// Chrome without a layout: each mode lays its own cells out (--grid as a CSS
-// table, --title as inline flow). Neither may be flex — a flex item is
-// blockified, and a blockified part is a line of its own in the clipboard,
-// which is how a one-title row copied as a newline and then its title.
 =expandable-row
   padding: $table-cell-padding-v $table-cell-padding-h
   background-color: $bg-element
   cursor: pointer
-  transition: background-image $transition-normal
-
-  &:hover
-    background-image: linear-gradient($hover-overlay, $hover-overlay)
+  +table-row-hover
 
   &.expanded
     background-image: linear-gradient($selected-overlay, $selected-overlay)
 
-  // Rows stand flush, so the ring goes inward: on the edge it would lie on
-  // the neighbouring row.
+  // Rows stand flush, so the ring goes inward.
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
+    +focus-ring($inward: true)
 
-// The column the marker sits in. The marker itself is the global
-// .expand-marker (Reset.sass): it draws the glyph and owns the turn.
+// The column of the marker; the global .expand-marker draws and turns it.
 =expand-icon
   display: inline-block
   vertical-align: middle
@@ -112,5 +83,4 @@ $details-offset: 20px
   font-size: $secondary-font-size
   color: $text
   white-space: normal
-  word-wrap: break-word
   overflow-wrap: break-word

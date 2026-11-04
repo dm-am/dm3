@@ -1,6 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Linq;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.UnreadCounters;

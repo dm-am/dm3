@@ -1,7 +1,3 @@
-using System.IO;
-using System.Threading;
-using System.Threading.Tasks;
-
 namespace DM.Domain.Core.Uploads;
 
 /// <summary>
@@ -9,14 +5,6 @@ namespace DM.Domain.Core.Uploads;
 /// bucket, the caching a never-rewritten key allows and the address the object
 /// is served from.
 /// </summary>
-/// <remarks>
-/// The relational store has a context and the document store has a client; this
-/// one had neither, so every caller held the vendor client and wrote its own
-/// answer to "the key is already gone" — three callers, three different answers,
-/// and the bucket name repeated at each of them. A second object per upload, a
-/// different bucket or a move to batch deletes is one change here instead of
-/// several that have to agree.
-/// </remarks>
 public interface IObjectStorage
 {
     /// <summary>
@@ -63,7 +51,6 @@ public interface IObjectStorage
     /// <summary>
     /// Public address the object is served from.
     /// </summary>
-    /// <param name="key">Object key.</param>
     string BuildPublicUrl(string key);
 }
 

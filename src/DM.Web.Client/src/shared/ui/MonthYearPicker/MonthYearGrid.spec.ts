@@ -40,30 +40,30 @@ const focused = () =>
 describe("MonthYearGrid keyboard", () => {
   it("is one stop of Tab, on the selected month", () => {
     const wrapper = mountGrid();
-    expect(tabStop(wrapper)).toEqual(["Июл"]);
+    expect(tabStop(wrapper)).toEqual(["Июль"]);
     expect(wrapper.findAll('.myp-cell[tabindex="-1"]')).toHaveLength(11);
   });
 
   it("walks months with the side arrows and rows of three with the others", async () => {
     const wrapper = mountGrid();
     await press(wrapper, "ArrowRight");
-    expect(focused()).toBe("Авг");
+    expect(focused()).toBe("Авг.");
     await press(wrapper, "ArrowDown");
-    expect(focused()).toBe("Ноя");
+    expect(focused()).toBe("Нояб.");
     await press(wrapper, "ArrowLeft");
-    expect(focused()).toBe("Окт");
+    expect(focused()).toBe("Окт.");
     await press(wrapper, "ArrowUp");
-    expect(focused()).toBe("Июл");
+    expect(focused()).toBe("Июль");
     await press(wrapper, "Home");
-    expect(focused()).toBe("Янв");
+    expect(focused()).toBe("Янв.");
     await press(wrapper, "End");
-    expect(focused()).toBe("Дек");
+    expect(focused()).toBe("Дек.");
   });
 
   it("does not step onto a month out of reach", async () => {
     const wrapper = mountGrid({ maxYear: 2026, maxMonth: 7 });
     await press(wrapper, "ArrowRight");
-    expect(tabStop(wrapper)).toEqual(["Июл"]);
+    expect(tabStop(wrapper)).toEqual(["Июль"]);
   });
 
   it("turns the year with PageUp and PageDown", async () => {

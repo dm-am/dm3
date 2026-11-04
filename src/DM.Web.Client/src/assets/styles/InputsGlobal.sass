@@ -1,12 +1,5 @@
-// The base look of every form control, applied once for the whole document.
-//
-// It lives apart from Inputs.sass on purpose: 85 components import that file to
-// reach its mixins, and a file that also emits rules emits them again inside
-// every one of those scoped stylesheets. That cost 84 byte-identical copies of
-// this block — 99 708 bytes, a fifth of all shipped CSS, and 54 of the copies
-// were in components with no form control at all. Inputs.sass is now mixins
-// only; anything that outputs rules globally belongs here and is imported once
-// from main.ts.
+// The rules of the form controls, emitted once from main.ts: Inputs.sass is
+// imported by many components, so it holds mixins only.
 @use "Inputs" as *
 
 input,
@@ -20,21 +13,12 @@ input[type="checkbox"]
 input[type="radio"]
   +radio()
 
-// A control's letters are the site's. The reset lists sixty elements and
-// `button` is not among them, and the block above covers input/textarea/select
-// only — so every hand-rolled button (the subscription tabs, the notepad's
-// close cross, the four outlined pills) was drawn by the user agent in its own
-// family, visibly not PT Sans, on the same line as text that was. `inherit` and
-// not the family by name: the family is declared once, on <body>, and this rule
-// only stops the UA sheet from overriding it.
+// The UA sheet gives a button a family of its own; it takes the body's.
 button
   font-family: inherit
 
-// The bot trap the public forms render: in the markup, out of the page. Off
-// screen rather than display:none, which is the first thing a bot skips. One
-// rule for all three call sites: they had drifted into two different
-// treatments, and the support form drew the trap with none at all, in plain
-// sight, where a reader could type into it and get the ticket refused.
+// The bot trap of the public forms: off screen, and not display: none, which a
+// bot skips first.
 .honeypot-field
   position: absolute
   left: -9999px

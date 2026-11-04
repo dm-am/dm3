@@ -1,11 +1,5 @@
-/**
- * The character sheet on the wire.
- *
- * A specification and its possible values are the same shape wherever a sheet
- * is served: the schema of a game, and the template a game starts from. They
- * live here rather than in either slice because both read them, and a copy in
- * each is how the two would come to disagree.
- */
+// The character sheet on the wire, read by the schema of a game and by the
+// template a game starts from.
 
 /**
  * Constraints a specification puts on its value.
@@ -39,32 +33,21 @@ export interface AttributeSpecification {
   /** Maximal length - only for Text/Number/BbCode types */
   maxLength?: number | null;
   /**
-   * Possible values, empty for every type but TextList/NumberList/TextNumberList.
-   *
-   * An array always, never null: the server declares the field required and
-   * refuses a null with a validation error, so a draft that means "no values"
-   * carries an empty array.
+   * Empty for every type but the lists; never null, which the server refuses.
    */
   values: AttributeValueSpecification[];
 }
 
 /**
- * The character sheet of one game, as its details answer serves it.
- *
- * The version is a number without meaning: the client compares it to nothing
- * and only hands back the one it was given, so a replacement written against a
- * sheet somebody else has already changed is refused instead of overwriting it.
+ * The version is only handed back, so a replacement written against a sheet
+ * somebody else changed is refused.
  */
 export interface GameAttributeSchema {
   specifications: AttributeSpecification[];
   version: number;
 }
 
-/**
- * Replacement of a game's whole sheet. Partial edits have no meaning here: the
- * set that arrives is the set the game keeps, and the values of every
- * specification it drops go with them.
- */
+/** The whole sheet: values of every specification it drops go with them. */
 export interface ReplaceGameAttributeSchemaRequest {
   specifications: AttributeSpecification[];
   /** The version the sheet was read at; the server refuses a body without one. */

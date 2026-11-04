@@ -1,8 +1,5 @@
 namespace DM.Domain.Core.Enums;
 
-/// <summary>
-/// Type of room access target
-/// </summary>
 public enum RoomAccessTargetType
 {
     /// <summary>

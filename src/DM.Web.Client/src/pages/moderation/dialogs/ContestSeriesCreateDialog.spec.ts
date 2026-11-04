@@ -2,20 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * Creating a contest series, and where the refusal to that press is written.
- *
- * The window runs the request itself (Dialog `action`), so a refusal - a
- * series with this number and year already there, above all, and the refusals
- * the response interceptor used to say in a plate over the dialog - is printed
- * in the window over its buttons, and the window stays open with the fields as
- * they were. The request carries the flags that keep the interceptor quiet.
- *
- * The library tier under the window is reduced to a box that draws the card,
- * and the shared Select to a native list: neither decides anything here.
- */
+// The window runs the request: a refusal, above all a series already there,
+// is printed in it and it stays open. The shared Select is a native list here.
 import { afterEach, describe, it, expect, vi, beforeEach } from "vitest";
-import { defineComponent, h } from "vue";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { ContestType } from "@/shared/api/models/achievements";
 import { setScrollContainer } from "@/shared/lib/scroll";
@@ -23,23 +12,14 @@ import ContestSeriesCreateDialog from "./ContestSeriesCreateDialog.vue";
 
 const createContestSeries = vi.hoisted(() => vi.fn());
 
-vi.mock("@/entities/achievement", () => ({
+vi.mock("@/entities/achievement", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/entities/achievement")>()),
   achievementApi: { createContestSeries },
 }));
 
-vi.mock("vue-final-modal", () => ({
-  VueFinalModal: defineComponent({
-    props: { contentClass: { type: String, default: "" } },
-    setup:
-      (props, { slots }) =>
-      () =>
-        h(
-          "div",
-          { class: ["vfm-content", props.contentClass] },
-          slots.default?.(),
-        ),
-  }),
-}));
+vi.mock("vue-final-modal", async () =>
+  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+);
 
 const FLAGS = { ownsRefusal: true, ownsRateLimit: true };
 
@@ -110,7 +90,7 @@ describe("the contest series dialog", () => {
     expect(wrapper.find(".form-refusal").exists()).toBe(false);
   });
 
-  /** A series already there, and the refusals the interceptor used to say. */
+  /** A series already there, and the refusals the window takes over from the interceptor. */
   it.each([
     [409, "Такая серия уже существует"],
     [403, "Недостаточно прав"],
@@ -142,10 +122,7 @@ describe("the contest series dialog", () => {
   });
 });
 
-/**
- * The year is the site's field of four digits, not the browser's number field
- * with its arrows up and down beside the year.
- */
+// The year is the site's field of four digits, not the browser's number field.
 describe("the year of a contest series", () => {
   beforeEach(() => {
     createContestSeries.mockReset();
@@ -154,6 +131,7 @@ describe("the year of a contest series", () => {
 
   const year = (wrapper: ReturnType<typeof render>["wrapper"]) =>
     wrapper.get("#series-year");
+  const nextYear = new Date().getFullYear() + 1;
   const createButton = (wrapper: ReturnType<typeof render>["wrapper"]) =>
     wrapper.findAll("button").find((button) => button.text() === "Создать")!;
 
@@ -179,15 +157,30 @@ describe("the year of a contest series", () => {
     expect(createButton(wrapper).attributes("disabled")).toBeDefined();
   });
 
+  // The server's bounds: the opening of the site and a year past the current one.
   it("names the bounds", async () => {
     const { wrapper } = render();
-    await year(wrapper).setValue("1999");
+    await year(wrapper).setValue("2006");
     await year(wrapper).trigger("blur");
-    expect(wrapper.get(".form-field-error").text()).toBe("Не раньше 2000");
+    expect(wrapper.get(".form-field-error").text()).toBe("Не раньше 2007");
+
+    await year(wrapper).setValue(String(nextYear + 1));
+    await year(wrapper).trigger("blur");
+    expect(wrapper.get(".form-field-error").text()).toBe(
+      `Не позже ${nextYear}`,
+    );
   });
 
-  // Enter in a field of a form sends it: that is the browser's own default
-  // action of the key, and a field or a form that cancels the key cancels it.
+  it("takes the opening year of the site and the next one", async () => {
+    const { wrapper } = render();
+    for (const taken of ["2007", String(nextYear)]) {
+      await year(wrapper).setValue(taken);
+      await year(wrapper).trigger("blur");
+      expect(wrapper.find(".form-field-error").exists()).toBe(false);
+    }
+  });
+
+  // Enter sends a form by the browser's default action; cancelling the key cancels it.
   const enter = (target: Element) => {
     const press = new KeyboardEvent("keydown", {
       key: "Enter",
@@ -210,18 +203,18 @@ describe("the year of a contest series", () => {
 
   it("lets Enter send a year it took", async () => {
     const { wrapper } = render();
-    await year(wrapper).setValue("2031");
+    await year(wrapper).setValue(String(nextYear));
     expect(enter(year(wrapper).element)).toBe(false);
     expect(enter(wrapper.get("#series-number").element)).toBe(false);
   });
 
   it("sends the year typed in", async () => {
     const { wrapper } = render();
-    await year(wrapper).setValue("2031");
+    await year(wrapper).setValue(String(nextYear));
     await create(wrapper);
 
     expect(createContestSeries).toHaveBeenCalledWith(
-      expect.objectContaining({ year: 2031 }),
+      expect.objectContaining({ year: nextYear }),
       FLAGS,
     );
   });

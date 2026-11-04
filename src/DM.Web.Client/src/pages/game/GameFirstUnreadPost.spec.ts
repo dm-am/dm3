@@ -1,17 +1,8 @@
-/**
- * The jump to the first unread post has to name the page the room will draw:
- * counted in the page size the room asks the API for, and handed over under the
- * query key the room reads.
- *
- * It used to divide by a literal 20 and write "?page=", a key the room never
- * reads, so the computed page was dropped and every jump landed on page one.
- * The twin screen for comments (GameFirstUnreadComment.vue) had already been
- * fixed both ways; this pins the same two facts here.
- */
+// The jump to the first unread post names the page the room will draw.
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { useAuthStore } from "@/shared/stores";
+import { useAuthStore } from "@/entities/user";
 import GameFirstUnreadPost from "./GameFirstUnreadPost.vue";
 
 const { mockGetFirstUnreadPost, mockGetRooms, mockReplace } = vi.hoisted(
@@ -22,11 +13,12 @@ const { mockGetFirstUnreadPost, mockGetRooms, mockReplace } = vi.hoisted(
   }),
 );
 
-vi.mock("@/entities/game/api/gameApi", () => ({
-  default: {
-    getFirstUnreadPost: mockGetFirstUnreadPost,
-    getRooms: mockGetRooms,
-  },
+vi.mock("@/entities/game/api/postApi", () => ({
+  default: { getFirstUnreadPost: mockGetFirstUnreadPost },
+}));
+
+vi.mock("@/entities/game/api/roomApi", () => ({
+  default: { getRooms: mockGetRooms },
 }));
 
 vi.mock("vue-router", () => ({
@@ -37,8 +29,8 @@ vi.mock("vue-router", () => ({
 let pinia: ReturnType<typeof createPinia>;
 
 /** A reader with this many posts per page saved. */
-function reader(postsPerPage: number) {
-  useAuthStore().user = { settings: { paging: { postsPerPage } } } as never;
+function reader(pageSize: number) {
+  useAuthStore().user = { settings: { pageSize } } as never;
 }
 
 /** Mounts the screen on an unread post and returns the route it redirected to. */
@@ -98,5 +90,20 @@ describe("GameFirstUnreadPost", () => {
     const target = await jumpTo(25);
 
     expect(target.query).toEqual({ scrollTo: "p-77" });
+  });
+
+  it("opens the game itself when the request failed", async () => {
+    mockGetFirstUnreadPost.mockResolvedValue({
+      data: null,
+      error: { status: 500, title: "" },
+    });
+
+    mount(GameFirstUnreadPost, { global: { plugins: [pinia] } });
+    await flushPromises();
+
+    expect(mockReplace).toHaveBeenCalledWith({
+      name: "game",
+      params: { id: "g-1" },
+    });
   });
 });

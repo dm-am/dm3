@@ -31,7 +31,7 @@ public enum UserSort
     GamesHosting = 4,
 
     /// <summary>
-    /// Sort by popularity (active subscribers within 30 days)
+    /// Sort by popularity (subscribers active within <see cref="Configuration.ActivityPolicy.ActivePeriod" />)
     /// </summary>
     Popularity = 5,
 

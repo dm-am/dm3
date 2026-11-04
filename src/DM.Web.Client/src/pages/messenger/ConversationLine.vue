@@ -1,34 +1,12 @@
 <script setup lang="ts">
 /**
- * ConversationLine: the line at the top of a correspondence's frame, where
- * the global chat has its events, and in their dress (ChatStrip): who the
- * correspondence is with and whether he is on the site, then the two things
- * done to it, "поиск" and "…".
- *
- * A conversation of two names the other one, a link to his profile, with
- * "[online]" or "[offline]" after the name, the site's way of saying it. A
- * group names itself and the number of its participants.
- *
- * "поиск" opens the search of the correspondence under the line (the page
- * draws it); it stands only over a correspondence with something in it.
- *
- * "…" opens the menu of the correspondence, the site's one menu (_Menu.sass):
- * the profile of the other one, the clearing of the history for the reader
- * alone, the leaving of a group. Each line stands only where the server says
- * the reader may do it, and "…" only where one line does. The clearing and
- * the leaving ask first (the page's windows).
- *
- * The menu hangs under "…" at its left edge, or at its right edge where the
- * window has no room for it to the right. It is drawn over the page rather
- * than inside the frame of the feed, which clips what stands outside it: in a
- * narrow column the menu was cut at the frame's edge. A scroll or a resize
- * takes it down, as it would leave it hanging away from "…". So does the focus
- * leaving "…" and the menu both: drawn at the end of the page, the menu is
- * not where Tab goes from "…", and it stood open over the feed the focus
- * went to.
- *
- * The line is one inline run with real spaces, as the events are, so it
- * copies as it reads: "SolohinLex [online] | поиск | …".
+ * The line at the top of a correspondence's frame, in the events' dress
+ * (ChatStrip): who it is with and whether he is on the site, "поиск" (over a
+ * correspondence with something in it) and "…", the site's one menu with only
+ * the lines the server allows. The menu is drawn over the page, since the
+ * feed's frame clips it, so a scroll, a resize and the focus leaving both "…"
+ * and the menu take it down. The line copies as it reads:
+ * "SolohinLex [online] | поиск | …".
  */
 import { computed, nextTick, onUnmounted, ref, watch } from "vue";
 import type { Chat } from "@/entities/message";
@@ -39,13 +17,9 @@ import { ChatStrip } from "@/widgets/chat-feed";
 
 const props = withDefaults(
   defineProps<{
-    /** The open correspondence; null while it is on its way. */
     chat: Chat | null;
-    /** The other one of a conversation of two. */
     interlocutor?: User | null;
-    /** The search under the line is open. */
     searchOpen?: boolean;
-    /** There is something to search in. */
     canSearch?: boolean;
   }>(),
   { interlocutor: null, searchOpen: false, canSearch: false },
@@ -87,9 +61,7 @@ const hasMenu = computed(
   () => Boolean(profile.value) || canClear.value || canLeave.value,
 );
 
-// ─────────────────────────────────────────────────────────────
 // The menu under "…"
-// ─────────────────────────────────────────────────────────────
 const menuOpen = ref(false);
 const anchor = ref<HTMLElement | null>(null);
 const trigger = ref<HTMLButtonElement | null>(null);
@@ -152,10 +124,7 @@ function onAnchorKeydown(event: KeyboardEvent) {
   handleMenuKeydown(event);
 }
 
-/**
- * The focus gone from "…" and the menu to elsewhere on the page. Nowhere in
- * particular (a press on what takes no focus) is the click's to answer.
- */
+/** The focus gone from "…" and the menu; gone nowhere in particular is the click's to answer. */
 function onFocusOut(event: FocusEvent) {
   const next = event.relatedTarget as Node | null;
   if (!next) return;
@@ -169,8 +138,7 @@ function onDocumentClick(event: MouseEvent) {
   closeMenu();
 }
 
-// While the menu is open. The scroll is caught on its way down: the feed and
-// the page scroll in containers of their own.
+// The scroll is caught on its way down: the feed and the page scroll in containers of their own.
 function listen(on: boolean) {
   if (on) {
     document.addEventListener("click", onDocumentClick);
@@ -292,13 +260,15 @@ onUnmounted(() => listen(false));
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 @use "@/assets/styles/Menu" as *
 @use "@/assets/styles/Skeleton" as *
 @use "@/assets/styles/ZIndex" as *
 
-// Who the correspondence is with: bold in the text's colour, as the title of
-// an event; the profile a link of it.
+// The bar standing for a name while the correspondence loads.
+$name-placeholder-width: 180px
+
+// Bold in the text's colour, as an event title; the profile a link of it.
 .line-name
   font-weight: 700
   color: $text
@@ -317,8 +287,7 @@ a.line-name
 .offline
   color: $text-muted
 
-// "поиск" and "…": the grey link-buttons of the events line, $link and bold
-// while what they opened is up.
+// The grey link-buttons of the events line, $link and bold while open.
 .strip-item
   +muted-link-button
   &
@@ -337,7 +306,7 @@ a.line-name
 .conversation-menu
   position: fixed
   z-index: $z-dropdown
-  // As wide as its longest line: the anchor it hangs from is one sign wide.
+  // As wide as its longest line: the anchor is one sign wide.
   width: max-content
   +menu-panel
 
@@ -349,7 +318,7 @@ a.line-name
 // While the correspondence is on its way: a bar where the name will be.
 .line-placeholder
   display: inline-block
-  width: 180px
+  width: $name-placeholder-width
   max-width: 100%
   height: 1em
   vertical-align: middle

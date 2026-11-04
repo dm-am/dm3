@@ -58,6 +58,7 @@ const image: Upload = {
   url: "https://files.example/portrait.png",
   contentUrl: "/v1/uploads/u-1/content",
   createdUtc: "2026-05-01T12:00:00",
+  canOpen: true,
 };
 
 const archive: Upload = {
@@ -86,11 +87,6 @@ function render(columns: Column[], withUploader = false) {
     slots: withUploader
       ? { "cell-uploader": '<span class="who">кто-то</span>' }
       : {},
-    global: {
-      stubs: {
-        RouterLink: { props: ["to"], template: "<a><slot /></a>" },
-      },
-    },
   });
 }
 
@@ -98,53 +94,53 @@ describe("UploadsTable", () => {
   it("draws the owner's row as his page had it", () => {
     const wrapper = render(PROFILE_COLUMNS);
 
-    expect(markup(wrapper.findAll("tr.table-row")[0].html())).toBe(
-      [
-        '<tr class="table-row">',
-        "<!--v-if-->",
-        '<td class="col col-preview align-center"><img src="https://files.example/portrait.png" alt="portrait.png" class="upload-thumb" loading="lazy"></td>',
-        '<td class="col col-file align-left"><a href="https://files.example/portrait.png" target="_blank" rel="noopener" class="upload-name">portrait.png</a></td>',
-        '<td class="col col-date align-left">01.05.2026</td>',
-        '<td class="col col-size align-right">200,0 КБ</td>',
-        '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
-        "</tr>",
-      ].join("\n"),
-    );
+    expect(
+      wrapper
+        .findAll("tr.table-row")[0]
+        .findAll("td")
+        .map((cell) => markup(cell.html())),
+    ).toEqual([
+      '<td class="col col-preview align-center"><img src="https://files.example/portrait.png" alt="portrait.png" class="upload-thumb" loading="lazy"></td>',
+      '<td class="col col-file align-left"><span><a href="https://files.example/portrait.png" target="_blank" rel="noopener" class="upload-name">portrait.png</a></span></td>',
+      '<td class="col col-date align-left">01.05.2026</td>',
+      '<td class="col col-size align-right">200,0 КБ</td>',
+      '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
+    ]);
   });
 
   it("draws a file that is not an image by its extension", () => {
     const wrapper = render(PROFILE_COLUMNS);
 
-    expect(markup(wrapper.findAll("tr.table-row")[1].html())).toBe(
-      [
-        '<tr class="table-row">',
-        "<!--v-if-->",
-        '<td class="col col-preview align-center"><span class="upload-ext">ZIP</span></td>',
-        '<td class="col col-file align-left"><a href="https://files.example/archive.zip" target="_blank" rel="noopener" class="upload-name">archive.zip</a></td>',
-        '<td class="col col-date align-left">01.05.2026</td>',
-        '<td class="col col-size align-right">200,0 КБ</td>',
-        '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
-        "</tr>",
-      ].join("\n"),
-    );
+    expect(
+      wrapper
+        .findAll("tr.table-row")[1]
+        .findAll("td")
+        .map((cell) => markup(cell.html())),
+    ).toEqual([
+      '<td class="col col-preview align-center"><span class="upload-ext">ZIP</span></td>',
+      '<td class="col col-file align-left"><span><a href="https://files.example/archive.zip" target="_blank" rel="noopener" class="upload-name">archive.zip</a></span></td>',
+      '<td class="col col-date align-left">01.05.2026</td>',
+      '<td class="col col-size align-right">200,0 КБ</td>',
+      '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
+    ]);
   });
 
   it("draws the moderation row with the column that page adds", () => {
     const wrapper = render(MODERATION_COLUMNS, true);
 
-    expect(markup(wrapper.findAll("tr.table-row")[0].html())).toBe(
-      [
-        '<tr class="table-row">',
-        "<!--v-if-->",
-        '<td class="col col-preview align-center"><img src="https://files.example/portrait.png" alt="portrait.png" class="upload-thumb" loading="lazy"></td>',
-        '<td class="col col-file align-left"><a href="https://files.example/portrait.png" target="_blank" rel="noopener" class="upload-name">portrait.png</a></td>',
-        '<td class="col col-uploader align-left"><span class="who">кто-то</span></td>',
-        '<td class="col col-date align-left">01.05.2026</td>',
-        '<td class="col col-size align-right">200,0 КБ</td>',
-        '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
-        "</tr>",
-      ].join("\n"),
-    );
+    expect(
+      wrapper
+        .findAll("tr.table-row")[0]
+        .findAll("td")
+        .map((cell) => markup(cell.html())),
+    ).toEqual([
+      '<td class="col col-preview align-center"><img src="https://files.example/portrait.png" alt="portrait.png" class="upload-thumb" loading="lazy"></td>',
+      '<td class="col col-file align-left"><span><a href="https://files.example/portrait.png" target="_blank" rel="noopener" class="upload-name">portrait.png</a></span></td>',
+      '<td class="col col-uploader align-left"><span class="who">кто-то</span></td>',
+      '<td class="col col-date align-left">01.05.2026</td>',
+      '<td class="col col-size align-right">200,0 КБ</td>',
+      '<td class="col col-actions align-center"><button type="button" class="delete-button"> Удалить </button></td>',
+    ]);
   });
 
   it("has no uploader cell where the page asks for no such column", () => {
@@ -172,5 +168,49 @@ describe("UploadsTable", () => {
     expect(wrapper.find("table").attributes("aria-label")).toBe(
       "Загруженные файлы",
     );
+  });
+
+  // The owner's file of a post kept to some readers: the hidden block's green and tooltip.
+  it("marks a file kept to some readers as a hidden block", () => {
+    const wrapper = mount(UploadsTable, {
+      props: {
+        columns: PROFILE_COLUMNS,
+        uploads: [
+          {
+            ...image,
+            type: "PostAttachment",
+            recipients: "DungeonMaster, Assistant, Вася",
+          },
+        ],
+        loading: false,
+      },
+    });
+
+    const name = wrapper.get("a.upload-name");
+    expect(name.classes()).toContain("private-message");
+    expect(name.attributes("data-recipients")).toBe(
+      "DungeonMaster, Assistant, Вася",
+    );
+    expect(wrapper.find("img.upload-thumb").exists()).toBe(true);
+  });
+
+  // Its address would answer him as a file that is not there: no broken preview, no dead link.
+  it("names a file kept from the viewer without a link or a preview", () => {
+    const wrapper = mount(UploadsTable, {
+      props: {
+        columns: MODERATION_COLUMNS,
+        uploads: [{ ...image, type: "PostAttachment", canOpen: false }],
+        loading: false,
+      },
+    });
+
+    expect(wrapper.find("img").exists()).toBe(false);
+    expect(wrapper.find("a.upload-name").exists()).toBe(false);
+    expect(wrapper.get(".upload-ext").text()).toBe("PNG");
+    const name = wrapper.get(".upload-name");
+    expect(name.text()).toBe("portrait.png");
+    expect(name.classes()).toContain("private-message");
+    expect(name.attributes("data-recipients")).toBeUndefined();
+    expect(wrapper.find("button.delete-button").exists()).toBe(true);
   });
 });

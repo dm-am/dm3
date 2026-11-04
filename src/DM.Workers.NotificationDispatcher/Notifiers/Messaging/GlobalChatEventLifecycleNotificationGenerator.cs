@@ -13,19 +13,7 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Messaging;
 /// starts or ends.
 /// </summary>
 /// <remarks>
-/// The strip above the feed is read once, when the chat opens, and nothing polls
-/// it afterwards, so without a push it goes on describing the chat as it stood at
-/// page load while an event begins and finishes in front of the reader. The two
-/// moments were already published to the bus by the domain service, but no
-/// generator answered them: the queue binds exactly the events some generator
-/// declares it can handle, so the broker dropped both without a trace.
-///
-/// Both are public facts about a public chat, so the recipient set is everyone
-/// connected. As with a new global chat message,
-/// <see cref="CreateNotification.UsersInterested"/> is left empty (nothing lands
-/// in anyone's stored list, no letter and no bot message go out) and the
-/// API-side realtime processor broadcasts these event types to every open
-/// SignalR connection, guests included.
+/// Nothing polls the strip above the feed. UsersInterested is empty: the API broadcasts to every connection.
 /// </remarks>
 internal class GlobalChatEventLifecycleNotificationGenerator : INotificationGenerator
 {
@@ -37,7 +25,6 @@ internal class GlobalChatEventLifecycleNotificationGenerator : INotificationGene
 
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public GlobalChatEventLifecycleNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -49,9 +36,7 @@ internal class GlobalChatEventLifecycleNotificationGenerator : INotificationGene
     /// <inheritdoc />
     public async IAsyncEnumerable<CreateNotification> Generate(Guid entityId)
     {
-        // The event carries no idempotency key and may be redelivered, by which
-        // time the subject can be gone: telling every open tab to re-read the
-        // list because of an event that no longer exists is noise.
+        // Redelivered after the event has gone, the push is noise.
         var exists = await _dbContext.GlobalChatEvents
             .AnyAsync(e => e.GlobalChatEventId == entityId);
 
@@ -62,14 +47,9 @@ internal class GlobalChatEventLifecycleNotificationGenerator : INotificationGene
 
         yield return new CreateNotification
         {
-            // Empty on purpose: fan-out to all connected clients happens in the
-            // API realtime processor, not through per-user stored notifications
-            // (which would put a row about a public event in every inbox)
+            // Empty: the API broadcasts to every connection
             UsersInterested = [],
-            // No ActorId: an organizer does press start and end, but the row keeps
-            // only StartedUtc and EndedUtc, never who moved the switch, and the
-            // creator it does store is not necessarily that person. Nothing to
-            // filter against either, the recipient set being the whole chat.
+            // No ActorId: the row does not record who started or ended the event.
             Metadata = new
             {
                 GlobalChatEventId = entityId

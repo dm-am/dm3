@@ -15,13 +15,8 @@ namespace DM.Infrastructure.Persistence.Repositories.Personal;
 internal class NotificationRepository : INotificationRepository
 {
     /// <summary>
-    /// The stored metadata is spelled the way the bus spells the same bag:
-    /// camelCase keys, enums as numbers. One notification reaches one open tab
-    /// twice — pushed over the hub as the JSON the dispatcher published, and
-    /// read back from this table — and NotificationWireShould holds the two
-    /// wires to one format. Storing the bus spelling is what lets the column
-    /// travel to the reader verbatim (see NotificationPayloadConverter in the
-    /// API, which copies a JsonElement through unchanged).
+    /// The stored metadata is spelled the way the bus spells it (camelCase keys, enums
+    /// as numbers), so the column travels to the reader verbatim, as the hub push does.
     /// </summary>
     private static readonly JsonSerializerOptions MetadataOptions = new(JsonSerializerDefaults.Web)
     {
@@ -30,18 +25,15 @@ internal class NotificationRepository : INotificationRepository
 
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public NotificationRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
-    // ═══ READ ═══
-
     /// <inheritdoc />
-    public async Task<long> Count(Guid userId) => await _dbContext.NotificationRecipients
+    public async Task<int> Count(Guid userId) => await _dbContext.NotificationRecipients
         .TagWith("DM.Notifications.Count")
-        .LongCountAsync(r => r.UserId == userId);
+        .CountAsync(r => r.UserId == userId);
 
     /// <inheritdoc />
     public async Task<long> CountUnread(Guid userId) => await _dbContext.NotificationRecipients
@@ -99,8 +91,6 @@ internal class NotificationRepository : INotificationRepository
         return eventTypes.ToHashSet();
     }
 
-    // ═══ WRITE ═══
-
     /// <inheritdoc />
     public async Task Create(IEnumerable<CreateNotificationEntity> notifications)
     {
@@ -128,21 +118,14 @@ internal class NotificationRepository : INotificationRepository
         }
         catch
         {
-            // The retry ladder replays the whole delivery inside the SAME scope
-            // and the same DbContext (review of W1.4). A failed SaveChanges
-            // leaves these rows Added, and replaying on top of them would
-            // collide with the unique (EventId, EventType) index on the very
-            // rows this attempt failed to commit - turning every transient
-            // fault into a dead-lettered event. Clear, so the retry starts
-            // from the lookup and a clean tracker, the way the neighbouring
-            // repositories do.
+            // The retry ladder replays the delivery on the same DbContext, and rows
+            // left Added would collide with the (EventId, EventType) index.
             _dbContext.ChangeTracker.Clear();
             throw;
         }
     }
 
-    // Idempotent UPDATE instead of the AddToSet guard: a second "mark as read"
-    // arriving together with the first changes nothing the first did not.
+    // Idempotent UPDATE: a second "mark as read" changes nothing the first did not.
 
     /// <inheritdoc />
     public Task MarkAsRead(Guid notificationId, Guid userId) =>

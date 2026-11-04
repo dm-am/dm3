@@ -8,11 +8,8 @@ import { computed } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 import { symbols } from "@/shared/lib/utils/icons";
 
-defineOptions({ name: "FilterSearchInput" });
-
 const props = withDefaults(
   defineProps<{
-    /** Current value (v-model) */
     modelValue: string;
     /** Placeholder text */
     placeholder?: string;
@@ -41,10 +38,6 @@ function handleInput(event: Event) {
   emit("input");
 }
 
-function handleKeydown(event: KeyboardEvent) {
-  emit("keydown", event);
-}
-
 function clearInput() {
   emit("update:modelValue", "");
   emit("input");
@@ -61,7 +54,7 @@ function clearInput() {
       :placeholder="placeholder"
       :aria-label="inputAriaLabel"
       @input="handleInput"
-      @keydown="handleKeydown"
+      @keydown="emit('keydown', $event)"
       @focus="emit('focus')"
       @blur="emit('blur')"
     />

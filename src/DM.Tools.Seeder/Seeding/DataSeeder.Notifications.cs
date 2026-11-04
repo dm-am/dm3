@@ -5,7 +5,6 @@ using System.Text.Json;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Extensions;
-using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Infrastructure.Persistence.Entities.Personal.Notifications;
 using Microsoft.EntityFrameworkCore;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
@@ -21,8 +20,7 @@ internal sealed partial class DataSeeder
 
     /// <summary>
     /// The spelling the store writes a payload in: the web defaults, so camelCase
-    /// keys. A copy of NotificationRepository.MetadataOptions, which is private to
-    /// the store; the seed writes the column itself, as it writes every other one.
+    /// keys, as NotificationRepository.MetadataOptions.
     /// </summary>
     private static readonly JsonSerializerOptions NotificationMetadataOptions = new(JsonSerializerDefaults.Web)
     {
@@ -69,26 +67,15 @@ internal sealed partial class DataSeeder
 
     /// <summary>
     /// Seeds the list of notifications of TestUser: four unread and three read
-    /// when the fixture holds every fact they are about. Idempotent: skips when
-    /// the reader already has notifications.
+    /// when the fixture holds every fact they are about, and below them the read
+    /// ones of the weeks before. Idempotent: skips when the reader already has
+    /// notifications.
     /// </summary>
     /// <remarks>
-    /// Nothing seeded a notification, so a fresh stand showed "Нет уведомлений"
-    /// and the checks of the layout, which read the table of the list and the line
-    /// of what is unread over it, had nothing to measure. The notifications on the
-    /// owner's stand had gathered by themselves, which is why they passed there.
-    ///
-    /// Every event is one whose row fills both "Где" and "Кто": a place the title
-    /// leads to and a person who did what happened. Each payload is the one the
-    /// generator of the dispatcher writes for that event, field for field, and the
-    /// identifiers in it are those of the content seeded above, so a title leads to
-    /// a page that exists. SeededNotificationsShould in DM.Architecture.Tests puts
-    /// every payload through the mapper of the API and holds it to the generator.
-    ///
-    /// Last of the steps: the rows draw identifiers, and drawn earlier they would
-    /// move the identifier of everything drawn after them.
+    /// Each payload is the generator's, field for field, which SeededNotificationsShould holds.
+    /// After all the content: drawn earlier, the identifiers would move everything drawn after them.
     /// </remarks>
-    private async Task SeedNotifications(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task SeedNotifications(List<DbUser> users, ComprehensiveSeedResult result)
     {
         var reader = users.FirstOrDefault(u => u.Username == NotifiedLogin);
         if (reader == null)
@@ -100,12 +87,15 @@ internal sealed partial class DataSeeder
         var existing = await _dbContext.NotificationRecipients.CountAsync(r => r.UserId == reader.UserId);
         if (existing > 0)
         {
-            result.Skipped++;
             result.Details.Add($"Notifications of {NotifiedLogin} already exist ({existing}), skipping");
             return;
         }
 
-        var notifications = NotificationsAbout(await ReadNotificationFacts(reader.UserId, now), now);
+        var facts = await ReadNotificationFacts(reader.UserId);
+        var earlier = await ReadEarlierTopicComments(reader.UserId, facts.TopicComment);
+        var notifications = NotificationsAbout(facts, _now)
+            .Concat(EarlierNotificationsAbout(earlier, _now))
+            .ToList();
         foreach (var notification in notifications)
         {
             var notificationId = _guidFactory.Create();
@@ -155,22 +145,13 @@ internal sealed partial class DataSeeder
     /// fixture does not hold, with how long ago it arrived and whether it was read.
     /// </summary>
     /// <remarks>
-    /// Written the way the generator named beside each writes it, member for member
-    /// and with the same identifier encoding, because the mapper of the API finds the
-    /// words, the place and the link by the names of those members.
+    /// Written as the generator named beside each writes it: the API mapper reads the members by name.
     /// </remarks>
     private static IEnumerable<(EventType EventType, object? Metadata, TimeSpan Age, bool IsRead)> Payloads(
         NotificationFacts facts)
     {
-        // NewCommentInSubscribedTopicNotificationGenerator
         yield return (EventType.NewCommentInSubscribedTopic, facts.TopicComment is { } comment
-            ? new
-            {
-                CommentId = comment.CommentId,
-                TopicId = comment.TopicId.EncodeToReadable(comment.TopicTitle),
-                TopicTitle = comment.TopicTitle,
-                AuthorUsername = comment.AuthorUsername
-            }
+            ? TopicCommentPayload(comment)
             : null, TimeSpan.FromMinutes(35), false);
 
         // GameCharacterStatusChangedNotificationGenerator
@@ -238,22 +219,72 @@ internal sealed partial class DataSeeder
     }
 
     /// <summary>
-    /// What the notifications of the reader are about, each picked from the
-    /// content seeded above by an order that is an order: newest first, ties broken
-    /// by identifier, nothing left to the database to decide.
+    /// How many read rows of the weeks before stand under the seven: with them the list runs past a
+    /// page of twenty, so the size of its page shows.
+    /// </summary>
+    internal const int EarlierNotificationCount = 15;
+
+    /// <summary>
+    /// The read notifications of the weeks before, a day apart back from a week ago: comments in the
+    /// subscribed topics, each older than every row of <see cref="NotificationsAbout"/>.
+    /// </summary>
+    /// <param name="comments">What they are about, newest first</param>
+    /// <param name="now">The instant the seed is laid out around</param>
+    internal static IReadOnlyList<SeededNotification> EarlierNotificationsAbout(
+        IReadOnlyList<CommentFact> comments, DateTimeOffset now) =>
+        comments
+            .Select((comment, at) => new SeededNotification(
+                EventType.NewCommentInSubscribedTopic,
+                JsonSerializer.Serialize(TopicCommentPayload(comment), NotificationMetadataOptions),
+                now - TimeSpan.FromDays(7 + at),
+                IsRead: true))
+            .ToList();
+
+    // NewCommentInSubscribedTopicNotificationGenerator
+    private static object TopicCommentPayload(CommentFact comment) => new
+    {
+        CommentId = comment.CommentId,
+        TopicId = comment.TopicId.EncodeToReadable(comment.TopicTitle),
+        TopicTitle = comment.TopicTitle,
+        AuthorUsername = comment.AuthorUsername
+    };
+
+    /// <summary>
+    /// Comments of somebody else in the topics the reader can open, the newest of each topic and
+    /// newest first, past the topic of the newest row: as many as <see cref="EarlierNotificationCount"/>.
+    /// </summary>
+    private async Task<IReadOnlyList<CommentFact>> ReadEarlierTopicComments(Guid readerId, CommentFact? newest)
+    {
+        var recent = await _dbContext.Comments
+            .Where(c => c.AuthorId != readerId && c.CreatedUtc <= _now)
+            .Join(_dbContext.Topics, c => c.EntityId, t => t.TopicId, (c, t) => new { Comment = c, Topic = t })
+            .OrderByDescending(x => x.Comment.CreatedUtc)
+            .ThenBy(x => x.Comment.CommentId)
+            .Select(x => new CommentFact(
+                x.Comment.CommentId, x.Topic.TopicId, x.Topic.Title, x.Comment.Author.Username))
+            .Take(500)
+            .ToListAsync();
+
+        // In memory: the topic of a record built by the projection does not translate.
+        return recent
+            .Where(comment => comment.TopicId != newest?.TopicId)
+            .DistinctBy(comment => comment.TopicId)
+            .Take(EarlierNotificationCount)
+            .ToList();
+    }
+
+    /// <summary>
+    /// What the notifications of the reader are about, each picked from the content seeded above,
+    /// newest first and ties broken by identifier.
     /// </summary>
     /// <remarks>
-    /// Only what the reader can open: a topic of a board readers see, an active
-    /// game or blog that passed premoderation. People are live accounts only: the
-    /// filter of removed rows drops a removed author together with what joins him.
-    /// Games the reader plays in are left out of the two about a game somebody
-    /// else opened, since a player is not told about his own game that way.
+    /// Only what the reader can open, live accounts only, and no game the reader plays in.
     /// </remarks>
-    private async Task<NotificationFacts> ReadNotificationFacts(Guid readerId, DateTimeOffset now)
+    private async Task<NotificationFacts> ReadNotificationFacts(Guid readerId)
     {
         var topicComment = await _dbContext.Comments
-            .Where(c => c.AuthorId != readerId && c.CreatedUtc <= now)
-            .Join(ReadableTopics(), c => c.EntityId, t => t.TopicId, (c, t) => new { Comment = c, Topic = t })
+            .Where(c => c.AuthorId != readerId && c.CreatedUtc <= _now)
+            .Join(_dbContext.Topics, c => c.EntityId, t => t.TopicId, (c, t) => new { Comment = c, Topic = t })
             .OrderByDescending(x => x.Comment.CreatedUtc)
             .ThenBy(x => x.Comment.CommentId)
             .Select(x => new CommentFact(
@@ -282,7 +313,7 @@ internal sealed partial class DataSeeder
             .Select(b => new BlogFact(b.BlogId, b.Title, b.Author.Username))
             .FirstOrDefaultAsync();
 
-        var (topicLike, gameLike) = await ReadLikesOfReaderComments(readerId, now);
+        var (topicLike, gameLike) = await ReadLikesOfReaderComments(readerId);
 
         return new NotificationFacts(topicComment, character, recruiting, blog, topicLike, newGame, gameLike);
     }
@@ -291,15 +322,15 @@ internal sealed partial class DataSeeder
     /// The newest like on a comment of the reader in a topic, and the newest on one
     /// in the discussion of a game.
     /// </summary>
-    private async Task<(LikeFact? Topic, LikeFact? Game)> ReadLikesOfReaderComments(Guid readerId, DateTimeOffset now)
+    private async Task<(LikeFact? Topic, LikeFact? Game)> ReadLikesOfReaderComments(Guid readerId)
     {
         var likes = _dbContext.Likes
             .Where(l => l.EntityType == LikeEntityType.Comment && l.UserId != readerId)
-            .Join(_dbContext.Comments.Where(c => c.AuthorId == readerId && c.CreatedUtc <= now),
+            .Join(_dbContext.Comments.Where(c => c.AuthorId == readerId && c.CreatedUtc <= _now),
                 l => l.EntityId, c => c.CommentId, (l, c) => new { Like = l, Comment = c });
 
         var topic = await likes
-            .Join(ReadableTopics(), x => x.Comment.EntityId, t => t.TopicId,
+            .Join(_dbContext.Topics, x => x.Comment.EntityId, t => t.TopicId,
                 (x, t) => new { x.Like, x.Comment, PlaceId = t.TopicId, PlaceTitle = t.Title })
             .OrderByDescending(x => x.Comment.CreatedUtc)
             .ThenBy(x => x.Like.LikeId)
@@ -323,10 +354,6 @@ internal sealed partial class DataSeeder
         .ThenBy(g => g.GameId)
         .Select(g => new GameFact(g.GameId, g.Title, g.Master.Username))
         .FirstOrDefaultAsync();
-
-    /// <summary>Topics of the boards an ordinary reader sees.</summary>
-    private IQueryable<Topic> ReadableTopics() => _dbContext.Topics
-        .Where(t => (t.Board.ViewPolicy & BoardAccessPolicy.RegularUser) != BoardAccessPolicy.None);
 
     /// <summary>Games open to every reader: active and past premoderation.</summary>
     private IQueryable<DbGame> ReadableGames() => _dbContext.Games

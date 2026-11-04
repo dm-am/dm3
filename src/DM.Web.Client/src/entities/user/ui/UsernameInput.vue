@@ -8,7 +8,7 @@
         @input="onInput"
         :disabled="disabled"
         :class="{ 'has-status': showStatus }"
-        maxlength="20"
+        :maxlength="USERNAME_MAX_LENGTH"
         autocomplete="off"
         spellcheck="false"
       />
@@ -22,18 +22,14 @@
       </span>
     </div>
     <div class="username-status">
-      <template v-if="validationError">
-        <span class="error">{{ validationError }}</span>
-      </template>
-      <template v-else-if="isAvailable === true">
-        <span class="available">Имя свободно</span>
-      </template>
-      <template v-else-if="isAvailable === false">
-        <span class="unavailable">{{ unavailableReason }}</span>
-      </template>
-      <template v-else>
-        <span class="hint">2-20 символов</span>
-      </template>
+      <span v-if="validationError" class="error">{{ validationError }}</span>
+      <span v-else-if="isAvailable === true" class="available"
+        >Имя свободно</span
+      >
+      <span v-else-if="isAvailable === false" class="unavailable">{{
+        unavailableReason
+      }}</span>
+      <span v-else class="hint">2-20 символов</span>
     </div>
   </div>
 </template>
@@ -41,21 +37,21 @@
 <script setup lang="ts">
 import { ref, computed, watch } from "vue";
 import { symbols } from "@/shared/lib/utils/icons";
+import { SEARCH_DEBOUNCE_MS } from "@/shared/lib/constants/search";
 import { accountApi } from "../api";
+import {
+  USERNAME_MAX_LENGTH,
+  USERNAME_MIN_LENGTH,
+} from "@/shared/lib/constants/user";
 
 const props = withDefaults(
   defineProps<{
     modelValue: string;
     disabled?: boolean;
     debounceMs?: number;
-    /** Id for the <input>, so a caller's <label for> reaches it. */
     id?: string;
   }>(),
-  {
-    disabled: false,
-    debounceMs: 300,
-    id: undefined,
-  },
+  { debounceMs: SEARCH_DEBOUNCE_MS },
 );
 
 const emit = defineEmits<{
@@ -70,16 +66,14 @@ const validationError = ref<string | null>(null);
 
 let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-// Forbidden: control chars, HTML/URL unsafe, quotes, brackets, special chars, zero-width
-// See: docs/conventions/USERNAME_POLICY.md
-// Control characters are matched intentionally (forbidden in usernames).
+// docs/conventions/USERNAME_POLICY.md; control characters are matched on purpose.
 const forbiddenPattern =
   // eslint-disable-next-line no-control-regex
   /[\x00-\x1F\x7F<>"'`\\/@?#%&[\](){}=~!$^*+|;:\u200B-\u200F\u2028-\u202F\uFEFF]/;
 
 const showStatus = computed(() => {
   return (
-    props.modelValue.length >= 2 &&
+    props.modelValue.length >= USERNAME_MIN_LENGTH &&
     (checking.value || isAvailable.value !== null)
   );
 });
@@ -90,42 +84,18 @@ const statusClass = computed(() => {
   return "";
 });
 
-/**
- * One sentence for a name that cannot be had.
- *
- * The field used to keep three of them - "Имя уже занято" for a name in use,
- * "Имя зарезервировано" for one a former user left behind, "Имя недоступно"
- * when the server named no reason - and the activation page printed a fourth,
- * "Уже занято", when the same refusal came back on submit. The reader does one
- * and the same thing about every one of them, so he is told it once.
- *
- * "Занято" and not "используется": the server answers "Taken" for a name a
- * former user left behind as well as for one in use, and "используется"
- * asserts a live owner, which is false for the former. Whether the name is
- * free is the one bit the reader is given; whose it is, he is not.
- *
- * AccountActivationPage and UsernameChangePage keep the same sentence for the
- * refusal that arrives from the server after the field has already passed.
- */
+// "Taken" also covers a name a former user left behind, so the field does not claim an owner.
 const NAME_UNAVAILABLE = "Это имя занято";
 
-/**
- * The one refusal that is about the characters and not about the owner.
- *
- * The server spells the reason as its own enum member; the lowercase spelling
- * this switch was written against is read as well, so a mismatch in wire casing
- * cannot turn a forbidden character into "already used".
- */
+// A forbidden character is fixed by typing another one, so it does not read as "taken".
 const unavailableReason = computed(() =>
-  /^invalid_?format$/i.test(reason.value ?? "")
-    ? "Недопустимый символ"
-    : NAME_UNAVAILABLE,
+  reason.value === "InvalidFormat" ? "Недопустимый символ" : NAME_UNAVAILABLE,
 );
 
 function validateFormat(username: string): string | null {
   if (username.length === 0) return null;
-  if (username.length < 2) return "Минимум 2 символа";
-  if (username.length > 20) return "Максимум 20 символов";
+  if (username.length < USERNAME_MIN_LENGTH) return "Минимум 2 символа";
+  if (username.length > USERNAME_MAX_LENGTH) return "Максимум 20 символов";
   if (forbiddenPattern.test(username)) return "Недопустимый символ";
   if (/^\s/.test(username)) return "Не может начинаться с пробела";
   if (/\s$/.test(username)) return "Не может заканчиваться пробелом";
@@ -138,26 +108,22 @@ function onInput(event: Event) {
   const value = target.value;
   emit("update:modelValue", value);
 
-  // Reset state
   checking.value = false;
   isAvailable.value = null;
   reason.value = null;
   validationError.value = validateFormat(value);
 
-  // Clear pending debounce
   if (debounceTimer) {
     clearTimeout(debounceTimer);
     debounceTimer = null;
   }
 
-  // Emit unavailable if validation fails
   if (validationError.value) {
     emit("availability", false);
     return;
   }
 
-  // Check availability with debounce
-  if (value.length >= 2) {
+  if (value.length >= USERNAME_MIN_LENGTH) {
     checking.value = true;
     debounceTimer = setTimeout(
       () => checkAvailability(value),
@@ -172,7 +138,7 @@ async function checkAvailability(username: string) {
   try {
     const { data, error } = await accountApi.checkUsername(username);
 
-    // Ignore if value changed during request
+    // The value changed while the request was out.
     if (username !== props.modelValue) return;
 
     if (error) {
@@ -195,11 +161,11 @@ async function checkAvailability(username: string) {
   }
 }
 
-// Re-check when disabled changes (in case form was reset)
+// A form that was reset enables the field again.
 watch(
   () => props.disabled,
   (newDisabled) => {
-    if (!newDisabled && props.modelValue.length >= 2) {
+    if (!newDisabled && props.modelValue.length >= USERNAME_MIN_LENGTH) {
       checkAvailability(props.modelValue);
     }
   },
@@ -217,14 +183,15 @@ watch(
   input
     width: 100%
     box-sizing: border-box
-    padding-right: 2.5rem
+    // Room for the mark, at the field's inset on either side of it.
+    padding-right: $font-size + 2 * $field-inset
 
 .status-icon
   position: absolute
-  right: 0.75rem
+  right: $field-inset
   top: 50%
   transform: translateY(-50%)
-  font-size: 1rem
+  font-size: $font-size
   pointer-events: none
   display: flex
   align-items: center
@@ -239,14 +206,15 @@ watch(
 .username-status
   margin-top: $small
   font-size: $secondary-font-size
-  min-height: 1.4em
+  // A line held for the status, so the form does not move when it speaks.
+  min-height: 1lh
 
   .hint
     color: $text-muted
 
   .available
     color: $accent-green
-    font-weight: 500
+    font-weight: 400
 
   .error, .unavailable
     color: $accent-red

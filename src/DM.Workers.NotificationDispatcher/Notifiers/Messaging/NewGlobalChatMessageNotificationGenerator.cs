@@ -12,17 +12,12 @@ namespace DM.Workers.NotificationDispatcher.Notifiers.Messaging;
 /// Generates a realtime broadcast notification for new global chat messages
 /// </summary>
 /// <remarks>
-/// Global chat is public, so the recipient set is "all connected users".
-/// Connection state lives in the API process — the generator intentionally
-/// leaves <see cref="CreateNotification.UsersInterested"/> empty (nothing
-/// lands in anyone's stored notification list) and the API-side realtime
-/// processor broadcasts this event type to every open SignalR connection.
+/// UsersInterested is empty: the API broadcasts to every connection.
 /// </remarks>
 internal class NewGlobalChatMessageNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public NewGlobalChatMessageNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -53,13 +48,9 @@ internal class NewGlobalChatMessageNotificationGenerator : BaseNotificationGener
 
         yield return new CreateNotification
         {
-            // Empty on purpose: fan-out to all connected clients happens
-            // in the API realtime processor, not through per-user stored
-            // notifications (which would spam every user's inbox)
+            // Empty: the API broadcasts to every connection
             UsersInterested = [],
-            // The author is set even though the blacklist filter has no recipient
-            // list to work on here: the field states who wrote the message, and it
-            // starts filtering by itself the day this event gains an audience
+            // Who wrote the message, although there is no recipient list to filter
             ActorId = messageData.AuthorUserId,
             Metadata = new
             {

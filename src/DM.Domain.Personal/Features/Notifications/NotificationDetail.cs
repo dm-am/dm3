@@ -9,4 +9,8 @@ namespace DM.Domain.Personal.Features.Notifications;
 /// Whether the value is a point in time, which the reader's clock formats like
 /// every date of the site
 /// </param>
-public sealed record NotificationDetail(string Label, string Value, bool IsMoment);
+/// <param name="IsDestination">
+/// Whether the value names the place the notification leads to, which the list
+/// writes as the link of its row whatever order the bag came back in
+/// </param>
+public sealed record NotificationDetail(string Label, string Value, bool IsMoment, bool IsDestination = false);

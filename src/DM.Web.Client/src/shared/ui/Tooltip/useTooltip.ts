@@ -21,7 +21,7 @@ interface Size {
  * the box of a long block would put the bubble over its first line, off the
  * screen.
  */
-export function calculateTooltipPosition(
+function calculateTooltipPosition(
   anchor: DOMRect,
   bubble: Size,
   placement: TooltipPlacement,

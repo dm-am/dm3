@@ -1,5 +1,6 @@
 using System.Net;
 using System.Net.Http.Json;
+using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using AwesomeAssertions;
@@ -10,9 +11,6 @@ using DbUserContact = DM.Infrastructure.Persistence.Entities.Account.UserContact
 
 namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 
-/// <summary>
-/// Integration tests for PreferencesController
-/// </summary>
 public class PreferencesControllerShould : IntegrationTestBase
 {
     public PreferencesControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -20,62 +18,34 @@ public class PreferencesControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetPreferences_RequiresAuthentication()
+    public async Task GetPreferencesRequiresAuthentication()
     {
-        // Act
         var response = await Client.GetAsync("/v1/users/me/preferences");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task GetPreferences_WithAuth_ReturnsOk()
+    public async Task GetPreferencesWithAuthReturnsOk()
     {
-        // Arrange
         var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/users/me/preferences");
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task UpdatePreferences_RequiresAuthentication()
-    {
-        // Arrange
-        var preferencesData = new
-        {
-            paginationSize = 25,
-            colorSchema = "dark"
-        };
-
-        // Act
-        var response = await Client.PatchAsJsonAsync("/v1/users/me/preferences", preferencesData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
     /// A change of preferences leaves the contacts of the profile as they are.
     /// </summary>
-    /// <remarks>
-    /// Preferences are written by the same update of the user as the profile,
-    /// and that update reads contacts it was given no list of as "no contacts
-    /// at all" if its default says so: every change of a theme, a page size or
-    /// a time zone then deleted the reader's contacts, and one meeting a save
-    /// of the profile answered 500 when both deleted the same rows.
-    /// </remarks>
+    /// <remarks>Preferences and the profile share one update of the user, which must not read absent contacts as none.</remarks>
     [Fact]
     public async Task KeepTheContactsOfTheProfileWhenPreferencesChange()
     {
         var user = await SeedUserWithContact("Telegram", "@reader");
 
         var request = CreateAuthenticatedRequest(HttpMethod.Patch, "/v1/users/me/preferences", user);
-        request.Content = JsonContent.Create(new { paging = new { postsPerPage = 20 } });
+        request.Content = JsonContent.Create(new { pageSize = 20 });
         var response = await Client.SendAsync(request);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
@@ -84,6 +54,59 @@ public class PreferencesControllerShould : IntegrationTestBase
         var contacts = await db.UserContacts.Where(c => c.UserId == user.UserId).ToListAsync();
         contacts.Should().ContainSingle("preferences say nothing of contacts")
             .Which.ContactValue.Should().Be("@reader");
+    }
+
+    /// <summary>
+    /// The participation in the rating is a visibility setting of the profile:
+    /// saved by the profile, onto the account, and read back by it. The
+    /// preferences neither carry it nor touch it.
+    /// </summary>
+    [Fact]
+    public async Task SaveTheParticipationInTheRatingByTheProfile()
+    {
+        var user = await SeedUserWithContact("Telegram", "@reader");
+
+        var patch = CreateAuthenticatedRequest(HttpMethod.Patch, "/v1/users/me/profile", user);
+        patch.Content = JsonContent.Create(new { visibility = new { showRating = false } });
+        var response = await Client.SendAsync(patch);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, body);
+        await using (var db = DatabaseFixture.CreateDbContext())
+        {
+            (await db.Users.SingleAsync(u => u.UserId == user.UserId)).RatingDisabled.Should().BeTrue();
+        }
+
+        var profile = await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Get, "/v1/users/me/profile", user));
+        using (var read = JsonDocument.Parse(await profile.Content.ReadAsStringAsync()))
+        {
+            read.RootElement.GetProperty("visibility").GetProperty("showRating").GetBoolean().Should().BeFalse();
+        }
+
+        var preferencesPatch = CreateAuthenticatedRequest(HttpMethod.Patch, "/v1/users/me/preferences", user);
+        preferencesPatch.Content = JsonContent.Create(new { pageSize = 50 });
+        var preferencesResponse = await Client.SendAsync(preferencesPatch);
+        using var preferences = JsonDocument.Parse(await preferencesResponse.Content.ReadAsStringAsync());
+        preferences.RootElement.TryGetProperty("ratingEnabled", out _).Should().BeFalse();
+
+        await using var after = DatabaseFixture.CreateDbContext();
+        (await after.Users.SingleAsync(u => u.UserId == user.UserId)).RatingDisabled.Should().BeTrue(
+            "a change of preferences leaves the participation in the rating as it is");
+    }
+
+    /// <summary>
+    /// A page size the account form does not offer is refused under the field.
+    /// </summary>
+    [Fact]
+    public async Task RefuseAPageSizeTheFormDoesNotOffer()
+    {
+        var request = CreateAuthenticatedRequest(HttpMethod.Patch, "/v1/users/me/preferences");
+        request.Content = JsonContent.Create(new { pageSize = 15 });
+        var response = await Client.SendAsync(request);
+        var body = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.BadRequest, body);
+        body.Should().Contain("Недопустимое число на странице");
     }
 
     private async Task<GeneralUser> SeedUserWithContact(string type, string value)

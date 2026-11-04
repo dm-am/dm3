@@ -1,5 +1,4 @@
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
@@ -10,14 +9,9 @@ namespace DM.Web.API.Features.Game.Reviews;
 /// Game reviews of one user - received and written
 /// </summary>
 /// <remarks>
-/// The game-scoped listing next door answers "what was written about this
-/// game". These two answer the profile's question instead, "what has this
-/// person written and what has been written about their games", which the
-/// game-scoped route cannot: it takes a game and there is no game to name.
-///
-/// Not to be confused with /v1/users/{username}/reviews-shaped routes for post
-/// reviews. A post review rates one post; a game review is about a whole game,
-/// and the two counters on the profile are separate numbers.
+/// The profile's question, "what has this person written and what has been
+/// written about their games", which the game-scoped listing cannot answer.
+/// A post review rates one post; a game review is about a whole game.
 /// </remarks>
 [ApiController]
 [Route("v1/users/{username}/game-reviews")]
@@ -25,10 +19,9 @@ namespace DM.Web.API.Features.Game.Reviews;
 [Tags("Games")]
 public class UserGameReviewController : ControllerBase
 {
-    private readonly IGameReviewApiService _gameReviewApiService;
+    private readonly GameReviewApiService _gameReviewApiService;
 
-    /// <inheritdoc />
-    public UserGameReviewController(IGameReviewApiService gameReviewApiService)
+    public UserGameReviewController(GameReviewApiService gameReviewApiService)
     {
         _gameReviewApiService = gameReviewApiService;
     }

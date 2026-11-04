@@ -1,8 +1,5 @@
 namespace DM.Domain.Core.Enums;
 
-/// <summary>
-/// Status of an event in global chat
-/// </summary>
 public enum GlobalChatEventStatus
 {
     /// <summary>

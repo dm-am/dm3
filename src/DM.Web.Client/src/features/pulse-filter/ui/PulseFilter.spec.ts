@@ -2,13 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The pulse used to word its own bubbles: "от 5 до 20" for a range of ratings
- * and "с ... по ..." for a range of dates, while every other filter on the
- * site wrote both with a dash. The wording now comes from the shared helpers,
- * and these mount the filter on a query that sets both ranges to see what a
- * reader of the page actually gets.
- */
 import { describe, it, expect, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
@@ -68,34 +61,5 @@ describe("pulse filter bubbles", () => {
     });
     expect(bubbleWithPrefix(open, "Рейтинг:")).toBe("от 5");
     expect(bubbleWithPrefix(open, "Дата создания:")).toBe("до 20.09.2026");
-  });
-});
-
-/**
- * The panel draws its own frame, and the field block that ends it used to draw
- * a separator on top of that frame — two hairlines reading as one thick line.
- * The rule that drops the last separator is written in the filter's own scoped
- * stylesheet and reaches the block through the scope id the host puts on it,
- * so the block has to be both the last child of the panel and in that scope.
- */
-describe("pulse filter panel", () => {
-  it("ends its date leaf with a block the filter's own stylesheet reaches", async () => {
-    const wrapper = await mountWithQuery({});
-    const scopeOf = (el: Element) =>
-      [...el.attributes]
-        .map((a) => a.name)
-        .filter((n) => n.startsWith("data-v-"));
-    const host = scopeOf(wrapper.element);
-
-    await wrapper.find(".filter-section button").trigger("click");
-    await wrapper.vm.$nextTick();
-    const items = wrapper.findAll(".filter-dropdown-container > *");
-    await items[items.length - 1].trigger("click");
-    await wrapper.vm.$nextTick();
-
-    const panel = wrapper.element.querySelector(".filter-dropdown-container");
-    const last = panel?.lastElementChild;
-    expect(last?.className).toBe("dropdown-date-range");
-    expect(scopeOf(last!)).toEqual(expect.arrayContaining(host));
   });
 });

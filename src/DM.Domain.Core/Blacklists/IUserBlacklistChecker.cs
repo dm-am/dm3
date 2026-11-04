@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Blacklists;
@@ -35,7 +31,7 @@ public interface IUserBlacklistChecker
     /// </remarks>
     /// <param name="userId">The user who owns the blacklist</param>
     /// <param name="ct">Cancellation token</param>
-    Task<UserBlacklistSettings> GetSettings(Guid userId, CancellationToken ct = default);
+    Task<UserBlacklistSettings> GetSettingsAsync(Guid userId, CancellationToken ct = default);
 
     /// <summary>
     /// Get IDs of users blocked by a specific user, only if the specified flag is enabled.

@@ -1,22 +1,16 @@
-using DM.Domain.Account.Features.Authentication;
+using System;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
 using DM.Domain.Moderation.Authorization;
 using DM.Testing.Dsl;
-using DM.Testing;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Authorization;
 
-public class ModerationIntentionResolverShould : UnitTestBase
+public class ModerationIntentionResolverShould
 {
-    private readonly ModerationIntentionResolver resolver;
-
-    public ModerationIntentionResolverShould()
-    {
-        resolver = new ModerationIntentionResolver();
-    }
+    private readonly ModerationIntentionResolver resolver = new();
 
     [Theory]
     [InlineData(ModerationIntention.ViewModNotes)]
@@ -79,7 +73,7 @@ public class ModerationIntentionResolverShould : UnitTestBase
     {
         var admin = Create.User().WithRole(UserRole.Admin).Please();
 
-        foreach (var intention in System.Enum.GetValues<ModerationIntention>())
+        foreach (var intention in Enum.GetValues<ModerationIntention>())
         {
             resolver.IsAllowed(admin, intention).Should().BeTrue(
                 "an intention nobody can ever be granted is a rule with no subject");

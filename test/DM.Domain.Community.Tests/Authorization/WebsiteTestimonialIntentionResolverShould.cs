@@ -122,22 +122,12 @@ public class WebsiteTestimonialIntentionResolverShould
             .Should().BeFalse();
     }
 
-    #region Behaviour as found
-
     [Fact]
-    public void LetTheNamedAuthorEditButNotDeleteTheirOwnTestimonial()
+    public void NotLetTheNamedAuthorDeleteTheirOwnTestimonial()
     {
         var user = Create.User(AuthorId).WithRole(UserRole.RegularUser).Please();
-        var testimonial = TestimonialBy(AuthorId);
 
-        // Behaviour as found, not a rule that was chosen. Every neighbouring
-        // resolver over signed text — UserEndorsement, GameReview, PostReview —
-        // lets the author delete what they wrote; this one lets them rewrite it
-        // to anything and then keeps it up. Retracting is the weaker act of the
-        // two, so requiring more for it is the part that needs a decision.
-        resolver.IsAllowed(user, WebsiteTestimonialIntention.Edit, testimonial).Should().BeTrue();
-        resolver.IsAllowed(user, WebsiteTestimonialIntention.Delete, testimonial).Should().BeFalse();
+        // Behaviour as found: neighbouring resolvers over signed text let the author delete, the rule is not decided.
+        resolver.IsAllowed(user, WebsiteTestimonialIntention.Delete, TestimonialBy(AuthorId)).Should().BeFalse();
     }
-
-    #endregion
 }

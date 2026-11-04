@@ -2,6 +2,7 @@
 @use "Themes" as *
 @use "ZIndex" as *
 @use "Animations" as *
+@use "Surfaces" as *
 
 html, body, div, span, applet, object, iframe,
 h1, h2, h3, h4, h5, h6, p, blockquote, pre,
@@ -34,13 +35,11 @@ body
   font-family: "PT Sans", "PT Sans Fallback", sans-serif
   font-size: $font-size
   line-height: 1.3
-  word-wrap: break-word
+  overflow-wrap: break-word
   color: $text
 
-// The link of the site. Its colour eases over the tempo of the buttons and of
-// every link-shaped button (+link-tone in Inputs.sass), so an <a> and a
-// <button> standing side by side in one line answer the pointer alike; it
-// used to take .4s here and none at all there.
+// The colour eases over the tempo of the buttons, as in +link-tone, so an <a>
+// and a link-shaped <button> answer the pointer alike.
 a
   text-decoration: none
   cursor: pointer
@@ -50,103 +49,51 @@ a
     text-decoration: underline
     color: $link-hover
 
-// Focus indicator — the reset above removes outlines, and this is where the
-// site's one ring comes back. One colour, $link, at a width and offset chosen
-// by what the ring goes around, and nothing else anywhere draws a different
-// one; component rules only refine these (a negative offset for controls that
-// stand shoulder to shoulder — table rows, segments, picker cells — where a
-// ring on the edge would lie on the neighbour).
-//
-// Inline text (a link, a word made focusable with tabindex): 1px, two pixels
-// out. A 2px ring around a single word reads as a box drawn over the sentence,
-// and that is what this rule used to draw. [tabindex] is treated as text here
-// because most of it is; a focusable box takes the block recipe in its own
-// component.
-//
-// A block control (a button): 2px flush with the edge, so the ring follows the
-// control's corners and reads as part of it rather than as a rectangle around
-// it. The filled primary steps it one pixel out in Inputs.sass, because a ring
-// of $link on a fill of $link would vanish.
-//
-// A field (input, textarea, select): no outline at all. The frame turns $link
-// and a 1px shadow of $link sits flush against it — 2px following the field's
-// own rounded edge, the pair AuthSurface.sass already draws. On :focus and not
-// :focus-visible, because a field is where the reader types, and the mouse
-// needs the mark as much as the keyboard. The outline is dropped only because
-// this pair replaces it, and dropped under :focus-visible rather than :focus:
-// the user agent's own ring is a :focus-visible rule, so that is the one state
-// in which it would double the frame. +input-base restates the pair for the fields that take the mixin; this rule
-// is what the fields that style their own frame (the search field, the date
-// field, the range picker — the most-used fields on the site) fall back on.
-//
-// $link and not the grey of $border-focus, which every ring here used to be:
-// WCAG 2.4.13 asks 3:1 against everything the indicator touches, and the grey
-// measured 2.85 on the light page. $link measures 7.6 in the light theme and
-// 4.3 in the dark one on every surface a control stands on — fillContrast
-// .spec.ts keeps measuring it.
+// The site's one focus ring, in $link, shaped by what it goes around: inline
+// text 1px two pixels out, a block control 2px flush with its edge, a field its
+// frame turned $link with a 1px shadow (focusRing.spec.ts measures all three).
 a:focus-visible,
 [tabindex]:focus-visible
   outline: 1px solid $link
   outline-offset: 2px
 
 button:focus-visible
-  outline: 2px solid $link
-  outline-offset: 0
+  +focus-ring
 
-// Text fields only: a checkbox or a radio is a box the reader clicks, not a
-// field they type into, so a mouse click on it must not light a ring, and its
-// keyboard ring is the box ring further down, not the field pair.
-//
-// :where() and not a bare :not() chain: :not() takes the specificity of its
-// argument, and three attribute selectors would lift this global rule above
-// every component's own field rule - the inner control of a wrapped field lost
-// its box-shadow: none to it and drew a second ring inside the first. :where()
-// keeps the exclusions and adds nothing, so the rule stays what a global
-// fallback must be: the weakest voice in the cascade.
-input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"])):focus,
-textarea:focus,
-select:focus
-  border-color: $link
-  box-shadow: 0 0 0 1px $link
+// Text fields only: a box is clicked, not typed into. :where() keeps the
+// exclusions out of the specificity, so a component's own field rule outranks
+// this fallback.
+input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"])),
+textarea,
+select
+  &:focus
+    border-color: $link
+    box-shadow: 0 0 0 1px $link
 
-input:where(:not([type="checkbox"]):not([type="radio"]):not([type="range"])):focus-visible,
-textarea:focus-visible,
-select:focus-visible
-  outline: none
+  &:focus-visible
+    outline: none
 
 input[type="checkbox"]:focus-visible,
 input[type="radio"]:focus-visible,
 input[type="range"]:focus-visible
-  outline: 2px solid $link
-  outline-offset: 0
+  +focus-ring
 
-// Zero-width preserved space: invisible in layout (font-size: 0) but
-// Selection.toString() still emits a real " " between the inline parts of a
-// one-line strip. The site-wide fix for Chrome's flex/block serializer
-// emitting newlines between items — see Tabs.vue / Paging / TestimonialCard
-// for the pattern rationale. Global because control strips across the site
-// (segmented controls, pickers, filter bubbles) all need it.
+// A zero-width space that still copies as " ", so a strip of inline parts
+// copies as one line.
 .copy-space
   white-space: pre
   font-size: 0
 
-// Animated expand/collapse zone — the element useExpandableSection pins
-// and animates (see shared/lib/composables/useExpandableSection.ts). Global
-// because every reveal on the site must move in the one unified tempo.
-// The animated property is the REAL height (both directions of a content
-// swap need the pin to hold — max-height only holds on expand); overflow
-// is hidden only while a transition is in flight.
+// The zone useExpandableSection animates; overflow is hidden only while it
+// moves.
 .expand-zone
   transition: height $expand-duration $expand-easing
 
   &.animating
     overflow: hidden
 
-// CSS-only expand/collapse fold — the grid-rows 0fr<->1fr technique (same
-// as BBCode's .bb-collapse), for v-for accordions and other reveals where
-// the content stays mounted (v-show/class toggle) and a JS height pin is
-// unnecessary. Same unified tempo; pair with `inert` on the clip while
-// closed to keep hidden content out of the tab order.
+// The 0fr/1fr fold, for reveals whose content stays mounted; pair it with
+// inert on the closed clip.
 .expand-fold
   display: grid
   grid-template-rows: 0fr
@@ -159,14 +106,8 @@ input[type="range"]:focus-visible
     overflow: hidden
     min-height: 0
 
-// Disclosure marker — the triangle in front of a row that opens. The glyph is
-// pseudo-content and never a text node: interface text stays selectable, so a
-// marker written into the markup rides along into every row a reader copies.
-// Collapsed is the base state, and `.expanded` turns the same triangle a
-// quarter circle, which draws the down-pointing one. Global for the same
-// reason as the folds above, and on their tempo — the marker and the content
-// it opens are one motion. Size and color are inherited, so a marker looks
-// like the row it belongs to.
+// The disclosure triangle, pseudo-content so a copy of the row does not carry
+// it; it turns with the content it opens.
 .expand-marker
   &::before
     content: "\25B6"
@@ -176,8 +117,8 @@ input[type="range"]:focus-visible
   &.expanded::before
     transform: rotate(90deg)
 
-// Screen-reader-only content (standard clip pattern)
-.visually-hidden
+// Screen-reader-only content
+=visually-hidden
   position: absolute
   width: 1px
   height: 1px
@@ -188,34 +129,20 @@ input[type="range"]:focus-visible
   clip-path: inset(50%)
   white-space: nowrap
   border: 0
+
+.visually-hidden
+  +visually-hidden
 
 ::selection
   background-color: $selection-bg
   color: $selection-text
 
-::-moz-selection
-  background-color: $selection-bg
-  color: $selection-text
-
-// Menu decorations (separators and bullet prefixes)
-.separator
-  color: $text-muted
-
 .muted
   color: $text-muted
 
-// Skip-to-content link — hidden until keyboard focus, then pinned top-left above all content
+// Hidden until keyboard focus, then pinned over the page.
 .skip-link
-  position: absolute
-  width: 1px
-  height: 1px
-  margin: -1px
-  padding: 0
-  overflow: hidden
-  clip: rect(0, 0, 0, 0)
-  clip-path: inset(50%)
-  white-space: nowrap
-  border: 0
+  +visually-hidden
 
   &:focus
     position: fixed
@@ -234,7 +161,7 @@ input[type="range"]:focus-visible
     border: 1px solid $border
     z-index: $z-toast
 
-// Highlight animation for unread content navigation
+// The flash on unread content the page scrolls to.
 .highlight-unread
   animation: highlight-pulse 2s ease-out
 
@@ -246,21 +173,16 @@ input[type="range"]:focus-visible
     background-color: transparent
     box-shadow: none
 
-// The skeleton shimmer lives here and not next to its mixin. A partial that
-// emits a rule is emitted again into every scoped stylesheet that imports it,
-// and twenty components import the skeleton partial: the built CSS carried
-// twenty copies of these four lines, eight of them in the entry chunk. This
-// file is emitted once, from main.ts, so the name stays global — which is also
-// what keeps the mixin's `animation:` resolving, since Vue rewrites a keyframes
-// name only when the @keyframes is declared inside the same scoped block.
+// The skeleton's shimmer lives here and not by its mixin: a partial that emits
+// a rule emits it again into every stylesheet using it, and Vue keeps a global
+// name for frames declared outside a scoped block.
 @keyframes skeleton-shimmer
   0%
     background-position: 200% 0
   100%
     background-position: -200% 0
 
-// Search highlight - global marker pen effect
-// Used by highlightMatch() utility - preserves original text color
+// The marker pen of highlightMatch(): the text keeps its colour.
 .search-highlight
   background-color: $search-highlight-bg
   padding: 0.05em 0.15em
@@ -269,8 +191,7 @@ input[type="range"]:focus-visible
   box-decoration-break: clone
   -webkit-box-decoration-break: clone
 
-// Global reduced-motion: respect user OS preference
-// 0.01ms (not 0) so transitionend/animationend events still fire
+// 0.01ms and not 0, so transitionend and animationend still fire.
 @media (prefers-reduced-motion: reduce)
   *, *::before, *::after
     transition-duration: 0.01ms !important

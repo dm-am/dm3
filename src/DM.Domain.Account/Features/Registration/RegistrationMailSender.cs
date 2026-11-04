@@ -1,3 +1,4 @@
+using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Mail;
 using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Mail;
@@ -11,22 +12,19 @@ namespace DM.Domain.Account.Features.Registration;
 /// <summary>
 /// Registration confirmation email sender for email-first flow
 /// </summary>
-internal class RegistrationMailSender : AccountMailSender, IRegistrationMailSender
+internal class RegistrationMailSender(
+    ITemplateRenderer renderer,
+    IMailSender mailSender,
+    IEmailAssetsProvider emailAssetsProvider,
+    IOptions<SiteAddressConfiguration> siteAddresses,
+    IOptions<TokenConfiguration> tokens)
+    : AccountMailSender(renderer, mailSender, emailAssetsProvider, siteAddresses), IRegistrationMailSender
 {
-    public RegistrationMailSender(
-        ITemplateRenderer renderer,
-        IMailSender mailSender,
-        IEmailAssetsProvider emailAssetsProvider,
-        IOptions<SiteAddressConfiguration> siteAddresses)
-        : base(renderer, mailSender, emailAssetsProvider, siteAddresses)
-    {
-    }
-
     /// <inheritdoc />
     public Task Send(string email, Guid token)
     {
-        var subject = "Dungeon Master: подтвердите почту";
-        return Send(email, subject, new RegistrationConfirmationViewModel(
-            ConfirmationLinkUrl: ConfirmationLink("activate", token)));
+        return Deliver(email, "подтвердите почту", new RegistrationConfirmationViewModel(
+            ConfirmationLinkUrl: ConfirmationLink("activate", token),
+            LinkLifetimeHours: tokens.Value.ActivationTokenLifetimeHours));
     }
 }

@@ -23,9 +23,7 @@ internal class GamePopularityProcessor : IGamePopularityProcessor
             return (0, 0);
         }
 
-        // "Active" is one product decision for the whole server, not this job's
-        // own idea of it: the same threshold orders subscribers and filters
-        // listings, and a second copy of it drifts the day the first one moves.
+        // "Active" is one product decision for the whole server.
         var activeSince = now - ActivityPolicy.ActivePeriod;
 
         var players = await _repository.CountActivePlayers(gameIds, activeSince, cancellationToken);

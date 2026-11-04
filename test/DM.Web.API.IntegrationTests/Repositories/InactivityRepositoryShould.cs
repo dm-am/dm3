@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Inactivity;
 using DM.Infrastructure.Persistence;
@@ -13,10 +11,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// The inactivity pass is a question about a moment in time, and the moment belongs
-/// to the caller: the processor reads its clock once and hands the same instant to
-/// every query of the pass. Runs against the container Postgres because the
-/// selection is one statement comparing a cutoff against two nullable columns.
+/// The inactivity pass hands one instant of its clock to every query. Against the container Postgres: one statement
+/// compares a cutoff against two nullable columns.
 /// </summary>
 public class InactivityRepositoryShould : IntegrationTestBase
 {
@@ -25,9 +21,7 @@ public class InactivityRepositoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The cutoff used to be measured from the process clock inside the query, so
-    /// no test could ask what the rule does a month from now, and the game the
-    /// processor stamped was not necessarily selected at the same instant.
+    /// The cutoff is measured from the instant the caller hands in.
     /// </summary>
     [Fact]
     public async Task MeasureTheSilenceFromTheMomentItIsGivenAndNotFromTheProcessClock()
@@ -55,14 +49,7 @@ public class InactivityRepositoryShould : IntegrationTestBase
     /// <summary>
     /// A game that came back to life after the freeze pass had already picked it.
     /// </summary>
-    /// <remarks>
-    /// A pass reads its batch once and then works through it game by game, so a post
-    /// arriving in between used to be answered by a write decided minutes earlier:
-    /// the silence was checked in the SELECT and nowhere else, and the game froze
-    /// with a fresh post in it. Carrying the selected state into the WHERE clause of
-    /// the write is what moves that check to the moment of the write, and only the
-    /// database can be asked whether it did.
-    /// </remarks>
+    /// <remarks>The selected state is carried into the WHERE of the write, which checks it at the moment of writing.</remarks>
     [Fact]
     public async Task RefuseToFreezeAGameThatWasPostedInBeforeTheWriteReachedIt()
     {
@@ -97,14 +84,7 @@ public class InactivityRepositoryShould : IntegrationTestBase
     /// <summary>
     /// A game that was posted in after the warning pass had already picked it.
     /// </summary>
-    /// <remarks>
-    /// The other half of the same story, and the more expensive one: a post clears
-    /// the warning stamp as it lands, so "still unwarned" was true again right
-    /// after it and the stamp went on a game that had just spoken. Nothing shows
-    /// that until the freeze pass a week later reads that post as older than the
-    /// warning and takes the game - from a master who did exactly what the warning
-    /// asked for.
-    /// </remarks>
+    /// <remarks>A post clears the warning stamp as it lands, so the stamp checks the state it was selected in.</remarks>
     [Fact]
     public async Task RefuseToWarnAGameThatWasPostedInBeforeTheWriteReachedIt()
     {

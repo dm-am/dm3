@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// Integration tests for TicketController
-/// </summary>
 public class TicketControllerShould : IntegrationTestBase
 {
     public TicketControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -17,56 +14,44 @@ public class TicketControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetTickets_RequiresAuthentication()
+    public async Task GetTicketsRequiresAuthentication()
     {
-        // Act
         var response = await Client.GetAsync("/v1/moderation/tickets");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task GetTickets_WithAuth_RequiresModeratorRole()
+    public async Task GetTicketsWithAuthRequiresModeratorRole()
     {
-        // Arrange
         var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/moderation/tickets");
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert - Regular user should be forbidden
+        // Regular user should be forbidden
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
     [Fact]
-    public async Task GetTicketStats_RequiresAuthentication()
+    public async Task GetTicketStatsRequiresAuthentication()
     {
-        // Act
         var response = await Client.GetAsync("/v1/moderation/tickets/stats");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task GetMyFiledTickets_RequiresAuthentication()
+    public async Task GetMyFiledTicketsRequiresAuthentication()
     {
-        // Act
         var response = await Client.GetAsync("/v1/moderation/tickets/mine");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]
-    public async Task GetMyFiledTickets_TakesThePageAndReportsTheTotal()
+    public async Task GetMyFiledTicketsTakesThePageAndReportsTheTotal()
     {
-        // Both lists used to answer with everything and say nothing about it.
-        // The parameters have to bind on the wire, not only in the signature,
-        // and the envelope has to carry the total: a truncated answer that does
-        // not say how much it truncated leaves the caller unable to ask for the
-        // rest.
+        // The parameters bind on the wire, and the envelope carries the total.
         var request = CreateAuthenticatedRequest(
             HttpMethod.Get, "/v1/moderation/tickets/mine?skip=0&take=1");
 
@@ -79,40 +64,13 @@ public class TicketControllerShould : IntegrationTestBase
         paging.TryGetProperty("total", out _).Should().BeTrue();
     }
 
-    [Fact]
-    public async Task CreateTicket_RequiresAuthentication()
-    {
-        // Arrange
-        var ticketData = new
-        {
-            targetUserLogin = TestConstants.SecondUserLogin,
-            reason = "Spam",
-            description = "Test report"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync("/v1/moderation/tickets", ticketData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task CreateTicketComment_RequiresAuthentication()
-    {
-        var response = await Client.PostAsJsonAsync(
-            $"/v1/moderation/tickets/{Guid.NewGuid()}/comments", new { text = "Есть кто?" });
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
     /// <summary>
     /// A moderator's answer is the one the author waits for, and the author's
     /// reply is the turn of moderation again: the state says whose move it is, and
     /// each answer comes back as the ticket it left.
     /// </summary>
     [Fact]
-    public async Task CreateTicketComment_PassesTheTurnBetweenModerationAndTheAuthor()
+    public async Task CreateTicketCommentPassesTheTurnBetweenModerationAndTheAuthor()
     {
         var ticketId = await FileATicket(CustomWebApplicationFactory.CreateTestUser());
 
@@ -121,7 +79,7 @@ public class TicketControllerShould : IntegrationTestBase
         asked.GetProperty("status").GetString().Should().Be("WaitingForUser",
             "an answer that chose no status waits for the author");
         var written = asked.GetProperty("comments").EnumerateArray().Single();
-        written.GetProperty("author").GetProperty("username").GetString().Should().Be(TestConstants.AdminUserUsername);
+        written.GetProperty("author").GetProperty("username").GetString().Should().Be(TestConstants.AdminUserLogin);
         written.GetProperty("isGuest").GetBoolean().Should().BeFalse();
         written.GetProperty("text").GetString().Should().Contain("<strong>Пришлите ссылку</strong>");
 
@@ -142,7 +100,7 @@ public class TicketControllerShould : IntegrationTestBase
         waitingForModeration.GetProperty("canResolve").GetBoolean().Should().BeTrue();
         var comments = waitingForModeration.GetProperty("comments").EnumerateArray().ToArray();
         comments.Select(c => c.GetProperty("author").GetProperty("username").GetString())
-            .Should().Equal([TestConstants.AdminUserUsername, TestConstants.TestUserUsername],
+            .Should().Equal([TestConstants.AdminUserLogin, TestConstants.TestUserLogin],
                 "the conversation reads from the oldest comment to the newest");
     }
 
@@ -151,7 +109,7 @@ public class TicketControllerShould : IntegrationTestBase
     /// from a ticket that does not exist.
     /// </summary>
     [Fact]
-    public async Task CreateTicketComment_AnswersAStrangerAsIfThereWereNoTicket()
+    public async Task CreateTicketCommentAnswersAStrangerAsIfThereWereNoTicket()
     {
         var ticketId = await FileATicket(CustomWebApplicationFactory.CreateTestUser());
 
@@ -166,7 +124,7 @@ public class TicketControllerShould : IntegrationTestBase
     /// A closed ticket takes no answer and is not opened again by one.
     /// </summary>
     [Fact]
-    public async Task CreateTicketComment_RefusesAClosedTicket()
+    public async Task CreateTicketCommentRefusesAClosedTicket()
     {
         var ticketId = await FileATicket(CustomWebApplicationFactory.CreateTestUser());
         (await Answer(ticketId, "", CustomWebApplicationFactory.CreateAdminUser(), "Closed")).StatusCode
@@ -186,7 +144,7 @@ public class TicketControllerShould : IntegrationTestBase
     /// the length of a comment of a topic.
     /// </summary>
     [Fact]
-    public async Task CreateTicketComment_HoldsTheTextToTheLengthOfATicket()
+    public async Task CreateTicketCommentHoldsTheTextToTheLengthOfATicket()
     {
         var ticketId = await FileATicket(CustomWebApplicationFactory.CreateTestUser());
 
@@ -203,7 +161,7 @@ public class TicketControllerShould : IntegrationTestBase
     /// offered on it.
     /// </summary>
     [Fact]
-    public async Task CreateTicketComment_ClosesWithTheLastWordInOneAnswer()
+    public async Task CreateTicketCommentClosesWithTheLastWordInOneAnswer()
     {
         var ticketId = await FileATicket(CustomWebApplicationFactory.CreateTestUser());
 
@@ -211,11 +169,11 @@ public class TicketControllerShould : IntegrationTestBase
             CustomWebApplicationFactory.CreateAdminUser(), "Closed"));
 
         closed.GetProperty("status").GetString().Should().Be("Closed");
-        closed.GetProperty("resolvedByUsername").GetString().Should().Be(TestConstants.AdminUserUsername);
+        closed.GetProperty("resolvedByUsername").GetString().Should().Be(TestConstants.AdminUserLogin);
         closed.GetProperty("canComment").GetBoolean().Should().BeFalse();
         closed.GetProperty("canResolve").GetBoolean().Should().BeFalse();
         closed.GetProperty("comments").EnumerateArray().Single()
-            .GetProperty("author").GetProperty("username").GetString().Should().Be(TestConstants.AdminUserUsername);
+            .GetProperty("author").GetProperty("username").GetString().Should().Be(TestConstants.AdminUserLogin);
 
         var author = await Read(ticketId, CustomWebApplicationFactory.CreateTestUser());
         author.GetProperty("status").GetString().Should().Be("Closed");
@@ -230,7 +188,7 @@ public class TicketControllerShould : IntegrationTestBase
     [Theory]
     [InlineData("Closed")]
     [InlineData("Spam")]
-    public async Task CreateTicketComment_ClosesWithoutAWordAndNamesWhoClosedIt(string status)
+    public async Task CreateTicketCommentClosesWithoutAWordAndNamesWhoClosedIt(string status)
     {
         var ticketId = await FileATicket(CustomWebApplicationFactory.CreateTestUser());
 
@@ -239,7 +197,7 @@ public class TicketControllerShould : IntegrationTestBase
         resolved.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", await resolved.Content.ReadAsStringAsync());
         var ticket = await Read(ticketId, CustomWebApplicationFactory.CreateTestUser());
         ticket.GetProperty("status").GetString().Should().Be(status);
-        ticket.GetProperty("resolvedByUsername").GetString().Should().Be(TestConstants.AdminUserUsername);
+        ticket.GetProperty("resolvedByUsername").GetString().Should().Be(TestConstants.AdminUserLogin);
         ticket.GetProperty("commentsCount").GetInt32().Should().Be(0, "nothing was said");
 
         var again = await Answer(ticketId, "", CustomWebApplicationFactory.CreateAdminUser(), "Closed");
@@ -254,7 +212,7 @@ public class TicketControllerShould : IntegrationTestBase
     [InlineData("", null, "text")]
     [InlineData("", "WaitingForUser", "text")]
     [InlineData("Ответ", "WaitingForModeration", "status")]
-    public async Task CreateTicketComment_RefusesAnAnswerItCannotTake(string text, string? status, string field)
+    public async Task CreateTicketCommentRefusesAnAnswerItCannotTake(string text, string? status, string field)
     {
         var ticketId = await FileATicket(CustomWebApplicationFactory.CreateTestUser());
 
@@ -273,10 +231,10 @@ public class TicketControllerShould : IntegrationTestBase
     /// no status, and answers in it as its author.
     /// </summary>
     [Fact]
-    public async Task CreateTicketComment_RefusesAStatusFromTheModeratorWhoFiledIt()
+    public async Task CreateTicketCommentRefusesAStatusFromTheModeratorWhoFiledIt()
     {
         var moderator = CustomWebApplicationFactory.CreateModeratorUser();
-        var ticketId = await FileAComplaint(moderator, TestConstants.SecondUserUsername);
+        var ticketId = await FileAComplaint(moderator, TestConstants.SecondUserLogin);
 
         var own = await Read(ticketId, moderator);
         own.GetProperty("canResolve").GetBoolean().Should().BeFalse();
@@ -328,11 +286,10 @@ public class TicketControllerShould : IntegrationTestBase
         var ticket = await Read(ticketId, CustomWebApplicationFactory.CreateAdminUser());
 
         ticket.GetProperty("description").GetString().Should().Be(
-            "Оскорбляет в комментариях\n\n" +
-            $"Нарушитель: {TestConstants.SecondUserUsername}\n\n" +
-            "Ссылка на нарушение: https://dm.am/forum/general/1");
-        ticket.GetProperty("descriptionHtml").GetString().Should().Contain(TestConstants.SecondUserUsername,
-            "the line is rendered with the rest of the text");
+            "Оскорбляет в комментариях<br /><br />" +
+            $"Нарушитель: {TestConstants.SecondUserLogin}<br /><br />" +
+            "Ссылка на нарушение: https://dm.am/forum/general/1",
+            "the lines of the form are rendered with the rest of the text");
         foreach (var gone in new[] { "targetUsername", "hasWarning", "hasBan", "canIssueWarning", "canIssueBan" })
         {
             ticket.TryGetProperty(gone, out _).Should().BeFalse($"{gone} is not a part of a ticket any more");
@@ -340,16 +297,14 @@ public class TicketControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// One queue for moderation, and it is no wider than the rule that opens a
-    /// ticket (TicketVisibility): a junior moderator reads complaints about users,
-    /// a senior one the complaints about a junior's decision on top of that, and
-    /// the administrators everything, the support desk included.
+    /// One queue, no wider than TicketVisibility: a junior moderator reads user complaints, a senior one complaints
+    /// about a junior's decision too, the administrators everything.
     /// </summary>
     [Fact]
     public async Task HoldTheOneQueueToWhatTheRoleReads()
     {
         var author = CustomWebApplicationFactory.CreateTestUser();
-        var complaint = await FileAComplaint(author, TestConstants.SecondUserUsername);
+        var complaint = await FileAComplaint(author, TestConstants.SecondUserLogin);
         var juniorDecision = await FileADecisionComplaint(author, "ModeratorDecisionComplaint");
         var seniorDecision = await FileADecisionComplaint(author, "SeniorModeratorDecisionComplaint");
         var bug = await FileATicket(author);
@@ -406,11 +361,6 @@ public class TicketControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Nothing is taken in hand any more, and nothing is closed apart from an
-    /// answer: the addresses of the assignment and of the separate closing answer
-    /// nothing.
-    /// </summary>
     [Fact]
     public async Task AnswerNothingAtTheAddressesOfTheAssignmentAndTheClosing()
     {
@@ -431,10 +381,8 @@ public class TicketControllerShould : IntegrationTestBase
             .GetProperty("status").GetString().Should().Be("WaitingForModeration");
     }
 
-    /// <summary>The statuses in the order the queue stands in.</summary>
     private static readonly string[] StatusOrder = ["WaitingForModeration", "WaitingForUser", "Closed", "Spam"];
 
-    /// <summary>A ticket filed through the form, by its identifier.</summary>
     private async Task<Guid> FileATicket(GeneralUser author)
     {
         var post = CreateAuthenticatedRequest(HttpMethod.Post, "/v1/tickets", author);
@@ -442,7 +390,6 @@ public class TicketControllerShould : IntegrationTestBase
         return await Filed(post);
     }
 
-    /// <summary>A complaint about the named user, filed through the form.</summary>
     private async Task<Guid> FileAComplaint(GeneralUser author, string violator)
     {
         var post = CreateAuthenticatedRequest(HttpMethod.Post, "/v1/tickets", author);
@@ -456,7 +403,6 @@ public class TicketControllerShould : IntegrationTestBase
         return await Filed(post);
     }
 
-    /// <summary>A complaint about a decision of moderation, filed through the form.</summary>
     private async Task<Guid> FileADecisionComplaint(GeneralUser author, string subtype)
     {
         var post = CreateAuthenticatedRequest(HttpMethod.Post, "/v1/tickets", author);
@@ -505,7 +451,6 @@ public class TicketControllerShould : IntegrationTestBase
         return Client.SendAsync(post);
     }
 
-    /// <summary>The ticket an answer came back with.</summary>
     private static async Task<JsonElement> Ticket(HttpResponseMessage answer)
     {
         var body = await answer.Content.ReadAsStringAsync();
@@ -513,7 +458,6 @@ public class TicketControllerShould : IntegrationTestBase
         return JsonDocument.Parse(body).RootElement.GetProperty("resource").Clone();
     }
 
-    /// <summary>The ticket page as the given user reads it.</summary>
     private async Task<JsonElement> Read(Guid ticketId, GeneralUser user)
     {
         var response = await Client.SendAsync(

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using AwesomeAssertions;
 
@@ -9,13 +8,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The files the telemetry providers are composed in, found rather than named.
 /// </summary>
-/// <remarks>
-/// The rules about meters, histogram buckets and trace sources read the place
-/// where the providers are built. Read by the path of the logging configuration,
-/// they fail the day tracing and metrics get a file of their own, and the
-/// failure names a missing line instead of the rule. A file that builds a tracer
-/// or a meter provider is the composition wherever it lives.
-/// </remarks>
+/// <remarks>A file that builds a tracer or a meter provider is the composition wherever it lives.</remarks>
 internal static class TelemetrySources
 {
     /// <summary>The calls that build a provider, as the OpenTelemetry builder spells them.</summary>

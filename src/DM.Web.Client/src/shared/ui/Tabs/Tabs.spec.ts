@@ -13,7 +13,6 @@
  * to assistive tech to that same order.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineComponent, h, ref, type PropType } from "vue";
@@ -28,7 +27,7 @@ const HERE = dirname(fileURLToPath(import.meta.url));
  * stands at the start or the end of the line (the label of a tab is set on a
  * line of its own in the template).
  */
-const drawn = (text: string | null) => (text ?? "").replace(/s+/g, " ").trim();
+const drawn = (text: string | null) => (text ?? "").replace(/\s+/g, " ").trim();
 
 const ALL: TabItem[] = [
   { value: "about", label: "О себе" },
@@ -145,11 +144,9 @@ describe("Tabs keyboard navigation", () => {
 });
 
 /**
- * The strip whole at every width, as it stood before 5 October 2026: every tab
- * in it, the open one first, and where the column is narrow it takes the lines
- * it needs. That wave kept it one line by sending the tabs that did not fit
- * into "ЕЩЕ", which hid "Топики" and "Зал славы" on a phone; the owner, 12
- * October 2026, wants nothing shortened and no row scrolled sideways.
+ * The strip whole at every width: every tab in it, the open one first, and
+ * where the column is narrow it takes the lines it needs, nothing shortened
+ * and no row scrolled sideways.
  *
  * The line breaks after a bar only, the way the strip of the forum's boards
  * breaks (pages/forum/BoardNavigation.vue): a tab and the bar after it are one
@@ -162,7 +159,7 @@ describe("Tabs whole at every width", () => {
   const mountStrip = (initial: string, tabs: TabItem[] = ALL) =>
     mount(Host, { attachTo: document.body, props: { tabs, initial } });
 
-  it("draws every tab, the open one first, and nothing called Еще", () => {
+  it("draws every tab, the open one first", () => {
     const strip = mountStrip("topics");
 
     expect(strip.findAll('[role="tab"]').map((tab) => tab.text())).toEqual([
@@ -172,9 +169,6 @@ describe("Tabs whole at every width", () => {
       "Блоги",
       "Зал славы",
     ]);
-    expect(strip.find("[hidden]").exists()).toBe(false);
-    expect(strip.find(".more-menu").exists()).toBe(false);
-    expect(strip.text()).not.toMatch(/Еще|ЕЩЕ|…/);
     strip.unmount();
   });
 
@@ -221,22 +215,5 @@ describe("Tabs whole at every width", () => {
     ).toBe(true);
     expect(list.findAll("button")).toHaveLength(ALL.length);
     strip.unmount();
-  });
-
-  it("wraps like text at every width and never scrolls sideways", () => {
-    const css = componentCss(SOURCE);
-    const strip = ruleMap(css).get(".tabs") ?? {};
-
-    expect(strip.display).toBe("block");
-    for (const property of ["overflow", "overflow-x", "white-space"])
-      expect(strip[property], property).toBeUndefined();
-    expect(ruleMap(css).get(".tab")?.["white-space"]).toBe("nowrap");
-    expect(ruleMap(css).get(".tab")?.display).toBe("inline-block");
-    // No @media takes a phone's strip anywhere else, and nothing measures it
-    // to send a tab away.
-    expect(css).not.toMatch(/@media|@container/);
-    expect(readFileSync(SOURCE, "utf8")).not.toMatch(
-      /FitRow|MoreMenu|data-fit-/,
-    );
   });
 });

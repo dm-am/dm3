@@ -34,10 +34,8 @@ internal class UserNotepadService : IUserNotepadService
     private Guid UserId => _identityProvider.Current.User.UserId;
 
     /// <inheritdoc />
-    public async Task<IEnumerable<NotepadEntry>> GetEntries(CancellationToken ct = default)
-    {
-        return await _repository.GetEntriesAsync(NotepadType.User, UserId, null, ct);
-    }
+    public Task<IEnumerable<NotepadEntry>> GetEntries(CancellationToken ct = default) =>
+        _repository.GetEntriesAsync(NotepadType.User, UserId, null, ct);
 
     /// <inheritdoc />
     public async Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default)

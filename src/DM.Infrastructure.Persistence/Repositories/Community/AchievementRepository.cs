@@ -5,31 +5,28 @@ using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Community.Features.Achievements;
 using DM.Domain.Core.Abstractions;
+using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
-using EntityAchievementCategory = DM.Infrastructure.Persistence.Entities.Community.AchievementCategory;
-using EntityAchievementType = DM.Infrastructure.Persistence.Entities.Community.AchievementType;
-using EntityUserAchievement = DM.Infrastructure.Persistence.Entities.Community.UserAchievement;
+using DbAchievementType = DM.Infrastructure.Persistence.Entities.Community.AchievementType;
+using DbUserAchievement = DM.Infrastructure.Persistence.Entities.Community.UserAchievement;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
 
 /// <inheritdoc />
 internal class AchievementRepository : IAchievementRepository
 {
-    private readonly DmDbContext _db;
+    private readonly DmDbContext _dbContext;
     private readonly IGuidFactory _guidFactory;
 
-    public AchievementRepository(DmDbContext db, IGuidFactory guidFactory)
+    public AchievementRepository(DmDbContext dbContext, IGuidFactory guidFactory)
     {
-        _db = db;
+        _dbContext = dbContext;
         _guidFactory = guidFactory;
     }
 
-    // ---- Categories ----
-
     public async Task<IReadOnlyCollection<AchievementCategory>> GetCategoriesAsync(bool includeInactive, CancellationToken ct = default)
     {
-        var query = _db.AchievementCategories.AsNoTracking();
+        var query = _dbContext.AchievementCategories.AsNoTracking();
         if (!includeInactive) query = query.Where(c => c.IsActive);
         return await query
             .OrderBy(c => c.SortOrder)
@@ -38,7 +35,7 @@ internal class AchievementRepository : IAchievementRepository
     }
 
     public async Task<AchievementCategory?> GetCategoryAsync(Guid id, CancellationToken ct = default) =>
-        await _db.AchievementCategories
+        await _dbContext.AchievementCategories
             .AsNoTracking()
             .Where(c => c.AchievementCategoryId == id)
             .ProjectToCategory()
@@ -46,17 +43,15 @@ internal class AchievementRepository : IAchievementRepository
 
     public async Task<AchievementCategory> UpdateCategoryAsync(UpdateAchievementCategory update, CancellationToken ct = default)
     {
-        var entity = await _db.AchievementCategories.FirstAsync(c => c.AchievementCategoryId == update.Id, ct);
+        var entity = await _dbContext.AchievementCategories.FirstAsync(c => c.AchievementCategoryId == update.Id, ct);
         if (update.Title != null) entity.Title = update.Title;
         if (update.Description != null) entity.Description = update.Description;
         if (update.IconName != null) entity.IconName = update.IconName;
         if (update.SortOrder.HasValue) entity.SortOrder = update.SortOrder.Value;
         if (update.IsActive.HasValue) entity.IsActive = update.IsActive.Value;
-        await _db.SaveChangesAsync(ct);
+        await _dbContext.SaveChangesAsync(ct);
         return entity.ToCategory();
     }
-
-    // ---- Tiers ----
 
     public async Task<IReadOnlyCollection<AchievementType>> GetTypesAsync(bool includeInactive, CancellationToken ct = default)
     {
@@ -65,7 +60,7 @@ internal class AchievementRepository : IAchievementRepository
         // line that changed neither the SQL nor the result - which is the worst
         // kind, because the next reader takes it for the thing that makes the
         // category available.
-        var query = _db.AchievementTypes.AsNoTracking();
+        var query = _dbContext.AchievementTypes.AsNoTracking();
         if (!includeInactive) query = query.Where(t => t.Category.IsActive);
         return await query
             .OrderBy(t => t.Category.SortOrder)
@@ -75,14 +70,14 @@ internal class AchievementRepository : IAchievementRepository
     }
 
     public async Task<AchievementType?> GetTypeAsync(Guid id, CancellationToken ct = default) =>
-        await _db.AchievementTypes
+        await _dbContext.AchievementTypes
             .AsNoTracking()
             .Where(t => t.AchievementTypeId == id)
             .ProjectToType()
             .FirstOrDefaultAsync(ct);
 
     public async Task<AchievementType?> GetTypeByCodeAsync(string code, CancellationToken ct = default) =>
-        await _db.AchievementTypes
+        await _dbContext.AchievementTypes
             .AsNoTracking()
             .Where(t => t.Code == code)
             .ProjectToType()
@@ -90,7 +85,7 @@ internal class AchievementRepository : IAchievementRepository
 
     public async Task<AchievementType> CreateTypeAsync(CreateAchievementType create, CancellationToken ct = default)
     {
-        var entity = new EntityAchievementType
+        var entity = new DbAchievementType
         {
             AchievementTypeId = _guidFactory.Create(),
             Code = create.Code,
@@ -99,33 +94,31 @@ internal class AchievementRepository : IAchievementRepository
             Tier = create.Tier,
             AchievementCategoryId = create.AchievementCategoryId,
         };
-        _db.AchievementTypes.Add(entity);
-        await _db.SaveChangesAsync(ct);
+        _dbContext.AchievementTypes.Add(entity);
+        await _dbContext.SaveChangesAsync(ct);
         return (await GetTypeAsync(entity.AchievementTypeId, ct))!;
     }
 
     public async Task<AchievementType> UpdateTypeAsync(UpdateAchievementType update, CancellationToken ct = default)
     {
-        var entity = await _db.AchievementTypes.FirstAsync(t => t.AchievementTypeId == update.Id, ct);
+        var entity = await _dbContext.AchievementTypes.FirstAsync(t => t.AchievementTypeId == update.Id, ct);
         if (update.Title != null) entity.Title = update.Title;
         if (update.Threshold.HasValue) entity.Threshold = update.Threshold.Value;
         if (update.Tier.HasValue) entity.Tier = update.Tier;
-        await _db.SaveChangesAsync(ct);
+        await _dbContext.SaveChangesAsync(ct);
         return (await GetTypeAsync(entity.AchievementTypeId, ct))!;
     }
 
     public async Task DeleteTypeAsync(Guid id, CancellationToken ct = default)
     {
-        var entity = await _db.AchievementTypes.FirstOrDefaultAsync(t => t.AchievementTypeId == id, ct);
+        var entity = await _dbContext.AchievementTypes.FirstOrDefaultAsync(t => t.AchievementTypeId == id, ct);
         if (entity == null) return;
-        _db.AchievementTypes.Remove(entity);
-        await _db.SaveChangesAsync(ct);
+        _dbContext.AchievementTypes.Remove(entity);
+        await _dbContext.SaveChangesAsync(ct);
     }
 
-    // ---- Earnings ----
-
     public async Task<IReadOnlyCollection<UserAchievement>> GetUserAchievementsAsync(Guid userId, CancellationToken ct = default) =>
-        await _db.UserAchievements
+        await _dbContext.UserAchievements
             .AsNoTracking()
             .Where(a => a.UserId == userId)
             .OrderByDescending(a => a.EarnedUtc)
@@ -134,7 +127,7 @@ internal class AchievementRepository : IAchievementRepository
 
     public async Task<bool> TryGrantAsync(Guid userId, Guid achievementTypeId, DateTimeOffset earnedUtc, CancellationToken ct = default)
     {
-        var entity = new EntityUserAchievement
+        var entity = new DbUserAchievement
         {
             UserAchievementId = _guidFactory.Create(),
             UserId = userId,
@@ -142,18 +135,18 @@ internal class AchievementRepository : IAchievementRepository
             EarnedUtc = earnedUtc,
             IsRemoved = false,
         };
-        _db.UserAchievements.Add(entity);
+        _dbContext.UserAchievements.Add(entity);
         try
         {
-            await _db.SaveChangesAsync(ct);
+            await _dbContext.SaveChangesAsync(ct);
             return true;
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // UNIQUE(UserId, AchievementTypeId) — a parallel
             // evaluator has already granted it. Roll back the tracker and report
             // "already there". This is a normal situation, not an error.
-            _db.Entry(entity).State = EntityState.Detached;
+            _dbContext.Entry(entity).State = EntityState.Detached;
             return false;
         }
     }

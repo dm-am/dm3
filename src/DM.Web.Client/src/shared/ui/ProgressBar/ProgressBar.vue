@@ -28,7 +28,7 @@ const progress = computed(() => (props.current / props.goal) * 100);
   bottom: 0
   background-color: $progress-fill-overlay
   // prefers-reduced-motion is handled globally in Reset.sass.
-  transition: width 0.4s ease
+  transition: width $transition-slow
 
 .progress-text
   position: relative

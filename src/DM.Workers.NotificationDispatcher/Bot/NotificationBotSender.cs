@@ -44,7 +44,7 @@ internal class NotificationBotSender : INotificationBotSender
     }
 
     /// <inheritdoc />
-    public async Task SendIfEnabled(CreateNotification notification, EventType eventType, CancellationToken ct = default)
+    public async Task SendIfEnabled(CreateNotification notification, EventType eventType, CancellationToken ct)
     {
         var category = NotificationCategoryMapper.GetCategory(eventType);
         if (category == null)
@@ -58,20 +58,16 @@ internal class NotificationBotSender : INotificationBotSender
             return;
         }
 
-        // Get user settings
         var settingsDict = await _dbContext.UserSettings
             .Where(s => userIds.Contains(s.UserId))
             .ToDictionaryAsync(s => s.UserId, ct);
 
-        // Get user bot IDs
         var userBotIds = await _dbContext.Users
             .Where(u => userIds.Contains(u.UserId))
             .Select(u => new { u.UserId, u.DiscordId, u.TelegramId })
             .ToDictionaryAsync(u => u.UserId, ct);
 
-        // Two channels, two markup languages: Telegram parses the message as HTML and
-        // Discord prints it as text. One message for both meant one of them was always
-        // wrong.
+        // Telegram parses HTML and Discord prints text, so each gets its own message.
         var discordMessage = BuildDiscordMessage(eventType, notification.Metadata, _siteAddresses);
         var telegramMessage = BuildTelegramMessage(eventType, notification.Metadata, _siteAddresses);
 
@@ -84,24 +80,18 @@ internal class NotificationBotSender : INotificationBotSender
 
             settingsDict.TryGetValue(userId, out var settings);
 
-            // Send to Discord
-            if (!string.IsNullOrEmpty(botIds.DiscordId) && !string.IsNullOrEmpty(_botConfig.DiscordBotToken))
+            if (!string.IsNullOrEmpty(botIds.DiscordId) && !string.IsNullOrEmpty(_botConfig.DiscordBotToken) &&
+                NotificationChannels.ShouldSend(settings?.DiscordPreferences, category.Value))
             {
-                if (NotificationChannels.ShouldSend(settings?.DiscordPreferences, category.Value))
-                {
-                    await Deliver(DiscordChannel, eventType,
-                        () => SendDiscordMessage(botIds.DiscordId, discordMessage, ct));
-                }
+                await Deliver(DiscordChannel, eventType,
+                    () => SendDiscordMessage(botIds.DiscordId, discordMessage, ct));
             }
 
-            // Send to Telegram
-            if (!string.IsNullOrEmpty(botIds.TelegramId) && !string.IsNullOrEmpty(_botConfig.TelegramBotToken))
+            if (!string.IsNullOrEmpty(botIds.TelegramId) && !string.IsNullOrEmpty(_botConfig.TelegramBotToken) &&
+                NotificationChannels.ShouldSend(settings?.TelegramPreferences, category.Value))
             {
-                if (NotificationChannels.ShouldSend(settings?.TelegramPreferences, category.Value))
-                {
-                    await Deliver(TelegramChannel, eventType,
-                        () => SendTelegramMessage(botIds.TelegramId, telegramMessage, ct));
-                }
+                await Deliver(TelegramChannel, eventType,
+                    () => SendTelegramMessage(botIds.TelegramId, telegramMessage, ct));
             }
         }
     }
@@ -116,16 +106,7 @@ internal class NotificationBotSender : INotificationBotSender
     /// Runs one send and counts what the channel refused.
     /// </summary>
     /// <remarks>
-    /// A bot answering 403 for every recipient - a token revoked, a bot removed
-    /// from a workspace, a chat blocked - was a warning line and nothing else.
-    /// The message had already been consumed successfully by then, because from
-    /// the pipeline's side it had: the swallowing happens here, below it. So
-    /// every channel that is down is invisible to every rule about the queue and
-    /// to every panel about the process.
-    ///
-    /// Both shapes of refusal, because they are the same event to a recipient who
-    /// received nothing: a status the bot API returns and an exception on the way
-    /// to it.
+    /// The message is already consumed, so this counter is the only trace of a channel that is down.
     /// </remarks>
     private static async Task Deliver(string channel, EventType eventType, Func<Task<bool>> send)
     {
@@ -145,7 +126,6 @@ internal class NotificationBotSender : INotificationBotSender
             client.DefaultRequestHeaders.Authorization =
                 new System.Net.Http.Headers.AuthenticationHeaderValue("Bot", _botConfig.DiscordBotToken);
 
-            // Create DM channel
             var dmChannelResponse = await client.PostAsJsonAsync(
                 "https://discord.com/api/v10/users/@me/channels",
                 new { recipient_id = userId },
@@ -161,7 +141,6 @@ internal class NotificationBotSender : INotificationBotSender
             var dmChannel = await dmChannelResponse.Content.ReadFromJsonAsync<JsonElement>(ct);
             var channelId = dmChannel.GetProperty("id").GetString();
 
-            // Send message
             var messageResponse = await client.PostAsJsonAsync(
                 $"https://discord.com/api/v10/channels/{channelId}/messages",
                 new { content = message },
@@ -174,7 +153,6 @@ internal class NotificationBotSender : INotificationBotSender
                 return false;
             }
 
-            _logger.LogDebug("Sent Discord notification to user {UserId}", userId);
             return true;
         }
         catch (Exception ex)
@@ -207,7 +185,6 @@ internal class NotificationBotSender : INotificationBotSender
                 return false;
             }
 
-            _logger.LogDebug("Sent Telegram notification to chat {ChatId}", chatId);
             return true;
         }
         catch (Exception ex)
@@ -222,14 +199,7 @@ internal class NotificationBotSender : INotificationBotSender
     /// it is escaped first.
     /// </summary>
     /// <remarks>
-    /// parse_mode is kept rather than dropped: bold is the only formatting the channel
-    /// has, and Telegram accepts exactly what the shared encoder produces. Unescaped,
-    /// a title holding an angle bracket made the whole message invalid markup,
-    /// Telegram answered 400, and the notification was lost behind a warning in the
-    /// log.
-    ///
-    /// Internal rather than private so that the escaping can be checked without a
-    /// database, a broker and a bot token.
+    /// Internal so that the escaping can be checked without a database and a bot token.
     /// </remarks>
     /// <param name="eventType">Event the message is about</param>
     /// <param name="metadata">Metadata bag of the notification</param>
@@ -238,7 +208,7 @@ internal class NotificationBotSender : INotificationBotSender
         EventType eventType, object metadata, SiteAddressConfiguration addresses)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"<b>Dungeon Master: {NotificationText.EscapeHtml(NotificationWording.GetTitle(eventType))}</b>");
+        sb.AppendLine($"<b>{NotificationText.TitlePrefix}{NotificationText.EscapeHtml(NotificationWording.GetTitle(eventType))}</b>");
         sb.AppendLine();
 
         foreach (var (name, value) in NotificationWording.ReadMetadata(metadata))
@@ -246,13 +216,11 @@ internal class NotificationBotSender : INotificationBotSender
             sb.AppendLine($"<b>{NotificationText.EscapeHtml(name)}:</b> {NotificationText.EscapeHtml(value)}");
         }
 
-        // The destination the letter and the list lead to, in the markup this channel
-        // reads. An anchor is the only way a Telegram message carries one.
         var target = NotificationLink.GetUrl(eventType, metadata, addresses);
         if (target != null)
         {
             sb.AppendLine();
-            sb.AppendLine($"<a href=\"{NotificationText.EscapeHtml(target)}\">Перейти</a>");
+            sb.AppendLine($"<a href=\"{NotificationText.EscapeHtml(target)}\">{NotificationLink.Caption}</a>");
         }
 
         return sb.ToString();
@@ -262,13 +230,6 @@ internal class NotificationBotSender : INotificationBotSender
     /// The Discord message. Discord renders the content as text, so it carries no
     /// markup and nothing in it is escaped.
     /// </summary>
-    /// <remarks>
-    /// One message used to be built for both channels in Telegram's HTML, and Discord
-    /// printed it with the tags showing. Escaping that shared string would only have
-    /// moved the damage: an ampersand in a game title would have reached Discord as an
-    /// entity. The two channels do not share a markup language, so they no longer
-    /// share a message.
-    /// </remarks>
     /// <param name="eventType">Event the message is about</param>
     /// <param name="metadata">Metadata bag of the notification</param>
     /// <param name="addresses">Addresses of the site, for the root of the link</param>
@@ -276,7 +237,7 @@ internal class NotificationBotSender : INotificationBotSender
         EventType eventType, object metadata, SiteAddressConfiguration addresses)
     {
         var sb = new StringBuilder();
-        sb.AppendLine($"Dungeon Master: {NotificationWording.GetTitle(eventType)}");
+        sb.AppendLine($"{NotificationText.TitlePrefix}{NotificationWording.GetTitle(eventType)}");
         sb.AppendLine();
 
         foreach (var (name, value) in NotificationWording.ReadMetadata(metadata))
@@ -284,9 +245,7 @@ internal class NotificationBotSender : INotificationBotSender
             sb.AppendLine($"{name}: {value}");
         }
 
-        // The same destination the other two channels lead to, written as the bare
-        // address: Discord links a URL of its own accord, and an anchor around it
-        // would arrive with the tag showing.
+        // The bare address: Discord links a URL by itself and would show an anchor tag.
         var target = NotificationLink.GetUrl(eventType, metadata, addresses);
         if (target != null)
         {

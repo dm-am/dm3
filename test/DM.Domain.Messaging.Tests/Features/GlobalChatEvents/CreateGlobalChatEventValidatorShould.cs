@@ -2,38 +2,40 @@ using System;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Messaging.Features.GlobalChatEvents;
-using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.GlobalChatEvents;
 
-public class CreateGlobalChatEventValidatorShould : UnitTestBase
+public class CreateGlobalChatEventValidatorShould
 {
     private readonly CreateGlobalChatEventValidator validator;
-    private readonly IDateTimeProvider dateTimeProvider;
-    private readonly DateTimeOffset now;
+    private readonly DateTimeOffset now = new(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
 
     public CreateGlobalChatEventValidatorShould()
     {
-        now = new DateTimeOffset(2024, 1, 1, 12, 0, 0, TimeSpan.Zero);
-        dateTimeProvider = Substitute.For<IDateTimeProvider>();
+        var dateTimeProvider = Substitute.For<IDateTimeProvider>();
         dateTimeProvider.Now.Returns(now);
         validator = new CreateGlobalChatEventValidator(dateTimeProvider);
+    }
+
+    /// <summary>An event an hour from now, changed by the case in the one field it is about.</summary>
+    private CreateGlobalChatEvent ValidEvent(Action<CreateGlobalChatEvent>? change = null)
+    {
+        var input = new CreateGlobalChatEvent { Title = "Valid title", StartsUtc = now.AddHours(1) };
+        change?.Invoke(input);
+        return input;
     }
 
     [Fact]
     public void PassForValidInput()
     {
-        var input = new CreateGlobalChatEvent
+        var input = ValidEvent(e =>
         {
-            Title = "Valid event title",
-            Description = "Valid description",
-            StartsUtc = now.AddHours(1),
-            Duration = TimeSpan.FromHours(2)
-        };
+            e.Description = "Valid description";
+            e.Duration = TimeSpan.FromHours(2);
+        });
 
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
@@ -42,13 +44,7 @@ public class CreateGlobalChatEventValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenTitleIsEmpty()
     {
-        var input = new CreateGlobalChatEvent
-        {
-            Title = "",
-            StartsUtc = now.AddHours(1)
-        };
-
-        var result = validator.TestValidate(input);
+        var result = validator.TestValidate(ValidEvent(e => e.Title = ""));
         result.ShouldHaveValidationErrorFor(x => x.Title)
             .WithErrorMessage(ValidationError.Empty);
     }
@@ -56,13 +52,8 @@ public class CreateGlobalChatEventValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenTitleExceedsMaxLength()
     {
-        var input = new CreateGlobalChatEvent
-        {
-            Title = new string('x', 201),
-            StartsUtc = now.AddHours(1)
-        };
-
-        var result = validator.TestValidate(input);
+        var result = validator.TestValidate(
+            ValidEvent(e => e.Title = new string('x', GlobalChatEventFieldLimits.TitleMaxLength + 1)));
         result.ShouldHaveValidationErrorFor(x => x.Title)
             .WithErrorMessage(ValidationError.Long);
     }
@@ -70,14 +61,8 @@ public class CreateGlobalChatEventValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenDescriptionExceedsMaxLength()
     {
-        var input = new CreateGlobalChatEvent
-        {
-            Title = "Valid title",
-            Description = new string('x', 10001),
-            StartsUtc = now.AddHours(1)
-        };
-
-        var result = validator.TestValidate(input);
+        var result = validator.TestValidate(
+            ValidEvent(e => e.Description = new string('x', GlobalChatEventFieldLimits.DescriptionMaxLength + 1)));
         result.ShouldHaveValidationErrorFor(x => x.Description)
             .WithErrorMessage(ValidationError.Long);
     }
@@ -85,43 +70,17 @@ public class CreateGlobalChatEventValidatorShould : UnitTestBase
     [Fact]
     public void FailWhenStartsAtIsInPast()
     {
-        var input = new CreateGlobalChatEvent
-        {
-            Title = "Valid title",
-            StartsUtc = now.AddHours(-1)
-        };
-
-        var result = validator.TestValidate(input);
+        var result = validator.TestValidate(ValidEvent(e => e.StartsUtc = now.AddHours(-1)));
         result.ShouldHaveValidationErrorFor(x => x.StartsUtc)
             .WithErrorMessage(ValidationError.MustBeFuture);
     }
 
-    [Fact]
-    public void FailWhenDurationIsZero()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void FailWhenDurationIsNotPositive(int hours)
     {
-        var input = new CreateGlobalChatEvent
-        {
-            Title = "Valid title",
-            StartsUtc = now.AddHours(1),
-            Duration = TimeSpan.Zero
-        };
-
-        var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(x => x.Duration)
-            .WithErrorMessage(ValidationError.MustBePositive);
-    }
-
-    [Fact]
-    public void FailWhenDurationIsNegative()
-    {
-        var input = new CreateGlobalChatEvent
-        {
-            Title = "Valid title",
-            StartsUtc = now.AddHours(1),
-            Duration = TimeSpan.FromHours(-1)
-        };
-
-        var result = validator.TestValidate(input);
+        var result = validator.TestValidate(ValidEvent(e => e.Duration = TimeSpan.FromHours(hours)));
         result.ShouldHaveValidationErrorFor(x => x.Duration)
             .WithErrorMessage(ValidationError.MustBePositive);
     }
@@ -129,14 +88,7 @@ public class CreateGlobalChatEventValidatorShould : UnitTestBase
     [Fact]
     public void PassWhenDurationIsNull()
     {
-        var input = new CreateGlobalChatEvent
-        {
-            Title = "Valid title",
-            StartsUtc = now.AddHours(1),
-            Duration = null
-        };
-
-        var result = validator.TestValidate(input);
+        var result = validator.TestValidate(ValidEvent(e => e.Duration = null));
         result.ShouldNotHaveAnyValidationErrors();
     }
 }

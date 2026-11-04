@@ -9,17 +9,9 @@ namespace DM.Testing.Markup;
 /// <summary>
 /// What generated markup is made of, read from the list the client reads too.
 /// </summary>
-/// <remarks>
-/// The list lives in the client tree, markupAlphabet.ts, as strict JSON between
-/// two marker comments, and is read here the way BbGrammarTable reads the
-/// grammar table: from the file, so a piece added there is a piece both sides
-/// are tried on without anybody copying it. What each field holds is written
-/// beside the list.
-/// </remarks>
+/// <remarks>Read from markupAlphabet.ts in the client, as strict JSON between two marker comments.</remarks>
 public sealed class MarkupAlphabet
 {
-    private const string Begin = "/* alphabet:begin */";
-    private const string End = "/* alphabet:end */";
 
     private static readonly Lazy<MarkupAlphabet> Loaded = new(Load);
 
@@ -94,16 +86,7 @@ public sealed class MarkupAlphabet
     /// <summary>Text that is no markup and names nothing wrong.</summary>
     public IReadOnlyList<string> ValidText { get; }
 
-    private static MarkupAlphabet Load()
-    {
-        var text = System.IO.File.ReadAllText(File);
-        var start = text.IndexOf(Begin, StringComparison.Ordinal);
-        var end = text.IndexOf(End, StringComparison.Ordinal);
-        if (start < 0 || end < start)
-            throw new InvalidOperationException($"{File} lost its {Begin} and {End} markers");
-
-        return new MarkupAlphabet(JsonNode.Parse(text[(start + Begin.Length)..end])!.AsObject());
-    }
+    private static MarkupAlphabet Load() => new(ClientTable.Read(File, "alphabet").AsObject());
 
     private static string[] ReadStrings(JsonNode node) =>
         node.AsArray().Select(item => (string)item!).ToArray();

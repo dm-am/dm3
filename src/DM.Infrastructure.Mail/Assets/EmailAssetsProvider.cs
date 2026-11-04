@@ -16,7 +16,7 @@ internal class EmailAssetsProvider : IEmailAssetsProvider
     }
 
     /// <inheritdoc />
-    public DM.Domain.Core.Mail.LinkedResource GetLogo() => new()
+    public LinkedResource GetLogo() => new()
     {
         ContentId = "logo",
         MimeType = "image/png",

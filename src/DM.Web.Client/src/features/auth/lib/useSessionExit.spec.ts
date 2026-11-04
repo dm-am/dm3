@@ -1,13 +1,6 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * "Выйти" on the account settings page left the viewer standing on it: the
- * guard only runs on navigation, and this is not one. What it must NOT do is
- * move a reader off a public page, and it must not move anyone at all when the
- * server refused to end the session.
- */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 const { push, currentMeta, signOutMock, signOutAllMock } = vi.hoisted(() => ({

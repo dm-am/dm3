@@ -12,7 +12,7 @@
  *                   </span>
  *
  * Sizing flows through CSS custom properties declared on the wrapper span
- * (see _BbcodeContent.sass image contract). No inline max-width/max-height
+ * (see _BbcodeImage.sass image contract). No inline max-width/max-height
  * on the <img> — this lets ancestors like TruncatedContent override image
  * sizing via normal class rules without !important.
  *
@@ -23,10 +23,10 @@
  */
 
 import { Node, mergeAttributes } from "@tiptap/core";
-import { sanitizeImageUrl } from "@/shared/lib/utils/bbcode";
+import { sanitizeUrl } from "@/shared/lib/utils/bbcodeAddresses";
+import { kept } from "./kept";
 
 export interface BbImageOptions {
-  inline: boolean;
   HTMLAttributes: Record<string, unknown>;
 }
 
@@ -53,7 +53,6 @@ export const BbImage = Node.create<BbImageOptions>({
 
   addOptions() {
     return {
-      inline: true,
       HTMLAttributes: {
         class: "bb-image",
         "data-bb-tag": "img",
@@ -64,13 +63,9 @@ export const BbImage = Node.create<BbImageOptions>({
     };
   },
 
-  inline() {
-    return this.options.inline;
-  },
+  inline: true,
 
-  group() {
-    return this.options.inline ? "inline" : "block";
-  },
+  group: "inline",
 
   draggable: true,
 
@@ -81,14 +76,7 @@ export const BbImage = Node.create<BbImageOptions>({
       },
       // Each attribute reads its own element: a parse rule's getAttrs does
       // not have the last word, the attribute's parseHTML does.
-      source: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-bb-source"),
-        renderHTML: (attributes) =>
-          attributes.source === null
-            ? {}
-            : { "data-bb-source": attributes.source },
-      },
+      source: kept("data-bb-source"),
       // Width and height live on the wrapper <span> of a sized image; the
       // bare <img> of a default one has neither.
       width: {
@@ -123,32 +111,8 @@ export const BbImage = Node.create<BbImageOptions>({
           };
         },
       },
-      // Bare form: <img class="bb-image" data-bb-tag="img">
-      {
-        tag: 'img[data-bb-tag="img"]',
-        getAttrs: (element) => {
-          const el = element as HTMLElement;
-          return {
-            src: el.getAttribute("src"),
-            source: el.getAttribute("data-bb-source"),
-            width: null,
-            height: null,
-          };
-        },
-      },
-      // Any other <img src="..."> is taken as a plain image
-      {
-        tag: "img[src]",
-        getAttrs: (element) => {
-          const el = element as HTMLElement;
-          return {
-            src: el.getAttribute("src"),
-            source: null,
-            width: null,
-            height: null,
-          };
-        },
-      },
+      // The bare form, the site's <img class="bb-image"> or any other <img src>.
+      { tag: "img[src]" },
     ];
   },
 
@@ -189,7 +153,7 @@ export const BbImage = Node.create<BbImageOptions>({
         ({ commands }) => {
           // Only an address the server draws: http and https, and nothing on
           // the reader's own machine or network.
-          const safeSrc = sanitizeImageUrl(attributes.src);
+          const safeSrc = sanitizeUrl(attributes.src);
           if (safeSrc === "#") {
             return false;
           }

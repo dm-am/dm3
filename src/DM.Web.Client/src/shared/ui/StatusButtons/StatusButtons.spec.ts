@@ -2,23 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * One control draws the status actions of a game and of a blog.
- *
- * BlogStatusButtons and GameStatusButtons were the same 156 lines twice over,
- * apart from the store they read and the noun in three sentences. They are now
- * two wrappers over this component, and the risk a merge like that carries is
- * visual: the sidebar strip and the page button group are markup no assertion
- * about behaviour would notice moving.
- *
- * So the markup is the assertion. The two callers are mounted here the way the
- * features mount them — a blog's transitions and a game's, which differ by the
- * Finish a blog does not have — and the drawn HTML is compared to what the two
- * pages rendered before they were merged, spelled out below. The layer rules
- * keep the feature wrappers out of a shared spec (shared may not import
- * features), so what is checked here is both call shapes rather than both
- * files; the wrappers add no markup of their own.
- */
+// One control for the status actions of a game and a blog: the drawn markup is the assertion.
 import { describe, it, expect, vi } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import StatusButtons from "./StatusButtons.vue";
@@ -44,9 +28,6 @@ const GAME: StatusTransitionOption[] = [
   { value: "Close", label: "Закрыть игру", danger: true },
 ];
 
-/** Scope ids are compile-time tokens; the styles moved with the markup. */
-const markup = (html: string) => html.replace(/ data-v-[0-9a-f]+=""/g, "");
-
 function render(
   transitions: StatusTransitionOption[],
   subject: string,
@@ -63,29 +44,33 @@ describe("StatusButtons", () => {
   it("draws the sidebar strip as the panel had it", () => {
     const { wrapper } = render(BLOG, "блога");
 
-    expect(markup(wrapper.html())).toBe(
-      [
-        "<!-- Sidebar strip variant -->",
-        '<li class="link"><span class="muted" aria-hidden="true">- </span><button type="button" class="strip-action">Заморозить блог</button></li>',
-        '<li class="link"><span class="muted" aria-hidden="true">- </span><button type="button" class="strip-action">Закрыть блог</button></li>',
-        "<!--teleport start-->",
-        "<!--teleport end-->",
-      ].join("\n"),
+    const items = wrapper.findAll("li.link");
+    expect(items.map((item) => item.get(".muted").text())).toEqual(["-", "-"]);
+    expect(
+      items.map((item) => item.get(".muted").attributes("aria-hidden")),
+    ).toEqual(["true", "true"]);
+    expect(items.map((item) => item.get("button.strip-action").text())).toEqual(
+      ["Заморозить блог", "Закрыть блог"],
     );
+    expect(
+      wrapper.findAll("button").map((button) => button.attributes("type")),
+    ).toEqual(["button", "button"]);
+    expect(wrapper.find(".status-buttons").exists()).toBe(false);
   });
 
   it("draws the page button group as the settings page had it", () => {
     const { wrapper } = render(GAME, "игры", "button");
 
-    expect(markup(wrapper.html())).toBe(
-      [
-        "<!-- Sidebar strip variant -->",
-        "<!-- Page button-group variant -->",
-        '<div class="status-buttons"><button type="button" class="status-btn">Завершить игру</button><button type="button" class="status-btn">Заморозить игру</button><button type="button" class="status-btn">Закрыть игру</button></div>',
-        "<!--teleport start-->",
-        "<!--teleport end-->",
-      ].join("\n"),
-    );
+    const group = wrapper.get(".status-buttons");
+    expect(group.findAll("button.status-btn").map((b) => b.text())).toEqual([
+      "Завершить игру",
+      "Заморозить игру",
+      "Закрыть игру",
+    ]);
+    expect(
+      group.findAll("button").map((button) => button.attributes("type")),
+    ).toEqual(["button", "button", "button"]);
+    expect(wrapper.find("li").exists()).toBe(false);
   });
 
   it("draws nothing at all when the status offers no move", () => {

@@ -6,13 +6,11 @@ using DM.Web.API.Features.Community.Users;
 
 namespace DM.Web.API.Features.Blog.Likes;
 
-/// <inheritdoc />
-internal class BlogLikeApiService : IBlogLikeApiService
+public class BlogLikeApiService
 {
     private readonly IBlogLikeService _likeService;
     private readonly UserMapper _mapper;
 
-    /// <inheritdoc />
     public BlogLikeApiService(
         IBlogLikeService likeService,
         UserMapper mapper)
@@ -21,33 +19,27 @@ internal class BlogLikeApiService : IBlogLikeApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<User> LikeBlogComment(Guid commentId)
     {
         var likedByUser = await _likeService.LikeBlogCommentAsync(commentId);
         return _mapper.ToUser(likedByUser);
     }
 
-    /// <inheritdoc />
     public Task UnlikeBlogComment(Guid commentId) => _likeService.UnlikeBlogCommentAsync(commentId);
 
-    /// <inheritdoc />
     public async Task<Envelope<User>> LikePublicationComment(Guid commentId)
     {
         var likedByUser = await _likeService.LikePublicationCommentAsync(commentId);
         return new Envelope<User>(_mapper.ToUser(likedByUser));
     }
 
-    /// <inheritdoc />
     public Task UnlikePublicationComment(Guid commentId) => _likeService.UnlikePublicationCommentAsync(commentId);
 
-    /// <inheritdoc />
     public async Task<Envelope<User>> LikePublication(Guid publicationId)
     {
         var likedByUser = await _likeService.LikePublicationAsync(publicationId);
         return new Envelope<User>(_mapper.ToUser(likedByUser));
     }
 
-    /// <inheritdoc />
     public Task UnlikePublication(Guid publicationId) => _likeService.UnlikePublicationAsync(publicationId);
 }

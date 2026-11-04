@@ -68,7 +68,7 @@ internal class UserEndorsementService : IUserEndorsementService
             UserId = authorId,
             TargetUserId = targetUserId,
             CreatedUtc = _dateTimeProvider.Now,
-            Text = createEndorsement.Text.Trim()
+            Text = createEndorsement.Text
         };
 
         try
@@ -114,20 +114,19 @@ internal class UserEndorsementService : IUserEndorsementService
             return UserEndorsementEligibility.Refused("Нельзя рекомендовать самого себя");
         }
 
-        if (await IsNewbieAsync(authorId))
+        if (ProbationPolicy.IsNewbie(await _repository.GetUserPostCountAsync(authorId)))
         {
             return UserEndorsementEligibility.Refused(
                 $"Чтобы рекомендовать других, нужно не меньше {ProbationPolicy.NewbiePostThreshold} постов в играх");
         }
 
-        if (!await HavePlayedTogetherAsync(authorId, targetUserId))
+        if (!await _repository.HavePlayedTogetherAsync(authorId, targetUserId))
         {
             return UserEndorsementEligibility.Refused(
                 "Рекомендовать можно только тех, с кем вы играли в одной игре");
         }
 
-        // One recommendation per author-recipient pair.
-        if (await ExistsAsync(authorId, targetUserId))
+        if (await _repository.ExistsAsync(authorId, targetUserId))
         {
             return UserEndorsementEligibility.Refused(
                 RefusalMessage.AlreadyEndorsedUser, HttpStatusCode.Conflict);
@@ -137,30 +136,8 @@ internal class UserEndorsementService : IUserEndorsementService
     }
 
     /// <inheritdoc />
-    public async Task<UserEndorsement> GetAsync(Guid id)
-    {
-        var endorsement = await _repository.GetAsync(id);
-        if (endorsement == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, "Рекомендация не найдена");
-        }
-
-        return endorsement;
-    }
-
-    /// <inheritdoc />
-    public async Task<(IEnumerable<UserEndorsement> Endorsements, PagingResult Paging)> GetListAsync(
-        Guid targetUserId, PagingQuery query)
-    {
-        var totalCount = await _repository.CountAsync(targetUserId);
-        var pagingData = new PagingData(
-            query,
-            _identityProvider.Current.Settings.Paging.EntitiesPerPage,
-            totalCount);
-
-        var endorsements = await _repository.GetAsync(targetUserId, pagingData);
-        return (endorsements, pagingData.Result);
-    }
+    public async Task<UserEndorsement> GetAsync(Guid id) =>
+        await _repository.GetAsync(id) ?? throw new HttpException(HttpStatusCode.NotFound, "Рекомендация не найдена");
 
     /// <inheritdoc />
     public async Task<(IEnumerable<UserEndorsement> Endorsements, PagingResult Paging)> GetAllAsync(
@@ -169,16 +146,12 @@ internal class UserEndorsementService : IUserEndorsementService
         var totalCount = await _repository.CountAllAsync(filter);
         var pagingData = new PagingData(
             query,
-            _identityProvider.Current.Settings.Paging.EntitiesPerPage,
+            _identityProvider.Current.Settings.PageSize,
             totalCount);
 
         var endorsements = await _repository.GetAllAsync(pagingData, filter);
         return (endorsements, pagingData.Result);
     }
-
-    /// <inheritdoc />
-    public Task<UserEndorsement?> GetByAuthorAsync(Guid targetUserId, Guid authorId) =>
-        _repository.GetByAuthorAsync(targetUserId, authorId);
 
     /// <inheritdoc />
     public async Task<UserEndorsement> UpdateAsync(UpdateUserEndorsement updateEndorsement)
@@ -188,7 +161,6 @@ internal class UserEndorsementService : IUserEndorsementService
 
         _intentionManager.ThrowIfForbidden(UserEndorsementIntention.Edit, endorsement);
 
-        // Check 24-hour edit window (admins can edit anytime)
         var currentUser = _identityProvider.Current.User;
         if (currentUser.Role != UserRole.Admin && !CanEdit(endorsement))
         {
@@ -203,7 +175,7 @@ internal class UserEndorsementService : IUserEndorsementService
 
         var entity = new UpdateUserEndorsementEntity(
             endorsement.Id,
-            Text: updateEndorsement.Text.Trim(),
+            Text: updateEndorsement.Text,
             ModifiedUtc: _dateTimeProvider.Now,
             ModifiedByUserId: currentUser.UserId);
 
@@ -224,22 +196,10 @@ internal class UserEndorsementService : IUserEndorsementService
         await _repository.UpdateAsync(entity);
     }
 
-    /// <inheritdoc />
-    public Task<bool> ExistsAsync(Guid authorId, Guid targetUserId) =>
-        _repository.ExistsAsync(authorId, targetUserId);
-
-    /// <inheritdoc />
-    public Task<bool> HavePlayedTogetherAsync(Guid userId1, Guid userId2) =>
-        _repository.HavePlayedTogetherAsync(userId1, userId2);
-
-    /// <inheritdoc />
-    public bool CanEdit(UserEndorsement endorsement)
+    private bool CanEdit(UserEndorsement endorsement)
     {
         var now = _dateTimeProvider.Now;
         var editDeadline = endorsement.CreatedUtc + EditWindow;
         return now <= editDeadline;
     }
-
-    private async Task<bool> IsNewbieAsync(Guid userId) =>
-        ProbationPolicy.IsNewbie(await _repository.GetUserPostCountAsync(userId));
 }

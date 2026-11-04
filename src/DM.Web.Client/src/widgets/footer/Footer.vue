@@ -1,6 +1,5 @@
 <template>
   <footer class="footer">
-    <!-- Static content - render once (currentYear computed once at component creation) -->
     <div class="credits" v-once>
       <div class="copyright-line">
         © Dungeon Master, {{ SITE_FOUNDED_YEAR }}–{{ currentYear }}.
@@ -38,10 +37,6 @@
       </div>
     </div>
 
-    <!-- The other address of the site used to lead this column; it now has its
-         own sidebar block (widgets/sidebar/SiteAddresses.vue), where it is met
-         before anything stops answering rather than at the bottom of a page
-         nobody scrolls to in a hurry. -->
     <nav class="legal" aria-label="Правовая информация" v-once>
       <div>
         <router-link :to="{ name: 'user-agreement' }"
@@ -61,14 +56,12 @@
 import { SITE_FOUNDED_YEAR } from "@/shared/config/site";
 import { siteTime } from "@/shared/lib/utils/datetime";
 
-// Static value - year doesn't change during session
 const currentYear = siteTime().year();
 
-// Easter egg: rickroll disguised as profile link
-// Only on plain left-click; Ctrl/Shift/Meta+click opens real profile in new tab
+// Plain left click only; a modified click opens the real profile.
 function rickroll(event: MouseEvent) {
   if (event.ctrlKey || event.shiftKey || event.metaKey || event.button !== 0) {
-    return; // Let browser handle modified clicks normally
+    return;
   }
   event.preventDefault();
   window.location.href = "https://www.youtube.com/watch?v=dQw4w9WgXcQ";
@@ -76,8 +69,7 @@ function rickroll(event: MouseEvent) {
 </script>
 
 <style scoped lang="sass">
-// Shared column look for .credits/.legal — only the padding side differs,
-// which each caller sets itself (padding-left vs padding-right)
+// The column look of .credits and .legal; each sets its own padding side.
 %footer-column
   position: relative
   width: $sidebar-width
@@ -86,9 +78,7 @@ function rickroll(event: MouseEvent) {
   box-sizing: border-box
   font-size: $secondary-font-size
   line-height: 1.3
-  // Darkened one step further than the global --text-muted token: this
-  // text sits over the decoration strip's semi-transparent overlay, which
-  // still eats a bit of contrast even after the sitewide AA fix
+  // One step darker than $text-muted: the strip's overlay eats some contrast.
   color: color-mix(in srgb, $text-muted 60%, $text)
   display: flex
   flex-direction: column
@@ -107,15 +97,7 @@ $footer-strip: url('@/assets/images/decorations/footer-decoration.png')
   flex-shrink: 0
   overflow: hidden
 
-  // The paper strip covers the footer from its torn edge down to the bottom,
-  // whatever height the footer takes, and the edge is the one of a desktop
-  // at every width. Two layers of one picture: on top the picture at the
-  // footer's desktop height, torn edge and all; under it the same picture as
-  // tall as the footer, of which only the flat paper below the first layer
-  // shows. One layer at the footer's height drew the edge larger than on a
-  // desktop in a footer taller than its picture (a larger text of the
-  // browser); one layer of 150 left the last lines on the bare page under a
-  // hard edge.
+  // Two layers of one picture: the torn edge at the desktop height, the paper as tall as the footer.
   &:before
     content: ''
     position: absolute
@@ -155,20 +137,7 @@ $footer-strip: url('@/assets/images/decorations/footer-decoration.png')
   @extend %footer-column
   padding-right: $big
 
-// One step between every pair of rows in the column: the lines read as one
-// list, and a list reads as one only while its rows are spaced alike.
+// One step between every pair of rows, so the lines read as one list.
 .legal > div:not(:last-child)
   margin-bottom: $small
-
-// Without the sidebars the columns have nothing to line up with, so each is as
-// wide as its text: the credits on the page's left gutter, the legal links
-// against its right one, and never closer to each other than one gutter.
-@media (max-width: $bp-shell)
-  .footer
-    column-gap: $big
-
-  .credits,
-  .legal
-    width: auto
-    flex-shrink: 1
 </style>

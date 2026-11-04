@@ -24,14 +24,8 @@ namespace DM.Workers.Mail.Tests;
 /// in plain text.
 /// </summary>
 /// <remarks>
-/// The letters are the real ones, rendered through the registrations the hosts
-/// use: the text half is read off whatever the templates draw, so a reading
-/// tested against hand-written markup would pass while a template drew
-/// something it does not understand.
-///
-/// The HTML half is held to the byte. A client that draws HTML draws the last
-/// alternative, which is this one, so the letter looks exactly as it did only
-/// if the part is exactly what it was.
+/// The letters are the real ones, rendered through the hosts' registrations. The HTML half is held to the
+/// byte: a client that draws HTML draws this last alternative.
 /// </remarks>
 public class LetterBodyShould : IAsyncDisposable
 {
@@ -53,12 +47,12 @@ public class LetterBodyShould : IAsyncDisposable
     /// <summary>One of every letter the product sends, every optional part filled.</summary>
     public static TheoryData<object> EveryLetter() => new()
     {
-        new RegistrationConfirmationViewModel("https://dm.am/activate#token=a"),
-        new PasswordResetConfirmationViewModel("https://dm.am/reset#token=b"),
+        new RegistrationConfirmationViewModel("https://dm.am/activate#token=a", 48),
+        new PasswordResetConfirmationViewModel("https://dm.am/reset#token=b", 48),
         new EmailChangeConfirmationViewModel("https://dm.am/email#token=c"),
         new PasswordChangeNotificationViewModel("https://dm.am/support"),
         new SuspiciousLoginViewModel("203.0.113.9", "Firefox на Linux", "30.07.2026 15:00", "Россия"),
-        new UsernameChangeApprovalViewModel("https://dm.am/username#token=d"),
+        new UsernameChangeApprovalViewModel("https://dm.am/username#token=d", 48),
         new UsernameChangeRejectionViewModel("имя занято"),
         new EmailChangeWarningViewModel("now@dm.am", "next@dm.am"),
         new EmailChangeCompletedViewModel("before@dm.am", "next@dm.am", "https://dm.am/support"),
@@ -66,6 +60,8 @@ public class LetterBodyShould : IAsyncDisposable
         new AccountRestoredViewModel("https://dm.am/login"),
         new TwoFactorRemovalRequestViewModel("https://dm.am/two-factor#token=e"),
         new TwoFactorRemovalScheduledViewModel("13.10.2026 15:00", "https://dm.am/two-factor#token=f"),
+        new NotificationLetterViewModel(
+            "Игра заморожена", [new("Игра", "Потерянные хроники")], "https://dm.am/game/hroniki~aBcD", "Перейти"),
     };
 
     [Fact]
@@ -122,7 +118,7 @@ public class LetterBodyShould : IAsyncDisposable
     [Fact]
     public async Task ReadTheWayTheLetterReads()
     {
-        var letter = await Letter(new RegistrationConfirmationViewModel("https://dm.am/activate#token=2f1c"));
+        var letter = await Letter(new RegistrationConfirmationViewModel("https://dm.am/activate#token=2f1c", 48));
 
         TextOf(letter).Should().Be(
             "Регистрация\n" +
@@ -137,7 +133,18 @@ public class LetterBodyShould : IAsyncDisposable
             Footnote + "\n");
     }
 
-    /// <summary>A row of the facts reads as a label and its value.</summary>
+    /// <summary>
+    /// A letter built on the proxy offers the main address by its full name,
+    /// in the text part as in the HTML one.
+    /// </summary>
+    [Fact]
+    public async Task OfferTheMainAddressByItsFullName()
+    {
+        var letter = await Letter(new RegistrationConfirmationViewModel("https://ru.l.dm.am/activate#token=2f1c", 48));
+
+        TextOf(letter).Should().Contain("Ссылка через Основной сервер: https://dm.am/activate#token=2f1c\n");
+    }
+
     [Fact]
     public async Task ReadARowOfFactsAsALabelAndItsValue()
     {
@@ -193,8 +200,7 @@ public class LetterBodyShould : IAsyncDisposable
         ((TextPart)((MultipartAlternative)LetterBody.Build(letter))[0]).Text.ReplaceLineEndings("\n");
 
     /// <summary>
-    /// The body as the worker built it before the text half existed, kept here
-    /// as the reference the HTML half is compared against.
+    /// The HTML-only body, the reference the HTML half is compared against.
     /// </summary>
     private static MimeEntity HtmlAsItWas(EmailLetter letter)
     {

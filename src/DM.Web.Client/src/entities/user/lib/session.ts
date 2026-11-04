@@ -1,59 +1,41 @@
 import type {
   LoginCredentials,
-  RegisterCredentials,
+  LoginResponse,
 } from "@/shared/api/models/account";
-import type { GeneralError } from "@/shared/api/models/common";
+import type { GeneralError, User } from "@/shared/api/models/common";
+import type { UserSettings } from "@/shared/api/models/personal";
+import type { RequestOptions } from "@/shared/api";
 import { useAuthStore } from "@/shared/stores";
 import { notifyFailure } from "@/shared/lib/errors";
 import accountApi from "../api/accountApi";
 import personalApi from "../api/personalApi";
 
-/**
- * The operations that establish, refresh and end a session.
- *
- * They used to be actions on the session store, which put account endpoints
- * inside `shared` — the one layer that must stay domain-free. The store keeps
- * the state (who the viewer is, persistence, cross-tab sync); the calls that
- * change it live here, with the rest of the account surface.
- */
+// The calls that move the session; the store in shared keeps the state and stays domain-free.
 
-/**
- * Sign up. Returns the problem document to answer with, or null once the
- * pending registration exists and the letter is on its way.
- *
- * `null` is the caller's word for success, and it used to be the answer to
- * every failure that carried no field errors as well: an attempt the rate
- * limit refused, a mail server that would not take the letter. The form went
- * on to the "Проверьте почту" screen, and the reader waited for a letter
- * nobody had sent.
- */
-export async function register(credentials: RegisterCredentials) {
-  const { error } = await accountApi.register(credentials);
-  return error;
+// The theme and the page size of the account ride on the viewer: the user DTO
+// carries no settings, the preferences do. The lists read the page size there,
+// and the ui store offers the theme to a device that never chose one.
+function withSettings(
+  viewer: User,
+  settings: Partial<UserSettings> | null | undefined,
+): User {
+  return {
+    ...viewer,
+    settings: { theme: settings?.theme, pageSize: settings?.pageSize ?? null },
+  };
 }
 
-/**
- * Where a sign-in attempt stopped.
- *
- * Three outcomes and not two, because the server has three: a session, a
- * refusal, and a password that was accepted while the login is not finished.
- * The third one is a 200 with no viewer in it — the shape a boolean "did it
- * fail" reads as success — so it has to be a stage of its own here or the
- * dialog closes over a viewer who never got in.
- */
+/** The viewer of a finished login, with the preferences it came with. */
+function viewerOf(login: LoginResponse | null | undefined): User | null {
+  return login?.user ? withSettings(login.user, login.preferences) : null;
+}
+
+// Three outcomes: an accepted password with the login unfinished is a 200 with no viewer.
 export type SignInOutcome =
   | { stage: "signedIn" }
   | { stage: "secondFactor" }
   | { stage: "refused"; failure: GeneralError };
 
-/**
- * Sign in (cookie-based) and adopt the returned user as the session.
- *
- * A 403 is the one that mattered: the server refuses a banned, removed or
- * locked-out account by name, and that name is the answer to the form.
- * Reported as success, it closed the dialog over a header that went on
- * offering "Вход | Регистрация".
- */
 export async function signIn(
   credentials: LoginCredentials,
 ): Promise<SignInOutcome> {
@@ -61,33 +43,15 @@ export async function signIn(
 
   if (error) return { stage: "refused", failure: error };
 
-  // The password was accepted and the second factor is still owed: no session
-  // exists, no cookie was set, and the viewer is deliberately absent from the
-  // body. The challenge lives in a cookie of its own, so there is nothing to
-  // hold on to here - only a stage to report.
+  // No session yet: the challenge lives in a cookie of its own.
   if (data?.twoFactorRequired) return { stage: "secondFactor" };
 
   // The viewer arrives wrapped, next to the preferences of the first screen.
-  // Stored whole, the envelope stood in the store where the viewer belongs:
-  // every field read off it was undefined, the header went on offering
-  // "Вход | Регистрация" over a live session, and it stayed that way until the
-  // next boot reconciled the store against the server.
-  // No body behind a success is not a session, and the two lines above already
-  // ruled out a refusal and a half-finished login: nothing to sign in as, so
-  // the store stays empty.
-  useAuthStore().updateUser(data?.user ?? null);
+  useAuthStore().updateUser(viewerOf(data));
   return { stage: "signedIn" };
 }
 
-/**
- * Finish a login with the code from the device or with a recovery code.
- * Returns the problem document to answer with, or null once the session is in
- * place.
- *
- * The viewer arrives inside an envelope here, unlike on the first step, which
- * answers with a bare body. Read the way the first step is read, the envelope
- * itself would stand in the store where the viewer belongs.
- */
+/** Null once the session is in place; the viewer arrives enveloped, unlike on the first step. */
 export async function completeSecondFactor(
   code: string,
 ): Promise<GeneralError | null> {
@@ -95,18 +59,11 @@ export async function completeSecondFactor(
 
   if (error) return error;
 
-  useAuthStore().updateUser(data?.resource?.user ?? null);
+  useAuthStore().updateUser(viewerOf(data?.resource));
   return null;
 }
 
-/**
- * End the current session.
- *
- * The viewer is dropped only once the server confirms its own session is gone.
- * The cookie is HttpOnly and lives a year with "Запомнить меня", so clearing
- * the store on a failed request paints a guest interface over a live session:
- * on a shared machine that is the outcome this action exists to prevent.
- */
+// Dropped only once the server confirms: a guest interface over a live session misleads.
 export async function signOut(): Promise<boolean> {
   const { error } = await accountApi.signOut();
   if (error) {
@@ -118,17 +75,7 @@ export async function signOut(): Promise<boolean> {
   return true;
 }
 
-/**
- * "Выйти со всех устройств": terminate every other active session first,
- * then sign the current one out. The backend has no single "logout
- * everywhere" endpoint (DELETE account/sessions/others keeps the current
- * session), so combining the two calls logs the user out on all devices.
- *
- * The order decides what a failure means as well: if the other sessions
- * survive, this one is left alone too. Signing out here would hide the half
- * that failed behind a guest interface, and someone who asked for every device
- * would have no way to learn that the other devices are still signed in.
- */
+// The others first: if they survive this one stays, so the failure is not hidden.
 export async function signOutAll(): Promise<boolean> {
   const { error } = await accountApi.logoutAll();
   if (error) {
@@ -139,27 +86,10 @@ export async function signOutAll(): Promise<boolean> {
   return signOut();
 }
 
-/**
- * The answer of the start of the page, one per store: the shell asks at mount
- * and the route guard may ask before it, and both get the same request.
- */
+// One per store: the shell and the route guard both ask, and both get one request.
 const restorations = new WeakMap<object, Promise<void>>();
 
-/**
- * Who the viewer is, settled once when the page starts.
- *
- * A viewer stored in the browser is refreshed from the server, as before. With
- * nobody stored, the server is asked anyway: the session lives in a cookie the
- * page cannot read, and it outlives the stored copy whenever that copy is gone
- * (site data cleared, another tab's storage lost, a sign-in made on another
- * address of the same site). The page used to take the empty copy for an
- * answer and drew a guest over a live session until the reader signed in
- * again. Asked, the server names the viewer, and the page is signed in at
- * once; a 401 is a guest, said nowhere, because there is nothing to say.
- *
- * Once per page: the result is kept, so the guard that waits for it on every
- * protected navigation does not ask again, and a guest costs one request.
- */
+// With nobody stored the server is asked anyway: the session cookie outlives the stored copy.
 export function restoreSession(): Promise<void> {
   const auth = useAuthStore();
   let restoring = restorations.get(auth);
@@ -170,33 +100,37 @@ export function restoreSession(): Promise<void> {
   return restoring;
 }
 
-/** Asks the server who is signed in when the page holds nobody. */
+/**
+ * The viewer as the server has it, with the theme and the page size of the
+ * account; a failed read of those keeps the ones the viewer had.
+ */
+async function readViewer(options?: RequestOptions): Promise<User | null> {
+  const [profile, preferences] = await Promise.all([
+    personalApi.getMyProfile(options),
+    personalApi.getMyPreferences(options),
+  ]);
+  if (profile.error || !profile.data) return null;
+
+  return withSettings(
+    profile.data,
+    preferences.data ?? useAuthStore().user?.settings,
+  );
+}
+
 async function probeSession() {
-  const { data, error } = await personalApi.getMyProfile({
-    probesSession: true,
-  });
-  if (error || !data) return;
+  const viewer = await readViewer({ probesSession: true });
+  if (!viewer) return;
 
   // A sign-in finished while the question was out has the newer answer.
   const auth = useAuthStore();
-  if (!auth.isAuthenticated) auth.updateUser(data);
+  if (!auth.isAuthenticated) auth.updateUser(viewer);
 }
 
-/**
- * Background refresh of the session user. The store is already populated from
- * localStorage when it is created, so this only reconciles it with the server.
- *
- * A failed request is not an answer about who the viewer is. Only a 401 says
- * the session is over, and the client interceptor already ends it; anything
- * else is a bad minute on the network. Writing the empty result through signed
- * people out of the interface on a 500, with the server session still alive.
- */
+// A failure is no answer about the viewer: only a 401 ends the session, and the interceptor does it.
 export async function fetchUser() {
   const auth = useAuthStore();
   if (!auth.isAuthenticated) return;
 
-  const { data, error } = await personalApi.getMyProfile();
-  if (error || !data) return;
-
-  auth.updateUser(data);
+  const viewer = await readViewer();
+  if (viewer) auth.updateUser(viewer);
 }

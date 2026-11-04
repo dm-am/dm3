@@ -4,24 +4,10 @@ import { refusalHere } from "@/shared/lib/errors";
 import { useActionResult } from "./useActionResult";
 
 /**
- * Writing and deleting a chat message.
- *
- * The two chat views — the global chat and the messenger — had the same four
- * functions each, line for line: the send with its optimistic clear and its
- * restore-on-failure, and the three halves of the inline delete confirmation.
- * Only the store differed. What a duplicate like that costs is not the lines,
- * it is that every later fix has to be found twice: the toolbar above these
- * messages was copied the same way and one copy went years without accessible
- * names on its buttons, because nobody looking at the other one could tell.
- *
- * What stays with the page is what genuinely differs: which store answers, and
- * where the feed scrolls afterwards.
- *
- * A refusal is said where the press was, not in a plate (UI_STANDARDS,
- * "Всплывающие сообщения"): a refused send under the "Отправить" of the
- * composer, with the text back in the field; a refused press on a message - a
- * delete here, a saved edit or a like on the page - in a line under that
- * message, inside its row of the list so the list measures it with the row.
+ * Writing and deleting a chat message in both chat views; the page keeps its
+ * store and where the feed scrolls. A refusal is said where the press was: a
+ * refused send under the button with the text back, a refused press on a
+ * message in a line inside its row.
  */
 
 /** What a chat store answers a send or a delete with. */
@@ -33,36 +19,22 @@ export interface ChatComposerOptions {
   /** True while a send is in flight — the store's own flag. */
   sending: Ref<boolean>;
 
-  /**
-   * Hands the text to the store. Returns the error rather than throwing, so
-   * the text can go back into the field.
-   */
+  /** Returns the error rather than throwing, so the text can go back. */
   send: (text: string) => Promise<ChatActionResult>;
 
   /** Hands the id to the store. */
   remove: (id: string) => Promise<ChatActionResult>;
 
-  /**
-   * The message editor. Its own clear() drops the saved draft as well, which is
-   * the copy of the text that outlives the tab, so it is only called once the
-   * send has landed.
-   */
+  /** Its clear() drops the saved draft too, so it is called once the send landed. */
   editor: Ref<{ clear: () => void } | null>;
 
-  /**
-   * Which message shows "точно удалить?" in place of its delete button. Owned
-   * by useMessageToolbar, which also drops it when the toolbar goes away.
-   */
+  /** Owned by useMessageToolbar, which drops it with the toolbar. */
   confirmingDeleteId: Ref<string | null>;
 
   /** Follows the feed after a message of one's own lands. */
   scrollToBottom: () => void;
 
-  /**
-   * An extra precondition beyond "there is text and nothing is in flight". The
-   * messenger has one — a chat has to be selected — and the global chat does
-   * not.
-   */
+  /** A precondition beyond text and nothing in flight: the messenger's selected chat. */
   canSend?: () => boolean;
 }
 
@@ -82,10 +54,7 @@ export function useChatComposer(options: ChatComposerOptions) {
   /** The last refused press on a message, under that message. */
   const messageRefusal = ref<MessageRefusal | null>(null);
 
-  /**
-   * Says a refused press on a message under it, or nothing where the plate is
-   * the carrier (an expired session, a dead connection).
-   */
+  /** A refused press on a message, under it; nothing where the plate is the carrier. */
   function refuseMessage(
     id: string,
     error: GeneralError | BadRequestError,
@@ -95,11 +64,7 @@ export function useChatComposer(options: ChatComposerOptions) {
     messageRefusal.value = text ? { id, text } : null;
   }
 
-  /**
-   * Takes the line under a message down as a new press on it starts. A line
-   * left over from a refusal the retry has since overcome would stand under a
-   * heart that is filled, or an edit that is saved, and say the opposite.
-   */
+  /** A new press takes the line down: a stale refusal would contradict "Нравится". */
   function clearMessageRefusal(id: string): void {
     if (messageRefusal.value?.id === id) messageRefusal.value = null;
   }
@@ -112,9 +77,7 @@ export function useChatComposer(options: ChatComposerOptions) {
     newMessage.value = "";
     sendResult.clear();
     const { error } = await options.send(text);
-    // Give the text back on failure. Emptying the field before the request is
-    // what makes sending feel instant; losing what was written when it fails is
-    // not part of that bargain.
+    // Emptied before the request to feel instant, given back on failure.
     if (error) {
       newMessage.value = text;
       sendResult.refuse(error, "Не удалось отправить сообщение");

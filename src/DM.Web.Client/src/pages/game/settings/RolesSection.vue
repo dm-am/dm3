@@ -1,25 +1,13 @@
 <script setup lang="ts">
 /**
- * RolesSection — manage game staff. Both staff operations are the master's
- * alone: GameIntention.InviteAssistant and GameIntention.RemoveUser ask for
- * GameRole.Master and admit nobody else, not even a senior moderator. The host
- * page computes that one flag and passes it in; everyone else the settings page
- * admits reads the roster without controls, which is what the roster costs —
- * a plain GameIntention.Read on the game the page already loaded. The mentor
- * (premoderation curator) is shown read-only in either case — there is no
- * per-game mentor-assignment endpoint.
- *
- * Inviting an assistant says nothing in the corner and cannot say it with the
- * roster either: the invited person joins the list of assistants only once the
- * invitation is accepted. What it changes is the block below the roster, which
- * names everyone whose invitation is out and when it was sent (see
- * `loadPending`). The blog RolesSection is built the same way.
+ * The staff of the game. Inviting and removing an assistant are the master's
+ * alone; everyone else the page admits reads the roster. A sent invitation is
+ * answered by its row under the roster, not by a plate.
  */
 import { computed, onMounted, ref } from "vue";
 import { storeToRefs } from "pinia";
 import { useGameDetailsStore, gameApi, type Invitation } from "@/entities/game";
-import { UserLink } from "@/entities/user";
-import { UserAutocomplete } from "@/entities/user";
+import { UserAutocomplete, UserLink } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
 import { SettingsSection } from "@/shared/ui/SettingsSection";
 import { RemoveButton } from "@/shared/ui/RemoveButton";
@@ -28,6 +16,7 @@ import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 defineProps<{
   /** Whether the viewer may invite and remove assistants (the master alone). */
@@ -49,30 +38,13 @@ const pending = ref<Invitation[]>([]);
 const sentAt = (invitation: Invitation) =>
   new Date(invitation.createdUtc).getTime();
 
-/** When the invitation went out, in the row that stands for it. */
 const sentLabel = (invitation: Invitation) =>
   `отправлено ${formatDateFull(invitation.createdUtc)}`;
 
-/**
- * The assistant invitations that are still out, oldest first, so the one just
- * sent is the row next to the control that sent it.
- *
- * Read from the invitation endpoint rather than from the game, although the
- * game DTO carries a pending assistant of its own: that field holds one name,
- * picked with FirstOrDefault out of an unordered token read
- * (GameRepository), so a master who invites a second assistant while the
- * first invitation is out sees the line keep the other person's name - the
- * invitation he has just sent, silently absent. The read asks
- * GameIntention.EditSettings, which is also what admits a viewer to the
- * settings page, so everyone who is shown this section may make it.
- */
+// Not the game's pendingAssistant, which holds one name of several.
 async function loadPending() {
   if (!game.value) return;
-  const { data, error } = await gameApi.getGameInvitations(
-    game.value.publicId ?? game.value.id,
-  );
-  // A read that failed leaves the block as it is rather than emptying it over
-  // an invitation that is out.
+  const { data, error } = await gameApi.getGameInvitations(game.value.publicId);
   if (error) return;
   pending.value = (data?.resources ?? [])
     .filter((invitation) => invitation.type === "assistant")
@@ -81,7 +53,6 @@ async function loadPending() {
 
 onMounted(loadPending);
 
-/** A refused invitation, under the row it was typed in, the name kept. */
 const inviteResult = useActionResult();
 
 async function invite() {
@@ -97,11 +68,7 @@ async function invite() {
     inviteResult.refuse(error, "Не удалось пригласить ассистента");
     return;
   }
-  // The row from the server's own answer, in place of the invitation it has
-  // just replaced: a second invitation to the same person invalidates the
-  // first (GameInvitationRepository.InvalidateAndCreateInvitation), so what
-  // changes in the block is the moment it was sent. Put in before the reload,
-  // which is then free to fail without taking the row with it.
+  // A second invitation replaces the first on the server.
   if (data) {
     pending.value = [
       ...pending.value.filter(
@@ -111,21 +78,19 @@ async function invite() {
     ];
   }
   inviteUsername.value = "";
-  // Not the game: an invitation adds nobody to the roster, and the roster is
-  // what the game carries.
   await loadPending();
 }
 
-// The request of the confirmation. The window waits for it, prints a refusal in
-// itself and closes on success alone, so the interceptor keeps quiet about it.
+// The window prints its own refusal, so the interceptor keeps quiet.
 async function confirmRemove() {
   const target = pendingRemove.value;
   if (!game.value || !target) return;
-  const result = await gameApi.removeAssistant(game.value.id, target.username, {
-    ownsRefusal: true,
-    ownsRateLimit: true,
-  });
-  if (!result.error) void store.loadGame(game.value.publicId ?? game.value.id);
+  const result = await gameApi.removeAssistant(
+    game.value.id,
+    target.username,
+    OWNS_REFUSAL,
+  );
+  if (!result.error) void store.loadGame(game.value.publicId);
   return result;
 }
 </script>
@@ -136,7 +101,7 @@ async function confirmRemove() {
       <div class="role-label">Ассистенты</div>
       <ul v-if="assistants.length" class="staff-list">
         <li v-for="a in assistants" :key="a.id" class="staff-item">
-          <UserLink :user="a" />
+          <UserLink :user="a" hide-badge />
           <RemoveButton
             v-if="canManageRoles"
             @click="pendingRemove = { username: a.username }"
@@ -151,7 +116,7 @@ async function confirmRemove() {
         <div class="role-label">Ожидают подтверждения</div>
         <ul class="staff-list">
           <li v-for="inv in pending" :key="inv.id" class="staff-item">
-            <UserLink :user="inv.invitedUser" />
+            <UserLink :user="inv.invitedUser" hide-badge />
             <span class="sent">{{ sentLabel(inv) }}</span>
           </li>
         </ul>
@@ -177,7 +142,7 @@ async function confirmRemove() {
 
     <div class="role-block">
       <div class="role-label">Наставник (премодерация)</div>
-      <UserLink v-if="mentor" :user="mentor" />
+      <UserLink v-if="mentor" :user="mentor" hide-badge />
       <SecondaryText v-else>Наставник не назначен</SecondaryText>
     </div>
 

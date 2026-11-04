@@ -6,7 +6,6 @@ namespace DM.Domain.Community.Features.WebsiteTestimonials;
 /// <inheritdoc />
 internal class CreateWebsiteTestimonialValidator : AbstractValidator<CreateWebsiteTestimonial>
 {
-    /// <inheritdoc />
     public CreateWebsiteTestimonialValidator()
     {
         // The author is named by the moderator, so an empty name is a malformed

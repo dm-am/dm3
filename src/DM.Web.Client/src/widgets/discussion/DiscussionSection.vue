@@ -1,35 +1,16 @@
 <script setup lang="ts">
-/**
- * The discussion, one section for the whole site.
- *
- * Four records carry comments — topic, game, blog, publication — and the four
- * endpoints behind them read the same query: text search, authors, period,
- * sort. What differs between the pages is only where the comments come from
- * and who may write, so that is what arrives as props, and everything a reader
- * sees is here: the filter bar, paging above and below the list, the comments,
- * the empty and failed states, the permalink and the composer. The composer is
- * the form of comments of the site (CommentComposer): the conversation of a
- * ticket writes in the same one.
- *
- * It exists because the pages had drifted into three shapes. The game and the
- * blog rendered a bare list with a single paging block and no search at all —
- * not because the server could not filter, it always could, but because those
- * pages never sent the params — and answered a failed load with a red line and
- * no way to retry. The comment numbering was spelled out three times, the
- * empty state in two wordings, and a copied permalink resolved on one page of
- * the three.
- */
+/** One discussion section for the site: what differs between the pages arrives as props. */
 import { computed, ref, watch } from "vue";
-import type { RouteLocationRaw } from "vue-router";
+import type { RouteLocationNamedRaw } from "vue-router";
 import { storeToRefs } from "pinia";
 import type {
   ApiResult,
   Comment,
   Envelope,
-  GeneralError,
+  SubmitResult,
   PagingInfo,
 } from "@/shared/api/models/common";
-import type { CommentsQuery } from "@/shared/api";
+import type { CommentsQuery, RequestOptions } from "@/shared/api";
 import { useUiStore } from "@/shared/stores/ui";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
@@ -46,12 +27,6 @@ import {
 import { CommentsFilter, useCommentsFilter } from "@/features/comment-filter";
 import { LoginPrompt } from "@/features/auth";
 
-/** What a mutation answers with: null when the server took the change. */
-type SubmitResult = { error: GeneralError | null };
-
-/** Who shows a refused request: the two flags the api client reads by name. */
-type RefusalFlags = { ownsRefusal?: boolean; ownsRateLimit?: boolean };
-
 const props = defineProps<{
   /** Comments of the current page, as the caller's store holds them. */
   comments: Comment[];
@@ -59,15 +34,9 @@ const props = defineProps<{
   paging: PagingInfo | null;
   /** A load is in flight. */
   loading: boolean;
-  /**
-   * The last load failed. A flag and not a sentence: the sentence is the same
-   * on every discussion, so it is spelled here once.
-   */
+  /** The last load failed; the sentence is the same everywhere and spelled here once. */
   failed: boolean;
-  /**
-   * The record being discussed. A change reloads: this section stays mounted
-   * when the router swaps one game (or blog) for another.
-   */
+  /** The record discussed: a change reloads, since the section stays mounted across records. */
   recordId?: string;
   /** Loads a page of the discussion with the filter, sort and paging query. */
   load: (query: CommentsQuery) => unknown;
@@ -75,48 +44,23 @@ const props = defineProps<{
   create: (text: string) => Promise<SubmitResult>;
   /** Saves an edited comment; the item keeps its editor open on a refusal. */
   submitEdit: (id: string, text: string) => Promise<SubmitResult>;
-  /**
-   * Deletes a comment. The flags come from the item's confirmation, which
-   * prints a refusal in itself: passed on to the request, they keep the
-   * interceptor from saying it a second time.
-   */
-  submitDelete: (id: string, options?: RefusalFlags) => Promise<SubmitResult>;
-  /**
-   * Likes a comment. The answer goes on to the item: a refused like leaves
-   * the heart as it was, and the item is what says so.
-   */
+  /** Deletes a comment; the flags keep the interceptor from repeating the item's refusal. */
+  submitDelete: (id: string, options?: RequestOptions) => Promise<SubmitResult>;
+  /** Likes a comment; a refused like is the item's to say. */
   like: (id: string) => Promise<SubmitResult>;
   /** Takes the like back; answers as like does. */
   unlike: (id: string) => Promise<SubmitResult>;
   /** Fetches a comment's raw BBCode source for the edit form. */
   fetchEditSource: (id: string) => Promise<ApiResult<Envelope<Comment>>>;
   /** Where the paging links point: the discussion's own route. */
-  pagingTo: RouteLocationRaw;
+  pagingTo: RouteLocationNamedRaw;
   /** Composer draft key, built by composerDraftKey. */
   draftKey: string;
-  /**
-   * Whether the viewer may post right now: the record's `viewer.canComment`,
-   * asked by the code that refuses the comment, so a form shown here is one
-   * the server takes. False offers no form; what stands in its place is
-   * `closedHint`, else the way in for a guest.
-   */
+  /** The record's viewer.canComment, so a form shown here is one the server takes. */
   canComment: boolean;
-  /**
-   * Why the viewer may read this discussion and not write in it: a game
-   * read-only to those outside it, the blacklist of the game or the blog. A
-   * plaque where the form would be (RefusalNote), under the discussion, which
-   * stays whole: the filter bar, the comments, and "Комментариев пока нет"
-   * when there are none, that one grey, so a refusal never reads like the
-   * empty line. It goes before the sign-in prompt, so a guest at a discussion
-   * read-only to everybody outside the game is told so rather than invited to
-   * a form that signing in would not open.
-   */
+  /** Why the viewer may read and not write: a plaque in the form's place, before the sign-in prompt. */
   closedHint?: string;
-  /**
-   * The viewer is on the blacklist of the game or blog discussed here. The
-   * composer is the caller's business (canComment); this reaches the
-   * comments, where it takes "Редактировать" off the viewer's own.
-   */
+  /** The viewer is on the record's blacklist: his comments lose "Редактировать". */
   viewerBlacklisted?: boolean;
 }>();
 
@@ -132,26 +76,22 @@ const { isCompactLayout } = storeToRefs(useUiStore());
 const { user } = storeToRefs(useAuthStore());
 const { filterState, searchParams, hasActiveFilters } = useCommentsFilter();
 
-// The URL is the filter's single source of truth, so one watcher covers the
-// filter bar, the sort button and both paging blocks at once. The record is in
-// the key because this section stays mounted across a route hop between two
-// games, and the comments of the previous one would otherwise stay on screen.
+// The record is in the key: the section stays mounted across a hop between two records.
 const loadKey = computed(() =>
   JSON.stringify([props.recordId, searchParams.value]),
 );
 
+function loadPage() {
+  return props.load(searchParams.value);
+}
+
 watch(
   loadKey,
   () => {
-    if (!props.recordId) return;
-    props.load(searchParams.value);
+    if (props.recordId) loadPage();
   },
   { immediate: true },
 );
-
-function retryLoad() {
-  return props.load(searchParams.value);
-}
 
 // The caller marks the discussion read once, on the first page that arrives.
 const listReady = computed(() => props.comments.length > 0 && !props.loading);
@@ -175,13 +115,11 @@ const emptyText = computed(() =>
     : "Комментариев пока нет",
 );
 
-// Moderator warning (doc 4.2.4.1) — shared dialog wiring.
-const { warnComment: handleWarn } = useCommentWarnDialog((id) =>
+const { warnComment } = useCommentWarnDialog((id) =>
   props.comments.find((c) => c.id === id),
 );
 
-// Paging scrolls the discussion back into view instead of the page top: the
-// record above it (topic bubble, game header) is not worth re-showing.
+// Paging scrolls the discussion back into view, not the record above it.
 const sectionRef = ref<HTMLElement | null>(null);
 function pagingAnchor(): HTMLElement | null {
   return sectionRef.value;
@@ -189,13 +127,10 @@ function pagingAnchor(): HTMLElement | null {
 
 useCommentHashScroll(() => props.comments);
 
-// --- Composer ---
-// The comment goes, then the page is read again so it stands in the list; only
-// then does the form drop the draft. A refused one stays in the form, which
-// says why under its button.
+// The page is read again before the form drops the draft; a refused one stays in the form.
 async function send(text: string): Promise<SubmitResult> {
   const result = await props.create(text);
-  if (!result.error) await props.load(searchParams.value);
+  if (!result.error) await loadPage();
   return result;
 }
 </script>
@@ -214,16 +149,14 @@ async function send(text: string): Promise<SubmitResult> {
         :scroll-anchor="pagingAnchor"
       />
 
-      <!-- Loading: the skeleton stands in before the first page only, so a
-           refetch keeps the comments already on screen. -->
+      <!-- Before the first page only: a refetch keeps the comments on screen -->
       <CommentSkeleton v-if="loading && !comments.length" />
 
-      <!-- A failed load must not be presented as fake-empty. Shown only when
-           there are no stale comments to keep on screen. -->
+      <!-- A failed load is not an empty one -->
       <ErrorState
         v-else-if="failed && !comments.length"
         :message="LOAD_FAILURE"
-        :retry="retryLoad"
+        :retry="loadPage"
       />
 
       <SecondaryText v-else-if="!comments.length" class="discussion-none">
@@ -234,16 +167,6 @@ async function send(text: string): Promise<SubmitResult> {
         <CommentItem
           v-for="(comment, index) in comments"
           :key="comment.id"
-          v-memo="[
-            comment.id,
-            comment.text,
-            comment.likes?.length,
-            comment.isRemoved,
-            comment.modifiedUtc,
-            isCompactLayout,
-            filterState.search,
-            viewerBlacklisted,
-          ]"
           :comment="comment"
           :compact="isCompactLayout"
           :number="commentNumber(index)"
@@ -254,7 +177,7 @@ async function send(text: string): Promise<SubmitResult> {
           :submit-like="like"
           :submit-unlike="unlike"
           :viewer-blacklisted="viewerBlacklisted"
-          @warn="handleWarn"
+          @warn="warnComment"
         />
       </div>
 
@@ -268,8 +191,7 @@ async function send(text: string): Promise<SubmitResult> {
       />
     </div>
 
-    <!-- Nothing to offer and nothing to say (a ban): no block at all, so the
-         list ends the section without an empty step under it. -->
+    <!-- Nothing to offer and nothing to say (a ban): no block at all -->
     <div v-if="canComment || closedHint || !user" class="discussion-composer">
       <CommentComposer v-if="canComment" :send="send" :draft-key="draftKey" />
       <RefusalNote v-else-if="closedHint" class="discussion-hint">
@@ -281,13 +203,7 @@ async function send(text: string): Promise<SubmitResult> {
 </template>
 
 <style scoped lang="sass">
-// Three blocks: filter bar, discussion body, composer. $medium between them
-// and between the paging blocks and the list inside the body; the tighter
-// $small rhythm belongs between the comments themselves. The plaque of a
-// discussion closed to writing takes no margin of its own: it stands where
-// the form would, spaced by the gap, its frame flush with the left edge.
-// "Комментариев пока нет" keeps its $medium above, off the filter bar, and
-// none below.
+// $medium between the blocks and around the list, $small between the comments.
 .discussion
   display: flex
   flex-direction: column
@@ -306,10 +222,7 @@ async function send(text: string): Promise<SubmitResult> {
 .discussion-none
   padding-top: $medium
 
-// The place of the form under the discussion: the form itself
-// (CommentComposer, the editor across the column and "Отправить" under it at
-// the left), or the plaque that stands where it would (a refusal, or the way
-// in for a guest), across the column as the form would be.
+// The form under the discussion, or the plaque in its place, across the column.
 .discussion-composer
   display: flex
   flex-direction: column

@@ -1,13 +1,8 @@
 import { defineConfig } from "@playwright/test";
+import { env } from "./env";
 
 // Started by visual.mjs, which builds the client, serves it on 5174 and passes
 // everything below through the environment. Run by hand it has no server.
-const env = (name: string): string => {
-  const value = process.env[name];
-  if (!value)
-    throw new Error(`${name} is not set: run scripts/visual/visual.mjs`);
-  return value;
-};
 
 const base = env("VISUAL_BASE");
 const report = env("VISUAL_REPORT");
@@ -59,17 +54,6 @@ export default defineConfig({
     {
       name: "desktop",
       use: { viewport: { width: 1920, height: 911 }, deviceScaleFactor: 1 },
-    },
-    {
-      // A phone as e2e/fixtures/phone.ts emulates one: the viewport tag is
-      // honoured, so the page is laid out at the width index.html gives it.
-      name: "phone",
-      use: {
-        viewport: { width: 390, height: 844 },
-        deviceScaleFactor: 3,
-        isMobile: true,
-        hasTouch: true,
-      },
     },
   ],
 });

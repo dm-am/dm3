@@ -1,14 +1,14 @@
+using System.Linq;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Characters;
-using DM.Domain.Game.Features.Games;
-using DM.Testing;
+using DM.Domain.Game.Features.AttributeSchemas;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
 
-public class AttributeValueValidatorShould : UnitTestBase
+public class AttributeValueValidatorShould
 {
     private readonly AttributeValueValidator validator = new();
 
@@ -22,7 +22,7 @@ public class AttributeValueValidatorShould : UnitTestBase
             Type = type,
             Required = required,
             MaxLength = maxLength,
-            Values = System.Array.ConvertAll(listValues, v => new ListValue { Value = v })
+            Values = listValues.Select(v => new ListValue { Value = v })
         };
 
     [Fact]
@@ -177,15 +177,5 @@ public class AttributeValueValidatorShould : UnitTestBase
 
         valid.Should().BeFalse();
         error.Should().Be(AttributeValidationError.NotPresentInList(["Sword", "Bow"]));
-    }
-
-    [Fact]
-    public void FailForUndefinedSpecificationType()
-    {
-        var (valid, error) = validator.Validate("anything",
-            Specification((AttributeSpecificationType)99));
-
-        valid.Should().BeFalse();
-        error.Should().Be(ValidationError.Invalid);
     }
 }

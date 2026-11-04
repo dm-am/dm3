@@ -2,16 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The guest windows a page asks for by address.
- *
- * Any page may open one of the header's guest windows with ?action=, and the
- * header opens it over the page and takes the word out of the address. The
- * support page names two of them under "Восстановление доступа": the recovery
- * of access, and the request to switch the second factor off for a reader who
- * lost the phone and the codes. The second was reachable from the code step of
- * the sign-in card alone.
- */
+/** The guest windows a page asks for by address, ?action=. */
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 

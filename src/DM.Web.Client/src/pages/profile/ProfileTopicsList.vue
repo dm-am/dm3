@@ -1,25 +1,8 @@
 <script setup lang="ts">
 /**
- * ProfileTopicsList — cross-board topics table for the profile "Топики" tab.
- *
- * Mirrors the forum's per-board TopicsList exactly where it can (same
- * DataTable, same useTopicsFilter composable, same URL-state filter
- * model, same cell idioms) and diverges only where the context demands:
- *
- *   1. Backend endpoint: `forumApi.getAllTopics` (the new cross-board
- *      `GET /v1/topics`) instead of the per-board route.
- *   2. The author filter is forced to the profile's username — the
- *      composable still tracks any extra authors in URL state, but the
- *      profile owner is always included regardless of the URL.
- *   3. The "Автор" column is hidden (always the same person) and a
- *      "Раздел" column shows the board the topic lives on — the one
- *      thing the per-board page can take for granted but the cross-board
- *      view cannot.
- *
- * Filter UX is identical to forum/newbies: search by title, date range,
- * sort (last activity / created / likes / title), pagination via URL.
- * Likes column is always rendered so the "sort by likes" option has a
- * visible target.
+ * The topics of the profile's "Топики" tab across every board: the forum's
+ * table and filter, the owner always among the authors, a "Раздел" column in
+ * place of "Автор", and "Нравится" always drawn for its sort.
  */
 import { computed, ref, watch } from "vue";
 import type { Ref } from "vue";
@@ -28,12 +11,11 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import { SvgIcon } from "@/shared/ui/Icon";
 import Paging from "@/shared/ui/Paging/Paging.vue";
 import { forumApi, type Topic } from "@/entities/forum";
-import { RemovedAccountLink, UserLink } from "@/entities/user";
+import { RemovedAccountLink, UserLink, useAuthStore } from "@/entities/user";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import HumanDate from "@/shared/ui/Date/HumanDate.vue";
 import { TopicsFilter, useTopicsFilter } from "@/features/topic-filter";
 import { highlightMatch } from "@/shared/lib/utils/highlight";
-import { useAuthStore } from "@/shared/stores/auth";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 
 const props = defineProps<{
@@ -41,28 +23,20 @@ const props = defineProps<{
   username: string;
 }>();
 
-// Reuse the forum's filter composable verbatim. URL is the single source
-// of truth, so a Topics-tab user gets the same bookmarkable, back-button-
-// safe behaviour the forum page has.
+// The forum's filter, the address its only source.
 const { filterState, searchParams, hasActiveFilters } = useTopicsFilter();
 
-// Server-side filter always forces the profile owner as an author. The
-// composable's URL-tracked `authors[]` is merged in so a visitor can
-// also intersect with other co-authors if they want (rare, but free).
+// The owner is always an author; other authors from the address narrow it further.
 const apiQuery = computed(() => {
   const merged = new Set<string>(searchParams.value.authors ?? []);
   merged.add(props.username);
   return { ...searchParams.value, authors: [...merged] };
 });
 
-// We need full paging metadata for the Paging widget, so we keep the
-// raw ListEnvelope here (useApiList strips .resources, which would
-// throw away paging). Same cache-y idiom the rest of the app uses,
-// just inlined for one screen.
+// The whole envelope: Paging needs its paging, which useApiList drops.
 const envelope: Ref<ListEnvelope<Topic> | null> = ref(null);
 
-// Keeps any already-shown topics on a failure (stale-while-revalidate); the
-// template surfaces the error only when there's nothing to show.
+// A failure keeps the topics shown; the error stands only over an empty list.
 const {
   loading,
   error: loadError,
@@ -83,9 +57,7 @@ function fetchTopics() {
 const topics = computed(() => envelope.value?.resources ?? []);
 const paging = computed(() => envelope.value?.paging ?? null);
 
-// Re-fetch whenever the (stringified) params change. Stringify dedupes
-// adjacent identical states — switching tabs and back inside the same
-// URL doesn't refire the request.
+// Refetch on every change of the query; the string dedupes identical ones.
 const paramsKey = computed(() => JSON.stringify(apiQuery.value));
 watch(paramsKey, () => fetchTopics(), { immediate: true });
 
@@ -95,8 +67,7 @@ const emptyText = computed(() =>
     : "Пользователь не создал ни одного топика",
 );
 
-// "Топик" takes what the other columns leave; their shares are of the whole
-// table, the padding of each cell included.
+// "Топик" takes what the others leave; their shares include the cell padding.
 const columns: Column[] = [
   { key: "title", label: "Топик", align: "left" },
   {
@@ -106,7 +77,7 @@ const columns: Column[] = [
     align: "left",
   },
   { key: "comments", label: "Комментарии", width: "10.7%", align: "center" },
-  { key: "likes", label: "Лайки", width: "8%", align: "center" },
+  { key: "likes", label: "Нравится", width: "8%", align: "center" },
   {
     key: "created",
     label: "Дата создания",
@@ -121,8 +92,7 @@ const columns: Column[] = [
   },
 ];
 
-// The sort of the tab, told to the table as on a board (TopicsList): its
-// header announces the sort. Every sort of the filter is a column key.
+// The header announces the sort, as on a board; every sort is a column key.
 const currentSort = computed<SortState>(() => ({
   key: filterState.value.sortBy,
   direction: filterState.value.sortOrder,
@@ -132,7 +102,7 @@ function topicLink(row: Topic) {
   return `/forum/${row.board.alias}/${row.topicNumber}`;
 }
 
-// Paging scrolls the topics table back into view (not the page top)
+// Paging scrolls the table back into view, not the page top.
 const tableRef = ref<{ $el: HTMLElement } | null>(null);
 function pagingAnchor(): HTMLElement | null {
   return tableRef.value?.$el ?? null;
@@ -145,8 +115,7 @@ function boardLink(row: Topic) {
 
 <template>
   <div class="user-topics-list">
-    <!-- Same filter UI as forum/newbies; author scope is enforced
-         server-side, so the author chip is suppressed. -->
+    <!-- The forum's filter; the author scope is the server's, so no author chip. -->
     <TopicsFilter :hide-author="true" />
 
     <ErrorState v-if="loadError" :message="loadError" :retry="fetchTopics" />
@@ -206,9 +175,7 @@ function boardLink(row: Topic) {
         <HumanDate :date="row.createdUtc" />
       </template>
 
-      <!-- Who was last, then when, as the forum table of topics writes it
-           (TopicsList.vue): a name only in the tooltip of the date could not
-           be read on a touch screen. -->
+      <!-- Who was last, then when, as the forum's table of topics. -->
       <template #cell-lastActivity="{ row }">
         <template v-if="row.lastComment">
           <UserLink
@@ -222,8 +189,7 @@ function boardLink(row: Topic) {
             ><HumanDate :date="row.lastComment.createdUtc"
           /></router-link>
         </template>
-        <!-- A topic nobody has answered was last active when it was opened,
-             as the forum table of topics shows it. -->
+        <!-- Nobody answered: active since it was opened, as the forum shows it. -->
         <template v-else>
           <UserLink
             v-if="row.author"
@@ -256,35 +222,16 @@ function boardLink(row: Topic) {
   gap: $small
 
 .topic-link
-  color: $link
   display: inline-flex
   align-items: center
-  gap: 4px
-
-  &:hover
-    color: $link-hover
+  gap: $minor
 
   &.closed
-    opacity: 0.7
+    opacity: $closed-opacity
 
 .topic-icon
   flex-shrink: 0
 
-.board-link
-  color: $link
-
-  &:hover
-    color: $link-hover
-
-.muted
-  color: $text-muted
-
 .unread
   color: $link
-
-.last-activity-link
-  color: $link
-
-  &:hover
-    color: $link-hover
 </style>

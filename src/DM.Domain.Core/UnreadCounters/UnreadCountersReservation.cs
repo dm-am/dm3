@@ -1,7 +1,3 @@
-using System;
-using System.Collections.Generic;
-using System.Threading.Tasks;
-
 namespace DM.Domain.Core.UnreadCounters;
 
 /// <summary>
@@ -10,30 +6,14 @@ namespace DM.Domain.Core.UnreadCounters;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Both ends of this path live in one PostgreSQL now, so a single transaction
-/// became possible - and was deliberately not taken: folding the marker upsert
-/// into every caller's transaction means threading it through dozens of call
-/// sites, deferred by design (deliberately out of scope). Until then
-/// the explicit order stands. The markers go first, because their identifiers
-/// are minted by the caller and need no round trip to learn. Written after the
-/// insert instead, a refused marker write left a committed entity whose
-/// counters do not exist and never will: nothing recreates them, and its badge
-/// reads zero for everybody forever. Written first, the same refusal loses an
-/// entity nobody has seen yet, and the caller may simply try again.
+/// Markers go first: a refused marker write after the insert would leave a
+/// committed entity whose counters never exist, while before it the caller may
+/// simply try again.
 /// </para>
 /// <para>
-/// Taking them back is part of the write path rather than a habit of each caller:
-/// the order was correct in exactly one of the six places that needed it, and the
-/// other five were written by copying a neighbour.
-/// </para>
-/// <para>
-/// A failure to take a marker back is swallowed, and that is the deliberate half.
-/// This runs from disposal, which happens while the caller's own exception is on
-/// its way out — the refusal of the store is what the caller has to see, not the
-/// refusal of the cleanup that followed it. What survives such a double failure
-/// is a marker under an entity that was never committed: it cannot be opened by
-/// anybody, and it inflates one parent-scoped total until the retention sweep
-/// that collects removed markers reaches it.
+/// A failure to take a marker back is swallowed: disposal runs while the caller's
+/// own exception is on its way out, and that is the one the caller has to see.
+/// The leftover marker inflates one total until the retention sweep removes it.
 /// </para>
 /// </remarks>
 public sealed class UnreadCountersReservation : IAsyncDisposable

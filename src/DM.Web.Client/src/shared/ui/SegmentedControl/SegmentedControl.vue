@@ -1,23 +1,6 @@
 <script setup lang="ts" generic="V extends string">
-/**
- * SegmentedControl — the site's canonical mode/period toggle: a bordered
- * $control-height pill of mutually exclusive options, active = accent fill +
- * bold. SSOT for the idiom previously duplicated per page (statistics
- * granularity, profile role toggle).
- *
- * Copy-safe: the pill is an inline-block with inline-block buttons and
- * zero-width .copy-space text nodes between them, so a selection copies as
- * "Месяц Год Все время" on one line (Chrome serializes flex items with
- * newlines — the same fix as Tabs/Paging). The hairline divider therefore
- * uses "& ~ &" (a span sits between adjacent buttons, breaking "& + &").
- *
- * Accessibility: aria-pressed marks the active option; the keyboard focus
- * ring is inset (outline-offset: -2px) because the pill's overflow: hidden
- * would clip a ring drawn on the segment's edge. Pass the group name as `ariaLabel`,
- * NOT `aria-label` — the kebab spelling type-checks as a native ARIA
- * attribute instead of this prop, which both drops the required-prop check
- * and defeats the generic inference of V at the call site.
- */
+// Pass the group name as `ariaLabel`, not `aria-label`: the kebab spelling type-checks as the native
+// attribute, dropping the required-prop check and the inference of V at the call site.
 export interface SegmentedOption<V extends string = string> {
   value: V;
   label: string;
@@ -54,10 +37,9 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
-// Bordered pill — inline-block (NOT flex) so a selection copies in one line;
-// nowrap keeps the segments from ever breaking mid-pill.
+// Inline-block, not flex, so a selection copies in one line.
 .segmented-control
   display: inline-block
   white-space: nowrap
@@ -65,7 +47,7 @@ const emit = defineEmits<{
   height: $control-height
   box-sizing: border-box
   border: 1px solid $border
-  border-radius: $button-border-radius
+  border-radius: $border-radius
   overflow: hidden
 
 .segment
@@ -89,18 +71,13 @@ const emit = defineEmits<{
     color: $text
     font-weight: 700
 
-  // "& ~ &" (not "& + &"): a zero-width .copy-space span sits between
-  // adjacent buttons, so they are never direct siblings.
+  // A zero-width .copy-space sits between adjacent buttons.
   & ~ &
     border-left: 1px solid $border
 
-  // Inward: the pill's overflow: hidden would clip a ring drawn on the
-  // segment's edge, and the segments sit flush against each other.
+  // Inward: the pill's overflow: hidden would clip a ring on the segment's edge.
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
+    +focus-ring($inward: true)
 
-  // Out of reach the way every control with a box is: half its opacity under
-  // the site's hatch.
   +disabled-hatch
 </style>

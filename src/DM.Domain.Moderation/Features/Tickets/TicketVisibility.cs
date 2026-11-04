@@ -10,19 +10,9 @@ namespace DM.Domain.Moderation.Features.Tickets;
 /// service, the queue and the notifications about tickets all read.
 /// </summary>
 /// <remarks>
-/// Two halves. The category: a junior moderator reads complaints about users and
-/// suggestions, a senior moderator complaints about a junior moderator's decision
-/// on top of that, an administrator everything; the support desk categories are
-/// the administrators' alone. And the side: the moderator a complaint names as the
-/// violator does not read it, does not answer it and does not close it, and is not
-/// told it was filed - he is an ordinary user to it, and an ordinary user never
-/// learns of a complaint about himself.
-///
-/// Written once because the paths to a ticket are many (the page, the answer, the
-/// closing, the queue with its counters, the notifications of a filing and of a
-/// reply), and a rule copied into each of them is forgotten in the next one. The
-/// author of a ticket is not this rule's business: he reads his own ticket whatever
-/// his role, and the service decides what he may do in it.
+/// The moderator a complaint names as the violator does not read it, answer it or close
+/// it, and is not told it was filed: to it he is an ordinary user, who never learns of a
+/// complaint about himself. The author of a ticket reads his own whatever his role.
 /// </remarks>
 public static class TicketVisibility
 {
@@ -31,8 +21,7 @@ public static class TicketVisibility
     /// </summary>
     private static readonly TicketSubtype[] ModeratorSubtypes =
     [
-        TicketSubtype.UserComplaint,
-        TicketSubtype.SiteImprovementSuggestion
+        TicketSubtype.UserComplaint
     ];
 
     /// <summary>
@@ -41,8 +30,7 @@ public static class TicketVisibility
     /// </summary>
     private static readonly TicketSubtype[] SeniorModeratorSubtypes =
     [
-        TicketSubtype.UserComplaint,
-        TicketSubtype.SiteImprovementSuggestion,
+        ..ModeratorSubtypes,
         TicketSubtype.ModeratorDecisionComplaint
     ];
 

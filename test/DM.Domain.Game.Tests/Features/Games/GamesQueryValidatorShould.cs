@@ -1,11 +1,10 @@
 using DM.Domain.Game.Features.Games;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Games;
 
-public class GamesQueryValidatorShould : UnitTestBase
+public class GamesQueryValidatorShould
 {
     private readonly GamesQueryValidator validator = new();
 
@@ -112,33 +111,19 @@ public class GamesQueryValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    [Fact]
-    public void FailWhenRequiredTagIsNotPositive()
+    public static TheoryData<GamesQuery, string> NonPositiveTags => new()
     {
-        var input = new GamesQuery { RequiredTags = [0] };
+        { new GamesQuery { RequiredTags = [0] }, "RequiredTags[0]" },
+        { new GamesQuery { OptionalTags = [-1] }, "OptionalTags[0]" },
+        { new GamesQuery { ExcludedTags = [0] }, "ExcludedTags[0]" }
+    };
 
-        var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor("RequiredTags[0]")
-            .WithErrorMessage("Метка указана неверно");
-    }
-
-    [Fact]
-    public void FailWhenOptionalTagIsNotPositive()
+    [Theory]
+    [MemberData(nameof(NonPositiveTags))]
+    public void FailWhenATagIsNotPositive(GamesQuery input, string field)
     {
-        var input = new GamesQuery { OptionalTags = [-1] };
-
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor("OptionalTags[0]")
-            .WithErrorMessage("Метка указана неверно");
-    }
-
-    [Fact]
-    public void FailWhenExcludedTagIsNotPositive()
-    {
-        var input = new GamesQuery { ExcludedTags = [0] };
-
-        var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor("ExcludedTags[0]")
-            .WithErrorMessage("Метка указана неверно");
+        result.ShouldHaveValidationErrorFor(field)
+            .WithErrorMessage("Тег указан неверно");
     }
 }

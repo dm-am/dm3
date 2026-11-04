@@ -15,14 +15,8 @@ public interface IAttributeSchemaTemplateService
     /// </summary>
     Task<IEnumerable<AttributeSchemaTemplate>> GetAllAsync(CancellationToken ct = default);
 
-    /// <summary>
-    /// One template by identifier
-    /// </summary>
     Task<AttributeSchemaTemplate> GetAsync(Guid templateId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Add a template to the catalogue
-    /// </summary>
     Task<AttributeSchemaTemplate> CreateAsync(
         CreateAttributeSchemaTemplate create, CancellationToken ct = default);
 

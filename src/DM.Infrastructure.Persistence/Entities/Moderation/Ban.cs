@@ -12,10 +12,7 @@ namespace DM.Infrastructure.Persistence.Entities.Moderation;
 /// </summary>
 /// <remarks>
 /// Not soft-deletable: a lifted ban keeps its row for the moderation history and
-/// is marked by <see cref="LiftedUtc" />. It used to carry IsRemoved and the
-/// global soft-delete filter with it, so lifting erased the ban from the user's
-/// history and from GET /v1/bans/history at once and made the three columns below
-/// unreachable by any query.
+/// is marked by <see cref="LiftedUtc" />.
 /// </remarks>
 [Table("Bans")]
 public class Ban : IAdministrated

@@ -1,21 +1,8 @@
 <script setup lang="ts">
 /**
- * SupportPage - the way to the administration: security errors of the site
- * and trouble with an account. Guests may write too.
- *
- * The words are the old site's error report page, carried over where the site
- * works the same: who reads what is sent, what belongs here, and that the rest
- * is a topic in the forum's "Ошибки", where the community answers. What
- * differs is said the way the site says it: the reader is the administration,
- * the forum entity is a "топик", and suggestions go to "Улучшение сайта". One
- * sentence is DM3's own, at the end: a question about how the site works goes
- * to the mentors or to "Для новичков", the place a page of questions and
- * answers holds on other sites.
- *
- * The address may name the reason the reader came with
- * (?subtype=<TicketSubtype>, built by supportFor); the form opens on it. The
- * note the form keeps under a reason says what can be done without the
- * administration, and the page draws the one line of it the form cannot, the
+ * The way to the administration: security errors and account trouble; guests
+ * may write too. ?subtype=<TicketSubtype> (supportFor) opens the form on a
+ * reason, and the page draws the one line of the note the form cannot, the
  * site's "Войдите, чтобы" for a reason filed from an account.
  */
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
@@ -28,7 +15,7 @@ import { SupportTicketForm } from "@/features/support-ticket";
   <page-title>Поддержка</page-title>
 
   <LeadText
-    ><strong>ВНИМАНИЕ!</strong><br />Это сообщение отправится только
+    ><strong>ВНИМАНИЕ!</strong><br />Это обращение отправится только
     администрации сайта, поэтому настоятельно рекомендуем сообщать здесь только
     об ошибках безопасности (например, у вас появилась возможность редактировать
     чужие профили) и о проблемах с аккаунтом (например, вы не можете войти или
@@ -58,8 +45,7 @@ import { SupportTicketForm } from "@/features/support-ticket";
 </template>
 
 <style scoped lang="sass">
-// The site's sign-in line stands among the lines of the note, flush with them:
-// its own padding is for a line that stands alone under a block.
+// Flush with the lines of the note: its own padding is for a line that stands alone.
 .login-prompt.ticket-login
   padding: 0
 </style>

@@ -14,9 +14,7 @@
         <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
         <PackageReference Include="AWSSDK.S3" />
-        <PackageReference Include="Microsoft.Extensions.Caching.Abstractions" />
         <PackageReference Include="Microsoft.Extensions.Caching.Memory" />
-        <PackageReference Include="Microsoft.Extensions.Configuration" />
         <PackageReference Include="Microsoft.Extensions.Configuration.EnvironmentVariables" />
         <PackageReference Include="Microsoft.Extensions.Configuration.Json" />
         <PackageReference Include="OpenTelemetry.Instrumentation.EntityFrameworkCore" />
@@ -30,7 +28,7 @@
         <PackageReference Include="Serilog.Formatting.Compact" />
         <PackageReference Include="Serilog.Sinks.Console" />
         <PackageReference Include="Serilog.Sinks.Grafana.Loki" />
-        <PackageReference Include="SixLabors.ImageSharp" />
+        <PackageReference Include="Magick.NET-Q8-AnyCPU" />
     </ItemGroup>
 
 </Project>

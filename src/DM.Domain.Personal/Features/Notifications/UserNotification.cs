@@ -14,9 +14,6 @@ public class UserNotification
     /// </summary>
     public Guid NotificationId { get; set; }
 
-    /// <summary>
-    /// Event type
-    /// </summary>
     public EventType EventType { get; set; }
 
     /// <summary>
@@ -72,9 +69,6 @@ public class CreateNotificationEntity
     /// </summary>
     public object Metadata { get; set; } = null!;
 
-    /// <summary>
-    /// Event type
-    /// </summary>
     public EventType EventType { get; set; }
 
     /// <summary>

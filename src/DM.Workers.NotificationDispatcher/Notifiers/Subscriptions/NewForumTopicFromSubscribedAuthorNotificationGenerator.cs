@@ -10,15 +10,11 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Subscriptions;
 
-/// <summary>
-/// Generates notifications when a subscribed author creates a new forum topic
-/// </summary>
 internal class NewForumTopicFromSubscribedAuthorNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
     private readonly ISubscriptionRepository _subscriptionRepository;
 
-    /// <inheritdoc />
     public NewForumTopicFromSubscribedAuthorNotificationGenerator(
         DmDbContext dbContext,
         ISubscriptionRepository subscriptionRepository)
@@ -51,7 +47,6 @@ internal class NewForumTopicFromSubscribedAuthorNotificationGenerator : BaseNoti
             yield break;
         }
 
-        // Find all users subscribed to this author
         var subscriptions = await _subscriptionRepository.GetByTargetWithSettingsAsync(
             SubscriptionTargetType.User,
             topicData.AuthorId,
@@ -76,8 +71,8 @@ internal class NewForumTopicFromSubscribedAuthorNotificationGenerator : BaseNoti
                 TopicId = topicData.TopicId.EncodeToReadable(topicData.Title),
                 TopicTitle = topicData.Title,
                 BoardId = topicData.BoardId.EncodeToReadable(topicData.BoardTitle),
-                BoardTitle = topicData.BoardTitle,
-                AuthorUsername = topicData.AuthorUsername
+                topicData.BoardTitle,
+                topicData.AuthorUsername
             }
         };
     }

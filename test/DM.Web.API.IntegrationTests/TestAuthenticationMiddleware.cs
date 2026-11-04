@@ -1,5 +1,4 @@
 using DM.Domain.Account.Features.Authentication;
-using DM.Domain.Account.Features.Identity;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Enums;
 using Microsoft.AspNetCore.Http;
@@ -7,21 +6,12 @@ using Microsoft.AspNetCore.Http;
 namespace DM.Web.API.IntegrationTests;
 
 /// <summary>
-/// Test middleware that authenticates requests based on special test headers.
-/// This middleware runs BEFORE the normal AuthenticationMiddleware and sets up the identity
-/// so that the real authentication is bypassed.
-/// Injecting the identity from inside the pipeline is the only option that holds: a test
-/// IIdentityProvider registered from the test container callback is overwritten, because the
-/// account domain's module registers the production one after that callback has run.
+/// Authenticates a request from test headers ahead of the normal AuthenticationMiddleware: a test
+/// IIdentityProvider would be overwritten by the account module's registration.
 /// </summary>
 /// <remarks>
-/// Headers:
-/// - X-Test-User-Id: User ID (GUID) to authenticate as
-/// - X-Test-User-Username: Username
-/// - X-Test-User-Role: User role (RegularUser, Admin, Moderator, etc.)
-/// - X-Test-User-Access-Policy: Access policy (FullBan, DemocraticBan). Without
-///   it the injected identity carries no restriction, which is why a banned
-///   subject used to be impossible to express in an integration test.
+/// Headers: X-Test-User-Id, X-Test-User-Username, X-Test-User-Role and X-Test-User-Access-Policy (FullBan,
+/// DemocraticBan; without it the identity carries no restriction).
 /// </remarks>
 public class TestAuthenticationMiddleware
 {
@@ -39,7 +29,6 @@ public class TestAuthenticationMiddleware
 
     public async Task InvokeAsync(HttpContext httpContext, IIdentitySetter identitySetter)
     {
-        // Check for test authentication headers
         if (httpContext.Request.Headers.TryGetValue(TestUserIdHeader, out var userIdHeader) &&
             Guid.TryParse(userIdHeader.FirstOrDefault(), out var userId))
         {
@@ -61,7 +50,6 @@ public class TestAuthenticationMiddleware
                 accessPolicy = parsedPolicy;
             }
 
-            // Create authenticated user
             var authenticatedUser = new AuthenticatedUser
             {
                 UserId = userId,
@@ -73,7 +61,6 @@ public class TestAuthenticationMiddleware
                 PasswordHashVersion = 3
             };
 
-            // Create session
             var session = new Session
             {
                 Id = Guid.NewGuid(),
@@ -81,7 +68,6 @@ public class TestAuthenticationMiddleware
                 ExpirationUtc = DateTimeOffset.UtcNow.AddHours(2)
             };
 
-            // Create and set identity
             var identity = Identity.Success(
                 authenticatedUser,
                 session,

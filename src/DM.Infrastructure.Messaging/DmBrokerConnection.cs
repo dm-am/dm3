@@ -9,20 +9,7 @@ namespace DM.Infrastructure.Messaging;
 /// The one AMQP connection of a host.
 /// </summary>
 /// <remarks>
-/// A connection is a TCP session with its own multi-step handshake; what is
-/// cheap to open per producer or per consumer is a channel on it. So a host
-/// holds one connection, dialed on first use, and everything else — producers,
-/// consumers, topology declarations, the health probe — opens channels on it.
-/// The probe sharing the connection is deliberate: it answers about the
-/// connection the application actually publishes on, not about a parallel one
-/// that could be healthy while this one is not.
-///
-/// Recovery belongs to the client: AutomaticRecoveryEnabled and
-/// TopologyRecoveryEnabled are the factory defaults, so a broker restart is
-/// redialed and the exchanges, queues, bindings and consumer subscriptions are
-/// re-declared without any code here. What this class adds is only the lazy
-/// dial and the guarantee that concurrent first callers get one connection
-/// rather than a connection each.
+/// Everything opens channels on it, the health probe included; recovery is the client's default.
 /// </remarks>
 public sealed class DmBrokerConnection(IConnectionFactory connectionFactory) : IAsyncDisposable, IDisposable
 {
@@ -33,10 +20,8 @@ public sealed class DmBrokerConnection(IConnectionFactory connectionFactory) : I
     /// The open connection of this host, dialing the broker on the first call.
     /// </summary>
     /// <remarks>
-    /// A failed dial is not cached: the next caller dials again, which is what
-    /// the subscription retry policies of the consumers lean on.
+    /// A failed dial is not cached, so the subscription retries dial again.
     /// </remarks>
-    /// <param name="cancellationToken">Cancellation token.</param>
     public async Task<IConnection> GetOpenConnection(CancellationToken cancellationToken)
     {
         if (Volatile.Read(ref _connection) is { } dialed)
@@ -73,9 +58,7 @@ public sealed class DmBrokerConnection(IConnectionFactory connectionFactory) : I
     /// Synchronous fallback, for a container that is disposed synchronously.
     /// </summary>
     /// <remarks>
-    /// Both paths exist because a container disposed synchronously refuses a
-    /// component that is only asynchronously disposable, and which way a host
-    /// or a test tears its container down is not this class's decision.
+    /// A container disposed synchronously refuses a component that is only asynchronously disposable.
     /// </remarks>
     public void Dispose()
     {

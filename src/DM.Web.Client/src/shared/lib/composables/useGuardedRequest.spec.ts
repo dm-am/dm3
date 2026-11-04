@@ -2,15 +2,8 @@ import { describe, it, expect, vi } from "vitest";
 import { shownOnPage, useGuardedRequest } from "./useGuardedRequest";
 import type { ApiResult, GeneralError } from "@/shared/api/models/common";
 import { announceWorded } from "@/shared/lib/errors/generalPlate";
-
-/** A fetcher whose response the test releases by hand. */
-function deferred<T>() {
-  let release!: (value: ApiResult<T>) => void;
-  const promise = new Promise<ApiResult<T>>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
-}
+import { problem } from "@/shared/lib/testing/problem";
+import { deferred, endOfTask } from "@/shared/lib/testing/tasks";
 
 const ok = <T>(data: T): ApiResult<T> => ({ data, error: null });
 const failed = <T>(title: string): ApiResult<T> => ({
@@ -20,8 +13,8 @@ const failed = <T>(title: string): ApiResult<T> => ({
 
 describe("useGuardedRequest", () => {
   it("keeps the answer of the newest request when an older one lands later", async () => {
-    const slow = deferred<string>();
-    const fast = deferred<string>();
+    const slow = deferred<ApiResult<string>>();
+    const fast = deferred<ApiResult<string>>();
     const request = useGuardedRequest({ message: "не вышло" });
     const applied: (string | null)[] = [];
 
@@ -34,9 +27,9 @@ describe("useGuardedRequest", () => {
       (data) => applied.push(data),
     );
 
-    fast.release(ok("новый"));
+    fast.resolve(ok("новый"));
     await fresh;
-    slow.release(ok("старый"));
+    slow.resolve(ok("старый"));
     await stale;
 
     // The reader typed a second search while the first was on the wire. The
@@ -45,8 +38,8 @@ describe("useGuardedRequest", () => {
   });
 
   it("leaves loading raised when a superseded answer lands first", async () => {
-    const slow = deferred<string>();
-    const fast = deferred<string>();
+    const slow = deferred<ApiResult<string>>();
+    const fast = deferred<ApiResult<string>>();
     const request = useGuardedRequest({ message: "не вышло" });
 
     const stale = request.run(
@@ -58,7 +51,7 @@ describe("useGuardedRequest", () => {
       () => {},
     );
 
-    slow.release(ok("старый"));
+    slow.resolve(ok("старый"));
     await stale;
 
     // The newest request is still out. Lowering the flag on the old answer
@@ -66,13 +59,13 @@ describe("useGuardedRequest", () => {
     // the answer.
     expect(request.loading.value).toBe(true);
 
-    fast.release(ok("новый"));
+    fast.resolve(ok("новый"));
     await fresh;
     expect(request.loading.value).toBe(false);
   });
 
   it("raises loading synchronously, before the first await", () => {
-    const never = deferred<string>();
+    const never = deferred<ApiResult<string>>();
     const request = useGuardedRequest({ message: "не вышло" });
 
     void request.run(
@@ -125,7 +118,7 @@ describe("useGuardedRequest", () => {
   });
 
   it("holds the failure through the next attempt unless told otherwise", async () => {
-    const pending = deferred<string>();
+    const pending = deferred<ApiResult<string>>();
     const request = useGuardedRequest({ message: "не вышло" });
 
     await request.run(
@@ -144,7 +137,7 @@ describe("useGuardedRequest", () => {
   });
 
   it("hides the failure for the length of the attempt when asked", async () => {
-    const pending = deferred<string>();
+    const pending = deferred<ApiResult<string>>();
     const request = useGuardedRequest({
       message: "не вышло",
       clearErrorOnStart: true,
@@ -193,21 +186,8 @@ describe("useGuardedRequest", () => {
   });
 });
 
-/**
- * Every screen that loads through here shows `error` in its own box beside the
- * content. The plate the interceptor held for the same failure said it a
- * second time in the corner, "Запрос не выполнен: ошибка сервера" over "Не
- * удалось загрузить топики [Повторить]".
- */
+// The screen shows the failure in its own box, so the held plate comes down.
 describe("the plate of a failed load", () => {
-  const problem = (status: number): GeneralError => ({
-    type: "",
-    title: "",
-    status,
-    traceId: "t",
-  });
-  const endOfTask = () => new Promise((resolve) => setTimeout(resolve, 0));
-
   it("is taken down: the screen says the failure in its own box", async () => {
     const failure = problem(500);
     const raise = vi.fn();

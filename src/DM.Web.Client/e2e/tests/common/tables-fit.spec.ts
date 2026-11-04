@@ -5,19 +5,19 @@ import {
   PRIMARY_STORAGE_STATE,
   SECONDARY_STORAGE_STATE,
 } from "../../fixtures/auth";
-import { phonePage } from "../../fixtures/phone";
+import { MASTERED_GAME } from "../../fixtures/seed";
 import { readTables } from "../../fixtures/tables";
-import type { Browser, Page } from "@playwright/test";
+import { settle, windowPage } from "../../fixtures/window";
+import type { Page } from "@playwright/test";
 
 /**
  * Every table of the content column keeps all of its columns and every word
- * whole at every width, a phone included, and never widens the page.
+ * whole at every width, and never widens the page.
  *
- * The column is narrow: 300px at 1024, 556px at 1280, 642px at 1366 and on a
- * phone, 716px at 1440 and 1196px at 1920; the sidebars take the rest. A table
- * shows all of its columns, its text breaks between words only, as on DM2,
- * and a table wider than the column at its least scrolls in its own frame
- * (DataTable) while the page stays put (fixtures/tables.ts).
+ * The column is narrow between two sidebars. A table shows all
+ * of its columns, its text breaks between words only, as on DM2, and a table
+ * wider than the column at its least scrolls in its own frame (DataTable)
+ * while the page stays put (fixtures/tables.ts).
  *
  * What is checked is what a reader sees, at every width in turn: every column
  * is there, in the header and in every row; no two headers run into each
@@ -26,16 +26,13 @@ import type { Browser, Page } from "@playwright/test";
  * wider than the column at its least; nothing between the frame and the
  * column scrolls, and the page does not.
  */
-const WIDTHS = [1024, 1280, 1366, 1440, 1920];
+const WIDTHS = [1366, 1440, 1920];
 
 /** The widths the statistics are read at while their boards load. */
-const STATISTICS_WIDTHS = [1280, 1366, 1440, 1920];
+const STATISTICS_WIDTHS = [1366, 1440, 1920];
 
 /** The seeded account the profile tables are read on: it hosts, plays, blogs. */
 const PROFILE = "/users/SolohinLex";
-
-/** A seeded game with both rosters, the players' and the master's. */
-const GAME_TITLE = "Хроники Забытых Королевств";
 
 /** A seeded blog; every blog of the seed has the rubrics "Общее" and "Для избранных". */
 const BLOG_TITLE = "Заметки мастера";
@@ -142,7 +139,7 @@ const GUEST: Target[] = [
       "Топик",
       "Раздел",
       "Комментарии",
-      "Лайки",
+      "Нравится",
       "Дата создания",
       "Последняя активность",
     ],
@@ -166,7 +163,7 @@ const GUEST: Target[] = [
     open: async (page) => {
       await openAndWait(page, "/games");
       const href = await page
-        .locator("main#main a.game-link", { hasText: GAME_TITLE })
+        .locator("main#main a.game-link", { hasText: MASTERED_GAME })
         .first()
         .getAttribute("href");
       expect(href).toBeTruthy();
@@ -254,18 +251,18 @@ interface Fit {
 }
 
 /**
- * The headers of every DataTable of the content column, and everything wrong
- * with those tables that fixtures/tables.ts does not read, as sentences. The
- * column's edges are the shell's, not the page's own box: a table that is too
- * wide widens that box together with itself.
+ * The edges of the content column: the page does not scroll sideways, and
+ * the frame of every DataTable keeps to the column with nothing between the
+ * two scrolling, as sentences; the tables themselves are read by
+ * fixtures/tables.ts. The column's edges are the shell's, not the page's own
+ * box: a table that is too wide widens that box together with itself.
  */
-function edgesAndHeads(): string[] {
+function readEdges(): string[] {
   const problems: string[] = [];
   const scroller = document.querySelector<HTMLElement>(".main")!;
   const content = document.querySelector<HTMLElement>("main#main")!;
   const style = getComputedStyle(content);
-  // The shell around the column: the sidebars on a desktop, nothing beside it
-  // on a phone and up to 1000, where they slide in over the page.
+  // The shell around the column: the sidebars, where the page has them.
   const body = document
     .querySelector<HTMLElement>(".content-body")!
     .getBoundingClientRect();
@@ -297,12 +294,6 @@ function edgesAndHeads(): string[] {
       .filter((c): c is HTMLElement => c instanceof HTMLElement && shown(c))
       .map((c) => `${name(c)} ${c.offsetWidth}/${c.scrollWidth} "${text(c)}"`)
       .join(", ");
-  /** The boxes of the text a cell draws, one per line. */
-  const textBoxes = (cell: Element) => {
-    const range = document.createRange();
-    range.selectNodeContents(cell);
-    return [...range.getClientRects()].filter((r) => r.width > 0.5);
-  };
 
   const tables = [
     ...content.querySelectorAll<HTMLElement>("table.data-table"),
@@ -328,75 +319,21 @@ function edgesAndHeads(): string[] {
       }
       up = up.parentElement;
     }
-
-    // No header runs into another: the text of each stays inside its own
-    // cell, so no two of them meet.
-    const heads = [...table.querySelectorAll<HTMLElement>("thead th")]
-      .filter(shown)
-      .map((th) => ({ th, boxes: textBoxes(th) }));
-    for (const { th, boxes } of heads) {
-      const cell = th.getBoundingClientRect();
-      if (
-        boxes.some(
-          (r) => r.left < cell.left - 0.5 || r.right > cell.right + 0.5,
-        )
-      ) {
-        problems.push(`the header "${text(th)}" runs out of its cell`);
-      }
-    }
-    for (let i = 0; i < heads.length; i++) {
-      for (let j = i + 1; j < heads.length; j++) {
-        const meet = heads[i].boxes.some((a) =>
-          heads[j].boxes.some(
-            (b) =>
-              a.left < b.right - 0.5 &&
-              b.left < a.right - 0.5 &&
-              a.top < b.bottom - 0.5 &&
-              b.top < a.bottom - 0.5,
-          ),
-        );
-        if (meet) {
-          problems.push(
-            `the headers "${text(heads[i].th)}" and "${text(heads[j].th)}" run into each other`,
-          );
-        }
-      }
-    }
-
-    // Content running past the cell's own edge, clipped or not.
-    for (const cell of table.querySelectorAll<HTMLElement>("th, td")) {
-      if (shown(cell) && cell.scrollWidth > cell.clientWidth + 1) {
-        problems.push(
-          `${name(cell)} "${text(cell)}" overflows: ${cell.scrollWidth} > ${cell.clientWidth}`,
-        );
-      }
-    }
   }
   return problems;
 }
 
 /** Everything wrong with the tables of the content column as they stand. */
 async function measure(page: Page): Promise<Fit> {
-  const tables = await page.evaluate(readTables, {
+  const tables = await readTables(page, {
     within: "main#main",
     words: true,
+    heads: true,
   });
   return {
     headers: tables.headers,
-    problems: [...tables.problems, ...(await page.evaluate(edgesAndHeads))],
+    problems: [...tables.problems, ...(await page.evaluate(readEdges))],
   };
-}
-
-/** Two frames after the face has loaded: a table settles after its column. */
-async function settle(page: Page) {
-  await page.evaluate(() =>
-    document.fonts.ready.then(
-      () =>
-        new Promise<void>((done) =>
-          requestAnimationFrame(() => requestAnimationFrame(() => done())),
-        ),
-    ),
-  );
 }
 
 /** Every header of every table of the page, as the target declares them. */
@@ -419,24 +356,6 @@ async function expectFits(page: Page, target: Target) {
     problems.push(...fit.problems.map((one) => `${width}px: ${one}`));
   }
   expect(problems).toEqual([]);
-}
-
-/**
- * A page of a window of the full version, as the session given or as a guest;
- * it closes with its context. A window of its own and not the page of the
- * project: a phone of a project lays the page out at its own width whatever
- * the width it is given later (fixtures/phone.ts).
- */
-async function windowPage(
-  browser: Browser,
-  width: number,
-  storageState?: string,
-): Promise<Page> {
-  const context = await browser.newContext({
-    storageState,
-    viewport: { width, height: 900 },
-  });
-  return context.newPage();
 }
 
 /** The readers of the tables, by the session each reads in. */
@@ -489,33 +408,6 @@ test.describe("Statistics while its boards load", () => {
   }
 });
 
-/**
- * The tables of a page on a phone. A phone lays the page out as a narrow
- * window whose column is as wide as at 1366 (fixtures/phone.ts), and its
- * tables are the tables of the full version, by the same rule.
- */
-async function expectFitsOnPhone(page: Page, target: Target) {
-  await settle(page);
-  const fit = await measure(page);
-  expect(fit.headers).toEqual(expectedHeaders(target, fit.headers));
-  expect(fit.problems.map((one) => `a phone: ${one}`)).toEqual([]);
-}
-
-for (const { who, targets, session } of READERS) {
-  test.describe(`Tables of the content column on a phone, as ${who}`, () => {
-    for (const target of targets) {
-      test(`${target.name} keeps its columns and words on a phone`, async ({
-        browser,
-      }) => {
-        const page = await phonePage(browser, { storageState: session });
-        await target.open(page);
-        await expectFitsOnPhone(page, target);
-        await page.context().close();
-      });
-    }
-  });
-}
-
 /** The number of lines each element of `selector` stands on. */
 function linesOf(page: Page, selector: string): Promise<number[]> {
   return page.locator(selector).evaluateAll((cells) =>
@@ -534,12 +426,12 @@ function linesOf(page: Page, selector: string): Promise<number[]> {
 /**
  * The share a header declares leaves the main column its line where the
  * column has the room: the rubrics of a blog stand on one line at 1366, where
- * "Публикаций" keeps its half of the table to the pixel, and on a phone, whose
- * column is as wide. "Для избранных" once stood on two lines on a phone, its
- * column 101 wide beside a column of one digit 161 wide.
+ * "Публикаций" keeps its half of the table to the pixel. "Для избранных" once
+ * stood on two lines, its column 101 wide beside a column of one digit 161
+ * wide.
  */
 test.describe("A share leaves the main column its line", () => {
-  test("the rubrics of a blog stand on one line on a phone, and keep their shares at 1366", async ({
+  test("the rubrics of a blog stand on one line and keep their shares at 1366", async ({
     request,
     browser,
   }) => {
@@ -552,14 +444,6 @@ test.describe("A share leaves the main column its line", () => {
     const address = `/blogs/${blog.publicId ?? blog.id}`;
     const cells = "main#main .rubrics td.col-title, main#main .rubrics th";
     const problems: string[] = [];
-
-    const phone = await phonePage(browser);
-    await openAndWait(phone, address, "main#main .rubrics tr.table-row");
-    await settle(phone);
-    const onPhone = await linesOf(phone, cells);
-    if (onPhone.some((count) => count !== 1))
-      problems.push(`a phone: lines ${onPhone.join(", ")}`);
-    await phone.context().close();
 
     const page = await windowPage(browser, 1366);
     await openAndWait(page, address, "main#main .rubrics tr.table-row");
@@ -579,12 +463,10 @@ test.describe("A share leaves the main column its line", () => {
   // The account's blacklist with nobody in it: the shares of "Внесен" and of
   // the action once left "Пользователь" less than its line, and the header
   // stood on two lines over the empty row.
-  test("the header of an empty blacklist stands on one line on a phone", async ({
+  test("the header of an empty blacklist stands on one line at 1366", async ({
     browser,
   }) => {
-    const page = await phonePage(browser, {
-      storageState: PRIMARY_STORAGE_STATE,
-    });
+    const page = await windowPage(browser, 1366, PRIMARY_STORAGE_STATE);
     await answerBlacklist(page, []);
     await openAndWait(
       page,

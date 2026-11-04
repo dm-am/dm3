@@ -20,19 +20,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// each flag is false exactly when the message it stands for is refused.
 /// </summary>
 /// <remarks>
-/// The owner, 05.10: what the user may not do is not offered, rather than
-/// refused after it was typed. The profile gave the button to everybody signed
-/// in, the correspondence gave the field to every participant, and a person kept
-/// on the addressee's blacklist with private messages blocked wrote the message
-/// and was told after it "Нельзя отправить сообщение этому пользователю".
-///
-/// Every row reads the flag the way the page reads it and then sends the message
-/// the page would send, as the same viewer, so the two answers are compared
-/// rather than each taken on trust. The expected value is asserted too: a flag
-/// and a write that both went wrong the same way would agree with each other.
-///
-/// Each case makes its own people and conversations and takes the conversations
-/// back out; the people stay, the way the neighbouring suites leave theirs.
+/// What the user may not do is not offered. Every row reads the flag as the page does and sends the message the
+/// page would, as the same viewer, against an expected value.
 /// </remarks>
 public class CanMessageFlagShould : IntegrationTestBase
 {
@@ -108,9 +97,7 @@ public class CanMessageFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A guest is offered no message: the conversation is opened for a signed-in
-    /// reader only. Nobody is offered one on his own profile, and the profile of
-    /// "Аккаунт удален" is nobody's to write to and answers no flag at all.
+    /// A guest, the owner of the profile and the profile of "Аккаунт удален" are offered no message.
     /// </summary>
     [Fact]
     public async Task OfferNoMessageToAGuestOnOnesOwnProfileOrToTheRemovedAccount()
@@ -137,10 +124,7 @@ public class CanMessageFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The field of a correspondence is there exactly when its message is taken:
-    /// the one other participant of a conversation of two answers for it, whatever
-    /// type the conversation was made under, and a group of three is no private
-    /// correspondence.
+    /// The field of a correspondence is there exactly when its message is taken; a group of three is no correspondence.
     /// </summary>
     [Theory]
     [InlineData(Conversation.Direct, Block.None, true)]
@@ -199,9 +183,7 @@ public class CanMessageFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The global chat is a chat read here too, and its flag says what its POST
-    /// says: a ban on public speech closes it, the private correspondence of the
-    /// same reader stays open.
+    /// A ban on public speech closes the global chat and leaves the private correspondence open.
     /// </summary>
     [Theory]
     [InlineData(false, true)]
@@ -241,9 +223,7 @@ public class CanMessageFlagShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The writes that hand a chat back carry the flag too, the page may put
-    /// their answer in place of the chat it holds; the list of chats carries
-    /// none, nothing is written from it.
+    /// The writes that hand a chat back carry the flag; the list of chats carries none.
     /// </summary>
     [Fact]
     public async Task AnswerTheWritesOfAChatWithTheFlagAndLeaveItOffTheList()
@@ -287,8 +267,6 @@ public class CanMessageFlagShould : IntegrationTestBase
             await DropAsync(chats, writer, addressee, third);
         }
     }
-
-    // ═══ SEEDING ═══
 
     private static object Text => new { text = "Сообщение, которое предлагает страница" };
 
@@ -376,8 +354,6 @@ public class CanMessageFlagShould : IntegrationTestBase
         await db.UserBlacklists.Where(b => ids.Contains(b.OwnerId) || ids.Contains(b.BlockedUserId))
             .ExecuteDeleteAsync();
     }
-
-    // ═══ REQUESTS ═══
 
     /// <summary>A request as the viewer, under an ordinary ban when asked; a guest sends none.</summary>
     private Task<HttpResponseMessage> SendAsync(

@@ -2,7 +2,6 @@ using FluentValidation;
 using System.Net;
 using System.Threading.Tasks;
 using System.Threading;
-using System;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
@@ -20,7 +19,6 @@ internal class UserProfileNoteService : IUserProfileNoteService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IValidator<CreateUserProfileNote> _validator;
 
-    /// <inheritdoc />
     public UserProfileNoteService(
         IUserProfileNoteRepository repository,
         IUserRepository userRepository,
@@ -40,19 +38,14 @@ internal class UserProfileNoteService : IUserProfileNoteService
     /// <inheritdoc />
     public async Task<UserProfileNote?> GetNote(string subjectUsername, CancellationToken ct = default)
     {
-        // A personal note is one the viewer wrote, so an anonymous viewer has
-        // none — null is the answer the nullable return type already promises.
-        // Throwing here made the profile page catch an exception to learn that,
-        // which is control flow across a layer boundary and the reason the
-        // refusal never reached anyone as a 401 either.
+        // A personal note is one the viewer wrote, so an anonymous viewer has none.
         var currentUser = _identityProvider.Current.User;
         if (!currentUser.IsAuthenticated)
         {
             return null;
         }
 
-        // Only the identifier is needed to find the note, and GetUserAsync pays for
-        // the whole achievement profile to hand it over.
+        // Only the identifier is needed, not the whole achievement profile.
         var subjectUserId = await _userRepository.FindUserIdAsync(subjectUsername);
         if (subjectUserId == null)
         {
@@ -66,11 +59,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
     public async Task<UserProfileNote?> UpsertNote(CreateUserProfileNote createNote, CancellationToken ct = default)
     {
         await _validator.ValidateAndThrowAsync(createNote, ct);
-        var currentUser = _identityProvider.Current.User;
-        if (!currentUser.IsAuthenticated)
-        {
-            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
-        }
+        var currentUser = _identityProvider.RequireAuthenticated();
 
         var subjectUserId = await _userRepository.FindUserIdAsync(createNote.SubjectUsername);
         if (subjectUserId == null)
@@ -85,7 +74,6 @@ internal class UserProfileNoteService : IUserProfileNoteService
                 "Нельзя оставить заметку о себе");
         }
 
-        // Delete note if text is empty
         if (string.IsNullOrWhiteSpace(createNote.Text))
         {
             var existingNote = await _repository.Get(currentUser.UserId, subjectUserId.Value, ct);
@@ -96,11 +84,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
             return null;
         }
 
-        // No read before the write: whether the pair already has a note is
-        // decided by the write itself. A read here stops being true the moment
-        // it returns - two saves arriving together both found nothing and both
-        // inserted, and a save that found the note lost it to a clear arriving
-        // with it and failed to update a row that was gone. Both answered 500.
+        // No read before the write: the write itself decides, so two saves cannot race.
         var entity = new CreateUserProfileNoteEntity
         {
             Id = _guidFactory.Create(),
@@ -116,11 +100,7 @@ internal class UserProfileNoteService : IUserProfileNoteService
     /// <inheritdoc />
     public async Task DeleteNote(string subjectUsername, CancellationToken ct = default)
     {
-        var currentUser = _identityProvider.Current.User;
-        if (!currentUser.IsAuthenticated)
-        {
-            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
-        }
+        var currentUser = _identityProvider.RequireAuthenticated();
 
         var subjectUserId = await _userRepository.FindUserIdAsync(subjectUsername);
         if (subjectUserId == null)

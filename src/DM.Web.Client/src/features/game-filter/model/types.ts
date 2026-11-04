@@ -1,11 +1,3 @@
-/**
- * Recruitment filter values
- * - any: show all games regardless of recruitment
- * - open: show games with open recruitment (any type)
- * - initial: show games with first-time recruitment
- * - subsequent: show games with subsequent recruitment ("донабор")
- * - closed: show games with closed recruitment
- */
 export type RecruitmentFilter =
   | "any"
   | "open"
@@ -13,135 +5,62 @@ export type RecruitmentFilter =
   | "subsequent"
   | "closed";
 
-/**
- * Closed reason filter values (includes 'any' option)
- * - None: closed without specific reason
- * - Finished: game completed
- * - Frozen: game frozen/paused indefinitely
- */
 export type ClosedReasonFilter = "any" | "None" | "Finished" | "Frozen";
 
-/**
- * Status values
- */
 export type StatusValue = "Draft" | "Active" | "Closed";
 
-/**
- * Filter state for games (new architecture)
- *
- * Logic:
- * - Status: Single status filter (or null for all)
- * - RecruitmentFilter: Sub-filter for Active (ignored if Active not selected)
- * - ClosedReasonFilter: Sub-filter for Closed (ignored if Closed not selected)
- * - RequiredTags: AND (game must have ALL)
- * - ExcludedTags: NOR (game must have NONE)
- */
 export interface GamesFilterState {
-  /** Text search query */
   search: string;
 
-  /** Selected status (single selection, null = all) */
+  /** Null for all. */
   status: StatusValue | null;
 
-  /** Recruitment filter for Active games */
+  /** Ignored unless the status is Active. */
   recruitmentFilter: RecruitmentFilter;
 
-  /** Closed reason filter for Closed games */
+  /** Ignored unless the status is Closed. */
   closedReasonFilter: ClosedReasonFilter;
 
-  /** Required tag IDs - game must have ALL (AND logic) */
   requiredTags: Set<number>;
 
-  /** Excluded tag IDs - game must have NONE (NOR logic) */
   excludedTags: Set<number>;
 
-  /** Hosts filter - master OR assistant (OR logic) */
+  /** Master or assistant. */
   hostUsernames: Set<string>;
 
-  /** Created date range start (inclusive) */
   createdFromUtc: string | null;
 
-  /** Created date range end (inclusive) */
   createdToUtc: string | null;
 
-  /** Activated date range start (inclusive). Games without ActivatedUtc are excluded. */
+  /** Games without ActivatedUtc are excluded. */
   activatedFromUtc: string | null;
 
-  /** Activated date range end (inclusive). Games without ActivatedUtc are excluded. */
   activatedToUtc: string | null;
 
-  /** Closed date range start (inclusive). Games without ClosedUtc are excluded. */
+  /** Games without ClosedUtc are excluded. */
   closedFromUtc: string | null;
 
-  /** Closed date range end (inclusive). Games without ClosedUtc are excluded. */
   closedToUtc: string | null;
 
-  /** Recruitment started date range start (inclusive). Games without RecruitmentStartedUtc are excluded. */
+  /** Games without RecruitmentStartedUtc are excluded. */
   recruitmentStartedFromUtc: string | null;
 
-  /** Recruitment started date range end (inclusive). Games without RecruitmentStartedUtc are excluded. */
   recruitmentStartedToUtc: string | null;
 
-  /** Sort field */
   sortBy: string;
 
-  /** Sort direction */
   sortOrder: "asc" | "desc";
 }
 
-/**
- * API search parameters for games.
- *
- * The endpoint's shape, taken from the entity that owns it rather than
- * restated here: the copy this replaces was a subset that had to be extended
- * by hand every time the search grew a parameter, and a filter that sets a
- * field the copy does not declare stops compiling for no reason a reader can
- * see. What the filter never sets (the participation and master/assistant
- * filters other screens pass) simply stays absent.
- */
+// The entity's own shape: what the filter never sets stays absent.
 export type { GamesSearchParams } from "@/entities/game";
 
-/**
- * Default filter state
- */
-export const DEFAULT_FILTER_STATE: GamesFilterState = {
-  search: "",
-  status: null,
-  recruitmentFilter: "any",
-  closedReasonFilter: "any",
-  requiredTags: new Set(),
-  excludedTags: new Set(),
-  hostUsernames: new Set(),
-  createdFromUtc: null,
-  createdToUtc: null,
-  activatedFromUtc: null,
-  activatedToUtc: null,
-  closedFromUtc: null,
-  closedToUtc: null,
-  recruitmentStartedFromUtc: null,
-  recruitmentStartedToUtc: null,
-  sortBy: "created",
-  sortOrder: "desc",
-};
-
-/**
- * Status filter options
- */
 export const STATUS_OPTIONS = [
   { value: "Draft" as const, label: "Оформляется" },
   { value: "Active" as const, label: "Идет игра" },
   { value: "Closed" as const, label: "Закрыта" },
 ] as const;
 
-/**
- * Recruitment filter options (sub-filter for Active)
- * Nested structure:
- * - any ("Любой")
- * - open ("Набор игроков") - parent for initial/subsequent
- *   - initial ("Первый набор")
- *   - subsequent ("Донабор игроков")
- * - closed ("Набор закрыт")
- */
 export const RECRUITMENT_FILTER_OPTIONS = [
   { value: "any" as const, label: "Любой" },
   { value: "open" as const, label: "Набор игроков", isParent: true },
@@ -150,9 +69,6 @@ export const RECRUITMENT_FILTER_OPTIONS = [
   { value: "closed" as const, label: "Набор закрыт" },
 ] as const;
 
-/**
- * Closed reason filter options (sub-filter for Closed)
- */
 export const CLOSED_REASON_FILTER_OPTIONS = [
   { value: "any" as const, label: "Все" },
   { value: "None" as const, label: "Без флагов" },
@@ -160,9 +76,6 @@ export const CLOSED_REASON_FILTER_OPTIONS = [
   { value: "Finished" as const, label: "Завершена" },
 ] as const;
 
-/**
- * Sort options (ordered as in menu)
- */
 export const SORT_OPTIONS = [
   {
     value: "title",

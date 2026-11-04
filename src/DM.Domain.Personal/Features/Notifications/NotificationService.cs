@@ -22,7 +22,6 @@ internal class NotificationService : INotificationService
     private readonly IUserBlacklistChecker _blacklistChecker;
     private readonly ILogger<NotificationService> _logger;
 
-    /// <inheritdoc />
     public NotificationService(
         IIdentityProvider identityProvider,
         IDateTimeProvider dateTimeProvider,
@@ -39,8 +38,6 @@ internal class NotificationService : INotificationService
         _logger = logger;
     }
 
-    #region Reading
-
     /// <inheritdoc />
     public Task<long> CountUnreadAsync() =>
         _repository.CountUnread(_identityProvider.Current.User.UserId);
@@ -50,14 +47,10 @@ internal class NotificationService : INotificationService
     {
         var userId = _identityProvider.Current.User.UserId;
         var totalCount = await _repository.Count(userId);
-        var pagingData = new PagingData(query, 10, (int)totalCount);
+        var pagingData = new PagingData(query, _identityProvider.Current.Settings.PageSize, totalCount);
         var notifications = await _repository.GetNotifications(userId, pagingData);
         return (notifications, pagingData.Result);
     }
-
-    #endregion
-
-    #region Creating
 
     /// <inheritdoc />
     public async Task<IReadOnlyList<CreatedNotification>> CreateAsync(
@@ -71,24 +64,16 @@ internal class NotificationService : INotificationService
             return [];
         }
 
-        // The one place a personal blacklist reaches notifications. Applied here
-        // and not in the generators because there are forty-one of them: a rule
-        // written per generator is a rule the forty-second forgets, and the ones
-        // that exist had no reason to know about blacklists at all.
+        // The one place a personal blacklist reaches notifications, rather than in
+        // every generator, where the next one would forget it.
         var addressedTo = await ExcludeBlockedRecipients(requested, ct);
 
         var notifications = addressedTo
             .Select(n => new CreatedNotification(n, _factory.Create(n, createDate)))
             .ToArray();
 
-        // A notification with no recipients is not stored: nobody can ever read
-        // it, so the row is unreachable by construction. Global chat produces
-        // exactly this — its fan-out goes to every connected client through the
-        // realtime hub, not through a per-user notification. A realtime-only one
-        // is addressed and still not stored: it exists to nudge an open tab, and
-        // a row would show up in the notification list and in the mail queue.
-        // The entity is returned in both cases so the caller can broadcast it:
-        // it needs the assigned id.
+        // Not stored: one without recipients (global chat goes through the hub) and a
+        // realtime-only one. Both are returned, the caller broadcasts by the assigned id.
         var addressed = notifications
             .Where(n => !n.Source.RealtimeOnly && n.Entity.UsersInterested.Any())
             .Select(n => n.Entity)
@@ -102,38 +87,11 @@ internal class NotificationService : INotificationService
     }
 
     /// <summary>
-    /// Drops the notifications a previous delivery of the same event already
-    /// stored, keyed by (EventId, EventType).
-    /// </summary>
-    /// <remarks>
-    /// The bus delivers at least once, so a broker redelivery hands the same
-    /// publication in again with the same EventId. EventType disambiguates
-    /// within it: one event fans out through several generators, each answering
-    /// at most one notification of its own output type, so the pair names one
-    /// logical notification and the unique index on it holds the same pair to
-    /// one row when this check races a concurrent write. A notification without
-    /// an EventId — a caller that predates the key — is not deduplicated: Empty
-    /// would make every legacy message a replay of one and the same event.
-    ///
-    /// Answering the caller with the survivors only is what keeps every channel
-    /// quiet on a replay: mail, bots and the realtime push are all built from
-    /// this method's answer, so a notification dropped here is one no channel
-    /// sends twice. What this cannot cover is a realtime-only notification —
-    /// there is no row to find, so a replay pushes it again — and that is
-    /// acceptable by construction: it nudges an open tab to re-read a counter,
-    /// and reading it twice shows the same number.
-    /// </remarks>
-    /// <summary>
     /// Drops batch entries that repeat a (EventId, EventType) pair already in it.
     /// </summary>
     /// <remarks>
-    /// Today no two generators answer one event with the same output type -
-    /// checked across all of them during W1.4 - but the guarantee is one
-    /// forgotten rename away (review of W1.4). Without this guard such a
-    /// collision would not trim a row: both copies fly into one SaveChanges,
-    /// the unique index refuses the whole batch on every retry, and the event
-    /// dies in the dead letter queue with all channels silent. A warning makes
-    /// the future mistake observable instead of fatal.
+    /// Such a pair would make the unique index refuse the whole batch on every
+    /// retry, so the duplicate is dropped with a warning instead.
     /// </remarks>
     private IReadOnlyList<CreateNotification> DeduplicateWithinBatch(
         IReadOnlyList<CreateNotification> notifications)
@@ -156,6 +114,16 @@ internal class NotificationService : INotificationService
         return kept;
     }
 
+    /// <summary>
+    /// Drops the notifications a previous delivery of the same event already
+    /// stored, keyed by (EventId, EventType).
+    /// </summary>
+    /// <remarks>
+    /// The bus delivers at least once, and every channel is built from the survivors,
+    /// so a replay is sent by none. A notification without an EventId is not
+    /// deduplicated, and a realtime-only one has no row to find: a replay only
+    /// re-reads a counter.
+    /// </remarks>
     private async Task<IReadOnlyList<CreateNotification>> ExcludeAlreadyCreated(
         IReadOnlyList<CreateNotification> notifications)
     {
@@ -188,15 +156,9 @@ internal class NotificationService : INotificationService
     /// personal blacklist.
     /// </summary>
     /// <remarks>
-    /// Unconditional, with no settings flag in front of it. The flags of
-    /// <see cref="UserBlacklistSettings"/> govern what a listing shows — comments,
-    /// chat messages, games, blogs — which is a different question from whether
-    /// the site writes to you about somebody. Blocking a person is the opt-in
-    /// already given, and a notification is the one surface a reader cannot
-    /// scroll past: it arrives in the list, by mail and through a bot.
-    ///
-    /// One statement per distinct actor, not per recipient. A batch out of the
-    /// dispatcher is normally one event by one person addressed to many.
+    /// Unconditional: the flags of <see cref="UserBlacklistSettings"/> govern what a
+    /// listing shows, and a notification cannot be scrolled past. One statement per
+    /// distinct actor, not per recipient.
     /// </remarks>
     private async Task<IReadOnlyList<CreateNotification>> ExcludeBlockedRecipients(
         IReadOnlyList<CreateNotification> notifications, CancellationToken ct)
@@ -235,10 +197,6 @@ internal class NotificationService : INotificationService
             .ToArray();
     }
 
-    #endregion
-
-    #region Flushing
-
     /// <inheritdoc />
     public Task MarkAsReadAsync(Guid notificationId) =>
         _repository.MarkAsRead(notificationId, _identityProvider.Current.User.UserId);
@@ -246,6 +204,4 @@ internal class NotificationService : INotificationService
     /// <inheritdoc />
     public Task MarkAllAsReadAsync() =>
         _repository.MarkAsRead(_identityProvider.Current.User.UserId);
-
-    #endregion
 }

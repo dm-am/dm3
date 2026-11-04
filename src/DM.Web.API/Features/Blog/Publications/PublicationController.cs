@@ -20,13 +20,12 @@ namespace DM.Web.API.Features.Blog.Publications;
 [Tags("Publications")]
 public class PublicationController : ControllerBase
 {
-    private readonly IBlogApiService _apiService;
-    private readonly IBlogLikeApiService _likeApiService;
+    private readonly BlogApiService _apiService;
+    private readonly BlogLikeApiService _likeApiService;
 
-    /// <inheritdoc />
     public PublicationController(
-        IBlogApiService apiService,
-        IBlogLikeApiService likeApiService)
+        BlogApiService apiService,
+        BlogLikeApiService likeApiService)
     {
         _apiService = apiService;
         _likeApiService = likeApiService;
@@ -161,9 +160,6 @@ public class PublicationController : ControllerBase
     /// Adds a like to the publication from the current user.
     /// Users cannot like their own publications.
     /// Each user can only like a publication once.
-    ///
-    /// Example request:
-    ///     POST /v1/publications/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Publication identifier (GUID)</param>
     /// <response code="200">Like added, returns user who liked</response>
@@ -187,9 +183,6 @@ public class PublicationController : ControllerBase
     /// <remarks>
     /// Removes the current user's like from the publication.
     /// Can only remove your own likes.
-    ///
-    /// Example request:
-    ///     DELETE /v1/publications/3fa85f64-5717-4562-b3fc-2c963f66afa6/likes
     /// </remarks>
     /// <param name="id">Publication identifier (GUID)</param>
     /// <response code="204">Like removed successfully</response>

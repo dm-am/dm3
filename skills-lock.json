@@ -13,23 +13,17 @@
       "skillPath": "skills/architecture-review/SKILL.md",
       "computedHash": "108097f945a16bb8754b85c0164a10356f29bd203283f783be6919a46fe7d349"
     },
-    "codex-issue-coordinator": {
-      "source": "owainlewis/blueprint",
-      "sourceType": "github",
-      "skillPath": "skills/codex-issue-coordinator/SKILL.md",
-      "computedHash": "d533e7689d296850c2228401b631f76612a67b977de50bd2d7959c5ca6caf06d"
-    },
     "design": {
       "source": "owainlewis/blueprint",
       "sourceType": "github",
       "skillPath": "skills/design/SKILL.md",
       "computedHash": "65490aa5677c22177f6d8b2f4c4dea458374464b5f6cb9fe2b6ba40b2f4b61fe"
     },
-    "html-doc": {
-      "source": "owainlewis/blueprint",
+    "grilling": {
+      "source": "mattpocock/skills",
       "sourceType": "github",
-      "skillPath": "skills/html-doc/SKILL.md",
-      "computedHash": "6c92975eebf3bad7c6e30f01633ea15ee7bbf75993ad2feec300904d2112444a"
+      "skillPath": "skills/productivity/grilling/SKILL.md",
+      "ref": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d"
     },
     "improve": {
       "source": "owainlewis/blueprint",
@@ -42,6 +36,12 @@
       "sourceType": "github",
       "skillPath": "skills/plan/SKILL.md",
       "computedHash": "e78f9826f31a2d5fbf175b0a5e8cd9631952577c3fb6a333bf6b0e4be640b0a2"
+    },
+    "prototype": {
+      "source": "mattpocock/skills",
+      "sourceType": "github",
+      "skillPath": "skills/engineering/prototype/SKILL.md",
+      "ref": "4ae2317ddb22b046e26455e4f9c9b3aaaf62212d"
     },
     "review": {
       "source": "owainlewis/blueprint",

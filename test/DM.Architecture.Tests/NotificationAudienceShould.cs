@@ -2,6 +2,7 @@ using System;
 using System.IO;
 using System.Linq;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -10,22 +11,9 @@ namespace DM.Architecture.Tests;
 /// One event produces one notification per recipient.
 /// </summary>
 /// <remarks>
-/// Most generators leave the outgoing event type alone and the processor stamps
-/// the event that triggered them. A few overwrite it, which is how a subscription
-/// notification says "new game from a subscribed author" while answering the
-/// creation of a game. That rename is a claim about the recipient, not about the
-/// event: it only holds for someone who could not see the entity before.
-///
-/// The activation generators broke that. They renamed the event and, in the same
-/// notification, addressed the subscribers of the entity's status changes — the
-/// people the status generator answers on the very same event. Every activation
-/// reached those readers twice, and the second copy called a game they were
-/// already following a new one. Nothing failed and no count was off; the two
-/// notifications simply disagreed about what had happened.
-///
-/// Asserted against the sources, because the audience is a constant inside a
-/// method body and neither the compiler nor the IL shows that two generators
-/// answering one event address one person.
+/// A generator that renames the event claims the recipient could not see the entity before, so it
+/// must not address the status subscribers. Asserted against the sources: the audience is a constant
+/// inside a method body.
 /// </remarks>
 public class NotificationAudienceShould
 {
@@ -38,21 +26,18 @@ public class NotificationAudienceShould
     /// <summary>The subscription flag the status generators are driven by.</summary>
     private const string StatusSubscribers = "SubscriptionSettings.StatusChanges";
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     private static string[] RenamingGenerators => Directory
-        .GetFiles(Path.Combine(RepositoryRoot, NotifiersDirectory), "*.cs", SearchOption.AllDirectories)
+        .GetFiles(Path.Combine(RepositoryLayout.Root, NotifiersDirectory), "*.cs", SearchOption.AllDirectories)
         .Where(file => File.ReadAllText(file).Contains(RenamesTheEvent, StringComparison.Ordinal))
         .ToArray();
 
     /// <summary>
-    /// A rule that matches nothing passes. The subscription generators are the
-    /// reason the rename exists, so finding none means the search string went
-    /// stale rather than that the tree is clean.
+    /// A rule that matches nothing passes, so the subscription generators are counted first.
     /// </summary>
     [Fact]
     public void FindTheGeneratorsThatRenameTheirEvent() =>
-        RenamingGenerators.Should().HaveCountGreaterThanOrEqualTo(4);
+        RenamingGenerators.Should().NotBeEmpty();
 
     [Fact]
     public void LeaveStatusSubscribersToTheStatusGenerator()

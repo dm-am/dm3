@@ -2,25 +2,14 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The heading of every forum page is "Форум", and on a board and on each of
- * its topics the strip of boards stands right under it, the board of the page
- * first (BoardNavigation). That is how the forum stood before 5 October 2026;
- * the wave of that day named the board in the heading instead and moved the
- * boards into a menu of the left column, and the owner asked for the forum
- * back as it was on 12 October. The index has its table of boards, so it has
- * no strip.
- */
+// "Форум" heads every forum page; on a board and its topics the strip of boards
+// stands under it, the page's board first. The index has its table instead.
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h } from "vue";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { createMemoryHistory, createRouter, RouterView } from "vue-router";
-import {
-  BOARD_PAGE_OWNS_REFUSAL,
-  useBoardsStore,
-  type Board,
-} from "@/entities/forum";
+import { useBoardsStore, type Board } from "@/entities/forum";
 import ForumPage from "./ForumPage.vue";
 
 const Empty = defineComponent({ render: () => null });
@@ -106,13 +95,8 @@ describe("the heading of the forum", () => {
   });
 });
 
-/**
- * A board that would not open answers once. The page stands the error page of
- * the status in place of the board, a 429 included, so the read it opens the
- * board with takes the refusal over (BOARD_PAGE_OWNS_REFUSAL). Without the
- * flags the interceptor's plate "Слишком много попыток" stood in the corner
- * over "Упс! Слишком много запросов!", the same refusal in two wordings.
- */
+// A board that would not open answers once: the error page of the status, so
+// the read owns its refusal, a 429 included.
 describe("the read that opens a board", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -131,10 +115,6 @@ describe("the read that opens a board", () => {
       expect(
         vi.mocked(useBoardsStore().trySelectBoardByAlias).mock.calls,
       ).toEqual([["ideas", { ownsRefusal: true, ownsRateLimit: true }]]);
-      expect(BOARD_PAGE_OWNS_REFUSAL).toEqual({
-        ownsRefusal: true,
-        ownsRateLimit: true,
-      });
     });
   }
 });

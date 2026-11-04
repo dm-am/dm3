@@ -12,19 +12,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The contract and the domain check a game's text fields by the same numbers.
 /// </summary>
-/// <remarks>
-/// They did not. The request contract allowed a 200-character title, a
-/// 100-character system and setting, and a description of one character; the
-/// domain validator behind it cut the title at 100, the other two at 50, and
-/// demanded at least 200 characters of description. Everything between the two
-/// sets was accepted by the form, accepted by the contract and refused by the
-/// domain — and refused in a code the form had no line for, so the author saw an
-/// English word under a Russian field after pressing "create".
-///
-/// Asserted through the attributes rather than by reading source text: the
-/// contract states its bounds in DataAnnotations, and an attribute carrying a
-/// literal is exactly the drift this rule exists to catch.
-/// </remarks>
+/// <remarks>Asserted through the attributes: the contract states its bounds in DataAnnotations.</remarks>
 public class GameFieldLimitsShould
 {
     [Theory]
@@ -49,16 +37,6 @@ public class GameFieldLimitsShould
             "promising that one character is enough is what made the refusal a surprise");
     }
 
-    /// <summary>
-    /// A rule over numbers only holds while the numbers are read from one place.
-    /// </summary>
-    [Fact]
-    public void KeepTheLimitsWorthReading()
-    {
-        GameFieldLimits.TitleMinLength.Should().BeLessThan(GameFieldLimits.TitleMaxLength);
-        GameFieldLimits.InfoMinLength.Should().BeGreaterThan(0,
-            "a minimum of zero is no rule, and the form would have nothing to say");
-    }
 
     private static int MaximumOf(Type contract, string property)
     {

@@ -8,6 +8,7 @@ using DM.Domain.Account.Features.Deactivation;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence.Shared.Queries;
+using DM.Infrastructure.Persistence.Shared.Users;
 using Microsoft.EntityFrameworkCore;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
@@ -29,28 +30,13 @@ internal class DeactivationRepository : IDeactivationRepository
     /// The removed account as moderation reads it, spliced into every read below
     /// so the SELECT stays the six columns the screen shows.
     /// </summary>
-    private static readonly Expression<Func<DbUser, RemovedAccount>> Projection = user => new RemovedAccount(
+    private static readonly Expression<Func<DbUser, RemovedAccountRow>> Projection = user => new RemovedAccountRow(
         user.UserId,
         user.Username,
         user.Email,
         user.Role,
         user.CreatedUtc,
         user.LastActivityUtc);
-
-    /// <inheritdoc />
-    public async Task<UserCredentials?> GetUserCredentials(Guid userId, CancellationToken cancellationToken = default)
-    {
-        return await _dbContext.Users
-            .AsNoTracking()
-            .Where(u => u.UserId == userId && !u.IsRemoved)
-            .Select(u => new UserCredentials
-            {
-                UserId = u.UserId,
-                PasswordHash = u.PasswordHash,
-                Salt = u.Salt
-            })
-            .FirstOrDefaultAsync(cancellationToken);
-    }
 
     /// <inheritdoc />
     public async Task DeactivateUser(Guid userId, CancellationToken cancellationToken = default)
@@ -76,12 +62,11 @@ internal class DeactivationRepository : IDeactivationRepository
                 .SetProperty(user => user.IsRemoved, false), cancellationToken);
 
     /// <inheritdoc />
-    public Task<RemovedAccount?> GetRemovedByUsername(string username,
+    public Task<RemovedAccountRow?> GetRemovedByUsername(string username,
         CancellationToken cancellationToken = default)
     {
-        var normalized = username.ToLower();
         return Removed(null)
-            .Where(user => user.Username.ToLower() == normalized)
+            .Where(AccountNames.UsernameIs(username))
             .Select(Projection)
             .FirstOrDefaultAsync(cancellationToken);
     }
@@ -91,7 +76,7 @@ internal class DeactivationRepository : IDeactivationRepository
         Removed(search).CountAsync(cancellationToken);
 
     /// <inheritdoc />
-    public async Task<IReadOnlyList<RemovedAccount>> GetRemoved(string? search, PagingData paging,
+    public async Task<IReadOnlyList<RemovedAccountRow>> GetRemoved(string? search, PagingData paging,
         CancellationToken cancellationToken = default) =>
         await Removed(search)
             .OrderBy(user => user.Username)

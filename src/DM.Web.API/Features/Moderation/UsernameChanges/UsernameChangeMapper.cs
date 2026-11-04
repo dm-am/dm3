@@ -10,7 +10,7 @@ namespace DM.Web.API.Features.Moderation.UsernameChanges;
 /// left to convention.
 /// </summary>
 [Mapper]
-internal partial class UsernameChangeMapper
+public partial class UsernameChangeMapper
 {
     /// <summary>
     /// Domain queue entry to the moderation queue row

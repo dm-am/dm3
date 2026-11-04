@@ -1,12 +1,4 @@
-/**
- * The filter of one game room: the pulse filter moved into a room.
- *
- * Same URL spelling as the pulse (`q`, `sort`, `order`, `authors`,
- * `minRating`, `maxRating`, `createdFrom`, `createdTo`), plus the two things
- * only a room has to filter by: the characters the posts are written by and
- * whether a post has reviews. The default view is the room itself, in the
- * order it is written, and none of it is spelled in the address.
- */
+// The pulse filter in one room, same address spelling, plus characters and reviews.
 import { computed, type ComputedRef } from "vue";
 import { useRoute, useRouter, type LocationQuery } from "vue-router";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
@@ -17,17 +9,11 @@ import {
 } from "@/shared/lib/filters/utils";
 import type { RoomPostsFilter } from "@/entities/game";
 
-export type RoomPostSortBy =
-  | "created"
-  | "rating"
-  | "reviewcount"
-  | "lastreview";
+const SORT_FIELDS = ["created", "rating", "reviewcount", "lastreview"] as const;
+export type RoomPostSortBy = (typeof SORT_FIELDS)[number];
 export type RoomPostReviews = "with" | "without";
 
-/**
- * The "Без персонажа" entry of the characters set. Never a character id: ids
- * are GUIDs, so the word cannot collide with one.
- */
+// Never a character id: ids are GUIDs, so the word cannot collide with one.
 export const WITHOUT_CHARACTER = "none";
 
 export interface RoomPostFilterState {
@@ -35,28 +21,21 @@ export interface RoomPostFilterState {
   sortBy: RoomPostSortBy;
   sortOrder: "asc" | "desc";
   authorUsernames: Set<string>;
-  /** Character ids, and WITHOUT_CHARACTER for posts written without one. */
   characters: Set<string>;
   minRating: number | null;
   maxRating: number | null;
   reviews: RoomPostReviews | null;
-  /** YYYY-MM-DD */
   createdFrom: string | null;
-  /** YYYY-MM-DD */
   createdTo: string | null;
 }
 
 export interface RoomPostFilterComposable {
   filterState: ComputedRef<RoomPostFilterState>;
-  /** What the room list is asked on top of the page; empty for the room itself. */
+  /** Empty for the room itself. */
   apiFilter: ComputedRef<RoomPostsFilter>;
-  /** A filter narrows the posts (sort left out: it reorders, it does not narrow). */
+  /** A sort reorders, it does not narrow. */
   hasActiveFilters: ComputedRef<boolean>;
-  /**
-   * Anything but the room as it is written: a filter or another order. Such a
-   * view is not reading the room, so it does not mark the room read, and a
-   * post's own page is somewhere else.
-   */
+  /** A filter or another order: such a view does not mark the room read. */
   isFilteredView: ComputedRef<boolean>;
 
   setSearch: (search: string) => void;
@@ -86,11 +65,8 @@ type Action =
 const DEFAULT_SORT_BY: RoomPostSortBy = "created";
 const DEFAULT_SORT_ORDER = "asc";
 
-/**
- * The direction a sort takes when it is picked: the room reads forward, every
- * other order puts the most first.
- */
-export function defaultSortOrder(sortBy: RoomPostSortBy): "asc" | "desc" {
+// The room reads forward; every other order puts the most first.
+function defaultSortOrder(sortBy: RoomPostSortBy): "asc" | "desc" {
   return sortBy === "created" ? "asc" : "desc";
 }
 
@@ -122,8 +98,7 @@ function withSet(
   return { ...state, [key]: next };
 }
 
-// Returns the same state when nothing changed, which the dispatcher reads as
-// "no navigation needed".
+// The same state when nothing changed means no navigation for the dispatcher.
 function reducer(
   state: RoomPostFilterState,
   action: Action,
@@ -196,13 +171,6 @@ function hasFilters(state: RoomPostFilterState): boolean {
   );
 }
 
-const SORT_FIELDS = new Set<string>([
-  "created",
-  "rating",
-  "reviewcount",
-  "lastreview",
-]);
-
 function parseList(value: LocationQuery[string]): string[] {
   if (!value) return [];
   return String(value)
@@ -217,14 +185,14 @@ function parseInteger(value: LocationQuery[string]): number | null {
   return isNaN(parsed) ? null : parsed;
 }
 
-/** Exported for the spec: the address is the whole state. */
 export function parseQueryToState(query: LocationQuery): RoomPostFilterState {
   const state = createDefaultState();
 
   if (query.q) state.search = String(query.q).slice(0, 200);
 
   const sort = query.sort ? String(query.sort) : "";
-  if (SORT_FIELDS.has(sort)) state.sortBy = sort as RoomPostSortBy;
+  if (SORT_FIELDS.some((field) => field === sort))
+    state.sortBy = sort as RoomPostSortBy;
   const order = query.order ? String(query.order) : "";
   if (order === "asc" || order === "desc") state.sortOrder = order;
 
@@ -244,7 +212,7 @@ export function parseQueryToState(query: LocationQuery): RoomPostFilterState {
   return state;
 }
 
-/** Exported for the spec: only what differs from the room itself is written. */
+// Only what differs from the room itself is written.
 export function buildQueryFromState(
   state: RoomPostFilterState,
 ): Record<string, string> {
@@ -266,11 +234,7 @@ export function buildQueryFromState(
   return query;
 }
 
-/**
- * Exported for the spec: the request the list is asked with. The room itself
- * asks with nothing at all, so its request is the one it always was, and the
- * server numbers its page without the extra query a filtered view costs.
- */
+// The room itself asks with nothing, so the server numbers its page without the extra query.
 export function buildApiFilter(state: RoomPostFilterState): RoomPostsFilter {
   const filter: RoomPostsFilter = {};
 

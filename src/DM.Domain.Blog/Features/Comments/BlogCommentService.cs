@@ -29,8 +29,7 @@ internal class BlogCommentService : IBlogCommentService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IBlogCommentRepository _repository;
     private readonly IUnreadCountersRepository _countersRepository;
-    private readonly IEventProducer _invokedEventProducer;
-    private readonly IBbTagNameCase _tagNames;
+    private readonly IEventProducer _eventProducer;
 
     public BlogCommentService(
         IValidator<CreateComment> createValidator,
@@ -41,8 +40,7 @@ internal class BlogCommentService : IBlogCommentService
         IDateTimeProvider dateTimeProvider,
         IBlogCommentRepository repository,
         IUnreadCountersRepository countersRepository,
-        IEventProducer invokedEventProducer,
-        IBbTagNameCase tagNames)
+        IEventProducer eventProducer)
     {
         _createValidator = createValidator;
         _updateValidator = updateValidator;
@@ -52,8 +50,7 @@ internal class BlogCommentService : IBlogCommentService
         _dateTimeProvider = dateTimeProvider;
         _repository = repository;
         _countersRepository = countersRepository;
-        _invokedEventProducer = invokedEventProducer;
-        _tagNames = tagNames;
+        _eventProducer = eventProducer;
     }
 
     /// <inheritdoc />
@@ -66,17 +63,13 @@ internal class BlogCommentService : IBlogCommentService
         var blog = await _blogService.GetAsync(createComment.EntityId);
         var currentUser = _identityProvider.Current.User;
 
-        // The blacklist closes writing: reading this blog is open to the user it
-        // blacklisted, commenting in it is not. The intention carries the same
-        // rule; asked first here, it answers with the reason instead of the
-        // generic refusal of the gate below. The gate is MayCreate's question,
+        // Asked before the gate for the words; the gate is MayCreate's question,
         // so the form the page offers and this refusal cannot part.
         blog.ThrowIfBlacklisted(currentUser.UserId);
         _intentionManager.ThrowIfForbidden(BlogIntention.CreateComment, blog);
 
-        // Strip [mod] authored by a non-moderator (it renders as a green mod
-        // block on the Comment surface); Moderator+ may author it.
-        createComment.Text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role), BbTagSet.WithModBlock);
+        // [mod] renders as a mod block on the Comment surface; Moderator+ may author it.
+        createComment.Text = ModBlockSanitizer.SanitizeForAuthor(createComment.Text, currentUser.Role);
 
         var (createdComment, commentId) = await _repository.Create(
             createComment,
@@ -84,7 +77,7 @@ internal class BlogCommentService : IBlogCommentService
             blog.Id);
 
         await _countersRepository.IncrementAsync(blog.Id, UnreadEntryType.Message);
-        await _invokedEventProducer.SendAsync(EventType.NewBlogComment, commentId);
+        await _eventProducer.SendAsync(EventType.NewBlogComment, commentId);
 
         return createdComment;
     }
@@ -92,9 +85,7 @@ internal class BlogCommentService : IBlogCommentService
     /// <inheritdoc />
     /// <remarks>
     /// The intention CreateAsync is refused by, and nothing beside it: the
-    /// blacklist CreateAsync asks first is one of the intention's own arms,
-    /// asked there for the words only. A private draft and the ban are both in
-    /// it (BlogIntentionResolver.CreateComment).
+    /// blacklist CreateAsync asks first is one of the intention's own arms.
     /// </remarks>
     public bool MayCreate(Blogs.Blog blog) =>
         _intentionManager.IsAllowed(BlogIntention.CreateComment, blog);
@@ -103,18 +94,14 @@ internal class BlogCommentService : IBlogCommentService
     public async Task<(IEnumerable<Comment> Comments, PagingResult Paging)> GetAsync(Guid blogId, CommentsQuery query,
         IReadOnlyCollection<Guid>? excludeUserIds = null)
     {
-        // The discussion of a blog the reader may not open is not there, exactly
-        // as the blog is not (see BlogService.GetAsync). It used to be read
-        // through GetBlogAsync, which skips the private-draft and premoderation
-        // gates, so the comments of a hidden blog were listed to anybody holding
-        // its id.
+        // The discussion of a blog the reader may not open is not there, exactly as the blog is not.
         if (!await _blogService.IsVisibleToViewerAsync(blogId))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
         var totalCount = await _repository.Count(blogId, query, excludeUserIds);
-        var paging = new PagingData(query, _identityProvider.Current.Settings.Paging.CommentsPerPage, totalCount);
+        var paging = new PagingData(query, _identityProvider.Current.Settings.PageSize, totalCount);
 
         var comments = await _repository.Get(blogId, query, paging, excludeUserIds);
 
@@ -126,12 +113,8 @@ internal class BlogCommentService : IBlogCommentService
     {
         var comment = await FindAsync(commentId);
 
-        // The four discussions share one table and the row above is read by its
-        // id alone, so the discussion is asked here exactly as the listing asks it:
-        // whether the reader may open the blog at all. A comment of a blog shut to
-        // the reader, and a comment of another kind of discussion, answer exactly
-        // as a comment that is not there - a different answer would tell a stranger
-        // that the id resolves, and to what.
+        // The discussions share one table: a comment of a blog shut to the reader
+        // answers as one that is not there, or the id would tell a stranger what it resolves to.
         if (!await _blogService.IsVisibleToViewerAsync(comment.EntityId))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));
@@ -141,10 +124,8 @@ internal class BlogCommentService : IBlogCommentService
     }
 
     /// <summary>
-    /// The comment by its identifier, among the comments of blogs only (the
-    /// repository narrows it: a lookup by id alone let this route edit a comment
-    /// of another discussion past that discussion's rules). The edit keeps to
-    /// this lookup: who may edit is CommentIntention.Edit's answer on the row.
+    /// The comment by its identifier, among the comments of blogs only, so this
+    /// route cannot edit a comment of another discussion past its rules.
     /// </summary>
     private async Task<Comment> FindAsync(Guid commentId) =>
         await _repository.Get(commentId) ??
@@ -158,15 +139,12 @@ internal class BlogCommentService : IBlogCommentService
 
         _intentionManager.ThrowIfForbidden(CommentIntention.Edit, comment);
 
-        // Rewriting a comment publishes text exactly as writing one does, so the
-        // blacklist and the ban are asked here too, on the terms
-        // BlogIntention.CreateComment sets: the user's own blog stays open to the
-        // ban. Only the author is asked, a moderator editing somebody else's
-        // comment is moderating and neither list takes a moderator tool away.
+        // Rewriting publishes text as writing does, so the author is asked the
+        // blacklist and the ban too; a moderator editing somebody else's comment is moderating.
         var currentUser = _identityProvider.Current.User;
         if (comment.Author?.UserId == currentUser.UserId)
         {
-            var blog = await _blogService.GetBlogAsync(comment.EntityId);
+            var blog = await _blogService.GetUnfiltered(comment.EntityId);
             blog.ThrowIfBlacklisted(currentUser.UserId);
             if (!currentUser.MaySpeak())
             {
@@ -174,15 +152,13 @@ internal class BlogCommentService : IBlogCommentService
             }
         }
 
-        var text = updateComment.Text?.Trim();
+        var text = AuthoredText.AsTyped(updateComment.Text);
         if (!string.IsNullOrEmpty(text))
         {
-            // Strip [mod] authored by a non-moderator before comparing/saving.
-            text = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role), BbTagSet.WithModBlock);
+            text = ModBlockSanitizer.SanitizeForAuthor(text, currentUser.Role);
         }
         if (string.IsNullOrEmpty(text) || text == comment.Text)
         {
-            // No actual changes
             return comment;
         }
 
@@ -195,7 +171,7 @@ internal class BlogCommentService : IBlogCommentService
         };
 
         var updatedComment = await _repository.Update(entity);
-        await _invokedEventProducer.SendAsync(EventType.ChangedBlogComment, updateComment.CommentId);
+        await _eventProducer.SendAsync(EventType.ChangedBlogComment, updateComment.CommentId);
         return updatedComment;
     }
 
@@ -223,17 +199,13 @@ internal class BlogCommentService : IBlogCommentService
         var removed = await _repository.Delete(entity);
         if (!removed)
         {
-            // Somebody else removed this comment between the read above and the
-            // write. The blog's unread counter and the event belong to the removal
-            // that happened, and repeating them here takes the counter down twice
-            // for one comment. The caller is answered the same either way: the
-            // comment is gone, which is what they asked for.
+            // Somebody else removed it in between; the counter and the event are that removal's.
             return;
         }
 
         await _countersRepository.DecrementAsync(comment.BlogId, UnreadEntryType.Message, comment.CreatedUtc);
 
-        await _invokedEventProducer.SendAsync(EventType.DeletedBlogComment, commentId);
+        await _eventProducer.SendAsync(EventType.DeletedBlogComment, commentId);
     }
 
     /// <inheritdoc />

@@ -12,35 +12,24 @@ namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 /// rather than for a repository.
 /// </summary>
 /// <remarks>
-/// OnModelCreating hangs the "not removed" filter in a loop over IRemovable, so
-/// no repository can drop it and no repository has to remember it. Two things
-/// can still break the rule and neither is visible at the call site: deleting
-/// the loop, and adding an IsRemoved column to an entity that does not declare
-/// the interface - a row that then reads as deleted to the writer and as present
-/// to every reader.
+/// OnModelCreating applies the filter in a loop over IRemovable; an IsRemoved column on an entity without
+/// the interface would read as present to every reader.
 /// </remarks>
 public class SoftDeleteFilterShould
 {
     /// <summary>
-    /// Entities that opt out of the global filter: an upsert over a tombstoned
-    /// unread marker deliberately revives it for a re-added participant, so that
-    /// write path has to see tombstone rows, and it spells its own IsRemoved
-    /// predicate in every read instead - see the entity remarks. Adding here is a
-    /// decision, not a convenience.
+    /// Entities that opt out of the global filter: the unread-marker upsert revives tombstones, so it spells
+    /// its own IsRemoved predicate in every read.
     /// </summary>
     private static readonly string[] OwnTheirPredicates =
     [
         nameof(Entities.Shared.UnreadCounter),
     ];
 
-    private static DmDbContext Context() => new(new DbContextOptionsBuilder<DmDbContext>()
-        .UseInMemoryDatabase(Guid.NewGuid().ToString())
-        .Options);
-
     [Fact]
     public void ApplyToEverySetThatDeclaresTheContract()
     {
-        using var context = Context();
+        using var context = InMemoryStore.Open();
 
         var removable = context.Model.GetEntityTypes()
             .Where(entity => typeof(IRemovable).IsAssignableFrom(entity.ClrType))
@@ -54,14 +43,12 @@ public class SoftDeleteFilterShould
     }
 
     /// <summary>
-    /// The opt-out list has to keep naming entities that exist and that really
-    /// are unfiltered, or a rename leaves a hole and a re-added filter leaves a
-    /// stale exemption.
+    /// The opt-out list keeps naming entities that exist and really are unfiltered.
     /// </summary>
     [Fact]
     public void KeepTheOptOutListHonest()
     {
-        using var context = Context();
+        using var context = InMemoryStore.Open();
 
         var unfiltered = context.Model.GetEntityTypes()
             .Where(entity => typeof(IRemovable).IsAssignableFrom(entity.ClrType))

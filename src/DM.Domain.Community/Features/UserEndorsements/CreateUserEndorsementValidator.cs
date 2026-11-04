@@ -1,22 +1,18 @@
+using DM.Domain.Core.Exceptions;
 using FluentValidation;
 
 namespace DM.Domain.Community.Features.UserEndorsements;
 
-/// <summary>
-/// Validator for CreateUserEndorsement
-/// </summary>
+/// <inheritdoc />
 internal class CreateUserEndorsementValidator : AbstractValidator<CreateUserEndorsement>
 {
     public CreateUserEndorsementValidator()
     {
         RuleFor(x => x.TargetUserId)
-            .NotEmpty()
-            .WithMessage("Укажите пользователя");
+            .NotEmpty().WithMessage(ValidationError.Empty);
 
         RuleFor(x => x.Text)
-            .NotEmpty()
-            .WithMessage("Введите текст рекомендации")
-            .MaximumLength(UserEndorsementFieldLimits.TextMaxLength)
-            .WithMessage("Рекомендация не длиннее 5000 символов");
+            .NotEmpty().WithMessage(ValidationError.Empty)
+            .MaximumLength(UserEndorsementFieldLimits.TextMaxLength).WithMessage(ValidationError.Long);
     }
 }

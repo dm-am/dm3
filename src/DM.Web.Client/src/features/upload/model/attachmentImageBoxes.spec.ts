@@ -1,32 +1,10 @@
-/**
- * Reserving the box of an attachment picture placed in the post's text.
- *
- * The avatar has declared its width and height for as long as it has existed,
- * and that pair is the whole anti-shift mechanism: the browser reads a ratio
- * off it and lays the text out once, instead of pushing it down when the
- * picture decodes. A picture in the body of a post had no such pair — the
- * BBCode renderer emits none, because for an arbitrary address there is nothing
- * to put there. For the post's own attachments there is: the upload pipeline
- * measured them and the payload carries the numbers.
- *
- * So what these assert is the boundary of "we know the size": the post's own
- * attachments get the pair, and everything else — somebody else's upload, an
- * external address, an attachment stored before the pipeline measured — is left
- * exactly as it came, because a guessed box is a shift with extra steps.
- */
 import { describe, expect, it } from "vitest";
 import type { PostAttachment } from "@/entities/game";
 import { reserveAttachmentImageBoxes } from "./postAttachments";
 
 const MAP_ID = "571c0beb-1890-9ba6-2170-4bb531bc51f6";
 
-/**
- * An absolute address, because that is the only spelling that survives the
- * BBCode sanitizer — it passes http and https and nothing else, so a picture in
- * the text always carries a host. Which host is deliberately not this site's:
- * the identifier in the path is what names the upload, and a rule keyed on the
- * origin would break the day the site answers on a second one.
- */
+// Absolute, as the BBCode sanitizer leaves it, and on a foreign host: the id names the upload.
 const ORIGIN = "https://example.test";
 
 function attachment(over: Partial<PostAttachment> = {}): PostAttachment {
@@ -47,7 +25,6 @@ function image(src: string, extra = ""): string {
   return `<p>перед<img src="${src}" class="bb-image" data-bb-tag="img" loading="lazy"${extra} />после</p>`;
 }
 
-/** The cap on the width of the single <img> in the result, or null. */
 function widthCap(html: string): string | null {
   const template = document.createElement("template");
   template.innerHTML = html;
@@ -55,7 +32,6 @@ function widthCap(html: string): string | null {
   return img?.style.getPropertyValue("--bb-image-max-width") || null;
 }
 
-/** width/height of the single <img> in the result, or null when undeclared. */
 function declared(html: string): [string, string] | null {
   const template = document.createElement("template");
   template.innerHTML = html;
@@ -159,13 +135,6 @@ describe("reserveAttachmentImageBoxes", () => {
     ]);
   });
 
-  /**
-   * A picture is drawn no taller than 500 pixels, as on DM2, and that cap
-   * clamps the height without touching a declared width: a tall picture would
-   * keep the width of its pair and be drawn narrower inside it, with the gap
-   * on both sides. The pair is the file's own, and the width is capped where
-   * the picture is exactly as tall as the cap.
-   */
   it("declares the file's own pair however tall it is", () => {
     const html = image(`/v1/uploads/${MAP_ID}/content`);
     const tall = [attachment({ width: 731, height: 793 })];
@@ -196,11 +165,6 @@ describe("reserveAttachmentImageBoxes", () => {
     ]);
   });
 
-  /**
-   * A picture the author gave a size of their own is wrapped in a frame that
-   * carries the caps it is drawn to. A second declaration of its box would
-   * fight that one, so the frame is left to decide.
-   */
   it("leaves a picture the author sized to its frame", () => {
     const html =
       '<span class="bb-image-frame" data-bb-width="300" ' +

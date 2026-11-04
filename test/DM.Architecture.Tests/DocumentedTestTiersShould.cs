@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.Json;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,19 +14,8 @@ namespace DM.Architecture.Tests;
 /// The testing guide names every runner this tree tests with.
 /// </summary>
 /// <remarks>
-/// A tier the guide does not mention is a tier nobody runs before pushing and
-/// nobody updates after changing a screen. The browser tier lived exactly like
-/// that: its own spec corpus, four package scripts and a job both publish jobs
-/// depend on, against a guide that described the two tiers which existed when it
-/// was written. A contributor learned that the tier existed from a red pipeline,
-/// and the quieter half of the cost is a screen changed without its spec.
-///
-/// The runners are read out of the package scripts and the test projects instead
-/// of being listed here, so a runner added to the tree turns this red until the
-/// guide has a line for it. A tier is not a runner: the backend unit, integration
-/// and architecture projects all reference xunit and collapse to one word here, so
-/// a fourth xunit tier passes this silently. Naming the tiers is on the guide and
-/// on review, and this gate only holds the runner names.
+/// The runners are read out of the package scripts and the test projects. A tier is not a runner:
+/// the xunit projects collapse to one word here.
 /// </remarks>
 public class DocumentedTestTiersShould
 {
@@ -34,22 +24,16 @@ public class DocumentedTestTiersShould
         ["npx", "npm", "run", "run-p", "run-s", "cross-env"];
 
     /// <summary>The .NET test frameworks a test project can be built on.</summary>
-    /// <remarks>
-    /// xUnit ships its third major under a package id of its own, xunit.v3, and the
-    /// second id will never see another release. The suffix is matched and dropped
-    /// rather than captured: what the guide names is the runner, and a major bump
-    /// that renames the package is not a tier the reader has to learn to run.
-    /// </remarks>
+    /// <remarks>The xunit.v3 suffix is dropped: the guide names the runner, not the package id.</remarks>
     private static readonly Regex TestFramework = new(
         @"PackageReference Include=""(?<runner>xunit|nunit|mstest)(?:\.v3)?""",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    private static DirectoryInfo RepositoryRoot => DM.Testing.RepositoryLayout.RootDirectory;
 
     [Fact]
     public void NameEveryRunnerTheTreeTestsWith()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.RootDirectory;
         var guide = File.ReadAllText(
             Path.Combine(root.FullName, "docs", "guides", "TESTING.md"));
 

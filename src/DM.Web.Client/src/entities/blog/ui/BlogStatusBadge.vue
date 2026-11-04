@@ -3,22 +3,17 @@ import { computed } from "vue";
 import type { BlogStatus } from "../model/types";
 
 const props = defineProps<{
-  /** Blog status */
-  status: BlogStatus | string;
+  status: BlogStatus;
 }>();
 
-// Status checks
-const isDraft = computed(() => props.status === "Draft");
-const isActive = computed(() => props.status === "Active");
-const isClosed = computed(() => props.status === "Closed");
+const LABELS: Record<BlogStatus, string> = {
+  Draft: "Оформляется",
+  Active: "Открыт",
+  Closed: "Закрыт",
+};
 
-// Status display text (short form, unified with games)
-const statusDisplay = computed<string>(() => {
-  if (isDraft.value) return "Оформляется";
-  if (isActive.value) return "Открыт";
-  if (isClosed.value) return "Закрыт";
-  return String(props.status);
-});
+// A status the server added before this client knew it is shown as it came.
+const statusDisplay = computed(() => LABELS[props.status] ?? props.status);
 </script>
 
 <template>
@@ -27,6 +22,5 @@ const statusDisplay = computed<string>(() => {
 
 <style scoped lang="sass">
 .blog-status
-  display: inline
-  word-wrap: break-word
+  overflow-wrap: break-word
 </style>

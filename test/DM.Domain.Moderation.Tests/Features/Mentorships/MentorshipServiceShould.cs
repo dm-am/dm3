@@ -1,12 +1,12 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Moderation.Features.Mentorships;
 using DM.Testing;
+using DM.Testing.Dsl;
 using AwesomeAssertions;
 using NSubstitute;
 using Xunit;
@@ -15,39 +15,29 @@ namespace DM.Domain.Moderation.Tests.Features.Mentorships;
 
 public class MentorshipServiceShould : UnitTestBase
 {
-    private readonly IMentorshipRepository _repository;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly MentorshipService _service;
-    private readonly Guid _mentorUserId = Guid.NewGuid();
-    private readonly Guid _gameId = Guid.NewGuid();
-    private readonly Guid _blogId = Guid.NewGuid();
+    private readonly IMentorshipRepository repository;
+    private readonly IIdentityProvider identityProvider;
+    private readonly MentorshipService service;
+    private readonly Guid mentorUserId = Guid.NewGuid();
+    private readonly Guid gameId = Guid.NewGuid();
+    private readonly Guid blogId = Guid.NewGuid();
 
     public MentorshipServiceShould()
     {
-        _repository = Mock<IMentorshipRepository>();
-        _identityProvider = Mock<IIdentityProvider>();
+        repository = Mock<IMentorshipRepository>();
+        identityProvider = Mock<IIdentityProvider>();
 
-        var mentorIdentity = Identity.Success(
-            new AuthenticatedUser { UserId = _mentorUserId, Role = UserRole.Mentor, Username = "Mentor" },
-            new Session { Id = Guid.NewGuid() },
-            new UserSettings(),
-            "token");
-        _identityProvider.Current.Returns(mentorIdentity);
+        identityProvider.Current.Returns(Identities.User(mentorUserId, "Mentor", UserRole.Mentor));
 
-        _service = new MentorshipService(_repository, _identityProvider);
+        service = new MentorshipService(repository, identityProvider);
     }
 
     [Fact]
     public async Task ThrowWhenNonMentorTriesToAssignGameMentor()
     {
-        var userIdentity = Identity.Success(
-            new AuthenticatedUser { UserId = Guid.NewGuid(), Role = UserRole.RegularUser, Username = "User" },
-            new Session { Id = Guid.NewGuid() },
-            new UserSettings(),
-            "token");
-        _identityProvider.Current.Returns(userIdentity);
+        identityProvider.Current.Returns(Identities.User(Guid.NewGuid(), "User"));
 
-        var act = () => _service.AssignGameMentor(_gameId);
+        var act = () => service.AssignGameMentor(gameId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("роль наставника"));
@@ -56,9 +46,9 @@ public class MentorshipServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenAssigningMentorToNonexistentGame()
     {
-        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(false);
+        repository.GameExists(gameId, Arg.Any<CancellationToken>()).Returns(false);
 
-        var act = () => _service.AssignGameMentor(_gameId);
+        var act = () => service.AssignGameMentor(gameId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("не найдена"));
@@ -67,10 +57,10 @@ public class MentorshipServiceShould : UnitTestBase
     [Fact]
     public async Task ThrowWhenGameAlreadyHasMentor()
     {
-        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(true);
-        _repository.GetGameMentorId(_gameId, Arg.Any<CancellationToken>()).Returns(Guid.NewGuid());
+        repository.GameExists(gameId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetGameMentorId(gameId, Arg.Any<CancellationToken>()).Returns(Guid.NewGuid());
 
-        var act = () => _service.AssignGameMentor(_gameId);
+        var act = () => service.AssignGameMentor(gameId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("уже есть наставник"));
@@ -79,21 +69,21 @@ public class MentorshipServiceShould : UnitTestBase
     [Fact]
     public async Task AssignGameMentorSuccessfully()
     {
-        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(true);
-        _repository.GetGameMentorId(_gameId, Arg.Any<CancellationToken>()).Returns((Guid?)null);
+        repository.GameExists(gameId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetGameMentorId(gameId, Arg.Any<CancellationToken>()).Returns((Guid?)null);
 
-        await _service.AssignGameMentor(_gameId);
+        await service.AssignGameMentor(gameId);
 
-        await _repository.Received(1).SetGameMentor(_gameId, _mentorUserId, Arg.Any<CancellationToken>());
+        await repository.Received(1).SetGameMentor(gameId, mentorUserId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task ThrowWhenRemovingMentorFromGameUserIsNotMentorOf()
     {
-        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(true);
-        _repository.GetGameMentorId(_gameId, Arg.Any<CancellationToken>()).Returns(Guid.NewGuid());
+        repository.GameExists(gameId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetGameMentorId(gameId, Arg.Any<CancellationToken>()).Returns(Guid.NewGuid());
 
-        var act = () => _service.RemoveGameMentor(_gameId);
+        var act = () => service.RemoveGameMentor(gameId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.Message.Contains("не наставник"));
@@ -102,33 +92,33 @@ public class MentorshipServiceShould : UnitTestBase
     [Fact]
     public async Task RemoveGameMentorSuccessfully()
     {
-        _repository.GameExists(_gameId, Arg.Any<CancellationToken>()).Returns(true);
-        _repository.GetGameMentorId(_gameId, Arg.Any<CancellationToken>()).Returns(_mentorUserId);
+        repository.GameExists(gameId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetGameMentorId(gameId, Arg.Any<CancellationToken>()).Returns(mentorUserId);
 
-        await _service.RemoveGameMentor(_gameId);
+        await service.RemoveGameMentor(gameId);
 
-        await _repository.Received(1).SetGameMentor(_gameId, null, Arg.Any<CancellationToken>());
+        await repository.Received(1).SetGameMentor(gameId, null, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task AssignBlogMentorSuccessfully()
     {
-        _repository.BlogExists(_blogId, Arg.Any<CancellationToken>()).Returns(true);
-        _repository.GetBlogMentorId(_blogId, Arg.Any<CancellationToken>()).Returns((Guid?)null);
+        repository.BlogExists(blogId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetBlogMentorId(blogId, Arg.Any<CancellationToken>()).Returns((Guid?)null);
 
-        await _service.AssignBlogMentor(_blogId);
+        await service.AssignBlogMentor(blogId);
 
-        await _repository.Received(1).SetBlogMentor(_blogId, _mentorUserId, Arg.Any<CancellationToken>());
+        await repository.Received(1).SetBlogMentor(blogId, mentorUserId, Arg.Any<CancellationToken>());
     }
 
     [Fact]
     public async Task RemoveBlogMentorSuccessfully()
     {
-        _repository.BlogExists(_blogId, Arg.Any<CancellationToken>()).Returns(true);
-        _repository.GetBlogMentorId(_blogId, Arg.Any<CancellationToken>()).Returns(_mentorUserId);
+        repository.BlogExists(blogId, Arg.Any<CancellationToken>()).Returns(true);
+        repository.GetBlogMentorId(blogId, Arg.Any<CancellationToken>()).Returns(mentorUserId);
 
-        await _service.RemoveBlogMentor(_blogId);
+        await service.RemoveBlogMentor(blogId);
 
-        await _repository.Received(1).SetBlogMentor(_blogId, null, Arg.Any<CancellationToken>());
+        await repository.Received(1).SetBlogMentor(blogId, null, Arg.Any<CancellationToken>());
     }
 }

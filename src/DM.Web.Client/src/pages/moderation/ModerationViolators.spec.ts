@@ -2,17 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * "Нарушители", the filter over the list.
- *
- * Three short values are the segments of the site, not a list under the
- * caption "Фильтр": "Все | С баном | Только баллы", one press each. What is
- * checked is that each segment asks the server for its own list, that the
- * pressed one is the one marked, and that a list narrowed to nobody is told
- * apart from a site with no violators. The segments make the switch quick,
- * so two answers can be on the wire at once, and the one asked for last has
- * to be the one that stays.
- */
+// Each segment asks for its own list and is marked when pressed; a narrowed
+// empty list is told from a site without violators; the last press wins.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   mount,
@@ -27,11 +18,6 @@ const getViolators = vi.hoisted(() => vi.fn());
 vi.mock("@/entities/moderation", () => ({
   moderationApi: { getViolators },
   banTermLabel: () => "Бан",
-}));
-
-// The gate has its own spec (roleGate); here the viewer is a moderator.
-vi.mock("./lib/useRoleGate", () => ({
-  useRoleGate: () => ({ hasAccess: true, deniedText: "" }),
 }));
 
 const violator = (name: string) => ({
@@ -90,11 +76,9 @@ describe("the moderation list of violators", () => {
     getViolators.mockResolvedValue(list(["Первый"]));
   });
 
-  it("filters by segments, not by a list under a caption", async () => {
+  it("filters by segments", async () => {
     const wrapper = await rendered();
 
-    expect(wrapper.find("label").exists()).toBe(false);
-    expect(wrapper.find("select").exists()).toBe(false);
     expect(segments(wrapper).map((b) => b.text())).toEqual([
       "Все",
       "С баном",

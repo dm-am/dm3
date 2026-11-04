@@ -1,19 +1,11 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * The community list, addressed the way the filter addresses itself.
- *
- * What this file was: `q`, `sort` and `filter` in every URL. The filter reads
- * none of them — useUsersFilter binds `search`, `activity`, `role`, `sortBy` and
- * `sortOrder` (buildQueryFromState / parseQueryToState) — so every one of those
- * navigations asked for the plain unfiltered list, and the tests that then
- * asserted "no .error-message" passed on a page that had never been filtered.
- * Their titles named a feature; their bodies checked that the page rendered.
- *
- * Two more rules the URL follows and the assertions follow with it: a parameter
- * is written only while it differs from the default (sortBy is lastActivity,
- * activity is all), and the direction comes with the field — choosing "Имя"
- * sets asc because that option declares it.
+ * The community list, addressed the way the filter addresses itself:
+ * useUsersFilter binds `search`, `activity`, `role`, `sortBy` and `sortOrder`.
+ * A parameter is written only while it differs from the default (sortBy is
+ * lastActivity, activity is all), and the direction comes with the field:
+ * choosing "Имя" sets asc because that option declares it.
  */
 test.describe("Users Search", () => {
   test.describe("Search Functionality", () => {
@@ -42,8 +34,7 @@ test.describe("Users Search", () => {
     test("should display search results", async ({ page }) => {
       await page.goto("/community?search=a");
 
-      // ".users-table", ".user-card" and ".search-results" name nothing: the
-      // widget renders .users-data-table.
+      // The widget renders .users-data-table.
       await expect(page.locator(".users-data-table")).toBeVisible();
       await expect(page.locator(".error-message")).not.toBeVisible();
     });
@@ -53,10 +44,7 @@ test.describe("Users Search", () => {
     test("should sort by username", async ({ page }) => {
       await page.goto("/community");
 
-      // The control is the SortButton: a .sort-btn opening a .sort-dropdown
-      // of .sort-option items. ".sort-select" and "[data-sort]" are not in
-      // the client, and the option reads "Имя", not "По имени" — so the
-      // guard was false and the body never ran.
+      // The control is the SortButton: a .sort-btn opening .sort-option items.
       await page.locator(".sort-btn").click();
       await page
         .locator(".sort-option")
@@ -115,12 +103,9 @@ test.describe("Users Search", () => {
 
       await expect(page.locator(".users-data-table")).toBeVisible();
 
-      // The rule is that the page does not WRITE a default into the address,
-      // not that it rewrites an address somebody arrived with: buildQueryFromState
-      // omits the default when a filter is dispatched, and a direct visit
-      // dispatches nothing. Stripping what the visitor typed would be the
-      // stronger claim and the product does not make it. What is asserted here
-      // is that the default was understood - the list is the unfiltered one.
+      // The page does not write a default into the address, and it does not
+      // rewrite an address somebody arrived with either: the default is
+      // understood, and the list is the unfiltered one.
       await expect(page).toHaveURL(/activity=all/);
       await expect(page.locator(".bubbles-row")).toHaveCount(0);
     });
@@ -145,9 +130,7 @@ test.describe("Users Search", () => {
 
     test("should preserve the query when paginating", async ({ page }) => {
       // A sort, not a search: the seed writes more accounts than fit on one
-      // page, so the paging strip is there whatever the search matches. The
-      // old version paginated on "q", which the filter does not read, and
-      // clicked behind an `if` — nothing was asserted either way.
+      // page, so the paging strip is there whatever the search matches.
       await page.goto("/community?sortBy=username");
 
       const paging = page.locator(".paging").first();
@@ -167,8 +150,6 @@ test.describe("Users Search", () => {
     test("should show empty message when no users match search", async ({
       page,
     }) => {
-      // The filter binds "search"; "q" is not read at all, so the old URL asked
-      // for the unfiltered list and no empty state could ever appear.
       await page.goto("/community?search=xyznonexistentuser123456789");
 
       await expect(page.locator(".table-empty")).toHaveText(

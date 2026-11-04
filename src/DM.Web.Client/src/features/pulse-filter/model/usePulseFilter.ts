@@ -6,13 +6,9 @@ import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDis
 import { isValidDate, parsePageNumber } from "@/shared/lib/filters/utils";
 import type { PulseSearchParams } from "@/entities/game";
 
-// =============================================================================
-// TYPES
-// =============================================================================
-
 export type PulseSortBy = "lastreview" | "rating" | "reviewcount";
 
-export interface PulseFilterState {
+interface PulseFilterState {
   search: string;
   sortBy: PulseSortBy;
   sortOrder: "asc" | "desc";
@@ -39,10 +35,6 @@ export interface PulseFilterComposable {
   clearFilters: () => void;
 }
 
-// =============================================================================
-// ACTION TYPES
-// =============================================================================
-
 type PulseFilterAction =
   | { type: "SET_SEARCH"; search: string }
   | { type: "SET_SORT"; sortBy: PulseSortBy; sortOrder?: "asc" | "desc" }
@@ -52,10 +44,6 @@ type PulseFilterAction =
   | { type: "SET_CREATED_RANGE"; from: string | null; to: string | null }
   | { type: "SET_GAME_ID"; gameId: string | null }
   | { type: "CLEAR_FILTERS" };
-
-// =============================================================================
-// PURE REDUCER
-// =============================================================================
 
 function createDefaultState(): PulseFilterState {
   return {
@@ -140,10 +128,6 @@ function reducer(
     }
   }
 }
-
-// =============================================================================
-// PARSING & BUILDING
-// =============================================================================
 
 const validSortByValues = new Set<string>([
   "lastreview",
@@ -232,23 +216,15 @@ function buildQueryFromState(state: PulseFilterState): Record<string, string> {
   return query;
 }
 
-// =============================================================================
-// MODULE-LEVEL DISPATCHER
-// =============================================================================
-
 const dispatcher = createFilterDispatcher<PulseFilterState, PulseFilterAction>({
   buildQuery: buildQueryFromState,
   name: "usePulseFilter",
 });
 
-// =============================================================================
-// COMPOSABLE
-// =============================================================================
-
 export function usePulseFilter(): PulseFilterComposable {
   const route = useRoute();
   const router = useRouter();
-  const { entitiesPerPage } = usePaging();
+  const { pageSize } = usePaging();
 
   dispatcher.setRouter(router);
 
@@ -277,12 +253,11 @@ export function usePulseFilter(): PulseFilterComposable {
     const pageNumber = parsePageNumber(route.query.number);
     if (pageNumber) params.number = pageNumber;
 
-    params.size = entitiesPerPage.value;
+    params.size = pageSize.value;
     return params;
   });
 
-  // Sorting is intentionally excluded: it changes the order, not the
-  // subset of data (same as games/blogs/topics filter composables)
+  // A sort changes the order, not the subset.
   const hasActiveFilters = computed(() => {
     const state = filterState.value;
     return (

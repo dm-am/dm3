@@ -8,8 +8,8 @@ using DM.Domain.Core.Dto;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Extensions;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Queries;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using DbWebsiteTestimonial = DM.Infrastructure.Persistence.Entities.Community.WebsiteTestimonial;
 
 namespace DM.Infrastructure.Persistence.Repositories.Community;
@@ -20,7 +20,6 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public WebsiteTestimonialRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
@@ -32,14 +31,14 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
     // READ
 
     /// <inheritdoc />
-    public Task<long> Count(WebsiteTestimonialsQuery query)
+    public Task<int> Count(WebsiteTestimonialsQuery query)
     {
         var dbQuery = _dbContext.WebsiteTestimonials
             .Where(t => !t.IsRemoved);
 
         dbQuery = ApplyFilters(dbQuery, query);
 
-        return dbQuery.LongCountAsync();
+        return dbQuery.CountAsync();
     }
 
     /// <inheritdoc />
@@ -62,13 +61,13 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
         IQueryable<DbWebsiteTestimonial> query,
         WebsiteTestimonialsQuery testimonialsQuery)
     {
-        // Search by text content or author username
+        // Search by text content or author username, "%" and "_" as themselves
         if (!string.IsNullOrWhiteSpace(testimonialsQuery.Search))
         {
-            var searchLower = testimonialsQuery.Search.ToLowerInvariant();
+            var pattern = LikePatterns.Contains(testimonialsQuery.Search);
             query = query.Where(t =>
-                t.Text.ToLower().Contains(searchLower) ||
-                (t.Author != null && t.Author.Username.ToLower().Contains(searchLower)));
+                EF.Functions.ILike(t.Text, pattern, "\\") ||
+                EF.Functions.ILike(t.Author.Username, pattern, "\\"));
         }
 
         return query;
@@ -87,15 +86,9 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
             isDescending = sortBy == "created";
         }
 
-        return sortBy switch
-        {
-            "author" => isDescending
-                ? query.OrderByDescending(t => t.Author != null ? t.Author.Username : "")
-                : query.OrderBy(t => t.Author != null ? t.Author.Username : ""),
-            _ => isDescending // "created" or default
-                ? query.OrderByDescending(t => t.CreatedUtc)
-                : query.OrderBy(t => t.CreatedUtc)
-        };
+        return sortBy == "author"
+            ? query.OrderByDirection(t => t.Author.Username, !isDescending)
+            : query.OrderByDirection(t => t.CreatedUtc, !isDescending);
     }
 
     /// <inheritdoc />
@@ -135,7 +128,7 @@ internal class WebsiteTestimonialRepository : IWebsiteTestimonialRepository
         {
             await _dbContext.SaveChangesAsync();
         }
-        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+        catch (DbUpdateException ex) when (ex.IsDuplicateKey())
         {
             // The caller pre-checks for an existing testimonial; this is the race
             // where two concurrent requests both pass that check. Translated here

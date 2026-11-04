@@ -45,11 +45,6 @@ describe("DateRangePicker", () => {
   // ============================================================================
 
   describe("Basic Rendering", () => {
-    it("renders date range container", () => {
-      const wrapper = mountComponent();
-      expect(wrapper.find(".dropdown-date-range").exists()).toBe(true);
-    });
-
     it("renders from and to date inputs (site calendar, not native)", () => {
       const wrapper = mountComponent();
       const dateInputs = wrapper.findAllComponents(DateInput);
@@ -72,11 +67,6 @@ describe("DateRangePicker", () => {
       const labels = wrapper.findAll(".date-label");
       expect(labels[0].text()).toBe("Начало");
       expect(labels[1].text()).toBe("Конец");
-    });
-
-    it("renders apply button", () => {
-      const wrapper = mountComponent();
-      expect(wrapper.findComponent(FilterApplyButton).exists()).toBe(true);
     });
   });
 

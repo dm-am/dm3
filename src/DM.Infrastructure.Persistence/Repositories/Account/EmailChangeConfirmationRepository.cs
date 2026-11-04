@@ -4,6 +4,7 @@ using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.EmailChange;
 using DM.Domain.Core.Enums;
+using DM.Infrastructure.Persistence.Shared.Tokens;
 using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
@@ -34,17 +35,11 @@ internal class EmailChangeConfirmationRepository : IEmailChangeConfirmationRepos
     /// <inheritdoc />
     public Task MarkTokenUsed(Guid secret)
     {
-        // By the hash, because that is the only half of the link the table holds.
-        // Searched by row identifier this matched nothing whatever was handed in -
-        // the letter carries the secret, and the identifier is a second value the
-        // caller never sees - so the write ran over an empty set and the link the
-        // confirmation had just spent stayed live.
-        //
-        // No age in the predicate: a link is spent whenever it is redeemed, and
-        // whether it was still within its window is the lookup's question.
+        // By the hash, the only half of the link the table holds. No age: a link is
+        // spent whenever it is redeemed.
         var hash = ConfirmationSecret.Hash(secret);
         return _dbContext.Tokens
             .Where(t => t.SecretHash == hash && t.Type == TokenType.EmailChange && !t.IsRemoved)
-            .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true));
+            .Retire();
     }
 }

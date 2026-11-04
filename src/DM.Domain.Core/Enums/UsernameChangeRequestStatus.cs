@@ -1,8 +1,5 @@
 namespace DM.Domain.Core.Enums;
 
-/// <summary>
-/// Status of a username change request
-/// </summary>
 public enum UsernameChangeRequestStatus
 {
     /// <summary>

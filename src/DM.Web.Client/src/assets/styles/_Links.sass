@@ -1,0 +1,66 @@
+@use "Themes" as *
+@use "Variables" as *
+
+// One behaviour for an <a> and for a <button> dressed as one, as DM2's links:
+// no underline at rest, the underline and the hover colour under the pointer,
+// the colour easing over $transition-normal. Only the resting colour tells the
+// kinds apart. A bold link is 700: the face has two weights. The links of a
+// tooltip, of a toast and the header's navigation keep their own.
+
+/// A link in a resting colour: the hover, the ring of inline text, a disabled
+/// <button>. The ring is restated because the component rule that sets the
+/// colour outranks the global one. Ends with nested rules: wrap later
+/// declarations in "&".
+@mixin link-tone($rest, $hover: $link-hover)
+  color: $rest
+  text-decoration: none
+  transition: color $transition-normal
+
+  &:hover:not(:disabled)
+    color: $hover
+    text-decoration: underline
+
+  &:focus-visible
+    outline: 1px solid $link
+    outline-offset: 2px
+
+  &:disabled
+    opacity: $disabled-opacity
+    cursor: default
+
+/// A <button> that is a word of the text around it and reads as a link: the
+/// UA box taken off, then the link's behaviour. Unlike +button-link it has no
+/// height or padding box.
+@mixin inline-link-button($rest: $link)
+  background: none
+  border: none
+  padding: 0
+  font: inherit
+  cursor: pointer
+  +link-tone($rest)
+
+/// The "показать полностью" control. The bare & keeps the padding after the
+/// recipe's reset.
+@mixin expand-toggle-button()
+  align-self: flex-start
+  display: inline-block
+  margin-top: $tiny
+  text-align: left
+  +inline-link-button
+  &
+    padding: $tiny 0
+
+/// A line of secondary links: muted, in the secondary size. Its links take
+/// +muted-link, through :deep(a) when they belong to a child component.
+@mixin muted-links-line()
+  font-size: $secondary-font-size
+  color: $text-muted
+
+/// A grey link, as DM2's: $text-muted at rest, the hover of every link. For an
+/// <a>; a bare <button> takes +muted-link-button.
+@mixin muted-link()
+  +link-tone($text-muted)
+
+/// A <button> that reads as a grey link.
+@mixin muted-link-button()
+  +inline-link-button($text-muted)

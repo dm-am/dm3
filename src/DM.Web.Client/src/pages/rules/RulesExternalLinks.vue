@@ -1,21 +1,18 @@
 <script setup lang="ts">
-/**
- * RulesExternalLinks - external links rules
- */
-
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import {
   ExpandableList,
   type ExpandableItem,
 } from "@/shared/ui/ExpandableList";
 import { useExpandOnHash } from "./expandableListRef";
+import { MAX_WARNING_POINTS, points } from "./warningPolicy";
 
 const sections: ExpandableItem[] = [
   {
     id: "other-rpg",
     title: "Другие ролевые сайты",
     content: [
-      "Ссылки без согласования = 6 баллов. Для согласования напишите администрации.",
+      `Ссылки без согласования = ${points(MAX_WARNING_POINTS)}. Для согласования напишите администрации.`,
       "Исключение: личные переписки и профили.",
     ],
   },

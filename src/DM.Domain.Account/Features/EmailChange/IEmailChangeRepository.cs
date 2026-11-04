@@ -27,14 +27,8 @@ public interface IEmailChangeRepository
     /// pending and create the confirmation token, in one transaction
     /// </summary>
     /// <remarks>
-    /// The account keeps answering at its current address until the link is
-    /// followed. Anything else makes the letter a formality and a typo a locked
-    /// account.
-    ///
-    /// Retiring and requesting are one write because they are one decision: as
-    /// two, a second request from another tab interleaved with the first and left
-    /// two live letters, the older of them pointing at an address the owner had
-    /// already replaced.
+    /// The account keeps its current address until the link is followed. Retiring
+    /// and requesting are one write, so two tabs cannot leave two live letters.
     /// </remarks>
     Task RequestChange(Guid userId, string newEmail, CreateToken token);
 

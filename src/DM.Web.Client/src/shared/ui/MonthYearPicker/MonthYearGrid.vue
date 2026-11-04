@@ -1,38 +1,6 @@
 <script setup lang="ts">
-/**
- * MonthYearGrid — the panel a period picker shows instead of days: a header
- * with ‹ › navigation and a 12-cell grid under it. Two modes:
- *  - "month": year navigation (‹ 2026 ›) + a 12-month grid.
- *  - "year": block navigation (‹ 2015–2026 ›) + a 12-year grid, paged in
- *    fixed 12-year blocks anchored at maxYear so the grid mirrors the month
- *    one; the oldest block may be partial.
- *
- * It draws the panel and nothing else — no popover, no trigger, no open
- * state. That is what lets the two owners share it: MonthYearPicker hangs it
- * under its own trigger, and CalendarGrid swaps it in over the day grid when
- * the reader clicks the "Июль 2026" header. Before this existed the calendar
- * had no way up at all: another year was only reachable by stepping months.
- *
- * Bounds are open-ended when absent, which is the difference between the two
- * callers. The statistics picker is bounded on both sides (the site has a
- * founding year and no future data); a date field usually is not — a birthday
- * has to reach 1970 — so a missing minYear/maxYear pages on instead of
- * stopping, anchored at the year handed in.
- *
- * `yearNavigable` turns the year in the month-mode header into a button to
- * the year grid, marked with the chevron of a drop-down list. It is off by
- * default: whoever owns the level above decides whether there is a level
- * above.
- *
- * The grid is one stop of Tab (a roving tabindex), like the day grid of the
- * calendar: the arrows walk the cells, a row of three at a time up and down,
- * Home and End go to the first and the last, PageUp and PageDown turn the
- * year or the block of years. Enter and Space pick, as on any button.
- *
- * The header is inline flow (not flex) with zero-width `.copy-space` text
- * nodes, so a selection copies as "‹ 2026 ›" on one line — see
- * onelineCopy.spec.ts for why a flex row would not.
- */
+// The panel alone, no popover or trigger, so MonthYearPicker and CalendarGrid share it. Absent bounds page
+// on instead of stopping: a birthday has to reach 1970, the statistics picker is bounded on both sides.
 import { ref, computed, nextTick } from "vue";
 import { RU_MONTHS_SHORT } from "@/shared/lib/utils/months";
 import { SvgIcon } from "@/shared/ui/Icon";
@@ -82,8 +50,6 @@ const emit = defineEmits<{
   "open-years": [];
 }>();
 
-const MONTHS_SHORT = RU_MONTHS_SHORT;
-
 const maxM = computed(() => props.maxMonth ?? 12);
 const minM = computed(() => props.minMonth ?? 1);
 
@@ -98,8 +64,6 @@ const markMonth = computed(() =>
 function isMarkedMonth(m: number): boolean {
   return navYear.value === markYear.value && m === markMonth.value;
 }
-
-// --- month mode ------------------------------------------------------------
 
 /** Year shown in the header while navigating; the pick carries it out. */
 const navYear = ref(props.year);
@@ -133,16 +97,13 @@ function pickMonth(m: number) {
   emit("pick-month", navYear.value, m);
 }
 
-// --- year mode (12-year blocks) --------------------------------------------
-
 const YEARS_PER_BLOCK = 12;
 
 /** Newest year of block 0 — the bound when there is one, else the selection. */
 const anchor = computed(() => props.maxYear ?? props.year);
 
-/** Blocks back from the anchor; grows going into the past. */
-const yearBlock = ref(0);
-yearBlock.value = (() => {
+/** The block that holds the year handed in, and none older than the oldest. */
+function initialBlock(): number {
   const start = props.maxYear ?? props.year;
   const holding = Math.max(
     0,
@@ -151,7 +112,10 @@ yearBlock.value = (() => {
   if (props.minYear === undefined) return holding;
   const oldest = Math.floor((start - props.minYear) / YEARS_PER_BLOCK);
   return Math.min(oldest, holding);
-})();
+}
+
+/** Blocks back from the anchor; grows going into the past. */
+const yearBlock = ref(initialBlock());
 
 const blockNewest = computed(
   () => anchor.value - yearBlock.value * YEARS_PER_BLOCK,
@@ -161,8 +125,7 @@ const blockOldest = computed(() => {
   return props.minYear === undefined ? oldest : Math.max(props.minYear, oldest);
 });
 
-// Ascending within the block (2015, 2016, … 2026) — the same reading order
-// as the month grid ("Янв" → "Дек") and as the block label.
+// Ascending within the block, the reading order of the month grid.
 const years = computed(() => {
   const list: number[] = [];
   for (let y = blockOldest.value; y <= blockNewest.value; y++) list.push(y);
@@ -188,12 +151,6 @@ function prevBlock() {
 function nextBlock() {
   if (canNextBlock.value) yearBlock.value -= 1;
 }
-
-function pickYear(y: number) {
-  emit("pick-year", y);
-}
-
-// --- keyboard ----------------------------------------------------------------
 
 /** Cells in a row of either grid. */
 const COLUMNS = 3;
@@ -282,7 +239,6 @@ function onYearKeydown(e: KeyboardEvent) {
 
 <template>
   <div class="myp-body">
-    <!-- Month mode: year nav + month grid. -->
     <template v-if="mode === 'month'">
       <div class="myp-header">
         <button
@@ -320,7 +276,7 @@ function onYearKeydown(e: KeyboardEvent) {
         @keydown="onMonthKeydown"
       >
         <button
-          v-for="(m, i) in MONTHS_SHORT"
+          v-for="(m, i) in RU_MONTHS_SHORT"
           :key="m"
           type="button"
           class="myp-cell"
@@ -335,7 +291,6 @@ function onYearKeydown(e: KeyboardEvent) {
       </div>
     </template>
 
-    <!-- Year mode: block navigation + 12-year grid. -->
     <template v-else>
       <div class="myp-header">
         <button
@@ -372,7 +327,7 @@ function onYearKeydown(e: KeyboardEvent) {
           :class="{ selected: y === markYear }"
           :tabindex="y === tabYear ? 0 : -1"
           :aria-current="y === markYear ? 'date' : undefined"
-          @click.stop="pickYear(y)"
+          @click.stop="emit('pick-year', y)"
         >
           {{ y }}
         </button>
@@ -382,11 +337,9 @@ function onYearKeydown(e: KeyboardEvent) {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/shared/ui/DatePicker/calendar" as *
 
-// Inline flow (not flex) so the header copies as "‹ 2026 ›" in one line; the
-// label stretches between the fixed-width nav buttons and centers its text,
-// reproducing the old space-between geometry.
+// Inline flow, not flex, so the header copies as "‹ 2026 ›" on one line.
 .myp-header
   white-space: nowrap
   margin-bottom: $small
@@ -399,8 +352,7 @@ function onYearKeydown(e: KeyboardEvent) {
   font-weight: bold
   color: $text
 
-// The year as the way up to the year grid. Same hover as the arrows beside
-// it, because it is the third control of the same header and not a link.
+// The third control of the header, not a link: the arrows' hover.
 .myp-year-button
   padding: 0
   border: none
@@ -413,33 +365,12 @@ function onYearKeydown(e: KeyboardEvent) {
   &:hover
     background-color: $bg-element-accent
 
-// The chevron of a drop-down list (Select), after the year: the year opens a
-// choice of years, as the month and the year of the day grid above it do.
+// Select's chevron: the year opens a choice of years.
 .myp-chevron
-  width: 14px
-  height: 14px
-  margin-left: $tiny
-  vertical-align: -2px
-  color: $text-muted
+  +calendar-chevron
 
 .myp-nav
-  width: $grid-step * 7
-  height: $grid-step * 7
-  border: none
-  border-radius: $border-radius
-  background: transparent
-  color: $link
-  font-size: $font-size
-  cursor: pointer
-  line-height: 1
-  vertical-align: middle
-
-  &:hover:not(:disabled)
-    background-color: $bg-element-accent
-
-  &:disabled
-    color: $text-muted
-    cursor: default
+  +calendar-nav($grid-step * 7)
 
 .myp-grid
   display: grid
@@ -448,34 +379,5 @@ function onYearKeydown(e: KeyboardEvent) {
 
 .myp-cell
   padding: $tiny 0
-  border: none
-  border-radius: $border-radius
-  background: transparent
-  color: $text
-  cursor: pointer
-  font: inherit
-  font-size: $secondary-font-size
-
-  &:hover:not(:disabled):not(.selected)
-    background-color: $bg-highlight-blue
-
-  // The cells stand flush in a grid: the ring goes inside (UI_STANDARDS,
-  // "Клавиатура и фокус").
-  &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
-
-  // Out of reach the way everything out of reach is on the site: the
-  // standard dimming and the plain pointer. A cell has no box of its own to
-  // hatch, only its number.
-  &:disabled
-    color: $text-muted
-    opacity: $disabled-opacity
-    cursor: default
-
-  // The month or the year on view, filled as the picked day of the calendar
-  // is: the fill, ink and weight of the main action, its lighter hover and
-  // its ring a pixel out, where a ring of the fill's own colour shows.
-  &.selected
-    +button-primary
+  +calendar-cell
 </style>

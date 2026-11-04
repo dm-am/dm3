@@ -10,11 +10,7 @@ namespace DM.Domain.Community.Tests.Features.Polls;
 /// The voting window, pinned at both of its edges.
 /// </summary>
 /// <remarks>
-/// One rule answers three questions - may this user vote, may this user take a
-/// vote back, and what the response calls the poll - and it used to be written
-/// out separately at each of them. The window is half-open, so a poll is open at
-/// the tick its start arrives and closed at the tick its end does; both edges are
-/// asserted here because that is where two copies drift apart first.
+/// The window is half-open: open at the tick its start arrives and closed at the tick its end does.
 /// </remarks>
 public class PollStatusShould
 {

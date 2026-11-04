@@ -2,21 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The whole point of this control is that it offers exactly what the API would
- * accept and nothing else. The client had all nine event endpoints and not one
- * caller, so the first version of this file is also the first time any of the
- * four is executed anywhere but on the server.
- *
- * Every state the strip can put a reader in is here, because the states are the
- * feature: an offer to join shown to somebody the API would refuse is worse
- * than no offer at all, and a refusal answered with silence leaves a reader
- * believing they are signed up.
- *
- * The store is real and only the transport is faked: what the control offers
- * depends on the participants list, which the store caches, and a mocked store
- * would assert the mock rather than the wiring.
- */
+// The store is real and only the transport faked: what the control offers depends on its cache.
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { setActivePinia, createPinia } from "pinia";
@@ -36,7 +22,7 @@ const { api } = vi.hoisted(() => ({
 
 vi.mock("@/entities/global-chat/api/globalChatApi", () => ({ default: api }));
 
-import { useGlobalChatStore } from "@/entities/global-chat";
+import { useGlobalChatEventsStore } from "@/entities/global-chat";
 import { useAuthStore } from "@/shared/stores";
 import { useToast } from "@/shared/lib/composables/useToast";
 import ChatEventActions from "./ChatEventActions.vue";
@@ -71,10 +57,9 @@ const answered = (details: GlobalChatEvent) => ({
   error: null,
 });
 
-/** Sign the viewer in (or, with null, leave them a guest) and cache details. */
 function stand(username: string | null, details: GlobalChatEvent | null) {
   useAuthStore().user = username ? person(username) : null;
-  if (details) useGlobalChatStore().eventDetails[EVENT_ID] = details;
+  if (details) useGlobalChatEventsStore().eventDetails[EVENT_ID] = details;
 }
 
 const render = () => mount(ChatEventActions, { props: { eventId: EVENT_ID } });
@@ -84,7 +69,6 @@ const control = (wrapper: ReturnType<typeof render>) =>
 
 const toast = useToast();
 
-/** What is on screen in toasts right now, in the order it arrived. */
 const said = (): string[] => toast.toasts.value.map((t) => t.message);
 
 beforeEach(() => {
@@ -103,11 +87,6 @@ describe("what the control offers", () => {
     expect(render().find(".event-actions").exists()).toBe(false);
   });
 
-  /**
-   * The label is decided by the participants list, and the list arrives with
-   * the card's own request. Guessing "Участвовать" while it is in the air
-   * shows the wrong word to everyone already signed up.
-   */
   it("offers nothing until the details are read", () => {
     stand("Astrellan", null);
 
@@ -141,11 +120,6 @@ describe("what the control offers", () => {
     expect(control(render()).text()).toBe("Закончить");
   });
 
-  /**
-   * A closed event takes its participants from the organizer, and the API
-   * answers a self-join with a 403. So the control is not drawn, and the line
-   * that replaces it says why rather than leaving a blank.
-   */
   it("does not offer a closed event, and says why", () => {
     stand("Astrellan", event({ isOpen: false }));
 
@@ -166,17 +140,7 @@ describe("what the control offers", () => {
   });
 });
 
-/**
- * Success is not announced, and these are where that is held.
- *
- * Every endpoint answers with the whole event, the store keeps that answer,
- * and the control is drawn from it — so each press rewrites the word it was
- * made on, and a plate in the corner would only repeat the word. The pairs
- * below are therefore always both halves at once: the plate is gone AND the
- * control now reads the other thing. Asserting only the silence would let the
- * answer disappear from the screen unnoticed, which is the failure the rule in
- * UI_STANDARDS, "Всплывающие сообщения", is about.
- */
+// Success is silent: each pair checks that the plate is gone and the control reads the other word.
 describe("what the control does", () => {
   it("signs up, and the offer flips instead of a plate", async () => {
     stand("Astrellan", event());
@@ -188,8 +152,6 @@ describe("what the control does", () => {
     await flushPromises();
 
     expect(api.joinEvent).toHaveBeenCalledWith(EVENT_ID);
-    // The answer is what the cache now holds, so the same card immediately
-    // offers the opposite action. That IS the confirmation.
     expect(control(wrapper).text()).toBe("Отменить участие");
     expect(said()).toEqual([]);
   });
@@ -208,11 +170,6 @@ describe("what the control does", () => {
     expect(said()).toEqual([]);
   });
 
-  /**
-   * A closed event has no offer to flip back to: nobody signs themselves up
-   * for one. The control leaves and the line that explains the closed event
-   * takes its place, so the press is still answered where it was made.
-   */
   it("replaces the control with its reason on a closed event", async () => {
     const closed = event({
       isOpen: false,
@@ -249,17 +206,10 @@ describe("what the control does", () => {
     expect(api.startEvent).toHaveBeenCalledWith(EVENT_ID);
     expect(control(wrapper).text()).toBe("Закончить");
     expect(said()).toEqual([]);
-    // The strip above the feed is drawn from the summary list, and the status
-    // it prints lives only there: "Скоро" becomes "Идет" on this re-read.
+    // The strip prints a status that lives only in the summary list: "Скоро" becomes "Идет".
     expect(api.getEvents).toHaveBeenCalledTimes(1);
   });
 
-  /**
-   * Ending is the one action with nothing to flip to: the event is over, so
-   * the row goes away entirely. The list re-read finishes the answer — the API
-   * hands out Live and Scheduled events only, so the ended one also leaves the
-   * strip the organizer was looking at.
-   */
   it("ends it, and the control goes away, not a plate", async () => {
     stand(
       "SolohinLex",
@@ -294,7 +244,6 @@ describe("what the control does", () => {
     await control(wrapper).trigger("click");
 
     expect(control(wrapper).attributes("disabled")).toBeDefined();
-    // A second click while the first is in the air must not reach the wire.
     await control(wrapper).trigger("click");
     expect(api.joinEvent).toHaveBeenCalledTimes(1);
 
@@ -303,11 +252,6 @@ describe("what the control does", () => {
     expect(control(wrapper).attributes("disabled")).toBeUndefined();
   });
 
-  /**
-   * A refusal used to be the one outcome nobody saw: `Api` resolves on a 409
-   * exactly as it resolves on a 200, so a swallowed error reads as success.
-   * The sentence is the server's own — the conflict it names is the reason.
-   */
   it("reads the refusal out instead of falling silent", async () => {
     stand("SolohinLex", event({ participants: [member("SolohinLex", true)] }));
     api.startEvent.mockResolvedValue({
@@ -324,10 +268,8 @@ describe("what the control does", () => {
     await control(wrapper).trigger("click");
     await flushPromises();
 
-    // Under the control in the card, where the press was; no plate.
     expect(wrapper.get(".event-refusal").text()).toBe("Уже идет другой эвент");
     expect(said()).toEqual([]);
-    // Refused, so nothing moved: the same offer stands and is clickable again.
     expect(control(wrapper).text()).toBe("Начать");
     expect(control(wrapper).attributes("disabled")).toBeUndefined();
   });

@@ -11,14 +11,7 @@ namespace DM.Web.API.Tests.Shared.Binding;
 /// An identifier in a request body reads from either spelling the site hands
 /// out and is written back in the plain one.
 /// </summary>
-/// <remarks>
-/// The two converters are inserted first into the options every body goes
-/// through, so a field typed Guid in any request reads the readable form too.
-/// They differ from the route binder in one way that matters: a value they
-/// cannot read becomes the empty identifier, or nothing for an optional one,
-/// rather than a refusal. It is held here so that a change to it is made on
-/// purpose.
-/// </remarks>
+/// <remarks>Inserted first into the options every body goes through; a value they cannot read is refused, as the route binder refuses it.</remarks>
 public class ReadableGuidConverterShould
 {
     private static readonly Guid Identifier = Guid.Parse("8b1e4c2a-37d5-4f61-9a0b-c3d4e5f60718");
@@ -49,14 +42,20 @@ public class ReadableGuidConverterShould
         Read<Guid?>(spelling).Should().Be(Identifier);
     }
 
-    [Fact]
-    public void ReadAValueThatIsNeitherSpellingAsTheEmptyIdentifier() =>
-        Read<Guid>("not-a-guid!").Should().Be(Guid.Empty,
-            "the converter answers what it cannot read with the default rather than a refusal");
+    public static TheoryData<string> Garbage => new()
+    {
+        "not-a-guid!",
+        "gamea",
+        "12345",
+    };
 
-    [Fact]
-    public void ReadAValueThatIsNeitherSpellingAsNoIdentifierWhereOneIsOptional() =>
-        Read<Guid?>("not-a-guid!").Should().BeNull();
+    [Theory]
+    [MemberData(nameof(Garbage))]
+    public void RefuseAValueThatIsNeitherSpelling(string value)
+    {
+        Assert.Throws<JsonException>(() => Read<Guid>(value));
+        Assert.Throws<JsonException>(() => Read<Guid?>(value));
+    }
 
     [Fact]
     public void ReadAnEmptyStringAsNoIdentifier()

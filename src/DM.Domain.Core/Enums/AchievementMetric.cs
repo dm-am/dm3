@@ -50,8 +50,6 @@ public enum AchievementMetric
     /// <summary>
     /// Number of publications — blog articles written by the user
     /// (count(Publications) where AuthorId=user AND !IsRemoved).
-    /// Drafts (IsPublished=false) also count — the user did the
-    /// work even without clicking "Опубликовать".
     /// </summary>
     PublicationsAuthored = 12,
 

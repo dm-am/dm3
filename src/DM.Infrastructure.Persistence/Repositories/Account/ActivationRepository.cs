@@ -8,7 +8,6 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
-using Npgsql;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 using DM.Infrastructure.Persistence.Shared.Users;
@@ -33,22 +32,7 @@ internal class ActivationRepository : IActivationRepository
         var hash = ConfirmationSecret.Hash(secret);
         var entity = await _dbContext.PendingRegistrations
             .FirstOrDefaultAsync(p => p.SecretHash == hash, cancellationToken);
-
-        if (entity == null)
-            return null;
-
-        return new PendingRegistration
-        {
-            PendingRegistrationId = entity.PendingRegistrationId,
-            SecretHash = entity.SecretHash,
-            Email = entity.Email,
-            PasswordHash = entity.PasswordHash,
-            Salt = entity.Salt,
-            PasswordHashVersion = entity.PasswordHashVersion,
-            CreatedUtc = entity.CreatedUtc,
-            TokenCreatedUtc = entity.TokenCreatedUtc,
-            AcceptedRules = entity.AcceptedRules
-        };
+        return entity?.ToPendingRegistration();
     }
 
     /// <inheritdoc />
@@ -80,28 +64,19 @@ internal class ActivationRepository : IActivationRepository
             settings.TimeZoneId = user.TimeZoneId;
         }
 
-        // Both writes or neither: an account created without its pending row
-        // removed can be activated a second time, and a pending row removed
-        // without its account is a registration that can never be finished and
-        // cannot be started again either - the address is taken by a row nobody
-        // can log in as.
-        //
-        // dbUser is built above the block, so a replay re-adds the same instance
-        // rather than minting a second identifier, and the pending row is re-read
-        // inside it from whatever the rollback restored.
+        // Both writes or neither, or the registration can be activated twice or never.
+        // dbUser is built above the block, so a replay re-adds the same instance.
         await RetryableWrite.Run(_dbContext, async () =>
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
             try
             {
-                // Create the user
                 _dbContext.Users.Add(dbUser);
                 if (settings != null)
                 {
                     _dbContext.UserSettings.Add(settings);
                 }
 
-                // Delete the pending registration
                 var pending = await _dbContext.PendingRegistrations.FindAsync(pendingId);
                 if (pending != null)
                 {
@@ -111,22 +86,13 @@ internal class ActivationRepository : IActivationRepository
                 await _dbContext.SaveChangesAsync();
                 await transaction.CommitAsync();
             }
-            catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: "23505" })
+            catch (DbUpdateException ex) when (ex.IsDuplicateKey())
             {
-                // The name or the address was free when it was checked and is not
-                // free now. Which of the two it was is not read off the constraint
-                // name: the caller decides by looking at what is there, because the
-                // same collision is an idempotent second click for one person and a
-                // taken name for another. Translated here so the domain need not
-                // know the storage engine's codes.
+                // The name or the address was taken after the check; the caller tells a
+                // second click from a taken name by reading what is there.
                 await transaction.RollbackAsync();
                 _dbContext.ChangeTracker.Clear();
                 throw new DuplicateEntityException("Duplicate account", ex);
-            }
-            catch
-            {
-                await transaction.RollbackAsync();
-                throw;
             }
         });
     }
@@ -135,7 +101,7 @@ internal class ActivationRepository : IActivationRepository
     public async Task<AuthenticatedUser?> FindUserByEmail(string email, CancellationToken cancellationToken = default)
     {
         return await _dbContext.Users
-            .Where(u => u.Email.ToLower() == email.ToLower())
+            .Where(AccountNames.EmailIs(email))
             .ProjectToAuthenticatedUser()
             .FirstOrDefaultAsync(cancellationToken);
     }

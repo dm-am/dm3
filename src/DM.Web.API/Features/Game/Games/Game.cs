@@ -51,14 +51,8 @@ public enum GameParticipation
 /// <summary>
 /// API DTO model for game (for lists and tables)
 /// </summary>
-/// <remarks>
-/// Extends GameRef with additional fields for display in tables/cards.
-/// Inherits: Id, Title, Status, ClosedReason, ActivatedUtc, Master, Assistants,
-///           Participation, SubscribersCount, Recruitment, UnreadPostsCount, UnreadCommentsCount
-/// </remarks>
 public class Game : GameRef
 {
-
     /// <summary>
     /// RPG system name
     /// </summary>

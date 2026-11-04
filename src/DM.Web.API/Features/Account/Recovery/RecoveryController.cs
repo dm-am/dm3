@@ -15,14 +15,8 @@ namespace DM.Web.API.Features.Account.Recovery;
 /// Account recovery: password reset and activation resend
 /// </summary>
 /// <remarks>
-/// Provides account recovery options for users who:
-/// - Forgot their password (sends password reset link)
-/// - Didn't receive activation email (resends activation)
-///
-/// All operations are rate-limited to prevent abuse.
-/// The recovery response names which of the three cases it hit, so it does tell a
-/// caller whether an address is registered. That is a recorded exception, stated
-/// with its reason on the endpoint below and in docs/conventions/SECURITY.md.
+/// The recovery answer discloses whether an address is registered, so the form can
+/// say it was mistyped: the recorded exception in docs/conventions/SECURITY.md.
 /// </remarks>
 [ApiController]
 [Route("v1/account")]
@@ -31,14 +25,11 @@ namespace DM.Web.API.Features.Account.Recovery;
 [EnableRateLimiting(RateLimitPolicies.Auth)]
 public class RecoveryController : ControllerBase
 {
-    private readonly IRecoveryApiService _recoveryService;
+    private readonly RecoveryApiService _recoveryService;
     private readonly ILogger<RecoveryController> _logger;
 
-    /// <summary>
-    /// Creates a new instance of RecoveryController
-    /// </summary>
     public RecoveryController(
-        IRecoveryApiService recoveryService,
+        RecoveryApiService recoveryService,
         ILogger<RecoveryController> logger)
     {
         _recoveryService = recoveryService;

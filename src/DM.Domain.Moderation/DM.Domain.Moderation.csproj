@@ -13,8 +13,6 @@
     </ItemGroup>
 
     <ItemGroup>
-        <!-- No options packages: this assembly reads no configuration and ships no
-             configuration extension, which is what the account domain has them for. -->
         <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" />
         <PackageReference Include="FluentValidation" />
     </ItemGroup>

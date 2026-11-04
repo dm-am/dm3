@@ -1,16 +1,8 @@
 <template>
   <SpeechBubble :content-key="review.id">
-    <!-- Server-rendered BBCode, unlike the recommendation's plain text: the
-         bubble does not care what is inside it. Highlighting is ContentText's
-         own, done over the DOM rather than by a regex over the HTML. -->
     <ContentText :html="review.text" :search-query="searchQuery" />
 
-    <!-- "<автор> о <игра>", the recommendation's footer shape. The author
-         leads as the person speaking; the second party recedes to a muted
-         link. Spaces around "о" are real text nodes so the line copies as
-         plain text. The game is omitted where the surface IS the game — its
-         own reviews tab — the way the site testimonials gallery omits a
-         recipient. -->
+    <!-- The spaces around "о" are text nodes, so the line copies as plain text. -->
     <template #left>
       <user-link
         v-if="review.author"
@@ -36,9 +28,6 @@
       >
     </template>
 
-    <!-- The edit and delete icons, forwarded to the bubble corner. Only the
-         game's own reviews tab passes them (GameReviewEditable); the profile
-         listings draw the card read-only. -->
     <template v-if="$slots.actions" #actions>
       <slot name="actions" />
     </template>
@@ -46,15 +35,6 @@
 </template>
 
 <script setup lang="ts">
-/**
- * A game review drawn the way a recommendation is: the same green bubble with
- * the text visible at once, and "<автор> о <игра>" with the date under it.
- *
- * It used to be a row of a collapsed accordion, where the text was hidden
- * behind a click and the authorship was a comma-joined string with no links
- * in it. The bubble comes from shared/ui/SpeechBubble, so this card and
- * TestimonialCard cannot drift apart.
- */
 import { computed } from "vue";
 import type { GameReview } from "@/shared/api/models/game/reviews";
 import { RemovedAccountLink, UserLink } from "@/entities/user/@x/game";
@@ -66,42 +46,30 @@ import { formatDate, formatDateFull } from "@/shared/lib/utils/datetime";
 const props = withDefaults(
   defineProps<{
     review: GameReview;
-    /**
-     * Name the reviewed game in the footer. False on the game's own reviews
-     * tab, where every row is about the page the reader is already on.
-     */
+    /** False on the game's own reviews tab. */
     showGame?: boolean;
-    /** Search query for highlighting */
     searchQuery?: string;
   }>(),
-  { showGame: true, searchQuery: undefined },
+  { showGame: true },
 );
 
-// A game whose title never arrived still gets a readable line rather than an
-// empty link — the same fallback the accordion rows used.
 const gameTitle = computed(() => props.review.gameTitle ?? "Игра без названия");
 </script>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
-// The bubble sets pre-wrap for the recommendation's plain text; server-
-// rendered BBCode brings its own markup, and literal whitespace runs would
-// render here differently from every other ContentText surface.
+// The bubble's pre-wrap is for plain text; rendered BBCode brings its own markup.
 :deep(.bbcode-content)
   white-space: normal
 
-// The second party of the pair recedes so the author stays the primary link,
-// exactly as the recipient does in a recommendation.
 .about-link
   +muted-link
 
 .about-connector
   color: $text-muted
 
-// secondary-text renders a block <div>; inside the float's inline copy flow
-// it must be inline, or Chrome emits a newline and the footer copies as
-// "author\ndate".
+// Inline, or the footer copies as "author", a newline and the date.
 .review-date
   display: inline
   font-size: $font-size

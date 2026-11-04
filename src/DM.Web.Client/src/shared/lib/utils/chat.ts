@@ -1,20 +1,10 @@
-import { formatDate, siteTime } from "@/shared/lib/utils/datetime";
-/**
- * Pure utility functions for chat message rendering.
- * Shared between GlobalChatPage, ChatView, and future chat components.
- *
- * All functions are stateless — no refs, no composables, no side effects.
- */
+import { DAY, formatDate, siteTime } from "@/shared/lib/utils/datetime";
+// Pure functions of chat message rendering, shared by both chat views.
 
 import dayjs from "dayjs";
 import type { Message } from "@/shared/api/models/common/message";
 import type { User } from "@/shared/api/models/common/user";
 import { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
-import { pluralize } from "./pluralize";
-
-// =============================================================================
-// Types
-// =============================================================================
 
 export interface DateSeparator {
   type: "date-separator";
@@ -28,53 +18,33 @@ export interface MessageWithContinuation extends Message {
 
 export type MessageOrSeparator = MessageWithContinuation | DateSeparator;
 
-// =============================================================================
-// Constants
-// =============================================================================
-
 /** Messages from same author within this period are grouped as continuation */
-export const CONTINUATION_TIME_LIMIT_MINUTES = 5;
+const CONTINUATION_TIME_LIMIT_MINUTES = 5;
 
-/** Users active within this period are shown as online (single source: shared/lib/constants/user) */
-export { ONLINE_THRESHOLD_MINUTES } from "@/shared/lib/constants/user";
-
-/** Time limit for editing own messages (minutes) */
+/**
+ * The author's edit window, in minutes: MessagingConfiguration and PostReviewService
+ * refuse past it, for posts and comments it is the client's own. EditWindowShould
+ * compares the numbers.
+ */
 export const EDIT_TIME_LIMIT_MINUTES = 15;
-
-/** Max messages in memory to prevent unbounded growth */
-export const MAX_MESSAGES = 500;
-
-// =============================================================================
-// Formatting
-// =============================================================================
 
 /** Format message time as "HH:mm", on the site's clock (siteTime). */
 export function formatChatTime(dateStr: string): string {
   return siteTime(dateStr).format("HH:mm");
 }
 
-/**
- * Format chat date separator: "Сегодня", "Вчера", or canonical
- * `DD.MM.YYYY` (matches docs/conventions/CODE_STYLE.md → "Формат
- * отображения дат"). "Сегодня" / "Вчера" remain as human-readable
- * shortcuts for the two most recent days — they are NOT date
- * formats, they are calendar-relative labels.
- */
-export function formatSeparatorDate(dateStr: string): string {
+/** "Сегодня", "Вчера", or DD.MM.YYYY (CODE_STYLE, "Формат отображения дат"). */
+function formatSeparatorDate(dateStr: string): string {
   // A day of the calendar, taken as it was handed. "Today" is the day on the
   // site's clock, the one the messages under the separator are counted in.
   const date = dayjs(dateStr);
-  const today = dayjs(siteTime().format("YYYY-MM-DD"));
+  const today = dayjs(siteTime().format(DAY));
   const yesterday = today.subtract(1, "day");
 
   if (date.isSame(today, "day")) return "Сегодня";
   if (date.isSame(yesterday, "day")) return "Вчера";
   return formatDate(dateStr);
 }
-
-// =============================================================================
-// Type Guards
-// =============================================================================
 
 /** Type guard for date separator items */
 export function isDateSeparator(
@@ -83,16 +53,9 @@ export function isDateSeparator(
   return "type" in item && (item as DateSeparator).type === "date-separator";
 }
 
-// =============================================================================
-// Message Grouping
-// =============================================================================
-
 /**
- * Group messages with date separators and continuation flags.
- *
- * Inserts DateSeparator between messages from different dates.
- * Marks messages from the same author within `continuationMinutes` as continuation
- * (to hide avatar/author for compact layout).
+ * Inserts date separators and marks messages of one author within
+ * `continuationMinutes` as continuations.
  */
 export function groupMessagesWithSeparators(
   messages: Message[],
@@ -108,7 +71,7 @@ export function groupMessagesWithSeparators(
   for (const msg of messages) {
     // The day on the site's clock, so a message sent at 23:30 in the zone of
     // the account stands under that day and not the device's next one.
-    const msgDate = siteTime(msg.createdUtc).format("YYYY-MM-DD");
+    const msgDate = siteTime(msg.createdUtc).format(DAY);
     const msgTime = dayjs(msg.createdUtc);
 
     // Insert date separator when date changes
@@ -145,15 +108,7 @@ export function groupMessagesWithSeparators(
   return result;
 }
 
-// =============================================================================
-// Virtual Rows
-// =============================================================================
-
-/**
- * Geometry a virtualizer reports for one visible row: where to draw it and
- * which item of the list it stands for. Declared structurally so this module
- * keeps its "no dependencies" promise — @tanstack's VirtualItem satisfies it.
- */
+/** A virtualizer's row, declared structurally to keep @tanstack out (VirtualItem fits). */
 export interface VirtualRowGeometry {
   index: number;
   key: string | number | bigint;
@@ -169,12 +124,12 @@ interface ChatVirtualRowBase {
   index: number;
 }
 
-export interface ChatSeparatorRow extends ChatVirtualRowBase {
+interface ChatSeparatorRow extends ChatVirtualRowBase {
   kind: "separator";
   separator: DateSeparator;
 }
 
-export interface ChatMessageRow extends ChatVirtualRowBase {
+interface ChatMessageRow extends ChatVirtualRowBase {
   kind: "message";
   message: MessageWithContinuation;
 }
@@ -182,22 +137,9 @@ export interface ChatMessageRow extends ChatVirtualRowBase {
 export type ChatVirtualRow = ChatSeparatorRow | ChatMessageRow;
 
 /**
- * Resolve every visible row to the item it draws, with the two kinds of item
- * already told apart.
- *
- * A virtualized chat list is mixed — messages and date separators — and the
- * virtualizer returns geometry with an index, nothing more. Re-reading the
- * array at that index inside a template binding leaves the expression typed as
- * the union, so each binding needs a cast to reach the member it wants; both
- * chat pages did that dozens of times per row, with type checking off for all
- * of them. Applying the guard once here and carrying the narrowed value on the
- * row is what gives the template something typed to read, and the `kind`
- * discriminant is what keeps that narrowing alive inside the inline handlers
- * Vue compiles into closures — a null check on a member would not.
- *
- * A row whose item is gone is dropped: the virtualizer's window can outlive a
- * list that just shrank (a jump to another archive date), and such a row has
- * nothing to draw.
+ * Each visible row with its item already narrowed by `kind`, so the template
+ * and its inline handlers read a typed value without casts. A row whose item is
+ * gone (the list just shrank) is dropped.
  */
 export function toChatVirtualRows(
   items: MessageOrSeparator[],
@@ -217,29 +159,22 @@ export function toChatVirtualRows(
   return result;
 }
 
-// =============================================================================
-// Likes
-// =============================================================================
+/** The names the likers' tooltip spells out: a line or two, the rest counted. */
+const LIKERS_NAMED = 5;
 
-/** Build tooltip text for likes badge */
-export function getLikesTooltip(likes: User[]): string {
-  if (!likes?.length) return "Нравится";
-
+/**
+ * The likers' tooltip, "Нравится: Anna, Boris", past five names
+ * "Нравится: A, B, C, D, E и еще 4"; empty while nobody likes it.
+ */
+export function getLikesTooltip(
+  likes: readonly Pick<User, "username">[],
+): string {
+  if (!likes?.length) return "";
   const names = likes.map((u) => u.username);
-  const count = names.length;
-
-  if (count === 1) return `${names[0]} оценил(а) это`;
-  if (count === 2) return `${names[0]} и ${names[1]} оценили это`;
-  if (count <= 5)
-    return `${names.slice(0, -1).join(", ")} и ${names[count - 1]} оценили это`;
-  const rest = count - 3;
-  const verb = pluralize(rest, "оценил это", "оценили это", "оценили это");
-  return `${names.slice(0, 3).join(", ")} и еще ${rest} ${verb}`;
+  const named = names.slice(0, LIKERS_NAMED).join(", ");
+  const rest = names.length - LIKERS_NAMED;
+  return rest > 0 ? `Нравится: ${named} и еще ${rest}` : `Нравится: ${named}`;
 }
-
-// =============================================================================
-// Online Status
-// =============================================================================
 
 /** Check if user is online based on their last activity timestamp */
 export function isUserOnline(
@@ -252,25 +187,31 @@ export function isUserOnline(
   );
 }
 
-// =============================================================================
-// Images of the global chat
-// =============================================================================
+/**
+ * Each author's latest activity among the messages, by username: ISO strings
+ * compare in time order, and an author's older messages carry older stamps.
+ */
+export function latestActivityByUsername(
+  messages: readonly Pick<Message, "author">[],
+): Map<string, string> {
+  const latest = new Map<string, string>();
+  for (const { author } of messages) {
+    const username = author?.username;
+    const seen = author?.lastActivityUtc;
+    if (!username || !seen) continue;
+    const known = latest.get(username);
+    if (!known || seen > known) latest.set(username, seen);
+  }
+  return latest;
+}
 
 /** The mark the server puts on the spoiler it wraps a chat image in. */
 const IMAGE_GATE = '[data-bb-gate="image"]';
 
 /**
- * A message of the global chat as the full layout shows it.
- *
- * The server puts every image of such a message behind a spoiler of its own,
- * marked data-bb-gate="image" on the button and on the block, because the
- * layout is the reader's choice and lives on the reader's device. The compact
- * layout keeps that spoiler; the full one shows the image where it stands, as
- * a post does: the button goes and the block gives way to what it holds. A
- * spoiler the author wrote carries no mark and stays closed in both layouts.
- *
- * A transform of a string, like trimHtmlWhitespace: it parses into a detached
- * template and touches nothing on the page.
+ * A global chat message for the full layout: the server's image spoilers
+ * (data-bb-gate="image") give way to the image; an author's spoiler stays. A
+ * string transform on a detached template.
  */
 export function openImageGates(html: string): string {
   if (!html || !html.includes("data-bb-gate")) return html;

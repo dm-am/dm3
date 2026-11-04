@@ -1,6 +1,5 @@
 using System.Net;
 using System.Net.Http.Json;
-using System.Text.Json.Nodes;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Tokens;
 using DM.Infrastructure.Persistence.Entities.Account;
@@ -8,6 +7,7 @@ using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using OtpNet;
+using DM.Web.API.Shared.Http;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
@@ -16,11 +16,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// The mailed way back in, for somebody who has lost the device and the codes.
 /// </summary>
 /// <remarks>
-/// The letter does not take the factor off. Following the link schedules
-/// the removal a week out, ends every session and hands back a way to call it
-/// off; the other way to call it off is simply to sign in with the factor. So
-/// whoever holds both the mailbox and the password still gets the account - after
-/// a week of visible, cancellable noise rather than instantly and silently.
+/// The link schedules the removal a week out, ends every session and hands back a way to call it off; signing
+/// in with the factor calls it off too.
 /// </remarks>
 public class TwoFactorRemovalByMailShould : IntegrationTestBase
 {
@@ -28,26 +25,14 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
     {
     }
 
-    private const string Password = "TestPass123ok";
-
     private sealed record Account(string Login, string Email, string Session, string Secret);
 
     private async Task<Account> CreateUserWithFactor(string prefix)
     {
-        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, prefix, Password);
-        var session = await UserTestHelper.Login(Client, email, Password);
+        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, prefix, TestConstants.Password);
+        var session = await UserTestHelper.Login(Client, email, TestConstants.Password);
 
-        var setup = UserTestHelper.CreateCookieAuthRequest(
-            HttpMethod.Post, "/v1/account/two-factor/setup", session);
-        setup.Content = JsonContent.Create(new { password = Password });
-        var secret = JsonNode.Parse(await (await Client.SendAsync(setup)).Content.ReadAsStringAsync())!
-            ["resource"]!["secret"]!.GetValue<string>();
-
-        var confirm = UserTestHelper.CreateCookieAuthRequest(
-            HttpMethod.Post, "/v1/account/two-factor/confirm", session);
-        confirm.Content = JsonContent.Create(
-            new { code = new Totp(Base32Encoding.ToBytes(secret)).ComputeTotp(DateTime.UtcNow) });
-        (await Client.SendAsync(confirm)).StatusCode.Should().Be(HttpStatusCode.OK);
+        var (secret, _) = await UserTestHelper.EnableSecondFactor(Client, session, TestConstants.Password);
 
         return new Account(login, email, session, secret);
     }
@@ -55,11 +40,7 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
     /// <summary>
     /// Stamps a known secret onto the live token of a type and returns it.
     /// </summary>
-    /// <remarks>
-    /// The row keeps only a hash of the value the letter carried, which is the
-    /// property asserted elsewhere - so the test issues a value of its own and
-    /// stamps its hash, the way the activation helper does.
-    /// </remarks>
+    /// <remarks>The row keeps only a hash, so the test issues a value of its own and stamps its hash.</remarks>
     private async Task<Guid> TakeOverToken(string login, TokenType type)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -78,7 +59,7 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
     private Task<HttpResponseMessage> Follow(string url, Guid secret)
     {
         var request = new HttpRequestMessage(HttpMethod.Post, url);
-        request.Headers.Add("X-Dm-Account-Token", secret.ToString());
+        request.Headers.Add(TokenHeaders.Account, secret.ToString());
         return Client.SendAsync(request);
     }
 
@@ -91,7 +72,7 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
         var account = await CreateUserWithFactor("tfmailsch");
 
         (await Client.PostAsJsonAsync("/v1/account/two-factor/removal", new { account.Email }))
-            .StatusCode.Should().Be(HttpStatusCode.NoContent);
+            .StatusCode.Should().Be(HttpStatusCode.OK);
 
         var secret = await TakeOverToken(account.Login, TokenType.TwoFactorRemovalRequest);
         (await Follow("/v1/account/two-factor/removal/confirm", secret))
@@ -135,10 +116,7 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
     /// <summary>
     /// A successful sign-in with the factor calls the removal off.
     /// </summary>
-    /// <remarks>
-    /// This is the path the real owner has: if the device is still in his hand,
-    /// somebody else's request dies the moment he signs in.
-    /// </remarks>
+    /// <remarks>The real owner, if the device is still in his hand, ends the request by signing in.</remarks>
     [Fact]
     public async Task CallTheRemovalOffOnASuccessfulSignIn()
     {
@@ -149,7 +127,7 @@ public class TwoFactorRemovalByMailShould : IntegrationTestBase
         await Follow("/v1/account/two-factor/removal/confirm", request);
 
         var login = await Client.PostAsJsonAsync(
-            "/v1/account/login", new { account.Email, password = Password });
+            "/v1/account/login", new { account.Email, password = TestConstants.Password });
         var challenge = login.Headers.GetValues("Set-Cookie")
             .First(cookie => cookie.StartsWith("dm_2fa=", StringComparison.Ordinal))
             .Split(';')[0]["dm_2fa=".Length..];

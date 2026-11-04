@@ -2,34 +2,24 @@ using System;
 
 namespace DM.Domain.Messaging.Features.GlobalChatEvents;
 
-/// <summary>
-/// DTO for creating a chat event
-/// </summary>
 public class CreateGlobalChatEvent
 {
-    /// <summary>
-    /// Event title
-    /// </summary>
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Event description (BBCode, optional)
+    /// Event description in BBCode, optional
     /// </summary>
     public string? Description { get; set; }
 
-    /// <summary>
-    /// Scheduled start time (UTC)
-    /// </summary>
     public DateTimeOffset StartsUtc { get; set; }
 
     /// <summary>
-    /// Planned duration. Null means no time limit.
+    /// Planned duration, four hours when left out
     /// </summary>
     public TimeSpan? Duration { get; set; }
 
     /// <summary>
-    /// If true, all authenticated users can participate.
-    /// If false, only invited participants can send messages.
+    /// Whether every signed-in user may write during the event, or only its participants
     /// </summary>
     public bool IsOpen { get; set; }
 }

@@ -1,20 +1,10 @@
 <script setup lang="ts">
 /**
- * PublicationCreate — create a new publication in the blog (dev doc
- * 4.2.3.6.7 "Создание публикации"). Form: title (required), rubric (optional
- * select over the blog's rubrics), content (BBCode editor). "Опубликовать"
- * creates and publishes immediately; "Отмена" returns to the blog feed.
- * Access is gated to owner + assistant; the backend enforces this too.
- *
- * Anybody else, a guest included, gets the site's own "not found" at this
- * address, as on the settings of the blog, and not a page with a refusal or an
- * invitation to sign in on it: the link here is drawn only for the owner and
- * the assistants. The way out waits for the answer about the session
- * (restoreSession), since a session the browser kept no copy of is named by
- * that answer alone, and deciding before it would send an author away from
- * his blog.
+ * A new publication of the blog, for the owner and the assistants; anybody
+ * else gets the site's "not found", decided after restoreSession, since
+ * deciding before it would send an author away from his blog.
  */
-import { computed, ref, watch } from "vue";
+import { computed, ref } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore, blogApi } from "@/entities/blog";
@@ -22,6 +12,7 @@ import { restoreSession } from "@/entities/user";
 import { PublicationForm } from "@/features/publication";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import { useActionResult } from "@/shared/lib/composables/useActionResult";
+import { useNotFoundWhen } from "@/shared/lib/composables/useNotFoundWhen";
 
 const route = useRoute();
 const router = useRouter();
@@ -34,22 +25,9 @@ const sessionSettled = ref(false);
 const settle = () => (sessionSettled.value = true);
 restoreSession().then(settle, settle);
 
-watch(
-  () => sessionSettled.value && !canManage.value,
-  (refused) => {
-    if (!refused) return;
-    void router.replace({
-      name: "not-found",
-      params: { pathMatch: route.path.slice(1).split("/") },
-      query: route.query,
-      hash: route.hash,
-    });
-  },
-  { immediate: true, flush: "post" },
-);
+useNotFoundWhen(() => sessionSettled.value && !canManage.value);
 
-// "Без рубрики" sentinel: the Select needs a concrete value; empty string
-// maps to "no rubricId" in the payload.
+// "Без рубрики": the Select needs a value, and "" sends no rubricId.
 const NO_RUBRIC = "";
 const rubricOptions = computed(() => [
   { value: NO_RUBRIC, label: "Без рубрики" },
@@ -66,37 +44,28 @@ const valid = computed(
   () => title.value.trim().length > 0 && content.value.trim().length > 0,
 );
 
-/** A refused submit, said over the footer of the form. */
 const saveResult = useActionResult();
 
 async function publish() {
-  // Validity gates the form, not this handler: the page hands `valid` down and
-  // the form keeps its action disabled while it is false, so a submit that
-  // arrives here is one the author was allowed to make. The second check that
-  // used to stand here answered the form's own event with silence.
+  // Validity gates the form, which keeps its action disabled while invalid.
   if (saving.value) return;
   saving.value = true;
   saveResult.clear();
   const { data, error } = await blogApi.createPublication(blogId.value, {
-    title: title.value.trim(),
+    title: title.value,
     content: content.value,
     rubricId: rubricId.value || null,
-    publishImmediately: true,
   });
   saving.value = false;
   if (error) {
     saveResult.refuse(error, "Не удалось создать публикацию");
     return;
   }
-  // No success toast: the redirect below lands on the blog feed, which
-  // reloads and carries the fresh publication first.
+  // No success toast: the blog feed this lands on carries the publication first.
 
-  // The text is published, so the draft of it is no longer a draft. It lived
-  // seven days, and the next visit to this page offered to restore an already
-  // published record — accepting posted it twice. Every other composer clears
-  // its draft here; this one navigated away instead.
+  // Sent, so the composer draft goes: a restored one would post it twice.
   formRef.value?.clearDraft();
-  // Refresh the blog so counters and the sidebar stay in sync.
+  // The counters and the sidebar follow the blog.
   if (blog.value) blogStore.loadBlog(blogId.value);
   const createdRubric = data?.resource?.rubric?.id;
   router.push({

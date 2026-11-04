@@ -2,11 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The testimonials filter read through the address: what an address means,
- * what each action writes into it, and that an address the filter wrote reads
- * back as itself.
- */
 import { describe, it, expect, afterEach } from "vitest";
 import {
   filterOnListPage,

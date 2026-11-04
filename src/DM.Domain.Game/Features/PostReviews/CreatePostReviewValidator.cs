@@ -3,9 +3,6 @@ using FluentValidation;
 
 namespace DM.Domain.Game.Features.PostReviews;
 
-/// <summary>
-/// Validator for CreatePostReview input
-/// </summary>
 internal class CreatePostReviewValidator : AbstractValidator<CreatePostReview>
 {
     public CreatePostReviewValidator()
@@ -20,10 +17,9 @@ internal class CreatePostReviewValidator : AbstractValidator<CreatePostReview>
 
         RuleFor(r => r.Text)
             .NotEmpty()
-            .WithMessage("Введите текст рецензии");
+            .WithMessage("Введите текст оценки");
 
-        // A review renders on the Comment surface, which does not declare
-        // [private]: the tag is not markup there and hides nothing.
+        // The Comment surface does not declare [private].
         RuleFor(r => r.Text)
             .Must(text => !PrivateBlockMarkup.ContainsPrivateMarkup(text))
             .WithMessage(r => PrivateBlockMarkup.DescribeSurfaceRefusal(r.Text));

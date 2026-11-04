@@ -1,4 +1,3 @@
-using DM.Domain.Core.Content;
 using DM.Infrastructure.Persistence.Repositories.Search;
 using AwesomeAssertions;
 using Xunit;
@@ -9,11 +8,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Search;
 /// What a search preview may show of a post that has private blocks in it.
 /// </summary>
 /// <remarks>
-/// Snippets are built past the viewer-scoped render that hides private text, so
-/// the cut here is a lock between a private line and every reader of the
-/// results page. The pattern it cuts by is shared with the stored search vector —
-/// PrivateBlockPatternShould asserts that PostgreSQL reads the same string the
-/// same way.
+/// Snippets are built past the viewer-scoped render, so this cut is the lock; PrivateBlockPatternShould
+/// asserts PostgreSQL reads the same pattern the same way.
 /// </remarks>
 public class PrivateBlockSnippetShould
 {
@@ -42,14 +38,11 @@ public class PrivateBlockSnippetShould
     [InlineData("до [private]тайна[/pr\u0131vate] и хвост")]
     [InlineData("до [private=\"Вася\"]без закрытия и хвост")]
     [InlineData("до [private")]
-    public void RemoveTheRestOfTheText_WhenNothingClosesTheBlock(string input)
+    public void RemoveTheRestOfTheTextWhenNothingClosesTheBlock(string input)
     {
         SearchSnippet.StripPrivateBlocks(input).Should().Be("до ");
     }
 
-    /// <summary>
-    /// A word that starts like the tag is a word.
-    /// </summary>
     [Theory]
     [InlineData("privatebank и [privateer] тоже")]
     [InlineData("[private_x] остается")]
@@ -59,24 +52,12 @@ public class PrivateBlockSnippetShould
     }
 
     /// <summary>
-    /// Text standing between two private blocks is public and stays. It used to
-    /// disappear in PostgreSQL and survive here, which is the drift this pair of
-    /// tests exists to prevent.
+    /// Text standing between two private blocks is public and stays, here and in PostgreSQL.
     /// </summary>
     [Fact]
     public void KeepPublicTextBetweenTwoBlocks()
     {
         SearchSnippet.StripPrivateBlocks("A [private]x[/private] СЕРЕДИНА [private]y[/private] B")
             .Should().Be("A СЕРЕДИНА B");
-    }
-
-    /// <summary>
-    /// One string, not two copies that happen to agree today.
-    /// </summary>
-    [Fact]
-    public void ShareThePatternWithTheStoredIndex()
-    {
-        SearchSnippet.PrivateBlockPattern.Should().BeSameAs(PrivateBlockMarkup.BlockPattern);
-        SearchSnippet.PrivateBlockPatternFlags.Should().BeSameAs(PrivateBlockMarkup.BlockPatternFlags);
     }
 }

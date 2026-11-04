@@ -1,7 +1,8 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { symbols } from "@/shared/lib/utils/icons";
 import { useAuthStore, userIsSeniorModerator } from "@/entities/user";
+import { PollTypeField } from "@/entities/poll";
+import { RemoveCross } from "@/shared/ui/RemoveButton";
 import { useCreatePoll } from "../model";
 import TextArea from "@/shared/ui/TextArea/TextArea.vue";
 import Button from "@/shared/ui/Button/Button.vue";
@@ -12,7 +13,6 @@ const canCreatePoll = computed(() => userIsSeniorModerator(userStore.user));
 
 const {
   formExpanded,
-  formHovered,
   pollTitle,
   pollDetails,
   pollStartsUtc,
@@ -34,15 +34,12 @@ const {
 </script>
 
 <template>
-  <!-- Create Poll (moderators only) -->
   <template v-if="canCreatePoll">
     <button
       v-if="!formExpanded"
       type="button"
       class="toggle-link"
       @click="toggleForm"
-      @mouseenter="formHovered = true"
-      @mouseleave="formHovered = false"
     >
       + Создать опрос
     </button>
@@ -92,20 +89,7 @@ const {
             />
           </form-field>
 
-          <form-field label="Тип опроса">
-            <div class="poll-type-selector">
-              <label class="radio-option">
-                <input type="radio" v-model="pollIsAnonymous" :value="true" />
-                <span>Анонимный опрос</span>
-                <span class="hint">(рекомендуется)</span>
-              </label>
-              <label class="radio-option">
-                <input type="radio" v-model="pollIsAnonymous" :value="false" />
-                <span>Публичный опрос</span>
-                <span class="hint warning">Все увидят кто как голосовал</span>
-              </label>
-            </div>
-          </form-field>
+          <PollTypeField v-model="pollIsAnonymous" />
 
           <form-field label="Варианты ответа" name="pollOptions">
             <template #hint>Минимум два варианта</template>
@@ -120,15 +104,11 @@ const {
                 :placeholder="`Вариант ${index + 1}`"
                 :aria-label="`Вариант ${index + 1}`"
               />
-              <button
+              <RemoveCross
                 v-if="pollOptions.length > 2"
-                type="button"
-                class="remove-option-btn"
-                aria-label="Удалить вариант"
+                label="Удалить вариант"
                 @click="removeOption(option.id)"
-              >
-                {{ symbols.close }}
-              </button>
+              />
             </div>
             <button type="button" class="add-option-btn" @click="addOption">
               + Добавить вариант
@@ -154,16 +134,14 @@ const {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .toggle-link
   display: inline-block
   margin-bottom: $medium
   +inline-link-button
 
-// The collapse itself is the global CSS-only .expand-fold (Reset.sass).
 
-// Poll form styling
 .poll-form
   margin-bottom: $medium
   padding: $medium
@@ -178,18 +156,6 @@ const {
   input
     flex: 1
 
-.remove-option-btn
-  flex-shrink: 0
-  padding: 0 $small
-  background: none
-  border: none
-  color: $text-muted
-  cursor: pointer
-  font-size: 1.2em
-
-  &:hover
-    color: $text
-
 .add-option-btn
   margin-top: $tiny
   +inline-link-button
@@ -202,26 +168,4 @@ const {
 .error-message
   color: $accent-red
   font-size: $secondary-font-size
-
-.poll-type-selector
-  display: flex
-  flex-direction: column
-  gap: $small
-
-.radio-option
-  display: flex
-  align-items: center
-  gap: $small
-  cursor: pointer
-
-  input[type="radio"]
-    margin: 0
-
-.hint
-  margin-left: $small
-  font-size: $secondary-font-size
-  color: $text-muted
-
-  &.warning
-    color: $accent-red
 </style>

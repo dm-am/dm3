@@ -1,6 +1,7 @@
 using System.Threading.Tasks;
 using DM.Domain.Account.Configuration;
 using DM.Domain.Account.Features.Registration;
+using DM.Domain.Account.Tests.Dsl;
 using DM.Domain.Core.Exceptions;
 using DM.Testing;
 using FluentValidation.TestHelper;
@@ -20,18 +21,11 @@ public class UserRegistrationValidatorShould : UnitTestBase
         repository = Mock<IRegistrationRepository>();
         repository.EmailFreeForNewRegistration(Arg.Any<string>(), default).Returns(true);
 
-        var passwordPolicy = Options.Create(new PasswordPolicyConfiguration
-        {
-            MinimumLength = 8,
-            MaximumLength = 128,
-            RequireUppercase = false,
-            RequireLowercase = false,
-            RequireDigit = false,
-            RequireSpecialCharacter = false
-        });
-
-        validator = new UserRegistrationValidator(repository, passwordPolicy);
+        validator = CreateValidator(PasswordPolicies.Requiring());
     }
+
+    private UserRegistrationValidator CreateValidator(PasswordPolicyConfiguration passwordPolicy) =>
+        new(repository, Options.Create(passwordPolicy));
 
     [Fact]
     public async Task PassForValidInput()
@@ -61,7 +55,7 @@ public class UserRegistrationValidatorShould : UnitTestBase
         var input = new UserRegistration { Email = "not-an-email" };
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Email)
-            .WithErrorMessage(ValidationError.Invalid);
+            .WithErrorMessage(RefusalMessage.EmailInvalid);
     }
 
     [Fact]
@@ -105,11 +99,36 @@ public class UserRegistrationValidatorShould : UnitTestBase
         var input = new UserRegistration
         {
             Email = "user@example.com",
-            Password = new string('a', 129)
+            Password = new string('a', PasswordPolicies.MaximumLength + 1)
         };
         var result = await validator.TestValidateAsync(input);
         result.ShouldHaveValidationErrorFor(x => x.Password)
             .WithErrorMessage(ValidationError.Long);
+    }
+
+    [Theory]
+    [InlineData(true, false, false, false, "password123!", ValidationError.RequiresUppercase)]
+    [InlineData(false, true, false, false, "PASSWORD123!", ValidationError.RequiresLowercase)]
+    [InlineData(false, false, true, false, "Password!", ValidationError.RequiresDigit)]
+    [InlineData(false, false, false, true, "Password123", ValidationError.RequiresSpecialCharacter)]
+    public async Task FailWhenPasswordLacksWhatThePolicyRequires(
+        bool requireUppercase, bool requireLowercase, bool requireDigit, bool requireSpecialCharacter,
+        string password, string expectedError)
+    {
+        var strictValidator = CreateValidator(
+            PasswordPolicies.Requiring(requireUppercase, requireLowercase, requireDigit, requireSpecialCharacter));
+        var input = new UserRegistration
+        {
+            Email = "user@example.com",
+            Password = password,
+            AcceptedRules = true
+        };
+
+        var result = await strictValidator.TestValidateAsync(input);
+
+        result.ShouldHaveValidationErrorFor(x => x.Password)
+            .WithErrorMessage(expectedError)
+            .Only();
     }
 
     [Fact]

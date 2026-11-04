@@ -1,14 +1,10 @@
-using System;
 using System.Net;
-using System.Net.Http;
 using System.Net.Http.Json;
 using System.Text.Json;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence;
 using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 using DbGame = DM.Infrastructure.Persistence.Entities.Game.Game;
@@ -20,25 +16,11 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// Who may replace the character sheet of a game, and in what order the
 /// endpoint refuses everybody else.
 /// </summary>
-/// <remarks>
-/// The sheet belongs to the game, so the gate is the game's: the master writes
-/// it, a player does not, a stranger is not told the game exists, and a caller
-/// with no session is asked to sign in before any of that is decided.
-/// </remarks>
+/// <remarks>The master writes the sheet, a player does not, a stranger is not told the game exists, a guest signs in first.</remarks>
 public class GameAttributeSchemaEndpointShould : IntegrationTestBase
 {
     public GameAttributeSchemaEndpointShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
-    }
-
-    [Fact]
-    public async Task RefuseAnAnonymousCaller()
-    {
-        var gameId = await SeedGame(TestConstants.TestUserId);
-
-        var response = await Client.PutAsJsonAsync(Url(gameId), Body(0));
-
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     [Fact]

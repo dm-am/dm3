@@ -1,5 +1,6 @@
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
+using DM.Domain.Core.Content;
 using CommentariesAccessMode = DM.Domain.Core.Enums.CommentsAccessMode;
 
 namespace DM.Web.API.Features.Game.Games;
@@ -8,35 +9,28 @@ namespace DM.Web.API.Features.Game.Games;
 /// API DTO for editing an existing game
 /// </summary>
 /// <remarks>
-/// Only what a master may edit. The endpoint used to take GameDetails, the
-/// 40-field response DTO, and the defence against the other 33 fields was a
-/// column of Ignore() in the mapping profile — the arrangement under which a
-/// field added to the response silently becomes writable, and the reviewer is
-/// the only check. Status is absent by construction rather than by an Ignore:
-/// a game changes state through POST /v1/games/{id}/status, which names the
-/// transition and refuses an illegal one.
-///
-/// Every field is optional. PATCH sends what changed, and an omitted field
-/// leaves the stored value alone.
+/// Only what a master may edit, every field optional; the state changes through
+/// POST /v1/games/{id}/status.
 /// </remarks>
 public class UpdateGameRequest
 {
     /// <summary>
     /// Game title
     /// </summary>
-    [StringLength(200, MinimumLength = 3, ErrorMessage = "Заголовок от 3 до 200 символов")]
+    [StringLength(GameFieldLimits.TitleMaxLength, MinimumLength = GameFieldLimits.TitleMinLength,
+        ErrorMessage = "Название до {1} символов")]
     public string? Title { get; set; }
 
     /// <summary>
     /// RPG system name
     /// </summary>
-    [StringLength(100, ErrorMessage = "Название системы не длиннее 100 символов")]
+    [StringLength(GameFieldLimits.SystemMaxLength, ErrorMessage = "Название системы не длиннее {1} символов")]
     public string? System { get; set; }
 
     /// <summary>
     /// Narrative setting
     /// </summary>
-    [StringLength(100, ErrorMessage = "Название сеттинга не длиннее 100 символов")]
+    [StringLength(GameFieldLimits.SettingMaxLength, ErrorMessage = "Название сеттинга не длиннее {1} символов")]
     public string? Setting { get; set; }
 
     /// <summary>

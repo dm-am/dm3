@@ -31,7 +31,6 @@ internal class GameBlacklistService : IGameBlacklistService
     private readonly ICharacterRepository _characterRepository;
     private readonly IEventProducer _producer;
 
-    /// <inheritdoc />
     public GameBlacklistService(
         IValidator<OperateBlacklistLink> validator,
         IGameService gameService,
@@ -78,20 +77,8 @@ internal class GameBlacklistService : IGameBlacklistService
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotBlacklistGameLead);
         }
 
-        // An assistant or a player has to leave the game first: somebody inside
-        // the game is answered by the game's own tools (exile, taking the
-        // assistant off), and the list is for the people outside it. A subscriber
-        // is not a member and is blacklisted as he stands, subscription and all -
-        // the list closes the discussion and the application, and a subscription
-        // is reading. The player who has just left is exactly such a subscriber
-        // (CharacterService subscribes him), and refusing him here made the one
-        // person a list is usually started for impossible to put on it.
-        //
-        // Membership is read off the game directly rather than through GetRoles:
-        // this is the only question in the codebase asked about somebody other
-        // than the current viewer, and GetRoles answers Reader from the
-        // viewer-scoped subscriber flag without comparing it to the id it was
-        // handed.
+        // A member leaves the game first, the list is for people outside it; a subscriber is not a member.
+        // Read off the game, not GetRoles: GetRoles answers Reader for the viewer, not for this id.
         var isMember = game.Assistants.Any(a => a.UserId == userId) ||
                        game.Players.Any(p => p.UserId == userId);
         if (isMember)
@@ -107,13 +94,10 @@ internal class GameBlacklistService : IGameBlacklistService
         }
         catch (DuplicateEntityException)
         {
-            // The request that lost the race against an identical one. Same answer
-            // as the check above gives, because the caller asked the same question
-            // and the outcome is the same: the person is on the list.
+            // Lost the race against an identical request: the person is on the list either way.
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.AlreadyInBlacklist);
         }
 
-        // Cancel pending invitations for this user
         var cancelledInvitations = await _invitationRepository.CancelInvitationsForUser(game.Id, userId);
         foreach (var invitation in cancelledInvitations)
         {
@@ -130,7 +114,6 @@ internal class GameBlacklistService : IGameBlacklistService
             }
         }
 
-        // Decline pending characters for this user
         await _characterRepository.DeclinePendingCharacters(game.Id, userId);
 
         await _producer.SendAsync(EventType.ChangedGame, game.Id);
@@ -151,5 +134,4 @@ internal class GameBlacklistService : IGameBlacklistService
 
         await _repository.Remove(game.Id, userId);
     }
-
 }

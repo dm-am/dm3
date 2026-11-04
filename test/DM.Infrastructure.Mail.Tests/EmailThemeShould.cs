@@ -1,4 +1,3 @@
-using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
@@ -65,14 +64,14 @@ public class EmailThemeShould
     [Fact]
     public void KeepTheScaleOfTheSite()
     {
-        EmailConstants.FontSize.Should().Be(Pixels("AuthSurface.sass", "auth-font-size"));
+        EmailConstants.FontSize.Should().Be(Pixels("_AuthTokens.sass", "auth-font-size"));
         EmailConstants.ButtonFontSize.Should().Be(Pixels("Variables.sass", "font-size"));
         EmailConstants.TitleFontSize.Should().Be(Pixels("Variables.sass", "title-font-size"));
-        EmailConstants.CardWidth.Should().Be(Pixels("AuthSurface.sass", "auth-card-width"));
+        EmailConstants.CardWidth.Should().Be(Pixels("_AuthTokens.sass", "auth-card-width"));
         EmailConstants.SecondaryFontSize.Should().Be(Pixels("Variables.sass", "secondary-font-size"));
         // $border-radius is $small, and $small is two grid steps.
         EmailConstants.BorderRadius.Should().Be(2 * Pixels("Variables.sass", "grid-step"));
-        EmailConstants.ControlHeight.Should().Be(Pixels("AuthSurface.sass", "auth-control-height"));
+        EmailConstants.ControlHeight.Should().Be(Pixels("_AuthTokens.sass", "auth-control-height"));
     }
 
     [Fact]

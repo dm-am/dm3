@@ -1,44 +1,23 @@
-/**
- * Russian month names — SSOT for every month-picking control (MonthYearPicker,
- * CalendarGrid). Previously copy-pasted per component.
- */
+// Russian month names for every month-picking control, from the date library's
+// Russian locale. A month formatted alone comes in the nominative ("январь"),
+// the standalone form; inside a date the library declines it on its own.
+import dayjs from "dayjs";
+import "dayjs/locale/ru";
 
-// Lowercase nominative ("январь") — the mid-sentence form. Not exported:
-// standalone UI labels (buttons, headers) use the capitalized set below;
-// prose composes month names inline where needed.
-const RU_MONTHS_FULL = [
-  "январь",
-  "февраль",
-  "март",
-  "апрель",
-  "май",
-  "июнь",
-  "июль",
-  "август",
-  "сентябрь",
-  "октябрь",
-  "ноябрь",
-  "декабрь",
-] as const;
+const capitalized = (word: string) => word[0].toUpperCase() + word.slice(1);
 
-/** Capitalized nominative ("Январь") — standalone labels: calendar grid
- * headers, picker trigger buttons ("Июль 2026"). */
-export const RU_MONTHS_CAPITALIZED = RU_MONTHS_FULL.map(
-  (m) => m[0].toUpperCase() + m.slice(1),
-) as readonly string[];
+/** The twelve months, January first, by the given format token. */
+const monthsAs = (token: "MMMM" | "MMM"): readonly string[] =>
+  Array.from({ length: 12 }, (_, month) =>
+    capitalized(
+      dayjs(new Date(2000, month, 1))
+        .locale("ru")
+        .format(token),
+    ),
+  );
 
-/** Three-letter abbreviations ("Янв") — dense month grids. */
-export const RU_MONTHS_SHORT = [
-  "Янв",
-  "Фев",
-  "Мар",
-  "Апр",
-  "Май",
-  "Июн",
-  "Июл",
-  "Авг",
-  "Сен",
-  "Окт",
-  "Ноя",
-  "Дек",
-] as const;
+/** Capitalized nominative ("Январь"): calendar grid headers, picker trigger buttons ("Июль 2026"). */
+export const RU_MONTHS_CAPITALIZED = monthsAs("MMMM");
+
+/** The library's abbreviations, capitalized ("Янв.", "Март"): dense month grids. */
+export const RU_MONTHS_SHORT = monthsAs("MMM");

@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -14,23 +15,9 @@ namespace DM.Architecture.Tests;
 /// cannot see, and for the words in the client as well.
 /// </summary>
 /// <remarks>
-/// GLOSSARY states the rule in as many words: one Russian word and one English
-/// identifier per term, the same in the UI, in the code and in the
-/// documentation. The client enforces it for interface strings
-/// (copy-rules.spec.ts). Nothing enforced it anywhere else, and the gap showed:
-/// the role every screen calls a "наставник" was still a "ментор" in five documents
-/// -- including the glossary that declares the rule -- and in a seeded profile,
-/// and the documentation is where the next screen takes its words from.
-///
-/// The two characters are here for the same reason. CODE_STYLE keeps the letter
-/// at U+0451 and the typographic quotes out of every text a person reads, seeded
-/// data and documentation included, and said in as many words that the rule was
-/// checked by hand.
-///
-/// The check is textual because the offending value is prose: no type stands
-/// between a word and the file it is written in. The retired words are a list
-/// rather than a rule, exactly as on the client: neither of them is something
-/// the code could re-derive.
+/// GLOSSARY states the rule, and the client enforces it for its strings (copy-rules.spec.ts).
+/// CODE_STYLE keeps U+0451 and the typographic quotes out of every text a person reads. Textual:
+/// the offending value is prose.
 /// </remarks>
 public class InterfaceVocabularyShould
 {
@@ -57,26 +44,10 @@ public class InterfaceVocabularyShould
     ];
 
     /// <summary>
-    /// The forum entity is a "топик". The word "тема" means other things here --
-    /// the colour theme, the subject of a ticket, the subject of a letter -- so
-    /// the context decides and not the path, exactly as on the client
-    /// (copy-rules.spec.ts).
+    /// The forum entity is a "топик"; "тема" means other things too, so the context decides, as on the
+    /// client. The ending is optional (the genitive plural has none), and <see cref="Pronoun"/> tells
+    /// the pronoun apart.
     /// </summary>
-    /// <remarks>
-    /// The rule used to read "check the files whose path names the forum", which
-    /// is a rule about where the word was last caught rather than about the word.
-    /// The dictionary of notification headings
-    /// (DM.Domain.Personal/Features/Notifications/NotificationWording.cs) is
-    /// named after neither a topic nor a forum, so the line a reader sees over
-    /// every forum notification was outside it; so were four passages of
-    /// AUTHORIZATION.md that call the entity by the retired word.
-    ///
-    /// The ending is optional: the genitive plural has none. Without it the rule
-    /// read "список закрепленных тем" and "удаление тем форума" as clean, and
-    /// that is the form a list of topics is named in. The same three letters are
-    /// also the pronoun ("тем же", "тем, что"), which <see cref="Pronoun"/> tells
-    /// apart.
-    /// </remarks>
     private static readonly Regex Tema =
         new(@"(?<![А-Яа-я])[Тт]ем(а|ы|е|у|ой|ам|ах|ами)?(?![А-Яа-я])", RegexOptions.Compiled);
 
@@ -98,10 +69,7 @@ public class InterfaceVocabularyShould
         new("форум|топик|topic|комментари", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
     /// <summary>
-    /// A word right before "тема" that makes it the entity wherever it stands.
-    /// Only a topic is pinned, and the label of the pin handle
-    /// ("Порядок закрепленной темы ...") has neither the forum nor a comment
-    /// within reach in its template.
+    /// A word right before "тема" that makes it the entity wherever it stands: only a topic is pinned.
     /// </summary>
     private static readonly Regex EntityBefore =
         new(@"закрепл\p{L}*\s+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
@@ -113,10 +81,7 @@ public class InterfaceVocabularyShould
     private const int Neighbourhood = 60;
 
     /// <summary>
-    /// The senses the word keeps: the subject of a conversation, of a letter, of
-    /// a ticket, and the colour scheme. Listed because they do stand next to the
-    /// forum -- the rules speak of "уход от темы в служебных разделах форума",
-    /// which is about staying on subject and not about a "топик".
+    /// The senses the word keeps: the subject of a conversation, a letter or a ticket, and the colour scheme.
     /// </summary>
     private static readonly Regex[] OtherSenses =
     [
@@ -127,27 +92,15 @@ public class InterfaceVocabularyShould
     ];
 
     /// <summary>
-    /// Names, not terms. The achievement for a twenty-fifth topic is called
-    /// "Занятные темы" -- a title the owner wrote, and award titles are his to
-    /// write (a neighbouring one is called "Народное признание, например").
-    /// Renaming it would also be a seed change, and the seed is the same row in
-    /// the migration and in both model snapshots. "Платиновые темы" is an item of
-    /// the old site's lore (ERROR_PAGES_AND_LORE.md), listed under the name its
-    /// community gave it.
+    /// Names, not terms: award titles such as "Занятные темы", also seeded in the migration and snapshots.
     /// </summary>
     private static readonly Regex[] ProperNames =
     [
-        new("Занятные темы", RegexOptions.Compiled),
-        new("Платиновые темы", RegexOptions.Compiled)
+        new("Занятные темы", RegexOptions.Compiled)
     ];
 
     /// <summary>
-    /// The retired word named as retired. The glossary's rows read "term, our
-    /// word, the word we do not use", and the row for the forum entity has to
-    /// spell the word it retires or it records nothing. Only that spelling is
-    /// let through -- the word in quotes in the cell right after "Топик" -- so
-    /// prose elsewhere in the same file that calls a topic by the old word is
-    /// still caught.
+    /// The retired word named as retired: the quoted cell right after "Топик" in the glossary.
     /// </summary>
     private static readonly Regex[] RetiredMentions =
     [
@@ -214,7 +167,7 @@ public class InterfaceVocabularyShould
     [Fact]
     public void CallOneMeaningByOneWord()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -247,7 +200,7 @@ public class InterfaceVocabularyShould
     [Fact]
     public void SpellRussianWithTheCharactersTheConventionAllows()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
         var offenders = new List<string>();
         var scanned = 0;
 
@@ -274,18 +227,9 @@ public class InterfaceVocabularyShould
     }
 
     /// <summary>
-    /// Every file outside the client that a person reads Russian in: the
-    /// documentation, the agent instructions and the server sources. The client
-    /// is left out because it checks itself, and the audit reports at the root
-    /// are left out because they quote the violations they name.
+    /// Every file outside the client a person reads Russian in: every markdown file a commit carries and
+    /// the server sources. The client checks itself; audit reports quote what they name.
     /// </summary>
-    /// <remarks>
-    /// The documents are every markdown file a commit carries, asked of git: a
-    /// walk of README, docs and .claude left out the guides that live beside the
-    /// scripts they describe (scripts/visual/README.md), and the other gates over
-    /// hand-written documents (DocumentPunctuationShould and its neighbours) read
-    /// the same set.
-    /// </remarks>
     private static IEnumerable<string> ReadableText(string root)
     {
         foreach (var file in RepositoryFiles.CommittableFiles())
@@ -297,19 +241,14 @@ public class InterfaceVocabularyShould
             }
         }
 
-        foreach (var file in FilesUnder(Path.Combine(root, "src"), "*.cs"))
+        foreach (var file in RepositoryFiles.Files(Path.Combine(root, "src"), "*.cs", NotSource))
         {
             yield return file;
         }
     }
 
     /// <summary>
-    /// The client's own sources, for the words only. The client checks them too
-    /// (copy-rules.spec.ts), but its rule for the entity stood where this one did
-    /// and missed the same forms: the pin handle of every pinned topic was read
-    /// out as "Порядок закрепленной темы". The characters stay the client's
-    /// business: its motto is the one place the typographic quotes are allowed.
-    /// Specs are left out, as there: they quote the words they forbid.
+    /// The client's own sources, for the words only; specs are left out, they quote the words they forbid.
     /// </summary>
     private static IEnumerable<string> ClientText(string root)
     {
@@ -321,7 +260,7 @@ public class InterfaceVocabularyShould
 
         foreach (var pattern in new[] { "*.vue", "*.ts" })
         {
-            foreach (var file in FilesUnder(client, pattern))
+            foreach (var file in RepositoryFiles.Files(client, pattern, NotSource))
             {
                 if (!file.EndsWith(".spec.ts", StringComparison.Ordinal) &&
                     !file.EndsWith(".d.ts", StringComparison.Ordinal))
@@ -332,29 +271,6 @@ public class InterfaceVocabularyShould
         }
     }
 
-    private static IEnumerable<string> FilesUnder(string directory, string pattern)
-    {
-        foreach (var file in Directory.EnumerateFiles(directory, pattern))
-        {
-            yield return file;
-        }
-
-        foreach (var nested in Directory.EnumerateDirectories(directory))
-        {
-            if (Array.IndexOf(NotSource, Path.GetFileName(nested)) >= 0)
-            {
-                continue;
-            }
-
-            foreach (var file in FilesUnder(nested, pattern))
-            {
-                yield return file;
-            }
-        }
-    }
-
     private static string Relative(string root, string file) =>
         Path.GetRelativePath(root, file).Replace('\\', '/');
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

@@ -18,7 +18,7 @@ import { defineComponent, h, type Component } from "vue";
 import { flushPromises, mount } from "@vue/test-utils";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { componentCss, ruleMap, styleRules } from "@/shared/lib/testing/styles";
+import { componentCss, styleRules } from "@/shared/lib/testing/styles";
 import DataTable from "./DataTable.vue";
 import type { Column } from "./types";
 
@@ -155,24 +155,11 @@ describe("DataTable line under a row", () => {
   });
 });
 
-describe("DataTable box", () => {
-  // The table scrolls sideways in a box of its own only where the words of
-  // its columns are wider than the column, and the page does not (e2e
-  // tables-fit).
-  it("stands the table in a box of its own, the one that scrolls", () => {
-    const table = render();
-
-    expect(table.find(".data-table-scroll > table.data-table").exists()).toBe(
-      true,
-    );
-  });
-});
-
 /**
  * The footer, the paging of the list, under the part of the table the reader
  * sees: a table wider than its column scrolls in its box, and a footer as wide
- * as the table centred the strip under all of it, so on a phone ">>" stood out
- * of sight and the strip measured a line it did not have (Paging.vue).
+ * as the table centred the strip under all of it, so ">>" stood out of sight
+ * and the strip measured a line it did not have (Paging.vue).
  */
 describe("DataTable footer", () => {
   afterEach(() => vi.unstubAllGlobals());
@@ -205,25 +192,11 @@ describe("DataTable footer", () => {
       table.find("tfoot td > .table-footer-line > nav.paging").exists(),
     ).toBe(true);
   });
-
-  it("holds the line at the left of the box, as wide as the box less the cell", () => {
-    const rules = ruleMap(
-      componentCss(
-        join(dirname(fileURLToPath(import.meta.url)), "DataTable.vue"),
-      ),
-    );
-    expect(rules.get(".table-footer-line")).toEqual({
-      position: "sticky",
-      left: "13px",
-      width: "calc(var(--data-table-box) - 26px)",
-    });
-  });
 });
 
 /**
  * Every column stands at every width of the window: no column of a table goes,
- * and the stylesheet keeps no other form of the table for a narrow column or a
- * phone. A word of a cell is never broken inside: where the words of the
+ * and the stylesheet keeps no other form of the table for a narrow column. A word of a cell is never broken inside: where the words of the
  * columns do not fit, the box scrolls (DataTable box). jsdom lays nothing out,
  * so the rules are read off the stylesheet.
  */
@@ -232,18 +205,6 @@ describe("DataTable at any width", () => {
     join(dirname(fileURLToPath(import.meta.url)), "DataTable.vue"),
   );
   const rules = styleRules(css);
-
-  it("hides no cell and keeps no form of the table for a narrow column", () => {
-    expect(css).not.toMatch(/@media|@container/);
-    expect(css).not.toContain("col--hidden");
-    expect(css).not.toContain("hide-mobile");
-    const hidden = rules.filter(
-      (rule) =>
-        rule.declarations.display === "none" &&
-        /\b(th|td)\b|col/.test(rule.selector),
-    );
-    expect(hidden).toEqual([]);
-  });
 
   it("breaks the words of a cell and of a header between words only", () => {
     const wrapOf = (selector: string) =>

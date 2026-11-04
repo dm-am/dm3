@@ -43,7 +43,7 @@ internal class PasswordResetRepository : IPasswordResetRepository
 
             await _dbContext.Tokens
                 .Where(t => t.UserId == userId && t.Type == TokenType.PasswordChange && !t.IsRemoved)
-                .ExecuteUpdateAsync(s => s.SetProperty(t => t.IsRemoved, true));
+                .Retire();
 
             _dbContext.Tokens.Add(tokenEntity);
             await _dbContext.SaveChangesAsync();

@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
@@ -15,22 +14,11 @@ namespace DM.Web.API.Features.Account.TwoFactor;
 /// Second factor: setting it up, switching it off, and getting back in without it
 /// </summary>
 /// <remarks>
-/// Switching the factor on takes three calls and the factor is off between the
-/// first two: a secret is issued, a code from the device confirms it, and only
-/// the confirmation switches anything on. That order is what turns "the app saved
-/// nothing" or "the clock is adrift" into a refusal now rather than a locked
-/// account days later.
-///
-/// Neither the secret nor a recovery code ever travels in a path: a path is
-/// written into the proxy log verbatim.
-///
-/// The budget is named on each action rather than on the controller, because the
-/// two halves of this surface are counted per different thing. What an owner does
-/// to his own factor carries a session and is counted per account
-/// (<see cref="RateLimitPolicies.TwoFactor" />); the mailed removal path carries
-/// nothing and is counted per address, out of the same strict budget as the rest
-/// of the credential surface. Written as one attribute on the controller with
-/// overrides below, the reader would have to know which of the two wins.
+/// Only the confirming code switches the factor on, so a device that saved nothing
+/// is refused now rather than locking the account later. Neither the secret nor a
+/// recovery code travels in a path, which the proxy logs. The budget is named per
+/// action: the owner's calls count per account (<see cref="RateLimitPolicies.TwoFactor" />),
+/// the mailed removal path per address.
 /// </remarks>
 [ApiController]
 [Route("v1/account/two-factor")]
@@ -39,12 +27,9 @@ namespace DM.Web.API.Features.Account.TwoFactor;
 [AuthenticationRequired]
 public class TwoFactorController : ControllerBase
 {
-    private readonly ITwoFactorApiService _twoFactorApiService;
+    private readonly TwoFactorApiService _twoFactorApiService;
 
-    /// <summary>
-    /// Creates a new instance of TwoFactorController
-    /// </summary>
-    public TwoFactorController(ITwoFactorApiService twoFactorApiService)
+    public TwoFactorController(TwoFactorApiService twoFactorApiService)
     {
         _twoFactorApiService = twoFactorApiService;
     }
@@ -58,9 +43,7 @@ public class TwoFactorController : ControllerBase
     [EnableRateLimiting(RateLimitPolicies.TwoFactor)]
     [ProducesResponseType(typeof(Envelope<TwoFactorStatusResponse>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
-    // The caller's own security state. Same rule as the session list: an
-    // authenticated read of the account area is stored by nothing.
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [PrivateResponse]
     public async Task<IActionResult> GetTwoFactorStatus() =>
         Ok(new Envelope<TwoFactorStatusResponse>(await _twoFactorApiService.GetStatus()));
 
@@ -84,7 +67,7 @@ public class TwoFactorController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [PrivateResponse]
     public async Task<IActionResult> SetupTwoFactor([FromBody] TwoFactorSetupRequest request) =>
         Ok(new Envelope<TwoFactorSetupResponse>(await _twoFactorApiService.Setup(request)));
 
@@ -112,7 +95,7 @@ public class TwoFactorController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status410Gone)]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [PrivateResponse]
     public async Task<IActionResult> ConfirmTwoFactor([FromBody] TwoFactorConfirmRequest request) =>
         Ok(new Envelope<RecoveryCodesResponse>(await _twoFactorApiService.Confirm(request)));
 
@@ -161,7 +144,7 @@ public class TwoFactorController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
-    [ResponseCache(NoStore = true, Location = ResponseCacheLocation.None)]
+    [PrivateResponse]
     public async Task<IActionResult> ReissueRecoveryCodes(
         [FromBody] TwoFactorConfirmedActionRequest request) =>
         Ok(new Envelope<RecoveryCodesResponse>(
@@ -182,21 +165,18 @@ public class TwoFactorController : ControllerBase
     /// second administrator.
     /// </remarks>
     /// <param name="request">Address the account answers at</param>
-    /// <response code="204">Request accepted, whatever it named</response>
+    /// <response code="200">Request accepted, whatever it named; the body says how long the mailed link lives</response>
     /// <response code="400">Invalid email format</response>
     /// <response code="429">Too many requests</response>
     [HttpPost("removal", Name = nameof(RequestTwoFactorRemoval))]
     [AllowAnonymous]
     [EnableRateLimiting(RateLimitPolicies.Auth)]
-    [ProducesResponseType(StatusCodes.Status204NoContent)]
+    [ProducesResponseType(typeof(Envelope<MailedLink>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
     public async Task<IActionResult> RequestTwoFactorRemoval(
-        [FromBody] TwoFactorRemovalRequest request)
-    {
-        await _twoFactorApiService.RequestRemoval(request);
-        return NoContent();
-    }
+        [FromBody] TwoFactorRemovalRequest request) =>
+        Ok(new Envelope<MailedLink>(await _twoFactorApiService.RequestRemoval(request)));
 
     /// <summary>
     /// Follow the link from the letter: schedule the removal

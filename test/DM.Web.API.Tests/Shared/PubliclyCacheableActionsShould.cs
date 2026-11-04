@@ -3,7 +3,6 @@ using System.Linq;
 using System.Reflection;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
-using Microsoft.AspNetCore.Mvc.Routing;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
@@ -13,23 +12,8 @@ namespace DM.Web.API.Tests.Shared;
 /// cache.
 /// </summary>
 /// <remarks>
-/// The server cache and every proxy on the way key on the method and the path,
-/// and on nothing else, because nothing declares a Vary. One personal field in
-/// the body, an unread counter, a "mine" flag, a list that depends on the
-/// audience, is therefore enough to make the answer given to the first caller the
-/// answer given to all of them. Not a scenario: the forum handed one user's
-/// unread counters to everyone, and the repair was one word inside an attribute.
-///
-/// API_DESIGN states the rule, this keeps it true. The attribute is written by
-/// copying the neighbouring action, and a catalogue endpoint is a convenient
-/// neighbour. Note also that Location defaults to Any, so an attribute that names
-/// only a Duration is public without saying so, and is matched here as such.
-///
-/// The list below is the whole exception: lookups whose service is never handed
-/// an identity. It is asserted in both directions. An action that starts caching
-/// publicly without being added turns the first test red, and a name that stops
-/// caching publicly, or stops existing, turns the second red, because an
-/// exemption nobody has to maintain outlives the reason it was granted.
+/// Caches key on method and path, and nothing declares a Vary. Location defaults to Any, so a bare
+/// Duration is public. The list is lookups never handed an identity, asserted both ways.
 /// </remarks>
 public class PubliclyCacheableActionsShould
 {
@@ -44,9 +28,7 @@ public class PubliclyCacheableActionsShould
     ];
 
     /// <summary>
-    /// Every controller action in the host with the cache policy in force for it.
-    /// The action's own attribute wins over the controller's, the way MVC resolves
-    /// it.
+    /// Every controller action with the cache policy in force for it, the action's own winning as in MVC.
     /// </summary>
     private static (string Name, ResponseCacheAttribute? Policy)[] Actions() => ApiSurface.RoutedActions()
         .Select(m => (
@@ -79,15 +61,7 @@ public class PubliclyCacheableActionsShould
     /// <summary>
     /// And nothing caches privately either.
     /// </summary>
-    /// <remarks>
-    /// Location.Client keeps the answer out of shared caches and leaves it in the
-    /// reader's own browser for the duration — which for a response carrying
-    /// unread counters means the badge survives the request that clears it. The
-    /// two endpoints that had it were the forum board list and the rated posts,
-    /// and both were personal. There is no list of exceptions here on purpose: a
-    /// response worth caching in a browser has to be impersonal, and an
-    /// impersonal response belongs on the list above instead.
-    /// </remarks>
+    /// <remarks>Location.Client keeps a badge in the browser past the request that clears it; an impersonal response belongs above.</remarks>
     [Fact]
     public void NotCacheInTheBrowserEither()
     {

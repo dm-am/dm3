@@ -2,30 +2,13 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The roster and the sheet are two different reads, and the card has to
- * survive the lighter one. The list endpoint answers names, portraits,
- * statuses and authors; the filled-in attributes come from the
- * single-character read. That split is deliberate and load-bearing: the game
- * shell fetches the roster on every page of the game zone, to find the NPCs
- * for one menu item, and putting the sheet on that response would ship every
- * character's server-rendered BbCode along with it.
- *
- * The card used to read the attributes unconditionally and threw inside its
- * render, and Vue drops the whole subtree on a render error — the characters
- * page drew the game title and nothing else, no cards and no message.
- *
- * The guard has two halves. At runtime a card mounted on a roster entry still
- * draws the name and offers no chevron to open. At compile time the roster
- * entry is declared without the two fields only the detail read carries and
- * assigned to Character: the day either of them stops being optional, this
- * file stops compiling.
- */
+// The roster read carries no attributes, and a card mounted on it still draws; the roster
+// entry below stops compiling the day either field of the detail read stops being optional.
 import { describe, it, expect } from "vitest";
 import { mount, RouterLinkStub } from "@vue/test-utils";
 import { SvgIcon } from "@/shared/ui/Icon";
 import CharacterCard from "./CharacterCard.vue";
-import type { Character } from "../model/types";
+import type { Character } from "../model/characterTypes";
 
 /**
  * A roster entry, field for field as the list endpoint sends it. Ids and most

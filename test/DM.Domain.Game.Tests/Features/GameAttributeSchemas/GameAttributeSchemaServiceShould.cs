@@ -7,6 +7,7 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.GameAttributeSchemas;
 using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Testing;
 using FluentValidation;
 using AwesomeAssertions;
@@ -29,28 +30,28 @@ namespace DM.Domain.Game.Tests.Features.GameAttributeSchemas;
 /// </remarks>
 public class GameAttributeSchemaServiceShould : UnitTestBase
 {
-    private readonly IGameService _gameService;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IGameAttributeSchemaRepository _repository;
-    private readonly GameAttributeSchemaService _service;
+    private readonly IGameService gameService;
+    private readonly IIntentionManager intentionManager;
+    private readonly IGameAttributeSchemaRepository repository;
+    private readonly GameAttributeSchemaService service;
 
-    private readonly Guid _gameId = Guid.NewGuid();
+    private readonly Guid gameId = Guid.NewGuid();
 
     public GameAttributeSchemaServiceShould()
     {
-        _gameService = Mock<IGameService>();
-        _gameService.GetAsync(_gameId).Returns(new GameDto { Id = _gameId });
+        gameService = Mock<IGameService>();
+        gameService.GetAsync(gameId).Returns(new GameDto { Id = gameId });
 
-        _intentionManager = Mock<IIntentionManager>();
-        _repository = Mock<IGameAttributeSchemaRepository>();
-        _repository.Replace(Arg.Any<ReplaceGameAttributeSchema>())
+        intentionManager = Mock<IIntentionManager>();
+        repository = Mock<IGameAttributeSchemaRepository>();
+        repository.Replace(Arg.Any<ReplaceGameAttributeSchema>())
             .Returns(new GameAttributeSchema { Version = 1 });
 
-        _service = new GameAttributeSchemaService(
+        service = new GameAttributeSchemaService(
             new ReplaceGameAttributeSchemaValidator(),
-            _gameService,
-            _intentionManager,
-            _repository);
+            gameService,
+            intentionManager,
+            repository);
     }
 
     /// <summary>
@@ -60,15 +61,15 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseABodyWithoutAVersionBeforeReadingTheGame()
     {
-        var replace = async () => await _service.ReplaceAsync(new ReplaceGameAttributeSchema
+        var replace = async () => await service.ReplaceAsync(new ReplaceGameAttributeSchema
         {
-            GameId = _gameId,
+            GameId = gameId,
             Specifications = []
         });
 
         await replace.Should().ThrowAsync<ValidationException>();
-        await _gameService.DidNotReceive().GetAsync(Arg.Any<Guid>());
-        await _repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
+        await gameService.DidNotReceive().GetAsync(Arg.Any<Guid>());
+        await repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
     }
 
     /// <summary>
@@ -80,9 +81,9 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
     {
         var repeated = Guid.NewGuid();
 
-        var replace = async () => await _service.ReplaceAsync(new ReplaceGameAttributeSchema
+        var replace = async () => await service.ReplaceAsync(new ReplaceGameAttributeSchema
         {
-            GameId = _gameId,
+            GameId = gameId,
             Version = 0,
             Specifications =
             [
@@ -92,8 +93,8 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
         });
 
         await replace.Should().ThrowAsync<ValidationException>();
-        await _gameService.DidNotReceive().GetAsync(Arg.Any<Guid>());
-        await _repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
+        await gameService.DidNotReceive().GetAsync(Arg.Any<Guid>());
+        await repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
     }
 
     /// <summary>
@@ -103,15 +104,15 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseACallerWhoMayNotEditTheGame()
     {
-        _intentionManager
+        intentionManager
             .When(m => m.ThrowIfForbidden(GameIntention.Edit, Arg.Any<GameDto>()))
             .Throw(new HttpException(HttpStatusCode.Forbidden, "нет прав"));
 
-        var replace = async () => await _service.ReplaceAsync(Valid());
+        var replace = async () => await service.ReplaceAsync(Valid());
 
         (await replace.Should().ThrowAsync<HttpException>())
             .Which.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
+        await repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
     }
 
     /// <summary>
@@ -121,14 +122,14 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseAGameTheCallerCannotSee()
     {
-        _gameService.GetAsync(_gameId)
+        gameService.GetAsync(gameId)
             .Returns<GameDto>(_ => throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound));
 
-        var replace = async () => await _service.ReplaceAsync(Valid());
+        var replace = async () => await service.ReplaceAsync(Valid());
 
         (await replace.Should().ThrowAsync<HttpException>())
             .Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        await _repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
+        await repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
     }
 
     /// <summary>
@@ -138,10 +139,10 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
     [Fact]
     public async Task RefuseAVersionTheStoredSheetHasMovedPast()
     {
-        _repository.Replace(Arg.Any<ReplaceGameAttributeSchema>())
+        repository.Replace(Arg.Any<ReplaceGameAttributeSchema>())
             .Returns((GameAttributeSchema?)null);
 
-        var replace = async () => await _service.ReplaceAsync(Valid());
+        var replace = async () => await service.ReplaceAsync(Valid());
 
         (await replace.Should().ThrowAsync<HttpException>())
             .Which.StatusCode.Should().Be(HttpStatusCode.Conflict);
@@ -150,15 +151,15 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
     [Fact]
     public async Task AnswerWithTheStoredSheetAndItsNewVersion()
     {
-        var replaced = await _service.ReplaceAsync(Valid());
+        var replaced = await service.ReplaceAsync(Valid());
 
         replaced.Version.Should().Be(1);
-        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.Edit, Arg.Any<GameDto>());
+        intentionManager.Received(1).ThrowIfForbidden(GameIntention.Edit, Arg.Any<GameDto>());
     }
 
     private ReplaceGameAttributeSchema Valid() => new()
     {
-        GameId = _gameId,
+        GameId = gameId,
         Version = 0,
         Specifications = [Specification("Раса", null, 0)]
     };

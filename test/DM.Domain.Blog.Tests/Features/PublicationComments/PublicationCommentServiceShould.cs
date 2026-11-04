@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -17,9 +18,8 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
-using DM.Domain.Core.Users;
 using DM.Testing;
-using DM.Testing.Markup;
+using DM.Testing.Dsl;
 using DM.Domain.Account.Features.Authentication;
 using AwesomeAssertions;
 using FluentValidation;
@@ -31,53 +31,52 @@ namespace DM.Domain.Blog.Tests.Features.PublicationComments;
 
 public class PublicationCommentServiceShould : UnitTestBase
 {
-    private readonly IValidator<CreateComment> _createValidator;
-    private readonly IValidator<UpdateComment> _updateValidator;
-    private readonly IBlogService _blogService;
-    private readonly IPublicationService _publicationService;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IPublicationCommentRepository _repository;
-    private readonly IUnreadCountersRepository _countersRepository;
-    private readonly IEventProducer _eventProducer;
-    private readonly PublicationCommentService _service;
+    private readonly IValidator<CreateComment> createValidator;
+    private readonly IValidator<UpdateComment> updateValidator;
+    private readonly IBlogService blogService;
+    private readonly IPublicationService publicationService;
+    private readonly IIntentionManager intentionManager;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly IPublicationCommentRepository repository;
+    private readonly IUnreadCountersRepository countersRepository;
+    private readonly IEventProducer eventProducer;
+    private readonly PublicationCommentService service;
 
     public PublicationCommentServiceShould()
     {
-        _createValidator = Mock<IValidator<CreateComment>>();
-        _updateValidator = Mock<IValidator<UpdateComment>>();
-        _blogService = Mock<IBlogService>();
-        _publicationService = Mock<IPublicationService>();
-        _intentionManager = Mock<IIntentionManager>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _repository = Mock<IPublicationCommentRepository>();
-        _countersRepository = Mock<IUnreadCountersRepository>();
-        _eventProducer = Mock<IEventProducer>();
+        createValidator = Mock<IValidator<CreateComment>>();
+        updateValidator = Mock<IValidator<UpdateComment>>();
+        blogService = Mock<IBlogService>();
+        publicationService = Mock<IPublicationService>();
+        intentionManager = Mock<IIntentionManager>();
+        identityProvider = Mock<IIdentityProvider>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
+        repository = Mock<IPublicationCommentRepository>();
+        countersRepository = Mock<IUnreadCountersRepository>();
+        eventProducer = Mock<IEventProducer>();
 
-        _identityProvider.Current.Returns(Identity.Guest());
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        identityProvider.Current.Returns(Identity.Guest());
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _createValidator
+        createValidator
             .ValidateAsync(Arg.Any<ValidationContext<CreateComment>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
-        _updateValidator
+        updateValidator
             .ValidateAsync(Arg.Any<ValidationContext<UpdateComment>>(), Arg.Any<CancellationToken>())
             .Returns(new ValidationResult());
 
-        _service = new PublicationCommentService(
-            _createValidator,
-            _updateValidator,
-            _blogService,
-            _publicationService,
-            _intentionManager,
-            _identityProvider,
-            _dateTimeProvider,
-            _repository,
-            _countersRepository,
-            _eventProducer,
-            new TagNamesAsTyped());
+        service = new PublicationCommentService(
+            createValidator,
+            updateValidator,
+            blogService,
+            publicationService,
+            intentionManager,
+            identityProvider,
+            dateTimeProvider,
+            repository,
+            countersRepository,
+            eventProducer);
     }
 
     [Fact]
@@ -88,19 +87,19 @@ public class PublicationCommentServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var publication = new Publication { Id = publicationId, BlogId = blogId };
-        var blog = new BlogDto { Id = blogId, Author = new GeneralUser { UserId = Guid.NewGuid() }, Assistants = Array.Empty<BlogAssistantInfo>(), BlacklistedUserIds = new HashSet<Guid>() };
+        var blog = OpenBlog(blogId);
         var createComment = new CreateComment { EntityId = publicationId, Text = "Test comment" };
-        var identity = AuthenticatedIdentities.Of(userId);
+        var identity = Identities.User(userId, "testuser");
 
-        _identityProvider.Current.Returns(identity);
-        _publicationService.GetPublication(publicationId, default).Returns(publication);
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.Create(Arg.Any<CreateComment>(), userId, publicationId, default)
+        identityProvider.Current.Returns(identity);
+        publicationService.GetPublication(publicationId, default).Returns(publication);
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.Create(Arg.Any<CreateComment>(), userId, publicationId, default)
             .Returns((new Comment { Id = commentId }, commentId));
 
-        await _service.CreateAsync(createComment);
+        await service.CreateAsync(createComment);
 
-        _intentionManager.Received(1).ThrowIfForbidden(PublicationIntention.CreateComment, publication);
+        intentionManager.Received(1).ThrowIfForbidden(PublicationIntention.CreateComment, publication);
     }
 
     [Fact]
@@ -110,15 +109,15 @@ public class PublicationCommentServiceShould : UnitTestBase
         var blogId = Guid.NewGuid();
         var userId = Guid.NewGuid();
         var publication = new Publication { Id = publicationId, BlogId = blogId };
-        var blog = new BlogDto { Id = blogId, Author = new GeneralUser { UserId = Guid.NewGuid() }, Assistants = Array.Empty<BlogAssistantInfo>(), BlacklistedUserIds = new HashSet<Guid> { userId } };
+        var blog = OpenBlog(blogId, userId);
         var createComment = new CreateComment { EntityId = publicationId, Text = "Test comment" };
-        var identity = AuthenticatedIdentities.Of(userId);
+        var identity = Identities.User(userId, "testuser");
 
-        _identityProvider.Current.Returns(identity);
-        _publicationService.GetPublication(publicationId, default).Returns(publication);
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
+        identityProvider.Current.Returns(identity);
+        publicationService.GetPublication(publicationId, default).Returns(publication);
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
 
-        var act = async () => await _service.CreateAsync(createComment);
+        var act = async () => await service.CreateAsync(createComment);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromBlog);
@@ -140,11 +139,11 @@ public class PublicationCommentServiceShould : UnitTestBase
             Text = "Original text",
             Author = new GeneralUser { UserId = userId }
         };
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(userId));
-        _repository.Get(comment.Id, default).Returns(comment);
-        _publicationService.GetPublication(publicationId, default)
+        identityProvider.Current.Returns(Identities.User(userId, "testuser"));
+        repository.Get(comment.Id, default).Returns(comment);
+        publicationService.GetPublication(publicationId, default)
             .Returns(new Publication { Id = publicationId, BlogId = blogId });
-        _blogService.GetBlogAsync(blogId, default).Returns(new BlogDto
+        blogService.GetUnfiltered(blogId, default).Returns(new BlogDto
         {
             Id = blogId,
             Author = new GeneralUser { UserId = Guid.NewGuid() },
@@ -152,11 +151,32 @@ public class PublicationCommentServiceShould : UnitTestBase
             BlacklistedUserIds = new HashSet<Guid> { userId }
         });
 
-        var act = async () => await _service.UpdateAsync(new UpdateComment { CommentId = comment.Id, Text = "Updated" });
+        var act = async () => await service.UpdateAsync(new UpdateComment { CommentId = comment.Id, Text = "Updated" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromBlog);
-        await _repository.DidNotReceive().Update(Arg.Any<UpdatePublicationCommentEntity>(), Arg.Any<CancellationToken>());
+        await repository.DidNotReceive().Update(Arg.Any<UpdatePublicationCommentEntity>(), Arg.Any<CancellationToken>());
+    }
+
+    /// <summary>The text is stored as typed, the spaces around it included (BBCODE_RENDERING.md, "Регистр имен").</summary>
+    [Fact]
+    public async Task StoreTheTextAsTyped()
+    {
+        var publicationId = Guid.NewGuid();
+        var blogId = Guid.NewGuid();
+        var userId = Guid.NewGuid();
+        var commentId = Guid.NewGuid();
+        identityProvider.Current.Returns(Identities.User(userId, "testuser"));
+        publicationService.GetPublication(publicationId, default)
+            .Returns(new Publication { Id = publicationId, BlogId = blogId });
+        blogService.GetUnfiltered(blogId, default).Returns(OpenBlog(blogId));
+        repository.Create(Arg.Any<CreateComment>(), userId, publicationId, default)
+            .Returns((new Comment { Id = commentId }, commentId));
+
+        await service.CreateAsync(new CreateComment { EntityId = publicationId, Text = "  \n Test comment \n " });
+
+        await repository.Received(1).Create(
+            Arg.Is<CreateComment>(c => c.Text == "  \n Test comment \n "), userId, publicationId, default);
     }
 
     [Fact]
@@ -167,32 +187,32 @@ public class PublicationCommentServiceShould : UnitTestBase
         var userId = Guid.NewGuid();
         var commentId = Guid.NewGuid();
         var publication = new Publication { Id = publicationId, BlogId = blogId };
-        var blog = new BlogDto { Id = blogId, Author = new GeneralUser { UserId = Guid.NewGuid() }, Assistants = Array.Empty<BlogAssistantInfo>(), BlacklistedUserIds = new HashSet<Guid>() };
+        var blog = OpenBlog(blogId);
         var createComment = new CreateComment { EntityId = publicationId, Text = "Test comment" };
-        var identity = AuthenticatedIdentities.Of(userId);
+        var identity = Identities.User(userId, "testuser");
 
-        _identityProvider.Current.Returns(identity);
-        _publicationService.GetPublication(publicationId, default).Returns(publication);
-        _blogService.GetBlogAsync(blogId, default).Returns(blog);
-        _repository.Create(Arg.Any<CreateComment>(), userId, publicationId, default)
+        identityProvider.Current.Returns(identity);
+        publicationService.GetPublication(publicationId, default).Returns(publication);
+        blogService.GetUnfiltered(blogId, default).Returns(blog);
+        repository.Create(Arg.Any<CreateComment>(), userId, publicationId, default)
             .Returns((new Comment { Id = commentId }, commentId));
 
-        await _service.CreateAsync(createComment);
+        await service.CreateAsync(createComment);
 
         // The publication event, not the blog one: a comment carries the id of
         // whatever it hangs on, so the blog generator joined Comments to Blogs on
         // a publication id and produced nothing at all.
-        await _eventProducer.Received(1).SendAsync(EventType.NewPublicationComment, commentId);
-        await _eventProducer.DidNotReceive().SendAsync(EventType.NewBlogComment, Arg.Any<Guid>());
+        await eventProducer.Received(1).SendAsync(EventType.NewPublicationComment, commentId);
+        await eventProducer.DidNotReceive().SendAsync(EventType.NewBlogComment, Arg.Any<Guid>());
     }
 
     [Fact]
     public async Task ThrowWhenCommentNotFound()
     {
         var commentId = Guid.NewGuid();
-        _repository.Get(commentId, default).Returns((Comment?)null);
+        repository.Get(commentId, default).Returns((Comment?)null);
 
-        var act = async () => await _service.GetAsync(commentId);
+        var act = async () => await service.GetAsync(commentId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -205,12 +225,12 @@ public class PublicationCommentServiceShould : UnitTestBase
         var comment = new Comment { Id = commentId, Text = "Original text" };
         var updateComment = new UpdateComment { CommentId = commentId, Text = "Updated text" };
 
-        _repository.Get(commentId, default).Returns(comment);
-        _repository.Update(Arg.Any<UpdatePublicationCommentEntity>(), default).Returns(comment);
+        repository.Get(commentId, default).Returns(comment);
+        repository.Update(Arg.Any<UpdatePublicationCommentEntity>(), default).Returns(comment);
 
-        await _service.UpdateAsync(updateComment);
+        await service.UpdateAsync(updateComment);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Edit, comment);
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Edit, comment);
     }
 
     [Fact]
@@ -220,12 +240,12 @@ public class PublicationCommentServiceShould : UnitTestBase
         var comment = new Comment { Id = commentId, Text = "Same text" };
         var updateComment = new UpdateComment { CommentId = commentId, Text = "Same text" };
 
-        _repository.Get(commentId, default).Returns(comment);
+        repository.Get(commentId, default).Returns(comment);
 
-        var result = await _service.UpdateAsync(updateComment);
+        var result = await service.UpdateAsync(updateComment);
 
         result.Should().Be(comment);
-        await _repository.DidNotReceive().Update(
+        await repository.DidNotReceive().Update(
             Arg.Any<UpdatePublicationCommentEntity>(), Arg.Any<CancellationToken>());
     }
 
@@ -233,14 +253,7 @@ public class PublicationCommentServiceShould : UnitTestBase
     /// The removal that went through pays the unread counters and announces itself.
     /// </summary>
     /// <remarks>
-    /// Deletion in this service had no test at all, alone among the four that
-    /// carry comments.
-    ///
-    /// Neither the count nor the last-comment pointer is asserted here, because
-    /// the service no longer decides either: both are written by the transaction
-    /// that marks the comment removed, and what a second removal of the same
-    /// comment does to them is a question for the database. DiscussionCountersShould
-    /// and LastCommentPointerShould answer it against PostgreSQL.
+    /// The count and the last-comment pointer are the database's, see DiscussionCountersShould and LastCommentPointerShould.
     /// </remarks>
     [Fact]
     public async Task PayTheCountersForTheRemovalThatWentThrough()
@@ -257,35 +270,29 @@ public class PublicationCommentServiceShould : UnitTestBase
             CreatedUtc = createdUtc
         };
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(userId));
-        _repository.GetForDelete(commentId, default).Returns(comment);
+        identityProvider.Current.Returns(Identities.User(userId, "testuser"));
+        repository.GetForDelete(commentId, default).Returns(comment);
 
         DeletePublicationCommentEntity? deleted = null;
-        _repository
+        repository
             .Delete(Arg.Do<DeletePublicationCommentEntity>(entity => deleted = entity), default)
             .Returns(true);
 
-        await _service.DeleteAsync(commentId);
+        await service.DeleteAsync(commentId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Delete, Arg.Any<Comment>());
+        intentionManager.Received(1).ThrowIfForbidden(CommentIntention.Delete, Arg.Any<Comment>());
 
         deleted.Should().NotBeNull("the deletion is what the repository is handed");
         deleted!.DeletedByUserId.Should().Be(userId,
             "who removed it is the one thing the row cannot recover afterwards");
-        await _countersRepository.Received(1).DecrementAsync(
+        await countersRepository.Received(1).DecrementAsync(
             publicationId, UnreadEntryType.Message, createdUtc);
-        await _eventProducer.Received(1).SendAsync(EventType.DeletedPublicationComment, commentId);
+        await eventProducer.Received(1).SendAsync(EventType.DeletedPublicationComment, commentId);
     }
 
     /// <summary>
     /// A removal that found the comment already gone pays nothing.
     /// </summary>
-    /// <remarks>
-    /// The author and a moderator can both press delete, and the author can press
-    /// it twice on a slow answer. The unread counter and the event belong to the
-    /// removal that happened: repeating them here takes the counter down twice for
-    /// one comment, and nothing recomputes it.
-    /// </remarks>
     [Fact]
     public async Task LeaveTheCountersToTheRemovalThatTookTheComment()
     {
@@ -299,16 +306,23 @@ public class PublicationCommentServiceShould : UnitTestBase
             CreatedUtc = DateTimeOffset.UtcNow
         };
 
-        _identityProvider.Current.Returns(AuthenticatedIdentities.Of(Guid.NewGuid()));
-        _repository.GetForDelete(commentId, default).Returns(comment);
-        _repository.Delete(Arg.Any<DeletePublicationCommentEntity>(), default).Returns(false);
+        identityProvider.Current.Returns(Identities.User(Guid.NewGuid(), "testuser"));
+        repository.GetForDelete(commentId, default).Returns(comment);
+        repository.Delete(Arg.Any<DeletePublicationCommentEntity>(), default).Returns(false);
 
-        await _service.DeleteAsync(commentId);
+        await service.DeleteAsync(commentId);
 
-        await _countersRepository.DidNotReceive().DecrementAsync(
+        await countersRepository.DidNotReceive().DecrementAsync(
             Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<DateTimeOffset>());
-        await _eventProducer.DidNotReceive().SendAsync(
+        await eventProducer.DidNotReceive().SendAsync(
             Arg.Any<EventType>(), Arg.Any<Guid>());
     }
 
+    private static BlogDto OpenBlog(Guid blogId, params Guid[] blacklisted) => new()
+    {
+        Id = blogId,
+        Author = new GeneralUser { UserId = Guid.NewGuid() },
+        Assistants = Array.Empty<BlogAssistantInfo>(),
+        BlacklistedUserIds = blacklisted.ToHashSet()
+    };
 }

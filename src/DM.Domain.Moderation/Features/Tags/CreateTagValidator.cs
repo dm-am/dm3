@@ -4,9 +4,6 @@ using FluentValidation;
 
 namespace DM.Domain.Moderation.Features.Tags;
 
-/// <summary>
-/// Validator for tag creation
-/// </summary>
 internal class CreateTagValidator : AbstractValidator<CreateTag>
 {
     public CreateTagValidator()
@@ -21,9 +18,7 @@ internal class CreateTagValidator : AbstractValidator<CreateTag>
         RuleFor(t => t.Description)
             .MaximumLength(TagFieldLimits.DescriptionMaxLength).WithMessage(ValidationError.Long);
 
-        // The description is the hint surface, where a hidden block is erased
-        // for every reader: refused with the reason, as on every surface that
-        // has none (the editor's markup check names it in the same words).
+        // The hint surface erases a hidden block for every reader, so it is refused with the reason.
         RuleFor(t => t.Description)
             .Must(description => !PrivateBlockMarkup.ContainsPrivateMarkup(description))
             .WithMessage(t => PrivateBlockMarkup.DescribeSurfaceRefusal(t.Description));

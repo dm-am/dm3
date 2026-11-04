@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using DM.Web.API.Swagger;
 using DM.Web.API.Shared.Authentication;
@@ -23,13 +22,12 @@ namespace DM.Web.API.Features.Game.Readers;
 [Tags("Readers")]
 public class GameReaderController : ControllerBase
 {
-    private readonly IGameUserApiService _userApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly GameUserApiService _userApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <inheritdoc />
     public GameReaderController(
-        IGameUserApiService userApiService,
-        IGameApiService gameApiService)
+        GameUserApiService userApiService,
+        GameApiService gameApiService)
     {
         _userApiService = userApiService;
         _gameApiService = gameApiService;

@@ -1,14 +1,4 @@
 <script setup lang="ts">
-/**
- * RulesPage - site rules page.
- *
- * All sections are static (not loaded from DB).
- * Penalty data lives inline and is rendered via the unified ExpandableList
- * (multi-column mode with per-id slots for rich detail content).
- *
- * Editing — through code.
- */
-
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import {
   ExpandableList,
@@ -23,6 +13,7 @@ import RulesBans from "./RulesBans.vue";
 import RulesAuthors from "./RulesAuthors.vue";
 import RulesStaffTable from "./RulesStaffTable.vue";
 import { useExpandOnHash } from "./expandableListRef";
+import { AUTO_BAN_POINTS, MAX_WARNING_POINTS, points } from "./warningPolicy";
 
 // Type alias (not interface) so the implicit index signature satisfies
 // the ExpandableItem constraint of ExpandableList.
@@ -30,52 +21,28 @@ type Penalty = {
   id: string;
   violation: string;
   points: string;
-  sortValue: number;
 };
+
+// The top of the table is the most one warning may cost.
+const TOP_PENALTY = String(MAX_WARNING_POINTS);
 
 // Order: from most serious violations to less serious
 const penalties: Penalty[] = [
-  { id: "hacking", violation: "Атака на сайт", points: "∞", sortValue: 100 },
-  { id: "insult", violation: "Оскорбление", points: "6", sortValue: 6.2 },
+  { id: "hacking", violation: "Атака на сайт", points: "∞" },
+  { id: "insult", violation: "Оскорбление", points: TOP_PENALTY },
   {
     id: "advertising",
     violation: "Несогласованная реклама",
-    points: "6",
-    sortValue: 6.1,
+    points: TOP_PENALTY,
   },
-  {
-    id: "multiaccounts",
-    violation: "Мультиаккаунт",
-    points: "6",
-    sortValue: 6,
-  },
-  {
-    id: "banned-proxy",
-    violation: "Нарушение бана",
-    points: "5",
-    sortValue: 5,
-  },
-  {
-    id: "provocation",
-    violation: "Провокация и политика",
-    points: "3",
-    sortValue: 3,
-  },
-  {
-    id: "shock-content",
-    violation: "Шок-контент без [nsfw]",
-    points: "2",
-    sortValue: 2,
-  },
-  { id: "profanity", violation: "Мат без [nsfw]", points: "1", sortValue: 1.5 },
-  { id: "flame", violation: "Флейм", points: "1", sortValue: 1 },
-  {
-    id: "flood",
-    violation: "Флуд, вайп и оффтоп",
-    points: "1",
-    sortValue: 0.5,
-  },
-].sort((a, b) => b.sortValue - a.sortValue);
+  { id: "multiaccounts", violation: "Мультиаккаунт", points: TOP_PENALTY },
+  { id: "banned-proxy", violation: "Нарушение бана", points: "5" },
+  { id: "provocation", violation: "Провокация и политика", points: "3" },
+  { id: "shock-content", violation: "Шок-контент без [nsfw]", points: "2" },
+  { id: "profanity", violation: "Мат без [nsfw]", points: "1" },
+  { id: "flame", violation: "Флейм", points: "1" },
+  { id: "flood", violation: "Флуд, вайп и оффтоп", points: "1" },
+];
 
 const penaltyColumns: ExpandableListColumn<Penalty>[] = [
   { key: "violation", label: "Нарушение" },
@@ -92,7 +59,6 @@ const penaltiesListRef = useExpandOnHash(penalties);
 
   <RulesHelpLinks />
 
-  <!-- Penalties table -->
   <section id="penalties" class="rules-section">
     <BlockTitle>Нарушения и баллы</BlockTitle>
     <ExpandableList
@@ -123,8 +89,8 @@ const penaltiesListRef = useExpandOnHash(penalties);
 
       <template #item-multiaccounts>
         Один человек — один аккаунт. Дополнительные аккаунты банятся навсегда,
-        основной получает 6 баллов (0 баллов, если сразу сообщить об ошибке
-        через
+        основной получает {{ points(MAX_WARNING_POINTS) }} (0 баллов, если сразу
+        сообщить об ошибке через
         <router-link :to="supportFor('AccountRemoval')"
           ><strong>форму поддержки</strong></router-link
         >
@@ -135,8 +101,8 @@ const penaltiesListRef = useExpandOnHash(penalties);
       </template>
 
       <template #item-banned-proxy>
-        Публикация текстов за забаненного пользователя запрещена. Мастер в бане
-        может согласовать ассистента для ведения игры.
+        Писать за забаненного пользователя запрещено. Мастер в бане может
+        согласовать ассистента для ведения игры.
       </template>
 
       <template #item-provocation>
@@ -170,8 +136,8 @@ const penaltiesListRef = useExpandOnHash(penalties);
       </template>
     </ExpandableList>
     <p class="penalty-note">
-      Набрали 6 баллов — получили бан. Баллы сгорают через 6 месяцев без
-      нарушений.
+      Набрали {{ points(AUTO_BAN_POINTS) }} — получили бан. Баллы сгорают через
+      6 месяцев без нарушений.
     </p>
   </section>
 
@@ -179,7 +145,6 @@ const penaltiesListRef = useExpandOnHash(penalties);
 
   <RulesBans />
 
-  <!-- For authors and masters -->
   <RulesAuthors />
 
   <RulesStaffTable />

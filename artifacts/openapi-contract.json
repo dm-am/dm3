@@ -50,6 +50,7 @@
   ],
   "DM.Web.API.Features.Account.Credentials.UsernameChangeApprovalInfo": [
     "currentUsername",
+    "linkLifetimeHours",
     "status"
   ],
   "DM.Web.API.Features.Account.Credentials.UsernameChangeCompletionRequest": [
@@ -71,6 +72,9 @@
     "resolverComment",
     "status"
   ],
+  "DM.Web.API.Features.Account.MailedLink": [
+    "linkLifetimeHours"
+  ],
   "DM.Web.API.Features.Account.Recovery.PasswordResetCompletion": [
     "newPassword"
   ],
@@ -82,6 +86,7 @@
   ],
   "DM.Web.API.Features.Account.Recovery.RecoveryResponse": [
     "email",
+    "linkLifetimeHours",
     "status"
   ],
   "DM.Web.API.Features.Account.Registration.ActivationRequest": [
@@ -132,9 +137,6 @@
     "lastVerifiedUtc",
     "recoveryCodesLeft",
     "removalDueUtc"
-  ],
-  "DM.Web.API.Features.Blog.Blacklists.BlockUserRequest": [
-    "username"
   ],
   "DM.Web.API.Features.Blog.Blogs.Blog": [
     "activatedUtc",
@@ -210,13 +212,9 @@
     "inviterUsername",
     "type"
   ],
-  "DM.Web.API.Features.Blog.Invitations.CreateInvitationRequest": [
-    "username"
-  ],
   "DM.Web.API.Features.Blog.Publications.CreatePublicationRequest": [
     "content",
     "preview",
-    "publishImmediately",
     "rubricId",
     "title"
   ],
@@ -228,11 +226,9 @@
     "content",
     "createdUtc",
     "id",
-    "isPublished",
     "likes",
     "modifiedUtc",
     "preview",
-    "publishedUtc",
     "rubric",
     "title",
     "viewCount",
@@ -244,7 +240,6 @@
   "DM.Web.API.Features.Blog.Publications.UpdatePublicationRequest": [
     "clearRubric",
     "content",
-    "isPublished",
     "preview",
     "rubricId",
     "title"
@@ -436,7 +431,6 @@
     "topPlayersByVolume"
   ],
   "DM.Web.API.Features.Community.Statistics.LiveStats": [
-    "lastReviewedPost",
     "online",
     "totals",
     "weeklyBestPost"
@@ -574,8 +568,6 @@
     "name",
     "personalNote",
     "picture",
-    "postReviewsGiven",
-    "postReviewsReceived",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -589,6 +581,10 @@
     "username",
     "usernameHistory",
     "viewer"
+  ],
+  "DM.Web.API.Features.Community.Users.UserSubscriptionCategory": [
+    "category",
+    "events"
   ],
   "DM.Web.API.Features.Community.Users.UsernameHistoryEntry": [
     "changedUtc",
@@ -785,7 +781,6 @@
     "unreadCount"
   ],
   "DM.Web.API.Features.Game.ChatRooms.ChatRoomAccess": [
-    "character",
     "id",
     "user"
   ],
@@ -1048,11 +1043,13 @@
     "viewer"
   ],
   "DM.Web.API.Features.Game.Posts.PostAttachment": [
+    "addressees",
     "contentType",
     "createdUtc",
     "fileName",
     "height",
     "id",
+    "recipients",
     "sizeBytes",
     "url",
     "width"
@@ -1063,6 +1060,7 @@
     "modifiedUtc"
   ],
   "DM.Web.API.Features.Game.Posts.PostViewer": [
+    "canEdit",
     "canReview"
   ],
   "DM.Web.API.Features.Game.Posts.UpdatePostRequest": [
@@ -1083,7 +1081,12 @@
     "gameTitle",
     "id",
     "modifiedUtc",
-    "text"
+    "text",
+    "viewer"
+  ],
+  "DM.Web.API.Features.Game.Reviews.GameReviewViewer": [
+    "canDelete",
+    "canEdit"
   ],
   "DM.Web.API.Features.Game.Reviews.PostReviewDto": [
     "author",
@@ -1229,7 +1232,6 @@
     "comments",
     "createdUtc",
     "description",
-    "descriptionHtml",
     "resolvedByUsername",
     "resolvedUtc",
     "status",
@@ -1244,9 +1246,6 @@
     "type",
     "unreadMessagesCount",
     "viewer"
-  ],
-  "DM.Web.API.Features.Messaging.Chats.ChatUnreadCount": [
-    "count"
   ],
   "DM.Web.API.Features.Messaging.Chats.ChatViewer": [
     "canClearHistory",
@@ -1308,9 +1307,6 @@
     "startsUtc",
     "title"
   ],
-  "DM.Web.API.Features.Messaging.Messages.CreateMessageInput": [
-    "text"
-  ],
   "DM.Web.API.Features.Messaging.Messages.Message": [
     "author",
     "createdUtc",
@@ -1329,7 +1325,7 @@
     "id",
     "modifiedUtc"
   ],
-  "DM.Web.API.Features.Messaging.Messages.UpdateMessageInput": [
+  "DM.Web.API.Features.Messaging.Messages.MessageInput": [
     "text"
   ],
   "DM.Web.API.Features.Moderation.Awards.ContestSeriesAward": [
@@ -1457,8 +1453,6 @@
     "permissions",
     "personalNote",
     "picture",
-    "postReviewsGiven",
-    "postReviewsReceived",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -1525,21 +1519,8 @@
     "totalBans",
     "totalWarnings"
   ],
-  "DM.Web.API.Features.Moderation.Tags.CreateTagGroupRequest": [
-    "description",
-    "maxTagsPerGame",
-    "sortOrder",
-    "title"
-  ],
-  "DM.Web.API.Features.Moderation.Tags.CreateTagRequest": [
-    "description",
-    "groupId",
-    "sortOrder",
-    "title"
-  ],
   "DM.Web.API.Features.Moderation.Tags.Tag": [
     "description",
-    "descriptionHtml",
     "gamesCount",
     "groupId",
     "groupTitle",
@@ -1556,13 +1537,13 @@
     "tagsCount",
     "title"
   ],
-  "DM.Web.API.Features.Moderation.Tags.UpdateTagGroupRequest": [
+  "DM.Web.API.Features.Moderation.Tags.TagGroupRequest": [
     "description",
     "maxTagsPerGame",
     "sortOrder",
     "title"
   ],
-  "DM.Web.API.Features.Moderation.Tags.UpdateTagRequest": [
+  "DM.Web.API.Features.Moderation.Tags.TagRequest": [
     "description",
     "groupId",
     "sortOrder",
@@ -1587,7 +1568,6 @@
     "commentsCount",
     "createdUtc",
     "description",
-    "descriptionHtml",
     "entityId",
     "entityType",
     "guestEmail",
@@ -1613,7 +1593,6 @@
     "commentsCount",
     "createdUtc",
     "description",
-    "descriptionHtml",
     "entityId",
     "entityType",
     "guestEmail",
@@ -1698,6 +1677,7 @@
     "user"
   ],
   "DM.Web.API.Features.Moderation.Warnings.WarningLogEntry": [
+    "accessRestricted",
     "createdUtc",
     "entityCreatedUtc",
     "entityType",
@@ -1734,9 +1714,6 @@
     "hideGames",
     "hideMessages"
   ],
-  "DM.Web.API.Features.Personal.Blacklists.BlockUserRequest": [
-    "username"
-  ],
   "DM.Web.API.Features.Personal.Blacklists.UpdateBlacklistSettingsRequest": [
     "autoPopulateContentBlacklist",
     "blockDirectMessages",
@@ -1750,7 +1727,6 @@
     "entityId",
     "entityTitle",
     "entityType",
-    "expiresUtc",
     "id",
     "inviterUsername",
     "type"
@@ -1795,10 +1771,8 @@
     "title",
     "url"
   ],
-  "DM.Web.API.Features.Personal.Notifications.NotificationCount": [
-    "count"
-  ],
   "DM.Web.API.Features.Personal.Notifications.NotificationDetail": [
+    "isDestination",
     "isMoment",
     "label",
     "value"
@@ -1815,27 +1789,13 @@
     "discord",
     "telegram"
   ],
-  "DM.Web.API.Features.Personal.Preferences.Paging": [
-    "commentsPerPage",
-    "entitiesPerPage",
-    "messagesPerPage",
-    "postsPerPage",
-    "topicsPerPage"
-  ],
   "DM.Web.API.Features.Personal.Preferences.Preferences": [
-    "paging",
+    "pageSize",
     "theme",
     "timeZoneId"
   ],
-  "DM.Web.API.Features.Personal.Preferences.UpdatePagingRequest": [
-    "commentsPerPage",
-    "entitiesPerPage",
-    "messagesPerPage",
-    "postsPerPage",
-    "topicsPerPage"
-  ],
   "DM.Web.API.Features.Personal.Preferences.UpdatePreferencesRequest": [
-    "paging",
+    "pageSize",
     "theme",
     "timeZoneId"
   ],
@@ -1878,8 +1838,6 @@
     "name",
     "personalNote",
     "picture",
-    "postReviewsGiven",
-    "postReviewsReceived",
     "publicationsAuthored",
     "rating",
     "registeredUtc",
@@ -1935,37 +1893,43 @@
   ],
   "DM.Web.API.Shared.BbRendering.CommonBbText": [
     "context",
-    "parseMode",
     "surface",
     "value"
   ],
   "DM.Web.API.Shared.BbRendering.HintBbText": [
     "context",
-    "parseMode",
     "surface",
     "value"
   ],
   "DM.Web.API.Shared.BbRendering.InfoBbText": [
     "context",
-    "parseMode",
     "surface",
     "value"
   ],
   "DM.Web.API.Shared.BbRendering.PostBbText": [
     "context",
-    "parseMode",
     "surface",
     "value"
   ],
   "DM.Web.API.Shared.BbRendering.RenderContextEnvelope": [
+    "editableBy",
     "gameId",
     "gameLeadUserIds",
+    "gameShowPrivateMessages",
     "postAuthorUserId",
-    "postSharePrivateWithAll",
     "privateAddresseeNamesByAttribute",
     "privateAddresseeOwnerUserIdsByAttribute",
     "roomViewPrivateText",
-    "surface"
+    "surface",
+    "withheldUploadIds"
+  ],
+  "DM.Web.API.Shared.BbRendering.TagDescriptionBbText": [
+    "context",
+    "surface",
+    "value"
+  ],
+  "DM.Web.API.Shared.Dto.BlockUserRequest": [
+    "username"
   ],
   "DM.Web.API.Shared.Dto.Comment": [
     "author",
@@ -1975,7 +1939,7 @@
     "modifiedUtc",
     "text"
   ],
-  "DM.Web.API.Shared.Dto.CreateCommentRequest": [
+  "DM.Web.API.Shared.Dto.CommentRequest": [
     "text"
   ],
   "DM.Web.API.Shared.Dto.CreateInvitationRequest": [
@@ -1995,25 +1959,10 @@
     "nextCursor",
     "prevCursor"
   ],
-  "DM.Web.API.Shared.Dto.DiscussionComment": [
-    "author",
-    "canDelete",
-    "canEdit",
-    "canLike",
-    "createdUtc",
-    "id",
-    "isLikedByMe",
-    "likesCount",
-    "modifiedUtc",
-    "text"
-  ],
-  "DM.Web.API.Shared.Dto.DiscussionResponse": [
-    "canComment",
-    "comments",
-    "paging",
-    "totalLikes"
-  ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Account.Authentication.LoginResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Account.MailedLink, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Account.TwoFactor.RecoveryCodesResponse, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
@@ -2130,9 +2079,6 @@
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.General.Tickets.TrackedTicket, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
-  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Messaging.Chats.ChatUnreadCount, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
-    "resource"
-  ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Features.Messaging.GlobalChatEvents.GlobalChatEvent, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
@@ -2170,6 +2116,12 @@
     "resource"
   ],
   "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.Dto.Comment, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.Dto.UnreadCount, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "resource"
+  ],
+  "DM.Web.API.Shared.Dto.Envelope`1[[DM.Web.API.Shared.Dto.Upload, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "resource"
   ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Account.Authentication.Session, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
@@ -2237,6 +2189,10 @@
     "resources"
   ],
   "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Users.User, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
+    "paging",
+    "resources"
+  ],
+  "DM.Web.API.Shared.Dto.ListEnvelope`1[[DM.Web.API.Features.Community.Users.UserSubscriptionCategory, DM.Web.API, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null]]": [
     "paging",
     "resources"
   ],
@@ -2395,16 +2351,23 @@
     "take",
     "total"
   ],
-  "DM.Web.API.Shared.Dto.UpdateCommentRequest": [
-    "text"
+  "DM.Web.API.Shared.Dto.UnreadCount": [
+    "count"
+  ],
+  "DM.Web.API.Shared.Dto.UpdateUploadAudienceRequest": [
+    "characterIds",
+    "visibleTo"
   ],
   "DM.Web.API.Shared.Dto.Upload": [
+    "addressees",
+    "canOpen",
     "confirmedUtc",
     "contentType",
     "contentUrl",
     "createdUtc",
     "id",
     "originalFileName",
+    "recipients",
     "sizeBytes",
     "status",
     "targetId",
@@ -2412,6 +2375,10 @@
     "uploaderUsername",
     "url",
     "userId"
+  ],
+  "DM.Web.API.Shared.Dto.UploadAddressee": [
+    "id",
+    "name"
   ],
   "DM.Web.API.Shared.Dto.UserRef": [
     "id",
@@ -2434,5 +2401,425 @@
     "status",
     "title",
     "type"
+  ],
+  "System.Func`2[[DM.Domain.Core.Authorization.IIntentionManager, DM.Domain.Core, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null],[System.Boolean, System.Private.CoreLib, Version=10.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e]]": [
+    "method",
+    "target"
+  ],
+  "System.ModuleHandle": [
+    "mdStreamVersion"
+  ],
+  "System.Reflection.Assembly": [
+    "codeBase",
+    "customAttributes",
+    "definedTypes",
+    "entryPoint",
+    "escapedCodeBase",
+    "exportedTypes",
+    "fullName",
+    "globalAssemblyCache",
+    "hostContext",
+    "imageRuntimeVersion",
+    "isCollectible",
+    "isDynamic",
+    "isFullyTrusted",
+    "location",
+    "manifestModule",
+    "modules",
+    "reflectionOnly",
+    "securityRuleSet"
+  ],
+  "System.Reflection.ConstructorInfo": [
+    "attributes",
+    "callingConvention",
+    "containsGenericParameters",
+    "customAttributes",
+    "declaringType",
+    "isAbstract",
+    "isAssembly",
+    "isCollectible",
+    "isConstructedGenericMethod",
+    "isConstructor",
+    "isFamily",
+    "isFamilyAndAssembly",
+    "isFamilyOrAssembly",
+    "isFinal",
+    "isGenericMethod",
+    "isGenericMethodDefinition",
+    "isHideBySig",
+    "isPrivate",
+    "isPublic",
+    "isSecurityCritical",
+    "isSecuritySafeCritical",
+    "isSecurityTransparent",
+    "isSpecialName",
+    "isStatic",
+    "isVirtual",
+    "memberType",
+    "metadataToken",
+    "methodHandle",
+    "methodImplementationFlags",
+    "module",
+    "name",
+    "reflectedType"
+  ],
+  "System.Reflection.CustomAttributeData": [
+    "attributeType",
+    "constructor",
+    "constructorArguments",
+    "namedArguments"
+  ],
+  "System.Reflection.CustomAttributeNamedArgument": [
+    "isField",
+    "memberInfo",
+    "memberName",
+    "typedValue"
+  ],
+  "System.Reflection.CustomAttributeTypedArgument": [
+    "argumentType",
+    "value"
+  ],
+  "System.Reflection.EventInfo": [
+    "addMethod",
+    "attributes",
+    "customAttributes",
+    "declaringType",
+    "eventHandlerType",
+    "isCollectible",
+    "isMulticast",
+    "isSpecialName",
+    "memberType",
+    "metadataToken",
+    "module",
+    "name",
+    "raiseMethod",
+    "reflectedType",
+    "removeMethod"
+  ],
+  "System.Reflection.FieldInfo": [
+    "attributes",
+    "customAttributes",
+    "declaringType",
+    "fieldHandle",
+    "fieldType",
+    "isAssembly",
+    "isCollectible",
+    "isFamily",
+    "isFamilyAndAssembly",
+    "isFamilyOrAssembly",
+    "isInitOnly",
+    "isLiteral",
+    "isNotSerialized",
+    "isPinvokeImpl",
+    "isPrivate",
+    "isPublic",
+    "isSecurityCritical",
+    "isSecuritySafeCritical",
+    "isSecurityTransparent",
+    "isSpecialName",
+    "isStatic",
+    "memberType",
+    "metadataToken",
+    "module",
+    "name",
+    "reflectedType"
+  ],
+  "System.Reflection.MemberInfo": [
+    "customAttributes",
+    "declaringType",
+    "isCollectible",
+    "memberType",
+    "metadataToken",
+    "module",
+    "name",
+    "reflectedType"
+  ],
+  "System.Reflection.MethodBase": [
+    "attributes",
+    "callingConvention",
+    "containsGenericParameters",
+    "customAttributes",
+    "declaringType",
+    "isAbstract",
+    "isAssembly",
+    "isCollectible",
+    "isConstructedGenericMethod",
+    "isConstructor",
+    "isFamily",
+    "isFamilyAndAssembly",
+    "isFamilyOrAssembly",
+    "isFinal",
+    "isGenericMethod",
+    "isGenericMethodDefinition",
+    "isHideBySig",
+    "isPrivate",
+    "isPublic",
+    "isSecurityCritical",
+    "isSecuritySafeCritical",
+    "isSecurityTransparent",
+    "isSpecialName",
+    "isStatic",
+    "isVirtual",
+    "memberType",
+    "metadataToken",
+    "methodHandle",
+    "methodImplementationFlags",
+    "module",
+    "name",
+    "reflectedType"
+  ],
+  "System.Reflection.MethodInfo": [
+    "attributes",
+    "callingConvention",
+    "containsGenericParameters",
+    "customAttributes",
+    "declaringType",
+    "isAbstract",
+    "isAssembly",
+    "isCollectible",
+    "isConstructedGenericMethod",
+    "isConstructor",
+    "isFamily",
+    "isFamilyAndAssembly",
+    "isFamilyOrAssembly",
+    "isFinal",
+    "isGenericMethod",
+    "isGenericMethodDefinition",
+    "isHideBySig",
+    "isPrivate",
+    "isPublic",
+    "isSecurityCritical",
+    "isSecuritySafeCritical",
+    "isSecurityTransparent",
+    "isSpecialName",
+    "isStatic",
+    "isVirtual",
+    "memberType",
+    "metadataToken",
+    "methodHandle",
+    "methodImplementationFlags",
+    "module",
+    "name",
+    "reflectedType",
+    "returnParameter",
+    "returnType",
+    "returnTypeCustomAttributes"
+  ],
+  "System.Reflection.Module": [
+    "assembly",
+    "customAttributes",
+    "fullyQualifiedName",
+    "mdStreamVersion",
+    "metadataToken",
+    "moduleHandle",
+    "moduleVersionId",
+    "name",
+    "scopeName"
+  ],
+  "System.Reflection.ParameterInfo": [
+    "attributes",
+    "customAttributes",
+    "defaultValue",
+    "hasDefaultValue",
+    "isIn",
+    "isLcid",
+    "isOptional",
+    "isOut",
+    "isRetval",
+    "member",
+    "metadataToken",
+    "name",
+    "parameterType",
+    "position",
+    "rawDefaultValue"
+  ],
+  "System.Reflection.PropertyInfo": [
+    "attributes",
+    "canRead",
+    "canWrite",
+    "customAttributes",
+    "declaringType",
+    "getMethod",
+    "isCollectible",
+    "isSpecialName",
+    "memberType",
+    "metadataToken",
+    "module",
+    "name",
+    "propertyType",
+    "reflectedType",
+    "setMethod"
+  ],
+  "System.Reflection.TypeInfo": [
+    "assembly",
+    "assemblyQualifiedName",
+    "attributes",
+    "baseType",
+    "containsGenericParameters",
+    "customAttributes",
+    "declaredConstructors",
+    "declaredEvents",
+    "declaredFields",
+    "declaredMembers",
+    "declaredMethods",
+    "declaredNestedTypes",
+    "declaredProperties",
+    "declaringMethod",
+    "declaringType",
+    "fullName",
+    "genericParameterAttributes",
+    "genericParameterPosition",
+    "genericTypeArguments",
+    "genericTypeParameters",
+    "guid",
+    "hasElementType",
+    "implementedInterfaces",
+    "isAbstract",
+    "isAnsiClass",
+    "isArray",
+    "isAutoClass",
+    "isAutoLayout",
+    "isByRef",
+    "isByRefLike",
+    "isCOMObject",
+    "isClass",
+    "isCollectible",
+    "isConstructedGenericType",
+    "isContextful",
+    "isEnum",
+    "isExplicitLayout",
+    "isFunctionPointer",
+    "isGenericMethodParameter",
+    "isGenericParameter",
+    "isGenericType",
+    "isGenericTypeDefinition",
+    "isGenericTypeParameter",
+    "isImport",
+    "isInterface",
+    "isLayoutSequential",
+    "isMarshalByRef",
+    "isNested",
+    "isNestedAssembly",
+    "isNestedFamANDAssem",
+    "isNestedFamORAssem",
+    "isNestedFamily",
+    "isNestedPrivate",
+    "isNestedPublic",
+    "isNotPublic",
+    "isPointer",
+    "isPrimitive",
+    "isPublic",
+    "isSZArray",
+    "isSealed",
+    "isSecurityCritical",
+    "isSecuritySafeCritical",
+    "isSecurityTransparent",
+    "isSerializable",
+    "isSignatureType",
+    "isSpecialName",
+    "isTypeDefinition",
+    "isUnicodeClass",
+    "isUnmanagedFunctionPointer",
+    "isValueType",
+    "isVariableBoundArray",
+    "isVisible",
+    "memberType",
+    "metadataToken",
+    "module",
+    "name",
+    "namespace",
+    "reflectedType",
+    "structLayoutAttribute",
+    "typeHandle",
+    "typeInitializer",
+    "underlyingSystemType"
+  ],
+  "System.Runtime.InteropServices.StructLayoutAttribute": [
+    "typeId",
+    "value"
+  ],
+  "System.RuntimeFieldHandle": [
+    "value"
+  ],
+  "System.RuntimeMethodHandle": [
+    "value"
+  ],
+  "System.RuntimeTypeHandle": [
+    "value"
+  ],
+  "System.Type": [
+    "assembly",
+    "assemblyQualifiedName",
+    "attributes",
+    "baseType",
+    "containsGenericParameters",
+    "customAttributes",
+    "declaringMethod",
+    "declaringType",
+    "fullName",
+    "genericParameterAttributes",
+    "genericParameterPosition",
+    "genericTypeArguments",
+    "guid",
+    "hasElementType",
+    "isAbstract",
+    "isAnsiClass",
+    "isArray",
+    "isAutoClass",
+    "isAutoLayout",
+    "isByRef",
+    "isByRefLike",
+    "isCOMObject",
+    "isClass",
+    "isCollectible",
+    "isConstructedGenericType",
+    "isContextful",
+    "isEnum",
+    "isExplicitLayout",
+    "isFunctionPointer",
+    "isGenericMethodParameter",
+    "isGenericParameter",
+    "isGenericType",
+    "isGenericTypeDefinition",
+    "isGenericTypeParameter",
+    "isImport",
+    "isInterface",
+    "isLayoutSequential",
+    "isMarshalByRef",
+    "isNested",
+    "isNestedAssembly",
+    "isNestedFamANDAssem",
+    "isNestedFamORAssem",
+    "isNestedFamily",
+    "isNestedPrivate",
+    "isNestedPublic",
+    "isNotPublic",
+    "isPointer",
+    "isPrimitive",
+    "isPublic",
+    "isSZArray",
+    "isSealed",
+    "isSecurityCritical",
+    "isSecuritySafeCritical",
+    "isSecurityTransparent",
+    "isSerializable",
+    "isSignatureType",
+    "isSpecialName",
+    "isTypeDefinition",
+    "isUnicodeClass",
+    "isUnmanagedFunctionPointer",
+    "isValueType",
+    "isVariableBoundArray",
+    "isVisible",
+    "memberType",
+    "metadataToken",
+    "module",
+    "name",
+    "namespace",
+    "reflectedType",
+    "structLayoutAttribute",
+    "typeHandle",
+    "typeInitializer",
+    "underlyingSystemType"
   ]
 }

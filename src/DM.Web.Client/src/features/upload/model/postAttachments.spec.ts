@@ -2,16 +2,6 @@
  * @vitest-environment node
  */
 
-/**
- * The composer's half of the two-phase attach.
- *
- * A file cannot be uploaded before the post it belongs to exists, so the post is
- * published first and the files follow. That makes a partial outcome real — a
- * published post with a file missing — and what these assert is that the partial
- * outcome is reported rather than swallowed, and that the uploads are sequential
- * so the server's count of a post's attachments is not read by three requests at
- * once.
- */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/api", () => ({
@@ -23,12 +13,13 @@ import {
   MAX_POST_ATTACHMENTS,
   MAX_POST_ATTACHMENT_BYTES,
   describeAttachmentProblem,
+  pickAttachments,
   uploadPostAttachments,
 } from "./postAttachments";
+import { everyReader, type PendingAttachment } from "./attachmentAudience";
 
 function file(name: string, type: string, size: number): File {
-  // Constructing a File with the real size would allocate it; the picker only
-  // reads .size, so the property is defined directly.
+  // A File of the real size would allocate it; the picker reads only .size.
   const f = new File([""], name, { type });
   Object.defineProperty(f, "size", { value: size });
   return f;
@@ -65,6 +56,64 @@ describe("describeAttachmentProblem", () => {
   });
 });
 
+describe("pickAttachments", () => {
+  const names = (files: File[]) => files.map((f) => f.name);
+  const png = (name: string) => file(name, "image/png", 10);
+
+  it("ends the pick at the limit, with the limit as its refusal", () => {
+    const picked = pickAttachments(
+      ["a.png", "b.png", "c.png", "d.png", "e.png"].map(png),
+      0,
+    );
+
+    expect(names(picked.accepted)).toEqual(["a.png", "b.png", "c.png"]);
+    expect(picked.error).toBe("Не больше 3 файлов");
+  });
+
+  it("leaves out a file of the wrong kind and tries the next one", () => {
+    const picked = pickAttachments(
+      [file("rules.pdf", "application/pdf", 10), png("map.png")],
+      0,
+    );
+
+    expect(names(picked.accepted)).toEqual(["map.png"]);
+    expect(picked.error).toBe(
+      "rules.pdf: Допустимы только JPEG, PNG, WebP и GIF",
+    );
+  });
+
+  it("leaves the last refusal of the pick standing", () => {
+    const big = file("big.png", "image/png", MAX_POST_ATTACHMENT_BYTES + 1);
+    const picked = pickAttachments(
+      [file("rules.pdf", "application/pdf", 10), big, png("map.png")],
+      0,
+    );
+
+    expect(names(picked.accepted)).toEqual(["map.png"]);
+    expect(picked.error).toBe(`big.png: ${describeAttachmentProblem(big)}`);
+  });
+
+  it("counts the files already held toward the limit", () => {
+    const fits = pickAttachments([png("a.png"), png("b.png")], 1);
+    expect(names(fits.accepted)).toEqual(["a.png", "b.png"]);
+    expect(fits.error).toBeNull();
+
+    const over = pickAttachments([png("a.png"), png("b.png")], 2);
+    expect(names(over.accepted)).toEqual(["a.png"]);
+    expect(over.error).toBe("Не больше 3 файлов");
+
+    const none = pickAttachments([png("a.png")], MAX_POST_ATTACHMENTS);
+    expect(none.accepted).toEqual([]);
+    expect(none.error).toBe("Не больше 3 файлов");
+  });
+});
+
+/** A file chosen in a form, every reader's unless marked. */
+const chosen = (one: File, audience = everyReader()): PendingAttachment => ({
+  file: one,
+  audience,
+});
+
 describe("uploadPostAttachments", () => {
   beforeEach(() => vi.mocked(uploadApi.directUpload).mockReset());
 
@@ -75,8 +124,8 @@ describe("uploadPostAttachments", () => {
     } as never);
 
     await uploadPostAttachments("post-1", [
-      file("a.png", "image/png", 10),
-      file("b.png", "image/png", 10),
+      chosen(file("a.png", "image/png", 10)),
+      chosen(file("b.png", "image/png", 10)),
     ]);
 
     expect(uploadApi.directUpload).toHaveBeenCalledTimes(2);
@@ -85,13 +134,29 @@ describe("uploadPostAttachments", () => {
     );
     expect(vi.mocked(uploadApi.directUpload).mock.calls[0][2]).toEqual({
       targetId: "post-1",
+      audience: everyReader(),
     });
   });
 
-  /**
-   * The whole point of reporting rather than throwing: the post is already
-   * published, so "it failed" is wrong and silence is worse.
-   */
+  // Stored with the file: no moment when it is seen wider than chosen.
+  it("sends each file with the mark chosen for it", async () => {
+    vi.mocked(uploadApi.directUpload).mockResolvedValue({
+      data: null,
+      error: null,
+    } as never);
+    const map = file("map.png", "image/png", 10);
+    const art = file("art.png", "image/png", 10);
+    const vasya = { visibleTo: "Selected" as const, characterIds: ["c-vasya"] };
+
+    await uploadPostAttachments("post-1", [chosen(map, vasya), chosen(art)]);
+
+    const calls = vi.mocked(uploadApi.directUpload).mock.calls;
+    expect(calls[0][0]).toBe(map);
+    expect(calls[0][2]?.audience).toEqual(vasya);
+    expect(calls[1][0]).toBe(art);
+    expect(calls[1][2]?.audience).toEqual(everyReader());
+  });
+
   it("reports which files did not make it and counts the ones that did", async () => {
     vi.mocked(uploadApi.directUpload)
       .mockResolvedValueOnce({ data: { id: "u1" }, error: null } as never)
@@ -101,18 +166,14 @@ describe("uploadPostAttachments", () => {
       } as never);
 
     const result = await uploadPostAttachments("post-1", [
-      file("ok.png", "image/png", 10),
-      file("broken.png", "image/png", 10),
+      chosen(file("ok.png", "image/png", 10)),
+      chosen(file("broken.png", "image/png", 10)),
     ]);
 
     expect(result.uploadedCount).toBe(1);
     expect(result.failedNames).toEqual(["broken.png"]);
   });
 
-  /**
-   * One at a time. The server counts a post's attachments to enforce the limit,
-   * and requests racing each other read the same count.
-   */
   it("uploads one file at a time", async () => {
     let inFlight = 0;
     let overlapped = false;
@@ -127,7 +188,7 @@ describe("uploadPostAttachments", () => {
     await uploadPostAttachments(
       "post-1",
       Array.from({ length: MAX_POST_ATTACHMENTS }, (_, i) =>
-        file(`${i}.png`, "image/png", 10),
+        chosen(file(`${i}.png`, "image/png", 10)),
       ),
     );
 

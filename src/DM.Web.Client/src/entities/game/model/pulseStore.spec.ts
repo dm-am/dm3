@@ -1,26 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import type { ApiResult, ListEnvelope } from "@/shared/api/models/common";
-import type { Post } from "./types";
+import type { Post } from "./postTypes";
+import { deferred } from "@/shared/lib/testing/tasks";
 
 const getRatedPosts = vi.fn();
 
-vi.mock("../api/gameApi", () => ({
+vi.mock("../api/postApi", () => ({
   default: {
     getRatedPosts: (...args: unknown[]) => getRatedPosts(...args),
   },
 }));
 
 const { usePulseStore } = await import("./pulseStore");
-
-/** A response the test releases by hand. */
-function deferred() {
-  let release!: (value: ApiResult<ListEnvelope<Post>>) => void;
-  const promise = new Promise<ApiResult<ListEnvelope<Post>>>((resolve) => {
-    release = resolve;
-  });
-  return { promise, release };
-}
 
 const page = (title: string): ApiResult<ListEnvelope<Post>> => ({
   data: {
@@ -58,21 +50,11 @@ describe("usePulseStore", () => {
     vi.useRealTimers();
   });
 
-  /**
-   * The reader leaves a filter and comes back to it while the first answer is
-   * still on the wire.
-   *
-   * This store used to decide "is this answer still wanted" by comparing the
-   * request key it had built, which answers a different question: the key of the
-   * abandoned first request equals the key of the third, so its answer was
-   * accepted and painted over the newer one. The shared guard counts requests
-   * rather than describing them, so the only answer that lands is the one asked
-   * for last.
-   */
+  // The abandoned request asked what the newest asks, so only a count of requests tells them apart.
   it("drops the answer to an abandoned request that asked the same question", async () => {
-    const first = deferred();
-    const second = deferred();
-    const third = deferred();
+    const first = deferred<ApiResult<ListEnvelope<Post>>>();
+    const second = deferred<ApiResult<ListEnvelope<Post>>>();
+    const third = deferred<ApiResult<ListEnvelope<Post>>>();
     getRatedPosts
       .mockReturnValueOnce(first.promise)
       .mockReturnValueOnce(second.promise)
@@ -84,18 +66,18 @@ describe("usePulseStore", () => {
     const other = store.fetchPosts({ number: 2 });
     const current = store.fetchPosts({ number: 1 });
 
-    third.release(page("свежая первая страница"));
+    third.resolve(page("свежая первая страница"));
     await current;
-    second.release(page("вторая страница"));
+    second.resolve(page("вторая страница"));
     await other;
-    first.release(page("брошенная первая страница"));
+    first.resolve(page("брошенная первая страница"));
     await abandoned;
 
     expect(titles(store.posts)).toEqual(["свежая первая страница"]);
   });
 
   it("does not put a second request on the wire for the one already there", async () => {
-    const only = deferred();
+    const only = deferred<ApiResult<ListEnvelope<Post>>>();
     getRatedPosts.mockReturnValue(only.promise);
 
     const store = usePulseStore();
@@ -103,21 +85,13 @@ describe("usePulseStore", () => {
     aMomentPasses();
     const repeat = store.fetchPosts({ number: 1 });
 
-    only.release(page("первая страница"));
+    only.resolve(page("первая страница"));
     await Promise.all([started, repeat]);
 
     expect(getRatedPosts).toHaveBeenCalledTimes(1);
   });
 
-  /**
-   * The cache is asked a question it can answer.
-   *
-   * The key used to be built from the request rather than from the filter, and
-   * the request carries the start of the seven-day window as a millisecond
-   * timestamp taken at call time. Every call therefore produced a key of its
-   * own: the cache was written to, never read from, and the prefetch warmed
-   * entries under keys nobody would ever ask for.
-   */
+  // Keyed by the filter: the request carries a timestamp taken at call time.
   it("answers the same page from the cache instead of asking again", async () => {
     getRatedPosts.mockResolvedValue(page("первая страница"));
 
@@ -131,18 +105,31 @@ describe("usePulseStore", () => {
   });
 
   it("keeps a cleared store cleared when the answer it was waiting for lands", async () => {
-    const pending = deferred();
+    const pending = deferred<ApiResult<ListEnvelope<Post>>>();
     getRatedPosts.mockReturnValue(pending.promise);
 
     const store = usePulseStore();
     const fetching = store.fetchPosts({ number: 1 });
     store.clear();
 
-    pending.release(page("страница из прошлого"));
+    pending.resolve(page("страница из прошлого"));
     await fetching;
 
     // clear() is the reader leaving the page. An answer that arrives afterwards
     // has nowhere to go, and putting it in the store resurrects what was cleared.
     expect(store.posts).toEqual([]);
+  });
+  // The words of the shared list of rated posts (RatedPostsList), so a failure reads the same on /pulse.
+  it("keeps the posts shown and names the failure as the shared list does", async () => {
+    getRatedPosts.mockResolvedValueOnce(page("первая страница"));
+    const store = usePulseStore();
+    await store.fetchPosts({ number: 1 });
+
+    getRatedPosts.mockResolvedValueOnce({ data: null, error: { status: 500 } });
+    aMomentPasses();
+    await store.fetchPosts({ number: 2 });
+
+    expect(store.error).toBe("Не удалось загрузить оцененные посты");
+    expect(titles(store.posts)).toEqual(["первая страница"]);
   });
 });

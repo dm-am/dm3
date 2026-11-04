@@ -1,48 +1,25 @@
 <script setup lang="ts">
-/**
- * MessageSearchBar — the search row of a feed of messages: the global chat or
- * one correspondence (`scope`).
- *
- * The site has exactly one search idiom, the .filter-bar line: a growing
- * FilterSearchInput followed by $control-height buttons (forum, games, blogs,
- * comments, polls, pulse, users all assemble it the same way). This is that
- * line, applied to the chat. It stands ABOVE the chat frame — the search is
- * not part of the feed — and its results unroll as a dropdown laid over the
- * feed: picking a row jumps the feed to that message and the dropdown stays
- * open, so the next hit is one click away.
- *
- * The scope is the feed the row stands over and nothing else (see
- * searchStore), order is the backend's only one, newest first — hence no
- * scope selector and no sort control. The field names the feed it searches:
- * "Поиск по чату" over the global chat, "Поиск по переписке" over a
- * correspondence.
- *
- * The default slot carries the rest of the row (the feed's "Перейти к дате"
- * button), so the field and the buttons share one line.
- *
- * The endpoint is authenticated, so a guest gets the row without the field
- * rather than a 401 that would throw him off the page.
- */
+// Stands above the chat frame; picking a hit jumps the feed and leaves the dropdown open.
+// A guest gets the row without the field: the endpoint is authenticated.
 import { computed, ref, watch } from "vue";
 import { storeToRefs } from "pinia";
 import { vClickOutside } from "@/shared/directives";
 import { FilterSearchInput } from "@/shared/ui/Filters";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { NOTHING_FOUND } from "@/shared/lib/constants/copy";
 import { useAuthStore } from "@/shared/stores";
 import { useMessageSearchStore } from "../model/searchStore";
 import type { MessageSearchResult, MessageSearchScope } from "../model/types";
 
 const props = withDefaults(
   defineProps<{
-    /** The feed the row stands over, and the only one it searches. */
     scope?: MessageSearchScope;
   }>(),
   { scope: "global" },
 );
 
 const emit = defineEmits<{
-  /** Land on this message in the live feed (the page owns the feed). */
   jump: [messageId: string];
 }>();
 
@@ -51,11 +28,9 @@ const { query, results, hasMore, loading, loadingMore, error, hasSearched } =
   storeToRefs(store);
 const { user } = storeToRefs(useAuthStore());
 
-// Before the field reads the query back on mount: the query of another feed
-// is not this feed's.
+// Before the field reads the query back on mount: another feed's query is not this one's.
 store.setScope(props.scope);
 
-/** The words of the field, by the feed it searches. */
 const words = computed(() =>
   props.scope === "global"
     ? { placeholder: "Поиск по чату", label: "Поиск по глобальному чату" }
@@ -64,10 +39,8 @@ const words = computed(() =>
 
 const rootRef = ref<HTMLElement | null>(null);
 
-/** The results layer is up or down; the query itself outlives it. */
 const resultsOpen = ref(false);
 
-// Another correspondence opened in the same page: its feed starts unsearched.
 watch(
   () => props.scope,
   (scope) => {
@@ -76,10 +49,6 @@ watch(
   },
 );
 
-/**
- * Applied by the shared filter-search composable — the same 300ms debounce,
- * the same apply-on-blur, that every other search field on the site uses.
- */
 function runSearch(value: string) {
   store.query = value;
   if (!value.trim()) {
@@ -100,17 +69,12 @@ function close() {
   resultsOpen.value = false;
 }
 
-/**
- * Anything on the row that is not the field takes the results down: the row's
- * other controls open layers of their own over the same feed, and two layers
- * over one feed collide.
- */
+// Any other control of the row opens a layer over the same feed, so the results go down.
 function onRowPointerDown(event: PointerEvent) {
   const target = event.target as HTMLElement | null;
   if (!target?.closest(".search-container")) close();
 }
 
-/** Coming back to the field brings the last hits back with it. */
 function reopen() {
   if (hasSearched.value) resultsOpen.value = true;
 }
@@ -126,19 +90,12 @@ function onKeydown(event: KeyboardEvent) {
   applySearch();
 }
 
-/**
- * Jump to the message. The dropdown deliberately stays up: a search is read
- * hit by hit, and closing it would cost a fresh search per hit.
- */
+// The dropdown stays up: a search is read hit by hit.
 function jumpTo(result: MessageSearchResult) {
   emit("jump", result.id);
 }
 
-/**
- * The page's Ctrl+F lands here: focus the field, restore the last hits, and
- * answer whether there was a field at all — a guest has none, and the page
- * must then leave the browser's own find alone instead of swallowing the key.
- */
+// Answers whether there was a field: a guest has none, and the browser's own find stays.
 function focus(): boolean {
   const field = rootRef.value?.querySelector<HTMLInputElement>("input");
   if (!field) return false;
@@ -186,7 +143,7 @@ defineExpose({ focus });
         v-else-if="hasSearched && results.length === 0"
         class="search-state"
       >
-        Ничего не найдено
+        {{ NOTHING_FOUND }}
       </secondary-text>
 
       <template v-else>
@@ -229,21 +186,15 @@ defineExpose({ focus });
 
 <style scoped lang="sass">
 @use "@/assets/styles/Filters" as *
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 @use "@/assets/styles/Animations" as *
 
-// The row IS the site's filter bar, and it is also what the results hang off:
-// the chat frame below clips its own overflow, so the layer has to belong to
-// something outside it.
+// The chat frame clips its overflow, so the results layer belongs to the row.
 .chat-search
   position: relative
   margin-bottom: $small
   +filter-bar
-  +filter-responsive
 
-// Results layer — the shared dropdown panel stretched to the full width of the
-// row, so it reads as a section over the feed rather than as a menu. Settles in
-// on the site's one reveal idiom.
 .search-dropdown
   +dropdown-panel
   left: 0
@@ -271,8 +222,6 @@ defineExpose({ focus });
 .retry-button
   +button
 
-// A hit is a control: full width, left aligned, lit on hover, and its text
-// stays selectable inside it.
 .result-row
   display: flex
   flex-direction: column
@@ -288,11 +237,9 @@ defineExpose({ focus });
     background-color: $hover-overlay
   &:focus:not(:focus-visible)
     outline: none
-  // Hits stand flush in the list, so the ring goes inward: on the edge it
-  // would lie on the neighbouring hit.
+  // Hits stand flush, so the ring goes inward.
   &:focus-visible
-    outline: 2px solid $link
-    outline-offset: -2px
+    +focus-ring($inward: true)
 
 .result-time
   font-size: $secondary-font-size
@@ -300,8 +247,7 @@ defineExpose({ focus });
 
 .result-snippet
   color: $text
-  word-break: break-word
-  overflow-wrap: break-word
+  overflow-wrap: anywhere
 
 .load-more-row
   display: flex

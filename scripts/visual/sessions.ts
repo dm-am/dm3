@@ -1,6 +1,7 @@
 import { request } from "@playwright/test";
 import { mkdirSync, writeFileSync } from "fs";
 import { join } from "path";
+import { env } from "./env";
 import { ROLES, type Role } from "./roles";
 import { resolveFixture } from "./fixture";
 
@@ -50,9 +51,9 @@ async function saveSession(
 }
 
 export default async function globalSetup() {
-  const app = process.env.VISUAL_APP!;
-  const api = process.env.VISUAL_API!;
-  const directory = process.env.VISUAL_AUTH!;
+  const app = env("VISUAL_APP");
+  const api = env("VISUAL_API");
+  const directory = env("VISUAL_AUTH");
   mkdirSync(directory, { recursive: true });
 
   for (const role of ROLES) {

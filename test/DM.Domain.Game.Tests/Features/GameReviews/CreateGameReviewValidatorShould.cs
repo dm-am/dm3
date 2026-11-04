@@ -1,12 +1,11 @@
 using System;
 using DM.Domain.Game.Features.GameReviews;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.GameReviews;
 
-public class CreateGameReviewValidatorShould : UnitTestBase
+public class CreateGameReviewValidatorShould
 {
     private readonly CreateGameReviewValidator validator = new();
 
@@ -57,7 +56,7 @@ public class CreateGameReviewValidatorShould : UnitTestBase
         var input = new CreateGameReview
         {
             GameId = Guid.NewGuid(),
-            Text = new string('a', 5001)
+            Text = new string('a', GameReviewFieldLimits.TextMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);

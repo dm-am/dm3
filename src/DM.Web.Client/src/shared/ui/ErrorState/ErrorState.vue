@@ -1,11 +1,4 @@
 <script setup lang="ts">
-/**
- * Unified block-level load-error box.
- *
- * It replaces the red error boxes that pages used to each carry a copy of.
- * A page that still has its own has not moved over yet: this component is the
- * destination, not a list of who uses it today.
- */
 import { ref } from "vue";
 
 const props = defineProps<{
@@ -44,7 +37,7 @@ async function handleRetry() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
 // Square, as every panel of content on a page: the radius belongs to controls.
 .error-state

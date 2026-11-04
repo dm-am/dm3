@@ -2,22 +2,14 @@
  * @vitest-environment jsdom
  */
 
-/**
- * A category of the achievement catalogue: its icon, its words, and its own
- * action as the caption line under the description, "Редактировать". Its
- * tiers are a table whose rows are added and removed in place, drawn as the
- * editor of a character sheet draws its own (AttributeSchemaEditor): the
- * pencil and the bin at the end of a row, "+ Тир" right under the table.
- */
+// A category: its action is the caption line under the description; its tiers
+// are a table with the pencil and the bin in a row and "+ Тир" under it.
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
-import type { Column } from "@/shared/ui/DataTable";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import ModerationAchievements from "./ModerationAchievements.vue";
+import { mountPage, windows } from "@/shared/lib/testing/mountPage";
 
-const { openModal } = vi.hoisted(() => ({ openModal: vi.fn() }));
-
-vi.mock("@/entities/achievement", async () => {
-  const { ref } = await import("vue");
+const api = vi.hoisted(() => {
   const category = {
     id: "c-1",
     title: "Игровые посты",
@@ -28,11 +20,12 @@ vi.mock("@/entities/achievement", async () => {
     sortOrder: 2,
     isActive: true,
   };
+  const listed = <T>(resources: T[]) =>
+    Promise.resolve({ data: { resources }, error: null });
   return {
-    achievementApi: { deleteAchievementType: vi.fn() },
-    useAchievementCatalog: () => ({
-      adminCategories: ref([category]),
-      adminTypes: ref([
+    getModerationAchievementCategories: () => listed([category]),
+    getModerationAchievementTypes: () =>
+      listed([
         {
           id: "t-2",
           code: "game_posts_100",
@@ -46,60 +39,58 @@ vi.mock("@/entities/achievement", async () => {
           code: "game_posts_10",
           title: "Рассказчик",
           threshold: 10,
-          tier: 1,
+          tier: 3,
           category,
         },
       ]),
-      loadAdmin: vi.fn().mockResolvedValue(undefined),
-      reload: vi.fn().mockResolvedValue(undefined),
-    }),
-    formatThreshold: (_metric: string, threshold: number) => String(threshold),
   };
 });
 
-vi.mock("vue-final-modal", () => ({
-  useModal: () => ({ open: openModal, close: vi.fn() }),
-}));
-
-/** The gate has its own spec; here the viewer may open the page. */
-vi.mock("./lib/useRoleGate", async () => {
-  const { ref } = await import("vue");
-  return { useRoleGate: () => ({ hasAccess: ref(true), deniedText: "" }) };
-});
+// The network only: the catalog, the page and its windows are the real ones.
+vi.mock("@/entities/achievement/api/achievementApi", () => ({ default: api }));
 
 enableAutoUnmount(afterEach);
-afterEach(() => openModal.mockClear());
 
-function render() {
-  return mount(ModerationAchievements, {
-    global: {
-      stubs: { PageTitle: true, "page-title": true, GameIcon: true },
+async function render() {
+  const { wrapper } = await mountPage(
+    ModerationAchievements,
+    "/moderation/achievements",
+    {
+      routes: [["moderation-achievements", "/moderation/achievements"]],
     },
-  });
+  );
+  await flushPromises();
+  return wrapper;
 }
 
+/** The title of the window open over the page, if one is. */
+const openWindow = () => windows().find(".dialog-frame .dialog h2");
+
 describe("a category of the achievement catalogue", () => {
-  it("writes its action as the caption line under the description", () => {
-    const wrapper = render();
+  // One Russian word for the order, the one the award types use.
+  it("names its order in Russian", async () => {
+    const wrapper = await render();
+
+    const meta = wrapper.get(".cat-row .cat-meta");
+    expect(meta.get(".cat-order").text()).toBe("порядок 2");
+    expect(meta.text()).not.toContain("sort");
+  });
+
+  it("writes its action as the caption line under the description", async () => {
+    const wrapper = await render();
 
     const info = wrapper.get(".cat-row .cat-info");
-    const parts = Array.from(info.element.children).map(
-      (child) => child.className.split(" ")[0],
-    );
-    expect(parts).toEqual([
-      "cat-title",
-      "cat-meta",
-      "cat-desc",
-      "caption-line",
-    ]);
     expect(info.get(".caption-line").text()).toBe("Редактировать");
-    expect(wrapper.find(".scroll-row").exists()).toBe(false);
   });
 
   it("opens the category from its caption, and a new tier from under its table", async () => {
-    const wrapper = render();
+    const wrapper = await render();
     await wrapper.get(".caption-line .caption-action").trigger("click");
-    expect(openModal).toHaveBeenCalledTimes(1);
+    await flushPromises();
+    expect(openWindow().text()).toBe("Категория: game_posts_authored");
+    await windows().get(".dialog-frame .dialog-close").trigger("click");
+    await flushPromises();
+    expect(openWindow().exists()).toBe(false);
 
     // Right under the table of the tiers it adds a row to.
     const add = wrapper.get(".add-tier");
@@ -110,36 +101,31 @@ describe("a category of the achievement catalogue", () => {
     await add.trigger("click");
     await flushPromises();
 
-    expect(openModal).toHaveBeenCalledTimes(2);
+    expect(openWindow().text()).toBe("Новый тир");
+    // The metal after the highest one the chain has: bronze and silver, then gold.
+    expect(windows().get<HTMLInputElement>("#tier-number").element.value).toBe(
+      "1",
+    );
   });
 });
 
-/**
- * The tiers of a category are the site's table (DataTable), as every list of
- * moderation is, with every column at every width: no column has a place in
- * an order of need.
- */
+// The tiers are the site's table, every column at every width.
 describe("the tiers of a category", () => {
-  it("are the site's table, every column standing", () => {
-    const wrapper = render();
+  it("are the site's table, every column standing", async () => {
+    const wrapper = await render();
 
-    const columns = wrapper
-      .getComponent({ name: "DataTable" })
-      .props("columns") as Column[];
-    expect(columns.map((column) => column.label)).toEqual([
+    const headers = wrapper.findAll(".tier-table th");
+    expect(headers.map((header) => header.text())).toEqual([
       "Тир",
       "Код",
       "Название",
       "Порог",
       "",
     ]);
-    for (const column of columns) {
-      expect(column).not.toHaveProperty("rank");
-    }
   });
 
   it("lists the tiers by their threshold, each with the pencil and the bin", async () => {
-    const wrapper = render();
+    const wrapper = await render();
 
     const rows = wrapper.findAll("tr.table-row");
     expect(rows.map((row) => row.get("td.col-title").text())).toEqual([
@@ -147,6 +133,11 @@ describe("the tiers of a category", () => {
       "Летописец",
     ]);
     expect(rows[0].get("td.col-code code").text()).toBe("game_posts_10");
+    // The tier as its metal, not its number on the scale.
+    expect(rows.map((row) => row.get("td.col-tier").text())).toEqual([
+      "Бронза",
+      "Серебро",
+    ]);
     const signs = rows[0].findAll("td.col-actions button");
     expect(signs.map((sign) => sign.attributes("aria-label"))).toEqual([
       "Редактировать тир Рассказчик",
@@ -156,6 +147,7 @@ describe("the tiers of a category", () => {
     expect(rows[0].get("td.col-actions").text()).toBe("");
 
     await signs[0].trigger("click");
-    expect(openModal).toHaveBeenCalledTimes(1);
+    await flushPromises();
+    expect(openWindow().text()).toBe("Тир: game_posts_10");
   });
 });

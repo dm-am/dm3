@@ -1,6 +1,6 @@
 using System;
 using System.Collections.Generic;
-using System.Text.Json.Serialization;
+
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Messaging.Messages;
 using DM.Domain.Core.Enums;
@@ -20,7 +20,6 @@ public class Chat
     /// <summary>
     /// Chat type (direct, group, or global)
     /// </summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public ChatType Type { get; set; }
 
     /// <summary>

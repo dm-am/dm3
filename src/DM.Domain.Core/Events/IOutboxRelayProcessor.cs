@@ -5,7 +5,7 @@ namespace DM.Domain.Core.Events;
 /// <summary>
 /// One stored domain event, as the relay hands it to its publish delegate.
 /// </summary>
-/// <param name="EventId">Identity of the publication (W1.4): every republication
+/// <param name="EventId">Identity of the publication: every republication
 /// of one row carries the same value, which is what lets the consumer treat a
 /// relay retry as a replay rather than a second event.</param>
 /// <param name="EventType">Type of the event.</param>

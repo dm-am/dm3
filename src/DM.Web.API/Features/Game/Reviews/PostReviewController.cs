@@ -18,10 +18,9 @@ namespace DM.Web.API.Features.Game.Reviews;
 [Tags("Posts")]
 public class PostReviewController : ControllerBase
 {
-    private readonly IPostReviewApiService _postReviewApiService;
+    private readonly PostReviewApiService _postReviewApiService;
 
-    /// <inheritdoc />
-    public PostReviewController(IPostReviewApiService postReviewApiService)
+    public PostReviewController(PostReviewApiService postReviewApiService)
     {
         _postReviewApiService = postReviewApiService;
     }

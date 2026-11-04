@@ -35,26 +35,10 @@ const unlock = () => {
 };
 
 /**
- * Holds the page still under a window.
- *
- * The page does not scroll in the window of the browser: it scrolls inside
- * App.vue's `.main`, and `body` stands at overflow: hidden for good
- * (Reset.sass). So the scroll lock of vue-final-modal, which targets `body`,
- * never locked anything, and this locks the container from the scroll registry
- * instead. The side column of a narrow screen (MobileDrawer) holds the page
- * with this same lock.
- *
- * One more thing this lock must do: keep the place of the scrollbar. `.main`
- * scrolls with `overflow-y: scroll`, and on a desktop with a classic scrollbar
- * the bar takes real width; `overflow: hidden` alone takes the bar away and
- * the whole page under the dimming jumps sideways by its width, and back again
- * when the window closes. `scrollbar-gutter: stable` keeps that width reserved
- * while the bar is gone.
- *
- * Counted, because a window may stand over a window (the question "Закрыть без
- * сохранения?" over the one it guards): the page is let go when the last of
- * them closes. A holder that unmounts while holding lets go on the way out, so
- * a route change under an open window cannot leave the page frozen.
+ * Holds the page still under a window. The page scrolls in App.vue's `.main`,
+ * not body, so the lock of vue-final-modal locks nothing; scrollbar-gutter keeps
+ * the width of a classic scrollbar. Counted for a window over a window, and let
+ * go by a holder that unmounts.
  */
 export function usePageScrollLock() {
   let held = false;

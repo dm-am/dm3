@@ -22,13 +22,12 @@ namespace DM.Web.API.Features.Game.Invitations;
 [Tags("Invitations")]
 public class GameInvitationController : ControllerBase
 {
-    private readonly IGameInvitationApiService _invitationApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly GameInvitationApiService _invitationApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <inheritdoc />
     public GameInvitationController(
-        IGameInvitationApiService invitationApiService,
-        IGameApiService gameApiService)
+        GameInvitationApiService invitationApiService,
+        GameApiService gameApiService)
     {
         _invitationApiService = invitationApiService;
         _gameApiService = gameApiService;

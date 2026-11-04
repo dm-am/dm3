@@ -4,27 +4,16 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Personal.Features.Profiles;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.Profiles;
 
-public class UpdateUserValidatorShould : UnitTestBase
+public class UpdateUserValidatorShould
 {
     private readonly UpdateUserValidator validator = new();
 
-    private static UserSettings ValidSettings() => new()
-    {
-        Paging = new PagingSettings
-        {
-            CommentsPerPage = 10,
-            MessagesPerPage = 10,
-            PostsPerPage = 10,
-            TopicsPerPage = 10,
-            EntitiesPerPage = 10
-        }
-    };
+    private static UserSettings ValidSettings() => new() { PageSize = 10 };
 
     [Fact]
     public void PassForValidInput()
@@ -140,60 +129,37 @@ public class UpdateUserValidatorShould : UnitTestBase
     [InlineData(0)]
     [InlineData(15)]
     [InlineData(201)]
-    public void FailWhenCommentsPerPageIsNotAnOfferedSize(int value)
+    public void FailWhenThePageSizeIsNotAnOfferedSize(int value)
     {
         var settings = ValidSettings();
-        settings.Paging.CommentsPerPage = value;
+        settings.PageSize = value;
         var input = new UpdateUser { Settings = settings };
 
         var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(u => u.Settings.Paging.CommentsPerPage)
-            .WithErrorMessage(ValidationError.Invalid);
-    }
-
-    [Theory]
-    [InlineData(0)]
-    [InlineData(15)]
-    [InlineData(201)]
-    public void FailWhenPostsPerPageIsNotAnOfferedSize(int value)
-    {
-        var settings = ValidSettings();
-        settings.Paging.PostsPerPage = value;
-        var input = new UpdateUser { Settings = settings };
-
-        var result = validator.TestValidate(input);
-        result.ShouldHaveValidationErrorFor(u => u.Settings.Paging.PostsPerPage)
+        result.ShouldHaveValidationErrorFor(u => u.Settings!.PageSize)
             .WithErrorMessage(ValidationError.Invalid);
     }
 
     /// <summary>
-    /// The largest offered size saves. It used to fail the whole form — the
-    /// validator demanded less than 200 while the form offered exactly 200 — so a
-    /// reader who picked it could not save an unrelated change either.
+    /// The largest offered size saves.
     /// </summary>
     [Fact]
     public void AcceptTheLargestOfferedPageSize()
     {
         var settings = ValidSettings();
-        settings.Paging.CommentsPerPage = PagingPolicy.MaxPageSize;
-        settings.Paging.PostsPerPage = PagingPolicy.MaxPageSize;
+        settings.PageSize = PagingPolicy.MaxPageSize;
         var input = new UpdateUser { Settings = settings };
 
         var result = validator.TestValidate(input);
 
-        result.ShouldNotHaveValidationErrorFor(u => u.Settings.Paging.CommentsPerPage);
-        result.ShouldNotHaveValidationErrorFor(u => u.Settings.Paging.PostsPerPage);
+        result.ShouldNotHaveValidationErrorFor(u => u.Settings!.PageSize);
     }
 
     /// <summary>
     /// Hiding markup on a surface that does not declare it.
     /// </summary>
     /// <remarks>
-    /// The tag is not markup here, so it hides nothing: the line the author
-    /// wrote for one reader is published with the tag still around it. Refused
-    /// at the save path rather than erased, because a draft is not an attack
-    /// and a paragraph that vanished without a word is looked for instead of
-    /// rewritten.
+    /// Refused rather than erased: a paragraph that vanished without a word is looked for, not rewritten.
     /// </remarks>
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()

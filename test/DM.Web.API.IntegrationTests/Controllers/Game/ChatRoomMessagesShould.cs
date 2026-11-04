@@ -21,14 +21,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
 /// <summary>
-/// A game room chat is authorized by the room it belongs to. It is created with
-/// no participant rows at all, so the moment the messaging module gets to apply
-/// its participation rule to it, every request is refused - the master of the
-/// game included, who cannot possibly be a stranger to his own room.
-///
-/// The neighbouring file covers the authorization attributes only: all of its
-/// facts are unauthenticated, so both halves of this - the room saying yes and
-/// the chat saying no - stayed invisible to CI.
+/// A game room chat is authorized by the room it belongs to: it has no participant rows, so the chat's own
+/// participation rule would refuse its own master.
 /// </summary>
 public class ChatRoomMessagesShould : IntegrationTestBase
 {
@@ -56,6 +50,48 @@ public class ChatRoomMessagesShould : IntegrationTestBase
         }
     }
 
+    /// <summary>
+    /// A room is not moderated, so a removed message of its chat reaches nobody: not the master who reads
+    /// the room, not a moderator.
+    /// </summary>
+    [Fact]
+    public async Task GiveTheTextOfARemovedMessageToNobody()
+    {
+        const string removedText = "Removed chat room message.";
+        var (roomId, chatId) = await CreateChatRoom();
+        try
+        {
+            using (var scope = DatabaseFixture.Factory.Services.CreateScope())
+            {
+                var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+                dbContext.Messages.Add(new DbMessage
+                {
+                    MessageId = Guid.NewGuid(),
+                    ChatId = chatId,
+                    UserId = TestConstants.TestUserId,
+                    CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-1),
+                    Text = removedText,
+                    IsRemoved = true,
+                    DeletedByUserId = TestConstants.TestUserId
+                });
+                await dbContext.SaveChangesAsync();
+            }
+
+            var asMaster = await Client.SendAsync(
+                CreateAuthenticatedRequest(HttpMethod.Get, $"/v1/chat-rooms/{roomId}/messages"));
+            var asModerator = await Client.SendAsync(CreateAuthenticatedRequest(
+                HttpMethod.Get, $"/v1/chat-rooms/{roomId}/messages", CustomWebApplicationFactory.CreateModeratorUser()));
+
+            var masterBody = await asMaster.Content.ReadAsStringAsync();
+            masterBody.Should().Contain(SeededText).And.NotContain(removedText);
+            (await asModerator.Content.ReadAsStringAsync()).Should().NotContain(removedText);
+        }
+        finally
+        {
+            await DropChatRoom(roomId, chatId);
+        }
+    }
+
     [Fact]
     public async Task LetTheGameMasterPostIntoItsOwnChatRoom()
     {
@@ -76,10 +112,7 @@ public class ChatRoomMessagesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The other half of the same rule. A game room chat is not one of the user's
-    /// own chats, and the general chat endpoint has to keep refusing it. Making
-    /// the room readable by loosening the participation predicate instead would
-    /// open this door as a side effect, for everyone the room is available to.
+    /// A game room chat is not one of the user's own chats, and the general chat endpoint keeps refusing it.
     /// </summary>
     [Fact]
     public async Task KeepTheGameRoomChatOutOfTheGeneralChatEndpoint()
@@ -103,15 +136,8 @@ public class ChatRoomMessagesShould : IntegrationTestBase
     /// room clears it.
     /// </summary>
     /// <remarks>
-    /// The room and the chat are the same thing under two identifiers, and the
-    /// unread marker exists under the room's: the room half creates it, the game
-    /// badge sums it and deleting the room removes it. Counting messages under
-    /// the chat's identifier wrote into a marker nobody had made, so the number
-    /// was zero before the message, zero after it, and zero forever.
-    ///
-    /// Stated end to end because that is the only place the two halves meet: each
-    /// module is self-consistent, and every unit test of either one passed while
-    /// the feature did nothing at all.
+    /// The room and the chat are one thing under two identifiers, and the marker is the room's. End to end: each
+    /// module is self-consistent on its own.
     /// </remarks>
     [Fact]
     public async Task CountAMessageAsUnreadForTheOtherReaderAndClearItOnRead()
@@ -122,7 +148,7 @@ public class ChatRoomMessagesShould : IntegrationTestBase
             var reader = new GeneralUser
             {
                 UserId = TestConstants.SecondUserId,
-                Username = TestConstants.SecondUserUsername,
+                Username = TestConstants.SecondUserLogin,
                 Role = UserRole.RegularUser,
                 AccessPolicy = AccessPolicy.NotSpecified
             };
@@ -174,16 +200,8 @@ public class ChatRoomMessagesShould : IntegrationTestBase
     /// who does not.
     /// </summary>
     /// <remarks>
-    /// The rule of the room does not ask about the game: the open arm of
-    /// ViewMessages lets every reader in. What turns away the game a reader does
-    /// not see is the read that brings the room to the rule, GetChatRoomAsync
-    /// through RoomAvailable, and nothing else stands between a stranger and the
-    /// history of an open chat room of a private draft or of a game that waits on
-    /// premoderation. The unit tests of the resolver cannot see that read, and
-    /// the scope check of the repositories only asks that the user is passed,
-    /// not that the filter is right, so the answer is stated here end to end:
-    /// the same room reads while its game is in sight and is absent once the
-    /// game is hidden.
+    /// The open arm lets every reader in, and only GetChatRoomAsync through RoomAvailable turns away a game the
+    /// reader does not see; the resolver tests cannot see that read.
     /// </remarks>
     [Theory]
     [InlineData(ModuleStatus.Draft, PremoderationStatus.Approved, DraftVisibility.Private)]
@@ -210,10 +228,7 @@ public class ChatRoomMessagesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A guest reads an open chat room the way he reads the posts of an open room:
-    /// everybody who sees the game reads it, and a guest sees a public game. Once
-    /// the game is out of his sight, the room answers him as an address with
-    /// nothing behind it, word for word.
+    /// A guest reads an open chat room of a public game; once the game is hidden, the room answers as nothing.
     /// </summary>
     [Theory]
     [InlineData(ModuleStatus.Draft, PremoderationStatus.Approved, DraftVisibility.Private)]
@@ -237,11 +252,8 @@ public class ChatRoomMessagesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A closed chat room is read by the people it was opened to, all of them
-    /// signed in, and a guest is told nothing about it: not a refusal, which would
-    /// confirm the room exists, but the answer for an address with nothing behind
-    /// it. The same room opened up is read by the same guest, so it is the room
-    /// being closed that turns him away, not the game.
+    /// A closed chat room is read by the people it was opened to; a guest gets the answer for an empty address,
+    /// and the same room opened up reads.
     /// </summary>
     [Fact]
     public async Task AnswerAGuestAboutAClosedChatRoomAsAboutNothing()
@@ -266,22 +278,12 @@ public class ChatRoomMessagesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// What a guest is answered for the messages of a chat room: the status and the
-    /// body, minus the per-request trace and with identifiers written alike, so a
-    /// sentence that only repeats the id it was given is not told apart.
+    /// The status and body a guest gets, minus the trace and with identifiers written alike.
     /// </summary>
     private async Task<string> GuestAnswer(Guid roomId)
     {
         var response = await Client.GetAsync($"/v1/chat-rooms/{roomId}/messages");
-        var body = await response.Content.ReadAsStringAsync();
-        using var document = JsonDocument.Parse(body);
-        var fields = string.Join("&", document.RootElement
-            .EnumerateObject()
-            .Where(p => p.Name != "traceId")
-            .OrderBy(p => p.Name, StringComparer.Ordinal)
-            .Select(p => $"{p.Name}={p.Value.GetRawText()}"));
-        return $"{(int)response.StatusCode} " + System.Text.RegularExpressions.Regex.Replace(fields,
-            @"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", "{id}");
+        return $"{(int)response.StatusCode} " + Masked(await response.Content.ReadAsStringAsync());
     }
 
     private async Task OpenRoom(Guid roomId)
@@ -315,10 +317,7 @@ public class ChatRoomMessagesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A chat room of TestGame, whose master is TestUser, with its chat attached
-    /// and deliberately without a single UserChatLink - that is exactly the shape
-    /// the application creates. The unread marker is the one RoomService writes
-    /// on creation: keyed by the room, parented by the game.
+    /// A chat room of TestGame without a single UserChatLink, as the application creates it, with the room's marker.
     /// </summary>
     private async Task<(Guid RoomId, Guid ChatId)> CreateChatRoom(Guid? readerUserId = null)
     {
@@ -385,10 +384,7 @@ public class ChatRoomMessagesShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A game of its own, public and approved, mastered by TestUser, with an open
-    /// chat room holding one message. Fresh identifiers every time: the fixture
-    /// database is shared and the public ids are uniquely indexed, and a game of
-    /// its own is what the test may hide without touching anybody else's.
+    /// A game of its own, public and approved, with an open chat room holding one message; fresh identifiers.
     /// </summary>
     private async Task<(Guid GameId, Guid RoomId)> CreateGameWithOpenChatRoom()
     {

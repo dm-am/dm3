@@ -8,8 +8,7 @@ namespace DM.Web.API.Features.Community.Endorsements;
 /// User endorsement information (positive recommendation)
 /// </summary>
 /// <remarks>
-/// Endorsements are positive-only recommendations between users who have played together.
-/// No likes support - this is a simple recommendation system.
+/// Positive-only recommendations between users who have played together.
 /// </remarks>
 public class UserEndorsement
 {
@@ -72,13 +71,15 @@ public class EndorsementEligibility
 /// <summary>
 /// Request to create a new user endorsement
 /// </summary>
+/// <remarks>
+/// The length of the text is the domain's rule, the same for an edit.
+/// </remarks>
 public class CreateUserEndorsementRequest
 {
     /// <summary>
-    /// Endorsement text content (plain text, 10-5000 characters, positive only)
+    /// Endorsement text content (plain text, up to 5000 characters, positive only)
     /// </summary>
     [Required(ErrorMessage = "Введите текст рекомендации")]
-    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Рекомендация от 10 до 5000 символов")]
     public string Text { get; set; } = string.Empty;
 }
 
@@ -88,8 +89,7 @@ public class CreateUserEndorsementRequest
 public class UpdateUserEndorsementRequest
 {
     /// <summary>
-    /// Updated endorsement text (plain text, 10-5000 characters, positive only)
+    /// Updated endorsement text (plain text, up to 5000 characters, positive only)
     /// </summary>
-    [StringLength(5000, MinimumLength = 10, ErrorMessage = "Рекомендация от 10 до 5000 символов")]
     public string? Text { get; set; }
 }

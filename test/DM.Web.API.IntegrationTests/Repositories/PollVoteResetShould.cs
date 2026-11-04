@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Community.Features.Polls;
 using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
@@ -18,24 +15,13 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// moment is on one side of the clearing or the other, never inside it.
 /// </summary>
 /// <remarks>
-/// The reset used to read the flag it decides on with no lock and delete the
-/// votes it happened to see, while a vote was a bare insert that waited for
-/// nothing: a vote committed a moment later outlived the reset and appeared, by
-/// name, on a ballot its voter had cast anonymously. The poll row is what
-/// serializes the two now - the reset holds it exclusively, the vote reads it
-/// shared - and only a live server can be asked whether one write waits for
-/// another, which is why this is here and not in the domain tests.
-///
-/// Each test commits its hand-held transaction and awaits the queued call before
-/// asserting: the waiting call must not be left holding a scope the test is
-/// tearing down, and a bounded wait fails the run instead of hanging it.
+/// The reset holds the poll row exclusively and a vote reads it shared; only a live server shows whether one write
+/// waits for another. Each test commits its held transaction and awaits the queued call before asserting.
 /// </remarks>
 public class PollVoteResetShould : IntegrationTestBase
 {
     /// <summary>
-    /// How long the queued call is watched before it is called blocked. Long
-    /// enough that a call which does not wait at all has finished; short enough
-    /// that it is paid once per test.
+    /// How long the queued call is watched before it is called blocked.
     /// </summary>
     private static readonly TimeSpan Probe = TimeSpan.FromSeconds(2);
 
@@ -50,13 +36,7 @@ public class PollVoteResetShould : IntegrationTestBase
     /// A vote still in flight when the ballot is cleared is cleared with it,
     /// rather than surfacing afterwards on the published poll.
     /// </summary>
-    /// <remarks>
-    /// The vote is held open by hand, in the shape the repository casts one in,
-    /// because a vote committed a moment later is not the interesting ordering:
-    /// what broke the promise is a vote that is invisible to the reset's delete
-    /// and committed before the reset's own commit. The reset here is the real
-    /// call, so the ordering of its lock against its read is what is under test.
-    /// </remarks>
+    /// <remarks>The vote is held open by hand in the repository's shape; the reset is the real call.</remarks>
     [Fact]
     public async Task ClearTheVoteThatWasStillInFlightWhenTheBallotWasCleared()
     {
@@ -110,13 +90,7 @@ public class PollVoteResetShould : IntegrationTestBase
     /// A poll is published once. A second request to publish it, sent while the
     /// first is still in flight, must not clear the ballot again.
     /// </summary>
-    /// <remarks>
-    /// The vote left on the table stands for a vote that belongs on the public
-    /// ballot: the poll is public by the time the second request gets to decide,
-    /// and clearing then throws away votes nobody cast anonymously. The decision
-    /// used to be made on a read taken before the transaction was even opened,
-    /// which is a read that cannot see the request in flight.
-    /// </remarks>
+    /// <remarks>The poll is public by the time the second request decides, and its votes are nobody's anonymous ones.</remarks>
     [Fact]
     public async Task LeaveTheBallotAloneWhenThePollIsPublicByTheTimeItDecides()
     {

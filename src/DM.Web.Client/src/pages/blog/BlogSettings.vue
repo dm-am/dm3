@@ -1,25 +1,11 @@
 <script setup lang="ts">
 /**
- * BlogSettings — the blog management page (dev doc 4.2.3.6.6 "Настройки
- * блога"). Mirrors GameSettings and composes the sections (listed by their
- * on-page headings):
- *  - "Общие настройки" (title / who sees the blog while it is being formed)
- *  - "Управление рубриками" (rubric create / delete)
- *  - "Управление ролями" (assistant invite / remove)
- *  - "Черный список" (blog blacklist)
- *  - "Приглашения" (reader invites)
- *  - "Опасная зона" (owner-only blog delete)
- *
- * As on the game side, the sections do not share one audience: each is drawn
- * only for the viewers whose saves the server would accept. The widths are
- * spelled out at the computeds below, each named after its intention.
- *
- * As there too, a viewer the page admits to nothing, a guest included, gets
- * the site's own "not found" at its address instead of a page with a refusal
- * on it; the links to it are drawn only for those it admits.
+ * The blog management page. Each section is drawn only for the viewers whose
+ * saves the server would accept, by the intentions named at the computeds
+ * below; a viewer admitted to nothing gets the site's "not found".
  */
-import { computed, ref, watch } from "vue";
-import { useRoute, useRouter } from "vue-router";
+import { computed, ref } from "vue";
+import { useRouter } from "vue-router";
 import { storeToRefs } from "pinia";
 import { useBlogDetailsStore } from "@/entities/blog";
 import {
@@ -30,89 +16,54 @@ import {
 } from "@/entities/user";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import Button from "@/shared/ui/Button/Button.vue";
-import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlogInfoSection from "./settings/BlogInfoSection.vue";
 import RubricsSection from "./settings/RubricsSection.vue";
 import RolesSection from "./settings/RolesSection.vue";
 import BlacklistSection from "./settings/BlacklistSection.vue";
 import InvitationsSection from "./settings/InvitationsSection.vue";
+import { SettingsSection } from "@/shared/ui/SettingsSection";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
+import { useNotFoundWhen } from "@/shared/lib/composables/useNotFoundWhen";
 
-const route = useRoute();
 const router = useRouter();
 const blogStore = useBlogDetailsStore();
 const { isOwner, canManage } = storeToRefs(blogStore);
 const { user } = storeToRefs(useAuthStore());
 
-// BlogIntention.EditSettings — the information form (BlogService.Update) and
-// the invitation list (BlogInvitationService.GetPendingInvitations). The blog
-// leads (owner and assistant) and senior moderation; this is also what admits
-// a viewer to the page.
+// BlogIntention.EditSettings: the information form and the invitations. Also
+// what admits a viewer to the page.
 const canEditSettings = computed(
   () => canManage.value || userIsSeniorModerator(user.value),
 );
 
-// BlogIntention.Edit — the whole blacklist, its READ included, and assistant
-// removal (BlogService.RemoveAssistant). The owner and administration: unlike
-// the game side, this arm carries no senior-moderator clause, so a senior
-// moderator on this page gets no blacklist at all.
+// BlogIntention.Edit: the blacklist, its read included, and assistant removal;
+// no senior-moderator clause here, unlike the game.
 const canEditBlog = computed(() => isOwner.value || userIsAdmin(user.value));
 
-// BlogIntention.CreateRubric, InviteAssistant and CancelInvitation are the
-// owner's alone, so `isOwner` gates those directly in the template.
-//
-// BlogIntention.InviteReader — the owner and the assistants.
-const canInviteReader = computed(() => canManage.value);
+// ManageRubrics, InviteAssistant and CancelInvitation are the owner's
+// (`isOwner`); InviteReader the owner's and the assistants' (`canManage`).
 
-// Who the viewer is, settled: the start of the page asks the server once
-// (restoreSession), and a session the browser kept no copy of is named by that
-// answer alone. Deciding before it would send an author away from his blog.
-// The roles are read off the blog against the viewer, so they follow him
-// without another read of the blog.
+// Who the viewer is, settled by restoreSession: deciding before it would send
+// an author away from his blog.
 const sessionSettled = ref(false);
 const settle = () => (sessionSettled.value = true);
 restoreSession().then(settle, settle);
 
 const refused = computed(() => sessionSettled.value && !canEditSettings.value);
 
-watch(
-  refused,
-  (value) => {
-    if (!value) return;
-    void router.replace({
-      name: "not-found",
-      params: { pathMatch: route.path.slice(1).split("/") },
-      query: route.query,
-      hash: route.hash,
-    });
-  },
-  { immediate: true, flush: "post" },
-);
+useNotFoundWhen(refused);
 
-// --- Danger zone (owner-only blog delete) ---
 const confirmDelete = ref(false);
 
-// The request of the confirmation. The window waits for it, prints a refusal in
-// itself and closes on success alone, so the interceptor keeps quiet about it.
+// The window waits for it, prints a refusal in itself and closes on success alone.
 async function deleteBlog() {
-  // Read before the request: the blog belongs to the store, and leaving the
-  // blog zone wipes it. Empty only when there is no blog to delete, and then
-  // the request is refused before the navigation below is reached. A blog
-  // whose owner was removed has no owner to be on this page.
+  // Read before the request: leaving the blog zone wipes the store.
   const author = blogStore.blog?.author?.username ?? "";
-  const error = await blogStore.deleteBlog({
-    ownsRefusal: true,
-    ownsRateLimit: true,
-  });
+  const error = await blogStore.deleteBlog(OWNS_REFUSAL);
   if (error) return { error };
-  // The author's own blog list on their profile, not the site-wide catalogue
-  // of blogs: the deleted blog is missing from this list and nowhere else.
-  // The list is a tab, and the tab is asked for by name - /users/X/blogs is an
-  // old URL the router redirects to the plain profile, which would land the
-  // author on "О себе" and show them nothing.
-  //
-  // No success toast: that missing row is the confirmation. Put the toast back
-  // only if this page ever stops leaving for the author's list.
+  // To the author's blog list by its tab name (/users/X/blogs only redirects to
+  // the profile). No toast: the missing row is the confirmation.
   router.push({
     name: "profile",
     params: { username: author },
@@ -129,17 +80,16 @@ async function deleteBlog() {
       <RubricsSection v-if="isOwner" />
       <RolesSection :can-invite="isOwner" :can-remove="canEditBlog" />
       <BlacklistSection v-if="canEditBlog" />
-      <InvitationsSection :can-invite="canInviteReader" :can-cancel="isOwner" />
+      <InvitationsSection :can-invite="canManage" :can-cancel="isOwner" />
 
-      <section v-if="isOwner" class="settings-section danger-zone">
-        <block-title>Опасная зона</block-title>
+      <SettingsSection v-if="isOwner" class="danger-zone" title="Опасная зона">
         <secondary-text class="danger-hint">
           Удаление блога необратимо
         </secondary-text>
         <Button type="button" class="delete-blog" @click="confirmDelete = true">
           Удалить блог
         </Button>
-      </section>
+      </SettingsSection>
     </template>
 
     <ConfirmDialog
@@ -157,14 +107,7 @@ async function deleteBlog() {
 .blog-settings
   max-width: $grid-step * 200
 
-.settings-section
-  margin-bottom: $big
-  padding: $medium
-  background-color: $bg-element
-
-// Framed, and in the neutral line of the page: the danger is said by the
-// heading and the sentence under it, and the confirmation that follows the
-// press carries no red either.
+// Framed in the neutral line: the danger is said in words.
 .danger-zone
   border: 1px solid $border
 

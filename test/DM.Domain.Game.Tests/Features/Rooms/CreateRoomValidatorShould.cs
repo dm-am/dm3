@@ -2,23 +2,27 @@ using System;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Rooms;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Rooms;
 
-public class CreateRoomValidatorShould : UnitTestBase
+public class CreateRoomValidatorShould
 {
     private readonly CreateRoomValidator validator = new();
 
-    [Fact]
-    public void PassForValidInput()
+    /// <summary>
+    /// One character is a title; the bound is the only other rule.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(RoomFieldLimits.TitleMaxLength)]
+    public void PassATitleFromOneCharacterToTheBound(int length)
     {
         var input = new CreateRoom
         {
             GameId = Guid.NewGuid(),
-            Title = "Tavern"
+            Title = new string('a', length)
         };
 
         var result = validator.TestValidate(input);
@@ -75,7 +79,7 @@ public class CreateRoomValidatorShould : UnitTestBase
         var input = new CreateRoom
         {
             GameId = Guid.NewGuid(),
-            Title = new string('a', 101)
+            Title = new string('a', RoomFieldLimits.TitleMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);

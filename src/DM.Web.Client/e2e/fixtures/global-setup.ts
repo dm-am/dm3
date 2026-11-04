@@ -14,11 +14,6 @@ import {
  * Log in once per run and save the session to disk; every spec builds its
  * context from those files instead of authenticating itself.
  *
- * This is not only tidiness. The login endpoint is rate-limited to 5 requests
- * per minute, and twelve spec files logging in from parallel workers hit 429
- * within seconds — which is how the suite reacted the moment its swallowed
- * login errors were made loud. Two logins per run stay far under the limit.
- *
  * The session is two things, and saving one of them is what a browser reads as
  * a guest. The cookie is what the API checks. The interface checks
  * localStorage["user"]: the store is built from that key before any request
@@ -34,7 +29,6 @@ async function saveSession(
 ) {
   const context = await request.newContext();
   const response = await context.post(`${API_BASE_URL}/v1/account/login`, {
-    headers: { "Content-Type": "application/json" },
     data: { email: user.email, password: user.password },
   });
 

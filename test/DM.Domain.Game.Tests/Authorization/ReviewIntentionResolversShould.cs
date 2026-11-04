@@ -6,7 +6,6 @@ using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.GameReviews;
 using DM.Domain.Game.Features.PostReviews;
-using DM.Testing;
 using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Xunit;
@@ -19,7 +18,7 @@ namespace DM.Domain.Game.Tests.Authorization;
 /// of them is edited alone, the half of the table belonging to the other fails
 /// and the divergence has to be argued for instead of arriving silently.
 /// </summary>
-public class ReviewIntentionResolversShould : UnitTestBase
+public class ReviewIntentionResolversShould
 {
     /// <summary>
     /// Which of the two resolvers a case is being run against.

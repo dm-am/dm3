@@ -1,5 +1,4 @@
-using System;
-using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Text;
 using DM.Domain.Core.Enums;
 
@@ -24,24 +23,11 @@ public static class ModBlockSanitizer
     /// inner text (unwrap, not delete).
     /// </summary>
     /// <remarks>
-    /// A marker is a bracket, an optional slash, the name in any casing, then
-    /// either the closing bracket or "=" or whitespace and anything up to it that
-    /// is not a bracket: <c>[mod]</c>, <c>[MOD]</c>, <c>[mod="x"]</c>,
-    /// <c>[/mod x]</c>. That is more than the parser reads as the tag, on purpose
-    /// — this removes a superset, and the superset has to hold by a property
-    /// rather than by a list of cases.
-    ///
-    /// The property: no marker is left in the result. A single pass does not
-    /// have it, because removing a marker joins the text on either side, and the
-    /// join can be a marker: <c>[[mod]mod]</c> loses its inner marker and leaves
-    /// the outer one standing, which is how a user below Moderator stored a mod
-    /// block. So the text is written into the result one character at a time,
-    /// and every time a closing bracket completes a marker at the end of what has
-    /// been written, the marker is taken back out. A marker in the result would
-    /// have been completed by its own closing bracket, at which moment it stood at
-    /// the end, so none survives. Each character is written once and taken back
-    /// at most once, and the one check per closing bracket reads a prefix of
-    /// fixed length, so the pass is linear.
+    /// A marker is a bracket, an optional slash, the name in any casing, then the
+    /// closing bracket, "=" or whitespace: a superset of what the parser reads as
+    /// the tag. No marker is left in the result, including one a removal joins
+    /// (<c>[[mod]mod]</c>): a marker is taken back out the moment its closing bracket
+    /// completes it at the end of the result, which keeps the pass linear.
     /// </remarks>
     private static string StripUnauthorizedModBlocks(string rawBbCode)
     {
@@ -127,6 +113,7 @@ public static class ModBlockSanitizer
     /// author [mod]. Game master / assistant are game roles, not site roles,
     /// so they do not qualify.
     /// </summary>
-    public static string SanitizeForAuthor(string rawBbCode, UserRole authorRole) =>
-        authorRole >= UserRole.Moderator ? rawBbCode : StripUnauthorizedModBlocks(rawBbCode);
+    [return: NotNullIfNotNull(nameof(rawBbCode))]
+    public static string? SanitizeForAuthor(string? rawBbCode, UserRole authorRole) =>
+        rawBbCode is null || authorRole >= UserRole.Moderator ? rawBbCode : StripUnauthorizedModBlocks(rawBbCode);
 }

@@ -43,10 +43,11 @@ public class NotepadEntry : ISoftDeletable
     /// <summary>
     /// Entry title
     /// </summary>
+    [MaxLength(200)]
     public string Title { get; set; } = null!;
 
     /// <summary>
-    /// Entry content (BB-code or markdown)
+    /// Entry content (BBCode)
     /// </summary>
     public string Content { get; set; } = null!;
 

@@ -1,4 +1,6 @@
 using System.ComponentModel.DataAnnotations;
+using DM.Domain.Core.Exceptions;
+using DM.Web.API.Shared.BotTrap;
 
 namespace DM.Web.API.Features.Account.Registration;
 
@@ -6,7 +8,7 @@ namespace DM.Web.API.Features.Account.Registration;
 /// Request for user registration (email-first flow).
 /// Username is chosen after email verification.
 /// </summary>
-public class RegistrationRequest
+public class RegistrationRequest : IHoneypotForm
 {
     /// <summary>
     /// Valid email address for account verification
@@ -21,6 +23,7 @@ public class RegistrationRequest
     /// Account password (minimum 8 characters)
     /// </summary>
     [Required(ErrorMessage = "Пароль обязателен")]
+    // PasswordPolicyConfiguration's bounds: a shorter password falls to guessing, a longer one loads the hash.
     [StringLength(128, MinimumLength = 8, ErrorMessage = "Пароль должен быть от 8 до 128 символов")]
     public string Password { get; set; } = "";
 
@@ -33,9 +36,8 @@ public class RegistrationRequest
     /// <summary>
     /// Honeypot field for bot protection - must be left empty
     /// </summary>
-    /// <remarks>
-    /// This field is invisible to users but often filled by automated bots.
-    /// If this field contains any value, the registration will be rejected.
-    /// </remarks>
     public string? Website { get; set; }
+
+    /// <inheritdoc />
+    (string Field, string Sentence) IHoneypotForm.Refusal => ("email", RefusalMessage.RegistrationFailed);
 }

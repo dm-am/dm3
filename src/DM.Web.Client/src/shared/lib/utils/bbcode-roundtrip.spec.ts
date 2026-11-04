@@ -1,19 +1,16 @@
 /**
  * @vitest-environment jsdom
  *
- * BBCode Round-Trip Integration Tests
- *
- * Tests the COMPLETE pipeline of the visual mode:
- * BBCode → bbcodeToHtml → Tiptap setContent → Tiptap getHTML → htmlToBbcode → BBCode
- *
- * The editor is built from the very extensions and parse options BBCodeEditor
- * uses (createEditorExtensions, EDITOR_PARSE_OPTIONS), so a change there is a
- * change here.
+ * The whole visual-mode pipeline: BBCode → bbcodeToHtml → Tiptap setContent →
+ * getHTML → htmlToBbcode → BBCode, with BBCodeEditor's own extensions and
+ * parse options.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { Editor } from "@tiptap/core";
-import { bbcodeToHtml, htmlToBbcode, type BBCodeContext } from "./bbcode";
+import { bbcodeToHtml } from "./bbcodeToHtml";
+import { htmlToBbcode } from "./htmlToBbcode";
+import { type BBCodeContext } from "./bbcodeTagSet";
 import {
   createEditorExtensions,
   EDITOR_PARSE_OPTIONS,
@@ -309,12 +306,8 @@ describe("BBCode Round-Trip Integration", () => {
     });
   });
 
-  // The visual mode is the default one, and a hidden block that lost its
-  // wrapper on the way through it is published to the room on the next save:
-  // the save path accepts the text, because nothing in it is unbalanced any
-  // more. The code mark and the noparse mark used to exclude every other mark,
-  // and the link wrote itself from its attributes with nothing of what it held,
-  // so a [private] around any of the three came off it.
+  // A hidden block that lost its wrapper in the visual mode is published on
+  // the next save: the code mark, the noparse mark and the link used to drop it.
   describe("Private around other markup", () => {
     /** The text with every [private] block taken out, as a stranger reads it. */
     function outsideHidden(bbcode: string): string {
@@ -362,12 +355,8 @@ describe("BBCode Round-Trip Integration", () => {
       expect(roundTrip(input, "post").outputBbcode).toBe(input);
     });
 
-    // A hidden block is a mark, and a mark used to stand on the text inside a
-    // block and not on the block: the block came back outside the hidden one.
-    // A spoiler written in a hidden block was saved as a spoiler every reader
-    // saw, its caption included, and an empty quote as an empty frame on the
-    // page of every reader; the text around the block came back as blocks of
-    // its own, each with its line of recipients.
+    // A hidden block is a mark, which stood on the text inside a block and not
+    // on the block: the block came back outside it, a spoiler included.
     it.each([
       '[private="A"]до [spoiler]секрет[/spoiler] после[/private]',
       '[private="A"]до [quote]секрет[/quote] после[/private]',
@@ -403,12 +392,8 @@ describe("BBCode Round-Trip Integration", () => {
     });
   });
 
-  // A list that holds words or blocks besides its items. The visual mode used
-  // to put the words into items of their own, so a reader saw a bullet where
-  // the author wrote none, and moved a block out of the list; an empty list
-  // came back with an empty item. Such a list is drawn as a block of what it
-  // holds and comes back as typed. The spaces and line breaks between items
-  // go, as the page does not show them either.
+  // A list holding more than items is drawn as a block of what it holds and
+  // comes back as typed; the white space between items goes, as on the page.
   describe("A list that holds more than items", () => {
     it.each([
       "[ol]раз[/ol]",

@@ -11,16 +11,9 @@ using Xunit;
 namespace DM.Infrastructure.Core.Tests.Extensions;
 
 /// <summary>
-/// The MS.DI assembly scan keeps the semantics the Autofac one had.
+/// The assembly scan leaves explicit wiring alone, keeps every implementation of a shared contract, and
+/// registers nothing a container could not activate.
 /// </summary>
-/// <remarks>
-/// Three of them are load-bearing and each covered a production bug on the
-/// Autofac side: the scan must not displace explicit wiring (the pooled
-/// DbContext and the typed HttpClient factory were both shadowed once), it must
-/// keep every implementation of a shared contract (both S3 client providers),
-/// and it must not register what a container could never activate (under
-/// ValidateOnBuild every such registration is a startup failure).
-/// </remarks>
 public class DefaultTypesRegistrationShould
 {
     private static IServiceCollection Scanned()
@@ -53,10 +46,7 @@ public class DefaultTypesRegistrationShould
     [Fact]
     public void LeaveAnExplicitRegistrationTheDefault()
     {
-        // The typed-HttpClient shape: the service type is registered through a
-        // factory before any scan runs, and the scan must leave it alone -
-        // MS.DI hands a single resolution to the last descriptor, so a scanned
-        // pair after this one would silently replace the factory.
+        // MS.DI resolves the last descriptor, so a scanned pair after the factory would replace it.
         var services = new ServiceCollection();
         var explicitInstance = new PlainService();
         services.AddSingleton<IPlainContract>(_ => explicitInstance);

@@ -7,13 +7,12 @@ namespace DM.Web.API.Features.Personal.Profiles;
 /// <summary>
 /// API service for managing current user's profile
 /// </summary>
-internal class PersonalProfileApiService : IPersonalProfileApiService
+public class PersonalProfileApiService
 {
     private readonly IUserService _userService;
     private readonly IIdentityProvider _identityProvider;
     private readonly PersonalProfileMapper _mapper;
 
-    /// <inheritdoc />
     public PersonalProfileApiService(
         IUserService userService,
         IIdentityProvider identityProvider,
@@ -24,7 +23,6 @@ internal class PersonalProfileApiService : IPersonalProfileApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<PersonalProfile> GetMyProfile()
     {
         var currentUser = _identityProvider.Current.User;
@@ -32,19 +30,17 @@ internal class PersonalProfileApiService : IPersonalProfileApiService
         return _mapper.ToPersonalProfile(user);
     }
 
-    /// <inheritdoc />
     public async Task<PersonalProfile> UpdateMyProfile(UpdateProfile profile)
     {
         var currentUser = _identityProvider.Current.User;
-        var updateUser = _mapper.ToUpdateUser(profile);
+        var updateUser = PersonalProfileMapper.ToUpdateUser(profile);
         updateUser.Username = currentUser.Username;
 
         var updatedUser = await _userService.UpdateAsync(updateUser);
         return _mapper.ToPersonalProfile(updatedUser);
     }
 
-
-    /// <inheritdoc />
+    /// <summary>Idempotent: without an avatar it does nothing.</summary>
     public Task RemoveMyAvatar()
     {
         var currentUser = _identityProvider.Current.User;

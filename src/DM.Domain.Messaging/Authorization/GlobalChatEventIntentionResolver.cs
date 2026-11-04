@@ -13,7 +13,6 @@ internal class GlobalChatEventIntentionResolver :
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, GlobalChatEventIntention intention) => intention switch
     {
-        // Only SeniorModerator+ can create events
         GlobalChatEventIntention.Create => user.Role >= UserRole.SeniorModerator,
         _ => false
     };
@@ -21,29 +20,22 @@ internal class GlobalChatEventIntentionResolver :
     /// <inheritdoc />
     public bool IsAllowed(IAuthorizationSubject user, GlobalChatEventIntention intention, GlobalChatEvent target)
     {
-        var isOrganizer = target.Participants?.Any(p => p.User.UserId == user.UserId && p.IsOrganizer) ?? false;
-        var isParticipant = target.Participants?.Any(p => p.User.UserId == user.UserId) ?? false;
+        var isOrganizer = target.Participants.Any(p => p.User.UserId == user.UserId && p.IsOrganizer);
+        var isParticipant = target.Participants.Any(p => p.User.UserId == user.UserId);
 
         return intention switch
         {
-            // Only organizers can modify events
-            GlobalChatEventIntention.Update => isOrganizer,
-            GlobalChatEventIntention.Delete => isOrganizer,
+            GlobalChatEventIntention.Update or GlobalChatEventIntention.Delete or
+                GlobalChatEventIntention.AddParticipant or GlobalChatEventIntention.RemoveParticipant => isOrganizer,
 
-            // Only organizers can control event lifecycle
             GlobalChatEventIntention.Start => isOrganizer && target.Status == GlobalChatEventStatus.Scheduled,
             GlobalChatEventIntention.End => isOrganizer && target.Status == GlobalChatEventStatus.Live,
 
-            // Join is only for open events (any authenticated user)
             GlobalChatEventIntention.Join => user.IsAuthenticated && target.IsOpen && !isParticipant &&
-                                       (target.Status == GlobalChatEventStatus.Scheduled || target.Status == GlobalChatEventStatus.Live),
+                                             target.Status is GlobalChatEventStatus.Scheduled or GlobalChatEventStatus.Live,
 
-            // Leave is for participants who are not organizers
+            // The organizer does not leave his own event.
             GlobalChatEventIntention.Leave => isParticipant && !isOrganizer,
-
-            // Only organizers can manage participants
-            GlobalChatEventIntention.AddParticipant => isOrganizer,
-            GlobalChatEventIntention.RemoveParticipant => isOrganizer,
 
             _ => false
         };

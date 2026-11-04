@@ -6,21 +6,18 @@ namespace DM.Domain.Community.Features.Polls;
 /// <inheritdoc />
 internal class UpdatePollValidator : AbstractValidator<UpdatePoll>
 {
-    /// <inheritdoc />
     public UpdatePollValidator()
     {
         RuleFor(p => p.Id)
-            .NotEmpty();
+            .NotEmpty().WithMessage(ValidationError.Empty);
         RuleFor(p => p.Title)
             .NotEmpty().WithMessage(ValidationError.Empty)
             .When(p => p.Title != null);
         RuleFor(p => p.Details)
             .MaximumLength(PollFieldLimits.DetailsMaxLength).WithMessage(ValidationError.Long)
             .When(p => p.Details != null);
-        // Deliberately no "must be in the future" rules here, unlike creation:
-        // the moderator edit form sends the dates of the poll being edited, so
-        // such a rule would make every running poll uneditable. What an update
-        // must still guarantee is that the poll does not end before it starts.
+        // No "must be in the future" rules, unlike creation: the edit form sends the
+        // dates of the poll being edited, and every running poll would be uneditable.
         RuleFor(p => p.EndsUtc)
             .GreaterThan(p => p.StartsUtc!.Value).WithMessage(ValidationError.Invalid)
             .When(p => p.StartsUtc.HasValue && p.EndsUtc.HasValue);

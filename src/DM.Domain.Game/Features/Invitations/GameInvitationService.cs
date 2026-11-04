@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -81,7 +80,6 @@ internal class GameInvitationService : IGameInvitationService
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.InvitationNotFound);
         }
 
-        // Check if invitation has expired
         var expiresUtc = InvitationPolicy.ExpiresAt(token.CreatedUtc);
         if (_dateTimeProvider.Now > expiresUtc)
         {
@@ -99,14 +97,9 @@ internal class GameInvitationService : IGameInvitationService
         switch (token.TokenType)
         {
             case TokenType.GamePlayerInvitation:
-                // Player invitation acceptance - just mark token as used
-                // Character creation is a separate step
-                //
-                // The announcement belongs to the acceptance that happened. The
-                // link is spent by a conditional statement, so of two acceptances
-                // meeting on one link only one spends anything, and announcing
-                // from the other tells the game a seat was taken twice.
-                if (await _repository.RemoveInvitation(tokenId, ct) == 1)
+                // Character creation is a separate step. Of two acceptances on one link only one spends it,
+                // and only that one announces.
+                if (await _repository.RemoveInvitation(tokenId, ct))
                 {
                     await _producer.SendAsync(EventType.PlayerInvitationAccepted, tokenId);
                 }
@@ -114,12 +107,9 @@ internal class GameInvitationService : IGameInvitationService
                 break;
 
             case TokenType.GameReaderInvitation:
-                // The subscription first and the token second, on purpose: subscribing
-                // is idempotent, so a break between the two is repaired by following
-                // the same link again. The other order would spend the invitation and
-                // leave nothing for the second attempt to do.
+                // Subscription first: it is idempotent, so a break is repaired by following the link again.
                 await _subscriptionService.SubscribeAsync(gameId, ct);
-                if (await _repository.RemoveInvitation(tokenId, ct) == 1)
+                if (await _repository.RemoveInvitation(tokenId, ct))
                 {
                     await _producer.SendAsync(EventType.ReaderInvitationAccepted, tokenId);
                 }
@@ -127,7 +117,6 @@ internal class GameInvitationService : IGameInvitationService
                 break;
 
             case TokenType.GameAssistantInvitation:
-                // Add as assistant
                 var addEntity = new AddAssistantEntity
                 {
                     GameAssistantId = _guidFactory.Create(),
@@ -135,10 +124,7 @@ internal class GameInvitationService : IGameInvitationService
                     UserId = currentUserId,
                     JoinedUtc = _dateTimeProvider.Now
                 };
-                // The announcement belongs to the acceptance that happened. Two
-                // accepts of one link both leave the person an assistant, and the
-                // second one spent nothing: repeating the event there tells the
-                // game twice that a seat was taken once.
+                // Only the acceptance that spent the link announces.
                 if (await _repository.AcceptAssistantInvitation(addEntity, tokenId, ct))
                 {
                     await _producer.SendAsync(EventType.AssignmentRequestAccepted, tokenId);
@@ -165,11 +151,8 @@ internal class GameInvitationService : IGameInvitationService
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.InvitationNotForYou);
         }
 
-        // The announcement belongs to the rejection that happened, the same as on
-        // the accepting side: the link is spent by a conditional statement, so of
-        // two clicks meeting on it only one spends anything, and announcing from
-        // the other tells the master the invitation was turned down twice.
-        var rejected = await _repository.RemoveInvitation(tokenId, ct) == 1;
+        // Only the rejection that spent the link announces, as on the accepting side.
+        var rejected = await _repository.RemoveInvitation(tokenId, ct);
 
         var eventType = token.TokenType switch
         {
@@ -199,29 +182,10 @@ internal class GameInvitationService : IGameInvitationService
         await _repository.RemoveInvitation(tokenId, ct);
     }
 
-    #endregion
-
-    #region Users
-
-    public async Task<IEnumerable<GameUser>> GetUsers(Guid gameId, CancellationToken ct = default)
-    {
-        // The list is public for a game the reader may open, and that half of the
-        // sentence was the half nobody established: the repository filters only
-        // on IsRemoved, so an identifier was enough to enumerate the players of a
-        // game hidden from its holder. Fetching through GetGameOrThrow applies
-        // the reader's scope, the intention confirms the right to read.
-        var game = await GetGameOrThrow(gameId);
-        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
-        return await _repository.GetUsers(gameId, ct);
-    }
-
     public async Task<IEnumerable<GameInvitation>> GetPendingInvitations(Guid gameId, CancellationToken ct = default)
     {
         var game = await GetGameOrThrow(gameId);
-        // The list is a panel of the settings page, so it follows the page:
-        // EditSettings, same as the blog side. Reading who was invited is not
-        // managing the roster — creating and revoking invitations stay on the
-        // lead-only InvitePlayer / InviteReader / CancelInvitation.
+        // A panel of the settings page, so it follows the page; managing invitations stays lead-only.
         _intentionManager.ThrowIfForbidden(GameIntention.EditSettings, game);
         return await _repository.GetPendingInvitations(gameId, ct);
     }
@@ -232,20 +196,29 @@ internal class GameInvitationService : IGameInvitationService
         return await _repository.GetUserInvitations(userId, ct);
     }
 
+    #endregion
+
+    #region Users
+
+    public async Task<IEnumerable<GameUser>> GetUsers(Guid gameId, CancellationToken ct = default)
+    {
+        // The repository filters only on IsRemoved, so the reader's scope and Read are asked here.
+        var game = await GetGameOrThrow(gameId);
+        _intentionManager.ThrowIfForbidden(GameIntention.Read, game);
+        return await _repository.GetUsers(gameId, ct);
+    }
+
     public async Task RemoveUser(Guid gameId, Guid userId, CancellationToken ct = default)
     {
         var game = await GetGameOrThrow(gameId);
         _intentionManager.ThrowIfForbidden(GameIntention.RemoveUser, game);
 
-        // Cannot remove master
         if (game.Master?.UserId == userId)
         {
             throw new HttpException(HttpStatusCode.Forbidden, "Нельзя удалить мастера игры");
         }
 
-        // Only assistants can be removed from a game
-        // Players are removed by deleting their characters (see CharacterService)
-        // Readers cannot be removed - they can only unsubscribe themselves
+        // Players leave through their characters, readers only unsubscribe themselves.
         await _repository.RemoveAssistant(gameId, userId, ct);
     }
 
@@ -253,15 +226,6 @@ internal class GameInvitationService : IGameInvitationService
 
     #region Helpers
 
-    /// <summary>
-    /// One invitation, whichever of the three roles it is for.
-    /// </summary>
-    /// <remarks>
-    /// The three public methods differ in three literals and in nothing else: the
-    /// gate they check, the token they write and the event they announce. The
-    /// blog module already answers the same question this way
-    /// (BlogInvitationService.CreateInvitation).
-    /// </remarks>
     private async Task<GameInvitation> Invite(
         Guid gameId,
         string username,
@@ -274,14 +238,21 @@ internal class GameInvitationService : IGameInvitationService
         _intentionManager.ThrowIfForbidden(intention, game);
 
         var user = await _userLookupService.GetAsync(username);
-        await ValidateInvitation(user.UserId, ct);
+        var currentUserId = _identityProvider.Current.User.UserId;
+
+        // The game's blacklist is not asked: inviting somebody it lists is the lead's decision.
+        // The invitation is signed with the inviter's name, so the invitee's own blacklist is.
+        if (await _userBlacklistChecker.IsBlockedAsync(user.UserId, currentUserId, ct))
+        {
+            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteThisUser);
+        }
 
         var entity = new CreateGameInvitationEntity
         {
             TokenId = _guidFactory.Create(),
             GameId = gameId,
             UserId = user.UserId,
-            CreatorId = _identityProvider.Current.User.UserId,
+            CreatorId = currentUserId,
             TokenType = tokenType,
             CreatedUtc = _dateTimeProvider.Now
         };
@@ -294,35 +265,14 @@ internal class GameInvitationService : IGameInvitationService
 
     private async Task<GameDto> GetGameOrThrow(Guid gameId)
     {
-        var currentUserId = _identityProvider.Current?.User?.UserId ?? Guid.Empty;
-        // The invitation paths are lead-only on their own gates, so the
-        // premoderation rank buys nothing here: a mentor who may judge a game
-        // still may not staff it.
-        var game = await _gameRepository.GetGame(gameId, currentUserId, mayJudgePremoderation: false);
+        // A mentor who may judge a game still may not staff it.
+        var game = await _gameRepository.GetGame(
+            gameId, _identityProvider.Current.User.UserId, mayJudgePremoderation: false);
         if (game == null)
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.GameNotFound);
         }
         return game;
-    }
-
-    private async Task ValidateInvitation(Guid userId, CancellationToken ct = default)
-    {
-        var currentUserId = _identityProvider.Current.User.UserId;
-
-        // The game's own blacklist is not asked: inviting somebody the game
-        // listed is the lead's own decision. Entering the list withdraws the
-        // invitations already sent (GameBlacklistService), not the right to send
-        // a new one.
-        //
-        // The invitee's personal blacklist: an invitation reaches its addressee
-        // signed with the inviter's name, so it is not created for somebody who
-        // blocked the inviter. The inviter's own list is not asked - it restricts
-        // the people on it, not its owner (RefusalMessage.CannotInviteThisUser).
-        if (await _userBlacklistChecker.IsBlockedAsync(userId, currentUserId, ct))
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.CannotInviteThisUser);
-        }
     }
 
     private async Task<GameInvitation> GetInvitationInfo(Guid tokenId, CancellationToken ct)

@@ -13,17 +13,11 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// An account starts in the time zone of the device it was created on.
 /// </summary>
 /// <remarks>
-/// The site draws a date in the reader's browser, and a signed-in reader's letters
-/// are stamped in the zone of the account, so an account that started in UTC sent its
-/// first letters hours off until its owner found the setting. The request that creates
-/// the account - the activation, where the login is chosen - carries the zone of the
-/// device and the account keeps it. A zone the server cannot print a time in is left
-/// out, and the account is created all the same: a zone is no reason to refuse one.
+/// Letters are stamped in the zone of the account, and the activation request carries the device's zone. A
+/// zone the server cannot print in is left out, and the account is created all the same.
 /// </remarks>
 public class RegistrationTimeZoneShould : IntegrationTestBase
 {
-    private const string Password = "TestPass123ok";
-
     public RegistrationTimeZoneShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
@@ -57,7 +51,7 @@ public class RegistrationTimeZoneShould : IntegrationTestBase
         var login = $"zone{suffix}";
 
         var register = await Client.PostAsJsonAsync("/v1/account/register",
-            new { email, password = Password, acceptedRules = true });
+            new { email, password = TestConstants.Password, acceptedRules = true });
         register.StatusCode.Should().Be(HttpStatusCode.Created, await register.Content.ReadAsStringAsync());
 
         // The pending row keeps only a hash of the secret in the letter, so a

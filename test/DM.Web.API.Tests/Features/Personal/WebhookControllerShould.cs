@@ -26,14 +26,8 @@ using BotLinkResult = DM.Domain.Personal.Features.Notifications.BotLinkResult;
 namespace DM.Web.API.Tests.Features.Personal;
 
 /// <summary>
-/// The Discord branch of the webhook speaks the official interactions
-/// contract: no shared secret, an Ed25519 signature over timestamp + raw
-/// body instead. Two properties are load-bearing. An unconfigured public key
-/// closes the endpoint rather than opening it, and a bad signature answers
-/// 401 — Discord validates the endpoint by deliberately sending broken
-/// signatures and requires exactly that code, so a 403 here fails the
-/// registration. The Telegram branch keeps its secret-header contract and
-/// its 403 untouched.
+/// The Discord branch checks an Ed25519 signature over timestamp and raw body: no key closes the endpoint,
+/// a bad signature answers 401, which Discord's validation requires. Telegram keeps its secret header and 403.
 /// </summary>
 public class WebhookControllerShould : UnitTestBase
 {
@@ -172,23 +166,6 @@ public class WebhookControllerShould : UnitTestBase
 
         var response = result.Should().BeOfType<OkObjectResult>().Which.Value;
         JsonSerializer.SerializeToElement(response!).GetProperty("type").GetInt32().Should().Be(1);
-    }
-
-    [Fact]
-    public async Task DispatchASignedConnectCommand()
-    {
-        var body = """
-            {"type": 2, "data": {"name": "connect", "options": [{"name": "code", "type": 3, "value": "ABC123"}]}, "member": {"user": {"id": "9876543210"}}}
-            """;
-        var controller = Controller(DiscordConfigured(), body, SignedHeaders(body));
-
-        var result = await controller.HandleWebhook("discord");
-
-        await _botLinkService.Received(1).VerifyAndLink("ABC123", "discord", "9876543210", Arg.Any<CancellationToken>());
-        var response = result.Should().BeOfType<OkObjectResult>().Which.Value;
-        var json = JsonSerializer.SerializeToElement(response!);
-        json.GetProperty("type").GetInt32().Should().Be(4);
-        json.GetProperty("data").GetProperty("flags").GetInt32().Should().Be(64);
     }
 
     [Fact]

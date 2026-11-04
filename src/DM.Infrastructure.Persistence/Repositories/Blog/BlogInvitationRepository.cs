@@ -166,6 +166,9 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
                 BlogTitle = tbu.Blog.Title,
                 InvitedUserId = tbu.InvitedUser.UserId,
                 InvitedUsername = tbu.InvitedUser.Username,
+                InvitedRole = tbu.InvitedUser.Role,
+                InvitedLastActivityUtc = tbu.InvitedUser.LastActivityUtc,
+                InvitedQuantityRating = tbu.InvitedUser.QuantityRating,
                 InviterUserId = tbu.Token.CreatorId ?? tbu.Blog.AuthorId,
                 InviterUsername = tbu.Token.Creator != null
                     ? tbu.Token.Creator.Username
@@ -179,7 +182,15 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
         TokenId = data.TokenId,
         BlogId = data.BlogId,
         BlogTitle = data.BlogTitle,
-        InvitedUser = new GeneralUser { UserId = data.InvitedUserId, Username = data.InvitedUsername },
+        // What a reference to the invitee carries: the role and the newbie mark.
+        InvitedUser = new GeneralUser
+        {
+            UserId = data.InvitedUserId,
+            Username = data.InvitedUsername,
+            Role = data.InvitedRole,
+            LastActivityUtc = data.InvitedLastActivityUtc,
+            QuantityRating = data.InvitedQuantityRating
+        },
         InvitedBy = new GeneralUser { UserId = data.InviterUserId, Username = data.InviterUsername ?? "" },
         TargetRole = data.Type == TokenType.BlogAssistantInvitation ? BlogRole.Assistant : BlogRole.Reader,
         CreatedUtc = data.CreatedUtc,
@@ -193,6 +204,9 @@ internal class BlogInvitationRepository : IBlogInvitationRepository
         public string BlogTitle { get; init; } = "";
         public Guid InvitedUserId { get; init; }
         public string InvitedUsername { get; init; } = "";
+        public UserRole InvitedRole { get; init; }
+        public DateTimeOffset? InvitedLastActivityUtc { get; init; }
+        public int InvitedQuantityRating { get; init; }
         public Guid InviterUserId { get; init; }
         public string? InviterUsername { get; init; }
         public TokenType Type { get; init; }

@@ -2,17 +2,7 @@
  * @vitest-environment node
  */
 
-/**
- * The endorsement lists page by skip/take, like every other offset list.
- *
- * UserEndorsementsQuery binds skip and take and nothing else, and an unbound
- * query parameter is ignored rather than refused — so forwarding the reader's
- * 1-based page as `number` answered every page of "Полученные рекомендации"
- * and "Написанные рекомендации" with page one, while the pager and the address
- * bar both said page three. The static check in pagingVocabulary.spec.ts sees
- * that the retired name is gone; this one sees that the page the reader asked
- * for is the page requested.
- */
+// An unbound query parameter is ignored, so the page has to go out as skip.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 
 vi.mock("@/shared/api", () => ({

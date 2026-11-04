@@ -10,17 +10,12 @@ namespace DM.Domain.Game.Features.AttributeSchemaTemplates;
 /// </summary>
 public interface IAttributeSchemaTemplateRepository
 {
-    #region Read
-
     /// <summary>
     /// Every template that is not hidden, the default one first and the rest by
     /// title
     /// </summary>
     /// <remarks>
-    /// Carries the documents. The catalogue is small, the creation form needs
-    /// the document of the default one the moment it opens, and the column is
-    /// mapped as a document anyway, so counting attributes on the server would
-    /// have loaded exactly the same bytes and cost the form a second request.
+    /// Carries the documents: the catalogue is small and the creation form needs the default one at once.
     /// </remarks>
     Task<IEnumerable<AttributeSchemaTemplate>> GetTemplates(CancellationToken ct = default);
 
@@ -28,10 +23,6 @@ public interface IAttributeSchemaTemplateRepository
     /// One template, or null when it is hidden or absent
     /// </summary>
     Task<AttributeSchemaTemplate?> GetTemplate(Guid templateId, CancellationToken ct = default);
-
-    #endregion
-
-    #region Write
 
     /// <summary>
     /// Add a template, handing every specification an identifier of its own
@@ -70,6 +61,4 @@ public interface IAttributeSchemaTemplateRepository
     /// what serialises the two, and the loser has to look at the list again.
     /// </remarks>
     Task<bool> MakeDefault(Guid templateId, CancellationToken ct = default);
-
-    #endregion
 }

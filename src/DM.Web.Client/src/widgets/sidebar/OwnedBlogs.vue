@@ -1,6 +1,5 @@
 <template>
-  <SidebarBlock token="OwnedBlogs">
-    <template #title>Мои блоги</template>
+  <SidebarBlock token="OwnedBlogs" title="Мои блоги">
     <SidebarSkeleton
       v-if="store.participatingBlogsLoading && !store.participatingBlogs"
       :lines="3"
@@ -20,36 +19,24 @@
         v-for="blog in store.participatingBlogs"
         :key="blog.id"
         :blog="blog"
-        :counters="true"
         :always-show-counters="true"
       />
     </template>
     <li aria-hidden="true">
       <DashSeparator spacing="none" width="75%" />
     </li>
-    <li>
-      <span class="muted" aria-hidden="true">- </span>
-      <router-link class="forward" :to="{ name: 'blogs' }"
-        >Все блоги</router-link
-      >
-    </li>
-    <!--
-      Pairs with "Создать игру" in OwnedGames. BlogIntention.Create admits any
-      authenticated user, and this block only mounts for one (LeftSidebar's
-      v-if), so the row promises exactly what the server grants.
-    -->
-    <li>
-      <span class="muted" aria-hidden="true">- </span>
-      <router-link class="forward" :to="{ name: 'create-blog' }"
-        >Создать блог</router-link
-      >
-    </li>
+    <SidebarForwardLink :to="{ name: 'blogs' }">Все блоги</SidebarForwardLink>
+    <!-- Anybody signed in may create a blog, and the block mounts only for them -->
+    <SidebarForwardLink :to="{ name: 'create-blog' }"
+      >Создать блог</SidebarForwardLink
+    >
   </SidebarBlock>
 </template>
 
 <script setup lang="ts">
 import SidebarBlock from "./SidebarBlock.vue";
 import SidebarSkeleton from "./SidebarSkeleton.vue";
+import SidebarForwardLink from "./SidebarForwardLink.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import BlogLink from "./BlogLink.vue";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
@@ -61,18 +48,14 @@ import { useViewerChange } from "@/shared/lib/composables/useViewerChange";
 const userStore = useAuthStore();
 const store = useBlogsStore();
 
-// Initial fetch on mount. Gated by `v-if="userStore.user"` in
-// LeftSidebar so this only runs when the user is authenticated.
-// Avoids the race between watch { immediate: true } and user store
-// hydration that can otherwise fire a fetch with a null user.
+// onMounted, not an immediate watch: that fired before the user store was hydrated.
 onMounted(() => {
   if (userStore.user?.username) {
     store.fetchParticipatingBlogs();
   }
 });
 
-// Same rule as OwnedGames: reset in both directions, load for the viewer who
-// is here now. A sign-in in a second tab replaces the name in one step.
+// Reset in both directions, then load for the viewer who is here now.
 useViewerChange((username) => {
   store.resetParticipatingBlogs();
   if (username) store.fetchParticipatingBlogs();
@@ -80,12 +63,6 @@ useViewerChange((username) => {
 </script>
 
 <style scoped lang="sass">
-.forward
-  font-weight: bold
-
-.muted
-  color: $text-muted
-
 .error
   color: $accent-red
 </style>

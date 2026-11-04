@@ -1,20 +1,13 @@
 <script setup lang="ts">
-// Personal notepad — private notes, visible to their owner only. The screen
-// itself is NotepadBoard, shared with the game-master and blog notepads; this
-// page only binds it to `/v1/users/me/notepad`.
+// The personal notepad: NotepadBoard, bound to `/v1/users/me/notepad`.
 import { storeToRefs } from "pinia";
-import { notepadApi } from "@/entities/notepad";
+import { notepadEndpoints } from "@/shared/api";
 import { useAuthStore } from "@/entities/user";
 import { NotepadBoard, type NotepadAdapter } from "@/widgets/notepad";
 
 const { user } = storeToRefs(useAuthStore());
 
-const adapter: NotepadAdapter = {
-  list: () => notepadApi.getUserEntries(),
-  create: (input) => notepadApi.createUserEntry(input),
-  update: (id, input) => notepadApi.updateUserEntry(id, input),
-  remove: (id, options) => notepadApi.deleteUserEntry(id, options),
-};
+const adapter: NotepadAdapter = notepadEndpoints("users/me/notepad");
 </script>
 
 <template>

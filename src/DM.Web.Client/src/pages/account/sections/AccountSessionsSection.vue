@@ -3,29 +3,33 @@
     <h2 class="section-title">Сессии</h2>
 
     <div class="sessions-content">
-      <!-- Sessions list -->
-      <div v-if="loading" class="loading-state">Загрузка...</div>
+      <!-- The rows wait in their own shape; "Нет активных сессий" is said only by an answer. -->
+      <AccountSectionSkeleton
+        v-if="loading && !loaded"
+        shape="rows"
+        :count="2"
+      />
+      <ErrorState
+        v-else-if="loadError && !loaded"
+        :message="loadError"
+        :retry="loadSessions"
+      />
       <EmptyState
         v-else-if="sessions.length === 0"
         title="Нет активных сессий"
       />
-      <!-- This device's session stands apart under a caption of its own and
-           looks like every other row: what sets it apart is where it stands
-           and that it has no "Завершить", not a pill, a fill or a frame. -->
+      <!-- This device's session stands apart by its place and its missing "Завершить", not by a pill, a fill or a frame. -->
       <div v-else class="sessions-list">
         <div v-for="group in groups" :key="group.title" class="session-group">
           <p class="session-group-title">{{ group.title }}</p>
           <template v-for="session in group.sessions" :key="session.id">
             <div class="session-item">
               <div class="session-info">
-                <!-- Whole, breaking between words if it has to: the device is
-                     the row's main word. -->
+                <!-- Whole, breaking between words: the row's main word. -->
                 <div class="session-device">
                   {{ session.deviceInfo || "Неизвестное устройство" }}
                 </div>
-                <!-- Every part whole: where the line is short it wraps
-                     between the address and the date, and the long address
-                     of a mobile network stands on a line of its own. -->
+                <!-- Every part whole: the line wraps between the address and the date. -->
                 <CaptionLine size="secondary" class="session-details">
                   <span v-if="session.ipAddress" class="session-ip">{{
                     session.ipAddress
@@ -45,7 +49,7 @@
                 Завершить
               </Button>
             </div>
-            <!-- A refused "Завершить", under the row it was pressed in. -->
+            <!-- A refused "Завершить", under its row. -->
             <ActionResult
               v-if="terminateRefusal?.id === session.id"
               :text="terminateRefusal.text"
@@ -55,20 +59,17 @@
         </div>
       </div>
 
-      <!-- Logout all button -->
       <div class="sessions-actions">
         <Button
           v-if="hasOtherSessions"
           class="logout-all"
-          :loading="logoutAllAction.loading.value"
+          :loading="loggingOutAll"
+          :disabled="logoutAllResult.waiting.value"
           @click="logoutFromAll"
         >
           Выйти со всех других устройств
         </Button>
-        <ActionResult
-          :text="logoutAllAction.error.value"
-          class="error-text sessions-refusal"
-        />
+        <ActionResult :result="logoutAllResult" class="sessions-refusal" />
       </div>
     </div>
   </section>
@@ -80,14 +81,22 @@ import { accountApi } from "@/entities/user";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import Button from "@/shared/ui/Button/Button.vue";
 import { EmptyState } from "@/shared/ui/EmptyState";
-import { useAsyncAction } from "@/shared/lib/composables/useAsyncAction";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import type { SessionInfo } from "@/shared/api/models/account";
 import { refusalHere } from "@/shared/lib/errors";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import { CaptionLine } from "@/shared/ui/CaptionLine";
+import AccountSectionSkeleton from "./AccountSectionSkeleton.vue";
+import { OWNED_BY_CARD } from "./loadFailure";
+
+const LOAD_FAILED = "Не удалось загрузить сессии";
 
 const sessions = ref<SessionInfo[]>([]);
 const loading = ref(true);
+/** An answer has come: from then on a re-read keeps the rows on screen. */
+const loaded = ref(false);
+const loadError = ref<string | null>(null);
 const terminatingId = ref<string | null>(null);
 
 const hasOtherSessions = computed(() =>
@@ -114,11 +123,15 @@ onMounted(async () => {
 
 async function loadSessions() {
   loading.value = true;
-  const { data, error } = await accountApi.getSessions();
+  const { data, error } = await accountApi.getSessions(OWNED_BY_CARD);
   loading.value = false;
 
   if (!error && data) {
     sessions.value = data.resources;
+    loaded.value = true;
+    loadError.value = null;
+  } else {
+    loadError.value = LOAD_FAILED;
   }
 }
 
@@ -139,29 +152,24 @@ async function terminateSession(sessionId: string) {
   }
 }
 
-// Logout from all devices
-const logoutAllAction = useAsyncAction();
+const logoutAllResult = useActionResult();
+const loggingOutAll = ref(false);
 
-const logoutFromAll = () => {
-  logoutAllAction.execute(async () => {
-    const { error } = await accountApi.logoutAll();
-    if (error) {
-      // The list is untouched in either branch, so the reader is left looking
-      // at the sessions that are still open, and the line beside the button
-      // says why. The plate the interceptor held for the same refusal is taken
-      // down; an expired session and a dead connection stay with the plate.
-      const text = refusalHere(error, "Не удалось завершить сессии");
-      if (text) throw new Error(text);
-      return;
-    }
-    // Keep only current session
-    sessions.value = sessions.value.filter((s) => s.isCurrent);
-  });
-};
+async function logoutFromAll() {
+  logoutAllResult.clear();
+  loggingOutAll.value = true;
+  const { error } = await accountApi.logoutAll();
+  loggingOutAll.value = false;
+  if (error) {
+    // The list is untouched, so the line beside the button says why; an expired
+    // session and a dead connection stay the plate's.
+    logoutAllResult.refuse(error, "Не удалось завершить сессии");
+    return;
+  }
+  sessions.value = sessions.value.filter((s) => s.isCurrent);
+}
 
-// Read once on mount, and the list goes stale whenever something outside this
-// block ends a session: changing the password ends every other one on the
-// server. The page above re-reads the block through this door.
+// Read once on mount; a new password ends the other sessions, and the page reads the list again through this.
 defineExpose({ reload: loadSessions });
 </script>
 
@@ -171,9 +179,6 @@ defineExpose({ reload: loadSessions });
 .sessions-content
   padding: $medium
   background-color: $bg-element
-
-.loading-state
-  padding: $medium
 
 .sessions-list
   display: flex
@@ -190,12 +195,11 @@ defineExpose({ reload: loadSessions });
   font-size: $secondary-font-size
   color: $text-muted
 
-// Spaced by the gap of the group, at the left edge of the row above it.
+// Spaced by the gap of the group.
 .session-refusal
   --action-result-margin: 0
 
-// The device and its line on the left, "Завершить" level with them on the
-// right, at every width: a phone shows the row as the full version does.
+// The device and its line on the left, "Завершить" level with them on the right, at every width.
 .session-item
   display: grid
   grid-template-columns: minmax(0, 1fr) auto
@@ -213,10 +217,10 @@ defineExpose({ reload: loadSessions });
   min-width: 0
 
 .session-device
-  font-weight: 500
+  font-weight: 400
   color: $text
 
-// A row action: the shared secondary button, with no colour of its own.
+// The shared secondary button, with no colour of its own.
 .terminate-btn
   justify-self: start
 
@@ -226,8 +230,7 @@ defineExpose({ reload: loadSessions });
   flex-direction: column
   gap: $small
 
-// At the width of its caption, as every button of a page is: the column would
-// otherwise stretch it across the card.
+// At the width of its caption, not stretched across the card.
 .logout-all
   align-self: flex-start
 

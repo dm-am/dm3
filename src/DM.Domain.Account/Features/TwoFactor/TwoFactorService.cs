@@ -27,38 +27,32 @@ internal class TwoFactorService : ITwoFactorService
 
     private readonly ITwoFactorRepository _repository;
     private readonly ITwoFactorVerifier _verifier;
-    private readonly ITotpCalculator _calculator;
-    private readonly IRecoveryCodeFactory _recoveryCodes;
     private readonly ISymmetricCryptoService _cryptoService;
     private readonly ISecurityManager _securityManager;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IAuthenticationService _authenticationService;
-    private readonly ISecurityAuditRepository _auditService;
+    private readonly ISessionService _sessionService;
+    private readonly ISecurityAuditRepository _auditRepository;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly TwoFactorConfiguration _config;
 
     public TwoFactorService(
         ITwoFactorRepository repository,
         ITwoFactorVerifier verifier,
-        ITotpCalculator calculator,
-        IRecoveryCodeFactory recoveryCodes,
         ISymmetricCryptoService cryptoService,
         ISecurityManager securityManager,
         IIdentityProvider identityProvider,
-        IAuthenticationService authenticationService,
-        ISecurityAuditRepository auditService,
+        ISessionService sessionService,
+        ISecurityAuditRepository auditRepository,
         IDateTimeProvider dateTimeProvider,
         IOptions<TwoFactorConfiguration> config)
     {
         _repository = repository;
         _verifier = verifier;
-        _calculator = calculator;
-        _recoveryCodes = recoveryCodes;
         _cryptoService = cryptoService;
         _securityManager = securityManager;
         _identityProvider = identityProvider;
-        _authenticationService = authenticationService;
-        _auditService = auditService;
+        _sessionService = sessionService;
+        _auditRepository = auditRepository;
         _dateTimeProvider = dateTimeProvider;
         _config = config.Value;
     }
@@ -66,7 +60,7 @@ internal class TwoFactorService : ITwoFactorService
     /// <inheritdoc />
     public async Task<TwoFactorStatus> GetStatus(CancellationToken cancellationToken = default)
     {
-        var user = Owner();
+        var user = _identityProvider.RequireAuthenticated();
         var state = await _repository.Find(user.UserId, cancellationToken);
         var left = state is { ConfirmedUtc: not null }
             ? await _repository.CountUnusedRecoveryCodes(user.UserId, cancellationToken)
@@ -84,7 +78,7 @@ internal class TwoFactorService : ITwoFactorService
     public async Task<TwoFactorSetup> IssueSecret(
         string currentPassword, CancellationToken cancellationToken = default)
     {
-        var user = Owner();
+        var user = _identityProvider.RequireAuthenticated();
         RequirePassword(user, currentPassword);
 
         var existing = await _repository.Find(user.UserId, cancellationToken);
@@ -97,13 +91,11 @@ internal class TwoFactorService : ITwoFactorService
         }
 
         var secret = RandomNumberGenerator.GetBytes(SecretBytes);
-        var base32 = _calculator.ToBase32(secret);
+        var base32 = TotpCalculator.ToBase32(secret);
         if (!await _repository.IssueSecret(
                 user.UserId, await _cryptoService.Encrypt(base32), _dateTimeProvider.Now, cancellationToken))
         {
-            // The read above answered "off" and a confirmation committed between
-            // that answer and this write. Same refusal: what the owner is told
-            // must not depend on which of the two noticed.
+            // A confirmation committed after the read above: the same refusal.
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TwoFactorAlreadyEnabled);
         }
 
@@ -114,7 +106,7 @@ internal class TwoFactorService : ITwoFactorService
     public async Task<RecoveryCodeSet> Confirm(
         string code, CancellationToken cancellationToken = default)
     {
-        var user = Owner();
+        var user = _identityProvider.RequireAuthenticated();
         var state = await _repository.Find(user.UserId, cancellationToken);
         if (state == null)
         {
@@ -126,10 +118,7 @@ internal class TwoFactorService : ITwoFactorService
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TwoFactorAlreadyEnabled);
         }
 
-        // The setup window. A secret nobody confirmed is a credential lying in
-        // the table belonging to somebody who has forgotten about it, and the
-        // sweep takes it - but the refusal has to stand before the sweep runs,
-        // or the window would be "thirty minutes, give or take an hour".
+        // The setup window, refused here before the sweep removes the secret.
         var window = TimeSpan.FromMinutes(_config.SetupWindowMinutes);
         if (state.CreatedUtc + window < _dateTimeProvider.Now)
         {
@@ -140,43 +129,27 @@ internal class TwoFactorService : ITwoFactorService
         // factor on must not be usable a second later to pass a sign-in.
         if (!await _verifier.Accept(state, code, null, cancellationToken))
         {
-            // Counted, and counted in the journal rather than in the lockout
-            // counter of the login. A person who mistypes the very first code
-            // while setting the factor up must not be able to lock their own
-            // sign-in doing it; what stops guessing here is the rate limit on
-            // the endpoint, and what the owner needs is a record that somebody
-            // was trying. Under its own type and not the login one: there was a
-            // session, no password was asked for and nothing was signed into.
-            await _auditService.LogAsync(user.UserId, SecurityEventType.TwoFactorSetupFailure);
+            // In the journal under its own type, not in the login lockout counter:
+            // a mistyped first code must not lock the owner out.
+            await _auditRepository.LogAsync(user.UserId, SecurityEventType.TwoFactorSetupFailure);
             throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.TwoFactorRejected);
         }
 
-        // Before the factor goes on, not after. Switching it on while somebody
-        // else's year-long session sits inside the account is locking a door with
-        // the burglar behind it, and a failure here after the stamp
-        // would leave exactly that state with nothing left to retry: the factor
-        // would already be on and the confirmation would refuse a second run.
-        // Failing first costs the owner a re-confirmation and leaves the account
-        // as it was.
-        await _authenticationService.LogoutElsewhere();
+        // Other sessions end before the factor goes on, so a failure here leaves
+        // the account as it was and the confirmation can be retried.
+        await _sessionService.LogoutElsewhere();
 
-        // One transaction for the stamp and the set. The set is in this answer
-        // and in no other, so a factor switched on beside a set that never
-        // stored would tie the owner to one device with nothing to get past it.
+        // One transaction for the stamp and the set: the set is in this answer only.
         var (codes, hashes) = CreateRecoveryCodes();
         if (!await _repository.Confirm(
                 user.UserId, state.CreatedUtc, _dateTimeProvider.Now, hashes, cancellationToken))
         {
-            // The secret this code was checked against is no longer the one the
-            // account holds: another device started a setup, or a confirmation
-            // arrived first. The answer is the one a code that does not match
-            // gets, because that is what the code is now - it belongs to a secret
-            // that is gone, and what the owner has to do is scan the new one.
-            // No entry in the journal: nobody guessed at anything here.
+            // The secret was replaced meanwhile, so the code no longer matches;
+            // nobody guessed, so no journal entry.
             throw new HttpException(HttpStatusCode.BadRequest, RefusalMessage.TwoFactorRejected);
         }
 
-        await _auditService.LogAsync(user.UserId, SecurityEventType.TwoFactorEnabled);
+        await _auditRepository.LogAsync(user.UserId, SecurityEventType.TwoFactorEnabled);
         return codes;
     }
 
@@ -184,38 +157,32 @@ internal class TwoFactorService : ITwoFactorService
     public async Task Disable(
         string currentPassword, string secondFactor, CancellationToken cancellationToken = default)
     {
-        var user = Owner();
+        var user = _identityProvider.RequireAuthenticated();
         var state = await RequirePasswordAndFactor(
             user, currentPassword, secondFactor, cancellationToken);
 
         await _repository.Remove(state.UserId, cancellationToken);
-        await _auditService.LogAsync(user.UserId, SecurityEventType.TwoFactorDisabled);
+        await _auditRepository.LogAsync(user.UserId, SecurityEventType.TwoFactorDisabled);
     }
 
     /// <inheritdoc />
     public async Task<RecoveryCodeSet> ReissueRecoveryCodes(
         string currentPassword, string secondFactor, CancellationToken cancellationToken = default)
     {
-        var user = Owner();
+        var user = _identityProvider.RequireAuthenticated();
         await RequirePasswordAndFactor(user, currentPassword, secondFactor, cancellationToken);
 
         var (codes, hashes) = CreateRecoveryCodes();
 
-        // The whole previous set goes at once. A set that is half old and half
-        // new means a code the owner crossed off on paper still opens the
-        // account.
+        // The whole previous set goes at once.
         if (!await _repository.ReplaceRecoveryCodes(
                 user.UserId, hashes, _dateTimeProvider.Now, cancellationToken))
         {
-            // The factor was read a moment ago and is gone now - taken off from
-            // another session, or by a mailed removal that came due. The answer is
-            // the one a reissue asked for an account without a factor gets, and it
-            // has to be the write that says so: showing ten codes for a factor
-            // that is off is telling the owner a way in exists that does not.
+            // The factor went away since it was read: the write says so, not the codes.
             throw new HttpException(HttpStatusCode.Conflict, RefusalMessage.TwoFactorNotEnabled);
         }
 
-        await _auditService.LogAsync(user.UserId, SecurityEventType.TwoFactorRecoveryCodesReissued);
+        await _auditRepository.LogAsync(user.UserId, SecurityEventType.TwoFactorRecoveryCodesReissued);
         return codes;
     }
 
@@ -225,19 +192,8 @@ internal class TwoFactorService : ITwoFactorService
     /// </summary>
     private (RecoveryCodeSet Codes, IReadOnlyList<byte[]> Hashes) CreateRecoveryCodes()
     {
-        var codes = _recoveryCodes.Create(_config.RecoveryCodeCount);
-        return (new RecoveryCodeSet(codes), codes.Select(_recoveryCodes.Hash).ToList());
-    }
-
-    private AuthenticatedUser Owner()
-    {
-        var identity = _identityProvider.Current;
-        if (!identity.User.IsAuthenticated)
-        {
-            throw new HttpException(HttpStatusCode.Unauthorized, RefusalMessage.AuthenticationRequired);
-        }
-
-        return identity.User;
+        var codes = RecoveryCodeFactory.Create(_config.RecoveryCodeCount);
+        return (new RecoveryCodeSet(codes), codes.Select(RecoveryCodeFactory.Hash).ToList());
     }
 
     private void RequirePassword(AuthenticatedUser user, string password)

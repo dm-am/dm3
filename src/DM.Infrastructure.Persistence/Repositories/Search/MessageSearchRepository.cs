@@ -1,16 +1,17 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
 using DM.Domain.Messaging.Features.Search;
+using DM.Domain.Core.Chats;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using Microsoft.EntityFrameworkCore;
 using NpgsqlTypes;
-using DbChat = DM.Infrastructure.Persistence.Entities.Messaging.Chat;
+using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
+using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 
 namespace DM.Infrastructure.Persistence.Repositories.Search;
 
@@ -21,12 +22,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 /// </summary>
 internal class MessageSearchRepository : IMessageSearchRepository
 {
-    private const string SearchConfig = SearchTextConfiguration.Name;
-
-    // Must match the [private] strip used by the Post.SearchVector generated
-    // column (DmDbContext) and PostRepository — private text is never previewed.
-    private const string PrivateBlockPattern = SearchSnippet.PrivateBlockPattern;
-
     /// <summary>The one branch of this search that reads a different table.</summary>
     private const string GameSourceType = "game";
 
@@ -40,96 +35,20 @@ internal class MessageSearchRepository : IMessageSearchRepository
     }
 
     /// <summary>
-    /// Fills in the preview of a page: a window around the match, with the match
-    /// marked.
+    /// Fills in the preview of a page: a window around the match, with the match marked.
     /// </summary>
-    /// <remarks>
-    /// A second pass over the page rather than part of the projection above, and
-    /// not for tidiness. ts_headline re-parses the document it is given, and in the
-    /// select list of the ranked query it would run for every message that matched
-    /// anywhere the reader can see - to be thrown away by the paging a moment
-    /// later. Here it runs once per row a reader will actually see.
-    ///
-    /// The window is what makes the preview worth reading. Cut from the beginning
-    /// instead, it showed the first two hundred characters and almost never the
-    /// words that were searched for; and it could not have found them by looking,
-    /// because the search matches by lexeme - a query for "странник" matches
-    /// "странников", which no substring of the query occurs in.
-    ///
-    /// Both branches cut the private block out, and the branch that builds a
-    /// window has to cut it for a reason the fallback does not: ts_headline reads
-    /// the document it is given rather than the vector, so the strip in the
-    /// generated column protects which rows match and says nothing about what is
-    /// shown. A window opened around any other word in the same body ran straight
-    /// through the block. The projection has removed it since, so this is the
-    /// second lock of the pair - the one that also covers a row written before the
-    /// projection learned to.
-    /// </remarks>
     private async Task Preview(MessageSearchHit[] page, string query, CancellationToken ct)
     {
-        if (page.Length == 0)
-        {
-            return;
-        }
-
-        // A filter with no words in it - by author, by date - matches every row
-        // equally, and there is nothing to build a window around. The fallback
-        // strips the private block a second time: the projection already removed
-        // it, the column cannot fail and a process can.
-        if (string.IsNullOrWhiteSpace(query))
-        {
-            foreach (var row in page)
-            {
-                row.SnippetSegments = SearchSnippet.Plain(row.Snippet);
-            }
-
-            return;
-        }
-
         var messageIds = page.Where(h => h.SourceType != GameSourceType).Select(h => h.Id).ToArray();
         var postIds = page.Where(h => h.SourceType == GameSourceType).Select(h => h.Id).ToArray();
 
-        var headlines = new Dictionary<Guid, string>();
-
-        if (messageIds.Length > 0)
-        {
-            foreach (var row in await _dbContext.Messages
+        var headlines = await SearchSnippet.Headlines(query, ct,
+            (messageIds, _dbContext.Messages
                 .Where(m => messageIds.Contains(m.MessageId))
-                .Select(m => new
-                {
-                    m.MessageId,
-                    Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
-                        .GetResultHeadline(
-                            SearchConfig,
-                            DmDbContext.RegexpReplace(
-                                EF.Property<string>(m, "SearchText"), PrivateBlockPattern, " ", SearchSnippet.PrivateBlockPatternFlags),
-                            SearchSnippet.HeadlineOptions),
-                })
-                .ToArrayAsync(ct))
-            {
-                headlines[row.MessageId] = row.Headline;
-            }
-        }
-
-        if (postIds.Length > 0)
-        {
-            foreach (var row in await _dbContext.Posts
+                .Select(m => new SearchSnippet.Body { Id = m.MessageId, Text = EF.Property<string>(m, "SearchText") })),
+            (postIds, _dbContext.Posts
                 .Where(p => postIds.Contains(p.PostId))
-                .Select(p => new
-                {
-                    p.PostId,
-                    Headline = EF.Functions.WebSearchToTsQuery(SearchConfig, query)
-                        .GetResultHeadline(
-                            SearchConfig,
-                            DmDbContext.RegexpReplace(
-                                EF.Property<string>(p, "SearchText"), PrivateBlockPattern, " ", SearchSnippet.PrivateBlockPatternFlags),
-                            SearchSnippet.HeadlineOptions),
-                })
-                .ToArrayAsync(ct))
-            {
-                headlines[row.PostId] = row.Headline;
-            }
-        }
+                .Select(p => new SearchSnippet.Body { Id = p.PostId, Text = EF.Property<string>(p, "SearchText") })));
 
         foreach (var row in page)
         {
@@ -139,22 +58,36 @@ internal class MessageSearchRepository : IMessageSearchRepository
         }
     }
 
+    /// <summary>
+    /// What a search asks of every source it reads: the words, the author, the
+    /// dates and the place the walk stopped at. Read once from the query, so the
+    /// three sources ask it alike.
+    /// </summary>
+    /// <param name="FreeText">The words, trimmed; empty for a filter with none.</param>
+    /// <param name="FromLower">
+    /// The from: operator names one author, so this is an equality on the login,
+    /// not a pattern: ILIKE reads "_" and "%" in it as wildcards and cannot use
+    /// the lower("Username") index either. Lowered once, here, for every source.
+    /// </param>
+    /// <param name="After">The earliest moment a hit may be written at.</param>
+    /// <param name="Before">The latest moment a hit may be written at.</param>
+    /// <param name="CursorTs">The keyset cursor decodes to "older than (ts, id)": its ts.</param>
+    /// <param name="CursorId">Its id, which orders the hits of one moment.</param>
+    private sealed record Criteria(
+        string FreeText,
+        string? FromLower,
+        DateTimeOffset? After,
+        DateTimeOffset? Before,
+        DateTimeOffset? CursorTs,
+        Guid CursorId)
+    {
+        public bool HasText => FreeText.Length > 0;
+    }
+
     /// <inheritdoc />
     public async Task<CursorResult<MessageSearchHit>> Search(
         Guid userId, MessageSearchQuery query, CancellationToken ct = default)
     {
-        var limit = query.EffectiveLimit;
-        var freeText = query.Text?.Trim() ?? "";
-        var hasText = freeText.Length > 0;
-        // The from: operator names one author, so this is an equality on the login,
-        // not a pattern: ILIKE reads "_" and "%" in it as wildcards and cannot use
-        // the lower("Username") index either. Lowered once, here, for all three
-        // branches below.
-        var fromLower = query.FromUsername?.ToLowerInvariant();
-        var after = query.After;
-        var before = query.Before;
-        var globalChatId = DbChat.GlobalChatId;
-
         // Keyset cursor decodes to "older than (ts, id)".
         DateTimeOffset? cursorTs = null;
         var cursorId = Guid.Empty;
@@ -163,6 +96,9 @@ internal class MessageSearchRepository : IMessageSearchRepository
             cursorTs = cd.TimestampUtc;
             cursorId = cd.EntityId;
         }
+
+        var criteria = new Criteria(
+            query.Text?.Trim() ?? "", query.FromUsername?.ToLowerInvariant(), query.After, query.Before, cursorTs, cursorId);
 
         // Which sources are in scope. Empty scope list = everything accessible.
         var scopes = query.Scopes;
@@ -177,110 +113,9 @@ internal class MessageSearchRepository : IMessageSearchRepository
         var gameIds = await ResolveIds(gameScopes, isChat: false, ct);
 
         var branches = new List<IQueryable<MessageSearchHit>>();
-
-        // ── Global chat (readable by everyone) ──
-        if (includeGlobal)
-        {
-            var q = _dbContext.Messages.Where(m => !m.IsRemoved && m.ChatId == globalChatId);
-            // The authors the reader hides in the general chat stay hidden in its
-            // search (MessageSearchQuery.HiddenAuthorIds).
-            if (query.HiddenAuthorIds is { Count: > 0 })
-            {
-                var hiddenAuthors = query.HiddenAuthorIds.ToArray();
-                q = q.Where(m => !hiddenAuthors.Contains(m.UserId));
-            }
-
-            if (hasText)
-                q = q.Where(m => EF.Property<NpgsqlTsVector>(m, "SearchVector")
-                    .Matches(EF.Functions.WebSearchToTsQuery(SearchConfig, freeText)));
-            if (!string.IsNullOrEmpty(fromLower))
-                q = q.Where(m => m.Author.Username.ToLower() == fromLower);
-            if (after.HasValue) q = q.Where(m => m.CreatedUtc >= after.Value);
-            if (before.HasValue) q = q.Where(m => m.CreatedUtc <= before.Value);
-            if (cursorTs.HasValue)
-                q = q.Where(m => m.CreatedUtc <= cursorTs.Value &&
-                                 (m.CreatedUtc < cursorTs.Value || m.MessageId.CompareTo(cursorId) < 0));
-
-            branches.Add(q.Select(m => new MessageSearchHit
-            {
-                SourceType = "global",
-                SourceId = m.ChatId,
-                SourceTitle = null,
-                Id = m.MessageId,
-                CreatedUtc = m.CreatedUtc,
-                Snippet = EF.Property<string>(m, "SearchText")
-            }));
-        }
-
-        // ── Participant chats (direct/group), reusing the participation gate ──
-        // The gate carries the reader's cleared history too: a search is one more
-        // way of reading the conversation, and what he cleared for himself is not
-        // found for him.
-        if (includeChats)
-        {
-            var q = _dbContext.Messages.Where(m =>
-                !m.IsRemoved &&
-                m.ChatId != globalChatId &&
-                m.Chat.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId &&
-                                          (l.HistoryClearedUtc == null || m.CreatedUtc > l.HistoryClearedUtc)));
-            if (chatIds != null)
-                q = q.Where(m => chatIds.Contains(m.ChatId));
-            if (hasText)
-                q = q.Where(m => EF.Property<NpgsqlTsVector>(m, "SearchVector")
-                    .Matches(EF.Functions.WebSearchToTsQuery(SearchConfig, freeText)));
-            if (!string.IsNullOrEmpty(fromLower))
-                q = q.Where(m => m.Author.Username.ToLower() == fromLower);
-            if (after.HasValue) q = q.Where(m => m.CreatedUtc >= after.Value);
-            if (before.HasValue) q = q.Where(m => m.CreatedUtc <= before.Value);
-            if (cursorTs.HasValue)
-                q = q.Where(m => m.CreatedUtc <= cursorTs.Value &&
-                                 (m.CreatedUtc < cursorTs.Value || m.MessageId.CompareTo(cursorId) < 0));
-
-            branches.Add(q.Select(m => new MessageSearchHit
-            {
-                SourceType = "chat",
-                SourceId = m.ChatId,
-                SourceTitle = m.Chat.Title,
-                Id = m.MessageId,
-                CreatedUtc = m.CreatedUtc,
-                Snippet = EF.Property<string>(m, "SearchText")
-            }));
-        }
-
-        // ── Game posts, reusing the canonical room read gate ──
-        if (includeGames)
-        {
-            var q = _dbContext.Rooms
-                .Where(GameAccessibilityFilters.RoomAvailable(userId))
-                .SelectMany(r => r.Posts)
-                .Where(p => !p.IsRemoved);
-            if (gameIds != null)
-                q = q.Where(p => gameIds.Contains(p.Room.GameId));
-            if (hasText)
-                q = q.Where(p => EF.Property<NpgsqlTsVector>(p, "SearchVector")
-                    .Matches(EF.Functions.WebSearchToTsQuery(SearchConfig, freeText)));
-            if (!string.IsNullOrEmpty(fromLower))
-                q = q.Where(p => p.Author.Username.ToLower() == fromLower);
-            if (after.HasValue) q = q.Where(p => p.CreatedUtc >= after.Value);
-            if (before.HasValue) q = q.Where(p => p.CreatedUtc <= before.Value);
-            if (cursorTs.HasValue)
-                q = q.Where(p => p.CreatedUtc <= cursorTs.Value &&
-                                 (p.CreatedUtc < cursorTs.Value || p.PostId.CompareTo(cursorId) < 0));
-
-            branches.Add(q.Select(p => new MessageSearchHit
-            {
-                SourceType = GameSourceType,
-                SourceId = p.Room.GameId,
-                SourceTitle = p.Room.Game.Title,
-                Id = p.PostId,
-                CreatedUtc = p.CreatedUtc,
-                // The projected visible text, which the vector of this row is built
-                // from as well: a preview can show nothing the index refused.
-                // Snippet from the SAME [private]-stripped expression as the
-                // index — private content is never previewed.
-                Snippet = EF.Property<string>(p, "SearchText")
-            }));
-        }
+        if (includeGlobal) branches.Add(GlobalChatHits(query, criteria));
+        if (includeChats) branches.Add(ChatHits(userId, chatIds, criteria));
+        if (includeGames) branches.Add(GamePostHits(userId, gameIds, criteria));
 
         if (branches.Count == 0)
         {
@@ -288,8 +123,126 @@ internal class MessageSearchRepository : IMessageSearchRepository
         }
 
         var combined = branches.Aggregate((acc, next) => acc.Concat(next));
+        return await PageOf(combined, query.EffectiveLimit, criteria.FreeText, ct);
+    }
 
-        var rows = await combined
+    /// <summary>The messages of the global chat (readable by everyone).</summary>
+    private IQueryable<MessageSearchHit> GlobalChatHits(MessageSearchQuery query, Criteria criteria)
+    {
+        var globalChatId = WellKnownChats.GlobalChatId;
+        var q = _dbContext.Messages.Where(m => !m.IsRemoved && m.ChatId == globalChatId);
+        // The authors the reader hides in the general chat stay hidden in its
+        // search (MessageSearchQuery.HiddenAuthorIds).
+        if (query.HiddenAuthorIds is { Count: > 0 })
+        {
+            var hiddenAuthors = query.HiddenAuthorIds.ToArray();
+            q = q.Where(m => !hiddenAuthors.Contains(m.UserId));
+        }
+
+        return Matching(q, criteria).Select(m => new MessageSearchHit
+        {
+            SourceType = "global",
+            SourceId = m.ChatId,
+            SourceTitle = null,
+            Id = m.MessageId,
+            CreatedUtc = m.CreatedUtc,
+            Snippet = EF.Property<string>(m, "SearchText")
+        });
+    }
+
+    /// <summary>
+    /// The messages of the reader's correspondences (direct and group), through
+    /// the participation gate. The gate carries the reader's cleared history too:
+    /// a search is one more way of reading the conversation, and what he cleared
+    /// for himself is not found for him.
+    /// </summary>
+    private IQueryable<MessageSearchHit> ChatHits(Guid userId, List<Guid>? chatIds, Criteria criteria)
+    {
+        var globalChatId = WellKnownChats.GlobalChatId;
+        var q = _dbContext.Messages.Where(m =>
+            !m.IsRemoved &&
+            m.ChatId != globalChatId &&
+            m.Chat.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId &&
+                                      (l.HistoryClearedUtc == null || m.CreatedUtc > l.HistoryClearedUtc)));
+        if (chatIds != null)
+            q = q.Where(m => chatIds.Contains(m.ChatId));
+
+        return Matching(q, criteria).Select(m => new MessageSearchHit
+        {
+            SourceType = "chat",
+            SourceId = m.ChatId,
+            SourceTitle = m.Chat.Title,
+            Id = m.MessageId,
+            CreatedUtc = m.CreatedUtc,
+            Snippet = EF.Property<string>(m, "SearchText")
+        });
+    }
+
+    /// <summary>The game posts the reader may read, through the canonical room read gate.</summary>
+    private IQueryable<MessageSearchHit> GamePostHits(Guid userId, List<Guid>? gameIds, Criteria criteria)
+    {
+        var q = _dbContext.Rooms
+            .Where(GameAccessibilityFilters.RoomAvailable(userId))
+            .SelectMany(r => r.Posts)
+            .Where(p => !p.IsRemoved);
+        if (gameIds != null)
+            q = q.Where(p => gameIds.Contains(p.Room.GameId));
+
+        return Matching(q, criteria).Select(p => new MessageSearchHit
+        {
+            SourceType = GameSourceType,
+            SourceId = p.Room.GameId,
+            SourceTitle = p.Room.Game.Title,
+            Id = p.PostId,
+            CreatedUtc = p.CreatedUtc,
+            // The projected visible text, which the vector of this row is built
+            // from as well: a preview can show nothing the index refused.
+            // Snippet from the SAME [private]-stripped expression as the
+            // index — private content is never previewed.
+            Snippet = EF.Property<string>(p, "SearchText")
+        });
+    }
+
+    /// <summary>The messages a search asks for: its words, its author, its dates, past its cursor.</summary>
+    private static IQueryable<DbMessage> Matching(IQueryable<DbMessage> q, Criteria c)
+    {
+        if (c.HasText)
+            q = q.Where(m => EF.Property<NpgsqlTsVector>(m, "SearchVector")
+                .Matches(EF.Functions.WebSearchToTsQuery(SearchTextConfiguration.Name, c.FreeText)));
+        if (!string.IsNullOrEmpty(c.FromLower))
+            q = q.Where(m => m.Author.Username.ToLower() == c.FromLower);
+        if (c.After.HasValue) q = q.Where(m => m.CreatedUtc >= c.After.Value);
+        if (c.Before.HasValue) q = q.Where(m => m.CreatedUtc <= c.Before.Value);
+        if (c.CursorTs.HasValue)
+            q = q.Where(m => m.CreatedUtc <= c.CursorTs.Value &&
+                             (m.CreatedUtc < c.CursorTs.Value || m.MessageId.CompareTo(c.CursorId) < 0));
+        return q;
+    }
+
+    /// <summary>The game posts a search asks for, by the same criteria as the messages.</summary>
+    private static IQueryable<DbPost> Matching(IQueryable<DbPost> q, Criteria c)
+    {
+        if (c.HasText)
+            q = q.Where(p => EF.Property<NpgsqlTsVector>(p, "SearchVector")
+                .Matches(EF.Functions.WebSearchToTsQuery(SearchTextConfiguration.Name, c.FreeText)));
+        if (!string.IsNullOrEmpty(c.FromLower))
+            q = q.Where(p => p.Author.Username.ToLower() == c.FromLower);
+        if (c.After.HasValue) q = q.Where(p => p.CreatedUtc >= c.After.Value);
+        if (c.Before.HasValue) q = q.Where(p => p.CreatedUtc <= c.Before.Value);
+        if (c.CursorTs.HasValue)
+            q = q.Where(p => p.CreatedUtc <= c.CursorTs.Value &&
+                             (p.CreatedUtc < c.CursorTs.Value || p.PostId.CompareTo(c.CursorId) < 0));
+        return q;
+    }
+
+    /// <summary>
+    /// One page of the hits of every source, newest first, with its preview and
+    /// the cursor of the next page.
+    /// </summary>
+    private async Task<CursorResult<MessageSearchHit>> PageOf(
+        IQueryable<MessageSearchHit> hits, int limit, string freeText, CancellationToken ct)
+    {
+        var rows = await hits
             .OrderByDescending(h => h.CreatedUtc)
             .ThenByDescending(h => h.Id)
             .Take(limit + 1)

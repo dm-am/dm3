@@ -16,7 +16,6 @@ internal class PublicationLikedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public PublicationLikedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -55,11 +54,11 @@ internal class PublicationLikedNotificationGenerator : BaseNotificationGenerator
             ActorId = likedPublicationData.LikerId,
             Metadata = new
             {
-                LikerUsername = likedPublicationData.LikerUsername,
+                likedPublicationData.LikerUsername,
                 PublicationId = likedPublicationData.PublicationId.EncodeToReadable(likedPublicationData.Title),
                 PublicationTitle = likedPublicationData.Title,
                 BlogId = likedPublicationData.BlogId.EncodeToReadable(likedPublicationData.BlogTitle),
-                BlogTitle = likedPublicationData.BlogTitle
+                likedPublicationData.BlogTitle
             }
         };
     }

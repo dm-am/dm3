@@ -2,6 +2,7 @@ using System.Threading.Tasks;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
+using DM.Web.API.Shared.Http;
 
 namespace DM.Web.API.Features.Community.Awards;
 
@@ -19,10 +20,9 @@ namespace DM.Web.API.Features.Community.Awards;
 [Tags("Awards")]
 public class AwardController : ControllerBase
 {
-    private readonly IAwardApiService _awardApiService;
+    private readonly AwardApiService _awardApiService;
 
-    /// <inheritdoc />
-    public AwardController(IAwardApiService awardApiService)
+    public AwardController(AwardApiService awardApiService)
     {
         _awardApiService = awardApiService;
     }
@@ -31,9 +31,7 @@ public class AwardController : ControllerBase
     /// <response code="200">List of catalog records.</response>
     [HttpGet("award-types", Name = nameof(GetAwardTypes))]
     [ProducesResponseType(typeof(ListEnvelope<AwardType>), StatusCodes.Status200OK)]
-    // A catalogue: the service is called without an identity, so every caller
-    // gets the same bytes. Same policy as /v1/games/tags.
-    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
+    [CatalogueCache]
     public async Task<IActionResult> GetAwardTypes() =>
         Ok(await _awardApiService.GetTypes());
 
@@ -41,9 +39,7 @@ public class AwardController : ControllerBase
     /// <response code="200">List of series, newest first (year DESC → season).</response>
     [HttpGet("contest-series", Name = nameof(GetContestSeries))]
     [ProducesResponseType(typeof(ListEnvelope<ContestSeries>), StatusCodes.Status200OK)]
-    // A catalogue: the service is called without an identity, so every caller
-    // gets the same bytes. Same policy as /v1/games/tags.
-    [ResponseCache(Duration = 300, Location = ResponseCacheLocation.Any)]
+    [CatalogueCache]
     public async Task<IActionResult> GetContestSeries() =>
         Ok(await _awardApiService.GetSeries());
 

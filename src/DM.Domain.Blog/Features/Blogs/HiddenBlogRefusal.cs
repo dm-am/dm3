@@ -1,3 +1,4 @@
+using System;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -21,17 +22,13 @@ namespace DM.Domain.Blog.Features.Blogs;
 internal static class HiddenBlogRefusal
 {
     /// <summary>
-    /// Refuse by the intention, answering as a blog that is not there where the
-    /// caller may not see the blog at all.
+    /// The blog read unfiltered and refused by the intention, answering as a blog
+    /// that is not there where the caller may not see the blog at all.
     /// </summary>
-    /// <param name="intentionManager">Intention manager</param>
-    /// <param name="blogService">Blog service, for the visibility of the blog</param>
-    /// <param name="intention">Action asked for</param>
-    /// <param name="blog">The blog, read unfiltered</param>
-    /// <param name="ct">Cancellation token</param>
-    public static async Task ThrowIfForbiddenOrHiddenAsync(this IIntentionManager intentionManager,
-        IBlogService blogService, BlogIntention intention, Blog blog, CancellationToken ct = default)
+    public static async Task<Blog> GetPermittedBlogAsync(this IIntentionManager intentionManager,
+        IBlogService blogService, BlogIntention intention, Guid blogId, CancellationToken ct = default)
     {
+        var blog = await blogService.GetUnfiltered(blogId, ct);
         try
         {
             intentionManager.ThrowIfForbidden(intention, blog);
@@ -45,5 +42,7 @@ internal static class HiddenBlogRefusal
 
             throw;
         }
+
+        return blog;
     }
 }

@@ -3,9 +3,9 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
 using DM.Infrastructure.Persistence.RelationalStorage;
+using DM.Infrastructure.Persistence.Shared.Attachments;
 using DM.Domain.Core.Enums;
 using Microsoft.EntityFrameworkCore;
 using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
@@ -18,7 +18,6 @@ internal class RoomRepository : IRoomRepository
     private readonly DmDbContext _dbContext;
     private readonly IDateTimeProvider _dateTimeProvider;
 
-    /// <inheritdoc />
     public RoomRepository(
         DmDbContext dbContext,
         IDateTimeProvider dateTimeProvider)
@@ -26,8 +25,6 @@ internal class RoomRepository : IRoomRepository
         _dbContext = dbContext;
         _dateTimeProvider = dateTimeProvider;
     }
-
-    #region Read Operations
 
     public async Task<IEnumerable<Room>> GetAllVisible(
         Guid gameId, Guid userId, bool mayJudgePremoderation)
@@ -86,7 +83,7 @@ internal class RoomRepository : IRoomRepository
             .Where(r => r.RoomId == roomId)
             .Where(GameAccessibilityFilters.RoomAvailable(userId))
             .ProjectToRoomToUpdate()
-            .FirstOrDefaultAsync()!;
+            .FirstOrDefaultAsync();
     }
 
     /// <summary>
@@ -116,10 +113,6 @@ internal class RoomRepository : IRoomRepository
             room.TotalPostsCount = counts.GetValueOrDefault(room.ChatId!.Value);
         }
     }
-
-    #endregion
-
-    #region Write Operations
 
     public async Task<Room> Create(CreateRoomEntity createRoom)
     {
@@ -208,7 +201,7 @@ internal class RoomRepository : IRoomRepository
                 ?? throw new InvalidOperationException($"Room {updateRoom.RoomId} not found");
 
             if (!string.IsNullOrEmpty(updateRoom.Title))
-                room.Title = updateRoom.Title.Trim();
+                room.Title = updateRoom.Title;
 
             if (updateRoom.Type.HasValue)
                 room.Type = updateRoom.Type.Value;
@@ -236,9 +229,6 @@ internal class RoomRepository : IRoomRepository
 
             if (updateRoom.ShouldReorder)
                 await MoveAfter(room, updateRoom.NewPreviousRoomId);
-
-            if (updateRoom.IsRemoved.HasValue)
-                room.IsRemoved = updateRoom.IsRemoved.Value;
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -314,15 +304,13 @@ internal class RoomRepository : IRoomRepository
             // selects its rows through the post's room, which the soft-delete
             // filter has by then hidden, so a room deleted before its game takes
             // its files out of both paths at once.
-            await _dbContext.Uploads
-                .Where(u => u.Type == UploadType.PostAttachment
-                            && u.TargetPostId.HasValue
-                            && _dbContext.Posts.Any(p => p.PostId == u.TargetPostId.Value
-                                                         && p.RoomId == roomId))
-                .ExecuteUpdateAsync(u => u
-                    .SetProperty(x => x.IsRemoved, true)
-                    .SetProperty(x => x.DeletedByUserId, (Guid?)deletedByUserId)
-                    .SetProperty(x => x.DeletedUtc, (DateTimeOffset?)now));
+            await AttachmentRows.RetireAsync(
+                _dbContext.Uploads
+                    .Where(u => u.Type == UploadType.PostAttachment
+                                && u.TargetPostId.HasValue
+                                && _dbContext.Posts.Any(p => p.PostId == u.TargetPostId.Value
+                                                             && p.RoomId == roomId)),
+                deletedByUserId, now);
 
             await _dbContext.SaveChangesAsync();
             await transaction.CommitAsync();
@@ -337,6 +325,4 @@ internal class RoomRepository : IRoomRepository
     private Task LockGame(Guid gameId) =>
         _dbContext.Database.ExecuteSqlRawAsync(
             """SELECT "GameId" FROM "Games" WHERE "GameId" = {0} FOR UPDATE""", gameId);
-
-    #endregion
 }

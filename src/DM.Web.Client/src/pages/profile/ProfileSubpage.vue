@@ -1,20 +1,8 @@
 <script setup lang="ts">
 /**
- * ProfileSubpage — the one component behind the six list subpages of a
- * profile: received/given post ratings, endorsements and game reviews. The
- * router points all six routes here and names the subpage in the `subpage`
- * prop (the key is the route's own name); everything the six wrappers used to
- * spell separately — the 404, the header, the lead phrase around the profile
- * link and the list underneath — is a row in SUBPAGES.
- *
- * The lead phrase is stored in two halves around the link, spaces and
- * punctuation included, so the copy stays exactly what the six pages
- * rendered.
- *
- * Because all six routes resolve to this component, navigating between two
- * subpages swaps props without a remount — so everything here derives from
- * `cfg` reactively, and the lists themselves already reset on a mode/scope
- * change.
+ * The one component behind the six list subpages of a profile, named by the
+ * route in `subpage`; each is a row of SUBPAGES. Moving between two of them
+ * swaps props without a remount, so everything derives from `cfg`.
  */
 import { computed } from "vue";
 import { ErrorPage } from "@/shared/ui/ErrorPage";
@@ -57,12 +45,10 @@ const SUBPAGES: Record<
   | "given-game-reviews",
   SubpageConfig
 > = {
-  // The post-rating pair: the shared RatedPostsList scoped to this user as
-  // the post author (received) or as the reviewer (given). The author filter
-  // is hidden because the scope already fixes the author.
+  // Post ratings scoped to this user as the author (received) or the reviewer (given).
   "received-reviews": {
     label: "Полученные оценки постов",
-    before: "Посты игрока ",
+    before: "Посты пользователя ",
     after: ", оцененные хотя бы раз другими участниками сообщества",
     list: {
       kind: "rated-posts",
@@ -72,7 +58,7 @@ const SUBPAGES: Record<
   },
   "given-reviews": {
     label: "Поставленные оценки постов",
-    before: "Чужие посты, которые оценил игрок ",
+    before: "Чужие посты, которые оценил пользователь ",
     after: "",
     list: {
       kind: "rated-posts",
@@ -82,7 +68,7 @@ const SUBPAGES: Record<
   },
   "received-endorsements": {
     label: "Полученные рекомендации",
-    before: "Что участники сообщества пишут об игроке ",
+    before: "Что участники сообщества пишут о пользователе ",
     after: "",
     list: {
       kind: "endorsements",
@@ -92,7 +78,7 @@ const SUBPAGES: Record<
   },
   "given-endorsements": {
     label: "Написанные рекомендации",
-    before: "Что игрок ",
+    before: "Что пользователь ",
     after: " пишет о других участниках сообщества",
     list: {
       kind: "endorsements",
@@ -100,8 +86,7 @@ const SUBPAGES: Record<
       routeName: "given-endorsements",
     },
   },
-  // Reviews of whole games, not of posts — the profile shows the two pairs as
-  // different counters.
+  // Reviews of whole games, not of posts.
   "received-game-reviews": {
     label: "Полученные рецензии на игры",
     before: "Что участники сообщества пишут об играх, которые ведет ",
@@ -114,7 +99,7 @@ const SUBPAGES: Record<
   },
   "given-game-reviews": {
     label: "Написанные рецензии на игры",
-    before: "Что игрок ",
+    before: "Что пользователь ",
     after: " пишет об играх сообщества",
     list: {
       kind: "game-reviews",

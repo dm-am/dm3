@@ -18,7 +18,6 @@ internal class LoginRecordService : ILoginRecordService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly ILogger<LoginRecordService> _logger;
 
-    /// <inheritdoc />
     public LoginRecordService(
         ILoginRecordRepository repository,
         IGuidFactory guidFactory,

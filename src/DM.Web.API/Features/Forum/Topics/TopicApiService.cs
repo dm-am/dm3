@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
 using DM.Domain.Forum.Features.Comments;
 using DM.Domain.Forum.Features.Topics;
 using DM.Web.API.Features.Forum.Boards;
@@ -10,14 +11,12 @@ using DomainTopic = DM.Domain.Forum.Features.Topics.Topic;
 
 namespace DM.Web.API.Features.Forum.Topics;
 
-/// <inheritdoc />
-internal class TopicApiService : ITopicApiService
+public class TopicApiService
 {
     private readonly ITopicService _topicService;
     private readonly ITopicCommentService _commentService;
     private readonly TopicMapper _mapper;
 
-    /// <inheritdoc />
     public TopicApiService(
         ITopicService topicService,
         ITopicCommentService commentService,
@@ -28,27 +27,27 @@ internal class TopicApiService : ITopicApiService
         _mapper = mapper;
     }
 
-    /// <inheritdoc />
     public async Task<ListEnvelope<Topic>> Get(string boardId, TopicsQuery query)
     {
-        var domainQuery = _mapper.ToTopicsQuery(query);
-        var (topics, paging) = await _topicService.GetListAsync(boardId, domainQuery);
-        var mapped = topics.Select(_mapper.ToTopic).ToList();
-        await EnrichPeriodDigests(mapped);
-        return new ListEnvelope<Topic>(mapped, paging != null ? new PagingInfo(paging) : null);
+        var (topics, paging) = await _topicService.GetListAsync(boardId, _mapper.ToTopicsQuery(query));
+        return await ListOf(topics, paging);
     }
 
-    /// <inheritdoc />
+    /// <summary>The caller scopes the search by query.AuthorUsernames; the access policy keeps boards the viewer cannot read out.</summary>
     public async Task<ListEnvelope<Topic>> GetAcrossBoards(TopicsQuery query)
     {
-        var domainQuery = _mapper.ToTopicsQuery(query);
-        var (topics, paging) = await _topicService.GetListAcrossBoardsAsync(domainQuery);
+        var (topics, paging) = await _topicService.GetListAcrossBoardsAsync(_mapper.ToTopicsQuery(query));
+        return await ListOf(topics, paging);
+    }
+
+    private async Task<ListEnvelope<Topic>> ListOf(IEnumerable<DomainTopic> topics, PagingResult? paging)
+    {
         var mapped = topics.Select(_mapper.ToTopic).ToList();
         await EnrichPeriodDigests(mapped);
         return new ListEnvelope<Topic>(mapped, paging != null ? new PagingInfo(paging) : null);
     }
 
-    /// <inheritdoc />
+    /// <summary>Null inside the envelope when the user has no topic visible to the viewer.</summary>
     public async Task<Envelope<Topic?>> GetUserBestTopic(string username)
     {
         var topic = await _topicService.GetBestUserTopicAsync(username);
@@ -58,7 +57,6 @@ internal class TopicApiService : ITopicApiService
         return new Envelope<Topic?>(mapped);
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Topic>> Get(Guid topicId)
     {
         var topic = await _topicService.GetAsync(topicId);
@@ -67,7 +65,6 @@ internal class TopicApiService : ITopicApiService
         return new Envelope<Topic>(mapped);
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Topic>> GetByBoardAndNumber(string boardAlias, int topicNumber)
     {
         var topic = await _topicService.GetByBoardAndNumberAsync(boardAlias, topicNumber);
@@ -117,7 +114,6 @@ internal class TopicApiService : ITopicApiService
         }
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Topic>> Create(string boardId, CreateTopicRequest request)
     {
         var createTopic = _mapper.ToCreateTopic(request);
@@ -126,23 +122,19 @@ internal class TopicApiService : ITopicApiService
         return new Envelope<Topic>(TopicForViewer(createdTopic));
     }
 
-    /// <inheritdoc />
     public async Task<Envelope<Topic>> Update(Guid topicId, UpdateTopicRequest request)
     {
         var updateTopic = _mapper.ToUpdateTopic(request);
         updateTopic.TopicId = topicId;
         var updatedTopic = await _topicService.UpdateAsync(updateTopic);
         var mapped = TopicForViewer(updatedTopic);
-        // The client stores commit PATCH responses wholesale — without the
-        // marker a digest topic would lose its boards until a reload.
+        // The client stores the PATCH response whole: without the marker a digest loses its boards.
         await EnrichPeriodDigests([mapped]);
         return new Envelope<Topic>(mapped);
     }
 
-    /// <inheritdoc />
     public Task Delete(Guid topicId) => _topicService.DeleteAsync(topicId);
 
-    /// <inheritdoc />
     public Task ReorderPinned(string boardId, ReorderPinnedRequest request) =>
         _topicService.ReorderPinnedAsync(boardId, request.TopicIds);
 }

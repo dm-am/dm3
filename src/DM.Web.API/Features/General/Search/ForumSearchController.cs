@@ -25,10 +25,9 @@ namespace DM.Web.API.Features.General.Search;
 [Tags("Search")]
 public class ForumSearchController : ControllerBase
 {
-    private readonly IForumSearchApiService _apiService;
+    private readonly ForumSearchApiService _apiService;
 
-    /// <inheritdoc />
-    public ForumSearchController(IForumSearchApiService apiService)
+    public ForumSearchController(ForumSearchApiService apiService)
     {
         _apiService = apiService;
     }
@@ -55,11 +54,8 @@ public class ForumSearchController : ControllerBase
     [ProducesResponseType(typeof(ListEnvelope<ForumSearchResult>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    // The free-text filter is `search` on all thirteen other list endpoints;
-    // this one used to call it `query` and its neighbour /v1/search/messages
-    // called it `q`. See the query vocabulary in API_DESIGN.md.
     public async Task<IActionResult> SearchForum(
-        [FromQuery][Required][StringLength(500, MinimumLength = 1)] string search,
+        [FromQuery][Required][StringLength(500)] string search,
         [FromQuery] PagingQuery paging,
         CancellationToken ct) =>
         Ok(await _apiService.Search(search, paging, ct));

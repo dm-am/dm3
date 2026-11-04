@@ -1,10 +1,4 @@
 <script setup lang="ts">
-/**
- * ModerationNewUsers — "Новые пользователи" (doc 4.2.3.8.5).
- * Users with newbie role (< 100 game posts) registered within the last
- * 3 months, newest registrations first. Row: name (profile link),
- * registration date, game post count.
- */
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { userApi } from "@/entities/user";
@@ -13,17 +7,15 @@ import type { PagingInfo as PagingModel } from "@/shared/api/models/common";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
 import { Paging } from "@/shared/ui/Paging";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 import { formatDate } from "@/shared/lib/utils/datetime";
 import { parsePageNumber } from "@/shared/lib/filters";
+import { usePaging } from "@/shared/lib/composables/usePaging";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { UserLink } from "@/entities/user";
-import { useRoleGate } from "./lib/useRoleGate";
-
-const PAGE_SIZE = 25;
 
 const route = useRoute();
-const { hasAccess, deniedText } = useRoleGate("Moderator");
+// A page as long as the reader's lists (account settings).
+const { pageSize } = usePaging();
 
 const users = ref<User[]>([]);
 const paging = ref<PagingModel | null>(null);
@@ -38,14 +30,14 @@ const columns: Column[] = [
   { key: "posts", label: "Игровых постов", width: "27%", align: "center" },
 ];
 
-// Doc: registered no more than 3 months ago
+// The newcomers of the last three months
 function threeMonthsAgoUtc(): string {
   const d = new Date();
   d.setMonth(d.getMonth() - 3);
   return d.toISOString();
 }
 
-async function fetch() {
+async function loadNewUsers() {
   loading.value = true;
   const { data, error } = await userApi.getUsers({
     isNewbie: true,
@@ -53,8 +45,8 @@ async function fetch() {
     sort: "Registered",
     sortOrder: "desc",
     registeredFromUtc: threeMonthsAgoUtc(),
-    take: PAGE_SIZE,
-    skip: (pageNumber.value - 1) * PAGE_SIZE,
+    take: pageSize.value,
+    skip: (pageNumber.value - 1) * pageSize.value,
   });
   loading.value = false;
   if (error) {
@@ -66,24 +58,19 @@ async function fetch() {
   paging.value = data?.paging ?? null;
 }
 
-watch(pageNumber, fetch, { immediate: true });
-
-// DataTable rows keyed by user id
-const rows = computed(() => users.value.map((u) => ({ ...u, id: u.id })));
+watch(pageNumber, loadNewUsers, { immediate: true });
 </script>
 
 <template>
   <div class="moderation-new-users">
     <page-title>Новые пользователи</page-title>
 
-    <SecondaryText v-if="!hasAccess">{{ deniedText }}</SecondaryText>
-
-    <ErrorState v-else-if="loadError" :message="loadError" :retry="fetch" />
+    <ErrorState v-if="loadError" :message="loadError" :retry="loadNewUsers" />
 
     <template v-else>
       <DataTable
         :columns="columns"
-        :data="rows"
+        :data="users"
         :loading="loading"
         empty-text="Новых пользователей пока нет"
         aria-label="Новые пользователи"
@@ -92,7 +79,7 @@ const rows = computed(() => users.value.map((u) => ({ ...u, id: u.id })));
           <UserLink :user="row" />
         </template>
         <template #cell-registered="{ row }">
-          {{ formatDate(row.registeredUtc ?? row.registrationUtc) }}
+          {{ formatDate(row.registeredUtc) }}
         </template>
         <template #cell-posts="{ row }">
           {{ row.rating?.totalPosts ?? VALUE_UNAVAILABLE }}

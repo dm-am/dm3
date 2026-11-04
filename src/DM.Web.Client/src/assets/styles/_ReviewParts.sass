@@ -1,0 +1,28 @@
+// The parts of the reviews under a post that a list drawn as one wears too:
+// the decisions of a moderation record. PostReviews.vue and PostReviewItem.vue
+// are the reviews themselves.
+
+@use "Variables" as *
+@use "Themes" as *
+
+/// The list of the reviews, a disc before each.
+=review-list
+  list-style: disc
+  margin: 0
+  padding-top: $small
+  padding-left: $big + $small
+
+/// One review: its indent from the disc, its line height, the step to the next.
+=review-item
+  margin: $minor 0
+  padding-left: $small
+  line-height: 1.4
+
+  & + &
+    margin-top: $medium
+
+/// The words of a review over its caption.
+=review-text
+  color: $text
+  font-weight: 400
+  margin-bottom: $small

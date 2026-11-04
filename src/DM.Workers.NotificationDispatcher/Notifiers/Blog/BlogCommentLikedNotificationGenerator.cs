@@ -9,14 +9,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Blog;
 
-/// <summary>
-/// Generates notifications when a blog comment is liked
-/// </summary>
 internal class BlogCommentLikedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public BlogCommentLikedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -55,9 +51,9 @@ internal class BlogCommentLikedNotificationGenerator : BaseNotificationGenerator
             ActorId = likedCommentData.LikerId,
             Metadata = new
             {
-                LikerUsername = likedCommentData.LikerUsername,
+                likedCommentData.LikerUsername,
                 BlogId = likedCommentData.BlogId.EncodeToReadable(likedCommentData.BlogTitle),
-                BlogTitle = likedCommentData.BlogTitle
+                likedCommentData.BlogTitle
             }
         };
     }

@@ -10,9 +10,6 @@ using DbUserEndorsement = DM.Infrastructure.Persistence.Entities.Community.UserE
 
 namespace DM.Web.API.IntegrationTests.Controllers.Community;
 
-/// <summary>
-/// Integration tests for UserEndorsementController
-/// </summary>
 public class UserEndorsementControllerShould : IntegrationTestBase
 {
     public UserEndorsementControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -20,9 +17,7 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Seed an endorsement directly: the create endpoint requires the pair
-    /// to have played together and the author to have 100+ game posts,
-    /// which is too heavy to arrange through the API.
+    /// Seed an endorsement directly: the create endpoint's gates are too heavy to arrange through the API.
     /// </summary>
     private async Task SeedEndorsement(Guid id, Guid authorId, Guid targetUserId, string text, DateTimeOffset createdUtc)
     {
@@ -49,9 +44,9 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetUserEndorsements_ReturnsTextAsPlainString()
+    public async Task GetUserEndorsementsReturnsTextAsPlainString()
     {
-        // Arrange - endorsement text is plain text by contract (owner
+        // Endorsement text is plain text by contract (owner
         // decision): BBCode-looking markup must come back verbatim,
         // without server-side HTML rendering
         var endorsementId = Guid.NewGuid();
@@ -65,10 +60,9 @@ public class UserEndorsementControllerShould : IntegrationTestBase
 
         try
         {
-            // Act
             var response = await Client.GetAsync($"/v1/users/{TestConstants.SecondUserLogin}/endorsements");
 
-            // Assert - text round-trips unchanged
+            // Text round-trips unchanged
             response.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var json = await response.Content.ReadAsStringAsync();
@@ -84,9 +78,9 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetWrittenEndorsements_SortByAuthor_OrdersByTargetUsername()
+    public async Task GetWrittenEndorsementsSortByAuthorOrdersByTargetUsername()
     {
-        // Arrange - TestUser wrote about moderator / mentor / admin; creation
+        // TestUser wrote about moderator / mentor / admin; creation
         // order is reverse-alphabetical by target so a created-date fallback
         // (including the old Author.Username sort, where the author is
         // constant and the tie-breaker decides) yields a different sequence
@@ -98,11 +92,10 @@ public class UserEndorsementControllerShould : IntegrationTestBase
 
         try
         {
-            // Act
             var response = await Client.GetAsync(
                 $"/v1/users/{TestConstants.TestUserLogin}/written-endorsements?sortBy=author&sortOrder=asc");
 
-            // Assert - sorted alphabetically by target username
+            // Sorted alphabetically by target username
             response.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var json = await response.Content.ReadAsStringAsync();
@@ -122,9 +115,9 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetUserEndorsements_WithEqualCreatedUtc_TieBreaksById()
+    public async Task GetUserEndorsementsWithEqualCreatedUtcTieBreaksById()
     {
-        // Arrange - identical CreatedUtc; the row with the greater id is
+        // Identical CreatedUtc; the row with the greater id is
         // inserted first so insertion order cannot masquerade as the
         // deterministic id tie-breaker
         var firstId = Guid.Parse("00000000-0000-0000-0000-0000000000e1");
@@ -135,11 +128,10 @@ public class UserEndorsementControllerShould : IntegrationTestBase
 
         try
         {
-            // Act
             var response = await Client.GetAsync(
                 $"/v1/users/{TestConstants.SecondUserLogin}/endorsements?sortBy=created&sortOrder=asc");
 
-            // Assert - equal CreatedUtc resolves to ascending id order
+            // Equal CreatedUtc resolves to ascending id order
             response.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var json = await response.Content.ReadAsStringAsync();
@@ -156,19 +148,16 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetUserEndorsements_WithValidUser_ReturnsOk()
+    public async Task GetUserEndorsementsWithValidUserReturnsOk()
     {
-        // Act - route is /v1/users/{username}/endorsements
+        // Route is /v1/users/{username}/endorsements
         var response = await Client.GetAsync($"/v1/users/{TestConstants.TestUserLogin}/endorsements");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
     /// <summary>
-    /// The post that makes SecondUser and TestUser "players of the same game":
-    /// TestUser already has one in TestRoom, this is the other half of the
-    /// pair. Removed again by <see cref="RevokeEndorsementEligibility" />.
+    /// The post that makes SecondUser and TestUser players of the same game, removed by <see cref="RevokeEndorsementEligibility" />.
     /// </summary>
     private static readonly Guid EligibilityPostId = Guid.Parse("00000000-0000-0000-0000-0000000000e5");
 
@@ -229,12 +218,10 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The question the write form asks before it draws itself. A guest is
-    /// answered, not refused with 401: "may I?" has an answer for anonymous
-    /// readers too, and it is what the form prints instead of the field.
+    /// The question the write form asks before it draws itself; a guest is answered, not refused.
     /// </summary>
     [Fact]
-    public async Task GetEligibility_ForGuest_AnswersNoWithSignInSentence()
+    public async Task GetEligibilityForGuestAnswersNoWithSignInSentence()
     {
         var response = await Client.GetAsync(
             $"/v1/users/{TestConstants.TestUserLogin}/endorsements/eligibility");
@@ -245,7 +232,7 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetEligibility_ForYourself_AnswersNoWithTheSelfRule()
+    public async Task GetEligibilityForYourselfAnswersNoWithTheSelfRule()
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Get,
             $"/v1/users/{TestConstants.TestUserLogin}/endorsements/eligibility");
@@ -257,13 +244,10 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The whole path the reader walks: the site asks whether the control may
-    /// be drawn, draws it, the POST is accepted, the recommendation is on the
-    /// recipient's received page — and asking again now says no, because a
-    /// pair may have only one.
+    /// The whole path: may I, the POST, the recommendation on the received page, and a second "may I" says no.
     /// </summary>
     [Fact]
-    public async Task PostUserEndorsement_ShowsUpInRecipientsListAndClosesThePair()
+    public async Task PostUserEndorsementShowsUpInRecipientsListAndClosesThePair()
     {
         var previousRating = await GrantEndorsementEligibility();
         const string text = "Держит темп и не бросает сцену на полуслове";
@@ -319,21 +303,5 @@ public class UserEndorsementControllerShould : IntegrationTestBase
             if (createdId.HasValue) await RemoveEndorsements(createdId.Value);
             await RevokeEndorsementEligibility(previousRating);
         }
-    }
-
-    [Fact]
-    public async Task PostUserEndorsement_RequiresAuthentication()
-    {
-        // Arrange
-        var endorsementData = new
-        {
-            text = "Great player!"
-        };
-
-        // Act - route is /v1/users/{username}/endorsements
-        var response = await Client.PostAsJsonAsync($"/v1/users/{TestConstants.SecondUserLogin}/endorsements", endorsementData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

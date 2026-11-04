@@ -12,15 +12,14 @@ namespace DM.Web.API.Shared.Authentication;
 /// BFF Pattern uses HttpOnly cookies for authentication - no header required.
 /// </summary>
 /// <remarks>
-/// Asked of the method alone, this saw neither of the two ways an endpoint
-/// actually demands a caller: the attribute written once on the controller, and
-/// RequireRole, which is a TypeFilterAttribute and shares no base class with
-/// AuthenticationRequired even though it refuses anonymous callers with the same
-/// 401. A hundred and three operations documented that 401 with no security
-/// scheme beside it, so a generated client had nothing to send.
+/// Reads both ways an endpoint demands a caller, on the method and on the
+/// controller: AuthenticationRequired and RequireRole share no base class.
 /// </remarks>
 public class AuthenticationSwaggerFilter : IOperationFilter
 {
+    /// <summary>Name of the security scheme of the session cookie.</summary>
+    internal const string CookieScheme = "cookieAuth";
+
     /// <inheritdoc />
     public void Apply(OpenApiOperation operation, OperationFilterContext context)
     {
@@ -29,7 +28,7 @@ public class AuthenticationSwaggerFilter : IOperationFilter
             operation.Security ??= [];
             operation.Security.Add(new OpenApiSecurityRequirement
             {
-                [new OpenApiSecuritySchemeReference("cookieAuth")] = []
+                [new OpenApiSecuritySchemeReference(CookieScheme)] = []
             });
         }
     }

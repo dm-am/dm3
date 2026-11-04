@@ -1,5 +1,4 @@
 using System;
-using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Web.API.Shared.Authentication;
@@ -23,10 +22,9 @@ namespace DM.Web.API.Features.Messaging.GlobalChatEvents;
 [Tags("Global Chat")]
 public class GlobalChatEventController : ControllerBase
 {
-    private readonly IGlobalChatEventApiService _apiService;
+    private readonly GlobalChatEventApiService _apiService;
 
-    /// <inheritdoc />
-    public GlobalChatEventController(IGlobalChatEventApiService apiService)
+    public GlobalChatEventController(GlobalChatEventApiService apiService)
     {
         _apiService = apiService;
     }
@@ -37,31 +35,29 @@ public class GlobalChatEventController : ControllerBase
     /// <response code="200">List of events</response>
     [HttpGet(Name = nameof(GetGlobalChatEvents))]
     [ProducesResponseType(typeof(ListEnvelope<GlobalChatEventSummary>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetGlobalChatEvents(CancellationToken ct) =>
-        Ok(await _apiService.GetList(ct));
+    public async Task<IActionResult> GetGlobalChatEvents() =>
+        Ok(await _apiService.GetList());
 
     /// <summary>
     /// Get chat event details
     /// </summary>
     /// <param name="id">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="200">Event details</response>
     /// <response code="404">Event not found</response>
     [HttpGet("{id}", Name = nameof(GetGlobalChatEvent))]
     [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGlobalChatEvent(Guid id, CancellationToken ct) =>
-        Ok(await _apiService.Get(id, ct));
+    public async Task<IActionResult> GetGlobalChatEvent(Guid id) =>
+        Ok(await _apiService.Get(id));
 
     /// <summary>
     /// Get currently active (Live) event
     /// </summary>
-    /// <param name="ct">Cancellation token</param>
     /// <response code="200">Active event or null</response>
     [HttpGet("active", Name = nameof(GetActiveGlobalChatEvent))]
     [ProducesResponseType(typeof(Envelope<GlobalChatEventSummary>), StatusCodes.Status200OK)]
-    public async Task<IActionResult> GetActiveGlobalChatEvent(CancellationToken ct) =>
-        Ok(await _apiService.GetActive(ct));
+    public async Task<IActionResult> GetActiveGlobalChatEvent() =>
+        Ok(await _apiService.GetActive());
 
     /// <summary>
     /// Create a new chat event
@@ -195,18 +191,6 @@ public class GlobalChatEventController : ControllerBase
     public async Task<IActionResult> LeaveGlobalChatEvent(Guid id) =>
         Ok(await _apiService.Leave(id));
 
-    /// <summary>
-    /// Get participants of a chat event
-    /// </summary>
-    /// <param name="id">Event identifier</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <response code="200">Event with participants</response>
-    /// <response code="404">Event not found</response>
-    [HttpGet("{id}/participants", Name = nameof(GetGlobalChatEventParticipants))]
-    [ProducesResponseType(typeof(Envelope<GlobalChatEvent>), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetGlobalChatEventParticipants(Guid id, CancellationToken ct) =>
-        Ok(await _apiService.Get(id, ct));
 
     /// <summary>
     /// Add a participant to a closed event (organizer only)
@@ -232,20 +216,20 @@ public class GlobalChatEventController : ControllerBase
     /// Remove a participant from a chat event (organizer only)
     /// </summary>
     /// <param name="id">Event identifier</param>
-    /// <param name="login">User login to remove</param>
+    /// <param name="username">Username to remove</param>
     /// <response code="204">Participant removed</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not an organizer</response>
     /// <response code="404">Event or user not found</response>
-    [HttpDelete("{id}/participants/{login}", Name = nameof(RemoveGlobalChatEventParticipant))]
+    [HttpDelete("{id}/participants/{username}", Name = nameof(RemoveGlobalChatEventParticipant))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> RemoveGlobalChatEventParticipant(Guid id, string login)
+    public async Task<IActionResult> RemoveGlobalChatEventParticipant(Guid id, string username)
     {
-        await _apiService.RemoveParticipant(id, login);
+        await _apiService.RemoveParticipant(id, username);
         return NoContent();
     }
 }

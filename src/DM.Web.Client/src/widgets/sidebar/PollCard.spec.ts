@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount, config } from "@vue/test-utils";
+import { flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import Poll from "./PollCard.vue";
 import type {
@@ -13,15 +13,15 @@ import type {
   PollOptionId,
 } from "@/entities/poll";
 import { PollStatus } from "@/entities/poll";
-import type { Served } from "@/shared/api/models";
-import type { User } from "@/shared/api/models/common";
+import { useAuthStore } from "@/entities/user";
+import { asServed } from "@/shared/api/models";
 
-// Helper to cast raw values to Served type for test mocks
-function asServed<T>(value: T): Served<T> {
-  return value as Served<T>;
-}
+const api = vi.hoisted(() => ({
+  postPollVote: vi.fn(),
+  deletePollVote: vi.fn(),
+}));
+vi.mock("@/entities/poll/api/pollApi", () => ({ default: api }));
 
-// Helper to create a poll option with proper Served types
 function createPollOption(
   id: string,
   text: string,
@@ -37,68 +37,6 @@ function createPollOption(
     totalVoters: null,
   };
 }
-
-// Stub router-link
-config.global.stubs = {
-  "router-link": {
-    template: "<a><slot /></a>",
-    props: ["to"],
-  },
-};
-
-// Mock dayjs
-vi.mock("dayjs", () => {
-  const dayjs = () => ({
-    isBefore: vi.fn(() => false),
-    format: vi.fn(() => "01.01.2025 12:00"),
-    add: vi.fn(() => dayjs()),
-  });
-  dayjs.extend = vi.fn();
-  return { default: dayjs };
-});
-
-// Mock stores.
-// The session double has to be a real store, not a bare object: the card reads
-// the viewer through storeToRefs, and pinia walks every own property of the
-// store probing for a computed before it falls back to refs, so a plain `null`
-// property throws there. defineStore keeps the double honest about the shape
-// the component consumes.
-//
-// The whole shape of shared/stores/auth, not just the one member this card
-// reads today. A double that offers less answers `undefined` for the rest, and
-// `undefined` for `isAuthenticated` is a guest — so the day something here
-// starts asking for it, the test would quietly assert the guest branch instead
-// of failing on a gap in the double.
-vi.mock("@/entities/user", async () => {
-  const { defineStore } = await import("pinia");
-  const { ref, computed } = await import("vue");
-  return {
-    useAuthStore: defineStore("auth", () => {
-      const user = ref<User | null>(null);
-      return {
-        user,
-        isAuthenticated: computed(() => user.value !== null),
-        updateUser: (newUser: User | null) => {
-          user.value = newUser;
-        },
-      };
-    }),
-    userIsSeniorModerator: vi.fn(() => false),
-  };
-});
-
-vi.mock("@/entities/poll", () => ({
-  usePollsStore: () => ({
-    vote: vi.fn(),
-    unvote: vi.fn(),
-    editPoll: vi.fn().mockResolvedValue({ data: null, error: null }),
-  }),
-  PollStatus: {
-    Pending: "Pending",
-    Active: "Active",
-    Closed: "Closed",
-  },
-}));
 
 const createMockPoll = (overrides: Partial<PollType> = {}): PollType =>
   ({
@@ -116,32 +54,23 @@ const createMockPoll = (overrides: Partial<PollType> = {}): PollType =>
     ...overrides,
   }) as PollType;
 
+const render = (poll: PollType) => mount(Poll, { props: { poll } });
+
+const signIn = () => {
+  const auth = useAuthStore();
+  auth.user = { username: "Кто-то" } as NonNullable<typeof auth.user>;
+};
+
 describe("Poll", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
     vi.clearAllMocks();
+    api.postPollVote.mockResolvedValue({ data: null, error: null });
+    api.deletePollVote.mockResolvedValue({ data: null, error: null });
   });
 
-  // ============================================================================
-  // BASIC RENDERING
-  // ============================================================================
-
-  describe("Basic Rendering", () => {
-    it("renders without errors", () => {
-      const wrapper = mount(Poll, {
-        props: { poll: createMockPoll() },
-      });
-      expect(wrapper.exists()).toBe(true);
-    });
-
-    it("displays poll title", () => {
-      const wrapper = mount(Poll, {
-        props: { poll: createMockPoll({ title: "My Poll Title" }) },
-      });
-      expect(wrapper.find(".poll-title").text()).toContain("My Poll Title");
-    });
-
-    it("displays all poll options", () => {
+  describe("Votes Count", () => {
+    it("draws a bar for each option", () => {
       const poll = createMockPoll({
         options: [
           createPollOption("1", "First", 1, false),
@@ -149,171 +78,81 @@ describe("Poll", () => {
           createPollOption("3", "Third", 3, false),
         ],
       });
-      const wrapper = mount(Poll, {
-        props: { poll },
-      });
 
-      const progressBars = wrapper.findAllComponents({ name: "ProgressBar" });
+      const progressBars = render(poll).findAllComponents({
+        name: "ProgressBar",
+      });
       expect(progressBars.length).toBe(3);
-    });
-
-    it("has poll class on container", () => {
-      const wrapper = mount(Poll, {
-        props: { poll: createMockPoll() },
-      });
-      expect(wrapper.find(".poll").exists()).toBe(true);
-    });
-  });
-
-  // ============================================================================
-  // VOTES COUNT
-  // ============================================================================
-
-  describe("Votes Count", () => {
-    it("displays vote count for each option", () => {
-      const poll = createMockPoll({
-        options: [
-          createPollOption("1", "Option A", 7, false),
-          createPollOption("2", "Option B", 3, false),
-        ],
-      });
-      const wrapper = mount(Poll, {
-        props: { poll },
-      });
-
-      expect(wrapper.text()).toContain("7");
-      expect(wrapper.text()).toContain("3");
-    });
-  });
-
-  // ============================================================================
-  // CONTROLS MODE
-  // ============================================================================
-
-  describe("Controls Mode", () => {
-    it("does not show edit link when controls is false", () => {
-      const wrapper = mount(Poll, {
-        props: { poll: createMockPoll(), controls: false },
-      });
-      expect(wrapper.find(".poll-edit-link").exists()).toBe(false);
-    });
-  });
-
-  // ============================================================================
-  // VOTED STATE
-  // ============================================================================
-
-  describe("Voted State", () => {
-    it("highlights voted option", () => {
-      const poll = createMockPoll({
-        options: [
-          createPollOption("1", "A", 5, true),
-          createPollOption("2", "B", 3, false),
-        ],
-      });
-      const wrapper = mount(Poll, {
-        props: { poll },
-      });
-
-      expect(wrapper.find(".poll-option-voted").exists()).toBe(true);
-    });
-
-    it("shows checkmark symbol for voted option", () => {
-      const poll = createMockPoll({
-        options: [
-          createPollOption("1", "A", 5, true),
-          createPollOption("2", "B", 3, false),
-        ],
-      });
-      const wrapper = mount(Poll, {
-        props: { poll },
-      });
-
-      // Checkmark symbol should be rendered for voted option
-      expect(wrapper.text()).toContain("\u2713");
-    });
-  });
-
-  // ============================================================================
-  // STATUS
-  // ============================================================================
-
-  describe("Status Display", () => {
-    it("shows status inline", () => {
-      const wrapper = mount(Poll, {
-        props: { poll: createMockPoll() },
-      });
-      expect(wrapper.find(".poll-status-inline").exists()).toBe(true);
-    });
-
-    it("displays status text for active poll", () => {
-      const wrapper = mount(Poll, {
-        props: {
-          poll: createMockPoll({ status: asServed(PollStatus.Active) }),
-        },
-      });
-      expect(wrapper.text()).toContain("Активен до");
-    });
-  });
-
-  // ============================================================================
-  // EDIT MODE (for moderators)
-  // ============================================================================
-
-  describe("Edit Mode", () => {
-    it("does not show edit link by default", () => {
-      const wrapper = mount(Poll, {
-        props: { poll: createMockPoll(), detailed: true },
-      });
-      // Edit link should not be visible for non-moderators
-      expect(wrapper.find(".poll-edit-link").exists()).toBe(false);
-    });
-  });
-
-  // ============================================================================
-  // PROGRESS BARS
-  // ============================================================================
-
-  describe("Progress Bars", () => {
-    it("renders ProgressBar for each option", () => {
-      const poll = createMockPoll({
-        options: [
-          createPollOption("1", "A", 5, false),
-          createPollOption("2", "B", 3, false),
-        ],
-      });
-      const wrapper = mount(Poll, {
-        props: { poll },
-      });
-
-      const progressBars = wrapper.findAllComponents({ name: "ProgressBar" });
-      expect(progressBars.length).toBe(2);
     });
 
     it("passes correct current value to ProgressBar", () => {
       const poll = createMockPoll({
         options: [createPollOption("1", "A", 7, false)],
       });
-      const wrapper = mount(Poll, {
-        props: { poll },
-      });
 
-      const progressBar = wrapper.findComponent({ name: "ProgressBar" });
+      const progressBar = render(poll).findComponent({ name: "ProgressBar" });
       expect(progressBar.props("current")).toBe(7);
     });
   });
 
-  // ============================================================================
-  // VOTING UI (for anonymous users, no vote buttons)
-  // ============================================================================
-
-  describe("Voting UI", () => {
-    it("does not show vote buttons for anonymous users", () => {
-      const wrapper = mount(Poll, {
-        props: { poll: createMockPoll() },
+  describe("Voted State", () => {
+    const votedPoll = () =>
+      createMockPoll({
+        options: [
+          createPollOption("1", "A", 5, true),
+          createPollOption("2", "B", 3, false),
+        ],
       });
-      // The poll-option-vote class is the clickable overlay for voting
-      expect(wrapper.find(".poll-option-vote").exists()).toBe(false);
+
+    it("highlights voted option", () => {
+      expect(render(votedPoll()).find(".poll-option-voted").exists()).toBe(
+        true,
+      );
+    });
+
+    it("shows checkmark symbol for voted option", () => {
+      expect(render(votedPoll()).text()).toContain("\u2713");
+    });
+  });
+
+  describe("Voting", () => {
+    it("does not show vote buttons for anonymous users", () => {
+      expect(render(createMockPoll()).find(".poll-option-vote").exists()).toBe(
+        false,
+      );
+    });
+
+    it("votes for the option clicked", async () => {
+      signIn();
+      const wrapper = render(createMockPoll());
+
+      await wrapper
+        .find('[aria-label="Проголосовать за: Option 2"]')
+        .trigger("click");
+      await flushPromises();
+
+      expect(api.postPollVote).toHaveBeenCalledWith("poll-1", "opt-2");
+    });
+
+    it("cancels the vote from the option voted for", async () => {
+      signIn();
+      const wrapper = render(
+        createMockPoll({
+          options: [
+            createPollOption("opt-1", "Option 1", 5, true),
+            createPollOption("opt-2", "Option 2", 3, false),
+          ],
+        }),
+      );
+
+      expect(wrapper.find('[aria-label^="Проголосовать за"]').exists()).toBe(
+        false,
+      );
+      await wrapper.find('[aria-label="Отменить голос"]').trigger("click");
+      await flushPromises();
+
+      expect(api.deletePollVote).toHaveBeenCalledWith("poll-1");
+      expect(api.postPollVote).not.toHaveBeenCalled();
     });
   });
 });

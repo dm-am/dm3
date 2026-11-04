@@ -2,13 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The four presses of the account page that keep their own refusal line: the
- * new address, the new password, the end of the other sessions and the save of
- * the settings. What the reader sees of a press from the moment it is made to
- * the answer: a button that waits, a line that goes as soon as the press is
- * repeated, and the words the line says when the request itself throws.
- */
+/** The four presses of the account page with a refusal line of their own, the shared line of ActionResult: a waiting button, a line gone on the next press, and a wait counted down. */
 import {
   describe,
   expect,
@@ -28,20 +22,11 @@ import AccountSettingsSection from "./AccountSettingsSection.vue";
 const fetchUser = vi.hoisted(() => vi.fn());
 vi.mock("@/entities/user/lib/session", () => ({
   fetchUser,
-  register: vi.fn(),
   signIn: vi.fn(),
   completeSecondFactor: vi.fn(),
   signOut: vi.fn(),
   signOutAll: vi.fn(),
 }));
-
-const PAGING = {
-  postsPerPage: 20,
-  commentsPerPage: 20,
-  topicsPerPage: 20,
-  messagesPerPage: 20,
-  entitiesPerPage: 20,
-};
 
 interface Press {
   name: string;
@@ -54,6 +39,8 @@ interface Press {
   block: (wrapper: VueWrapper) => ReturnType<VueWrapper["get"]>;
   /** Its button, in that block. */
   button?: string;
+  /** Or the words of its button. */
+  label?: string;
 }
 
 const security = async () =>
@@ -71,6 +58,7 @@ const PRESSES: Press[] = [
       await wrapper.get("#email-password").setValue("current-secret");
     },
     block: (wrapper) => wrapper.findAll(".security-block")[0],
+    label: "Изменить почту",
   },
   {
     name: "the new password",
@@ -82,6 +70,7 @@ const PRESSES: Press[] = [
       await wrapper.get("#confirm-password").setValue("a-longer-secret");
     },
     block: (wrapper) => wrapper.findAll(".security-block")[1],
+    label: "Изменить пароль",
   },
   {
     name: "the end of the other sessions",
@@ -113,21 +102,21 @@ const PRESSES: Press[] = [
     render: async () => {
       vi.spyOn(personalApi, "getMyPreferences").mockResolvedValue({
         data: {
-          resource: { theme: Theme.Light, paging: PAGING, timeZoneId: "UTC" },
+          resource: {
+            theme: Theme.Light,
+            pageSize: 20,
+            timeZoneId: "UTC",
+          },
         },
         error: null,
       } as never);
-      const wrapper = mount(AccountSettingsSection, {
-        props: {
-          user: { username: "reader", settings: { paging: PAGING } } as never,
-        },
-      });
+      const wrapper = mount(AccountSettingsSection);
       await flushPromises();
       return wrapper;
     },
     request: () => vi.spyOn(personalApi, "updateMyPreferences"),
     fill: async (wrapper) => {
-      await wrapper.get("#account-posts-per-page").setValue("50");
+      await wrapper.get("#account-page-size").setValue("50");
     },
     block: (wrapper) => wrapper.get(".settings-content"),
   },
@@ -149,11 +138,15 @@ async function pressed(press: Press, wrapper: VueWrapper) {
   await buttonOf(press, wrapper).trigger("click");
 }
 
-const buttonOf = (press: Press, wrapper: VueWrapper) =>
-  press.block(wrapper).get(press.button ?? "button.save-button");
+const buttonOf = (press: Press, wrapper: VueWrapper) => {
+  const block = press.block(wrapper);
+  if (press.label)
+    return block.findAll("button").find((b) => b.text() === press.label)!;
+  return block.get(press.button ?? "button.save-button");
+};
 
 const lineOf = (press: Press, wrapper: VueWrapper) => {
-  const line = press.block(wrapper).find(".error-text");
+  const line = press.block(wrapper).find(".action-result");
   return line.exists() ? line.text() : null;
 };
 
@@ -200,37 +193,37 @@ describe("a press of the account page that keeps its own line", () => {
     },
   );
 
-  it("says the message of a request that threw", async () => {
-    const [address] = PRESSES;
-    const wrapper = await address.render();
-    address.request().mockRejectedValue(new Error("Network Error"));
+  // The countdown of useActionResult: the line falls each second and the button waits for zero.
+  it.each(PRESSES.map((press) => [press.name, press] as const))(
+    "%s: counts the wait the server asked for down in its line and keeps the button shut until it is over",
+    async (_name, press) => {
+      vi.useFakeTimers({ toFake: ["setInterval", "clearInterval"] });
+      try {
+        const wrapper = await press.render();
+        press.request().mockResolvedValue({
+          data: null,
+          error: { status: 429, title: "", retryAfterSeconds: 2 },
+        } as never);
 
-    await pressed(address, wrapper);
-    await flushPromises();
+        await pressed(press, wrapper);
+        await flushPromises();
 
-    expect(lineOf(address, wrapper)).toBe("Network Error");
-    expect(buttonOf(address, wrapper).attributes("disabled")).toBeUndefined();
-  });
+        expect(lineOf(press, wrapper)).toBe(
+          "Слишком много попыток, попробуйте через 2 секунды",
+        );
+        expect(buttonOf(press, wrapper).attributes("disabled")).toBeDefined();
 
-  it("says a failure of its own words when what was thrown is no error", async () => {
-    const [address] = PRESSES;
-    const wrapper = await address.render();
-    address.request().mockRejectedValue({ reason: "nothing readable" });
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(lineOf(press, wrapper)).toBe(
+          "Слишком много попыток, попробуйте через 1 секунду",
+        );
 
-    await pressed(address, wrapper);
-    await flushPromises();
-
-    expect(lineOf(address, wrapper)).toBe("Произошла неизвестная ошибка");
-  });
-
-  it("says the words of a thrown string as they are", async () => {
-    const [address] = PRESSES;
-    const wrapper = await address.render();
-    address.request().mockRejectedValue("Соединение прервано");
-
-    await pressed(address, wrapper);
-    await flushPromises();
-
-    expect(lineOf(address, wrapper)).toBe("Соединение прервано");
-  });
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(lineOf(press, wrapper)).toBeNull();
+        expect(buttonOf(press, wrapper).attributes("disabled")).toBeUndefined();
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
 });

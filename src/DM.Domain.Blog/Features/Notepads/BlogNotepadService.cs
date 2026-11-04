@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -112,7 +111,7 @@ internal class BlogNotepadService : IBlogNotepadService
         var entry = await FindEntry(entryId, ct);
         if (entry == null)
         {
-            return; // Already deleted
+            return;
         }
 
         Guid blogOwnerId;
@@ -129,7 +128,7 @@ internal class BlogNotepadService : IBlogNotepadService
 
         // Deleting adds the owner of the blog, who answers for what the notepad
         // holds - the blog's counterpart of the game master. An assistant and
-        // the curating mentor remove only what they wrote themselves.
+        // the mentor remove only what they wrote themselves.
         if (entry.AuthorId != UserId && blogOwnerId != UserId)
         {
             throw new HttpException(HttpStatusCode.Forbidden, RefusalMessage.AccessDenied);
@@ -179,13 +178,9 @@ internal class BlogNotepadService : IBlogNotepadService
     /// </remarks>
     private async Task<Guid> EnsureBlogParticipant(Guid blogId, CancellationToken ct)
     {
-        var blog = await _blogService.GetBlogAsync(blogId, ct);
-        var isOwner = blog.Author?.UserId == UserId;
-        var isAssistant = blog.Assistants.Any(a => a.UserId == UserId);
-        // Notepad access = owner + assistants + mentor (curator), per doc.
-        var isMentor = blog.Mentor?.UserId == UserId;
+        var blog = await _blogService.GetUnfiltered(blogId, ct);
 
-        if (!isOwner && !isAssistant && !isMentor)
+        if (!blog.IsOwnBlog(UserId))
         {
             // Everybody admitted above sees the blog, so only a refusal asks: a
             // blog the reader may not open answers as a blog that is not there,

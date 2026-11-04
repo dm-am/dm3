@@ -19,368 +19,352 @@ namespace DM.Tools.Seeder.Seeding;
 internal sealed partial class DataSeeder
 {
     /// <summary>
-    /// Ensures every statistics leaderboard has a full top-10 for the periods
-    /// the site shows by default: the current month (/statistics landing) and
-    /// the CLOSED periods the auto-created digest topics summarize — the last
-    /// closed month and the previous year (December window). The organic seed
-    /// leaves the rating boards short there: post reviews cluster in a single
-    /// finished game and blog publications spread across ~1.5 years. The
-    /// post/volume boards fill from organic data and are left untouched.
-    ///
-    /// Self-correcting and idempotent per window: coverage is measured the
-    /// same way the boards measure it (a positive score inside the window)
-    /// and only what is missing is added; reviewers who already reviewed a
-    /// post are never reused for it, and each covered post is used by one
-    /// window only.
+    /// A period the boards are read over: its first moment, the moment after its
+    /// last, and whether it is the current month.
     /// </summary>
-    private async Task EnsureLeaderboardCoverage(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private sealed record CoverageWindow(DateTimeOffset Start, DateTimeOffset End, bool IsCurrentMonth);
+
+    /// <summary>
+    /// Ensures every rating and blog leaderboard has a full top-10 for the periods the site shows by
+    /// default: the current month and the closed periods of the digest topics (the last closed month
+    /// and the previous year). The post and volume boards fill from organic data.
+    /// </summary>
+    /// <remarks>
+    /// Idempotent per window: coverage is measured as the boards measure it, only the missing part is added.
+    /// </remarks>
+    private async Task EnsureLeaderboardCoverage(List<DbUser> users, ComprehensiveSeedResult result)
     {
-        // A little over the board size so each board is unambiguously full.
-        const int target = LeaderboardBoards.BoardSize + 2;
-
-        var monthStart = new DateTimeOffset(now.Year, now.Month, 1, 0, 0, 0, TimeSpan.Zero);
+        var monthStart = new DateTimeOffset(_now.Year, _now.Month, 1, 0, 0, 0, TimeSpan.Zero);
         var prevMonthStart = monthStart.AddMonths(-1);
-        var prevYearDecStart = new DateTimeOffset(now.Year - 1, 12, 1, 0, 0, 0, TimeSpan.Zero);
+        var prevYearDecStart = new DateTimeOffset(_now.Year - 1, 12, 1, 0, 0, 0, TimeSpan.Zero);
 
-        // The homepage widgets must stay on the organic showcase posts (Chuck's
-        // grapefruit post for "лучший пост недели", the fireplace post for
-        // "последний оцененный"). The weekly widget ranks by the POST's creation
-        // date, so EVERY window can collide with it, not only the current month:
-        // the tail of a closed month (27.07 to 31.07 of a July window) lies
-        // inside the current week. Hence:
-        //  - coverage reviews go only on posts CREATED BEFORE the current week,
-        //    in every window;
-        //  - in the current-month window coverage review DATES also stay before
-        //    the week start and >=6h before `now`, so the freshest review on the
-        //    site remains the organic one.
-        var weekStart = WeekStartUtc(now);
+        // The homepage widgets stay on the organic showcase posts, and the weekly one ranks by the post date,
+        // so coverage rates only posts created before the current week, and in the current month dates its
+        // reviews before the week and at least six hours before now.
+        var weekStart = WeekStartUtc(_now);
 
         var nonDraftGameIds = await _dbContext.Set<DbGame>()
             .Where(g => !g.IsRemoved && g.Status != ModuleStatus.Draft)
             .Select(g => g.GameId)
             .ToListAsync();
 
-        // Iterated below, and every pass draws from the generator and takes the
-        // next publication number, so the order of this list is part of the
-        // fixture rather than a detail of the query plan.
+        // Every pass draws from the generator, so the order of this list is part of the fixture.
         var blogs = await _dbContext.Set<DbBlog>()
             .Where(b => !b.IsRemoved && b.Status != ModuleStatus.Draft)
             .OrderBy(b => b.SerialNumber)
             .ToListAsync();
 
-        // Publication numbers are assigned across windows before a single
-        // SaveChanges, so the DB max must be bumped in memory per blog.
+        // Publication numbers are assigned before a single SaveChanges, so the maximum is bumped in memory.
         var nextPublicationNumber = new Dictionary<Guid, int>();
 
-        // Each covered post belongs to exactly one window — review dates must
-        // stay inside their window and a (post, reviewer) pair is unique.
+        // A covered post belongs to one window: review dates stay inside it and (post, reviewer) is unique.
         var usedPostIds = new HashSet<Guid>();
 
-        async Task CoverWindow(DateTimeOffset winStart, DateTimeOffset winEnd, bool isCurrentMonth)
+        // Closed windows first, so that they claim their own posts.
+        CoverageWindow[] windows =
+        [
+            new(prevMonthStart, monthStart, IsCurrentMonth: false),
+            new(prevYearDecStart, prevYearDecStart.AddMonths(1), IsCurrentMonth: false),
+            new(monthStart, monthStart.AddMonths(1), IsCurrentMonth: true),
+        ];
+        foreach (var window in windows)
         {
-            DateTimeOffset RandomReviewDate()
-            {
-                var cap = winEnd;
-                if (isCurrentMonth)
-                {
-                    var reviewWindowEnd = weekStart < now.AddHours(-6) ? weekStart : now.AddHours(-6);
-                    cap = reviewWindowEnd;
-                }
-                var minutes = (int)Math.Max(0, (cap - winStart).TotalMinutes);
-                return winStart.AddMinutes(minutes == 0 ? 0 : _random.Next(0, minutes));
-            }
-
-            // ── Rating boards: TopPlayersByRating + TopGamesByRating ────────
-            // Both sum PostReview.SignValue; measure the window exactly as the
-            // boards do before topping up.
-            var windowReviews = await _dbContext.PostReviews
-                .Where(r => !r.IsRemoved && r.CreatedUtc >= winStart && r.CreatedUtc < winEnd)
-                .Select(r => new { r.GameId, r.PostAuthorId, Sign = (int)r.SignValue })
-                .ToListAsync();
-            var positiveGames = windowReviews.GroupBy(r => r.GameId).Count(g => g.Sum(x => x.Sign) > 0);
-            var positiveAuthors = windowReviews.GroupBy(r => r.PostAuthorId).Count(g => g.Sum(x => x.Sign) > 0);
-
-            if (positiveGames < LeaderboardBoards.BoardSize || positiveAuthors < LeaderboardBoards.BoardSize)
-            {
-                // Every window stops at the week start: a topped-up post created
-                // this week would outrank the showcase post in the weekly-best
-                // widget, and a closed month's last days fall inside this week.
-                // On top of that a closed window takes its own posts, so the
-                // reviews sit next to the activity they praise.
-                var candidatesQuery = _dbContext.Posts
-                    .Where(po => !po.IsRemoved
-                        && po.Room.AccessType == RoomAccessType.Open
-                        && nonDraftGameIds.Contains(po.Room.GameId)
-                        && po.CreatedUtc < weekStart);
-                if (!isCurrentMonth)
-                {
-                    candidatesQuery = candidatesQuery
-                        .Where(po => po.CreatedUtc >= winStart && po.CreatedUtc < winEnd);
-                }
-                // The first rows take the highest scores below, so this order is
-                // the ranking the boards end up showing.
-                var candidates = (await candidatesQuery
-                        .OrderBy(po => po.CreatedUtc)
-                        .ThenBy(po => po.PostId)
-                        .Select(po => new { po.PostId, po.AuthorId, GameId = po.Room.GameId })
-                        .ToListAsync())
-                    .Where(c => !usedPostIds.Contains(c.PostId))
-                    .ToList();
-
-                // One post per distinct (game, author) so one batch lights up
-                // `target` distinct games AND `target` distinct authors.
-                var seenGames = new HashSet<Guid>();
-                var seenAuthors = new HashSet<Guid>();
-                var picked = new List<(Guid PostId, Guid AuthorId, Guid GameId)>();
-                foreach (var c in candidates)
-                {
-                    if (picked.Count >= target) break;
-                    if (!seenGames.Add(c.GameId)) continue;
-                    if (!seenAuthors.Add(c.AuthorId)) { seenGames.Remove(c.GameId); continue; }
-                    picked.Add((c.PostId, c.AuthorId, c.GameId));
-                }
-                if (picked.Count < target)
-                {
-                    foreach (var c in candidates)
-                    {
-                        if (picked.Count >= target) break;
-                        if (!seenGames.Add(c.GameId)) continue;
-                        picked.Add((c.PostId, c.AuthorId, c.GameId));
-                    }
-                }
-
-                // Reviewers who already reviewed a candidate post must not be
-                // reused for it — (post, reviewer) stays unique.
-                var pickedIds = picked.Select(x => x.PostId).ToList();
-                var existingPairs = (await _dbContext.PostReviews
-                        .Where(r => pickedIds.Contains(r.PostId))
-                        .Select(r => new { r.PostId, r.AuthorId })
-                        .ToListAsync())
-                    .Select(x => (x.PostId, x.AuthorId))
-                    .ToHashSet();
-
-                // Descending positive scores (target, target-1, …, 1) so the
-                // boards read as a real ranking, not a wall of ties.
-                for (var i = 0; i < picked.Count; i++)
-                {
-                    var post = picked[i];
-                    usedPostIds.Add(post.PostId);
-                    var score = Math.Max(1, target - i);
-                    var reviewers = users
-                        .Where(u => u.UserId != post.AuthorId
-                            && !existingPairs.Contains((post.PostId, u.UserId)))
-                        .OrderBy(_ => _random.Next())
-                        .Take(score)
-                        .ToList();
-                    foreach (var reviewer in reviewers)
-                    {
-                        _dbContext.PostReviews.Add(new DM.Infrastructure.Persistence.Entities.Game.PostReview
-                        {
-                            PostReviewId = _guidFactory.Create(),
-                            AuthorId = reviewer.UserId,
-                            PostId = post.PostId,
-                            PostAuthorId = post.AuthorId,
-                            GameId = post.GameId,
-                            CreatedUtc = RandomReviewDate(),
-                            Text = "Отличный отыгрыш!",
-                            SignValue = (short)ReviewSign.Positive,
-                            IsRemoved = false
-                        });
-                        result.ReviewsCreated++;
-                    }
-                }
-            }
-
-            // ── Blog boards: TopBlogsByRating (publication likes) +
-            //    TopBlogsByPosts + TopBlogAuthorsByVolume. All three read
-            //    publications dated in the window; give every blog without one
-            //    a publication (with a few likes). ─────────────────────────
-            var blogsWithWindowPub = (await _dbContext.Set<Publication>()
-                .Where(pu => !pu.IsRemoved && pu.IsPublished
-                    && pu.CreatedUtc >= winStart && pu.CreatedUtc < winEnd)
-                .Select(pu => pu.BlogId)
-                .Distinct()
-                .ToListAsync()).ToHashSet();
-
-            foreach (var blog in blogs)
-            {
-                if (blogsWithWindowPub.Contains(blog.BlogId)) continue;
-
-                var rubricId = await _dbContext.Set<Rubric>()
-                    .Where(r => r.BlogId == blog.BlogId && !r.IsRemoved)
-                    .OrderBy(r => r.SortOrder)
-                    .Select(r => (Guid?)r.RubricId)
-                    .FirstOrDefaultAsync();
-                if (rubricId == null) continue;
-
-                if (!nextPublicationNumber.TryGetValue(blog.BlogId, out var nextNumber))
-                {
-                    nextNumber = (await _dbContext.Set<Publication>()
-                        .Where(pu => pu.BlogId == blog.BlogId)
-                        .MaxAsync(pu => (int?)pu.PublicationNumber) ?? 0) + 1;
-                }
-                nextPublicationNumber[blog.BlogId] = nextNumber + 1;
-
-                const string content = "Свежая заметка этого месяца: делюсь наблюдениями, "
-                    + "планами и парой историй с недавних игр. Впереди много интересного!";
-                var windowCap = winEnd < now ? winEnd : now;
-                var windowMinutes = (int)Math.Max(1, (windowCap - winStart).TotalMinutes);
-                var createdUtc = winStart.AddMinutes(_random.Next(0, windowMinutes));
-                var publication = new Publication
-                {
-                    PublicationId = _guidFactory.Create(),
-                    BlogId = blog.BlogId,
-                    AuthorId = blog.AuthorId,
-                    RubricId = rubricId.Value,
-                    PublicationNumber = nextNumber,
-                    Title = "Заметки месяца",
-                    Content = content,
-                    Preview = content[..Math.Min(100, content.Length)] + "...",
-                    CreatedUtc = createdUtc,
-                    IsPublished = true,
-                    PublishedUtc = createdUtc,
-                    ViewCount = _random.Next(10, 500),
-                    CommentCount = 0,
-                    IsRemoved = false
-                };
-                _dbContext.Set<Publication>().Add(publication);
-                blog.PublicationCount++;
-                result.PublicationsCreated++;
-
-                // At least one like so TopBlogsByRating counts this blog too.
-                var likers = users
-                    .Where(u => u.UserId != blog.AuthorId)
-                    .OrderBy(_ => _random.Next())
-                    .Take(_random.Next(1, 6))
-                    .ToList();
-                foreach (var liker in likers)
-                {
-                    _dbContext.Set<Like>().Add(new Like
-                    {
-                        LikeId = _guidFactory.Create(),
-                        EntityId = publication.PublicationId,
-                        EntityType = LikeEntityType.Publication,
-                        UserId = liker.UserId,
-                        IsRemoved = false
-                    });
-                    result.LikesCreated++;
-                }
-            }
+            await CoverRatingBoards(window, users, weekStart, nonDraftGameIds, usedPostIds, result);
+            await CoverBlogBoards(window, users, blogs, nextPublicationNumber, result);
         }
-
-        // Closed windows first so they claim their own posts; the current
-        // month then covers itself with any remaining pre-week posts.
-        await CoverWindow(prevMonthStart, monthStart, isCurrentMonth: false);
-        await CoverWindow(prevYearDecStart, prevYearDecStart.AddMonths(1), isCurrentMonth: false);
-        await CoverWindow(monthStart, monthStart.AddMonths(1), isCurrentMonth: true);
 
         await _dbContext.SaveChangesAsync();
         result.Details.Add("Ensured full top-10 rating coverage for the current month, the last closed month and the previous year");
     }
 
     /// <summary>
-    /// Recalculates the popularity scores of the fixture through the same
-    /// processors the running site uses.
+    /// Rating boards: TopPlayersByRating + TopGamesByRating. Both sum
+    /// PostReview.SignValue; the window is measured exactly as the boards do
+    /// before topping up.
     /// </summary>
-    /// <remarks>
-    /// This used to be a second copy of the calculation, query for query, and the
-    /// window the copies compared against had already diverged - the site read the
-    /// product constant, the fixture read a literal of its own. One definition
-    /// now, and the moment is the seed epoch rather than the wall clock, which is
-    /// what a fixture dates everything else from.
-    /// </remarks>
-    private async Task UpdatePopularityScores(DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task CoverRatingBoards(
+        CoverageWindow window, List<DbUser> users, DateTimeOffset weekStart,
+        List<Guid> nonDraftGameIds, HashSet<Guid> usedPostIds, ComprehensiveSeedResult result)
     {
-        var (_, games) = await _gamePopularity.UpdateScoresAsync(now);
-        var (_, blogs) = await _blogPopularity.UpdateScoresAsync(now);
+        var (winStart, winEnd, _) = window;
+
+        // A little over the board size so each board is unambiguously full.
+        const int target = Leaderboards.BoardSize + 2;
+
+        var windowReviews = await _dbContext.PostReviews
+            .Where(r => !r.IsRemoved && r.CreatedUtc >= winStart && r.CreatedUtc < winEnd)
+            .Select(r => new { r.GameId, r.PostAuthorId, Sign = (int)r.SignValue })
+            .ToListAsync();
+        var positiveGames = windowReviews.GroupBy(r => r.GameId).Count(g => g.Sum(x => x.Sign) > 0);
+        var positiveAuthors = windowReviews.GroupBy(r => r.PostAuthorId).Count(g => g.Sum(x => x.Sign) > 0);
+
+        if (positiveGames < Leaderboards.BoardSize || positiveAuthors < Leaderboards.BoardSize)
+        {
+            var picked = await PickCoveragePosts(window, weekStart, nonDraftGameIds, usedPostIds, target);
+
+            // Reviewers who already reviewed a candidate post must not be
+            // reused for it — (post, reviewer) stays unique.
+            var pickedIds = picked.Select(x => x.PostId).ToList();
+            var existingPairs = (await _dbContext.PostReviews
+                    .Where(r => pickedIds.Contains(r.PostId))
+                    .Select(r => new { r.PostId, r.AuthorId })
+                    .ToListAsync())
+                .Select(x => (x.PostId, x.AuthorId))
+                .ToHashSet();
+
+            // Descending scores, so the boards read as a ranking and not as ties.
+            for (var i = 0; i < picked.Count; i++)
+            {
+                var post = picked[i];
+                usedPostIds.Add(post.PostId);
+                var score = Math.Max(1, target - i);
+                var reviewers = users
+                    .Where(u => u.UserId != post.AuthorId
+                        && !existingPairs.Contains((post.PostId, u.UserId)))
+                    .OrderBy(_ => _random.Next())
+                    .Take(score)
+                    .ToList();
+                foreach (var reviewer in reviewers)
+                {
+                    AddPostReview(post.PostId, post.AuthorId, post.GameId, reviewer.UserId,
+                        CoverageReviewDate(window, weekStart), "Отличный отыгрыш!", ReviewSign.Positive, result);
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// The posts a window tops up, in the order of the ranking the boards end up
+    /// showing: one post per distinct (game, author) first, so one batch lights
+    /// up `target` distinct games AND `target` distinct authors.
+    /// </summary>
+    private async Task<List<(Guid PostId, Guid AuthorId, Guid GameId)>> PickCoveragePosts(
+        CoverageWindow window, DateTimeOffset weekStart, List<Guid> nonDraftGameIds, HashSet<Guid> usedPostIds,
+        int target)
+    {
+        var (winStart, winEnd, isCurrentMonth) = window;
+
+        // Every window stops at the week start: a post of this week would outrank the showcase post.
+        var candidatesQuery = _dbContext.Posts
+            .Where(po => !po.IsRemoved
+                && po.Room.AccessType == RoomAccessType.Open
+                && nonDraftGameIds.Contains(po.Room.GameId)
+                && po.CreatedUtc < weekStart);
+        if (!isCurrentMonth)
+        {
+            candidatesQuery = candidatesQuery
+                .Where(po => po.CreatedUtc >= winStart && po.CreatedUtc < winEnd);
+        }
+        // The first rows take the highest scores, so this order is the ranking the boards show.
+        var candidates = (await candidatesQuery
+                .OrderBy(po => po.CreatedUtc)
+                .ThenBy(po => po.PostId)
+                .Select(po => new { po.PostId, po.AuthorId, GameId = po.Room.GameId })
+                .ToListAsync())
+            .Where(c => !usedPostIds.Contains(c.PostId))
+            .ToList();
+
+        var seenGames = new HashSet<Guid>();
+        var seenAuthors = new HashSet<Guid>();
+        var picked = new List<(Guid PostId, Guid AuthorId, Guid GameId)>();
+        foreach (var c in candidates)
+        {
+            if (picked.Count >= target) break;
+            if (!seenGames.Add(c.GameId)) continue;
+            if (!seenAuthors.Add(c.AuthorId)) { seenGames.Remove(c.GameId); continue; }
+            picked.Add((c.PostId, c.AuthorId, c.GameId));
+        }
+        if (picked.Count < target)
+        {
+            foreach (var c in candidates)
+            {
+                if (picked.Count >= target) break;
+                if (!seenGames.Add(c.GameId)) continue;
+                picked.Add((c.PostId, c.AuthorId, c.GameId));
+            }
+        }
+
+        return picked;
+    }
+
+    /// <summary>
+    /// A moment inside the window for a coverage review. In the current month it
+    /// stays before the week start and six hours before now, so the freshest
+    /// review on the site remains the organic one.
+    /// </summary>
+    private DateTimeOffset CoverageReviewDate(CoverageWindow window, DateTimeOffset weekStart)
+    {
+        var (winStart, winEnd, isCurrentMonth) = window;
+
+        var cap = isCurrentMonth ? NoLaterThan(weekStart, _now.AddHours(-6)) : winEnd;
+        var minutes = (int)Math.Max(0, (cap - winStart).TotalMinutes);
+        return winStart.AddMinutes(minutes == 0 ? 0 : _random.Next(0, minutes));
+    }
+
+    /// <summary>
+    /// Blog boards: TopBlogsByRating (publication likes) + TopBlogsByPosts +
+    /// TopBlogAuthorsByVolume. All three read publications dated in the window;
+    /// every blog without one gets a publication (with a few likes).
+    /// </summary>
+    private async Task CoverBlogBoards(
+        CoverageWindow window, List<DbUser> users, List<DbBlog> blogs, Dictionary<Guid, int> nextPublicationNumber,
+        ComprehensiveSeedResult result)
+    {
+        var (winStart, winEnd, _) = window;
+
+        var blogsWithWindowPub = (await _dbContext.Set<Publication>()
+            .Where(pu => !pu.IsRemoved
+                && pu.CreatedUtc >= winStart && pu.CreatedUtc < winEnd)
+            .Select(pu => pu.BlogId)
+            .Distinct()
+            .ToListAsync()).ToHashSet();
+
+        foreach (var blog in blogs)
+        {
+            if (blogsWithWindowPub.Contains(blog.BlogId)) continue;
+
+            var rubricId = await _dbContext.Set<Rubric>()
+                .Where(r => r.BlogId == blog.BlogId && !r.IsRemoved)
+                .OrderBy(r => r.SortOrder)
+                .Select(r => (Guid?)r.RubricId)
+                .FirstOrDefaultAsync();
+            if (rubricId == null) continue;
+
+            if (!nextPublicationNumber.TryGetValue(blog.BlogId, out var nextNumber))
+            {
+                nextNumber = (await _dbContext.Set<Publication>()
+                    .Where(pu => pu.BlogId == blog.BlogId)
+                    .MaxAsync(pu => (int?)pu.PublicationNumber) ?? 0) + 1;
+            }
+            nextPublicationNumber[blog.BlogId] = nextNumber + 1;
+
+            const string content = "Заметка за месяц: что заметил в играх, что собираюсь "
+                + "попробовать и пара историй с недавних сессий.";
+            var windowCap = NoLaterThan(winEnd, _now);
+            var windowMinutes = (int)Math.Max(1, (windowCap - winStart).TotalMinutes);
+            var createdUtc = winStart.AddMinutes(_random.Next(0, windowMinutes));
+            var publication = new Publication
+            {
+                PublicationId = _guidFactory.Create(),
+                BlogId = blog.BlogId,
+                AuthorId = blog.AuthorId,
+                RubricId = rubricId.Value,
+                PublicationNumber = nextNumber,
+                Title = "Заметки месяца",
+                Content = content,
+                Preview = PreviewOf(content),
+                CreatedUtc = createdUtc,
+                ViewCount = _random.Next(10, 500),
+            };
+            _dbContext.Set<Publication>().Add(publication);
+            blog.PublicationCount++;
+            result.PublicationsCreated++;
+
+            // At least one like, so TopBlogsByRating counts this blog too.
+            result.LikesCreated += AddLikes(
+                publication.PublicationId, LikeEntityType.Publication, blog.AuthorId, users, minimum: 1);
+        }
+    }
+
+    /// <summary>
+    /// Recalculates the popularity scores of the fixture through the same
+    /// processors the running site uses, at the seed epoch.
+    /// </summary>
+    private async Task UpdatePopularityScores(ComprehensiveSeedResult result)
+    {
+        var (_, games) = await _gamePopularity.UpdateScoresAsync(_now);
+        var (_, blogs) = await _blogPopularity.UpdateScoresAsync(_now);
 
         result.Details.Add($"Updated popularity scores for {games} games and {blogs} blogs");
     }
 
     private async Task CreateLikes(List<DbUser> users, ComprehensiveSeedResult result)
     {
-        // Check if likes already exist
         var existingLikesCount = await _dbContext.Set<Like>().CountAsync();
         if (existingLikesCount > 0)
         {
-            result.Skipped++;
             result.Details.Add($"Likes already exist ({existingLikesCount}), skipping");
             return;
         }
 
         var likesCreated = 0;
 
-        // Helper to add random likes to an entity
-        void AddLikesForEntity(Guid entityId, LikeEntityType entityType, Guid? authorId)
-        {
-            // Each entity gets 0-5 likes from random users (excluding author)
-            var likeCount = _random.Next(0, 6);
-            var eligibleUsers = authorId.HasValue
-                ? users.Where(u => u.UserId != authorId.Value).ToList()
-                : users;
-
-            var likers = eligibleUsers
-                .OrderBy(_ => _random.Next())
-                .Take(likeCount)
-                .ToList();
-
-            foreach (var liker in likers)
-            {
-                _dbContext.Set<Like>().Add(new Like
-                {
-                    LikeId = _guidFactory.Create(),
-                    EntityId = entityId,
-                    EntityType = entityType,
-                    UserId = liker.UserId,
-                    IsRemoved = false
-                });
-                likesCreated++;
-            }
-        }
-
-        // 1. Likes for forum topics
+        // Forum topics
         var topics = await _dbContext.Set<Topic>()
             .Where(t => !t.IsRemoved)
             .Select(t => new { t.TopicId, t.AuthorId })
             .ToListAsync();
         foreach (var topic in topics)
         {
-            AddLikesForEntity(topic.TopicId, LikeEntityType.Topic, topic.AuthorId);
+            likesCreated += AddLikes(topic.TopicId, LikeEntityType.Topic, topic.AuthorId, users);
         }
 
-        // 2. Likes for forum/publication comments
+        // Forum and publication comments
         var comments = await _dbContext.Set<DbComment>()
             .Where(c => !c.IsRemoved)
             .Select(c => new { c.CommentId, c.AuthorId })
             .ToListAsync();
         foreach (var comment in comments)
         {
-            AddLikesForEntity(comment.CommentId, LikeEntityType.Comment, comment.AuthorId);
+            likesCreated += AddLikes(comment.CommentId, LikeEntityType.Comment, comment.AuthorId, users);
         }
 
-        // 3. Likes for publications
+        // Publications
         var publications = await _dbContext.Set<Publication>()
-            .Where(p => !p.IsRemoved && p.IsPublished)
+            .Where(p => !p.IsRemoved)
             .Select(p => new { p.PublicationId, p.AuthorId })
             .ToListAsync();
         foreach (var publication in publications)
         {
-            AddLikesForEntity(publication.PublicationId, LikeEntityType.Publication, publication.AuthorId);
+            likesCreated += AddLikes(publication.PublicationId, LikeEntityType.Publication, publication.AuthorId, users);
         }
 
-        // 4. Likes for chat messages — both the global chat and personal/group DMs
+        // Chat messages, the global chat and private and group chats
         var messages = await _dbContext.Set<Message>()
             .Where(m => !m.IsRemoved)
             .Select(m => new { m.MessageId, m.UserId })
             .ToListAsync();
         foreach (var message in messages)
         {
-            AddLikesForEntity(message.MessageId, LikeEntityType.Message, message.UserId);
+            likesCreated += AddLikes(message.MessageId, LikeEntityType.Message, message.UserId, users);
         }
 
         await _dbContext.SaveChangesAsync();
 
         result.LikesCreated = likesCreated;
         result.Details.Add($"Created {likesCreated} likes");
+    }
+
+    /// <summary>
+    /// Random likes on one entity, from users other than its author.
+    /// </summary>
+    /// <returns>How many likes it got.</returns>
+    private int AddLikes(Guid entityId, LikeEntityType entityType, Guid? authorId, List<DbUser> users, int minimum = 0)
+    {
+        var likesCreated = 0;
+
+        var likeCount = _random.Next(minimum, 6);
+        var eligibleUsers = authorId.HasValue
+            ? users.Where(u => u.UserId != authorId.Value).ToList()
+            : users;
+
+        var likers = eligibleUsers
+            .OrderBy(_ => _random.Next())
+            .Take(likeCount)
+            .ToList();
+
+        foreach (var liker in likers)
+        {
+            _dbContext.Set<Like>().Add(new Like
+            {
+                LikeId = _guidFactory.Create(),
+                EntityId = entityId,
+                EntityType = entityType,
+                UserId = liker.UserId,
+            });
+            likesCreated++;
+        }
+
+        return likesCreated;
     }
 }

@@ -2,17 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The default silhouette used to be a data URI, and a data URI is its own
- * document: it cannot see the stylesheet of the page showing it. So its two
- * tones were hard-coded and switched by `prefers-color-scheme` — the operating
- * system's theme. This site's theme is switched by hand, by a class on <html>,
- * and the two disagree the moment a reader picks the one their system is not
- * on: a light-grey square on a #222 page, or a dark one on white.
- *
- * Rendered inline it is painted by the cascade, which cannot disagree with
- * itself, and the four greys that had to be chosen by hand went with the URI.
- */
 import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import AvatarImg from "./AvatarImg.vue";
@@ -59,10 +48,6 @@ describe("AvatarImg", () => {
   });
 
   it("declares the picture's own box when the API measured it", () => {
-    // width/height is what the browser reserves the slot from, before it has a
-    // byte of the picture. The original preserves the uploaded aspect ratio, so
-    // a square declaration reserved 220px for a picture 165px tall and left the
-    // difference blank until somebody floored the wrapper to hide it.
     const wrapper = mount(AvatarImg, {
       props: {
         picture: {
@@ -82,9 +67,6 @@ describe("AvatarImg", () => {
   });
 
   it("falls back to the square when nobody measured the picture", () => {
-    // An upload stored before the pipeline recorded its dimensions. A guessed
-    // ratio would be worse than the square: the square is at least the shape
-    // the slot floors itself to.
     const wrapper = mount(AvatarImg, {
       props: {
         picture: { originalUrl: "https://example.test/o.jpg" },
@@ -100,8 +82,6 @@ describe("AvatarImg", () => {
   });
 
   it("keeps thumbnails square whatever the original measures", () => {
-    // small and medium are square center-crops at the size they are asked for,
-    // so the original's ratio says nothing about the box they occupy.
     const wrapper = mount(AvatarImg, {
       props: {
         picture: {

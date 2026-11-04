@@ -3,7 +3,6 @@ using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Infrastructure.Persistence;
 using AwesomeAssertions;
 using Xunit;
 using DM.Web.API.IntegrationTests.Helpers;
@@ -18,12 +17,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// way the details read answers, end to end.
 /// </summary>
 /// <remarks>
-/// The repository hands back the row it wrote without the character sheet, and
-/// every write answers through the details mapping, which requires one: a write
-/// that skips filling the details in is stored and still answers with a server
-/// error. So every write that answers with the game is asked here: the settings,
-/// a move of the status, a premoderation verdict and the reset of the
-/// recruitment date.
+/// The repository hands back the row without the sheet and every write answers through the details mapping,
+/// so each write that answers with the game is asked.
 /// </remarks>
 public class GameWriteAnswerShould : IntegrationTestBase
 {
@@ -92,9 +87,7 @@ public class GameWriteAnswerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A draft of a fresh master, open to everybody unless it waits for a verdict.
-    /// Fresh identifiers every time: the fixture database is shared and its
-    /// usernames and public ids are uniquely indexed.
+    /// A draft of a fresh master, open to everybody unless it waits for a verdict; fresh identifiers.
     /// </summary>
     private async Task<(GeneralUser Master, Guid GameId)> SeedAsync(
         PremoderationStatus premoderation = PremoderationStatus.Approved)

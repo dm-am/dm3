@@ -17,9 +17,6 @@ public class TagGroup
     [Key]
     public Guid TagGroupId { get; set; }
 
-    /// <summary>
-    /// Title
-    /// </summary>
     public string Title { get; set; } = null!;
 
     /// <summary>

@@ -1,27 +1,9 @@
 import { test, expect } from "@playwright/test";
 import type { Locator, Page } from "@playwright/test";
 
-/**
- * The game roster: reaching it, and what it says while it has nothing to say.
- *
- * What this file was: every assertion sat inside `if (await x.isVisible())`,
- * and none of the selectors existed. `.games-row` is not in the client (the
- * games table is a DataTable of `tr.table-row`), `.game-tabs` is not either
- * (per-game navigation lives in the left-sidebar "Меню игры" block), and the
- * headings it claimed to check — `.characters-group-title`, `.group-title` —
- * are written `.section-title`. Both tests reported green having executed no
- * assertion at all, over the very page whose dead end was the highest finding
- * of this slice.
- *
- * So: no `if` around an assertion. A locator that finds nothing must fail.
- */
+/** The game roster: reaching it, and what it says while it has nothing to say. */
 
-/**
- * The left-sidebar block that carries per-game navigation. SidebarBlock
- * identifies itself by token, not by a class: `.sidebar-block` was the second
- * invented selector in this file's history, and it went in as the fix for the
- * first.
- */
+/** The left-sidebar block that carries per-game navigation, by its token. */
 const gameMenu = (page: Page): Locator =>
   page.locator("#sidebar-list-GamePanel");
 
@@ -50,10 +32,7 @@ test.describe("Game characters", () => {
   test("opens the roster from the game menu in the sidebar", async ({
     page,
   }) => {
-    // Walked here rather than through the helper: this test is the route
-    // itself, and a body whose only statement is a call to a helper reports
-    // green on the day the helper stops asserting — the failure this file was
-    // rewritten to prevent, one level up.
+    // Walked here rather than through the helper: this test is the route itself.
     await openFirstGame(page);
     await gameMenu(page).getByRole("link", { name: "Персонажи" }).click();
 
@@ -66,8 +45,7 @@ test.describe("Game characters", () => {
   }) => {
     await openRoster(page);
 
-    // The skeleton is gone by the time the page settles: "В этой игре пока нет
-    // персонажей" used to be printed while the request was still on the wire.
+    // The skeleton is gone by the time the page settles.
     await expect(roster(page).locator(".character-skeleton-grid")).toHaveCount(
       0,
     );

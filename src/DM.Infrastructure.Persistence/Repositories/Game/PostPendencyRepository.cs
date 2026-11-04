@@ -4,7 +4,6 @@ using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostPendencies;
 using Microsoft.EntityFrameworkCore;
 using DbPostPendency = DM.Infrastructure.Persistence.Entities.Game.Links.PostPendency;
@@ -29,7 +28,7 @@ internal class PostPendencyRepository : IPostPendencyRepository
             .TagWith("DM.PostPendency.Get")
             .Where(e => e.PendencyId == pendencyId)
             .ProjectToPostPendency()
-            .FirstOrDefaultAsync()!;
+            .FirstOrDefaultAsync();
     }
 
     /// <inheritdoc />

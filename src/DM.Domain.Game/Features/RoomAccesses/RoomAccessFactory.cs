@@ -1,6 +1,5 @@
 using System;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Game.Features.Games;
 
 namespace DM.Domain.Game.Features.RoomAccesses;
 
@@ -9,7 +8,6 @@ internal class RoomAccessFactory : IRoomAccessFactory
 {
     private readonly IGuidFactory _guidFactory;
 
-    /// <inheritdoc />
     public RoomAccessFactory(
         IGuidFactory guidFactory)
     {

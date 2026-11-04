@@ -16,13 +16,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 /// history of a conversation for himself while the others keep theirs.
 /// </summary>
 /// <remarks>
-/// Written against HTTP rather than the services: the cleared history is a filter
-/// in five queries (the messages of the chat, its last message, a message read by
-/// its id, the search and the list), and every test with a substituted repository
-/// steps straight over all of them.
-///
-/// Each case makes its own people and conversations and takes the conversations
-/// back out; the people stay, the way the neighbouring suites leave theirs.
+/// Over HTTP: the cleared history is a filter in five queries. Each case makes its own people and conversations
+/// and takes the conversations back out.
 /// </remarks>
 public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
 {
@@ -132,9 +127,7 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Somebody else's conversation can be neither left nor cleared, by either of
-    /// its addresses, and it answers the stranger the way its every read does:
-    /// not found. A guest is not let in at all.
+    /// Somebody else's conversation can be neither left nor cleared, by either address: not found. A guest is not let in.
     /// </summary>
     [Fact]
     public async Task RefuseAStrangerToLeaveOrClearSomebodyElsesConversation()
@@ -173,9 +166,7 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The history is cleared for the one who asked: none of the ways of reading
-    /// the conversation gives him what was written up to that moment, the other
-    /// participant keeps all of it, and what is written afterwards reaches both.
+    /// The history is cleared for the one who asked, on every read; the other keeps it, and later messages reach both.
     /// </summary>
     [Fact]
     public async Task ClearTheHistoryForTheCallerAndKeepItForTheOther()
@@ -232,8 +223,6 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         }
     }
 
-    // ═══ READS ═══
-
     private static bool Viewer(JsonElement chat, string flag) =>
         chat.GetProperty("viewer").GetProperty(flag).GetBoolean();
 
@@ -263,8 +252,6 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         (await ReadAsync(user, HttpMethod.Get, "/v1/chats/unread"))
         .GetProperty("resource").GetProperty("count").GetInt64();
 
-    // ═══ WRITES ═══
-
     private static object Text(string text) => new { text };
 
     private async Task<Guid> CreateGroupAsync(GeneralUser author, List<Guid> chats, params GeneralUser[] others)
@@ -281,8 +268,6 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
     private async Task<Guid> WriteAsync(GeneralUser author, Guid chatId, string text) =>
         (await ReadAsync(author, HttpMethod.Post, $"/v1/chats/{chatId}/messages", Text(text)))
         .GetProperty("resource").GetProperty("id").GetGuid();
-
-    // ═══ SEEDING ═══
 
     private async Task<GeneralUser> SeedUserAsync(string prefix)
     {
@@ -319,8 +304,6 @@ public class ChatLeaveAndClearHistoryShould : IntegrationTestBase
         await db.UserChatLinks.IgnoreQueryFilters().Where(l => chats.Contains(l.ChatId)).ExecuteDeleteAsync();
         await db.Chats.Where(c => chats.Contains(c.ChatId)).ExecuteDeleteAsync();
     }
-
-    // ═══ REQUESTS ═══
 
     /// <summary>A request as the user; a guest sends none of the test headers.</summary>
     private Task<HttpResponseMessage> SendAsync(

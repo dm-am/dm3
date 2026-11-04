@@ -7,13 +7,8 @@ namespace DM.Testing.Markup;
 /// and what the checks that go over "every surface" go over.
 /// </summary>
 /// <remarks>
-/// Not every value of <see cref="BbSurface"/>. The hint, the description of a
-/// game tag, reads one tag of its own ([tip]) and none of a post: a generated
-/// post is prose there, and the corpus the client reads would move by a
-/// surface for every text if it were one of them. Its rows are in the grammar
-/// table under its own name, and its markup is held by HintMarkupShould. A
-/// surface added later has to be put here or next to the hint on purpose,
-/// which EveryBbSurfaceIsDecided in DM.Infrastructure.Core.Tests asks.
+/// The hint reads one tag of its own and none of a post, so it is not one of them; HintMarkupShould holds
+/// it, and EveryBbSurfaceIsDecided asks that a new surface is placed on purpose.
 /// </remarks>
 public static class MarkupSurfaces
 {

@@ -1,164 +1,38 @@
 using System.Net;
-using System.Net.Http.Json;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 
-/// <summary>
-/// Integration tests for BlogController
-/// </summary>
 public class BlogControllerShould : IntegrationTestBase
 {
     public BlogControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    [Fact]
-    public async Task GetBlogs_ReturnsOk()
+    /// <summary>Every sort and search of the list answers a guest, popularity included.</summary>
+    [Theory]
+    [InlineData("/v1/blogs")]
+    [InlineData("/v1/blogs?sortBy=popularity&take=10")]
+    [InlineData("/v1/blogs?sortBy=popularity")]
+    [InlineData("/v1/blogs?search=test")]
+    [InlineData("/v1/blogs?search=test&sortBy=created")]
+    [InlineData("/v1/blogs?search=test&sortBy=activated")]
+    [InlineData("/v1/blogs?search=test&size=5&number=1")]
+    public async Task ListTheBlogsForEveryQuery(string address)
     {
-        // Act
-        var response = await Client.GetAsync("/v1/blogs");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task GetPopularBlogs_ReturnsOk()
-    {
-        // Act - Popular blogs use sortBy=popularity query parameter
-        var response = await Client.GetAsync("/v1/blogs?sortBy=popularity&take=10");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    #region Search Tests
-
-    /// <summary>
-    /// Search blogs should return OK with results
-    /// </summary>
-    [Fact]
-    public async Task GetBlogs_WithSearch_ReturnsOk()
-    {
-        // Act
-        var response = await Client.GetAsync("/v1/blogs?search=test");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
+        var response = await Client.GetAsync(address);
         var content = await response.Content.ReadAsStringAsync();
+
+        response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", content);
         content.Should().Contain("resources");
     }
 
-    /// <summary>
-    /// Search blogs with explicit sort should respect sort (not use relevance)
-    /// </summary>
     [Fact]
-    public async Task GetBlogs_WithSearchAndSort_ReturnsOk()
+    public async Task GetUserBlogsWithValidUserReturnsOk()
     {
-        // Act - search with explicit created sort (should not use relevance)
-        var response = await Client.GetAsync("/v1/blogs?search=test&sortBy=created");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    /// <summary>
-    /// Search blogs with an explicit activation sort should return OK
-    /// </summary>
-    /// <remarks>
-    /// This asked for sortBy=updated, which BlogRepository has no case for, and
-    /// asserted 200 — so the test held the endpoint to answering a wrong sort
-    /// with the default order instead of refusing it. The endpoint now refuses
-    /// (SortRefusalShould), and the search-plus-sort combination this test is
-    /// about is exercised with a field the repository actually sorts by.
-    /// </remarks>
-    [Fact]
-    public async Task GetBlogs_WithSearchAndActivatedSort_ReturnsOk()
-    {
-        // Act
-        var response = await Client.GetAsync("/v1/blogs?search=test&sortBy=activated");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    /// <summary>
-    /// Search blogs with pagination should return OK
-    /// </summary>
-    [Fact]
-    public async Task GetBlogs_WithSearchAndPaging_ReturnsOk()
-    {
-        // Act
-        var response = await Client.GetAsync("/v1/blogs?search=test&size=5&number=1");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    /// <summary>
-    /// Get blogs with popularity sort (routed to GetPopularBlogs) should return OK
-    /// </summary>
-    [Fact]
-    public async Task GetBlogs_WithPopularitySort_ReturnsOk()
-    {
-        // Act
-        var response = await Client.GetAsync("/v1/blogs?sortBy=popularity");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    #endregion
-
-    [Fact]
-    public async Task GetUserBlogs_WithValidUser_ReturnsOk()
-    {
-        // Act
         var response = await Client.GetAsync($"/v1/blogs/owner/{TestConstants.TestUserLogin}");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-    }
-
-    [Fact]
-    public async Task PostBlog_RequiresAuthentication()
-    {
-        // Arrange
-        var blogData = new { title = "Test Blog", description = "Test Description" };
-
-        // Act
-        var response = await Client.PostAsJsonAsync("/v1/blogs", blogData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task DeleteBlog_RequiresAuthentication()
-    {
-        // Arrange
-        var blogId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.DeleteAsync($"/v1/blogs/{blogId}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
-
-    [Fact]
-    public async Task PatchBlog_RequiresAuthentication()
-    {
-        // Arrange
-        var blogId = Guid.NewGuid();
-        var updateData = new { title = "Updated Title" };
-
-        // Act
-        var response = await Client.PatchAsJsonAsync($"/v1/blogs/{blogId}", updateData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 }

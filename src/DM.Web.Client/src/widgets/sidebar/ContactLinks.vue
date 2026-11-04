@@ -1,10 +1,6 @@
 <template>
-  <SidebarBlock token="ContactForms">
-    <template #title>Обратная связь</template>
-    <!-- The "- " prefix is decorative (same idiom as SidebarForwardLink):
-         aria-hidden keeps it out of the accessibility tree, and the
-         block/inline flow (not flex) keeps the line copying as one line
-         instead of "- \n<link text>". The prefix itself is selectable. -->
+  <SidebarBlock token="ContactForms" title="Обратная связь">
+    <!-- The "- " is decorative; inline flow, not flex, so a row copies as one line -->
     <li v-once class="contact-links">
       <div class="contact-item">
         <span class="muted" aria-hidden="true">-&nbsp;</span>
@@ -30,12 +26,7 @@ import SidebarBlock from "./SidebarBlock.vue";
   flex-direction: column
   gap: $tiny
 
-// Plain block line (dash span + link are inline on a shared baseline).
-// Deliberately NOT flex: element flex items copy with a newline between
-// them, which made the line copy as "- \nОбратиться в поддержку".
+// Not flex: flex items copy with a newline between them.
 .contact-item
   display: block
-
-.muted
-  color: $text-muted
 </style>

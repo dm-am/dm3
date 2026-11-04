@@ -19,10 +19,7 @@ namespace DM.Infrastructure.Persistence.Repositories.Blog;
 
 /// <summary>
 /// Projection formulas for the blog module. The rubric shape is one spliced
-/// expression: it is asked for on its own, under a blog, under a publication,
-/// and once over a row already in memory. It used to be four copies "that must
-/// stay identical", with a note saying a fourth copy would be the moment to
-/// merge them; the fourth copy was written and the note was not read.
+/// expression, asked for on its own, under a blog, under a publication and in memory.
 /// </summary>
 internal static class BlogMappers
 {
@@ -38,7 +35,7 @@ internal static class BlogMappers
             Id = r.RubricId,
             Title = r.Title,
             SortOrder = r.SortOrder,
-            PublicationCount = r.Publications.Count(p => !p.IsRemoved && p.IsPublished)
+            PublicationCount = r.Publications.Count(p => !p.IsRemoved)
         };
 
     private static readonly Func<DbRubric, Rubric> CompiledRubric = RubricProjection.Compile();
@@ -47,7 +44,8 @@ internal static class BlogMappers
     /// EF projection to the domain blog. Subscriber facts and the per-viewer
     /// unread counters are populated by the repository/service after the query;
     /// the blacklist travels with the blog, as a game's does. Keeps the blogs of
-    /// removed owners, signed by nobody (<see cref="RemovedAuthors"/>).
+    /// removed owners, signed by nobody (<see cref="RemovedAuthors"/>). Read with
+    /// AsSplitQuery, as GameMappers.ProjectToGame is.
     /// </summary>
     public static IQueryable<BlogDto> ProjectToBlog(this IQueryable<DbBlog> query) =>
         query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbBlog, BlogDto>>(b => new BlogDto
@@ -64,10 +62,9 @@ internal static class BlogMappers
             ClosedReason = b.ClosedReason,
             DraftVisibility = b.DraftVisibility,
             PublicationCount = b.PublicationCount,
-            CommentCount = b.CommentCount,
-            // The blog discussion plus every published publication's thread.
+            // The blog discussion plus every publication's thread.
             CommentsCount = b.CommentCount + b.Publications
-                .Where(p => !p.IsRemoved && p.IsPublished)
+                .Where(p => !p.IsRemoved)
                 .Sum(p => p.CommentCount),
             LastCommentId = b.LastCommentId,
             Author = GeneralUserProjections.Projection.Splice(b.Author),
@@ -125,8 +122,6 @@ internal static class BlogMappers
             Preview = p.Preview,
             CreatedUtc = p.CreatedUtc,
             ModifiedUtc = p.ModifiedUtc,
-            IsPublished = p.IsPublished,
-            PublishedUtc = p.PublishedUtc,
             ViewCount = p.ViewCount,
             CommentCount = p.CommentCount,
             LastCommentId = p.LastCommentId,

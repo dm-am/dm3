@@ -1,12 +1,6 @@
 /**
- * Headers carrying the token a token-gated endpoint treats as the caller's
- * credential: the one-time token from a mailed link, and the tracking token a
- * guest receives when filing a ticket.
- *
- * The token never goes into the URL. A path is written verbatim into the reverse
- * proxy's access log and into the request trace, so a token placed there is
- * readable by everyone who can read either, for as long as the token lives — and
- * rotating it means purging logs rather than changing a value.
+ * The token of a token-gated endpoint goes in a header, never in the URL: a
+ * path is written into the proxy's access log and the trace.
  */
 
 /** Activation, password reset, email change confirmation, username change approval. */

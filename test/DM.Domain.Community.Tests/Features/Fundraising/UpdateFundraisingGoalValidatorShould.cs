@@ -1,12 +1,11 @@
 using DM.Domain.Community.Features.Fundraising;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Fundraising;
 
-public class UpdateFundraisingGoalValidatorShould : UnitTestBase
+public class UpdateFundraisingGoalValidatorShould
 {
     private readonly UpdateFundraisingGoalValidator validator = new();
 
@@ -15,7 +14,7 @@ public class UpdateFundraisingGoalValidatorShould : UnitTestBase
     /// it is about instead of restating the other two.
     /// </summary>
     private static UpdateFundraisingGoal Goal(
-        string title = "Хостинг и домен на год",
+        string title = "Хостинг на год",
         decimal goalAmount = 100m,
         decimal collectedAmount = 0m) => new()
         {
@@ -31,18 +30,12 @@ public class UpdateFundraisingGoalValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    [Fact]
-    public void FailWhenTitleIsEmpty()
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void FailWhenTitleIsBlank(string title)
     {
-        var result = validator.TestValidate(Goal(title: string.Empty));
-        result.ShouldHaveValidationErrorFor(x => x.Title)
-            .WithErrorMessage(ValidationError.Empty);
-    }
-
-    [Fact]
-    public void FailWhenTitleIsWhitespace()
-    {
-        var result = validator.TestValidate(Goal(title: "   "));
+        var result = validator.TestValidate(Goal(title: title));
         result.ShouldHaveValidationErrorFor(x => x.Title)
             .WithErrorMessage(ValidationError.Empty);
     }
@@ -64,18 +57,12 @@ public class UpdateFundraisingGoalValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    [Fact]
-    public void FailWhenGoalAmountIsZero()
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void FailWhenGoalAmountIsNotPositive(int goalAmount)
     {
-        var result = validator.TestValidate(Goal(goalAmount: 0m));
-        result.ShouldHaveValidationErrorFor(x => x.GoalAmount)
-            .WithErrorMessage(ValidationError.MustBePositive);
-    }
-
-    [Fact]
-    public void FailWhenGoalAmountIsNegative()
-    {
-        var result = validator.TestValidate(Goal(goalAmount: -1m));
+        var result = validator.TestValidate(Goal(goalAmount: goalAmount));
         result.ShouldHaveValidationErrorFor(x => x.GoalAmount)
             .WithErrorMessage(ValidationError.MustBePositive);
     }

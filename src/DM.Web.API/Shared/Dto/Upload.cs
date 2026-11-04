@@ -1,5 +1,5 @@
 using System;
-using System.Text.Json.Serialization;
+using System.Collections.Generic;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 
@@ -25,7 +25,6 @@ public class Upload
     public string? UploaderUsername { get; set; }
 
     /// <summary>Upload type / purpose.</summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public UploadType Type { get; set; }
 
     /// <summary>Target entity identifier (e.g. user ID for avatar, post ID for attachment).</summary>
@@ -41,14 +40,11 @@ public class Upload
     public long SizeBytes { get; set; }
 
     /// <summary>Processing status.</summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public UploadStatus Status { get; set; }
 
     /// <summary>
-    /// Source file URL (≤1024 px, EXIF stripped). Thumbnail variants
-    /// are generated on-the-fly via imgproxy at serving time — the client uses
-    /// this URL for the original variant and builds imgproxy URLs for
-    /// thumbnails via the picture object in the User/UserProfile/Character DTOs.
+    /// Source file URL (≤1024 px, EXIF stripped). The thumbnails of an avatar
+    /// come in the picture object of the User/UserProfile/Character DTOs.
     /// </summary>
     public string? Url { get; set; }
 
@@ -57,11 +53,8 @@ public class Upload
     /// to see them.
     /// </summary>
     /// <remarks>
-    /// Present for every upload, including the ones with no public
-    /// <see cref="Url"/> — which is what a moderation screen showing a file from a
-    /// closed prefix has to render from. It is not a link that grants anything:
-    /// the endpoint behind it re-decides on every request, so passing it on gives
-    /// the recipient exactly the access they already had.
+    /// Present also without a public <see cref="Url"/>. It grants nothing: the
+    /// endpoint behind it re-decides on every request.
     /// </remarks>
     public string ContentUrl { get; set; } = string.Empty;
 
@@ -70,26 +63,64 @@ public class Upload
 
     /// <summary>Confirmation timestamp (UTC).</summary>
     public DateTimeOffset? ConfirmedUtc { get; set; }
+
+    /// <summary>
+    /// Whether the caller may open the file. False for a file the post keeps from
+    /// him, its mark or a hidden block: a list names it without a link and without
+    /// a preview, and its address answers him as a file that is not there.
+    /// </summary>
+    public bool CanOpen { get; set; }
+
+    /// <summary>
+    /// Who sees a file of a post marked "Выбранные", the words after "Получатели:",
+    /// leads first: "DungeonMaster, Assistant, Вася". Null for a file every reader
+    /// of the post sees, and for a caller who may not open it.
+    /// </summary>
+    public string? Recipients { get; set; }
+
+    /// <summary>
+    /// The characters chosen to see the file, for the checkboxes of its author: one
+    /// gone from the room keeps his box by the name the mark froze. Null when
+    /// <see cref="Recipients"/> is.
+    /// </summary>
+    public IReadOnlyList<UploadAddressee>? Addressees { get; set; }
+}
+
+/// <summary>
+/// A character a file of a post is marked for.
+/// </summary>
+public class UploadAddressee
+{
+    /// <summary>The character.</summary>
+    public Guid Id { get; set; }
+
+    /// <summary>His name when he was chosen: the room may no longer know it.</summary>
+    public string Name { get; set; } = string.Empty;
+}
+
+/// <summary>
+/// Who sees a file of a post: the choice on its plate.
+/// </summary>
+public class UpdateUploadAudienceRequest
+{
+    /// <summary>
+    /// "All" for every reader of the post, "Selected" for the author, the leads and the characters named.
+    /// Required: a body without it would otherwise read as "All" and open the file to everybody.
+    /// </summary>
+    public UploadVisibleTo? VisibleTo { get; set; }
+
+    /// <summary>The characters chosen, from those let into the room; read only for "Selected".</summary>
+    public IReadOnlyList<Guid>? CharacterIds { get; set; }
 }
 
 /// <summary>
 /// Query parameters for listing uploads.
 /// </summary>
-/// <remarks>
-/// Pages with skip/take, inherited from <see cref="PagingQuery"/>, like the
-/// other twenty-seven offset-paged lists. It used to page with number/size and
-/// was the only endpoint that did, which cost the shared paging component on
-/// the client a branch of its own — and the page number was handed to
-/// PagingResult.Create in the slot that takes an entity index, so every page
-/// after the first came back declaring itself page 1.
-/// </remarks>
 public class UploadsQuery : PagingQuery
 {
     /// <summary>Filter by upload type.</summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public UploadType? Type { get; set; }
 
     /// <summary>Filter by processing status.</summary>
-    [JsonConverter(typeof(JsonStringEnumConverter))]
     public UploadStatus? Status { get; set; }
 }

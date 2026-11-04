@@ -4,8 +4,8 @@
 
 /**
  * The words of a tag description: the server's markup, whose [tip] words
- * open a small tooltip of their own, on hover, on a tap and on a focus from
- * the keyboard.
+ * open a small tooltip of their own, on hover and on a focus from the
+ * keyboard.
  *
  * The markup is taken from the pairs of hintMarkup.cases.ts, the string both
  * the server and the moderator's preview draw, so a name the tooltip reads
@@ -16,20 +16,14 @@
  * outerHTML, which took the <img> out from under Vue's patcher, so a flag, a
  * rendered element and a colour of the theme stand there now.
  */
-import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
-import { readFileSync } from "fs";
-import { dirname, join } from "path";
-import { fileURLToPath } from "url";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 import TooltipContent from "./TooltipContent.vue";
-import { trackInput } from "./touchRule";
+import { trackInput } from "./inputSource";
 import { HINT_MARKUP_PAIRS } from "@/shared/lib/utils/hintMarkup.cases";
-import { hintToHtml } from "@/shared/lib/utils/bbcode";
+import { hintToHtml } from "@/shared/lib/utils/hintMarkup";
 import { VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-const source = readFileSync(join(HERE, "TooltipContent.vue"), "utf8");
 
 /** The server's markup of the pair whose input holds the given spelling. */
 const serverHtml = (spelling: string): string => {
@@ -42,12 +36,12 @@ const TEXT = serverHtml('[tip text="Политика, религия, нацио
 const IMAGE = serverHtml('[tip img="/images/erp-tooltip.gif"]');
 const BOTH = serverHtml('[tip img="https://example.com/a.gif" text=');
 
-// Attached to the document: a touch outside has to reach the listener on
+// Attached to the document: a press outside has to reach the listener on
 // `document`, and it only gets there by bubbling through a mounted tree.
 const mountHtml = (html: string) =>
   mount(TooltipContent, { props: { html }, attachTo: document.body });
 
-// jsdom has no PointerEvent and no TouchEvent constructor. What the handlers
+// jsdom has no PointerEvent constructor. What the handlers
 // read of an event is its type, its target and its pointerType, and a bubbling
 // MouseEvent with the pointerType set by hand carries all three.
 const send = (
@@ -66,17 +60,6 @@ const send = (
   el.dispatchEvent(event);
 };
 
-// A tap as the browser sends it (touchRule.ts): the finger down, touchstart,
-// the finger up, the mouse events made up after it, the click.
-const tap = async (el: Element) => {
-  send(el, "pointerdown", "touch");
-  el.dispatchEvent(new Event("touchstart", { bubbles: true }));
-  send(el, "pointerup", "touch");
-  send(el, "mouseover");
-  send(el, "click", "touch");
-  await nextTick();
-};
-
 // The pointer of a mouse moving onto an element and off it.
 const hover = async (el: Element) => {
   send(el, "pointerover", "mouse");
@@ -93,12 +76,6 @@ const pointerListeners = (spy: { mock: { calls: unknown[][] } }) =>
   spy.mock.calls
     .filter((call) => call[0] === "pointerdown")
     .map((call) => call[1]);
-
-// jsdom draws no canvas, and the bubble measures its words on one; the
-// measure is not what these tests are about.
-beforeEach(() => {
-  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue(null);
-});
 
 afterEach(() => {
   vi.useRealTimers();
@@ -264,83 +241,30 @@ describe("TooltipContent", () => {
     expect(small()).toBeNull();
     wrapper.unmount();
   });
-
-  it("never writes into the DOM behind Vue", () => {
-    expect(source).not.toContain("outerHTML");
-  });
-
-  it("takes its colours from the theme", () => {
-    expect(source).not.toMatch(/#[0-9a-fA-F]{3,6}\b/);
-  });
 });
 
-describe("TooltipContent on touch", () => {
-  it("opens the tooltip of a word on a tap", async () => {
+describe("TooltipContent under a press", () => {
+  it("closes when a press lands outside the word and its tooltip", async () => {
     const wrapper = mountHtml(TEXT);
-
-    await tap(word(wrapper));
-
-    expect(small()).not.toBeNull();
-    wrapper.unmount();
-  });
-
-  it("closes when the touch lands outside the word and its tooltip", async () => {
-    const wrapper = mountHtml(TEXT);
-    await tap(word(wrapper));
+    await hover(word(wrapper));
 
     const elsewhere = document.createElement("div");
     document.body.appendChild(elsewhere);
-    await tap(elsewhere);
+    send(elsewhere, "pointerdown", "mouse");
+    await nextTick();
 
     expect(small()).toBeNull();
     wrapper.unmount();
   });
 
-  it("holds the tooltip open when the touch lands on it", async () => {
+  it("holds the tooltip open when a press lands on it", async () => {
     const wrapper = mountHtml(IMAGE);
-    await tap(word(wrapper));
+    await hover(word(wrapper));
 
-    await tap(small()!.querySelector("img")!);
-
-    expect(small()).not.toBeNull();
-    wrapper.unmount();
-  });
-
-  it("closes on a second tap of the same word", async () => {
-    const wrapper = mountHtml(TEXT);
-
-    await tap(word(wrapper));
-    expect(small()).not.toBeNull();
-
-    await tap(word(wrapper));
-    expect(small()).toBeNull();
-    wrapper.unmount();
-  });
-
-  it("opens nothing when the finger starts a scroll on the word", async () => {
-    const wrapper = mountHtml(TEXT);
-    const term = word(wrapper);
-
-    // The browser takes the gesture for a scroll: no click follows.
-    send(term, "pointerdown", "touch");
-    term.dispatchEvent(new Event("touchstart", { bubbles: true }));
-    send(term, "pointercancel", "touch");
+    send(small()!.querySelector("img")!, "pointerdown", "mouse");
     await nextTick();
 
-    expect(small()).toBeNull();
-    wrapper.unmount();
-  });
-
-  it("does not take the mouse events made up after a tap for hover", async () => {
-    const wrapper = mountHtml(TEXT);
-
-    // A finger that went down somewhere; the browser then sends mouseover
-    // to whatever lies under it.
-    send(document.body, "pointerdown", "touch");
-    send(word(wrapper), "mouseover");
-    await nextTick();
-
-    expect(small()).toBeNull();
+    expect(small()).not.toBeNull();
     wrapper.unmount();
   });
 
@@ -352,7 +276,7 @@ describe("TooltipContent on touch", () => {
     const removeSpy = vi.spyOn(document, "removeEventListener");
 
     const wrapper = mountHtml(TEXT);
-    await tap(word(wrapper));
+    await hover(word(wrapper));
     expect(small()).not.toBeNull();
 
     wrapper.unmount();

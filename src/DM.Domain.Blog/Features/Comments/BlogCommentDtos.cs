@@ -3,65 +3,29 @@ using DM.Domain.Core.Comments;
 
 namespace DM.Domain.Blog.Features.Comments;
 
-/// <summary>
-/// DTO for blog comment ready for deletion
-/// </summary>
 public class BlogCommentToDelete : Comment
 {
-    /// <summary>
-    /// Blog identifier
-    /// </summary>
     public Guid BlogId => EntityId;
 }
 
-/// <summary>
-/// Entity DTO for updating a blog comment (repository level)
-/// </summary>
 public class UpdateBlogCommentEntity
 {
-    /// <summary>
-    /// Comment identifier
-    /// </summary>
     public Guid CommentId { get; set; }
 
-    /// <summary>
-    /// Updated comment text
-    /// </summary>
     public string Text { get; set; } = null!;
 
-    /// <summary>
-    /// Last edit timestamp
-    /// </summary>
     public DateTimeOffset LastUpdateUtc { get; set; }
 
-    /// <summary>
-    /// User performing the edit
-    /// </summary>
     public Guid EditorUserId { get; set; }
 }
 
-/// <summary>
-/// Entity DTO for deleting a blog comment (repository level)
-/// </summary>
 public class DeleteBlogCommentEntity
 {
-    /// <summary>
-    /// Comment identifier
-    /// </summary>
     public Guid CommentId { get; set; }
 
-    /// <summary>
-    /// Blog identifier
-    /// </summary>
     public Guid BlogId { get; set; }
 
-    /// <summary>
-    /// User who deleted the comment
-    /// </summary>
     public Guid DeletedByUserId { get; set; }
 
-    /// <summary>
-    /// Deletion timestamp
-    /// </summary>
     public DateTimeOffset DeletedUtc { get; set; }
 }

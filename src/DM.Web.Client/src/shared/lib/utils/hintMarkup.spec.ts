@@ -5,7 +5,9 @@
  */
 
 import { describe, expect, it } from "vitest";
-import { hintToHtml, isTipImageAddress, validateBBCode } from "./bbcode";
+import { hintToHtml } from "./hintMarkup";
+import { tipImageAddress } from "./bbcodeAddresses";
+import { validateBBCode } from "./bbcodeWarnings";
 import { HINT_MARKUP_PAIRS } from "./hintMarkup.cases";
 
 describe("the markup of a tag description, on the client", () => {
@@ -44,7 +46,7 @@ describe("the address of a [tip] picture", () => {
     " /images/a.gif ",
     "/a",
   ])("takes %j", (address) => {
-    expect(isTipImageAddress(address)).toBe(true);
+    expect(tipImageAddress(address)).not.toBeNull();
   });
 
   it.each([
@@ -59,6 +61,6 @@ describe("the address of a [tip] picture", () => {
     "http://127.0.0.1/a.gif",
     "",
   ])("refuses %j", (address) => {
-    expect(isTipImageAddress(address)).toBe(false);
+    expect(tipImageAddress(address)).toBeNull();
   });
 });

@@ -9,7 +9,6 @@ namespace DM.Domain.Community.Features.Achievements;
 /// </summary>
 public class AchievementCategory
 {
-    /// <summary>Identifier.</summary>
     public Guid Id { get; set; }
 
     /// <summary>Stable code ("game_posts_authored").</summary>
@@ -40,20 +39,14 @@ public class AchievementCategory
     public bool IsActive { get; set; }
 }
 
-/// <summary>Category update request. Creation from the admin UI is not expected:
-/// the catalog of 13 categories is static; edits are point fixes (description, icon).</summary>
+/// <summary>Category update request; a null field is left as it is. The catalog is
+/// static: edits are point fixes (description, icon), no creation from the admin UI.</summary>
 public class UpdateAchievementCategory
 {
-    /// <summary>Identifier of the record being updated.</summary>
     public Guid Id { get; set; }
-    /// <summary>New title (null = leave unchanged).</summary>
     public string? Title { get; set; }
-    /// <summary>New description (null = leave unchanged).</summary>
     public string? Description { get; set; }
-    /// <summary>New icon (null = leave unchanged).</summary>
     public string? IconName { get; set; }
-    /// <summary>New SortOrder (null = leave unchanged).</summary>
     public int? SortOrder { get; set; }
-    /// <summary>New IsActive (null = leave unchanged).</summary>
     public bool? IsActive { get; set; }
 }

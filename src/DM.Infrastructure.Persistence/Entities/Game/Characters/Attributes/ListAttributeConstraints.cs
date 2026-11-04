@@ -1,5 +1,4 @@
 using System.Collections.Generic;
-using System.Linq;
 
 namespace DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes;
 
@@ -17,9 +16,6 @@ public class ListAttributeConstraints : AttributeConstraints
     /// Possible values
     /// </summary>
     public IEnumerable<ListAttributeValue> Values { get; set; } = [];
-
-    /// <inheritdoc />
-    public override string GetDefaultValue() => Values?.FirstOrDefault()?.Value ?? string.Empty;
 }
 
 /// <summary>
@@ -32,8 +28,5 @@ public class ListAttributeValue
     /// </summary>
     public string Value { get; set; } = null!;
 
-    /// <summary>
-    /// Modifier for the value
-    /// </summary>
     public int? Modifier { get; set; }
 }

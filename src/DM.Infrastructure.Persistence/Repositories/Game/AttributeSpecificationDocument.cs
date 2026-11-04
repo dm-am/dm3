@@ -10,9 +10,9 @@ using DbNumberConstraints = DM.Infrastructure.Persistence.Entities.Game.Characte
 using DbListConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeConstraints;
 using DbBbCodeConstraints = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.BbCodeAttributeConstraints;
 using DbListAttributeValue = DM.Infrastructure.Persistence.Entities.Game.Characters.Attributes.ListAttributeValue;
-using DtoSpecification = DM.Domain.Game.Features.Games.AttributeSpecification;
-using DtoSpecificationInput = DM.Domain.Game.Features.Games.IAttributeSpecificationInput;
-using DtoListValue = DM.Domain.Game.Features.Games.ListValue;
+using DtoSpecification = DM.Domain.Game.Features.AttributeSchemas.AttributeSpecification;
+using DtoSpecificationInput = DM.Domain.Game.Features.AttributeSchemas.CreateAttributeSpecification;
+using DtoListValue = DM.Domain.Game.Features.AttributeSchemas.ListValue;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
@@ -20,11 +20,8 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 /// The document of attribute specifications, in both directions.
 /// </summary>
 /// <remarks>
-/// Two stores hold this document now, the schema of a game and the shared
-/// schema row, and they have to read and write it the same way: the
-/// constraint subclass is what carries the type of a specification and the
-/// limits it declares, so a second spelling of the conversion is a second
-/// answer to "what type is this attribute". One class, called by both.
+/// The schema of a game and the shared template row read and write it alike: the
+/// constraint subclass carries the type of a specification and its limits.
 /// </remarks>
 internal static class AttributeSpecificationDocument
 {
@@ -83,44 +80,26 @@ internal static class AttributeSpecificationDocument
     private static List<DbListAttributeValue> MapValues(IEnumerable<DtoListValue> values) =>
         (values ?? []).Select(v => new DbListAttributeValue { Value = v.Value, Modifier = v.Modifier }).ToList();
 
-    private static DtoSpecification ToSpecification(DbSpecification source)
+    private static DtoSpecification ToSpecification(DbSpecification source) => new()
     {
-        var result = new DtoSpecification
+        Id = source.Id,
+        Title = source.Title,
+        Type = ResolveType(source),
+        Required = source.Constraints.Required,
+        Order = source.Order,
+        IsDescriptor = source.IsDescriptor,
+        IsHidden = source.IsHidden,
+        MaxLength = source.Constraints switch
         {
-            Id = source.Id,
-            Title = source.Title,
-            Type = ResolveType(source),
-            Required = source.Constraints.Required,
-            Order = source.Order,
-            IsDescriptor = source.IsDescriptor,
-            IsHidden = source.IsHidden
-        };
-
-        switch (source.Constraints)
-        {
-            case NumberAttributeConstraints numberConstraints:
-                result.MaxLength = numberConstraints.MaxLength;
-                result.Values = [];
-                return result;
-            case StringAttributeConstraints stringConstraints:
-                result.MaxLength = stringConstraints.MaxLength;
-                result.Values = [];
-                return result;
-            case ListAttributeConstraints listConstraints:
-                result.Values = listConstraints.Values.Select(v => new DtoListValue
-                {
-                    Value = v.Value,
-                    Modifier = v.Modifier
-                });
-                return result;
-            case BbCodeAttributeConstraints bbCodeConstraints:
-                result.MaxLength = bbCodeConstraints.MaxLength;
-                result.Values = [];
-                return result;
-            default:
-                return result;
-        }
-    }
+            NumberAttributeConstraints number => number.MaxLength,
+            StringAttributeConstraints text => text.MaxLength,
+            BbCodeAttributeConstraints bbCode => bbCode.MaxLength,
+            _ => null
+        },
+        Values = source.Constraints is ListAttributeConstraints list
+            ? list.Values.Select(v => new DtoListValue { Value = v.Value, Modifier = v.Modifier })
+            : []
+    };
 
     private static AttributeSpecificationType ResolveType(DbSpecification source) =>
         source.Constraints switch

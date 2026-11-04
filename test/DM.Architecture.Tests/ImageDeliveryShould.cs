@@ -1,0 +1,212 @@
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Text.RegularExpressions;
+using AwesomeAssertions;
+using DM.Testing;
+using Xunit;
+using static DM.Architecture.Tests.DeploymentFiles;
+
+namespace DM.Architecture.Tests;
+
+/// <summary>
+/// The server pulls the images CI publishes, and every image the deployment runs
+/// names a version.
+/// </summary>
+/// <remarks>An image reference lives in the compose files, the Dockerfiles and the shell scripts.</remarks>
+public class ImageDeliveryShould
+{
+    /// <summary>
+    /// The server runs what CI published, it does not build.
+    /// </summary>
+    /// <remarks>A local build takes the registry's name, so later pulls never happen.</remarks>
+    [Fact]
+    public void PullThePublishedImagesInsteadOfBuildingOnTheServer()
+    {
+        var installer = File.ReadAllText(Path.Combine(DockerDirectory, "setup-server.sh"));
+        var compose = Read(BaseCompose) + Read(PreviewCompose);
+
+        var starts = installer.Split('\n')
+            .Where(line => line.Contains("docker compose", StringComparison.Ordinal)
+                           && line.Contains("up -d", StringComparison.Ordinal)).ToList();
+
+        starts.Should().NotBeEmpty().And.NotContain(line => line.Contains("--build", StringComparison.Ordinal),
+            "the deployment pulls the published image, and building it here replaces it " +
+            "with a local one under the same tag");
+
+        var localTags = compose.Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("image:", StringComparison.Ordinal)
+                           && line.Contains(":local", StringComparison.Ordinal))
+            .ToList();
+
+        foreach (var tag in localTags)
+        {
+            tag.Should().Contain("dm-seeder",
+                "a local tag cannot be pulled, so every service holding one is built on " +
+                "the server; the seeder is the exception, the tools profile never starts " +
+                "it there");
+        }
+    }
+
+    /// <summary>
+    /// Everything the delivery workflow publishes has to be something the
+    /// deployment pulls.
+    /// </summary>
+    /// <remarks>An image nobody pulls is not delivery.</remarks>
+    [Fact]
+    public void PullEveryImageTheDeliveryWorkflowPublishes()
+    {
+        var workflow = File.ReadAllText(
+            Path.Combine(DockerDirectory, "..", ".github", "workflows", "dotnet.yml"));
+        var compose = Read(BaseCompose) + Read(PreviewCompose);
+
+        var published = Regex.Matches(workflow, @"image_suffix:\s*(\S+)")
+            .Select(match => match.Groups[1].Value)
+            .Concat(Regex.Matches(workflow, @"IMAGE_PREFIX\s*\}\}-([a-z-]+)")
+                .Select(match => match.Groups[1].Value))
+            .Distinct()
+            .ToList();
+
+        published.Should().HaveCountGreaterThan(1, "the parser must find the published images");
+        foreach (var image in published)
+        {
+            compose.Should().Contain($"/dm-{image}:",
+                $"dm-{image} is pushed on every merge, so a deployment has to name it");
+        }
+    }
+
+    /// <summary>
+    /// Every image the deployment runs names a version.
+    /// </summary>
+    /// <remarks>
+    /// A reference with no tag resolves to whatever the registry holds that day; the store client and
+    /// server are pinned together by digest. "latest" is refused by name, and the images published here
+    /// keep IMAGE_TAG a variable.
+    /// </remarks>
+    [Fact]
+    public void PinEveryImageTheDeploymentRuns()
+    {
+        var composeImages = (Read(BaseCompose) + "\n" + Read(PreviewCompose))
+            .Split('\n')
+            .Select(line => line.Trim())
+            .Where(line => line.StartsWith("image:", StringComparison.Ordinal))
+            .Select(line => line[6..].Trim().Trim('\'', '"'));
+
+        var dockerfileImages = new[]
+            {
+                Path.Combine(DockerDirectory, "app.Dockerfile"),
+                Path.Combine(RepositoryLayout.Root, "src", "DM.Web.Client", "Dockerfile"),
+            }
+            .SelectMany(path => File.ReadAllLines(path))
+            .Where(line => line.StartsWith("FROM ", StringComparison.Ordinal))
+            .Select(line => line[5..].Split(' ')[0]);
+
+        var shellImages = ImagesRunByShellScripts();
+
+        shellImages.Should().HaveCountGreaterThan(1,
+            "the parser must find the images the scripts run, in both spellings: the bare " +
+            "command and the installer's array that carries sudo");
+
+        var references = composeImages
+            .Concat(dockerfileImages)
+            .Concat(shellImages)
+            .ToList();
+
+        references.Should().HaveCountGreaterThan(10, "the parser must find the image references");
+
+        var published = references.Where(reference => reference.Contains("${", StringComparison.Ordinal)).ToList();
+        var external = references.Except(published).ToList();
+
+        published.Should().NotBeEmpty("the stack runs the images this repository builds");
+        external.Should().HaveCountGreaterThan(10, "the parser must find the third-party references");
+
+        foreach (var reference in published)
+        {
+            reference.Should().Contain("${IMAGE_TAG",
+                $"{reference} is built here, and which build a server runs is the deployment's " +
+                "choice through IMAGE_TAG; a tag written into the file takes that choice away");
+        }
+
+        foreach (var reference in external)
+        {
+            var name = reference.Split('/')[^1];
+            var separator = name.LastIndexOf(':');
+
+            separator.Should().BeGreaterThan(0,
+                $"{reference} resolves to whatever the registry holds on the day it is pulled");
+            name[(separator + 1)..].Should().NotBeEquivalentTo("latest",
+                $"{reference} follows the registry rather than this repository, so the same " +
+                "commit gives a different runtime a month later - and watchtower, the one that " +
+                "would decide it, mounts /var/run/docker.sock");
+        }
+    }
+
+    /// <summary>docker run options whose value is the argument after them.</summary>
+    private static readonly HashSet<string> OptionsTakingAValue = new(StringComparer.Ordinal)
+    {
+        "--add-host", "--entrypoint", "--env", "--env-file", "--label", "--name",
+        "--network", "--platform", "--publish", "--pull", "--user", "--volume",
+        "--workdir", "-e", "-l", "-p", "-u", "-v", "-w",
+    };
+
+    /// <summary>
+    /// The images the deployment scripts start with <c>docker run</c>.
+    /// </summary>
+    /// <remarks>Shell is the third place an image reference lives, and dependabot does not read it.</remarks>
+    private static List<string> ImagesRunByShellScripts()
+    {
+        var found = new List<string>();
+
+        foreach (var script in Directory
+            .EnumerateFiles(DockerDirectory, "*.sh", SearchOption.AllDirectories)
+            .OrderBy(path => path, StringComparer.Ordinal))
+        {
+            // Continuations are folded first; the second alternative is the installer's "${DOCKER[@]}" array.
+            var folded = Regex.Replace(File.ReadAllText(script), @"\\\r?\n\s*", " ");
+
+            foreach (Match invocation in Regex.Matches(
+                folded, @"(?:docker|DOCKER\[@\]\}""?)\s+run\s+(?<arguments>[^\r\n]*)"))
+            {
+                var image = ImageOperandOf(invocation.Groups["arguments"].Value);
+                if (image != null)
+                {
+                    found.Add(image);
+                }
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The image of a <c>docker run</c>: the first argument that is neither an
+    /// option nor the value of one.
+    /// </summary>
+    private static string? ImageOperandOf(string arguments)
+    {
+        var tokens = arguments
+            .Split(new[] { ' ', '\t' }, StringSplitOptions.RemoveEmptyEntries)
+            .Select(token => token.Trim('\'', '"'))
+            .Where(token => token.Length > 0)
+            .ToList();
+
+        for (var index = 0; index < tokens.Count; index++)
+        {
+            if (tokens[index][0] != '-')
+            {
+                return tokens[index];
+            }
+
+            // Without the skip an "--entrypoint sh" hands back sh as the image. The
+            // --option=value spelling is one token and needs none.
+            if (OptionsTakingAValue.Contains(tokens[index]))
+            {
+                index++;
+            }
+        }
+
+        return null;
+    }
+}

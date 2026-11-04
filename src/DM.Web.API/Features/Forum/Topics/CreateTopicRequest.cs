@@ -12,14 +12,13 @@ public class CreateTopicRequest
     /// Topic title
     /// </summary>
     [Required(ErrorMessage = "Заголовок обязателен")]
-    [StringLength(TopicPolicy.TitleMaxLength, MinimumLength = 3,
-        ErrorMessage = "Заголовок должен быть от 3 до 130 символов")]
+    // {1} is the maximum the attribute is given, so the number is written once.
+    [StringLength(TopicPolicy.TitleMaxLength, ErrorMessage = "Заголовок должен быть от 1 до {1} символов")]
     public string Title { get; set; } = "";
 
     /// <summary>
     /// Topic description/content (BB-code formatted text)
     /// </summary>
     [Required(ErrorMessage = "Текст обязателен")]
-    [MinLength(1, ErrorMessage = "Текст не может быть пустым")]
     public string Text { get; set; } = "";
 }

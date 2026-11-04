@@ -9,14 +9,10 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Workers.NotificationDispatcher.Notifiers.Game;
 
-/// <summary>
-/// Generates notifications when a game comment is liked
-/// </summary>
 internal class GameCommentLikedNotificationGenerator : BaseNotificationGenerator
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public GameCommentLikedNotificationGenerator(DmDbContext dbContext)
     {
         _dbContext = dbContext;
@@ -55,9 +51,9 @@ internal class GameCommentLikedNotificationGenerator : BaseNotificationGenerator
             ActorId = likedCommentData.LikerId,
             Metadata = new
             {
-                LikerUsername = likedCommentData.LikerUsername,
+                likedCommentData.LikerUsername,
                 GameId = likedCommentData.GameId.EncodeToReadable(likedCommentData.GameTitle),
-                GameTitle = likedCommentData.GameTitle
+                likedCommentData.GameTitle
             }
         };
     }

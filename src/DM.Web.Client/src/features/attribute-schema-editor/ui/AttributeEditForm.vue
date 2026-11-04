@@ -1,10 +1,5 @@
 <script setup lang="ts">
-/**
- * AttributeEditForm — inline editor for a single attribute specification.
- * Two-way bound via defineModel: it edits the spec object that lives inside
- * the parent draft, so changes reflect live in the table and preview. Rendered
- * in the region that otherwise shows the character-creation preview.
- */
+// Edits the spec object inside the parent draft, so the table and preview follow live.
 import type { AttributeSpecification } from "@/entities/game";
 import { AttributeSpecificationType } from "@/entities/game";
 import FormField from "@/shared/ui/Form/FormField.vue";
@@ -18,6 +13,7 @@ import {
   usesModifier,
   normalizeSpecForType,
 } from "@/entities/game";
+import { ATTRIBUTE_SCHEMA_TITLE_MAX_LENGTH } from "@/shared/lib/constants/game";
 
 const spec = defineModel<AttributeSpecification>({ required: true });
 
@@ -39,7 +35,7 @@ function onTypeChange(value: string) {
         v-model="spec.title"
         type="text"
         placeholder="Например, Сила"
-        maxlength="100"
+        :maxlength="ATTRIBUTE_SCHEMA_TITLE_MAX_LENGTH"
       />
     </form-field>
 

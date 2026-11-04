@@ -28,20 +28,15 @@ public class OutboxEvent
     public long Id { get; set; }
 
     /// <summary>
-    /// Identity of the publication (W1.4), stamped at insertion. Every
+    /// Identity of the publication, stamped at insertion. Every
     /// republication of this row carries the same value, so the consumer's
     /// (EventId, EventType) unique index swallows relay duplicates.
     /// </summary>
     public Guid EventId { get; set; }
 
     /// <summary>
-    /// Event type, stored as its number the way Notifications stores it: a name
-    /// string would jam the relay forever after a deployment rollback removed
-    /// the name. A number the RELAY's assembly does not know still jams the
-    /// head of the backlog - ToRoutingKeys throws before any publish - but
-    /// with Attempts/LastError diagnostics and a manual way out (design, R5).
-    /// Only a number unknown to the WORKER becomes an unroutable publish the
-    /// broker drops, exactly what the old direct producer did.
+    /// Event type, stored as its number: a name string would jam the relay forever
+    /// after a deployment rollback removed the name.
     /// </summary>
     public EventType EventType { get; set; }
 

@@ -73,7 +73,8 @@ describe("UsersDataTable", () => {
     expect(on.wrapper.get(".table-empty").text()).toBe(words);
   });
 
-  it("keeps the rows it has under a refusal, and the refusal over them", async () => {
+  // The rows held are the answer to the search before, not to this one.
+  it("shows a refusal with a retry and not the rows of the search before", async () => {
     const on = await tableOn(
       {},
       { rows: [user("anna")], error: "Не удалось загрузить пользователей" },
@@ -82,7 +83,8 @@ describe("UsersDataTable", () => {
     expect(on.wrapper.get(".error-message").text()).toBe(
       "Не удалось загрузить пользователей",
     );
-    expect(on.wrapper.findAll("tr.table-row")).toHaveLength(1);
+    expect(on.wrapper.get(".error-retry").text()).toBe("Повторить");
+    expect(on.wrapper.find("table").exists()).toBe(false);
   });
 
   it("draws no empty table under a refusal with nothing to show", async () => {

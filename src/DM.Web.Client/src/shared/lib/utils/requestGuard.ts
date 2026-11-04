@@ -1,9 +1,5 @@
 /**
- * Monotonically increasing request counter used to discard stale async
- * responses (out-of-order network replies racing a newer request).
- *
- * One guard shared by every search store instead of a counter per store: a store
- * that skips the check renders whichever reply happens to land last.
+ * A request counter that discards stale async responses.
  *
  * @example
  * ```ts
@@ -17,14 +13,8 @@
  * }
  * ```
  *
- * `current()` is the same guard read from the other side, and it is what a
- * store needs when the thing being superseded is not the request but what the
- * request describes. The global chat holds a window of messages; every
- * wholesale replacement of that window (a fresh load, a jump to a message or a
- * date) invalidates whatever catch-up read is in flight, because its answer
- * describes a window nobody is looking at any more. The replacements bump the
- * guard, and the reader takes the number as it stands instead of claiming a
- * request of its own:
+ * `current()` reads the guard without claiming a request: for a read that a
+ * replacement of what it describes supersedes.
  *
  * @example
  * ```ts

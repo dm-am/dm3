@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Messaging.Features.Chats;
 using DM.Infrastructure.Persistence;
@@ -15,27 +13,14 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// Two correspondents open the same conversation, whatever the database holds.
 /// </summary>
 /// <remarks>
-/// A direct chat is opened by "look for one, create one if there is none", and
-/// nothing in the schema stops a pair from owning two: two openings at once each
-/// read no chat and each created one. The lookup used to take whichever row came
-/// back first, and which one that is belongs to the planner - so the two sides
-/// could settle on different rows of the pair and write past each other, each in
-/// a conversation the other never opens.
-///
-/// Run against PostgreSQL because the claim is about what a query returns when
-/// more than one row satisfies it, and that is the database's answer to give.
+/// Nothing in the schema stops a pair from owning two direct chats, so the lookup orders its answer. Against
+/// PostgreSQL: which row a query returns among several is the database's answer.
 /// </remarks>
 public class DirectChatLookupShould : IntegrationTestBase
 {
     /// <summary>
-    /// Serial numbers of the two rows, deliberately out of step with the order
-    /// they are written in.
+    /// Serial numbers out of step with the write order, far above the shared identity sequence.
     /// </summary>
-    /// <remarks>
-    /// Written younger first, so the row a scan reaches first is not the row the
-    /// order names. Far above the identity sequence, because the fixture database
-    /// is shared and the column is unique by way of PublicId.
-    /// </remarks>
     private const int ElderSerialNumber = 1_900_000;
 
     private const int YoungerSerialNumber = 1_900_001;
@@ -102,11 +87,7 @@ public class DirectChatLookupShould : IntegrationTestBase
     /// <summary>
     /// A direct chat of two, written with the serial number it is to carry.
     /// </summary>
-    /// <remarks>
-    /// Raw SQL because the column is an identity one: the repository takes its
-    /// value from the sequence, and this test is about rows whose order in the
-    /// table is not the order of their serial numbers.
-    /// </remarks>
+    /// <remarks>Raw SQL: the column is an identity one.</remarks>
     private static async Task AddDirectChatAsync(
         DmDbContext dbContext, Guid chatId, int serialNumber, Guid oneId, Guid otherId)
     {

@@ -17,7 +17,6 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Statuses;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
-using DM.Domain.Blog.Features.Subscriptions;
 using DM.Domain.Core.Events;
 using FluentValidation;
 
@@ -30,8 +29,6 @@ internal class BlogService : IBlogService
     private readonly IBlogBlacklistRepository _blacklistRepository;
     private readonly IUserBlacklistChecker _userBlacklistChecker;
     private readonly IUserLookupService _userLookupService;
-    private readonly IBlogSubscriptionService _subscriptionService;
-    private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IIdentityProvider _identityProvider;
     private readonly IIntentionManager _intentionManager;
     private readonly IValidator<CreateBlog> _createBlogValidator;
@@ -41,15 +38,13 @@ internal class BlogService : IBlogService
     private readonly IGuidFactory _guidFactory;
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IEventProducer _eventProducer;
-    private readonly IBbTagNameCase _tagNames;
+    private readonly BlogUnreadCounters _unreadCounters;
 
-    /// <inheritdoc />
     public BlogService(
         IBlogRepository repository,
         IBlogBlacklistRepository blacklistRepository,
         IUserBlacklistChecker userBlacklistChecker,
         IUserLookupService userLookupService,
-        IBlogSubscriptionService subscriptionService,
         IUnreadCountersRepository unreadCountersRepository,
         IIdentityProvider identityProvider,
         IIntentionManager intentionManager,
@@ -59,15 +54,12 @@ internal class BlogService : IBlogService
         IValidator<UpdateRubric> updateRubricValidator,
         IGuidFactory guidFactory,
         IDateTimeProvider dateTimeProvider,
-        IEventProducer eventProducer,
-        IBbTagNameCase tagNames)
+        IEventProducer eventProducer)
     {
         _repository = repository;
         _blacklistRepository = blacklistRepository;
         _userBlacklistChecker = userBlacklistChecker;
         _userLookupService = userLookupService;
-        _subscriptionService = subscriptionService;
-        _unreadCountersRepository = unreadCountersRepository;
         _identityProvider = identityProvider;
         _intentionManager = intentionManager;
         _createBlogValidator = createBlogValidator;
@@ -77,7 +69,7 @@ internal class BlogService : IBlogService
         _guidFactory = guidFactory;
         _dateTimeProvider = dateTimeProvider;
         _eventProducer = eventProducer;
-        _tagNames = tagNames;
+        _unreadCounters = new BlogUnreadCounters(repository, unreadCountersRepository, identityProvider);
     }
 
     /// <summary>
@@ -95,11 +87,7 @@ internal class BlogService : IBlogService
     public async Task<(IEnumerable<Blog> blogs, PagingResult paging)> GetPublicBlogs(
         PagingQuery query, BlogFilter filter, CancellationToken ct = default)
     {
-        // Resolve usernames to user IDs if provided. A name nobody answers to is
-        // a filter that matches nothing, not a broken request: asked through
-        // GetAsync, one mistyped name in the query string answered the whole
-        // listing with 404. FindUserIdAsync is the form that says "not found"
-        // instead of throwing it.
+        // A name nobody answers to is a filter that matches nothing, not a 404.
         IReadOnlyCollection<Guid>? hostUserIds = null;
         if (filter.HostUsernames?.Count > 0)
         {
@@ -121,26 +109,19 @@ internal class BlogService : IBlogService
                 }
             }
 
-            // Every name unknown means every name filtered out. Falling back to
-            // null here would drop the filter and answer with all the blogs on
-            // the site, which is the opposite of what was asked.
+            // Every name unknown means every name filtered out, not the filter dropped.
             hostUserIds = userIds;
         }
 
-        // The premoderation filter is a mentor review-queue tool; silently
-        // ignore it for regular callers instead of failing the request. Who
-        // counts as one is answered by the intention the premoderation
-        // transitions ask, so the threshold stays in the resolver alone.
+        // A mentor review-queue tool, silently ignored for regular callers; the
+        // threshold stays in the resolver.
         var identity = _identityProvider.Current;
         var premoderationStatuses = _intentionManager.IsAllowed(BlogIntention.SetStatusModeration)
             ? filter.PremoderationStatuses
             : null;
 
-        // The viewer's "Скрывать блоги": the blogs of the people on their personal
-        // list leave the listings that offer blogs to read. A list asked for by
-        // the author's name is a question about that person and is answered in
-        // full, and the moderation queue is a worklist and is never cleaned, the
-        // way the game lists answer both (GameService.IsDiscoveryListing).
+        // "Скрывать блоги" cleans the listings that offer blogs to read, not a list asked
+        // for by the author's name nor the moderation queue (GameService.IsDiscoveryListing).
         var excludedOwners = identity.User.IsAuthenticated && hostUserIds is null &&
                              premoderationStatuses is not { Count: > 0 }
             ? await _userBlacklistChecker.GetBlockedUserIdsIfFlagEnabledAsync(
@@ -156,10 +137,10 @@ internal class BlogService : IBlogService
         };
 
         var totalCount = await _repository.CountPublicBlogs(resolvedFilter, ct);
-        var pagingData = new PagingData(query, identity.Settings.Paging.EntitiesPerPage, totalCount);
+        var pagingData = new PagingData(query, identity.Settings.PageSize, totalCount);
         var blogs = (await _repository.GetPublicBlogs(pagingData, resolvedFilter, ct)).ToArray();
 
-        await FillBlogUnreadCounters(blogs);
+        await _unreadCounters.FillBlogs(blogs);
         return (blogs, pagingData.Result);
     }
 
@@ -169,55 +150,40 @@ internal class BlogService : IBlogService
     {
         var blogs = (await _repository.GetPopularBlogs(
             count, _identityProvider.Current.User.UserId, excludeOwnerIds, ct)).ToArray();
-        await FillBlogUnreadCounters(blogs);
+        await _unreadCounters.FillBlogs(blogs);
         return blogs;
     }
 
     /// <inheritdoc />
     public async Task<IEnumerable<Blog>> GetUserBlogs(string username, CancellationToken ct = default)
     {
-        // Unknown name throws out of the lookup; the branch that used to test for
-        // null below it could never run, and reading it suggested a second answer
-        // to the same case that does not exist.
         var user = await _userLookupService.GetAsync(username);
 
-        // Premoderation-pending blogs are hidden from other viewers just like
-        // games; the owner, assistants, the curator, and senior moderation
-        // still see them in the profile list
+        // Premoderation-pending blogs are hidden from other viewers just like games
         var blogs = (await _repository.GetUserBlogs(user.UserId, _identityProvider.Current.User.UserId, ct))
             .Where(b => b.PremoderationStatus == PremoderationStatus.Approved ||
                         _intentionManager.IsAllowed(BlogIntention.ViewPremoderationPending, b))
             .ToArray();
-        await FillBlogUnreadCounters(blogs);
+        await _unreadCounters.FillBlogs(blogs);
         return blogs;
     }
 
     /// <inheritdoc />
-    public async Task<Blog> GetAsync(Guid blogId, CancellationToken ct = default)
-    {
-        var blog = await GetVisibleAsync(blogId, ct);
-        await FillBlogUnreadCounters(new[] { blog });
-        await FillBlogRubricCounters(blog);
-        return blog;
-    }
+    public async Task<Blog> GetAsync(Guid blogId, CancellationToken ct = default) =>
+        await FillCounters(await GetVisibleAsync(blogId, ct));
 
     /// <inheritdoc />
     public async Task<Blog> GetByPublicIdAsync(string publicId, CancellationToken ct = default)
     {
         var blog = await _repository.GetByPublicId(publicId, ViewerId, ct);
 
-        // Same answer as an alias nobody has taken: see GetAsync. This is the
-        // most exposed of the read paths — the alias is five letters, the route
-        // is open to guests, and BlogApiService.ResolveId funnels every
-        // blog-scoped route through it.
+        // Same answer as an alias nobody has taken: the alias is five letters and the route is open to guests.
         if (blog == null || !IsVisibleToViewer(blog))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
 
-        await FillBlogUnreadCounters(new[] { blog });
-        await FillBlogRubricCounters(blog);
-        return blog;
+        return await FillCounters(blog);
     }
 
     /// <inheritdoc />
@@ -225,25 +191,32 @@ internal class BlogService : IBlogService
     {
         var blog = await _repository.GetByOwnerUsernameAsync(username, ViewerId, ct);
 
-        // Same answer as a user who keeps no blog, down to the wording: see
-        // GetAsync. The message names the owner because that is what the caller
-        // asked for, and both branches use it, so the body cannot tell the two
-        // cases apart.
+        // Same answer as a user who keeps no blog, down to the wording.
         if (blog == null || !IsVisibleToViewer(blog))
         {
             throw new HttpException(HttpStatusCode.NotFound, $"Блог пользователя {username} не найден");
         }
 
-        await FillBlogUnreadCounters(new[] { blog });
-        await FillBlogRubricCounters(blog);
+        return await FillCounters(blog);
+    }
+
+    /// <inheritdoc />
+    public async Task<Blog> GetUnfiltered(Guid blogId, CancellationToken ct = default)
+    {
+        var blog = await _repository.Get(blogId, ViewerId, ct);
+        if (blog == null)
+        {
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
+        }
+
         return blog;
     }
 
     /// <inheritdoc />
-    public async Task<Blog> GetBlogAsync(Guid blogId, CancellationToken ct = default)
+    public async Task<Blog> GetVisibleAsync(Guid blogId, CancellationToken ct = default)
     {
         var blog = await _repository.Get(blogId, ViewerId, ct);
-        if (blog == null)
+        if (blog == null || !IsVisibleToViewer(blog))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
         }
@@ -261,10 +234,9 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task AddAssistant(Guid blogId, Guid userId, CancellationToken ct = default)
     {
-        // Check if already an assistant
         if (await _repository.IsAssistant(blogId, userId, ct))
         {
-            return; // Already an assistant, nothing to do
+            return;
         }
 
         var entity = new AddBlogAssistantEntity
@@ -290,14 +262,9 @@ internal class BlogService : IBlogService
             BlogId = _guidFactory.Create(),
             OwnerId = userId,
             Title = createBlog.Title,
-            // Blog descriptions render on the Comment surface where [mod] is a
-            // green mod block; strip it when authored by a non-moderator.
-            Description = _tagNames.ToLowerCase(
-                ModBlockSanitizer.SanitizeForAuthor(createBlog.Description, user.Role), BbTagSet.WithModBlock),
-            // Whether the blog is premoderated is decided by who is creating it,
-            // by the same rule a game is decided by. The blog side never wrote
-            // this field at all, so the column took its default, which is
-            // Approved, and premoderation applied to nobody.
+            // Descriptions render on the Comment surface, where [mod] is a mod block.
+            Description = ModBlockSanitizer.SanitizeForAuthor(createBlog.Description, user.Role),
+            // Decided by who is creating it, by the same rule a game is decided by.
             PremoderationStatus = ModulePremoderationPolicy.InitialStatus(user),
             DraftVisibility = createBlog.DraftVisibility,
             CreatedUtc = _dateTimeProvider.Now
@@ -307,16 +274,14 @@ internal class BlogService : IBlogService
         // The request decides when it says anything; silent, the author's account
         // setting does, the same rule a new game follows (GameService.CreateAsync).
         var copyBlacklist = createBlog.CopyBlacklist ??
-                            (await _userBlacklistChecker.GetSettings(userId, ct))
+                            (await _userBlacklistChecker.GetSettingsAsync(userId, ct))
                             .HasFlag(UserBlacklistSettings.AutoPopulateContentBlacklist);
         if (copyBlacklist)
         {
             await _blacklistRepository.CopyFromPersonalBlacklist(createdBlog.Id, userId, ct);
         }
 
-        // Surface the creation as a system event. The author-subscription
-        // notification generator listens for this and decides — based on
-        // DraftVisibility — whether to fan out a "new blog" notification.
+        // The author-subscription generator decides by DraftVisibility whether to fan out "new blog".
         await _eventProducer.SendAsync(EventType.NewBlog, createdBlog.Id);
 
         return createdBlog;
@@ -328,20 +293,18 @@ internal class BlogService : IBlogService
         await _updateBlogValidator.ValidateAndThrowAsync(updateBlog, ct);
 
         var blog = await GetAsync(updateBlog.BlogId, ct);
-        // The settings page save: open to the blog leads (owner + assistants),
-        // not just the owner. Owner-only operations stay on Edit.
+        // The settings page is open to the blog leads; owner-only operations stay on Edit.
         _intentionManager.ThrowIfForbidden(BlogIntention.EditSettings, blog);
 
         var entity = new UpdateBlogEntity
         {
             BlogId = updateBlog.BlogId,
             Title = updateBlog.Title,
-            // Blog descriptions render on the Comment surface where [mod] is a
-            // green mod block; strip it when the editor is a non-moderator.
-            Description = _tagNames.ToLowerCase(ModBlockSanitizer.SanitizeForAuthor(
-                updateBlog.Description, _identityProvider.Current.User.Role), BbTagSet.WithModBlock),
+            // Descriptions render on the Comment surface, where [mod] is a mod block.
+            Description = ModBlockSanitizer.SanitizeForAuthor(
+                AuthoredText.AsTyped(updateBlog.Description), _identityProvider.Current.User.Role),
             DraftVisibility = updateBlog.DraftVisibility,
-            UpdatedUtc = _dateTimeProvider.Now
+            ModifiedUtc = _dateTimeProvider.Now
         };
         return await _repository.UpdateBlog(entity, ct);
     }
@@ -356,15 +319,8 @@ internal class BlogService : IBlogService
         await _repository.DeleteBlog(blogId, userId, ct);
     }
 
-    // ═══ RUBRICS ═══
-    //
-    // Rubrics get no feature folder of their own. The blog read path fills
-    // their derived counters (FillBlogRubricCounters below), and every rubric
-    // operation starts by reading the blog. Moving them out either hands the
-    // blog a dependency on a rubric service that already depends on the blog,
-    // which the container refuses to build, or leaves the counter fill behind
-    // as a second copy of the same computation. PATTERNS.md states the
-    // exception this is an instance of.
+    // Rubrics live in the blog service: every rubric operation reads the blog,
+    // and the blog read fills their counters (the exception PATTERNS.md states).
 
     /// <inheritdoc />
     public async Task<Rubric> CreateRubric(CreateRubric createRubric, CancellationToken ct = default)
@@ -372,7 +328,7 @@ internal class BlogService : IBlogService
         await _createRubricValidator.ValidateAndThrowAsync(createRubric, ct);
 
         var blog = await GetAsync(createRubric.BlogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
+        _intentionManager.ThrowIfForbidden(BlogIntention.ManageRubrics, blog);
 
         var entity = new CreateRubricEntity
         {
@@ -388,15 +344,7 @@ internal class BlogService : IBlogService
     public async Task<Rubric> UpdateRubric(UpdateRubric updateRubric, CancellationToken ct = default)
     {
         await _updateRubricValidator.ValidateAndThrowAsync(updateRubric, ct);
-
-        var (rubric, blogId) = await _repository.GetRubric(updateRubric.RubricId, ct);
-        if (rubric == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RubricNotFound);
-        }
-
-        var blog = await GetAsync(blogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
+        await ThrowIfRubricForbidden(updateRubric.RubricId, ct);
 
         var entity = new UpdateRubricEntity
         {
@@ -412,10 +360,9 @@ internal class BlogService : IBlogService
         Guid blogId, IReadOnlyList<Guid> orderedRubricIds, CancellationToken ct = default)
     {
         var blog = await GetAsync(blogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
+        _intentionManager.ThrowIfForbidden(BlogIntention.ManageRubrics, blog);
 
-        // What this call replaces is the order of the blog as a whole, so the body
-        // names every rubric of that blog once. A subset would leave the rubrics it
+        // The order of the blog as a whole: a subset would leave the rubrics it
         // skipped holding the sort orders this call has just handed to others.
         var known = (await _repository.GetRubrics(blogId, ct)).Select(r => r.Id).ToArray();
         var named = new HashSet<Guid>(orderedRubricIds);
@@ -432,21 +379,14 @@ internal class BlogService : IBlogService
         // Read back rather than predicted: the response carries the sort orders
         // storage now holds.
         var rubrics = (await _repository.GetRubrics(blogId, ct)).ToArray();
-        await FillRubricCounters(blogId, rubrics);
+        await _unreadCounters.FillRubrics(blogId, rubrics);
         return rubrics;
     }
 
     /// <inheritdoc />
     public async Task DeleteRubric(Guid rubricId, CancellationToken ct = default)
     {
-        var (rubric, blogId) = await _repository.GetRubric(rubricId, ct);
-        if (rubric == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RubricNotFound);
-        }
-
-        var blog = await GetAsync(blogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.CreateRubric, blog);
+        await ThrowIfRubricForbidden(rubricId, ct);
 
         var userId = _identityProvider.Current.User.UserId;
         await _repository.DeleteRubric(rubricId, userId, ct);
@@ -455,98 +395,10 @@ internal class BlogService : IBlogService
     /// <inheritdoc />
     public async Task<IEnumerable<Rubric>> GetRubrics(Guid blogId, CancellationToken ct = default)
     {
-        // Verify blog exists and user has access
         await GetAsync(blogId, ct);
         var rubrics = (await _repository.GetRubrics(blogId, ct)).ToArray();
-        await FillRubricCounters(blogId, rubrics);
+        await _unreadCounters.FillRubrics(blogId, rubrics);
         return rubrics;
-    }
-
-    /// <inheritdoc />
-    public async Task<GeneralUser> Subscribe(Guid blogId, CancellationToken ct = default)
-    {
-        var blog = await GetVisibleAsync(blogId, ct);
-        var userId = _identityProvider.Current.User.UserId;
-
-        // Cannot subscribe to own blog
-        if (blog.Author?.UserId == userId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя подписаться на собственный блог");
-        }
-
-        // Check draft visibility (drafts with private visibility require invitation)
-        if (blog.Status == ModuleStatus.Draft && blog.DraftVisibility == DraftVisibility.Private)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Этот блог доступен только по приглашению");
-        }
-
-        // Use BlogSubscriptionService for readers
-        await _subscriptionService.SubscribeAsync(blogId, ct);
-        return _identityProvider.Current.User;
-    }
-
-    /// <inheritdoc />
-    public async Task Unsubscribe(Guid blogId, CancellationToken ct = default)
-    {
-        var blog = await GetVisibleAsync(blogId, ct);
-        var userId = _identityProvider.Current.User.UserId;
-
-        // Owner cannot unsubscribe from their own blog
-        if (blog.Author?.UserId == userId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя отписаться от собственного блога");
-        }
-
-        // Use BlogSubscriptionService for readers
-        await _subscriptionService.UnsubscribeAsync(blogId, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task Leave(Guid blogId, CancellationToken ct = default)
-    {
-        var blog = await GetVisibleAsync(blogId, ct);
-        var userId = _identityProvider.Current.User.UserId;
-
-        // Owner cannot leave their own blog
-        if (blog.Author?.UserId == userId)
-        {
-            throw new HttpException(HttpStatusCode.Forbidden, "Нельзя покинуть собственный блог");
-        }
-
-        // Remove as assistant
-        var removed = await _repository.RemoveAssistant(blogId, userId, ct);
-        if (!removed)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, "Вы не ассистент в этом блоге");
-        }
-    }
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<UserReference>> GetReaders(Guid blogId, CancellationToken ct = default)
-    {
-        await GetAsync(blogId, ct);
-        // Get subscribers via BlogSubscriptionService
-        return await _subscriptionService.GetReadersAsync(blogId, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task<IEnumerable<BlogUser>> GetAssistants(Guid blogId, CancellationToken ct = default)
-    {
-        await GetAsync(blogId, ct);
-        return await _repository.GetAssistantsWithJoinDate(blogId, ct);
-    }
-
-    /// <inheritdoc />
-    public async Task RemoveAssistant(Guid blogId, string username, CancellationToken ct = default)
-    {
-        var blog = await GetBlogAsync(blogId, ct);
-        _intentionManager.ThrowIfForbidden(BlogIntention.Edit, blog);
-
-        var removed = await _repository.RemoveAssistantByUsername(blogId, username, ct);
-        if (!removed)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, $"Ассистент {username} в этом блоге не найден");
-        }
     }
 
     /// <inheritdoc />
@@ -558,7 +410,7 @@ internal class BlogService : IBlogService
         var blogs = (await _repository.GetByIds(blogIds, _identityProvider.Current.User.UserId, ct))
             .Where(IsVisibleToViewer)
             .ToArray();
-        await FillBlogUnreadCounters(blogs);
+        await _unreadCounters.FillBlogs(blogs);
         return blogs;
     }
 
@@ -572,7 +424,7 @@ internal class BlogService : IBlogService
         }
 
         var blogs = (await _repository.GetOwnBlogs(identity.User.UserId, ct)).ToArray();
-        await FillBlogUnreadCounters(blogs);
+        await _unreadCounters.FillBlogs(blogs);
         return blogs;
     }
 
@@ -580,36 +432,18 @@ internal class BlogService : IBlogService
     public async Task<Blog> ChangePremoderationAsync(
         string id, ModulePremoderationTransition transition, CancellationToken ct = default)
     {
-        // Two moves belong to moderation and one to the owner, so there is no
-        // single gate for the endpoint. The moderation pair is a rank, asked
-        // before anything is read, so a stranger probing aliases is refused
-        // without learning whether the alias resolves. The owner's move is a fact
-        // about the blog and is asked once the blog is in hand.
-        //
-        // Either way the fetch goes through the repository directly rather than
-        // the read-gated GetAsync / GetByPublicIdAsync: that path hides a
-        // premoderation-pending blog from everyone but its own people, which
-        // includes the mentor who is meant to judge it.
+        // The judge's rank is asked before the read, so probing aliases learns nothing;
+        // not GetAsync, which hides a pending blog from the mentor who judges it.
         var isAuthorMove = transition == ModulePremoderationTransition.SubmitForApproval;
         if (!isAuthorMove)
         {
             _intentionManager.ThrowIfForbidden(BlogIntention.SetStatusModeration);
         }
 
-        var blog = Guid.TryParse(id, out var guid)
-            ? await _repository.Get(guid, ViewerId, ct)
-            : await _repository.GetByPublicId(id, ViewerId, ct);
+        var blog = await GetByIdOrPublicId(id, ct);
 
-        // Which scope the row is then read under is the difference between the
-        // two kinds of move, exactly as on the game side. The verdict is passed
-        // on blogs nobody outside them may open, so the judge reads past
-        // visibility - and pays the mentor rank for it above. The owner's move is
-        // not a rank, so it reads under the ordinary viewer scope: a blog the
-        // caller cannot see anywhere on the site does not exist for them here
-        // either. Without this arm the endpoint - authentication-gated, because
-        // the owner is normally neither mentor nor moderator - told anybody
-        // probing five-letter aliases whether the alias resolves and, through the
-        // state machine below, which premoderation status it resolved to.
+        // The judge reads past visibility and pays the mentor rank for it above;
+        // the owner's move reads under the viewer scope, so the alias is no oracle.
         if (blog == null || (isAuthorMove && !IsVisibleToViewer(blog)))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
@@ -618,9 +452,7 @@ internal class BlogService : IBlogService
         var blogId = blog.Id;
         var currentUserId = _identityProvider.Current.User.UserId;
 
-        // Legality first and authorization second, as in ChangeStatusAsync: a move
-        // the machine does not allow is a 400 whether or not the caller could have
-        // made a legal one.
+        // Legality before authorization: an illegal move is a 400 whoever asks.
         var change = ModulePremoderationPolicy.Resolve(
             transition, blog.PremoderationStatus, currentUserId);
         if (isAuthorMove)
@@ -631,7 +463,7 @@ internal class BlogService : IBlogService
         var update = new UpdateBlogEntity
         {
             BlogId = blogId,
-            UpdatedUtc = _dateTimeProvider.Now,
+            ModifiedUtc = _dateTimeProvider.Now,
             PremoderationStatus = change.Status,
             MentorId = change.MentorId,
             SetMentorId = change.SetMentorId
@@ -647,30 +479,9 @@ internal class BlogService : IBlogService
     public async Task<Blog> ChangeStatusAsync(
         string id, ModuleStatusTransition transition, CancellationToken ct = default)
     {
-        // Every move here belongs to the blog's own leads, so unlike
-        // ChangePremoderationAsync there is no rank to ask before the read and the
-        // whole endpoint is one kind of move. The fetch goes through the
-        // repository directly rather than the read-gated GetAsync /
-        // GetByPublicIdAsync: those refuse a blog the caller may not open with a
-        // 403, and 403 on this endpoint is exactly the leak.
-        var blog = Guid.TryParse(id, out var guid)
-            ? await _repository.Get(guid, ViewerId, ct)
-            : await _repository.GetByPublicId(id, ViewerId, ct);
-
-        // The row is then read under the ordinary viewer scope, as the owner's
-        // move in ChangePremoderationAsync is: a blog the caller cannot see
-        // anywhere on the site does not exist for them here either. Without this
-        // arm the endpoint - authentication-gated, because a lead is normally
-        // neither mentor nor moderator - was an oracle over every private draft
-        // and every premoderated blog: 404 for an unclaimed alias, and from the
-        // state machine and the gate below a 400 or a 403 for a taken one, which
-        // told a stranger both that the alias resolves and which status it sits
-        // in. The game side never had it - GameService.ChangeStatusAsync reads
-        // through GetDetailsAsync under the accessibility scope, so a stranger is
-        // answered 404 before the machine sees the game.
-        //
-        // Nobody loses a move to this: both status intentions want an owner or an
-        // assistant, and an owner and an assistant pass both view gates.
+        // Read under the viewer scope: a 400 or a 403 on a hidden blog would tell a
+        // stranger that the alias resolves and which status it sits in.
+        var blog = await GetByIdOrPublicId(id, ct);
         if (blog == null || !IsVisibleToViewer(blog))
         {
             throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
@@ -679,10 +490,7 @@ internal class BlogService : IBlogService
         var blogId = blog.Id;
         var now = _dateTimeProvider.Now;
 
-        // What only a blog answers for: the intention that guards the move and
-        // the event it publishes. Which state the move is legal from and what
-        // state it produces is the machine a game runs on too, and that lives
-        // in ModuleStatusPolicy.
+        // What only a blog answers for; the state machine is ModuleStatusPolicy, shared with games.
         var (intention, statusEvent) = transition switch
         {
             ModuleStatusTransition.Start =>
@@ -699,9 +507,7 @@ internal class BlogService : IBlogService
                 HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition)
         };
 
-        // Legality first and authorization second, as on the game side: an
-        // illegal move on a blog the caller can see is answered 400 whether or
-        // not they could have made a legal one.
+        // Legality before authorization: an illegal move is a 400 whoever asks.
         var change = ModuleStatusPolicy.Resolve(
             transition,
             new ModuleLifecycle(blog.Status, blog.ClosedReason, blog.ActivatedUtc, blog.ClosedUtc),
@@ -711,7 +517,7 @@ internal class BlogService : IBlogService
         var update = new UpdateBlogEntity
         {
             BlogId = blogId,
-            UpdatedUtc = now,
+            ModifiedUtc = now,
             Status = change.Status,
             ClosedReason = change.ClosedReason,
             ClosedUtc = change.ClosedUtc,
@@ -724,28 +530,28 @@ internal class BlogService : IBlogService
         return result;
     }
 
-    // ═══ PRIVATE HELPERS ═══
-
-    /// <summary>
-    /// The blog as the caller sees it, for a read or for a move he makes on it as
-    /// its reader.
-    /// </summary>
-    /// <remarks>
-    /// A blog the caller may not open answers exactly as one that is not there.
-    /// A 403 instead would tell a stranger that the identifier resolves and that
-    /// what it resolves to is a private draft or a blog under premoderation, and a
-    /// move let through would write a subscription into a blog hidden from the
-    /// one who made it.
-    /// </remarks>
-    private async Task<Blog> GetVisibleAsync(Guid blogId, CancellationToken ct)
+    private async Task<Blog> FillCounters(Blog blog)
     {
-        var blog = await _repository.Get(blogId, ViewerId, ct);
-        if (blog == null || !IsVisibleToViewer(blog))
+        await _unreadCounters.FillBlogs(new[] { blog });
+        await _unreadCounters.FillBlogRubrics(blog);
+        return blog;
+    }
+
+    private async Task<Blog?> GetByIdOrPublicId(string id, CancellationToken ct) =>
+        Guid.TryParse(id, out var guid)
+            ? await _repository.Get(guid, ViewerId, ct)
+            : await _repository.GetByPublicId(id, ViewerId, ct);
+
+    private async Task ThrowIfRubricForbidden(Guid rubricId, CancellationToken ct)
+    {
+        var (rubric, blogId) = await _repository.GetRubric(rubricId, ct);
+        if (rubric == null)
         {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.BlogNotFound);
+            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.RubricNotFound);
         }
 
-        return blog;
+        var blog = await GetAsync(blogId, ct);
+        _intentionManager.ThrowIfForbidden(BlogIntention.ManageRubrics, blog);
     }
 
     /// <summary>
@@ -753,28 +559,18 @@ internal class BlogService : IBlogService
     /// premoderation gate, asked rather than thrown.
     /// </summary>
     /// <remarks>
-    /// Every refusal on a blog the caller cannot see is a 404 and not a 403,
-    /// because the difference between "no such blog" and "not yours" is itself
-    /// the leak: the alias is five letters, so a stranger can walk the space. The
-    /// game side gets this for free from GameAccessibilityFilters, which drops
-    /// the row inside the query; a blog is read unfiltered and decides here.
+    /// A blog the caller cannot see is a 404 and not a 403, because "not yours"
+    /// tells a stranger walking the five-letter aliases that the blog exists. The
+    /// one statement of the rule: the viewer's reads of a blog and of what lives
+    /// inside it ask it, directly or through <see cref="GetVisibleAsync" /> and
+    /// <see cref="IsVisibleToViewerAsync" />. Two reads pass it by on purpose:
+    /// <see cref="GetUnfiltered" />, which feeds the intention gates, and the judge's
+    /// read in <see cref="ChangePremoderationAsync" />. An action on a blog the
+    /// caller can see is still refused with a 403 by its own intention.
     ///
-    /// The one statement of the rule. The three single-blog reads ask it, the two
-    /// status transitions ask it, the reader's own moves on a blog (subscribing,
-    /// unsubscribing, leaving) ask it through <see cref="GetVisibleAsync" />, the
-    /// list of the blogs a reader subscribed to asks it, and everything living
-    /// inside a blog asks it through <see cref="IsVisibleToViewerAsync" />. A second copy would be a
-    /// second answer to who may open a blog, and the copies would drift — as they
-    /// did while the reads threw a 403 and the transitions answered 404.
-    ///
-    /// It decides visibility only. An action the caller may not perform on a blog
-    /// they can see is still refused with a 403 by the intention guarding that
-    /// action, which is what a 403 is for.
-    ///
-    /// The draft gate is the one ModuleVisibility states for every module: the
-    /// draft visibility hides a blog while it is a draft and nothing after, so a
-    /// blog started from a private draft opens to its readers as the lists already
-    /// show it to them.
+    /// The draft visibility hides a blog while it is a draft and nothing after, as
+    /// ModuleVisibility states for every module: a blog started from a private
+    /// draft opens to its readers as the lists already show it to them.
     /// </remarks>
     private bool IsVisibleToViewer(Blog blog) =>
         (blog.Status != ModuleStatus.Draft ||
@@ -782,93 +578,4 @@ internal class BlogService : IBlogService
          _intentionManager.IsAllowed(BlogIntention.ViewDraft, blog)) &&
         (blog.PremoderationStatus == PremoderationStatus.Approved ||
          _intentionManager.IsAllowed(BlogIntention.ViewPremoderationPending, blog));
-
-    private async Task FillBlogUnreadCounters(Blog[] blogs)
-    {
-        if (blogs.Length == 0) return;
-
-        var identity = _identityProvider.Current;
-
-        // Anonymous users: show total counts (they can't mark anything as read)
-        if (!identity.User.IsAuthenticated)
-        {
-            foreach (var blog in blogs)
-            {
-                blog.UnreadPublicationsCount = blog.PublicationCount;
-                blog.UnreadCommentsCount = blog.CommentsCount;
-            }
-            return;
-        }
-
-        // Authenticated users: show actual unread counts
-        var userId = identity.User.UserId;
-
-        // Sequential on purpose: both fills query the one DmDbContext of this
-        // scope, and a context refuses parallel operations.
-
-        // UnreadPublicationsCount: count publications with unread comments (parent = blogId)
-        await _unreadCountersRepository.FillParentCounters(blogs, userId,
-            b => b.Id, b => b.UnreadPublicationsCount);
-
-        // UnreadCommentsCount: total unread comments across all publications
-        await _unreadCountersRepository.FillTotalUnreadCounters(blogs, userId,
-            b => b.Id, b => b.UnreadCommentsCount);
-    }
-
-    /// <summary>
-    /// Fill the per-rubric "(N/A)" counter (doc 4.2.1.4): N =
-    /// <see cref="Rubric.UnreadPublicationsCount"/> (publications with unread
-    /// content), A = <see cref="Rubric.UnreadCommentsCount"/> (total unread
-    /// comments across the rubric's publications). A rubric is not itself an
-    /// unread-counter entity — its publications are — so both values are
-    /// derived from the per-publication counters, mirroring how the blog's own
-    /// counters work but scoped to the rubric.
-    /// </summary>
-    private async Task FillRubricCounters(Guid blogId, ICollection<Rubric> rubrics)
-    {
-        if (rubrics.Count == 0) return;
-
-        var publicationIdsByRubric = await _repository.GetRubricPublicationIds(blogId);
-        var allPublicationIds = publicationIdsByRubric.Values
-            .SelectMany(ids => ids)
-            .Distinct()
-            .ToArray();
-        if (allPublicationIds.Length == 0) return;
-
-        // Anonymous users can't mark anything read — everything is unread. The
-        // Guid.Empty template counter holds the total unread items per
-        // publication, so querying with any id yields the totals for them; N is
-        // set to the full publication count directly (mirrors the blog-level
-        // anonymous branch).
-        var isAuthenticated = _identityProvider.Current.User.IsAuthenticated;
-        var userId = isAuthenticated ? _identityProvider.Current.User.UserId : Guid.Empty;
-
-        var unreadByPublication = await _unreadCountersRepository.SelectByEntitiesAsync(
-            userId, UnreadEntryType.Message, allPublicationIds);
-
-        foreach (var rubric in rubrics)
-        {
-            if (!publicationIdsByRubric.TryGetValue(rubric.Id, out var ids)) continue;
-
-            rubric.UnreadCommentsCount = ids.Sum(
-                id => unreadByPublication.TryGetValue(id, out var count) ? count : 0);
-
-            rubric.UnreadPublicationsCount = isAuthenticated
-                ? ids.Count(id => unreadByPublication.TryGetValue(id, out var count) && count > 0)
-                : rubric.PublicationCount;
-        }
-    }
-
-    /// <summary>
-    /// Fill the unread counters on a single blog's embedded rubrics. The
-    /// rubric list must be materialized so mutations survive serialization.
-    /// </summary>
-    private async Task FillBlogRubricCounters(Blog blog)
-    {
-        var rubrics = blog.Rubrics as ICollection<Rubric> ?? blog.Rubrics.ToArray();
-        if (rubrics.Count == 0) return;
-
-        await FillRubricCounters(blog.Id, rubrics);
-        blog.Rubrics = rubrics;
-    }
 }

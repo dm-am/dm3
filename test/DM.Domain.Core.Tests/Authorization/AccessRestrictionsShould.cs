@@ -8,9 +8,7 @@ using Xunit;
 namespace DM.Domain.Core.Tests.Authorization;
 
 /// <summary>
-/// The ban rules the owner defined, pinned one clause at a time. The ordinary
-/// ban was written by the moderation service and read by nothing at all, so
-/// every one of these assertions describes behavior that did not exist.
+/// The ban rules, one clause at a time.
 /// </summary>
 public class AccessRestrictionsShould
 {
@@ -65,11 +63,6 @@ public class AccessRestrictionsShould
     /// The refusal names what this ban forbids, and the two scopes forbid
     /// different things.
     /// </summary>
-    /// <remarks>
-    /// One sentence for both told a reader under the ordinary ban that
-    /// commenting was closed to him, while his own game and his own blog stayed
-    /// open and showed him the field.
-    /// </remarks>
     [Fact]
     public void RefuseTheOrdinaryBanWithoutClosingOwnSpace()
     {

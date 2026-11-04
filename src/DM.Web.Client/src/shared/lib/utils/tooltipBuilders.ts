@@ -1,8 +1,3 @@
-/**
- * Tooltip builder utilities for data tables.
- * Shared functions to build consistent tooltip text.
- */
-
 import { pluralize } from "./pluralize";
 
 interface SubscriberData {
@@ -11,13 +6,11 @@ interface SubscriberData {
 }
 
 /**
- * Build tooltip for readers/subscribers list.
- * Shows "Prefix: user1, user2, user3" format.
+ * "Prefix: user1, user2, user3" for a list of readers or subscribers.
  *
  * @param data - Object with subscribersCount and subscriberUsernames
  * @param emptyText - Text when count is 0 (e.g., "Нет читателей", "Нет подписчиков")
  * @param prefix - Prefix before names (e.g., "Читатели", "Подписчики")
- * @returns Tooltip text
  */
 export function buildSubscribersTooltip(
   data: SubscriberData,
@@ -35,10 +28,6 @@ export function buildSubscribersTooltip(
   return `${prefix}: ${names.join(", ")}`;
 }
 
-/**
- * Build tooltip for game/blog readers.
- * Convenience wrapper for buildSubscribersTooltip with "readers" terminology.
- */
 export function buildReadersTooltip(data: SubscriberData): string {
   return buildSubscribersTooltip(data, "Нет читателей", "Читатели");
 }
@@ -53,12 +42,10 @@ interface StatusByType {
 export type PluralForms = [one: string, few: string, many: string];
 
 /**
- * Build status lines for tooltip (draft/active/closed counts).
+ * The draft/active/closed lines of a tooltip.
  *
  * @param byStatus - Object with draft, active, closed counts
- * @param forms - `PluralForms` tuple, e.g. `["игра", "игры", "игр"]`. A plain
- *   string used to be accepted here "for existing callers", and every caller
- *   passed a tuple: the branch was dead and the comment said the opposite.
+ * @param forms - `PluralForms` tuple, e.g. `["игра", "игры", "игр"]`
  */
 export function buildStatusLines(
   byStatus: StatusByType | undefined,
@@ -70,7 +57,7 @@ export function buildStatusLines(
 
   const lines: string[] = [];
   if (byStatus.draft && byStatus.draft > 0) {
-    lines.push(`  Черновики: ${byStatus.draft} ${wordFor(byStatus.draft)}`);
+    lines.push(`  Оформляется: ${byStatus.draft} ${wordFor(byStatus.draft)}`);
   }
   if (byStatus.active && byStatus.active > 0) {
     lines.push(`  Активные: ${byStatus.active} ${wordFor(byStatus.active)}`);

@@ -25,7 +25,6 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
     private readonly IRealtimeNotificationProducer _producer;
     private readonly ILogger<NotificationProcessor> _logger;
 
-    /// <inheritdoc />
     public NotificationProcessor(
         IEnumerable<INotificationGenerator> generators,
         INotificationService notificationService,
@@ -45,10 +44,7 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
     /// <inheritdoc />
     public async Task<ProcessResult> Process(string key, InvokedEvent message, CancellationToken cancellationToken)
     {
-        // Empty is a message queued before the bus carried an idempotency key:
-        // stamping it through would make every legacy message a replay of one
-        // and the same event, so such a message is processed the way it always
-        // had been - written and delivered without deduplication.
+        // Empty is a message without the key: stamped through, every such message would be one replayed event.
         var eventId = message.EventId == Guid.Empty ? (Guid?)null : message.EventId;
 
         var notificationsToCreate = new List<CreateNotification>();
@@ -57,8 +53,7 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
             await foreach (var createNotification in generator.Generate(message.EntityId)
                                .WithCancellation(cancellationToken))
             {
-                // If generator didn't set EventType, use the message type
-                // Subscription generators set their own output EventType
+                // Subscription generators set their own output EventType.
                 var eventType = createNotification.EventType != default
                     ? createNotification.EventType
                     : message.Type;
@@ -66,35 +61,18 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
             }
         }
 
-        if (!notificationsToCreate.Any())
+        if (notificationsToCreate.Count == 0)
         {
             return ProcessResult.Success;
         }
 
-        // Counted before the creation call: past it the requested list may not be
-        // read at all - NotificationRecipientsShould holds every channel to the
-        // filtered answer - and the count is the one thing the replay log needs.
+        // Counted before the call: past it only the filtered answer may be read.
         var requestedCount = notificationsToCreate.Count;
 
         var notifications = await _notificationService.CreateAsync(notificationsToCreate, cancellationToken);
 
-        // Past this call the notifications are durable. Delivery below is best
-        // effort, logged and dropped on failure: an exception escaping from here
-        // would hand the whole method back to the retry middleware, and the cost
-        // of a lost push is bounded — the stored notification is what the list is
-        // built from, so it only delays until the next page load.
-        //
-        // A broker redelivery — a worker killed between the write and the
-        // acknowledgement, a nack, a restart — hands the same message in again,
-        // and since W1.4 that is safe end to end: the event carries an EventId
-        // from the single publishing point, CreateAsync writes idempotently by
-        // (EventId, EventType) under a unique index, and a replay gets an answer
-        // with the already-stored notifications removed. The channels below all
-        // iterate that answer, so what was written once is also mailed, botted
-        // and pushed at most once. The exceptions are deliberate: a message with
-        // no EventId predates the key and flows through undeduplicated, and a
-        // realtime-only notification has no row to find, so a replay repeats a
-        // push whose whole effect is an open tab re-reading a counter.
+        // Past this call the notifications are durable, so delivery below is best effort.
+        // A replay gets an answer without the stored notifications, so each channel delivers at most once.
         if (notifications.Count < requestedCount)
         {
             _logger.LogInformation(
@@ -103,34 +81,25 @@ internal class NotificationProcessor : IProcessor<string, InvokedEvent>
                 message.EventId, message.Type);
         }
 
-        // In-app notifications, pushed over SignalR by the API
         foreach (var notification in notifications)
         {
             await Deliver("realtime", notification.Entity.EventType, () =>
                 _producer.SendAsync(notification.Entity.ToRealtimeNotification(), cancellationToken));
         }
 
-        // A realtime-only notification ends at the hub. It carries no words of
-        // its own and exists to refresh a counter in an open tab, so mailing it
-        // out would turn a badge into correspondence nobody asked for.
-        //
-        // Read off what CreateAsync answered, never off notificationsToCreate:
-        // the service narrows the audience to who may receive the notification,
-        // and the list built above is the one it was asked for. Mailing that one
-        // delivers precisely what the filter refused to store.
+        // A realtime-only notification exists to refresh a counter in an open tab.
+        // Read off the answer, not off notificationsToCreate: the service narrows the audience.
         var outbound = notifications
             .Select(n => n.Source)
             .Where(n => !n.RealtimeOnly)
             .ToArray();
 
-        // Email notifications to users who have enabled them
         foreach (var createNotification in outbound)
         {
             await Deliver("email", createNotification.EventType, () =>
                 _emailSender.SendIfEnabled(createNotification, createNotification.EventType, cancellationToken));
         }
 
-        // Bot notifications (Discord/Telegram) to users who have enabled them
         foreach (var createNotification in outbound)
         {
             await Deliver("bot", createNotification.EventType, () =>

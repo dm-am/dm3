@@ -2,27 +2,16 @@
  * @vitest-environment jsdom
  */
 
-/**
- * "Все загруженные файлы", the name filter over it.
- *
- * The filter is the search line of the moderation lists: the site's search
- * field and "Найти" beside it, no caption over them. It is checked through the
- * address on both sides, as on the warnings beside: what the address says
- * reaches the request and the field, and what the moderator types reaches the
- * address without the page number of the list being left. The name used to
- * live in a ref, and a moderator on the third page of everything who looked a
- * name up was shown the third page of that name, which mostly does not exist.
- *
- * The server looks the name up before it lists anything, and a name nobody
- * carries is its 404. The page used to say "Не удалось загрузить список
- * файлов" with "Повторить" over it, which sends a moderator to retry a typo;
- * it is a list with nothing in it, and is said as one.
- */
+// The name filter goes both ways through the address, and a new name opens on
+// the first page. A name nobody carries is the server's 404 and an empty list.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import type { Mock } from "vitest";
 import type { Ref } from "vue";
 import * as vueRouter from "vue-router";
+import { createPinia, setActivePinia } from "pinia";
+import { useAuthStore } from "@/shared/stores";
+import { DEFAULT_PAGE_SIZE } from "@/shared/lib/composables/usePaging";
 import ModerationUploads from "./ModerationUploads.vue";
 
 const getAllUploads = vi.hoisted(() => vi.fn());
@@ -31,52 +20,17 @@ vi.mock("@/entities/moderation", () => ({
   moderationApi: { getAllUploads },
 }));
 
-/**
- * The address bar, held in a ref the page reads through computeds. The push
- * moves that same ref, the way a real navigation would, and refuses to move
- * when the address it is given is the one already open, as the real router
- * does.
- */
-vi.mock("vue-router", async () => {
-  const { shallowRef } = await import("vue");
-  const query = shallowRef<Record<string, string>>({});
-  const isCurrent = (next: Record<string, string>) => {
-    const current = query.value;
-    const keys = Object.keys(next);
-    return (
-      keys.length === Object.keys(current).length &&
-      keys.every((key) => current[key] === next[key])
-    );
-  };
-  const push = vi.fn((to: { query?: Record<string, string> }) => {
-    const next = { ...(to.query ?? {}) };
-    if (isCurrent(next)) return;
-    query.value = next;
-  });
-  return {
-    useRoute: () => ({
-      get query() {
-        return query.value;
-      },
-    }),
-    useRouter: () => ({ push }),
-    routeQuery: query,
-    routerPush: push,
-  };
-});
+vi.mock("vue-router", async () =>
+  (await import("./moderationLists.doubles")).vueRouter(),
+);
 
 const { routeQuery, routerPush } = vueRouter as unknown as {
   routeQuery: Ref<Record<string, string>>;
   routerPush: Mock;
 };
 
-// The gate has its own spec (roleGate); here the viewer is a moderator.
-vi.mock("./lib/useRoleGate", () => ({
-  useRoleGate: () => ({ hasAccess: true, deniedText: "" }),
-}));
-
-/** The page size of the list. */
-const PAGE_SIZE = 25;
+/** The page of a reader who chose no size. */
+const PAGE_SIZE = DEFAULT_PAGE_SIZE;
 
 const upload = (over: Record<string, unknown> = {}) => ({
   id: "u-1",
@@ -150,6 +104,7 @@ async function lookUp(wrapper: ReturnType<typeof render>, name: string) {
 
 describe("the moderation list of uploads", () => {
   beforeEach(() => {
+    setActivePinia(createPinia());
     getAllUploads.mockReset();
     getAllUploads.mockResolvedValue(page([upload()]));
     routerPush.mockClear();
@@ -179,6 +134,21 @@ describe("the moderation list of uploads", () => {
     });
     // A link handed to another moderator opens with the name in the field.
     expect(nameField(wrapper).element.value).toBe("Загрузивший");
+  });
+
+  it("asks for pages as long as the reader's lists", async () => {
+    routeQuery.value = { number: "3" };
+    useAuthStore().user = {
+      settings: { pageSize: 7 },
+    } as never;
+
+    await rendered();
+
+    expect(getAllUploads).toHaveBeenCalledWith({
+      username: undefined,
+      number: 3,
+      size: 7,
+    });
   });
 
   it("puts the name in the address without the page number of the list being left", async () => {

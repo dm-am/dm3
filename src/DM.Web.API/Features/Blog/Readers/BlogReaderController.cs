@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using DM.Web.API.Swagger;
 using DM.Web.API.Shared.Authentication;
@@ -23,13 +22,12 @@ namespace DM.Web.API.Features.Blog.Readers;
 [Tags("Readers")]
 public class BlogReaderController : ControllerBase
 {
-    private readonly IBlogUserApiService _userApiService;
-    private readonly IBlogApiService _blogApiService;
+    private readonly BlogUserApiService _userApiService;
+    private readonly BlogApiService _blogApiService;
 
-    /// <inheritdoc />
     public BlogReaderController(
-        IBlogUserApiService userApiService,
-        IBlogApiService blogApiService)
+        BlogUserApiService userApiService,
+        BlogApiService blogApiService)
     {
         _userApiService = userApiService;
         _blogApiService = blogApiService;
@@ -100,6 +98,6 @@ public class BlogReaderController : ControllerBase
         return NoContent();
     }
 
-    // Note: DELETE /{username} is not provided - readers can only unsubscribe themselves.
-    // The blacklist does not remove one either: it closes writing, not reading.
+    // No DELETE /{username}: readers only unsubscribe themselves, and the
+    // blacklist closes writing, not reading.
 }

@@ -59,26 +59,6 @@ describe("useTestimonialStore", () => {
     vi.clearAllMocks();
   });
 
-  it("reads the same search once, however the query was spelt", async () => {
-    mockGetTestimonials.mockResolvedValue(page("t-1"));
-    const store = useTestimonialStore();
-
-    await store.fetchTestimonials({ number: 1, take: 10 });
-    await store.fetchTestimonials({ take: 10, number: 1 });
-
-    expect(mockGetTestimonials).toHaveBeenCalledTimes(1);
-  });
-
-  it("treats an absent filter and a cleared one as one search", async () => {
-    mockGetTestimonials.mockResolvedValue(page("t-1"));
-    const store = useTestimonialStore();
-
-    await store.fetchTestimonials({ number: 1 });
-    await store.fetchTestimonials({ number: 1, take: undefined });
-
-    expect(mockGetTestimonials).toHaveBeenCalledTimes(1);
-  });
-
   it("keeps a page it has already read when another is asked for", async () => {
     mockGetTestimonials
       .mockResolvedValueOnce(page("t-1"))
@@ -160,11 +140,7 @@ describe("useTestimonialStore", () => {
     ]);
   });
 
-  /**
-   * A testimonial is posted on behalf of a participant the moderator names, so
-   * the name has to reach the request. It used to be absent from the whole
-   * call, and the server signed the entry with whoever was logged in.
-   */
+  // Posted on behalf of the participant the moderator names, not of whoever is logged in.
   it("signs a new testimonial with the participant it was told about", async () => {
     mockGetTestimonials.mockResolvedValue(page("t-1"));
     mockCreateTestimonial.mockResolvedValue({

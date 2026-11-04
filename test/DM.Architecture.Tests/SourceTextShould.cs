@@ -7,12 +7,7 @@ namespace DM.Architecture.Tests;
 /// The method reader under SizeRatchetShould finds a method whatever shape its
 /// declaration takes, and measures it from its signature to the end of its body.
 /// </summary>
-/// <remarks>
-/// A method the reader cannot see is a method the length limit does not hold, and
-/// that fails silently: the ratchet stays green over it. Each method below has a
-/// shape a reader by pattern misses, and the fields and the property have shapes
-/// such a reader takes for a method.
-/// </remarks>
+/// <remarks>Each method below has a shape a pattern reader misses; the fields and the property, shapes it takes for one.</remarks>
 public class SourceTextShould
 {
     [Fact]

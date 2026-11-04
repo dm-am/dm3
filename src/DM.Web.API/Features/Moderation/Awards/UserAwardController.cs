@@ -26,10 +26,9 @@ namespace DM.Web.API.Features.Moderation.Awards;
 [RequireRole(UserRole.SeniorModerator)]
 public class UserAwardController : ControllerBase
 {
-    private readonly IUserAwardApiService _userAwardApiService;
+    private readonly UserAwardApiService _userAwardApiService;
 
-    /// <inheritdoc />
-    public UserAwardController(IUserAwardApiService userAwardApiService)
+    public UserAwardController(UserAwardApiService userAwardApiService)
     {
         _userAwardApiService = userAwardApiService;
     }
@@ -53,12 +52,12 @@ public class UserAwardController : ControllerBase
         StatusCode(StatusCodes.Status201Created, await _userAwardApiService.Grant(username, request));
 
     /// <summary>Revoke a previously granted award (soft-delete).</summary>
-    /// <param name="username">Username (for URL consistency).</param>
+    /// <param name="username">Holder of the award.</param>
     /// <param name="awardId">Grant record identifier.</param>
     /// <response code="204">Revoked.</response>
     /// <response code="401">Not authenticated.</response>
     /// <response code="403">Insufficient permissions.</response>
-    /// <response code="404">Record not found.</response>
+    /// <response code="404">The user holds no such award.</response>
     [HttpDelete("users/{username}/awards/{awardId:guid}", Name = nameof(RevokeUserAward))]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
@@ -66,8 +65,7 @@ public class UserAwardController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> RevokeUserAward(string username, Guid awardId)
     {
-        _ = username; // route param for URL consistency, validation is by awardId
-        await _userAwardApiService.Revoke(awardId);
+        await _userAwardApiService.Revoke(username, awardId);
         return NoContent();
     }
 }

@@ -9,16 +9,12 @@ using DM.Domain.Core.Likes;
 
 namespace DM.Domain.Messaging.Features.Likes;
 
-/// <summary>
-/// Message like service
-/// </summary>
 internal class MessageLikeService : IMessageLikeService
 {
     private readonly IMessageService _messageService;
     private readonly IIntentionManager _intentionManager;
     private readonly ILikeOperations _likeOperations;
 
-    /// <inheritdoc />
     public MessageLikeService(
         IMessageService messageService,
         IIntentionManager intentionManager,

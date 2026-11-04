@@ -9,16 +9,7 @@ namespace DM.Workers.NotificationDispatcher.Dispatching;
 /// clients": there are none here.
 /// </summary>
 /// <remarks>
-/// The SignalR hub and its connection map live in the API, and an avatar
-/// changes over a request - never over a queue message. The dependency exists
-/// because this host scans the personal domain in, whose user service declares
-/// the broadcast for the API's sake, and the container refuses to start over an
-/// unconstructible registration since the composition validates on build.
-///
-/// Throws rather than doing nothing, for the same reason NoIdentityProvider
-/// does: a delivery quietly skipped is a real answer to a question that has no
-/// clients behind it, and a path that reaches this is a path that has to be
-/// looked at rather than served.
+/// Throws rather than skipping, for the reason NoIdentityProvider gives.
 /// </remarks>
 internal sealed class NoRealtimeAvatarBroadcaster : IRealtimeAvatarBroadcaster
 {

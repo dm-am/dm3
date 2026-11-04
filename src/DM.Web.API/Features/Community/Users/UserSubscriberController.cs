@@ -21,10 +21,9 @@ namespace DM.Web.API.Features.Community.Users;
 [Tags("Users")]
 public class UserSubscriberController : ControllerBase
 {
-    private readonly IUserSubscriberApiService _userSubscriberApiService;
+    private readonly UserSubscriberApiService _userSubscriberApiService;
 
-    /// <inheritdoc />
-    public UserSubscriberController(IUserSubscriberApiService userSubscriberApiService)
+    public UserSubscriberController(UserSubscriberApiService userSubscriberApiService)
     {
         _userSubscriberApiService = userSubscriberApiService;
     }
@@ -85,6 +84,18 @@ public class UserSubscriberController : ControllerBase
         await _userSubscriberApiService.UnsubscribeAsync(username);
         return NoContent();
     }
+
+    /// <summary>
+    /// Get the categories of a subscription to a user
+    /// </summary>
+    /// <remarks>
+    /// The bit of each category and what its notifications are about, in the order of the subscribe panel.
+    /// </remarks>
+    /// <response code="200">The categories</response>
+    [HttpGet("subscription-categories", Name = nameof(GetUserSubscriptionCategories))]
+    [ProducesResponseType(typeof(ListEnvelope<UserSubscriptionCategory>), StatusCodes.Status200OK)]
+    public IActionResult GetUserSubscriptionCategories() =>
+        Ok(_userSubscriberApiService.GetSubscriptionCategories());
 
     /// <summary>
     /// Check if current user is subscribed to a user

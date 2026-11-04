@@ -2,15 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The subscription row of the game menu in the left sidebar.
- *
- * A button of a sidebar answers a refusal with a plate, not with a line under
- * its row (UI_STANDARDS, "Всплывающие сообщения"): the menu is a column of
- * short rows, and a line put under one of them pushed every row below it
- * down. What is checked is that the refusal reaches the plate in the words of
- * the press, and that the menu gains no row for it.
- */
+// A sidebar button answers a refusal with a plate: a line would push every row below it down.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -30,7 +22,6 @@ vi.mock("vue-router", () => ({ useRouter: () => ({ push: vi.fn() }) }));
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((one) => one.message);
 
-/** A refusal the server named nothing in: the plate says the press. */
 const refused: GeneralError = {
   status: 404,
   title: "",
@@ -46,7 +37,7 @@ function mountStrip() {
     title: "Хроники",
     participation: [],
   } as unknown as Game;
-  return mount(GameJoinActions, { props: { variant: "strip" } });
+  return mount(GameJoinActions);
 }
 
 describe("GameJoinActions in the sidebar", () => {
@@ -85,12 +76,6 @@ describe("GameJoinActions in the sidebar", () => {
   });
 });
 
-/**
- * The game's blacklist closes the application, so "Подать заявку" is not in
- * the menu of the viewer on it, recruiting or not, and an application of his
- * is not offered for editing. The sheet of a character in play or out of it
- * stays his: "Редактировать персонажа" leads to it as it does for anybody.
- */
 describe("GameJoinActions on the blacklist", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -116,7 +101,6 @@ describe("GameJoinActions on the blacklist", () => {
       } as unknown as Character,
     ];
     return mount(GameJoinActions, {
-      props: { variant: "strip" },
       global: { stubs: { RouterLink: { template: "<a><slot /></a>" } } },
     });
   }
@@ -144,12 +128,6 @@ describe("GameJoinActions on the blacklist", () => {
   });
 });
 
-/**
- * A pending invitation to play opens the application of an active game whose
- * recruitment is shut, so the viewer invited to play finds "Подать заявку" in
- * the menu as anybody finds it in a recruiting game. The game does not carry
- * the invitation: the viewer's own list of invitations does.
- */
 describe("GameJoinActions with recruitment shut", () => {
   beforeEach(() => {
     setActivePinia(createPinia());
@@ -192,7 +170,7 @@ describe("GameJoinActions with recruitment shut", () => {
       viewerBlacklisted: false,
       ...game,
     } as unknown as Game;
-    const wrapper = mount(GameJoinActions, { props: { variant: "strip" } });
+    const wrapper = mount(GameJoinActions);
     await flushPromises();
     const rows = wrapper
       .findAll("li")

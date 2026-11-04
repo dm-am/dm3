@@ -80,18 +80,16 @@ public class NotificationDetail
     /// every date of the site
     /// </summary>
     public bool IsMoment { get; set; }
+
+    /// <summary>
+    /// Whether the value names the place the notification leads to: the title of
+    /// the page the path opens, which the list writes as the link of the row. The
+    /// store does not keep the order the fields were written in, so this, and not
+    /// the order of the details, says which of two places it is
+    /// </summary>
+    public bool IsDestination { get; set; }
 }
 
-/// <summary>
-/// DTO model for notification count
-/// </summary>
-public class NotificationCount
-{
-    /// <summary>
-    /// Number of unread notifications
-    /// </summary>
-    public long Count { get; set; }
-}
 
 /// <summary>
 /// Notification delivery settings for bot channels

@@ -80,7 +80,7 @@ withDefaults(
 .skeleton-lines
   display: flex
   flex-direction: column
-  gap: 6px
+  gap: $small
 
 .skeleton-line
   height: 14px

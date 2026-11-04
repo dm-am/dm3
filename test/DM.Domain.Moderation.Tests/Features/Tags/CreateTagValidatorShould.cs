@@ -1,13 +1,13 @@
 using System;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Moderation.Features.Tags;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tags;
 
-public class CreateTagValidatorShould : UnitTestBase
+public class CreateTagValidatorShould
 {
     private readonly CreateTagValidator validator = new();
 
@@ -60,7 +60,7 @@ public class CreateTagValidatorShould : UnitTestBase
         var input = new CreateTag
         {
             GroupId = Guid.NewGuid(),
-            Title = new string('a', 101)
+            Title = new string('a', TagFieldLimits.TitleMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
@@ -75,7 +75,7 @@ public class CreateTagValidatorShould : UnitTestBase
         {
             GroupId = Guid.NewGuid(),
             Title = "Fantasy",
-            Description = new string('a', 501)
+            Description = new string('a', TagFieldLimits.DescriptionMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
@@ -115,8 +115,7 @@ public class CreateTagValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(t => t.Description)
-            .WithErrorMessage("Скрытый текст работает только в игровом тексте поста: [private], символ 9. " +
-                              "Чтобы показать разметку примером, поставьте ее между [noparse] и [/noparse].");
+            .WithErrorMessage(PrivateBlockMarkup.DescribeSurfaceRefusal(input.Description));
     }
 
     [Fact]

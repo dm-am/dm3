@@ -1,13 +1,7 @@
 <script setup lang="ts">
-/**
- * ValuesEditor — editable list of possible attribute values, reusing the
- * Poll options-editor pattern from CreatePollForm.vue (row = input + remove,
- * full-width "+ add" link below). List types with a modifier
- * (NumberList / TextNumberList) additionally expose a numeric modifier field.
- */
 import { ref, watch } from "vue";
 import type { AttributeValueSpecification } from "@/entities/game";
-import { symbols } from "@/shared/lib/utils/icons";
+import { RemoveCross } from "@/shared/ui/RemoveButton";
 
 const props = defineProps<{
   modelValue: AttributeValueSpecification[] | null;
@@ -27,8 +21,7 @@ interface Row {
 let keyCounter = 0;
 const rows = ref<Row[]>([]);
 
-// Hydrate local rows from the incoming model without echoing our own emits
-// back into a reset (guarded by a shallow length+content compare).
+// Local rows hydrate from the model without echoing our own emits back into a reset.
 let suppress = false;
 watch(
   () => props.modelValue,
@@ -90,14 +83,7 @@ function removeRow(key: number) {
         aria-label="Модификатор"
         @input="emitChange"
       />
-      <button
-        type="button"
-        class="remove-btn"
-        aria-label="Удалить значение"
-        @click="removeRow(row.key)"
-      >
-        {{ symbols.close }}
-      </button>
+      <RemoveCross label="Удалить значение" @click="removeRow(row.key)" />
     </div>
 
     <button type="button" class="add-btn" @click="addRow">
@@ -107,7 +93,7 @@ function removeRow(key: number) {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .values-editor
   display: flex
@@ -128,18 +114,6 @@ function removeRow(key: number) {
   .modifier-input
     width: $grid-step * 20
     flex-shrink: 0
-
-.remove-btn
-  flex-shrink: 0
-  padding: 0 $small
-  background: none
-  border: none
-  color: $text-muted
-  cursor: pointer
-  font-size: 1.2em
-
-  &:hover
-    color: $text
 
 .add-btn
   align-self: flex-start

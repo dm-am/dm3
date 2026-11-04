@@ -1,0 +1,154 @@
+@use "Themes" as *
+@use "Variables" as *
+@use "Surfaces" as *
+
+/// The hatch's share of the ink it is drawn in. It multiplies with
+/// $disabled-opacity, which dims the control around it.
+$disabled-hatch-opacity: 0.35
+
+/// The hatch's six-pixel diagonal, also drawn by the read-only plate of the
+/// guest surface, a <div> that +disabled-hatch cannot reach.
+$disabled-hatch-mask: url("data:image/svg+xml,%3Csvg width='6' height='6' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M0 6L6 0M-1 1L1 -1M5 7L7 5' stroke='white' stroke-width='1'/%3E%3C/svg%3E")
+
+// Two buttons and no third: +button, the secondary, a grey scale over the
+// surface, and +button-primary, the main action of a form, a fill of $link laid
+// over a geometry already there. +button-link is a block control that reads as
+// a link. There is no coloured button (fillContrast.spec.ts). A state carries
+// no colour of its own: +disabled-hatch, shared with the checkbox and radio.
+//
+// Call +button and +button-link after the selector's own declarations: Sass
+// warns on a declaration after a nested rule.
+
+/// Out of reach, the one way: the control at half opacity under a diagonal
+/// hatch in its own ink. The hatch is a shape, so it reads without a control
+/// beside it to compare against. A mask over currentColor, so it follows the
+/// variant's ink; out of flow, so nothing moves. The control keeps its fill, so
+/// a footer still shows which of two buttons submits. The caption under the
+/// hatch is under 4.5 on purpose: WCAG 1.4.3 exempts a disabled control. The
+/// radius is inherited, or the layer's square corners show past the button's.
+/// `$state` is the suffix that means out of reach: a class for a wrapper that
+/// cannot hold a layer, as Select.
+@mixin disabled-hatch($state: ":disabled")
+  &#{$state}
+    position: relative
+    opacity: $disabled-opacity
+    cursor: default
+
+    &::before
+      content: ""
+      position: absolute
+      inset: 0
+      pointer-events: none
+      border-radius: inherit
+      background-color: currentColor
+      opacity: $disabled-hatch-opacity
+      mask-image: $disabled-hatch-mask
+
+/// The geometry +button and +button-link share, declarations only.
+@mixin _button-layout()
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  height: $control-height
+  box-sizing: border-box
+  padding: $button-padding
+  font-size: $control-font-size
+  font-family: inherit
+  line-height: 1
+  white-space: nowrap
+  cursor: pointer
+  border-radius: $border-radius
+
+/// The block ring of a button: none for the mouse, 2px of $link flush with the
+/// edge for the keyboard.
+@mixin _focus-ring-block()
+  &:focus:not(:focus-visible)
+    outline: none
+
+  &:focus-visible
+    +focus-ring
+
+/// The secondary button. The frame is constant and the fill carries the
+/// state, as on the checkbox. The steps are overlays painted in the image
+/// layer, so a modifier's background-color stays under them in every state.
+/// `.active`, a dropdown standing open, takes the hover step. The ring is
+/// restated so the variant carries its whole look.
+@mixin button()
+  +_button-layout
+  background-color: transparent
+  background-image: linear-gradient($control-fill-overlay, $control-fill-overlay)
+  color: $text
+  border: 1px solid $control-border-overlay
+  transition: background-image $transition-normal
+
+  &.active,
+  &:hover:not(:disabled)
+    background-image: linear-gradient($control-fill-hover-overlay, $control-fill-hover-overlay)
+
+  &:active:not(:disabled)
+    background-image: linear-gradient($control-fill-press-overlay, $control-fill-press-overlay)
+
+  +_focus-ring-block
+  +disabled-hatch
+
+/// The main action of a form, one per form and the only fill of $link
+/// (fillContrast.spec.ts), laid over +button or the guest card's geometry. The
+/// border is transparent so it shows the fill in every state; hover and press
+/// lighten with white, as a darker step drops the caption under 4.5; the ring
+/// steps 1px out, as $link on $link would vanish.
+@mixin button-primary()
+  background-color: $link
+  background-image: none
+  border-color: transparent
+  color: $text-on-fill
+  font-weight: 700
+
+  &:hover:not(:disabled)
+    background-image: linear-gradient($primary-hover-overlay, $primary-hover-overlay)
+
+  &:active:not(:disabled)
+    background-image: linear-gradient($primary-press-overlay, $primary-press-overlay)
+
+  &:focus-visible
+    outline-offset: 1px
+
+/// A block control that reads as a link ("Сбросить").
+@mixin button-link()
+  +_button-layout
+  background-color: transparent
+  color: $link
+  border: 1px solid transparent
+  transition: color $transition-normal
+
+  &:hover:not(:disabled)
+    color: $link-hover
+    text-decoration: underline
+
+  // The block ring of +button: the global rule would dress it as inline text.
+  +_focus-ring-block
+  +disabled-hatch
+
+/// An icon-only control. The drawn size is the caller's; the pointer target is
+/// at least $tap-target-min, grown as a centred overlay so the layout does not
+/// move. The interpolation inside max() keeps Sass from folding % with px.
+/// Ends with a nested rule: wrap later declarations in "&".
+@mixin icon-button($width, $height: $width)
+  position: relative
+  display: inline-flex
+  align-items: center
+  justify-content: center
+  width: $width
+  height: $height
+  padding: 0
+  border: none
+  background: none
+  cursor: pointer
+
+  &::after
+    content: ""
+    position: absolute
+    top: 50%
+    left: 50%
+    width: max(100%, #{$tap-target-min})
+    height: max(100%, #{$tap-target-min})
+    transform: translate(-50%, -50%)

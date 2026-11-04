@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Tokens;
-using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Account;
 using TokenEntity = DM.Infrastructure.Persistence.Entities.Account.Token;
 using SecurityAuditEntryEntity = DM.Infrastructure.Persistence.Entities.Account.SecurityAuditEntry;
@@ -12,6 +11,7 @@ using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using OtpNet;
+using DM.Web.API.Shared.Http;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
@@ -19,26 +19,19 @@ namespace DM.Web.API.IntegrationTests.Controllers.Account;
 /// <summary>
 /// The second factor from the outside: switched on, passed, replayed, recovered.
 /// </summary>
-/// <remarks>
-/// Run over the real database because the substance of the feature is two
-/// conditional updates - one that claims a time step and one that spends
-/// a recovery code - and a conditional update is only a guarantee where
-/// there is a database to make it.
-/// </remarks>
+/// <remarks>Over the real database: a step claim and a code spend are conditional updates.</remarks>
 public class TwoFactorShould : IntegrationTestBase
 {
     public TwoFactorShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    private const string Password = "TestPass123ok";
-
     private sealed record Account(string Login, string Email, string SessionCookie);
 
     private async Task<Account> CreateUser(string prefix)
     {
-        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, prefix, Password);
-        var cookie = await UserTestHelper.Login(Client, email, Password);
+        var (login, email) = await UserTestHelper.CreateUniqueUser(Client, DatabaseFixture, prefix, TestConstants.Password);
+        var cookie = await UserTestHelper.Login(Client, email, TestConstants.Password);
         return new Account(login, email, cookie);
     }
 
@@ -53,38 +46,9 @@ public class TwoFactorShould : IntegrationTestBase
     /// <summary>
     /// A code for the step after the current one.
     /// </summary>
-    /// <remarks>
-    /// One step ahead is inside the window and is guaranteed not to be the step
-    /// the previous call in the same test already claimed, which is what keeps
-    /// this from depending on where the wall clock happens to sit.
-    /// </remarks>
+    /// <remarks>One step ahead is inside the window and never the step a previous call claimed.</remarks>
     private static (long Step, string Code) NextCode(string base32Secret) =>
         CodeFor(base32Secret, DateTime.UtcNow.AddSeconds(30));
-
-    private static string? Cookie(HttpResponseMessage response, string name)
-    {
-        if (!response.Headers.TryGetValues("Set-Cookie", out var cookies))
-        {
-            return null;
-        }
-
-        string? value = null;
-        foreach (var cookie in cookies)
-        {
-            if (!cookie.StartsWith(name + "=", StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var candidate = cookie[(name.Length + 1)..].Split(';')[0];
-            if (!string.IsNullOrEmpty(candidate))
-            {
-                value = candidate;
-            }
-        }
-
-        return value;
-    }
 
     private static HttpRequestMessage WithCookies(
         HttpMethod method, string url, params (string Name, string Value)[] cookies)
@@ -95,52 +59,15 @@ public class TwoFactorShould : IntegrationTestBase
         return request;
     }
 
-    /// <summary>Switches the factor on and returns the Base32 secret.</summary>
-    private async Task<string> EnableFactor(Account account)
-    {
-        var setup = UserTestHelper.CreateCookieAuthRequest(
-            HttpMethod.Post, "/v1/account/two-factor/setup", account.SessionCookie);
-        setup.Content = JsonContent.Create(new { password = Password });
-        var setupResponse = await Client.SendAsync(setup);
-        setupResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        var secret = JsonNode.Parse(await setupResponse.Content.ReadAsStringAsync())!
-            ["resource"]!["secret"]!.GetValue<string>();
-
-        var confirm = UserTestHelper.CreateCookieAuthRequest(
-            HttpMethod.Post, "/v1/account/two-factor/confirm", account.SessionCookie);
-        confirm.Content = JsonContent.Create(new { code = CodeFor(secret, DateTime.UtcNow).Code });
-        var confirmResponse = await Client.SendAsync(confirm);
-        confirmResponse.StatusCode.Should().Be(HttpStatusCode.OK);
-
-        return secret;
-    }
-
-    private async Task<IReadOnlyList<string>> EnableFactorWithCodes(Account account, string[] codes)
-    {
-        var setup = UserTestHelper.CreateCookieAuthRequest(
-            HttpMethod.Post, "/v1/account/two-factor/setup", account.SessionCookie);
-        setup.Content = JsonContent.Create(new { password = Password });
-        var secret = JsonNode.Parse(await (await Client.SendAsync(setup)).Content.ReadAsStringAsync())!
-            ["resource"]!["secret"]!.GetValue<string>();
-
-        var confirm = UserTestHelper.CreateCookieAuthRequest(
-            HttpMethod.Post, "/v1/account/two-factor/confirm", account.SessionCookie);
-        confirm.Content = JsonContent.Create(new { code = CodeFor(secret, DateTime.UtcNow).Code });
-        var body = JsonNode.Parse(await (await Client.SendAsync(confirm)).Content.ReadAsStringAsync())!;
-
-        var issued = body["resource"]!["codes"]!.AsArray()
-            .Select(node => node!.GetValue<string>())
-            .ToList();
-        codes[0] = secret;
-        return issued;
-    }
+    /// <summary>Switches the factor on: the Base32 secret and the recovery codes the confirmation issues.</summary>
+    private Task<(string Secret, IReadOnlyList<string> Codes)> EnableFactor(Account account) =>
+        UserTestHelper.EnableSecondFactor(Client, account.SessionCookie, TestConstants.Password);
 
     /// <summary>The first step of a login, for an account that owes a factor.</summary>
     private async Task<string> BeginLogin(Account account)
     {
         var response = await Client.PostAsJsonAsync(
-            "/v1/account/login", new { email = account.Email, password = Password });
+            "/v1/account/login", new { email = account.Email, password = TestConstants.Password });
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -149,9 +76,9 @@ public class TwoFactorShould : IntegrationTestBase
         body["user"]?.GetValue<object?>().Should().BeNull("the login is not finished");
 
         // No session exists between the two factors.
-        Cookie(response, "dm_session").Should().BeNull();
+        UserTestHelper.Cookie(response, "dm_session").Should().BeNull();
 
-        var challenge = Cookie(response, "dm_2fa");
+        var challenge = UserTestHelper.Cookie(response, "dm_2fa");
         challenge.Should().NotBeNullOrEmpty();
         return challenge!;
     }
@@ -164,8 +91,6 @@ public class TwoFactorShould : IntegrationTestBase
         return Client.SendAsync(request);
     }
 
-    // ── Switching the factor on ──
-
     /// <summary>The answer carries the secret and the URI, once.</summary>
     [Fact]
     public async Task HandOverASecretAndAUriAndLeaveTheLoginSingleFactor()
@@ -174,7 +99,7 @@ public class TwoFactorShould : IntegrationTestBase
 
         var setup = UserTestHelper.CreateCookieAuthRequest(
             HttpMethod.Post, "/v1/account/two-factor/setup", account.SessionCookie);
-        setup.Content = JsonContent.Create(new { password = Password });
+        setup.Content = JsonContent.Create(new { password = TestConstants.Password });
         var response = await Client.SendAsync(setup);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
@@ -184,9 +109,9 @@ public class TwoFactorShould : IntegrationTestBase
 
         // The factor is off until it is confirmed, so the login is unchanged.
         var login = await Client.PostAsJsonAsync(
-            "/v1/account/login", new { email = account.Email, password = Password });
+            "/v1/account/login", new { email = account.Email, password = TestConstants.Password });
         login.StatusCode.Should().Be(HttpStatusCode.OK);
-        Cookie(login, "dm_session").Should().NotBeNullOrEmpty();
+        UserTestHelper.Cookie(login, "dm_session").Should().NotBeNullOrEmpty();
     }
 
     /// <summary>The current password is not optional.</summary>
@@ -209,7 +134,7 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task StoreTheSecretOnlyInsideTheEnvelope()
     {
         var account = await CreateUser("tfstore");
-        var secret = await EnableFactor(account);
+        var (secret, _) = await EnableFactor(account);
 
         await using var db = DatabaseFixture.CreateDbContext();
         var user = await db.Users.FirstAsync(u => u.Username == account.Login);
@@ -226,7 +151,7 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task EndEveryOtherSessionOnConfirmation()
     {
         var account = await CreateUser("tfothers");
-        var other = await UserTestHelper.Login(Client, account.Email, Password);
+        var other = await UserTestHelper.Login(Client, account.Email, TestConstants.Password);
 
         await EnableFactor(account);
 
@@ -235,21 +160,19 @@ public class TwoFactorShould : IntegrationTestBase
         (await Client.SendAsync(check)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    // ── Signing in ──
-
     /// <summary>A good code finishes the login and mints the session.</summary>
     [Fact]
     public async Task FinishTheLoginWithACodeFromTheDevice()
     {
         var account = await CreateUser("tflogin");
-        var secret = await EnableFactor(account);
+        var (secret, _) = await EnableFactor(account);
 
         var challenge = await BeginLogin(account);
         var (step, code) = NextCode(secret);
         var response = await FinishLogin(challenge, code);
 
         response.StatusCode.Should().Be(HttpStatusCode.OK);
-        Cookie(response, "dm_session").Should().NotBeNullOrEmpty();
+        UserTestHelper.Cookie(response, "dm_session").Should().NotBeNullOrEmpty();
 
         await using var db = DatabaseFixture.CreateDbContext();
         var user = await db.Users.FirstAsync(u => u.Username == account.Login);
@@ -263,7 +186,7 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task RefuseACodeWhoseStepWasAlreadyAccepted()
     {
         var account = await CreateUser("tfreplay");
-        var secret = await EnableFactor(account);
+        var (secret, _) = await EnableFactor(account);
 
         var firstChallenge = await BeginLogin(account);
         var (_, code) = NextCode(secret);
@@ -276,7 +199,7 @@ public class TwoFactorShould : IntegrationTestBase
         var replay = await FinishLogin(secondChallenge, code);
 
         replay.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        Cookie(replay, "dm_session").Should().BeNull();
+        UserTestHelper.Cookie(replay, "dm_session").Should().BeNull();
     }
 
     /// <summary>A recovery code opens the account exactly once.</summary>
@@ -284,14 +207,13 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task SpendARecoveryCodeExactlyOnce()
     {
         var account = await CreateUser("tfrecov");
-        var secretHolder = new string[1];
-        var codes = await EnableFactorWithCodes(account, secretHolder);
+        var (_, codes) = await EnableFactor(account);
         codes.Should().HaveCount(10);
 
         var challenge = await BeginLogin(account);
         var first = await FinishLogin(challenge, codes[0]);
         first.StatusCode.Should().Be(HttpStatusCode.OK);
-        Cookie(first, "dm_session").Should().NotBeNullOrEmpty();
+        UserTestHelper.Cookie(first, "dm_session").Should().NotBeNullOrEmpty();
 
         var secondChallenge = await BeginLogin(account);
         var second = await FinishLogin(secondChallenge, codes[0]);
@@ -311,7 +233,7 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task StoreOnlyTheHashOfARecoveryCode()
     {
         var account = await CreateUser("tfrhash");
-        var codes = await EnableFactorWithCodes(account, new string[1]);
+        var (_, codes) = await EnableFactor(account);
 
         await using var db = DatabaseFixture.CreateDbContext();
         var user = await db.Users.FirstAsync(u => u.Username == account.Login);
@@ -329,12 +251,11 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task InvalidateEveryCodeOfThePreviousSetOnReissue()
     {
         var account = await CreateUser("tfreissue");
-        var secretHolder = new string[1];
-        var old = await EnableFactorWithCodes(account, secretHolder);
+        var (_, old) = await EnableFactor(account);
 
         var reissue = UserTestHelper.CreateCookieAuthRequest(
             HttpMethod.Post, "/v1/account/two-factor/recovery-codes", account.SessionCookie);
-        reissue.Content = JsonContent.Create(new { password = Password, code = old[9] });
+        reissue.Content = JsonContent.Create(new { password = TestConstants.Password, code = old[9] });
         var reissued = await Client.SendAsync(reissue);
         reissued.StatusCode.Should().Be(HttpStatusCode.OK);
 
@@ -355,7 +276,7 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task DestroyTheChallengeWhenTheAttemptsRunOut()
     {
         var account = await CreateUser("tflimit");
-        var secret = await EnableFactor(account);
+        var (secret, _) = await EnableFactor(account);
 
         var challenge = await BeginLogin(account);
         for (var attempt = 0; attempt < 5; attempt++)
@@ -377,17 +298,12 @@ public class TwoFactorShould : IntegrationTestBase
     /// <summary>
     /// Five ways of failing, one answer.
     /// </summary>
-    /// <remarks>
-    /// Compared with the correlation token taken out. Every problem document of
-    /// this API carries one and it is different in every response by design, so
-    /// byte equality is asserted over everything that describes the failure and
-    /// over nothing that identifies the request.
-    /// </remarks>
+    /// <remarks>Compared with the correlation token taken out: it differs in every response by design.</remarks>
     [Fact]
     public async Task AnswerEveryFailureOfTheSecondFactorTheSameWay()
     {
         var account = await CreateUser("tfsame");
-        var codes = await EnableFactorWithCodes(account, new string[1]);
+        var (_, codes) = await EnableFactor(account);
 
         var wrongCode = await FinishLogin(await BeginLogin(account), "000000");
 
@@ -426,10 +342,6 @@ public class TwoFactorShould : IntegrationTestBase
     /// <summary>
     /// The mailed password reset hands out no session and lifts no factor.
     /// </summary>
-    /// <remarks>
-    /// It never did hand one out, and the point of the test is that nothing may
-    /// start: this is a hole of exactly the size the factor is bought to close.
-    /// </remarks>
     [Fact]
     public async Task LeaveTheFactorStandingAfterAPasswordResetFromTheMailbox()
     {
@@ -454,11 +366,11 @@ public class TwoFactorShould : IntegrationTestBase
             {
                 Content = JsonContent.Create(new { newPassword = "AnotherPass456ok" })
             };
-            reset.Headers.Add("X-Dm-Account-Token", secret.ToString());
+            reset.Headers.Add(TokenHeaders.Account, secret.ToString());
             var response = await Client.SendAsync(reset);
 
             response.StatusCode.Should().Be(HttpStatusCode.OK);
-            Cookie(response, "dm_session").Should().BeNull("a reset does not sign anybody in");
+            UserTestHelper.Cookie(response, "dm_session").Should().BeNull("a reset does not sign anybody in");
         }
 
         // And the next login still owes the factor.
@@ -467,7 +379,7 @@ public class TwoFactorShould : IntegrationTestBase
         login.StatusCode.Should().Be(HttpStatusCode.OK);
         JsonNode.Parse(await login.Content.ReadAsStringAsync())!
             ["twoFactorRequired"]!.GetValue<bool>().Should().BeTrue();
-        Cookie(login, "dm_session").Should().BeNull();
+        UserTestHelper.Cookie(login, "dm_session").Should().BeNull();
     }
 
     /// <summary>A password change kills unfinished logins.</summary>
@@ -475,14 +387,14 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task DiscardUnfinishedLoginsWhenThePasswordChanges()
     {
         var account = await CreateUser("tfpwd");
-        var secret = await EnableFactor(account);
+        var (secret, _) = await EnableFactor(account);
 
         var challenge = await BeginLogin(account);
 
         var change = UserTestHelper.CreateCookieAuthRequest(
             HttpMethod.Post, "/v1/account/password", account.SessionCookie);
         change.Content = JsonContent.Create(
-            new { oldPassword = Password, newPassword = "AnotherPass456ok" });
+            new { oldPassword = TestConstants.Password, newPassword = "AnotherPass456ok" });
         (await Client.SendAsync(change)).StatusCode.Should().Be(HttpStatusCode.OK);
 
         var (_, code) = NextCode(secret);
@@ -498,9 +410,7 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task WriteNeitherSecretNorRecoveryCodeIntoTheJournal()
     {
         var account = await CreateUser("tfjournal");
-        var secretHolder = new string[1];
-        var codes = await EnableFactorWithCodes(account, secretHolder);
-        var secret = secretHolder[0];
+        var (secret, codes) = await EnableFactor(account);
 
         var challenge = await BeginLogin(account);
         (await FinishLogin(challenge, codes[0])).StatusCode.Should().Be(HttpStatusCode.OK);
@@ -520,19 +430,14 @@ public class TwoFactorShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Section 5: the entry about a spent recovery code says how many are left.
+    /// The entry about a spent recovery code says how many are left.
     /// </summary>
-    /// <remarks>
-    /// Over the real database rather than only over a stub, because what is
-    /// under test is the order of two writes and a read: the count has to be
-    /// taken after the row is stamped, or every entry would report the
-    /// remainder one too high and the last code would read as one still in hand.
-    /// </remarks>
+    /// <remarks>The count is taken after the row is stamped, an order only the real database shows.</remarks>
     [Fact]
     public async Task SayHowManyRecoveryCodesAreLeftInTheJournal()
     {
         var account = await CreateUser("tfleft");
-        var codes = await EnableFactorWithCodes(account, new string[1]);
+        var (_, codes) = await EnableFactor(account);
 
         var challenge = await BeginLogin(account);
         (await FinishLogin(challenge, codes[0])).StatusCode.Should().Be(HttpStatusCode.OK);
@@ -554,11 +459,11 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task SwitchTheFactorOffOnlyForBothHalves()
     {
         var account = await CreateUser("tfoff");
-        var codes = await EnableFactorWithCodes(account, new string[1]);
+        var (_, codes) = await EnableFactor(account);
 
         var withoutFactor = UserTestHelper.CreateCookieAuthRequest(
             HttpMethod.Post, "/v1/account/two-factor/disable", account.SessionCookie);
-        withoutFactor.Content = JsonContent.Create(new { password = Password, code = "000000" });
+        withoutFactor.Content = JsonContent.Create(new { password = TestConstants.Password, code = "000000" });
         (await Client.SendAsync(withoutFactor)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
 
         var withoutPassword = UserTestHelper.CreateCookieAuthRequest(
@@ -568,13 +473,13 @@ public class TwoFactorShould : IntegrationTestBase
 
         var both = UserTestHelper.CreateCookieAuthRequest(
             HttpMethod.Post, "/v1/account/two-factor/disable", account.SessionCookie);
-        both.Content = JsonContent.Create(new { password = Password, code = codes[0] });
+        both.Content = JsonContent.Create(new { password = TestConstants.Password, code = codes[0] });
         (await Client.SendAsync(both)).StatusCode.Should().Be(HttpStatusCode.NoContent);
 
         // And the login is single-factor again.
         var login = await Client.PostAsJsonAsync(
-            "/v1/account/login", new { email = account.Email, password = Password });
-        Cookie(login, "dm_session").Should().NotBeNullOrEmpty();
+            "/v1/account/login", new { email = account.Email, password = TestConstants.Password });
+        UserTestHelper.Cookie(login, "dm_session").Should().NotBeNullOrEmpty();
 
         await using var db = DatabaseFixture.CreateDbContext();
         var user = await db.Users.FirstAsync(u => u.Username == account.Login);
@@ -589,7 +494,7 @@ public class TwoFactorShould : IntegrationTestBase
     public async Task DescribeTheFactorWithoutDisclosingAnythingThatPassesIt()
     {
         var account = await CreateUser("tfstatus");
-        var secret = await EnableFactor(account);
+        var (secret, _) = await EnableFactor(account);
 
         var request = UserTestHelper.CreateCookieAuthRequest(
             HttpMethod.Get, "/v1/account/two-factor", account.SessionCookie);

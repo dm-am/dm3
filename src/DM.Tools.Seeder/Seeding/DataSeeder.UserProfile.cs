@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
@@ -17,34 +16,55 @@ namespace DM.Tools.Seeder.Seeding;
 internal sealed partial class DataSeeder
 {
     /// <summary>
-    /// SolohinLex (admin): backfill username change history and upload an avatar
-    /// so the test admin profile has the same look-and-feel as a real veteran user.
+    /// SolohinLex (admin): the username history and an avatar, so the profile looks like a veteran's.
     /// </summary>
-    private async Task SetupSolohinLexProfile(List<DbUser> users, DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task SetupSolohinLexProfile(List<DbUser> users, ComprehensiveSeedResult result)
     {
-        var solohin = users.FirstOrDefault(u => u.Username == "SolohinLex");
+        var solohin = users.FirstOrDefault(u => u.Username == PrimaryLogin);
         if (solohin == null)
         {
             result.Details.Add("SolohinLex not found, skipping profile setup");
             return;
         }
 
-        // --- Username history ---
-        // Always rebuild so re-seeds produce a deterministic history.
-        var existingHistory = await _dbContext.UsernameHistories
-            .Where(h => h.UserId == solohin.UserId)
-            .ToListAsync();
-        if (existingHistory.Count > 0)
-        {
-            _dbContext.UsernameHistories.RemoveRange(existingHistory);
-        }
+        var historyCount = await SeedSolohinLexUsernameHistory(solohin);
 
-        // Three historical renames, oldest first: Lex (2020) → Solohin (2022) → AlexSolohin (2024) → SolohinLex (current)
+        await SeedSolohinLexAvatar(solohin);
+
+        // "О себе" from Assets/Seed/SolohinLex.bbcode, assigned on every run: a
+        // sample of the tags around pictures, each one the avatar above, so the
+        // stand serves every picture of the page itself.
+        var avatar = await _dbContext.Uploads.FindAsync(solohin.AvatarUploadId);
+        solohin.Info = (await LoadEmbeddedTextAsync(SolohinLexInfo))
+            .Replace("{avatar}", avatar?.FilePath, StringComparison.Ordinal);
+
+        var contactCount = await SeedSolohinLexContacts(solohin);
+        var endorsementCount = await SeedSolohinLexEndorsements(users, solohin);
+        await SeedSolohinLexAwards(solohin, result);
+        await SeedHonoraryGoblins(users, solohin, result);
+
+        await _dbContext.SaveChangesAsync();
+        result.Details.Add(
+            $"SolohinLex profile set up: {historyCount} username history entries, " +
+            $"{contactCount} contacts, {endorsementCount} endorsements, " +
+            $"info=yes, avatar={(solohin.AvatarUploadId != null ? "yes" : "no")}");
+    }
+
+    /// <summary>
+    /// Username history: three historical renames, rebuilt on every run.
+    /// </summary>
+    /// <returns>How many entries the history holds.</returns>
+    private async Task<int> SeedSolohinLexUsernameHistory(DbUser solohin)
+    {
+        _dbContext.UsernameHistories.RemoveRange(
+            await _dbContext.UsernameHistories.Where(h => h.UserId == solohin.UserId).ToListAsync());
+
+        // Oldest first: Lex (2020), Solohin (2022), AlexSolohin (2024), SolohinLex now
         var historyEntries = new (string Old, string New, DateTimeOffset When)[]
         {
-            ("Lex",          "Solohin",      now.AddYears(-4)),
-            ("Solohin",      "AlexSolohin",  now.AddYears(-2)),
-            ("AlexSolohin",  "SolohinLex",   now.AddMonths(-6)),
+            ("Lex",          "Solohin",      _now.AddYears(-4)),
+            ("Solohin",      "AlexSolohin",  _now.AddYears(-2)),
+            ("AlexSolohin",  PrimaryLogin,   _now.AddMonths(-6)),
         };
         foreach (var (oldName, newName, when) in historyEntries)
         {
@@ -59,25 +79,17 @@ internal sealed partial class DataSeeder
             });
         }
 
-        // --- "О себе" (Info, BBCode) ---
-        // Idempotent: always assign so re-seeds produce a known text.
-        // The BBCode source lives in Assets/Seed/SolohinLex.bbcode and
-        // is embedded into the assembly as an EmbeddedResource — the single copy
-        // for the whole project (SSOT). It used to be duplicated as a raw string
-        // here + in scripts/solohin-info.bbcode + scripts/update-solohin-info.sql;
-        // both external copies are gone, the manual psql update is no longer needed.
-        solohin.Info = await LoadEmbeddedTextAsync("DM.Tools.Seeder.Assets.Seed.SolohinLex.bbcode");
+        return historyEntries.Length;
+    }
 
-        // --- Contacts ---
-        // Same idempotency rule as username history: wipe and rebuild so re-seeds
-        // converge on a known state regardless of prior runs.
-        var existingContacts = await _dbContext.Set<DbUserContact>()
-            .Where(c => c.UserId == solohin.UserId)
-            .ToListAsync();
-        if (existingContacts.Count > 0)
-        {
-            _dbContext.Set<DbUserContact>().RemoveRange(existingContacts);
-        }
+    /// <summary>
+    /// Contacts, rebuilt on every run.
+    /// </summary>
+    /// <returns>How many contacts the profile shows.</returns>
+    private async Task<int> SeedSolohinLexContacts(DbUser solohin)
+    {
+        _dbContext.Set<DbUserContact>().RemoveRange(
+            await _dbContext.Set<DbUserContact>().Where(c => c.UserId == solohin.UserId).ToListAsync());
         var contactEntries = new (string Type, string Value)[]
         {
             ("Telegram", "@solohin_lex"),
@@ -96,19 +108,19 @@ internal sealed partial class DataSeeder
             });
         }
 
-        // --- Endorsements ("Рекомендации") ---
-        // Wipe-and-rebuild so re-seeds are deterministic. Endorsers are
-        // looked up by username — if a username doesn't exist in this seed
-        // run, that one entry is silently skipped.
-        var existingEndorsements = await _dbContext.UserEndorsements
-            .Where(e => e.TargetUserId == solohin.UserId)
-            .ToListAsync();
-        if (existingEndorsements.Count > 0)
-        {
-            _dbContext.UserEndorsements.RemoveRange(existingEndorsements);
-        }
-        // Plain text only (endorsements are not BBCode-rendered), about the
-        // person as player / master / human — not about site administration.
+        return contactEntries.Length;
+    }
+
+    /// <summary>
+    /// Endorsements ("Рекомендации"), rebuilt on every run.
+    /// </summary>
+    /// <returns>How many endorsements the list holds, the skipped ones included.</returns>
+    private async Task<int> SeedSolohinLexEndorsements(List<DbUser> users, DbUser solohin)
+    {
+        // An endorser missing from this run is skipped.
+        _dbContext.UserEndorsements.RemoveRange(
+            await _dbContext.UserEndorsements.Where(e => e.TargetUserId == solohin.UserId).ToListAsync());
+        // Plain text, not BBCode, about the person and not about site administration.
         var endorsementEntries = new (string Username, int DaysAgo, string Text)[]
         {
             ("TestSeniorMod", 180, "Играем с Лексом уже несколько лет. Надежный согрок: пишет регулярно, не пропадает посреди сцены, спорные моменты за столом обсуждает спокойно. Рекомендую и как мастера, и как игрока."),
@@ -126,48 +138,36 @@ internal sealed partial class DataSeeder
                 UserEndorsementId = _guidFactory.Create(),
                 AuthorId = author.UserId,
                 TargetUserId = solohin.UserId,
-                CreatedUtc = now.AddDays(-daysAgo),
+                CreatedUtc = _now.AddDays(-daysAgo),
                 Text = text,
-                IsRemoved = false,
             });
         }
 
-        // --- Awards ---
-        // SolohinLex's demo contest history: tells a progression
-        // 2022 → 2024 (from mid-table to the Grand Prix). Rules:
-        //   - At most one placement per series (1/2/3 are mutually exclusive).
-        //   - Special awards ("Народное" / "Критик" / "Угадайка") are granted separately
-        //     by jury/minigame decision and can be combined with a placement.
-        //   - The grant date is tied to the series (season, year), not to now,
-        //     so the sort order is natural.
-        // Wipe-and-rebuild, like the other demo blocks.
-        var existingAwards = await _dbContext.UserAwards
-            .Where(a => a.UserId == solohin.UserId)
-            .ToListAsync();
-        if (existingAwards.Count > 0)
-        {
-            _dbContext.UserAwards.RemoveRange(existingAwards);
-        }
-        var lit23 = new Guid("00000000-0000-0000-0004-000000000001"); // 23rd literary contest, 2024
-        var lit22 = new Guid("00000000-0000-0000-0004-000000000002"); // 22nd literary contest, 2023
-        var lit20 = new Guid("00000000-0000-0000-0004-000000000004"); // 20th literary contest, 2022
-        var art2 = new Guid("00000000-0000-0000-0004-000000000005"); // 2nd art contest, 2024
-        // "1-й арт-конкурс 2023" (0004-...-06) intentionally holds no
-        // SolohinLex award: his ONLY art award is the art2 place below.
+        return endorsementEntries.Length;
+    }
+
+    /// <summary>
+    /// The contest awards of SolohinLex, rebuilt on every run.
+    /// </summary>
+    private async Task SeedSolohinLexAwards(DbUser solohin, ComprehensiveSeedResult result)
+    {
+        // From mid-table in 2022 to the Grand Prix in 2024: one placement per series, the special awards
+        // beside a placement, the grant date tied to the series.
+        _dbContext.UserAwards.RemoveRange(
+            await _dbContext.UserAwards.Where(a => a.UserId == solohin.UserId).ToListAsync());
+        var lit23 = new Guid("00000000-0000-0000-0004-000000000001"); // 23rd literary contest, summer 2026
+        var lit22 = new Guid("00000000-0000-0000-0004-000000000002"); // 22nd literary contest, winter 2026
+        var lit20 = new Guid("00000000-0000-0000-0004-000000000004"); // 20th literary contest, winter 2025
+        var art2 = new Guid("00000000-0000-0000-0004-000000000005"); // 2nd art contest, 2016
+        // No SolohinLex award in "1-й арт-конкурс 2013": his only art award is the art2 place below.
         var contestFirst = new Guid("00000000-0000-0000-0001-000000000001");
         var contestSecond = new Guid("00000000-0000-0000-0001-000000000002");
         var contestThird = new Guid("00000000-0000-0000-0001-000000000003");
         var popularVote = new Guid("00000000-0000-0000-0001-000000000004");
         var bestCritic = new Guid("00000000-0000-0000-0001-000000000005");
         var guesser = new Guid("00000000-0000-0000-0001-000000000006");
-        // SolohinLex chronology: lit career 2022-2024 + a single art award
-        // (silver at art contest #2, 2024).
-        // WorkUrl — a placeholder topic with the work itself (for placements + popular
-        // vote). best_critic / guesser are not tied to a specific work.
-        // Special-award bindings must make sense per contest type: best_critic
-        // rewards REVIEWS (texts), so it only ever attaches to a literary
-        // series; guesser (author guessing) and popular_vote (vote for a work)
-        // fit any contest type.
+        // WorkUrl is a placeholder topic with the work. best_critic rewards reviews, so it attaches only to a
+        // literary series; guesser and popular_vote fit any contest.
         const string sampleWork = "/forum/topic/sample-work-";
         var demoAwards = new (Guid SeriesId, Guid AwardTypeId, DateTimeOffset At, string? WorkUrl)[]
         {
@@ -181,7 +181,7 @@ internal sealed partial class DataSeeder
         };
         foreach (var (seriesId, awardTypeId, at, workUrl) in demoAwards)
         {
-            _dbContext.UserAwards.Add(new DM.Infrastructure.Persistence.Entities.Community.UserAward
+            _dbContext.UserAwards.Add(new UserAward
             {
                 UserAwardId = _guidFactory.Create(),
                 UserId = solohin.UserId,
@@ -190,17 +190,19 @@ internal sealed partial class DataSeeder
                 WorkUrl = workUrl,
                 AwardedUtc = at,
                 AwardedByUserId = solohin.UserId, // self-grant in the seeder; in prod — admin/seniormod
-                IsRemoved = false,
             });
         }
+        result.Details.Add($"SolohinLex awards: rebuilt {demoAwards.Length} contest awards + honorary goblin across {demoAwards.Select(d => d.SeriesId).Distinct().Count()} contest series (2022-2024)");
+    }
 
-        // Honorary goblin — a non-contest veteran honour dated to the user's
-        // early years, so it is the OLDEST award and (awards sort oldest-first)
-        // leads the list. SolohinLex is the site's "главный гоблин" (admin), so
-        // he carries it too; the honour is not exclusive (TestHonorary keeps his
-        // own copy). No ContestSeriesId → the tile shows the plain type.title/icon.
+    /// <summary>
+    /// The "Почетный гоблин" award, held by SolohinLex and by TestHonorary.
+    /// </summary>
+    private async Task SeedHonoraryGoblins(List<DbUser> users, DbUser solohin, ComprehensiveSeedResult result)
+    {
+        // Dated to his early years, so the oldest award leads the list. Without ContestSeriesId the tile shows the type.
         var honoraryGoblinSince = new DateTimeOffset(2015, 6, 1, 12, 0, 0, TimeSpan.Zero);
-        _dbContext.UserAwards.Add(new DM.Infrastructure.Persistence.Entities.Community.UserAward
+        _dbContext.UserAwards.Add(new UserAward
         {
             UserAwardId = _guidFactory.Create(),
             UserId = solohin.UserId,
@@ -209,24 +211,14 @@ internal sealed partial class DataSeeder
             WorkUrl = null,
             AwardedUtc = honoraryGoblinSince,
             AwardedByUserId = solohin.UserId, // self-grant in the seeder; in prod — admin/seniormod
-            IsRemoved = false,
         });
-        result.Details.Add($"SolohinLex awards: rebuilt {demoAwards.Length} contest awards + honorary goblin across {demoAwards.Select(d => d.SeriesId).Distinct().Count()} contest series (2022-2024)");
 
-        // --- TestHonorary award ---
-        // Ex-honorary user: no longer a flag on the user entity, just holds
-        // the "Почетный гоблин" award like anyone else can.
         var testHonorary = users.FirstOrDefault(u => u.Username == "TestHonorary");
         if (testHonorary != null)
         {
-            var existingHonoraryAwards = await _dbContext.UserAwards
-                .Where(a => a.UserId == testHonorary.UserId)
-                .ToListAsync();
-            if (existingHonoraryAwards.Count > 0)
-            {
-                _dbContext.UserAwards.RemoveRange(existingHonoraryAwards);
-            }
-            _dbContext.UserAwards.Add(new DM.Infrastructure.Persistence.Entities.Community.UserAward
+            _dbContext.UserAwards.RemoveRange(
+                await _dbContext.UserAwards.Where(a => a.UserId == testHonorary.UserId).ToListAsync());
+            _dbContext.UserAwards.Add(new UserAward
             {
                 UserAwardId = _guidFactory.Create(),
                 UserId = testHonorary.UserId,
@@ -235,56 +227,63 @@ internal sealed partial class DataSeeder
                 WorkUrl = null,
                 AwardedUtc = honoraryGoblinSince, // "почетный гоблин с 2015 года" — matches the profile bio
                 AwardedByUserId = solohin.UserId,
-                IsRemoved = false,
             });
             result.Details.Add("TestHonorary awarded: Почетный гоблин");
         }
+    }
 
-        // --- Avatar upload ---
-        // Idempotent: skip if SolohinLex already has an avatar wired up.
-        if (solohin.AvatarUploadId == null)
+    /// <summary>
+    /// A type the award catalog hides, held by nobody: the list of types reads a hidden row with
+    /// it, and the form that grants an award does not offer it. The catalog ships every type shown.
+    /// </summary>
+    internal static readonly Guid HiddenAwardTypeId = FixedGuid(0xa1, 1);
+
+    private async Task SeedHiddenAwardType(ComprehensiveSeedResult result)
+    {
+        if (await _dbContext.AwardTypes.AnyAsync(t => t.AwardTypeId == HiddenAwardTypeId))
         {
-            try
-            {
-                var assembly = typeof(DataSeeder).Assembly;
-                const string resourceName = "DM.Tools.Seeder.Assets.Seed.SolohinLex.jpg";
-
-                await using var resourceStream = assembly.GetManifestResourceStream(resourceName);
-                if (resourceStream != null)
-                {
-                    using var ms = new MemoryStream();
-                    await resourceStream.CopyToAsync(ms);
-                    var imageBytes = ms.ToArray();
-
-                    var uploadId = _guidFactory.Create();
-                    var upload = await SeedAvatarFromBytesAsync(
-                        imageBytes,
-                        declaredContentType: "image/jpeg",
-                        sourceFileName: "SolohinLex.jpg",
-                        type: UploadType.UserAvatar,
-                        uploadId: uploadId,
-                        userId: solohin.UserId,
-                        entityId: solohin.UserId,
-                        now: now);
-                    _dbContext.Set<DM.Infrastructure.Persistence.Entities.Shared.Upload>().Add(upload);
-                    solohin.AvatarUploadId = uploadId;
-                }
-                else
-                {
-                    result.Details.Add("SolohinLex avatar resource not found (Assets/Seed/SolohinLex.jpg), skipping avatar");
-                }
-            }
-            catch (Exception ex)
-            {
-                result.Details.Add($"SolohinLex avatar upload failed: {ex.Message}");
-            }
+            result.Details.Add("Hidden award type already exists, skipping");
+            return;
         }
 
+        var lastSortOrder = await _dbContext.AwardTypes.MaxAsync(t => (int?)t.SortOrder) ?? 0;
+        _dbContext.AwardTypes.Add(new AwardType
+        {
+            AwardTypeId = HiddenAwardTypeId,
+            Code = "beta_tester",
+            Title = "Бета-тестер",
+            Description = "Участие в закрытом тесте прошлой версии сайта",
+            IconName = "ribbon-medal",
+            Tier = 1,
+            SortOrder = lastSortOrder + 1,
+            IsActive = false
+        });
         await _dbContext.SaveChangesAsync();
-        result.Details.Add(
-            $"SolohinLex profile set up: {historyEntries.Length} username history entries, " +
-            $"{contactEntries.Length} contacts, {endorsementEntries.Length} endorsements, " +
-            $"info=yes, avatar={(solohin.AvatarUploadId != null ? "yes" : "no")}");
+        result.Details.Add("Hidden award type: Бета-тестер");
+    }
+
+    /// <summary>
+    /// The avatar of SolohinLex, uploaded once.
+    /// </summary>
+    private async Task SeedSolohinLexAvatar(DbUser solohin)
+    {
+        // Skipped when SolohinLex already has an avatar.
+        if (solohin.AvatarUploadId == null)
+        {
+            var imageBytes = ReadEmbeddedSeedBytes(SolohinLexImage);
+            var uploadId = _guidFactory.Create();
+            var upload = await SeedImageFromBytesAsync(
+                imageBytes,
+                declaredContentType: "image/jpeg",
+                sourceFileName: "SolohinLex.jpg",
+                type: UploadType.UserAvatar,
+                uploadId: uploadId,
+                userId: solohin.UserId,
+                entityId: solohin.UserId,
+                uploadedUtc: _now);
+            _dbContext.Uploads.Add(upload);
+            solohin.AvatarUploadId = uploadId;
+        }
     }
 
     private async Task RecomputeUserRatings(ComprehensiveSeedResult result)
@@ -322,26 +321,21 @@ internal sealed partial class DataSeeder
         result.Details.Add("User ratings recomputed from actual PostReviews and Posts");
     }
 
+    /// <summary>Game posts tier ladder: T1=100, T2=500, T3=2000, T4=5000.</summary>
+    private const int ArchivePostTarget = 5000;
+
+    /// <summary>The prefix of the GameText the archive posts are counted by.</summary>
+    private const string ArchivePostMarker = "Архивная запись №";
+
     /// <summary>
-    /// Boosts SolohinLex metrics so his achievements page shows all 5 tier
-    /// plaque states, including platinum (T4) of the "Игровые посты" chain:
-    /// bulk-inserts lightweight archive posts up to the T4 threshold (5000)
-    /// into a room of a finished game he masters. The GamePostsAuthored
-    /// metric reads the denormalized QuantityRating, which is then recounted
-    /// from the real COUNT(Posts) — data and counter stay consistent.
-    /// Idempotent: marker is the GameText prefix, only the missing amount is
-    /// topped up. Must run AFTER <see cref="RecomputeUserRatings"/>, which
-    /// would otherwise overwrite the QualityRating boost.
+    /// Boosts SolohinLex metrics so his achievements page shows all 5 tier plaques, platinum (T4) of the
+    /// "Игровые посты" chain included: archive posts up to the T4 threshold, after which QuantityRating is
+    /// recounted from the posts. Idempotent by the GameText prefix. Runs after
+    /// <see cref="RecomputeUserRatings"/>, which would overwrite the QualityRating boost.
     /// </summary>
-    private async Task BoostSolohinLexMetrics(DateTimeOffset now, ComprehensiveSeedResult result)
+    private async Task BoostSolohinLexMetrics(ComprehensiveSeedResult result)
     {
-        var sw = System.Diagnostics.Stopwatch.StartNew();
-
-        // Game posts tier ladder: T1=100, T2=500, T3=2000, T4=5000.
-        const int targetArchivePosts = 5000;
-        const string archiveMarker = "Архивная запись №";
-
-        var solohin = await _dbContext.Users.FirstOrDefaultAsync(u => u.Username == "SolohinLex");
+        var solohin = await _dbContext.Users.FirstOrDefaultAsync(u => u.Username == PrimaryLogin);
         if (solohin == null)
         {
             result.Details.Add("SolohinLex metrics boost skipped: user not found");
@@ -351,64 +345,14 @@ internal sealed partial class DataSeeder
         var existing = await _dbContext.Posts
             .CountAsync(p => p.AuthorId == solohin.UserId
                 && !p.IsRemoved
-                && p.GameText.StartsWith(archiveMarker));
-        var toCreate = targetArchivePosts - existing;
+                && p.GameText.StartsWith(ArchivePostMarker));
+        var toCreate = ArchivePostTarget - existing;
         if (toCreate > 0)
         {
-            // A finished game mastered by SolohinLex is a plausible home for
-            // thousands of archive posts (a long completed campaign).
-            var game = await _dbContext.Set<DbGame>()
-                .Where(g => g.MasterId == solohin.UserId
-                    && !g.IsRemoved
-                    && g.Status == ModuleStatus.Closed
-                    && g.ClosedReason == ClosedReason.Finished)
-                .OrderBy(g => g.CreatedUtc)
-                .FirstOrDefaultAsync();
-            var room = game == null
-                ? null
-                : await _dbContext.Rooms
-                    .Where(r => r.GameId == game.GameId && !r.IsRemoved && r.Type == RoomType.Default)
-                    .OrderBy(r => r.RoomNumber)
-                    .FirstOrDefaultAsync();
-
-            if (room == null)
-            {
-                result.Details.Add("SolohinLex archive posts skipped: no finished mastered game with a room");
-            }
-            else
-            {
-                // Master posts (no character), short text, spread evenly
-                // between game activation and closing — always in the past,
-                // so they never surface in "recent activity" widgets.
-                var windowStart = game!.ActivatedUtc ?? game.CreatedUtc;
-                var windowEnd = game.ClosedUtc ?? now.AddDays(-1);
-                if (windowEnd <= windowStart) windowEnd = windowStart.AddDays(30);
-                var stepTicks = (windowEnd - windowStart).Ticks / targetArchivePosts;
-
-                var posts = new List<Post>(toCreate);
-                for (var i = 0; i < toCreate; i++)
-                {
-                    var ordinal = existing + i + 1;
-                    posts.Add(new Post
-                    {
-                        PostId = _guidFactory.Create(),
-                        RoomId = room.RoomId,
-                        CharacterId = null,
-                        AuthorId = solohin.UserId,
-                        CreatedUtc = windowStart.AddTicks(stepTicks * ordinal),
-                        GameText = $"{archiveMarker}{ordinal}. Летопись кампании, сохранена для истории.",
-                        IsRemoved = false,
-                    });
-                }
-                _dbContext.Posts.AddRange(posts);
-                await _dbContext.SaveChangesAsync();
-                result.PostsCreated += toCreate;
-            }
+            await SeedSolohinLexArchivePosts(solohin, existing, toCreate, result);
         }
 
-        // QuantityRating = real post count (archive + organic game posts) →
-        // T4 "Приключение в жизнь" (5000). QualityRating: 350 → silver
-        // (T1=100, T2=250 earned; T3=500, T4=1000 — not).
+        // QuantityRating, the real post count: T4. QualityRating 350: silver.
         await _dbContext.Database.ExecuteSqlRawAsync("""
             UPDATE "Users" u
             SET "QuantityRating" = (SELECT COUNT(*) FROM "Posts" p
@@ -417,9 +361,62 @@ internal sealed partial class DataSeeder
             WHERE u."Username" = 'SolohinLex';
         """);
 
-        sw.Stop();
         result.Details.Add(
             $"SolohinLex metrics boosted: +{Math.Max(toCreate, 0)} archive game posts " +
-            $"(target {targetArchivePosts} → posts T4 platinum), rating=350 (silver), took {sw.ElapsedMilliseconds} ms");
+            $"(target {ArchivePostTarget} → posts T4 platinum), rating=350 (silver)");
+    }
+
+    /// <summary>
+    /// The archive posts of SolohinLex, short master posts in a finished game he
+    /// masters, numbered on from the ones already there.
+    /// </summary>
+    private async Task SeedSolohinLexArchivePosts(
+        DbUser solohin, int existing, int toCreate, ComprehensiveSeedResult result)
+    {
+        // A finished game he masters is a plausible home for thousands of archive posts.
+        var game = await _dbContext.Set<DbGame>()
+            .Where(g => g.MasterId == solohin.UserId
+                && !g.IsRemoved
+                && g.Status == ModuleStatus.Closed
+                && g.ClosedReason == ClosedReason.Finished)
+            .OrderBy(g => g.CreatedUtc)
+            .FirstOrDefaultAsync();
+        var room = game == null
+            ? null
+            : await _dbContext.Rooms
+                .Where(r => r.GameId == game.GameId && !r.IsRemoved && r.Type == RoomType.Default)
+                .OrderBy(r => r.RoomNumber)
+                .FirstOrDefaultAsync();
+
+        if (game == null || room == null)
+        {
+            result.Details.Add("SolohinLex archive posts skipped: no finished mastered game with a room");
+        }
+        else
+        {
+            // Master posts between activation and closing, always in the past, out of the "recent activity" widgets.
+            var windowStart = game.ActivatedUtc ?? game.CreatedUtc;
+            var windowEnd = game.ClosedUtc ?? _now.AddDays(-1);
+            if (windowEnd <= windowStart) windowEnd = windowStart.AddDays(30);
+            var stepTicks = (windowEnd - windowStart).Ticks / ArchivePostTarget;
+
+            var posts = new List<Post>(toCreate);
+            for (var i = 0; i < toCreate; i++)
+            {
+                var ordinal = existing + i + 1;
+                posts.Add(new Post
+                {
+                    PostId = _guidFactory.Create(),
+                    RoomId = room.RoomId,
+                    CharacterId = null,
+                    AuthorId = solohin.UserId,
+                    CreatedUtc = windowStart.AddTicks(stepTicks * ordinal),
+                    GameText = $"{ArchivePostMarker}{ordinal}. Летопись кампании, сохранена для истории.",
+                });
+            }
+            _dbContext.Posts.AddRange(posts);
+            await _dbContext.SaveChangesAsync();
+            result.PostsCreated += toCreate;
+        }
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Game.Features.Posts;
 using Microsoft.EntityFrameworkCore;
@@ -17,23 +18,17 @@ internal class DiceRollRepository : IDiceRollRepository
 {
     private readonly DmDbContext _dbContext;
 
-    /// <inheritdoc />
     public DiceRollRepository(DmDbContext dbContext)
     {
         _dbContext = dbContext;
     }
 
     /// <inheritdoc />
-    public async Task<IEnumerable<DiceRoll>> GetByPostIdAsync(Guid postId)
+    public async Task<IEnumerable<DiceRoll>> GetByPostIdAsync(Guid postId, CancellationToken ct = default)
     {
-        var rolls = await _dbContext.DiceRolls
+        return await Read(_dbContext.DiceRolls
             .TagWith("DM.Game.DiceRollsByPost")
-            .Where(d => d.PostId == postId)
-            .OrderBy(d => d.CreatedUtc)
-            .ThenBy(d => d.DiceRollId)
-            .ToListAsync();
-
-        return rolls.Select(MapToDomain);
+            .Where(d => d.PostId == postId), ct);
     }
 
     /// <inheritdoc />
@@ -43,18 +38,39 @@ internal class DiceRollRepository : IDiceRollRepository
         if (postIdList.Count == 0)
             return new Dictionary<Guid, IEnumerable<DiceRoll>>();
 
-        var rolls = await _dbContext.DiceRolls
+        var rolls = await Read(_dbContext.DiceRolls
             .TagWith("DM.Game.DiceRollsByPosts")
-            .Where(d => postIdList.Contains(d.PostId))
-            .OrderBy(d => d.CreatedUtc)
-            .ThenBy(d => d.DiceRollId)
-            .ToListAsync();
+            .Where(d => postIdList.Contains(d.PostId)));
 
         return rolls
             .GroupBy(r => r.PostId)
             .ToDictionary(
                 g => g.Key,
-                g => g.Select(MapToDomain).AsEnumerable());
+                g => g.AsEnumerable());
+    }
+
+    /// <summary>
+    /// The rolls in the order they were thrown, each with the word of its room
+    /// and its game on who sees the results: the domain decides on the roll
+    /// alone (DiceRollVisibility), and a roll read without them hides itself from
+    /// everybody but the leads and the author.
+    /// </summary>
+    private async Task<List<DiceRoll>> Read(IQueryable<DbDiceRoll> rolls, CancellationToken ct = default)
+    {
+        var rows = await rolls
+            .Join(_dbContext.Posts, d => d.PostId, p => p.PostId, (d, p) => new
+            {
+                Roll = d,
+                p.Room.ViewDiceResults,
+                p.Room.Game.HideDiceResult
+            })
+            .OrderBy(r => r.Roll.CreatedUtc)
+            .ThenBy(r => r.Roll.DiceRollId)
+            .ToListAsync(ct);
+
+        return rows
+            .Select(r => MapToDomain(r.Roll, r.ViewDiceResults, r.HideDiceResult))
+            .ToList();
     }
 
     /// <summary>
@@ -66,9 +82,7 @@ internal class DiceRollRepository : IDiceRollRepository
             DiceRollId = roll.Id,
             PostId = roll.PostId,
             CreatedUtc = roll.CreatedUtc,
-            IsAdditional = roll.IsAdditional,
             IsHidden = roll.IsHidden,
-            IsFair = roll.IsFair,
             DiceCount = roll.DiceCount,
             EdgesCount = roll.EdgesCount,
             ExplosionCount = roll.ExplosionCount,
@@ -82,14 +96,14 @@ internal class DiceRollRepository : IDiceRollRepository
             }).ToArray()
         });
 
-    private static DiceRoll MapToDomain(DbDiceRoll db) => new()
+    private static DiceRoll MapToDomain(DbDiceRoll db, bool roomViewDiceResults, bool gameHideDiceResult) => new()
     {
         Id = db.DiceRollId,
         PostId = db.PostId,
         CreatedUtc = db.CreatedUtc,
-        IsAdditional = db.IsAdditional,
         IsHidden = db.IsHidden,
-        IsFair = db.IsFair,
+        RoomViewDiceResults = roomViewDiceResults,
+        GameHideDiceResult = gameHideDiceResult,
         DiceCount = db.DiceCount,
         EdgesCount = db.EdgesCount,
         ExplosionCount = db.ExplosionCount,

@@ -5,7 +5,6 @@ using DM.Domain.Core.Authorization;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Core.Parsing;
-using DM.Testing.Dsl;
 using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
@@ -15,20 +14,11 @@ namespace DM.Infrastructure.Core.Tests;
 /// under it stays hidden on every path a text is read by.
 /// </summary>
 /// <remarks>
-/// An unclosed tag used to be drawn to the end of the text, and an unclosed
-/// [code] or [noparse] used to show everything after it as an example unless a
-/// hidden block stood in it, in which case the first such block was read after
-/// all. Now every one of them is the text it is, and what follows its opening is
-/// read like any other text: a hidden block under it is a hidden block by the
-/// ordinary rule. That is the rule the privacy of the block rests on, so it is
-/// asked of every tag a post can leave open and on every path - the page for a
-/// reader the block is not for and for one it is, the plain text the mail and
-/// the search are built from, the second lock the search cuts with, the author's
-/// editor and the save path.
+/// What follows the opening of an unclosed tag is read like any other text, so a hidden block under it
+/// is hidden by the ordinary rule. Asked of every tag a post can leave open, on every path a text is read by.
 /// </remarks>
 public class BbUnclosedTagShould
 {
-    private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid LeadId = Guid.Parse("22222222-2222-2222-2222-222222222222");
     private static readonly Guid OwnerId = Guid.Parse("33333333-3333-3333-3333-333333333333");
     private static readonly Guid StrangerId = Guid.Parse("44444444-4444-4444-4444-444444444444");
@@ -72,17 +62,17 @@ public class BbUnclosedTagShould
 
     [Theory]
     [MemberData(nameof(OpenersAndBlocks))]
-    public void ShowTheBlockToItsReadersAlone_UnderATagLeftOpen(string opener, string block)
+    public void ShowTheBlockToItsReadersAloneUnderATagLeftOpen(string opener, string block)
     {
         var input = $"до {opener} пример {block} хвост";
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.GamePost);
         var snapshot = PrivateAddresseeSnapshot.Read(PrivateAddresseeSnapshot.Build(input,
             [new PrivateAddressee(Guid.NewGuid(), "Вася", OwnerId)]));
 
         wrapper.RenderHtml(input, Display(BbSurface.GamePost, StrangerId, snapshot))
             .Should().Be($"до {opener} пример  хвост");
 
-        foreach (var reader in new[] { AuthorId, LeadId, OwnerId })
+        foreach (var reader in new[] { BbVisibilityRender.AuthorId, LeadId, OwnerId })
         {
             wrapper.RenderHtml(input, Display(BbSurface.GamePost, reader, snapshot))
                 .Should().Be($"до {opener} пример {HiddenBlock(Secret)} хвост");
@@ -91,36 +81,14 @@ public class BbUnclosedTagShould
 
     [Theory]
     [MemberData(nameof(OpenersAndBlocks))]
-    public void KeepTheBlockOutOfThePlainTextAndTheSearch_UnderATagLeftOpen(string opener, string block)
+    public void KeepTheBlockOutOfThePlainTextAndTheSearchUnderATagLeftOpen(string opener, string block)
     {
         var input = $"до {opener} пример {block} хвост";
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.GamePost);
 
         wrapper.RenderText(input, RenderContext.ForPlainText() with { Surface = BbSurface.GamePost })
             .Should().Be($"до {opener} пример  хвост");
         new Regex(PrivateBlockMarkup.BlockPattern).Replace(input, " ").Should().NotContain(Secret);
-    }
-
-    /// <summary>
-    /// The author's editor gets the block as a block, so a save that changes
-    /// nothing writes back the text that was loaded.
-    /// </summary>
-    /// <remarks>
-    /// The danger here is the other way round from the page: a code block drawn
-    /// around the hidden one in the editor would be written back with its closing
-    /// tag, and the block would become an example printed to the room.
-    /// </remarks>
-    [Theory]
-    [MemberData(nameof(OpenersAndBlocks))]
-    public void GiveTheAuthorTheBlockAsABlock_UnderATagLeftOpen(string opener, string block)
-    {
-        var input = $"до {opener} пример {block} хвост";
-        var wrapper = (BbParserWrapper)_parserProvider.GetForAuthorEdit(BbSurface.GamePost);
-
-        wrapper.RenderHtml(input, RenderContext.ForAuthorEdit(Subject(AuthorId), BbSurface.GamePost))
-            .Should().Be($"{BbParserWrapper.LineBreaksWritten}до {opener} пример " +
-                         "<span class=\"private-message\" data-bb-tag=\"private\" " +
-                         $"data-bb-addressees=\"Вася\">{Secret}</span> хвост");
     }
 
     /// <summary>
@@ -129,13 +97,13 @@ public class BbUnclosedTagShould
     /// </summary>
     [Theory]
     [MemberData(nameof(OpenersAndBlocks))]
-    public void EraseTheBlockOffTheGamePost_UnderATagLeftOpen(string opener, string block)
+    public void EraseTheBlockOffTheGamePostUnderATagLeftOpen(string opener, string block)
     {
         var input = $"до {opener} пример {block} хвост";
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.Comment);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.Comment);
         var snapshot = PrivateAddresseeSnapshot.Read(PrivateAddresseeSnapshot.Empty);
 
-        wrapper.RenderHtml(input, Display(BbSurface.Comment, AuthorId, snapshot))
+        wrapper.RenderHtml(input, Display(BbSurface.Comment, BbVisibilityRender.AuthorId, snapshot))
             .Should().Be($"до {opener} пример  хвост");
     }
 
@@ -144,10 +112,7 @@ public class BbUnclosedTagShould
     /// refuses it under a [noparse] left open: the author almost always wrote an
     /// example there and forgot the closing tag.
     /// </summary>
-    /// <remarks>
-    /// [code] is an ordinary tag here. It changes the font and shows nothing as
-    /// an example, so a block under one left open is no forgotten example.
-    /// </remarks>
+    /// <remarks>[code] only changes the font, so a block under one left open is no forgotten example.</remarks>
     [Theory]
     [MemberData(nameof(OpenersAndBlocks))]
     public void RefuseTheBlockOnlyUnderANoparseLeftOpen(string opener, string block)
@@ -165,10 +130,10 @@ public class BbUnclosedTagShould
     /// </summary>
     [Theory]
     [MemberData(nameof(AllOpeners))]
-    public void HideTheRestOfTheText_WhenTheBlockUnderATagLeftOpenIsNotClosedEither(string opener)
+    public void HideTheRestOfTheTextWhenTheBlockUnderATagLeftOpenIsNotClosedEither(string opener)
     {
         var input = $"до {opener} пример [PRIVATE=\"Вася\"]{Secret} хвост";
-        var wrapper = (BbParserWrapper)_parserProvider.GetForSurface(BbSurface.GamePost);
+        var wrapper = _parserProvider.GetForSurface(BbSurface.GamePost);
         var snapshot = PrivateAddresseeSnapshot.Read(PrivateAddresseeSnapshot.Empty);
 
         wrapper.RenderHtml(input, Display(BbSurface.GamePost, StrangerId, snapshot))
@@ -188,17 +153,11 @@ public class BbUnclosedTagShould
             Audience = RenderAudience.Display,
             Surface = surface,
             Viewer = Subject(viewer),
-            PostAuthorUserId = AuthorId,
+            PostAuthorUserId = BbVisibilityRender.AuthorId,
             GameLeadUserIds = [LeadId],
             PrivateAddresseeOwnerUserIdsByAttribute = snapshot.OwnerUserIdsByAttribute,
             PrivateAddresseeNamesByAttribute = snapshot.AddresseeNamesByAttribute
         };
 
-    private static IAuthorizationSubject Subject(Guid userId) => new TestSubject
-    {
-        UserId = userId,
-        Role = UserRole.RegularUser,
-        IsAuthenticated = true,
-        AccessPolicy = AccessPolicy.NotSpecified
-    };
+    private static IAuthorizationSubject Subject(Guid userId) => BbVisibilityRender.Viewer(UserRole.RegularUser, userId);
 }

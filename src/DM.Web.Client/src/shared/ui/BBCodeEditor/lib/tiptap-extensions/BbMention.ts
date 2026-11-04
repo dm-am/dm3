@@ -10,28 +10,14 @@
 
 import { Node } from "@tiptap/core";
 
-export interface BbMentionOptions {
-  HTMLAttributes: Record<string, unknown>;
-}
-
-export const BbMention = Node.create<BbMentionOptions>({
+export const BbMention = Node.create({
   name: "bbMention",
-
-  addOptions() {
-    return {
-      HTMLAttributes: {},
-    };
-  },
 
   group: "inline",
 
   inline: true,
 
   atom: true,
-
-  selectable: true,
-
-  draggable: false,
 
   addAttributes() {
     return {
@@ -68,5 +54,3 @@ export const BbMention = Node.create<BbMentionOptions>({
     ];
   },
 });
-
-export default BbMention;

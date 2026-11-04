@@ -1,21 +1,11 @@
-using System.Linq;
-
 namespace DM.Domain.Core.Dto;
 
 /// <summary>
 /// How large a page may be, for every list on the site at once.
 /// </summary>
 /// <remarks>
-/// Four places stated this independently: the two preference DTOs listed the
-/// values the account form offers, the profile validator bounded them, and
-/// PagingQuery bounded what a request may ask for. They disagreed — the DTOs
-/// allowed 200 and the validator demanded less than 200 — so picking 200 in the
-/// settings refused the whole form with "некорректное значение", and a reader who
-/// wanted long pages could not save an unrelated change either.
-///
-/// The set is stated once here, in the layer both the API and the domain already
-/// reference. The client keeps its own copy of the numbers because it has to draw
-/// them; PagingContractShould holds the two sides together.
+/// The client keeps its own copy of the numbers because it has to draw them;
+/// PagingContractShould holds the two sides together.
 /// </remarks>
 public static class PagingPolicy
 {
@@ -32,7 +22,7 @@ public static class PagingPolicy
     /// preference the reader can save and the API then refuses to serve is a
     /// setting that quietly does nothing.
     /// </remarks>
-    public static readonly int MaxPageSize = AllowedPageSizes.Max();
+    public const int MaxPageSize = 200;
 
     /// <summary>
     /// Page size for a reader who has never chosen one.

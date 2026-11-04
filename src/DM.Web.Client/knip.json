@@ -1,0 +1,39 @@
+{
+  // Unused files, exports, types, enum members and packages of the client. Run
+  // as `npm run knip`; a finding fails the gate, and the lawful moves are to
+  // delete the code or, for a finding that is false, to write the exception
+  // with the reason it is false. knip reads this file with comments.
+  "$schema": "./node_modules/knip/schema.json",
+
+  // src/app/main.ts, the entry of index.html, is found through the vite plugin
+  // and needs no line here. These are read by nothing that imports them by text:
+  // vite.preview.config.ts is passed to vite by .claude/launch.json, and the three
+  // sass files are prepended to every stylesheet through additionalData in
+  // vite.config.ts.
+  "entry": [
+    "vite.preview.config.ts",
+    "src/assets/styles/{Variables,Themes,_Surfaces}.sass"
+  ],
+  // scss is listed although the tree has none: the specs name the extension in
+  // strings, and without it knip prints a configuration hint on every run.
+  "project": ["src/**/*.{ts,js,vue,sass,scss}", "e2e/**/*.ts", "*.{ts,js}"],
+  "paths": { "@/*": ["./src/*"] },
+
+  // An export used only inside its own file is a finding too: drop the
+  // `export`, not the code.
+  "ignoreExportsUsedInFile": false,
+  "includeEntryExports": false,
+
+  // Each entry below is a finding that is false, with the reason. A false
+  // finding on one export or enum member is written where it stands, as a
+  // @public tag with the reason, and stays out of this list: an entry here
+  // silences its issue type for the whole file. Only duplicates are written
+  // here: @public does not reach them, and @alias, which does, also takes its
+  // export out of the unused check.
+  "ignoreIssues": {
+    // POPOVER_GAP = TINY and VIEWPORT_EDGE = SMALL are deliberate names for the
+    // same step of the grid: the scale names are read by geometry.spec.ts, the
+    // role names by the placement code.
+    "src/shared/lib/constants/geometry.ts": ["duplicates"]
+  }
+}

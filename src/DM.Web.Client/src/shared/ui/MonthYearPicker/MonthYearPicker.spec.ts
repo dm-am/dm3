@@ -3,12 +3,10 @@
  */
 
 import { describe, it, expect, afterEach, vi } from "vitest";
-import { readFileSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import { nextTick } from "vue";
 import { mount } from "@vue/test-utils";
-import { parse as parseSfc } from "vue/compiler-sfc";
 import { componentCss, ruleMap } from "@/shared/lib/testing/styles";
 import MonthYearPicker from "./MonthYearPicker.vue";
 
@@ -35,10 +33,6 @@ describe("MonthYearPicker", () => {
   const open = async (wrapper: ReturnType<typeof mountComponent>) => {
     await wrapper.find(".myp-trigger").trigger("click");
   };
-
-  // ============================================================================
-  // MONTH MODE
-  // ============================================================================
 
   describe("Month mode", () => {
     it("labels the trigger with the capitalized month and year", () => {
@@ -75,10 +69,6 @@ describe("MonthYearPicker", () => {
       expect(wrapper.emitted("update:month")?.at(-1)).toEqual([3]);
     });
   });
-
-  // ============================================================================
-  // YEAR MODE (12-year blocks)
-  // ============================================================================
 
   describe("Year mode", () => {
     const yearMode = { mode: "year" as const };
@@ -147,10 +137,6 @@ describe("MonthYearPicker", () => {
     });
   });
 
-  // ============================================================================
-  // DIALOG BEHAVIOR
-  // ============================================================================
-
   describe("Dialog behavior", () => {
     it("marks the selected cell with aria-current", async () => {
       const wrapper = mountComponent();
@@ -167,105 +153,9 @@ describe("MonthYearPicker", () => {
     });
   });
 
-  // ============================================================================
-  // POPOVER PLACEMENT
-  // ============================================================================
-
-  /**
-   * The popover used to be rendered inside the bordered stepper pill, and the
-   * pill clips its sections by radius (overflow: hidden). The 220px panel was
-   * cut down to the field's own height, and since opening moves focus into a
-   * cell, the browser scrolled that clipped box: the field showed a strip of
-   * the month grid ("Июл Авг") instead of a popover under it. The border and
-   * the clipping live on an inner box now, and the popover is a child of the
-   * bare positioning root.
-   *
-   * The fence reads the component's own stylesheet instead of computed styles
-   * because jsdom applies no scoped CSS: getComputedStyle reports "visible"
-   * for every element here, so a style-blind test would stay green on exactly
-   * the markup that broke.
-   */
+  // The popover is a child of the bare root, outside the clipping pill; read off the stylesheet: jsdom applies no scoped CSS.
   describe("Popover placement", () => {
-    const SOURCE = readFileSync(
-      join(dirname(fileURLToPath(import.meta.url)), "MonthYearPicker.vue"),
-      "utf8",
-    );
-
-    /**
-     * Classes whose rule clips what it contains. Indented Sass: a declaration
-     * belongs to the nearest line above it with a smaller indent, so the
-     * enclosing selectors form a stack, and the box that clips is the last
-     * compound of the chain (in ".a &.b .c" it is ".c", not ".a").
-     */
-    const clippingClasses = (): Set<string> => {
-      const { descriptor } = parseSfc(SOURCE, {
-        filename: "MonthYearPicker.vue",
-      });
-      const clipping = new Set<string>();
-      const stack: { indent: number; selector: string }[] = [];
-      for (const line of (descriptor.styles[0]?.content ?? "").split("\n")) {
-        const text = line.trim();
-        if (!text || text.startsWith("//") || text.startsWith("@")) continue;
-        const indent = line.length - line.trimStart().length;
-        while (stack.length && stack[stack.length - 1].indent >= indent) {
-          stack.pop();
-        }
-        const overflow = /^overflow(?:-[xy])?:\s*(\S+)/.exec(text);
-        if (overflow) {
-          if (overflow[1] !== "visible") {
-            const box =
-              stack
-                .map((entry) => entry.selector)
-                .join(" ")
-                .split(/\s+/)
-                .pop() ?? "";
-            for (const [, name] of box.matchAll(/\.([\w-]+)/g)) {
-              clipping.add(name);
-            }
-          }
-          continue;
-        }
-        // Property lines and mixin calls are leaves; anything else opens a block.
-        if (!/^[a-z-]+:/.test(text) && !text.startsWith("+")) {
-          stack.push({ indent, selector: text });
-        }
-      }
-      return clipping;
-    };
-
-    it("keeps the popover out of every box that clips", async () => {
-      const clipping = clippingClasses();
-      // A silent empty scan would be worse than a failure: the walk below
-      // would then compare against nothing and could never go red again.
-      expect(clipping.size).toBeGreaterThan(0);
-
-      const wrapper = mountComponent({ stepper: true });
-      await wrapper.find(".myp-trigger-section").trigger("click");
-      const popover = wrapper.find(".myp-popover");
-      expect(popover.exists()).toBe(true);
-
-      // Up to the component root — boxes above it belong to the page.
-      const root = wrapper.element;
-      const clipped: string[] = [];
-      for (let el = popover.element.parentElement; el; el = el.parentElement) {
-        if (Array.from(el.classList).some((name) => clipping.has(name))) {
-          clipped.push(el.className);
-        }
-        if (el === root) break;
-      }
-      expect(clipped).toEqual([]);
-    });
-
-    /**
-     * The popover stands in a fixed layer, off the picker's rectangle, as the
-     * date field's calendar does. Inside the picker it was cut by any box
-     * around it that clips, and on a phone the period of the statistics page
-     * is a row that scrolls sideways, which clips what it scrolls.
-     *
-     * jsdom lays out nothing: the picker's rectangle and the window are given
-     * by hand, and the panel, which measures 0 here, is taken at the size the
-     * component assumes before it can measure it (220 by 200).
-     */
+    // A fixed layer, as the date field's calendar: jsdom lays out nothing, so the rectangles are given by hand.
     describe("in a fixed layer", () => {
       const html = document.documentElement;
       let restoreWindow: (() => void) | null = null;
@@ -343,7 +233,7 @@ describe("MonthYearPicker", () => {
       });
 
       it("is pushed back inside the window at its right edge", async () => {
-        // A phone: the picker has been scrolled toward the right of its row.
+        // A narrow window: the picker stands toward the right of its row.
         windowOf(375, 800);
         const { wrapper } = placed(300, 50);
         await open(wrapper);

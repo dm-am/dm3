@@ -2,14 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The three moments a sidebar list refetches, in one place now.
- *
- * Five blocks had written them out one by one, and the middle one is the one
- * that gets dropped when a sixth block is copied from a fifth: without the
- * forced refetch on a change of viewer, the unread counters on the rows stay
- * the previous reader's for the rest of the session.
- */
+/** The three moments a sidebar list refetches; without the forced one the counters stay the last reader's. */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { defineComponent, nextTick } from "vue";
 import { mount } from "@vue/test-utils";

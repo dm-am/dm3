@@ -1,17 +1,9 @@
 import { test, expect } from "@playwright/test";
 
 /**
- * Board and filter of a forum board.
- *
- * Two things were wrong here at once. "news" is not a board alias — the seed
- * writes "general" and nine more — and the filter selectors named a control
- * set the client does not have: ".search-input", ".sort-select",
- * ".sort-order-button", ".clear-button", ".clear-filters-button". The search
- * box is `.search-container .the-input` with a `.clear-input-btn`, the sort
- * is a SortButton (`.sort-btn` opening `.sort-dropdown` of `.sort-option`),
- * and there is no "clear filters" control for a search at all: the bubbles
- * row with its `.clear-all-link` only appears for an author or date filter.
- * The two tests written against it asserted a button that cannot exist.
+ * Board and filter of a forum board. The search box is `.search-container
+ * .the-input` with a `.clear-input-btn`, the sort is a SortButton (`.sort-btn`
+ * opening `.sort-dropdown` of `.sort-option`).
  */
 const BOARD = "/forum/general";
 
@@ -19,15 +11,6 @@ test.describe("Forum Topics", () => {
   test.beforeEach(async ({ page }) => {
     await page.goto(BOARD);
     await page.waitForSelector(".topics-page", { timeout: 10000 });
-  });
-
-  test("should display topics list with DataTable", async ({ page }) => {
-    await expect(page.locator(".data-table")).toBeVisible();
-  });
-
-  test("should display board navigation", async ({ page }) => {
-    await expect(page.locator(".board-navigation")).toBeVisible();
-    await expect(page.locator(".board-link").first()).toBeVisible();
   });
 
   test("should highlight current board in navigation", async ({ page }) => {
@@ -88,12 +71,9 @@ test.describe("Forum Topics Filters", () => {
     await expect(page).toHaveURL(/sortBy=created/);
   });
 
-  // Two things this test used to get wrong, and both made it red on correct
-  // code. The direction control lives inside the dropdown, which is a v-if and
-  // which toggleSortOrder closes (SortButton.vue), so the second click had no
-  // element to land on; and the URL carries the sort order only while it is not
-  // the default, so "back to desc" is an absent parameter and never
-  // `sortOrder=desc`.
+  // The direction control lives inside the dropdown, which toggleSortOrder
+  // closes (SortButton.vue), so each click reopens it; and the URL carries the
+  // sort order only while it is not the default.
   test("should toggle sort order", async ({ page }) => {
     const sortButton = page.locator(".topics-filter .sort-btn");
     const direction = page.locator(".topics-filter .sort-direction");
@@ -115,8 +95,7 @@ test.describe("Forum Topics Pinned", () => {
   });
 
   test("should display pinned topics with bold style", async ({ page }) => {
-    // Both topics the seed writes into this board are pinned, so the guard
-    // this test used to hide behind was never doing anything but hiding.
+    // Both topics the seed writes into this board are pinned.
     const firstPinned = page.locator(".topic-link.pinned").first();
 
     await expect(firstPinned).toBeVisible();

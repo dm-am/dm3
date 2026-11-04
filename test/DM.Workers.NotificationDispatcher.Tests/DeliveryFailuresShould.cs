@@ -22,21 +22,8 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// A notification that reached no recipient is counted.
 /// </summary>
 /// <remarks>
-/// Delivery is best effort by design: the notification is already durable when
-/// the senders run, and letting one dead channel throw would replay the whole
-/// message - since W1.4 the idempotent write keeps the replay from storing and
-/// sending it all again, but the retries would burn on a channel that is down
-/// and a message from before the key existed would still cost the recipient a
-/// second copy over every channel that is up. So a failure is swallowed - and
-/// swallowed is where it stopped. The message was consumed successfully, because from the
-/// pipeline's side it was, so every counter about the queue and every panel about
-/// the process stayed exactly as green as on a day when everything arrived.
-///
-/// The reason this needs a test rather than a reading of the code: the counter is
-/// in a catch block that nothing else observes. Delete the line and every test in
-/// this repository still passes, the worker still runs, the log still carries its
-/// warning, and the only difference is that the rule reading the series never
-/// fires again.
+/// Delivery is best effort and a failure is swallowed, so the message is consumed successfully; the counter
+/// in the catch block is the only trace, and nothing else observes it.
 /// </remarks>
 public class DeliveryFailuresShould
 {
@@ -82,7 +69,7 @@ public class DeliveryFailuresShould
 
         var generator = Substitute.For<INotificationGenerator>();
         generator.CanResolve(Arg.Any<EventType>()).Returns(true);
-        generator.Generate(Arg.Any<Guid>()).Returns(One(notification));
+        generator.Generate(Arg.Any<Guid>()).Returns(NotificationSeed.One(notification));
 
         var service = Substitute.For<INotificationService>();
         service
@@ -167,9 +154,4 @@ public class DeliveryFailuresShould
         return listener;
     }
 
-    private static async IAsyncEnumerable<CreateNotification> One(CreateNotification notification)
-    {
-        yield return notification;
-        await Task.CompletedTask;
-    }
 }

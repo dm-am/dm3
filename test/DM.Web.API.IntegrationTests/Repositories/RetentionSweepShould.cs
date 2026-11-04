@@ -1,5 +1,3 @@
-using System;
-using System.Threading.Tasks;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Retention;
@@ -16,11 +14,8 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// The retention sweep replaces the TTL indexes of the retired document store:
-/// one pass per policy, DELETE by the stamped column. Each of the policies is
-/// asserted the same way — a row older than the term goes, a row younger
-/// stays. Against a live Postgres because the sweep is raw SQL over the
-/// registry, and nothing else executes it.
+/// The retention sweep is one DELETE per policy by the stamped column: an older row goes, a younger one stays.
+/// Against a live Postgres: the sweep is raw SQL over the registry.
 /// </summary>
 public class RetentionSweepShould : IntegrationTestBase
 {
@@ -150,11 +145,7 @@ public class RetentionSweepShould : IntegrationTestBase
     /// <summary>
     /// A login that stopped between the two factors is a stream with a term.
     /// </summary>
-    /// <remarks>
-    /// The challenge itself lives five minutes; the day the sweep measures is
-    /// slack for a row the end of a login failed to delete, and not a second
-    /// lifetime for the challenge.
-    /// </remarks>
+    /// <remarks>The challenge lives five minutes; the day is slack for a row a login failed to delete.</remarks>
     [Fact]
     public async Task ExpireAbandonedSecondFactorChallenges()
     {

@@ -12,22 +12,8 @@ namespace DM.Web.API.Tests.Shared;
 /// A request body is its own type, never the response DTO of the same resource.
 /// </summary>
 /// <remarks>
-/// A response DTO answers "what does this resource look like"; a request body
-/// answers "what may the caller change". Using one for both makes the contract
-/// ask for fields that do nothing — editing the text of a comment requires
-/// assembling an author of 28 fields and an array of likers, none of which is
-/// read — and leaves the server with nothing but a hand-written Ignore per field
-/// standing between an input and the domain.
-///
-/// That defence has already failed once, and the comment recording it still sits
-/// in CharacterMappingProfile: PATCH of a character without a privacy block
-/// demoted an NPC to a player character, because a bool? destination took a
-/// plain false from a missing source. The repair was one line; the class of
-/// defect was untouched, and the next field added to a response DTO lands in the
-/// update path by name again.
-///
-/// The list below is the whole of the debt, frozen. It may shrink and must not
-/// grow: a new action binding a response DTO turns this red on the first build.
+/// A response DTO as a body asks for fields that do nothing and leaves an Ignore per field between input
+/// and domain. The list below is the frozen debt: it may shrink, not grow.
 /// </remarks>
 public class RequestBodyTypesShould
 {
@@ -36,16 +22,10 @@ public class RequestBodyTypesShould
     /// action rather than by type: the fix is a per-endpoint request DTO, so the
     /// list shrinks one action at a time.
     /// </summary>
-    /// <remarks>
-    /// Creation shares the debt with editing. A POST that binds the resource DTO
-    /// asks the caller for the id, the author and the counters the server is about
-    /// to compute, and the only thing keeping them out of the domain is the same
-    /// per-field Ignore.
-    /// </remarks>
+    /// <remarks>Creation shares the debt: a POST binding the resource DTO asks for the id and the counters.</remarks>
     private static readonly string[] Legacy =
     [
         "CharacterController.PostCharacter",
-        "GameBlacklistController.PostBlacklist",
         "RoomController.PostAccess",
     ];
 
@@ -84,13 +64,9 @@ public class RequestBodyTypesShould
     [Fact]
     public void NotBeAResponseType()
     {
-        var responses = ResponseTypes();
-        responses.Should().NotBeEmpty("the host declares success bodies");
+        ResponseTypes().Should().NotBeEmpty("the host declares success bodies");
 
-        var offenders = Actions()
-            .Where(action => action.GetParameters()
-                .Any(p => p.GetCustomAttribute<FromBodyAttribute>() != null && responses.Contains(p.ParameterType)))
-            .Select(action => $"{action.DeclaringType!.Name}.{action.Name}")
+        var offenders = TakingAResponseType()
             .Where(name => !Legacy.Contains(name))
             .OrderBy(name => name, StringComparer.Ordinal)
             .ToArray();
@@ -102,16 +78,19 @@ public class RequestBodyTypesShould
     [Fact]
     public void LeaveNoStaleNameOnTheLegacyList()
     {
-        var responses = ResponseTypes();
+        Legacy.Should().BeSubsetOf(TakingAResponseType(),
+            "an entry that outlives the action it exempts is an exemption nobody " +
+            "reviewed, waiting for a new action to be given the same name");
+    }
 
-        var offending = Actions()
+    /// <summary>The actions whose request body is a response type, as Controller.Action.</summary>
+    private static string[] TakingAResponseType()
+    {
+        var responses = ResponseTypes();
+        return Actions()
             .Where(action => action.GetParameters()
                 .Any(p => p.GetCustomAttribute<FromBodyAttribute>() != null && responses.Contains(p.ParameterType)))
             .Select(action => $"{action.DeclaringType!.Name}.{action.Name}")
             .ToArray();
-
-        Legacy.Should().BeSubsetOf(offending,
-            "an entry that outlives the action it exempts is an exemption nobody " +
-            "reviewed, waiting for a new action to be given the same name");
     }
 }

@@ -1,22 +1,8 @@
 <script setup lang="ts">
-/**
- * Canonical ASCII dash separator ("- - - - ...").
- *
- * A single long literal dash line clipped by the container width via
- * white-space: nowrap + overflow: hidden - matches the copies previously
- * duplicated in pages/home/HomePage.vue (.separator) and
- * pages/about/TestimonialsPage.vue (.separator).
- *
- * When `label` is set, switches to the line-label-line layout used by the
- * chat date-separator (pages/global-chat/GlobalChatPage.vue .date-separator):
- * two 1px dashed border lines flanking a centered muted label, instead of
- * literal dash text.
- */
+// A literal dash line clipped by its container; with a label, two dashed rules around it.
 withDefaults(
   defineProps<{
-    /** Vertical margin around the separator. "none" is for the callers
-     * that set the rhythm around the line themselves: the paging block and
-     * the sidebar lists space it by their own layout. */
+    /** "none" for callers that space the line themselves. */
     spacing?: "small" | "tiny" | "none";
     /** Optional centered label — switches to line-label-line layout */
     label?: string;
@@ -30,9 +16,7 @@ withDefaults(
   },
 );
 
-// Long "- " dash line, clipped by the container via CSS overflow rather than
-// measured/generated to fit at runtime. The repeat count comfortably outlasts
-// the widest supported viewport so the line always reaches the container edge.
+// Clipped by the container rather than measured: the count outlasts the widest viewport.
 const DASH_LINE = "- ".repeat(450);
 </script>
 
@@ -66,25 +50,16 @@ const DASH_LINE = "- ".repeat(450);
   max-width: var(--dash-width, 100%)
   width: 0
   min-width: var(--dash-width, 100%)
-  // Decorative horizontal dash line, and the only non-selectable text in
-  // the client: a page select-all/drag must not pull the "- - - -" line
-  // into the copied text. The sidebar "- " prefix is selectable by rule.
+  // The one non-selectable text: a select-all must not copy the dash line.
   user-select: none
-
-  &.spacing-small
-    margin: $small 0
-
-  &.spacing-tiny
-    margin: $tiny 0
-
-  &.spacing-none
-    margin: 0
 
 .dash-separator-labeled
   display: flex
   align-items: center
   gap: $small
 
+.dash-separator,
+.dash-separator-labeled
   &.spacing-small
     margin: $small 0
 
@@ -104,6 +79,6 @@ const DASH_LINE = "- ".repeat(450);
   flex-shrink: 0
   font-size: $secondary-font-size
   color: $text-muted
-  font-weight: 500
+  font-weight: 400
   white-space: nowrap
 </style>

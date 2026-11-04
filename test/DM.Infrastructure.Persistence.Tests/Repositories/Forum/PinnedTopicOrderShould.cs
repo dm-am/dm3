@@ -17,16 +17,7 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 /// <summary>
 /// The pinned order of a board is written whole, and only for that board.
 /// </summary>
-/// <remarks>
-/// The write used to be keyed by topic id alone: it took a map of id to position
-/// and updated whatever rows carried those ids, so the board only ever entered
-/// the call through the permission check made before it. Both halves of that are
-/// pinned here. Whose topics move is decided by the board of the address, not by
-/// the ids in the body, or the moderator of one board renumbers the pinned
-/// topics of another by naming them. And the read the service validates a body
-/// against is scoped the same way, since it is what decides whether a body
-/// covers the board or only part of it.
-/// </remarks>
+/// <remarks>Whose topics move is decided by the board of the address, not by the ids in the body, and so is the validating read.</remarks>
 public class PinnedTopicOrderShould
 {
     private static readonly Guid BoardId = Guid.Parse("9a4c1d20-0000-4000-8000-000000000001");
@@ -50,9 +41,7 @@ public class PinnedTopicOrderShould
     /// </summary>
     private static DmDbContext Seeded()
     {
-        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var context = InMemoryStore.Open();
 
         context.Users.Add(new DbUser
         {

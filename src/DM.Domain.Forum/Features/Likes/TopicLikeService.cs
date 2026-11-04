@@ -10,9 +10,7 @@ using DM.Domain.Forum.Features.Topics;
 
 namespace DM.Domain.Forum.Features.Likes;
 
-/// <summary>
-/// Forum like service
-/// </summary>
+/// <inheritdoc />
 internal class TopicLikeService : ITopicLikeService
 {
     private readonly ITopicService _topicService;

@@ -1,32 +1,27 @@
 #!/usr/bin/env bash
-# Fails, and names the command that fixes it, when the local stack is not one
-# the end-to-end suite can run against. Brings nothing up itself: starting,
-# rebuilding or recreating the stack is the developer's call, and a push that
-# quietly restarted the API under an open tab would be a worse surprise than a
-# refusal.
+# Fails, and names the command that fixes it, when the local stack is not one the end-to-end
+# suite can run against. Brings nothing up itself: starting or recreating the stack is the
+# developer's call, and a push that restarted the API under an open tab would be a worse
+# surprise than a refusal.
 #
-# Run by the pre-push hook and by scripts/gates.sh when the suite is asked for (DM_GATES_FULL), well before the suite:
-# the suite is the last and the dearest gate, and a stack that is not there is
-# a thing to learn in a second, not after twenty minutes of the others.
+# Run by the pre-push hook and by scripts/gates.sh when the suite is asked for
+# (DM_GATES_FULL), well before the suite: a stack that is not there is a thing to learn in a
+# second, not after twenty minutes of the other gates.
 #
 # What the suite needs of the stack, and which of it is checked here:
 #   1. The API answers its liveness route. Checked.
-#   2. Rate limiting is off. Checked. One page load is a dozen and more API
-#      requests against a budget of a hundred per address per minute, so under
-#      the limits the suite fails on 429s that read exactly like stale
-#      selectors. CI switches them off with an overlay in the e2e job of
-#      .github/workflows/dotnet.yml; "dm.ps1 e2e" and "dm.sh e2e" recreate the
-#      API with the same switch, and this reads it back off the container.
-#   3. The database is seeded. Not checked here: global setup signs in as the
-#      seeded accounts before the first spec and says so in its own words.
-#   4. The API is built from the server being pushed. Checked. The image is
-#      built once, by "e2e", and nothing rebuilds it after that, so a server
-#      change committed later would be pushed with the suite measuring the
-#      server before it, and the verdict would be wrong in either direction.
-#      "e2e" writes the commit it built on into the container, and the server
-#      part of the tree is compared between that commit and HEAD. What was
-#      uncommitted at build time is not told apart: the check is about
-#      commits that landed after the build.
+#   2. Rate limiting is off. Checked. One page load is a dozen and more API requests against
+#      a budget of a hundred per address per minute, so the suite would fail on 429s that
+#      read like stale selectors. CI switches the limits off with an overlay in the e2e job
+#      of .github/workflows/dotnet.yml; "dm.ps1 e2e" and "dm.sh e2e" recreate the API with
+#      the same switch, and this reads it back off the container.
+#   3. The database is seeded. Not checked: global setup signs in as the seeded accounts and
+#      says so itself.
+#   4. The API is built from the server being pushed. Checked. The image is built once, by
+#      "e2e", so a server change committed later would be measured as the server before it.
+#      "e2e" writes the commit it built on into the container, and the server part of the
+#      tree is compared between that commit and HEAD. What was uncommitted at build time is
+#      not told apart.
 set -euo pipefail
 
 API="http://localhost:5000"

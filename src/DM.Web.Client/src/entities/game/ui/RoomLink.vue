@@ -1,15 +1,11 @@
 <script setup lang="ts">
-// Shared primitive for linking to a game room. Rooms carry no tooltip, so
-// the component is only the route: the game id comes from the caller when
-// it has one, otherwise from the room's own embedded game reference. That
-// fallback chain is the reason callers reuse this instead of writing the
-// router-link inline.
+// The game id comes from the caller when it has one, otherwise from the room's own game.
 import { computed } from "vue";
-import type { Game, GameRef, Room } from "../model/types";
+import type { Game, GameRef } from "../model/gameTypes";
+import type { Room } from "../model/roomTypes";
 
 const props = defineProps<{
   room: Room;
-  /** Game the room belongs to, when the caller already holds it */
   game?: Game | GameRef;
 }>();
 

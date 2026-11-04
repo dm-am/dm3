@@ -7,7 +7,6 @@ namespace DM.Domain.Game.Features.Blacklists;
 /// <inheritdoc />
 internal class OperateBlacklistLinkValidator : AbstractValidator<OperateBlacklistLink>
 {
-    /// <inheritdoc />
     public OperateBlacklistLinkValidator(
         IUserLookupService userLookupService)
     {

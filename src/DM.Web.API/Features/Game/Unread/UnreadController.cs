@@ -17,11 +17,10 @@ namespace DM.Web.API.Features.Game.Unread;
 [Tags("Game Unread")]
 public class UnreadController : ControllerBase
 {
-    private readonly IUnreadApiService _unreadApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly UnreadApiService _unreadApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <inheritdoc />
-    public UnreadController(IUnreadApiService unreadApiService, IGameApiService gameApiService)
+    public UnreadController(UnreadApiService unreadApiService, GameApiService gameApiService)
     {
         _unreadApiService = unreadApiService;
         _gameApiService = gameApiService;

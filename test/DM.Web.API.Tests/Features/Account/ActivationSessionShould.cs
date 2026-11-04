@@ -4,7 +4,6 @@ using AwesomeAssertions;
 using DM.Domain.Account.Features.Registration;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
-using DM.Domain.Core.Uploads;
 using DM.Testing;
 using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Shared.Authentication;
@@ -21,14 +20,7 @@ namespace DM.Web.API.Tests.Features.Account;
 /// <summary>
 /// Activation hands back a reader who is actually signed in, or nothing at all.
 /// </summary>
-/// <remarks>
-/// The last step of activation signs the reader in without a password, and that
-/// path refuses an account which already carries a second factor. A name chosen
-/// seconds ago cannot carry one, so the refusal is a broken rule rather than an
-/// answer - but the answer went out unread, and what left the server was a guest
-/// wearing the shape of a user under a screen saying the account was ready. The
-/// reader was signed out with nothing on the page saying so.
-/// </remarks>
+/// <remarks>The passwordless sign-in refuses an account with a second factor, and that refusal must be read.</remarks>
 public class ActivationSessionShould : UnitTestBase
 {
     private static readonly Guid Token = Guid.NewGuid();
@@ -45,7 +37,7 @@ public class ActivationSessionShould : UnitTestBase
             .Returns(UserId);
 
         _service = new DM.Web.API.Features.Account.Registration.ActivationApiService(
-            _activationService, _authentication, new UserMapper(Mock<IImgproxyUrlBuilder>()));
+            _activationService, _authentication, new UserMapper());
     }
 
     [Fact]

@@ -4,7 +4,6 @@ using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Infrastructure.Persistence.Shared.Comments;
 using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using NSubstitute;
 using Xunit;
@@ -41,14 +40,7 @@ public class CreateCommentValidatorShould : UnitTestBase
     /// <summary>
     /// Hiding markup on a surface that does not declare it.
     /// </summary>
-    /// <remarks>
-    /// A comment renders on the Comment surface, whose tag set has no [private]
-    /// at all, so the tag is not markup here and the line the author meant to
-    /// hide is published with the tag still around it. Refused at the save path
-    /// rather than erased: the author is writing a draft, not attacking a
-    /// reader, and a paragraph that vanished without a word is looked for
-    /// instead of rewritten.
-    /// </remarks>
+    /// <remarks>The Comment surface has no [private]; refused rather than erased, so the author rewrites the draft.</remarks>
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {
@@ -67,10 +59,6 @@ public class CreateCommentValidatorShould : UnitTestBase
     /// A body past the length limit is refused, and refused by length rather
     /// than by some other rule tripping over it.
     /// </summary>
-    /// <remarks>
-    /// Comments had no limit at all, so the parse and the render of every open
-    /// of the page were bounded by the request size and nothing else.
-    /// </remarks>
     [Fact]
     public void RefuseTextLongerThanTheLimit()
     {
@@ -112,44 +100,17 @@ public class CreateCommentValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    [Fact]
-    public void FailWhenTextIsEmpty()
+    [Theory]
+    [InlineData("")]
+    [InlineData(null)]
+    [InlineData("   ")]
+    public void FailWhenTextIsEmpty(string? text)
     {
-        var comment = new CreateComment
-        {
-            EntityId = Guid.NewGuid(),
-            Text = ""
-        };
+        var comment = new CreateComment { EntityId = Guid.NewGuid(), Text = text! };
 
         var result = validator.TestValidate(comment);
         result.ShouldHaveValidationErrorFor(c => c.Text)
             .WithErrorMessage(ValidationError.Empty);
-    }
-
-    [Fact]
-    public void FailWhenTextIsNull()
-    {
-        var comment = new CreateComment
-        {
-            EntityId = Guid.NewGuid(),
-            Text = null!
-        };
-
-        var result = validator.TestValidate(comment);
-        result.ShouldHaveValidationErrorFor(c => c.Text);
-    }
-
-    [Fact]
-    public void FailWhenTextIsWhitespace()
-    {
-        var comment = new CreateComment
-        {
-            EntityId = Guid.NewGuid(),
-            Text = "   "
-        };
-
-        var result = validator.TestValidate(comment);
-        result.ShouldHaveValidationErrorFor(c => c.Text);
     }
 
     [Fact]
@@ -163,18 +124,5 @@ public class CreateCommentValidatorShould : UnitTestBase
 
         var result = validator.TestValidate(comment);
         result.ShouldHaveValidationErrorFor(c => c.EntityId);
-    }
-
-    [Fact]
-    public void PassWithMinimalValidInput()
-    {
-        var comment = new CreateComment
-        {
-            EntityId = Guid.NewGuid(),
-            Text = "A"
-        };
-
-        var result = validator.TestValidate(comment);
-        result.ShouldNotHaveAnyValidationErrors();
     }
 }

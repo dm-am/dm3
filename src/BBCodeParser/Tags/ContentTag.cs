@@ -9,14 +9,8 @@ namespace BBCodeParser.Tags
     /// A tag whose content is one value rather than text: an address, a login.
     /// </summary>
     /// <remarks>
-    /// Such a tag is a node like any other, so everything written between its
-    /// two halves goes through the grammar first: a hiding block inside it is a
-    /// hiding block, not part of an address. What the node then renders depends
-    /// on its content as a whole. When the node was closed by its own tag,
-    /// carries nothing but text and that text reads as one value of the kind,
-    /// the tag renders the value; otherwise the node renders as it was written,
-    /// opening and closing tag as text, and its children as they would render
-    /// anywhere else.
+    /// A node like any other, so a hiding block inside it is a hiding block. A closed
+    /// node holding one accepted value renders it; otherwise it renders as typed.
     /// </remarks>
     public abstract class ContentTag : Tag
     {

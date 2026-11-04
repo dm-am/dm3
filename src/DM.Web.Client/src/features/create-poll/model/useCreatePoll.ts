@@ -4,14 +4,20 @@ import { usePollsStore } from "@/entities/poll";
 import { refusalHere } from "@/shared/lib/errors";
 import { fromSiteInput, toSiteInput } from "@/shared/lib/utils/datetime";
 
+/** The form's labels, by the server's name of each field, for a refused field to be named. */
+const FIELD_LABELS = {
+  title: "Название",
+  details: "Описание",
+  startsUtc: "Начало",
+  endsUtc: "Окончание",
+  options: "Варианты ответа",
+};
+
 export function useCreatePoll() {
   const pollsStore = usePollsStore();
 
   const formExpanded = ref(false);
-  const formHovered = ref(false);
 
-  // The moment the form was set out, on the site's clock: the start it offers,
-  // and the earliest it takes.
   const openedAt = ref(toSiteInput());
 
   const pollTitle = ref("");
@@ -20,10 +26,7 @@ export function useCreatePoll() {
   const pollEndsUtc = ref(toSiteInput(dayjs().add(7, "day")));
   const pollIsAnonymous = ref(true);
 
-  // The server's rules for a new poll (CreatePollValidator): it starts no
-  // earlier than now, it ends more than a day after it starts, and it ends
-  // within a year. The fields take nothing else, and say why under them, so a
-  // pair of dates the server would refuse is not sent to be refused.
+  // The server's rules (CreatePollValidator), so a pair it would refuse is not sent.
   const startsMin = computed(() => openedAt.value);
   const endsMin = computed(() => {
     const starts = fromSiteInput(pollStartsUtc.value);
@@ -39,11 +42,10 @@ export function useCreatePoll() {
     ),
   );
 
-  // What the two fields say is wrong with them, shown under each.
   const startsReason = ref<string | null>(null);
   const endsReason = ref<string | null>(null);
 
-  // Use objects with unique IDs for stable v-for keys
+  // Objects with ids, for stable v-for keys.
   let optionIdCounter = 0;
   const createOption = (text = "") => ({ id: ++optionIdCounter, text });
   const pollOptions = ref([createOption(), createOption()]);
@@ -51,9 +53,6 @@ export function useCreatePoll() {
   const isSubmitting = ref(false);
   const errorMessage = ref("");
 
-  // The reveal itself is the global CSS-only .expand-fold (Reset.sass) —
-  // an inline tool form: unified animation tempo, no registry
-  // (UI_STANDARDS, Animation Standards).
   function toggleForm() {
     formExpanded.value = !formExpanded.value;
   }
@@ -93,25 +92,18 @@ export function useCreatePoll() {
       return;
     }
 
-    // The fields are filled in on the site's clock, the one the poll's card
-    // prints its dates by (fromSiteInput). A cleared field has no moment; read
-    // by `new Date` it threw past a raised isSubmitting and the form hung.
+    // A cleared field has no moment; `new Date` would throw past a raised isSubmitting.
     const starts = fromSiteInput(pollStartsUtc.value);
     const endsUtc = fromSiteInput(pollEndsUtc.value);
     if (!starts || !endsUtc) {
       errorMessage.value = "Укажите начало и окончание опроса";
       return;
     }
-    // The lines under the fields say what is wrong; this one says why the
-    // press did nothing.
     if (startsReason.value || endsReason.value) {
       errorMessage.value = "Проверьте начало и окончание опроса";
       return;
     }
-    // The field is read to the minute and the server takes no start before
-    // its own clock: the start the form offered is "now", and by the time the
-    // form is sent that minute is behind. A start the clock has passed while
-    // the form was being filled in is the moment it is sent.
+    // A start already past, as the minute offered at opening soon is, goes as the moment of sending.
     const now = new Date().toISOString();
     const startsUtc = starts < now ? now : starts;
 
@@ -119,26 +111,19 @@ export function useCreatePoll() {
     errorMessage.value = "";
 
     const { error } = await pollsStore.createPoll({
-      title: pollTitle.value.trim(),
-      details: pollDetails.value.trim() || null,
+      title: pollTitle.value,
+      details: pollDetails.value.trim() ? pollDetails.value : null,
       startsUtc,
       endsUtc,
       isAnonymous: pollIsAnonymous.value,
-      options: validOptions.map((o) => ({ text: o.text })) as any,
+      options: validOptions.map((o) => o.text),
     });
 
     isSubmitting.value = false;
 
     if (error) {
-      if (error.status === 400) {
-        errorMessage.value = "Начало должно быть раньше окончания";
-      } else {
-        // The form stays on screen with what was typed in it, and the line in
-        // it says every refusal, the plate the interceptor held for it taken
-        // down. An expired session and a dead connection stay with the plate.
-        errorMessage.value =
-          refusalHere(error, "Не удалось создать опрос") ?? "";
-      }
+      errorMessage.value =
+        refusalHere(error, "Не удалось создать опрос", FIELD_LABELS) ?? "";
     } else {
       resetForm();
       formExpanded.value = false;
@@ -147,7 +132,6 @@ export function useCreatePoll() {
 
   return {
     formExpanded,
-    formHovered,
     pollTitle,
     pollDetails,
     pollStartsUtc,

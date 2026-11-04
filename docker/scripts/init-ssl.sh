@@ -3,21 +3,11 @@ set -euo pipefail
 
 # Issues the certificate of the stand and turns the TLS server on.
 #
-# The edge served plain http and carried a commented-out TLS block that had been
-# there since the first day. It had already drifted away from the live server -
-# no health probe, and a listen directive in a form nginx has warned about since
-# 1.25 - so the thing meant to be switched on in the hour it was needed would not
-# have started. The documented command was `certbot --nginx`, which cannot work
-# here at all: the edge runs in a container and its configuration is mounted
-# read-only, so the plugin has nothing on the host to edit.
-#
-# Hence webroot. The challenge is fetched anonymously from the public internet
-# over http, which is why the edge answers /.well-known/acme-challenge/ from the
-# very first boot and answers it in front of the basic-auth door.
-#
-# Nothing self-signed is ever generated. A warning page teaches the reader to
-# click through warnings, and a stand that is honestly http is easier to reason
-# about than one that is dishonestly https.
+# Webroot, because `certbot --nginx` cannot work here: the edge runs in a container with
+# its configuration mounted read-only. The challenge is fetched anonymously over http, so
+# the edge answers /.well-known/acme-challenge/ from the first boot, in front of basic
+# auth. Nothing self-signed is generated: a warning page teaches readers to click through
+# warnings.
 #
 # Usage: init-ssl.sh <domain> [<domain>...]
 
@@ -47,26 +37,20 @@ for domain in "$@"; do
     DOMAIN_ARGS+=(-d "$domain")
 done
 
-# --cert-name фиксирует имя каталога, поэтому конфигурация nginx ссылается на
-# постоянный путь и переживает добавление доменов.
-#
-# --deploy-hook отрабатывает после каждого продления: nginx читает сертификат
-# только при старте, и без перезагрузки край продолжал бы отдавать истекший
-# сертификат ровно до следующей выкладки.
+# --cert-name fixes the directory name, so the nginx configuration keeps a stable path.
+# --deploy-hook reloads nginx after every renewal, since it reads the certificate only at
+# start and would serve the expired one until the next deploy.
 certbot certonly --webroot -w "$WEBROOT" \
     --cert-name dm "${DOMAIN_ARGS[@]}" \
     --deploy-hook "docker exec $EDGE_CONTAINER nginx -s reload"
 
 PRIMARY="$1"
 
-# Оба сервера пишутся сюда: редирект появляется тогда же, когда и TLS, и ни
-# минутой раньше — иначе стенд отправлял бы на адрес, которого еще нет.
-#
-# Редирект висит на имени домена, а не на _: край продолжает отвечать по адресу,
-# как отвечал, и https-only получает ровно тот домен, для которого выпущен
-# сертификат. Челлендж остается и здесь — продление идет тем же путем.
+# Both servers are written here: the redirect appears together with TLS and not before. It
+# hangs on the domain name, not on _, so the edge keeps answering by address. The
+# challenge stays, because renewal uses the same path.
 cat > "$TLS_DIR/tls.conf" <<EOF
-# Создан scripts/init-ssl.sh. Правки руками переживут ровно до следующего
+# Создан docker/scripts/init-ssl.sh. Правки руками переживут ровно до следующего
 # выпуска сертификата.
 server {
     listen 80;

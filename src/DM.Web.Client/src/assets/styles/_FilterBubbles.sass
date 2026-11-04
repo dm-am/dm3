@@ -1,0 +1,191 @@
+// The bubbles of an applied filter under a filter bar: the row with its
+// "Сбросить", the bubble with its cross, the list a bubble of several opens.
+
+@use "Themes" as *
+@use "Variables" as *
+@use "ZIndex" as *
+@use "Links" as *
+@use "Filters" as *
+
+/// The bubble's height with its frame, one for every bubble of a row.
+$bubble-height: 28px
+
+// The cross of a bubble or of a name in it: one step from what is on either
+// side of it, in the size of the search's cross.
+=_bubble-cross
+  margin-left: $small
+  vertical-align: middle
+  font-size: $font-size
+  +remove-icon-btn
+
+/// The box of a bubble: its fill, frame, corners and size. A chosen tag of
+/// TagSelector is the same box, standing in a form and not under a bar.
+=bubble-box
+  box-sizing: border-box
+  min-height: $bubble-height
+  padding: 0 $small
+  line-height: $bubble-height - 2px
+  font-size: $secondary-font-size
+  font-family: inherit
+  border: 1px solid $border
+  border-radius: $border-radius
+  background-color: $bg-element
+
+=filter-bubbles
+  .bubbles-row
+    display: flex
+    flex-wrap: wrap
+    gap: $small
+
+  // Inline-block and not flex: a flex item copies as a line of its own. The
+  // line of 14 sits in the middle of the 26 between the frames, so what
+  // stands in it adds nothing to the height.
+  .bubble
+    display: inline-block
+    +bubble-box
+    white-space: nowrap
+
+    &:not(.bubble-owners):not(.bubble-expandable):hover,
+    &.bubble-single-owner:hover
+      background-image: linear-gradient($hover-overlay, $hover-overlay)
+
+      .bubble-remove-btn,
+      .bubble-owner-remove
+        opacity: 1
+
+    &.bubble-single-owner .bubble-owner-item:hover
+      background-color: transparent
+
+    // The zero-size space would still take the line of 26 and grow the
+    // bubble.
+    .copy-space
+      line-height: 0
+
+  // The gaps are real spaces, so a bubble copies as "Статус: Активные ×".
+  .bubble-prefix,
+  .bubble-separator
+    color: $text-muted
+
+  .bubble-value-text
+    color: $text
+
+  .bubble-remove-btn
+    +_bubble-cross
+
+  // "Сбросить": a <button> that reads as a link; the size and padding come
+  // after the recipe's font reset. No taller than a bubble.
+  .clear-all-link
+    align-self: center
+    white-space: nowrap
+    +inline-link-button
+    &
+      padding: $tiny 0
+      font-size: $secondary-font-size
+
+  // The pill of a name gives its vertical padding back with a negative margin,
+  // so it does not raise the line; inline-block for the copy, as the bubble.
+  // Its line fills the bubble between the frames.
+  .bubble-owner-item
+    display: inline-block
+    padding: $tiny $minor
+    margin: (-$tiny) 0
+    line-height: $bubble-height - 2px - 2 * $tiny
+    border-radius: $border-radius
+    transition: background-color $transition-fast
+
+    &:hover
+      background-color: $hover-overlay
+
+      .bubble-owner-remove
+        opacity: 1
+
+  // The pill steps back over the space after the colon by $tiny, so the name
+  // stands one space after it.
+  .bubble-prefix + .bubble-owner-item
+    padding-left: $tiny
+    margin-left: -$tiny
+
+  .bubble-owner-remove
+    +_bubble-cross
+
+  // The pill of a single name lights with the whole bubble.
+  .bubble-single-owner .bubble-owner-item
+    padding-right: 0
+
+  // A bubble of several names
+  .bubble-expandable
+    position: relative
+
+  // "и еще N" opens with the space it copies with.
+  .bubble-remaining
+    color: $text-muted
+
+  // The chevron is centred on the text and pulled in like the name pill, so it
+  // does not grow the bubble.
+  .bubble-expand-btn
+    display: inline-flex
+    align-items: center
+    justify-content: center
+    vertical-align: middle
+    width: 18px
+    height: 18px
+    margin: (-$tiny) 0 (-$tiny) $tiny
+    padding: 0
+    cursor: pointer
+    border: none
+    background: none
+    color: $text-muted
+    border-radius: $border-radius
+    transition: background-color $transition-fast, color $transition-fast
+
+    &:hover,
+    &.active
+      background-color: $hover-overlay
+      color: $text
+
+    svg
+      width: 16px
+      height: 16px
+      transition: transform $transition-normal
+
+    &.active svg
+      transform: rotate(180deg)
+
+  .owners-dropdown
+    position: absolute
+    top: calc(100% + $tiny)
+    right: 0
+    z-index: $z-dropdown
+    min-width: 200px
+    max-height: 200px
+    overflow-y: auto
+    +dropdown-surface
+
+  .owners-dropdown-item
+    display: flex
+    align-items: center
+    justify-content: space-between
+    width: 100%
+    padding: $small $medium
+    font-size: $secondary-font-size
+    font-family: inherit
+    text-align: left
+    cursor: pointer
+    border: none
+    background: none
+    color: $text
+    transition: background-color $transition-fast
+
+    &:hover
+      background-color: $hover-overlay
+
+      .owner-remove
+        opacity: 1
+
+  // The list is as wide as its longest name: nothing cuts a name.
+  .owner-name
+    flex: 1
+
+  .owner-remove
+    font-size: $font-size
+    +remove-icon-btn

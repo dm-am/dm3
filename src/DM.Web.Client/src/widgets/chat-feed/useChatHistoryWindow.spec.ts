@@ -106,17 +106,7 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/**
- * The day picked in "Перейти к дате" is the day the calendar shows picked when
- * it opens again, as it was before 5 October 2026. The server answers a day
- * with the window of messages near it, and the page kept the day for every
- * such answer: the day selected in the calendar, the feed at the first message
- * of the day, or at the top of the window where the day has none.
- * From 5 October a day with no message of its own was dropped as soon as it
- * was picked, and the calendar opened on nothing picked. The day goes only
- * where the store found no window near it and fell back to the latest
- * messages, or where the reader goes back to them.
- */
+/** The day picked in "Перейти к дате" stays picked unless the store fell back to the latest. */
 describe("a day picked in the calendar", () => {
   /**
    * The window near 2 October, as the server builds it: around the first
@@ -170,8 +160,7 @@ describe("a day picked in the calendar", () => {
     expect(history.notice.value).toBeNull();
     expect(nav.router.replace).not.toHaveBeenCalled();
     expect(load.latest).not.toHaveBeenCalled();
-    // The feed opens at the top of the window, as it did before 5 October:
-    // m1, before the day, and not m6, the first message after it.
+    // The top of the window, m1 before the day, and not m6 after it.
     expect(feed.scrollToMessage).toHaveBeenCalledWith("m1", "start");
   });
 

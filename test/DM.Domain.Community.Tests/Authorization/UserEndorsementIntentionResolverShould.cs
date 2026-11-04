@@ -114,24 +114,14 @@ public class UserEndorsementIntentionResolverShould
             .Should().BeFalse();
     }
 
-    #region Behaviour as found
-
     [Theory]
     [InlineData(UserRole.SeniorModerator)]
     [InlineData(UserRole.Admin)]
-    public void GiveModerationNoWayToCorrectAnEndorsementShortOfDeletingIt(UserRole role)
+    public void NotLetModerationRewordAnEndorsement(UserRole role)
     {
         var user = Create.User(StrangerId).WithRole(role).Please();
-        var endorsement = EndorsementBy(AuthorId);
 
-        // Behaviour as found, not a rule that was chosen. Delete carries a
-        // moderation override and Edit carries none, so a moderator handling an
-        // abusive endorsement has only the blunt option. The asymmetry may well
-        // be right — an edited endorsement still bears the author's name — but it
-        // is not stated anywhere, so it is pinned rather than assumed.
-        resolver.IsAllowed(user, UserEndorsementIntention.Edit, endorsement).Should().BeFalse();
-        resolver.IsAllowed(user, UserEndorsementIntention.Delete, endorsement).Should().BeTrue();
+        // Behaviour as found: Delete carries a moderation override and Edit none, the rule is not decided.
+        resolver.IsAllowed(user, UserEndorsementIntention.Edit, EndorsementBy(AuthorId)).Should().BeFalse();
     }
-
-    #endregion
 }

@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Account.Features.Security;
 
@@ -6,18 +7,22 @@ namespace DM.Domain.Account.Features.Security;
 /// Which event types make up each of the journal's filters.
 /// </summary>
 /// <remarks>
-/// The answer to "what counts as a login event" is a statement about the product,
-/// not about storage, and it used to live inside the storage repository — three
-/// arrays built beside three otherwise identical queries. A type added to
-/// <see cref="SecurityEventType" /> had to be remembered there, in a file nobody
-/// opens to think about the journal, and the omission showed up as an entry the
-/// reader simply never saw under the filter it belongs to.
-///
-/// Declared next to the enum for that reason: adding a member and deciding which
-/// filter it answers to are one act, and they are now one place.
+/// Next to <see cref="SecurityEventType" />: adding a member and deciding which
+/// filter it answers to are one act.
 /// </remarks>
 public static class SecurityEventCategories
 {
+    /// <summary>The types a journal filter is made of, or null for no filter.</summary>
+    /// <param name="type">Filter the reader asked for</param>
+    public static IReadOnlyList<SecurityEventType>? For(SecurityLogType? type) => type switch
+    {
+        SecurityLogType.Login => Login,
+        SecurityLogType.Password => Password,
+        SecurityLogType.Session => Session,
+        SecurityLogType.TwoFactor => TwoFactor,
+        _ => null
+    };
+
     /// <summary>Attempts to sign in, successful and not.</summary>
     public static readonly IReadOnlyList<SecurityEventType> Login =
     [
@@ -54,12 +59,6 @@ public static class SecurityEventCategories
     ];
 
     /// <summary>Everything that happened to the second factor of the account.</summary>
-    /// <remarks>
-    /// Its own filter rather than a few rows folded into the password one: the
-    /// question the owner asks here is whether somebody has been working on the
-    /// way into the account, and a removal scheduled from a mailbox is the loudest
-    /// answer the journal can give.
-    /// </remarks>
     public static readonly IReadOnlyList<SecurityEventType> TwoFactor =
     [
         SecurityEventType.TwoFactorEnabled,

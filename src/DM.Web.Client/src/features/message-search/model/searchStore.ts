@@ -6,54 +6,31 @@ import messageSearchApi from "../api/messageSearchApi";
 
 const PAGE_SIZE = 50;
 
-/**
- * Dedicated search store. Deliberately NOT part of the live global-chat store:
- * search results are a distinct navigable list with its own cursor, not the
- * live scroll-back buffer.
- *
- * Order is the backend's and there is no way to ask for another one: relevance
- * ranking exists neither in the domain nor in the endpoint's signature, so a
- * control offering it would only be a promise the site does not keep.
- */
+// Not part of the live chat store: hits are a list with their own cursor; the order is the server's only one.
 export const useMessageSearchStore = defineStore("messageSearch", () => {
-  // Query
   const query = ref("");
-  /** The feed the field stands over; the hits of one are no answer in another. */
+  /** The hits of one feed are no answer in another. */
   const scope = ref<MessageSearchScope>("global");
 
-  // Results + cursor
   const results = ref<MessageSearchResult[]>([]);
   const nextCursor = ref<string | null>(null);
   const hasMore = ref(false);
 
-  // Status
   const loading = ref(false);
   const loadingMore = ref(false);
   const error = ref<string | null>(null);
-  /** True once a search has been dispatched — distinguishes the initial
-   * prompt state from a genuine "no results" state. */
+  /** Tells the initial prompt from a genuine "no results". */
   const hasSearched = ref(false);
 
   const trimmedQuery = computed(() => query.value.trim());
 
-  /** Whether a search can currently run. */
   const canSearch = computed(() => trimmedQuery.value.length > 0);
 
-  /**
-   * One counter for both requests, not one each.
-   *
-   * The field is debounced by 300ms and a search does not cancel the one before
-   * it, so two are regularly on the wire at once: the slower answer landed last
-   * and put the hits for "коб" under the text "кобольд", with nothing on screen
-   * saying they disagreed. loadMore shares the counter because a page that
-   * started under the older query would otherwise be appended to the newer
-   * query's results and would move its cursor.
-   */
+  // One counter for search and loadMore: two requests race, and only the newest may land.
   const guard = createRequestGuard();
 
   function reset() {
-    // An answer still on the wire must not repopulate what this just cleared:
-    // the field going empty is the caller.
+    // An answer still on the wire must not repopulate what this just cleared.
     guard.next();
     results.value = [];
     nextCursor.value = null;
@@ -64,12 +41,7 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     loadingMore.value = false;
   }
 
-  /**
-   * Points the search at another feed. The store is one for the site, and the
-   * query and the hits it holds are about the feed they were typed over: kept,
-   * they would stand over the next feed as its own, and a hit picked there
-   * would jump to a message the feed does not hold.
-   */
+  // The store is one for the site: hits kept over the next feed would jump to messages it lacks.
   function setScope(next: MessageSearchScope) {
     if (next === scope.value) return;
     scope.value = next;
@@ -77,7 +49,6 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
     reset();
   }
 
-  /** Run a fresh search from the top (replaces results). */
   async function search() {
     if (!canSearch.value) {
       reset();
@@ -93,7 +64,6 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
         in: [scope.value],
         limit: PAGE_SIZE,
       });
-      // A newer search owns the visible list.
       if (!guard.isCurrent(requestId)) return;
       if (apiError) {
         results.value = [];
@@ -106,13 +76,11 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
       nextCursor.value = data?.paging?.nextCursor ?? null;
       hasMore.value = data?.paging?.hasNext ?? false;
     } finally {
-      // Only the newest request may lower the spinner: an older one clearing it
-      // presents the request still on the wire as finished.
+      // Only the newest request may lower the spinner.
       if (guard.isCurrent(requestId)) loading.value = false;
     }
   }
 
-  /** Load the next (older) page and append it to the results. */
   async function loadMore() {
     if (loadingMore.value || !hasMore.value || !nextCursor.value) return;
     const requestId = guard.next();
@@ -125,12 +93,9 @@ export const useMessageSearchStore = defineStore("messageSearch", () => {
         cursor: nextCursor.value,
         limit: PAGE_SIZE,
       });
-      // A search started after this page did: its results are the list now, and
-      // appending an older query's tail to them would also move its cursor.
       if (!guard.isCurrent(requestId)) return;
       if (apiError) {
-        // Keep the already-rendered results and the cursor so the sentinel's
-        // retry can try again, matching the chat's stale-content convention.
+        // Keep the results and the cursor so the sentinel's retry can try again.
         error.value = "Не удалось загрузить еще";
         return;
       }

@@ -3,32 +3,18 @@
  */
 
 /**
- * Every address this client asks for is one the server answers.
- *
- * The models in this folder are held to the published schemas by
- * contract.spec.ts; nothing held the addresses. The account security section
- * spent its whole life calling `account/security`, which no controller has ever
- * served, and rendered empty without a word — its loader leaves the list alone
- * when the request fails, so a 404 looked exactly like "no events yet".
- *
- * The server side of the handshake is DM.Web.API.IntegrationTests
- * OpenApiContractShould.MatchTheCommittedRoutesSnapshot, which writes every
- * published "METHOD /v1/path" to artifacts/openapi-routes.json. This test reads
- * that file and holds every literal path in the api folders to it.
- *
- * Only literal paths are checked. A path assembled from a variable is skipped
- * and counted: the alternative is evaluating the module, and a call whose whole
- * address is computed is rare enough to be worth the hole. Interpolated
- * segments (`games/${id}/rooms`) are literal enough — the expression becomes a
- * `{param}` placeholder, which is the shape the snapshot stores.
+ * Every literal address this client asks for is one the server answers, as
+ * published in artifacts/openapi-routes.json by
+ * OpenApiContractShould.MatchTheCommittedRoutesSnapshot. A path built from a
+ * variable is skipped; an interpolation becomes {param}.
  */
 import { describe, it, expect } from "vitest";
-import { readFileSync, existsSync, readdirSync, statSync } from "fs";
+import { readFileSync, existsSync } from "fs";
 import { dirname, join, resolve, relative } from "path";
 import { fileURLToPath } from "url";
+import { CLIENT_SRC, collect } from "@/shared/lib/testing/sourceTree";
 
 const here = dirname(fileURLToPath(import.meta.url));
-const clientRoot = resolve(here, "..", "..");
 const repoRoot = resolve(here, "..", "..", "..", "..", "..");
 const snapshotPath = join(repoRoot, "artifacts", "openapi-routes.json");
 
@@ -48,15 +34,8 @@ const METHOD: Record<string, string> = {
 type Call = { file: string; method: string; path: string };
 
 /**
- * The five calls notepadEndpoints(base) makes, in the order it declares them.
- *
- * The five notepads of the site are asked for through that factory rather than
- * through Api directly (shared/api/notepadEndpoints.ts), so their addresses are
- * spelled once, at the five call sites, and the verbs are the factory's. A walk
- * that only reads Api.* would check none of them — which is the whole surface
- * of every notepad on the site — so it reads the base here as well and expands
- * it. A sixth call added to the factory and not to this list is a call nothing
- * checks, and the same is true of a verb removed from it.
+ * The calls notepadEndpoints(base) makes, in its order: the five notepads are
+ * asked for through it, so the base is read at the call sites and expanded.
  */
 const NOTEPAD_CALLS = [
   { method: "GET", suffix: "" },
@@ -66,36 +45,21 @@ const NOTEPAD_CALLS = [
   { method: "DELETE", suffix: "/{param}" },
 ];
 
-function sourceFiles(dir: string, found: string[] = []): string[] {
-  for (const entry of readdirSync(dir)) {
-    const full = join(dir, entry);
-    if (statSync(full).isDirectory()) {
-      if (entry !== "node_modules") sourceFiles(full, found);
-    } else if (
-      (entry.endsWith(".ts") || entry.endsWith(".vue")) &&
-      !entry.endsWith(".spec.ts")
-    ) {
-      found.push(full);
-    }
-  }
-  return found;
-}
+const sourceFiles = (): string[] =>
+  collect(
+    CLIENT_SRC,
+    (name) =>
+      (name.endsWith(".ts") || name.endsWith(".vue")) &&
+      !name.endsWith(".spec.ts"),
+  );
 
-/**
- * `Api.get("chats", ...)` and `Api.post(`games/${id}/rooms`, ...)`, reduced to
- * the address with its interpolations turned into placeholders.
- */
-function callsIn(file: string): { calls: Call[]; skipped: number } {
+/** An Api call reduced to its address, interpolations as placeholders. */
+function callsIn(file: string): Call[] {
   const source = readFileSync(file, "utf8");
   const calls: Call[] = [];
-  let skipped = 0;
 
-  // `${this.basePath}` is not a path parameter but a prefix kept as a field,
-  // which a named class (as GameApi is) may declare. Substituted rather than
-  // blanked: read as a parameter it turns every address of the class into
-  // /v1/{param}/..., which matches nothing on the server and would have to be
-  // excused by hand. A reserve: the prefixes there are now are constants of
-  // their modules, read below.
+  // A prefix kept as a field of a named class, substituted rather than read
+  // as a parameter.
   const fields = new Map<string, string>();
   for (const field of source.matchAll(
     /(?:private|public|readonly)\s+(\w+)\s*=\s*["']([^"']+)["']/g,
@@ -103,12 +67,8 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
     fields.set(field[1], field[2]);
   }
 
-  // The same prefix spelled as a constant of the module (`${BASE_PATH}`), the
-  // shape an exported class expression needs: it may not declare a private
-  // field. Only a constant at the top level of the file counts, and only at
-  // the head of the address: further along a constant is the value of a path
-  // parameter (`boards/${NEWS_BOARD_ALIAS}/topics`), which the snapshot spells
-  // {param} like any other.
+  // A prefix constant at the top level of the module, at the head of the
+  // address only: further along a constant is a path parameter.
   const constants = new Map<string, string>();
   for (const constant of source.matchAll(
     /^(?:export\s+)?const\s+(\w+)\s*=\s*["']([^"']+)["']\s*;?\s*$/gm,
@@ -116,12 +76,7 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
     constants.set(constant[1], constant[2]);
   }
 
-  // The type argument nests — Api.get<ListEnvelope<SecurityEvent>> is the
-  // ordinary shape here, not the exception. Matched to two levels, because a
-  // pattern that stops at the first ">" does not merely mis-read those calls,
-  // it fails to match them at all: the first draft of this gate skipped every
-  // enveloped list, which is most of the client, and passed while the wrong
-  // address it was written for sat in the file.
+  // The type argument nests (Api.get<ListEnvelope<X>>): matched to two levels.
   const generic = String.raw`<[^<>]*(?:<[^<>]*(?:<[^<>]*>)?[^<>]*>)?[^<>]*>`;
   const pattern = new RegExp(
     String.raw`\bApi\.(${CALLS.join("|")})\s*(?:${generic})?\s*\(\s*((?:\$\{[^}]*\}|[^,)])+)`,
@@ -136,10 +91,7 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
       /^'([^']*)'$/.exec(argument)?.[1] ??
       /^`([^`]*)`$/.exec(argument)?.[1];
 
-    if (literal === undefined) {
-      skipped++;
-      continue;
-    }
+    if (literal === undefined) continue;
 
     // A known field first, then whatever is left is a path parameter; the
     // snapshot spells those {param}.
@@ -170,7 +122,7 @@ function callsIn(file: string): { calls: Call[]; skipped: number } {
     }
   }
 
-  return { calls, skipped };
+  return calls;
 }
 
 /** The snapshot, with every parameter name flattened the same way. */
@@ -185,11 +137,6 @@ function publishedRoutes(): Set<string> {
 }
 
 describe("client routes", () => {
-  // The whole client, not the two folders that happened to hold most of the
-  // calls. A page asking for an address of its own was outside the walk, and so
-  // was every call written in a component rather than in a module.
-  const apiDirs = [clientRoot].filter(existsSync);
-
   it("has the published routes to compare against", () => {
     expect(
       existsSync(snapshotPath),
@@ -203,23 +150,19 @@ describe("client routes", () => {
     const unknown: string[] = [];
     let checked = 0;
 
-    for (const dir of apiDirs) {
-      for (const file of sourceFiles(dir)) {
-        const { calls } = callsIn(file);
-        for (const call of calls) {
-          checked++;
-          const address = `${call.method} /v1/${call.path}`;
-          if (!published.has(address)) {
-            unknown.push(`${call.file}: ${address}`);
-          }
+    // The whole client: calls are written in components too.
+    for (const file of sourceFiles()) {
+      for (const call of callsIn(file)) {
+        checked++;
+        const address = `${call.method} /v1/${call.path}`;
+        if (!published.has(address)) {
+          unknown.push(`${call.file}: ${address}`);
         }
       }
     }
 
-    // A gate that stops finding calls passes by checking nothing, so the floor
-    // sits just under the real count rather than comfortably below it: narrowing
-    // the walk back to a couple of folders has to be a red run and not a quieter
-    // one, and the difference between the two is six calls.
+    // A gate that finds no calls passes by checking nothing: the floor sits
+    // just under the real count.
     expect(checked).toBeGreaterThan(330);
     expect(unknown).toEqual([]);
   });

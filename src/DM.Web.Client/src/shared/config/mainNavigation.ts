@@ -1,12 +1,4 @@
-/**
- * SSOT for the site's main navigation.
- *
- * The desktop top menu (widgets/header) and the mobile drawer (app/App.vue)
- * show the same sections in the same order. They used to spell that list out
- * twice, with a moderator check each, and nothing would have failed if a
- * section had been added to one of them only: a reader on a phone and a reader
- * on a desktop would simply have had different sites.
- */
+/** SSOT for the site's main navigation, the top menu of the header (widgets/header). */
 
 import type { RouteLocationRaw } from "vue-router";
 

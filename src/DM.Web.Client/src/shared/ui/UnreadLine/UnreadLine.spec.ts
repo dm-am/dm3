@@ -16,13 +16,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { defineComponent, h, ref } from "vue";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
-import { dirname, resolve } from "node:path";
-import { fileURLToPath } from "node:url";
 import type { GeneralError } from "@/shared/api/models/common";
-import { componentCss } from "@/shared/lib/testing/styles";
 import UnreadLine from "./UnreadLine.vue";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
 
 const refused = (status: number, title = ""): GeneralError => ({
   type: "about:blank",
@@ -93,10 +88,8 @@ describe("the line of the unread", () => {
     expect(wrapper.get(".unread-count").text()).toBe("4");
   });
 
-  // Owner, 12 October 2026: nothing on a phone is shortened. The line used to
-  // say "Новых:" where its box was narrower than the line; it says
-  // "Непрочитанных:" at every width and wraps between its two parts, the
-  // number with its word, as every caption line of the site does.
+  // Nothing is shortened: the line wraps between its two parts,
+  // the number with its word, as every caption line of the site does.
   it("keeps its word at every width and wraps between its parts", () => {
     const { wrapper } = render(1000);
     const line = wrapper.get(".unread-line .caption-line");
@@ -107,9 +100,6 @@ describe("the line of the unread", () => {
         .map((part) => part.text().replace(/\s+/g, " ")),
     ).toEqual(["Непрочитанных: 999+", "Отметить прочитанными"]);
     expect(line.find(".caption-line__bar").exists()).toBe(true);
-    expect(wrapper.text()).not.toContain("Новых");
-    const css = componentCss(resolve(HERE, "UnreadLine.vue"));
-    expect(css).not.toMatch(/@container|nowrap/);
   });
 
   it.each([

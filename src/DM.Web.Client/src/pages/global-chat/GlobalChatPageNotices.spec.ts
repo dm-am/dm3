@@ -2,22 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * What the chat says on the page, where it used to raise a toast.
- *
- * Two ways onto this page ask for one place in the history - a #msg- link and
- * an archive date - and either can find nothing there. The page then shows the
- * latest messages, and used to explain that with a toast in the corner: the
- * reader's eye is on the feed, the explanation is about the feed, and the
- * error kind never went away on its own. Now a line above the feed says it,
- * names the day it is about, and stands while that window does.
- *
- * The link of a message is here for the contrast: an ordinary link, which
- * the reader opens or copies as any other, so a press on it raises nothing.
- *
- * The page's own spec next door parses the template and runs without a DOM;
- * this one mounts the page, like the realtime spec beside it.
- */
+// A #msg- link or an archive date that finds nothing shows the latest messages
+// with a line above the feed that says so and names the day. The link of a
+// message is an ordinary link, and a press on it raises nothing.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
 import { flushPromises, mount, enableAutoUnmount } from "@vue/test-utils";
@@ -32,8 +19,7 @@ const { api, route, router, virtualRows } = vi.hoisted(() => ({
     getMessagesNearDate: vi.fn(),
     getMessagesAfter: vi.fn(),
   },
-  // Filled by the mock factories below, which is where `ref` and `reactive`
-  // can be reached.
+  // Filled by the mock factories below, where `ref` and `reactive` can be reached.
   route: {
     current: null as unknown as {
       query: Record<string, string>;
@@ -46,11 +32,7 @@ const { api, route, router, virtualRows } = vi.hoisted(() => ({
 
 vi.mock("@/entities/global-chat/api/globalChatApi", () => ({ default: api }));
 
-/**
- * A route the test can move. The page watches ?date and clears it itself on a
- * fallback, so the router here does what the real one does on replace: the
- * query changes, and the watcher sees it change.
- */
+/** A route the test can move; replace changes the query as the real one does. */
 vi.mock("vue-router", async () => {
   const { reactive } = await import("vue");
   route.current = reactive({ params: {}, query: {}, hash: "" });
@@ -73,10 +55,7 @@ vi.mock("@/shared/lib/composables/useSignalR", async () => {
   };
 });
 
-/**
- * The virtualizer, replaced by the rows the test decides to put on screen.
- * The real one measures elements, and jsdom lays nothing out.
- */
+/** The virtualizer, reduced to the rows the test puts on screen. */
 vi.mock("@/shared/lib/composables/useVirtualScroll", async () => {
   const { ref } = await import("vue");
   virtualRows.held = ref([]);
@@ -92,8 +71,7 @@ vi.mock("@/shared/lib/composables/useVirtualScroll", async () => {
   };
 });
 
-// The page opens a warning dialog through it at setup; mounting the real modal
-// machinery would drag a teleport target in for a dialog nothing here opens.
+// The page opens a warning dialog through it; nothing here opens one.
 vi.mock("vue-final-modal", () => ({
   useModal: () => ({ open: vi.fn(), close: vi.fn() }),
 }));
@@ -107,10 +85,7 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-/**
- * The tooltip, reduced to the one thing asked of it here: what it would say.
- * The real one measures its text on a canvas and positions itself.
- */
+/** The tooltip, reduced to what it would say. */
 const TooltipStub = defineComponent({
   props: { text: { type: String, default: "" } },
   setup(props, { slots }) {
@@ -119,10 +94,7 @@ const TooltipStub = defineComponent({
   },
 });
 
-/**
- * A router link that says where it leads in an attribute, so a test can read
- * the target without a router.
- */
+/** A router link that says where it leads in an attribute. */
 const RouterLinkStub = defineComponent({
   name: "RouterLink",
   props: { to: { type: [String, Object], required: true } },
@@ -171,6 +143,9 @@ async function openChat() {
       plugins: [pinia],
       stubs: {
         ChatFeed: false,
+        ChatStrip: false,
+        FeedEdge: false,
+        MessageToolbar: false,
         Tooltip: TooltipStub,
         RouterLink: RouterLinkStub,
       },
@@ -252,11 +227,7 @@ describe("GlobalChatPage, a link to a message that is gone", () => {
     expect(notice(wrapper).exists()).toBe(false);
   });
 
-  /**
-   * A request that failed was announced by the interceptor; a line calling it
-   * "not found" would be a second carrier saying a different thing. The plate
-   * this replaces did exactly that.
-   */
+  // A failed request was announced by the interceptor; the page does not call it "not found".
   it("does not call a failed request a missing message", async () => {
     window.location.hash = "#msg-m1";
     api.getMessagesAround.mockResolvedValue(refused());
@@ -296,13 +267,8 @@ describe("GlobalChatPage, an archive date with nothing on it", () => {
     expect(plates()).toEqual([]);
   });
 
-  /**
-   * The server answers a day with the messages around the first one at or
-   * after its midnight, so a day with nothing on it comes back as a window
-   * near it that holds none of it. The day stays picked over that window, in
-   * the address and in the calendar, with no line, as it did before 5 October
-   * 2026 (useChatHistoryWindow.loadDate).
-   */
+  // A day with nothing on it comes back as a window near it: the day stays
+  // picked, with no line (useChatHistoryWindow.loadDate).
   it("keeps the day over the window near it, with no line", async () => {
     route.current.query = { date: "2019-03-05" };
     api.getMessagesNearDate.mockResolvedValue(messagePage([1, 2]));
@@ -327,10 +293,7 @@ describe("GlobalChatPage, an archive date with nothing on it", () => {
     expect(notice(wrapper).exists()).toBe(false);
   });
 
-  /**
-   * The store keeps the window it had when the request fails, and the plate
-   * this replaces told the reader that day was empty over it.
-   */
+  // The store keeps its window on a failure; the page does not call the day empty.
   it("does not call a failed request an empty day", async () => {
     const wrapper = await openChat();
     api.getMessagesNearDate.mockResolvedValue(refused());
@@ -343,12 +306,8 @@ describe("GlobalChatPage, an archive date with nothing on it", () => {
   });
 });
 
-/**
- * A picked day is a window drawn anew: the skeleton stands where the list was
- * while it loads, so its sentinels are new elements. The observers watched the
- * ones they were given on the way in, and after a day picked on the page the
- * feed never paged from it toward the latest messages.
- */
+// A picked day is drawn anew, so its sentinels are new elements, and the
+// observers must watch them for the feed to page from that day.
 describe("GlobalChatPage, paging from a picked day", () => {
   let observers: {
     callback: IntersectionObserverCallback;
@@ -374,6 +333,7 @@ describe("GlobalChatPage, paging from a picked day", () => {
   });
 
   it("watches the bottom of the day's window and pages from there", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout"] });
     const wrapper = await openChat();
     const day = messagePage([3, 4]);
     day.data.paging.hasNext = true;
@@ -383,7 +343,7 @@ describe("GlobalChatPage, paging from a picked day", () => {
     route.current.query = { date: "2026-03-14" };
     await settle();
     // The landing scroll settles before the sentinels wake.
-    await new Promise((resolve) => setTimeout(resolve, 650));
+    await vi.advanceTimersByTimeAsync(650);
 
     const sentinels = wrapper.findAll(".chat-feed__sentinel");
     const bottom = sentinels[sentinels.length - 1].element;
@@ -398,19 +358,13 @@ describe("GlobalChatPage, paging from a picked day", () => {
     await settle();
 
     expect(api.getMessagesAfter).toHaveBeenCalledWith("next-1", 50);
+    vi.useRealTimers();
   });
 });
 
 describe("GlobalChatPage, the link of a message", () => {
-  let writeText: ReturnType<typeof vi.fn>;
-
   beforeEach(() => {
-    writeText = vi.fn().mockResolvedValue(undefined);
-    Object.defineProperty(navigator, "clipboard", {
-      value: { writeText },
-      configurable: true,
-    });
-    // Two messages on screen. Their date separator sits at index 0.
+    // Two messages on screen; their date separator sits at index 0.
     virtualRows.held.value = [
       { index: 1, start: 0, key: "m1", size: 80 },
       { index: 2, start: 80, key: "m2", size: 80 },
@@ -440,11 +394,7 @@ describe("GlobalChatPage, the link of a message", () => {
     expect(tooltipOf(wrapper)).toBe("Ссылка на сообщение");
   });
 
-  /**
-   * Followed on this page, the link changes the anchor of the address and
-   * nothing else: the page reads the anchor on the way in, and the feed stood
-   * still under a link that seemed to do nothing.
-   */
+  // Followed on this page, the link changes the anchor only; the feed lands on the message.
   it("lands the feed on the message when followed on the page", async () => {
     await openChat();
     api.getMessagesAround.mockResolvedValue(messagePage([1, 2]));
@@ -454,16 +404,5 @@ describe("GlobalChatPage, the link of a message", () => {
 
     expect(api.getMessagesAround).toHaveBeenCalledTimes(1);
     expect(api.getMessagesAround.mock.calls[0][0]).toBe("m2");
-  });
-
-  it("writes nothing to the clipboard and raises no plate when pressed", async () => {
-    const wrapper = await openChat();
-    await hover(wrapper, "m1");
-
-    await anchor(wrapper).trigger("click");
-    await settle();
-
-    expect(writeText).not.toHaveBeenCalled();
-    expect(plates()).toEqual([]);
   });
 });

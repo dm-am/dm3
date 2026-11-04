@@ -13,12 +13,7 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// <summary>
 /// A granted award is told to its recipient and leads to his hall of fame.
 /// </summary>
-/// <remarks>
-/// Two people stand behind one award, the recipient and whoever granted it, and
-/// the payload names both. The address is built from the one the generator writes
-/// as Username, so the seed keeps the two names apart: a generator that wrote the
-/// granter there would send the recipient to somebody else's profile.
-/// </remarks>
+/// <remarks>The address is built from the Username the generator writes, so the seed keeps recipient and granter apart.</remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class AwardGrantedNotificationsShould
 {

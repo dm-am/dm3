@@ -31,7 +31,7 @@ export interface Mask {
 const SERVER_CLOCK =
   "a date the server wrote with its own clock during the run, which the seed does not pin";
 
-export const MASKS: Mask[] = [
+const MASKS: Mask[] = [
   {
     selector: ".site-stats .online",
     reason:

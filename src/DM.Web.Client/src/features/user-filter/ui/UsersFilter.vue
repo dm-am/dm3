@@ -47,36 +47,14 @@ const {
   clearFilters,
 } = useUsersFilter();
 
-// =============================================================================
-// SEARCH INPUT (with debounce)
-// =============================================================================
-
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
   setSearch,
 );
 
-// =============================================================================
-// FILTER DROPDOWN (with navigation)
-// =============================================================================
+const { showDropdown, navPath, closeDropdown, toggleDropdown, navigateBack } =
+  useFilterDropdown();
 
-const {
-  showDropdown,
-  navPath,
-  closeDropdown: closeDropdownBase,
-  toggleDropdown,
-  navigateBack: navigateBackBase,
-} = useFilterDropdown();
-
-function closeDropdown() {
-  closeDropdownBase();
-}
-
-function navigateBack() {
-  navigateBackBase();
-}
-
-// Root level filter options
 const filterOptions = [
   {
     key: "activity",
@@ -111,34 +89,23 @@ function getDropdownTitle(): string | null {
   return titles[navPath.value.filter] ?? null;
 }
 
-// =============================================================================
-// FILTER OPTIONS
-// =============================================================================
-
-// Activity options
 const activityListOptions = ACTIVITY_OPTIONS.map((o) => ({
   value: o.value,
   label: o.label,
   hint: o.hint,
 }));
 
-// Role options
 const roleListOptions = ROLE_OPTIONS.map((o) => ({
   value: o.value,
   label: o.label,
   hint: o.hint,
 }));
 
-// Experience options
 const experienceListOptions = EXPERIENCE_OPTIONS.map((o) => ({
   value: o.value,
   label: o.label,
   hint: o.hint,
 }));
-
-// =============================================================================
-// FILTER HANDLERS
-// =============================================================================
 
 function handleActivitySelect(value: string) {
   if (value === "online") {
@@ -160,10 +127,6 @@ function handleExperienceSelect(value: string) {
   setExperience(value as ExperienceFilter);
   closeDropdown();
 }
-
-// =============================================================================
-// NUMERIC RANGE HANDLERS
-// =============================================================================
 
 function handleRatingApply(min: number | null, max: number | null) {
   setRatingRange(min, max);
@@ -195,10 +158,6 @@ function handleRegisteredClear() {
   closeDropdown();
 }
 
-// =============================================================================
-// SORT
-// =============================================================================
-
 const sortOptions = SORT_OPTIONS.map((o) => ({
   value: o.value,
   label: o.label,
@@ -206,11 +165,6 @@ const sortOptions = SORT_OPTIONS.map((o) => ({
   defaultDirection: o.defaultDirection,
 }));
 
-// =============================================================================
-// BUBBLES
-// =============================================================================
-
-// Activity bubble
 const hasActivityFilter = computed(() => filterState.value.activity !== "all");
 const activityLabel = computed(() => {
   const isOnline =
@@ -221,14 +175,12 @@ const activityLabel = computed(() => {
   return opt?.label ?? filterState.value.activity;
 });
 
-// Role bubble
 const hasRoleFilter = computed(() => filterState.value.role !== "all");
 const roleLabel = computed(() => {
   const opt = ROLE_OPTIONS.find((o) => o.value === filterState.value.role);
   return opt?.label ?? String(filterState.value.role);
 });
 
-// Experience bubble
 const hasExperienceFilter = computed(
   () => filterState.value.experience !== "all",
 );
@@ -239,7 +191,6 @@ const experienceLabel = computed(() => {
   return opt?.label ?? filterState.value.experience;
 });
 
-// Rating bubble
 const hasRatingFilter = computed(
   () =>
     filterState.value.ratingMin !== null ||
@@ -252,7 +203,6 @@ const ratingLabel = computed(() =>
   ),
 );
 
-// Games hosting bubble
 const hasGamesHostingFilter = computed(
   () =>
     filterState.value.gamesHostingMin !== null ||
@@ -265,7 +215,6 @@ const gamesHostingLabel = computed(() =>
   ),
 );
 
-// Games playing bubble
 const hasGamesPlayingFilter = computed(
   () =>
     filterState.value.gamesPlayingMin !== null ||
@@ -278,7 +227,6 @@ const gamesPlayingLabel = computed(() =>
   ),
 );
 
-// Blogs hosting bubble
 const hasBlogsFilter = computed(
   () =>
     filterState.value.blogsHostingMin !== null ||
@@ -291,7 +239,6 @@ const blogsLabel = computed(() =>
   ),
 );
 
-// Registration date bubble
 const hasRegisteredFilter = computed(
   () =>
     filterState.value.registeredFromUtc !== null ||
@@ -304,8 +251,7 @@ const registeredLabel = computed(() => {
   });
 });
 
-// Sort is driven by the SortButton, not the filter bubbles — it must NOT
-// trigger the "Сбросить" row (consistent with Games / Pulse / Polls).
+// The sort is the SortButton's: it does not raise the "Сбросить" row.
 const hasBubbles = computed(() => {
   return (
     hasActivityFilter.value ||
@@ -324,19 +270,13 @@ function clearActivityFilter() {
   setOnlineFilter("all");
 }
 
-function clearRoleFilter() {
-  setRole("all");
-}
-
 function clearAll() {
   localInput.value = "";
   clearFilters();
 }
 
-// Search input keyboard handler
 function handleSearchKeydown(event: KeyboardEvent) {
   if (event.key === "Backspace" && !localInput.value) {
-    // Remove filters in reverse order
     if (hasRegisteredFilter.value) {
       event.preventDefault();
       setRegisteredRange(null, null);
@@ -369,7 +309,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
     }
     if (hasRoleFilter.value) {
       event.preventDefault();
-      clearRoleFilter();
+      setRole("all");
       return;
     }
     if (hasActivityFilter.value) {
@@ -383,9 +323,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
 <template>
   <div class="users-filter">
-    <!-- Filter bar row -->
     <div class="filter-bar">
-      <!-- Search input -->
       <FilterSearchInput
         v-model="localInput"
         placeholder="Поиск по имени"
@@ -394,7 +332,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <!-- Filter button -->
       <div v-click-outside="closeDropdown" class="filter-section">
         <FilterButton
           :active="showDropdown"
@@ -403,14 +340,12 @@ function handleSearchKeydown(event: KeyboardEvent) {
         />
 
         <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <!-- Navigation header when inside a sub-level -->
           <FilterDropdownHeader
             v-if="navPath"
             :title="getDropdownTitle() ?? ''"
             @back="navigateBack"
           />
 
-          <!-- Root level items -->
           <template v-if="!navPath">
             <FilterDropdownItem
               v-for="item in filterOptions"
@@ -422,28 +357,24 @@ function handleSearchKeydown(event: KeyboardEvent) {
             />
           </template>
 
-          <!-- Activity options -->
           <OptionsList
             v-if="navPath?.filter === 'activity'"
             :options="activityListOptions"
             @select="handleActivitySelect"
           />
 
-          <!-- Role options -->
           <OptionsList
             v-if="navPath?.filter === 'role'"
             :options="roleListOptions"
             @select="handleRoleSelect"
           />
 
-          <!-- Experience options -->
           <OptionsList
             v-if="navPath?.filter === 'experience'"
             :options="experienceListOptions"
             @select="handleExperienceSelect"
           />
 
-          <!-- Rating range -->
           <NumericRangePicker
             v-if="navPath?.filter === 'rating'"
             :min-value="filterState.ratingMin"
@@ -452,7 +383,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @apply="handleRatingApply"
           />
 
-          <!-- Games hosting range -->
           <NumericRangePicker
             v-if="navPath?.filter === 'gamesHosting'"
             :min-value="filterState.gamesHostingMin"
@@ -460,7 +390,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @apply="handleGamesHostingApply"
           />
 
-          <!-- Games playing range -->
           <NumericRangePicker
             v-if="navPath?.filter === 'gamesPlaying'"
             :min-value="filterState.gamesPlayingMin"
@@ -468,7 +397,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @apply="handleGamesPlayingApply"
           />
 
-          <!-- Blogs hosting range -->
           <NumericRangePicker
             v-if="navPath?.filter === 'blogs'"
             :min-value="filterState.blogsHostingMin"
@@ -476,7 +404,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
             @apply="handleBlogsApply"
           />
 
-          <!-- Registration date range -->
           <DateRangePicker
             v-if="navPath?.filter === 'registered'"
             :from-value="filterState.registeredFromUtc"
@@ -488,7 +415,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
         </FilterDropdown>
       </div>
 
-      <!-- Sort -->
       <SortButton
         :options="sortOptions"
         :sort-by="filterState.sortBy"
@@ -498,7 +424,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
       />
     </div>
 
-    <!-- Active filters row (bubbles) -->
     <BubblesRow v-if="hasBubbles" @clear-all="clearAll">
       <FilterBubble
         v-if="hasActivityFilter"
@@ -511,7 +436,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
         v-if="hasRoleFilter"
         prefix="Роль:"
         :value="roleLabel"
-        @remove="clearRoleFilter"
+        @remove="setRole('all')"
       />
 
       <FilterBubble
@@ -569,9 +494,7 @@ function handleSearchKeydown(event: KeyboardEvent) {
 
   +filter-bar
   +filter-button
-  +filter-responsive
 
-// Search input inside dropdown
 +dropdown-search-input
 +filter-dropdown-base
 </style>

@@ -15,7 +15,7 @@ namespace DM.Web.API.Features.Moderation.Tickets;
 /// </summary>
 [Mapper]
 [UseStaticMapper(typeof(BbTextMappers))]
-internal partial class TicketMapper
+public partial class TicketMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -30,7 +30,6 @@ internal partial class TicketMapper
     /// stays Guid.Empty and clients cannot address the ticket.
     /// </summary>
     [MapProperty(nameof(DomainTicket.TicketId), nameof(Ticket.Id))]
-    [MapProperty(nameof(DomainTicket.Description), nameof(Ticket.DescriptionHtml))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public partial Ticket ToTicket(DomainTicket ticket);
 
@@ -38,7 +37,6 @@ internal partial class TicketMapper
     /// Domain ticket with its conversation to the DTO of the page of a ticket
     /// </summary>
     [MapProperty(nameof(DomainTicketDetails.TicketId), nameof(TicketDetails.Id))]
-    [MapProperty(nameof(DomainTicketDetails.Description), nameof(TicketDetails.DescriptionHtml))]
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
     public partial TicketDetails ToTicketDetails(DomainTicketDetails ticket);
 

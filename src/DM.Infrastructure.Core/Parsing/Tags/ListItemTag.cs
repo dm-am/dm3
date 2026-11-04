@@ -7,17 +7,9 @@ namespace DM.Infrastructure.Core.Parsing.Tags;
 /// <c>[li]...[/li]</c> as a reader gets it: an item of the list it stands in.
 /// </summary>
 /// <remarks>
-/// An item written inside another item, with no list of its own between the
-/// two, is drawn as a block and not as an item. A browser closes an open
-/// &lt;li&gt; where the next one opens unless a list stands between them, and it
-/// looks through the elements of a spoiler, a quote, an 18+ block and a hidden
-/// block on the way: <c>[li]a[spoiler][li]b[/li]c[/spoiler][/li]</c> reached the
-/// page as an item "a" with an empty spoiler and "b" and "c" under it, readable
-/// with the spoiler closed. Drawn as a block, the inner item stays where it was
-/// written, inside the spoiler.
-///
-/// An element that is not drawn does not count: a list or an item printed as
-/// the text it was typed is no element the browser sees.
+/// An item inside another item with no list between them is drawn as a block: a
+/// browser closes the open &lt;li&gt; where the next opens, through a spoiler too,
+/// and the inner item would leave it. A tag printed as typed does not count.
 /// </remarks>
 internal sealed class ListItemTag : Tag
 {

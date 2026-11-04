@@ -24,15 +24,9 @@ using PendingRegistration = DM.Domain.Account.Features.Registration.PendingRegis
 namespace DM.Web.API.IntegrationTests.Repositories;
 
 /// <summary>
-/// Two requests to one account arriving together, on the paths where the loser
-/// used to be answered with a failure of the storage engine or with nothing at all.
+/// Two requests to one account arriving together. Against the container Postgres: every assertion is about what
+/// the database decided.
 /// </summary>
-/// <remarks>
-/// Against the container Postgres because every assertion here is about what the
-/// database decided: a unique index refusing a second row, an upsert predicate
-/// refusing an update, a delete that carried its own condition. A substitute
-/// returns what it was told to and proves none of it.
-/// </remarks>
 public class AccountWriteRacesShould : IntegrationTestBase
 {
     private const int Parallelism = 4;
@@ -41,18 +35,10 @@ public class AccountWriteRacesShould : IntegrationTestBase
     {
     }
 
-    // ── Registration ──
-
     /// <summary>
     /// The form submitted twice leaves one pending registration and no failure.
     /// </summary>
-    /// <remarks>
-    /// The service asks whether the address already has a pending row and writes
-    /// according to the answer, and the answer stops being true the moment it is
-    /// given: submissions arriving together all found nothing and all inserted,
-    /// and the unique index over the address answered every loser with a 500 on
-    /// the very first screen of the site.
-    /// </remarks>
+    /// <remarks>Submissions arriving together all find nothing; the unique index over the address decides.</remarks>
     [Fact]
     public async Task TakeTheRegistrationFormTwiceWithoutFailing()
     {
@@ -86,8 +72,6 @@ public class AccountWriteRacesShould : IntegrationTestBase
             "refreshed on every letter, an address could be held forever by pressing a button");
         row.TokenCreatedUtc.Should().Be(started.AddDays(3), "the letter is the new one");
     }
-
-    // ── The second factor ──
 
     /// <summary>
     /// A setup started again replaces the secret; once the factor is on, nothing
@@ -140,18 +124,8 @@ public class AccountWriteRacesShould : IntegrationTestBase
     /// address that letter was asked for.
     /// </summary>
     /// <remarks>
-    /// Retiring the account's old links and writing the new pending address used to
-    /// be two calls, and a request from another tab landed between them: both
-    /// retired what they found and both wrote a letter, so two links were live at
-    /// once and the older of them confirmed an address the owner had already
-    /// replaced.
-    ///
-    /// Together and not one after the other, because that gap is the whole of what
-    /// is being tested: run in sequence, the second request finds the first one
-    /// committed and the arrangement this test exists to hold - one transaction
-    /// over the account row - can be taken out with every assertion still passing.
-    /// Which of them wins is not fixed, so the surviving letter is found first and
-    /// the waiting address is read against it.
+    /// Together, not in sequence: the gap is what one transaction over the account row closes. The surviving letter
+    /// is found first and the waiting address read against it.
     /// </remarks>
     [Fact]
     public async Task LeaveOneLiveLetterWhenChangeRequestsArriveTogether()
@@ -196,12 +170,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
     /// A confirmation checked against a secret that has since been replaced
     /// switches nothing on.
     /// </summary>
-    /// <remarks>
-    /// The window is between reading the state and stamping it: a setup begun on
-    /// another device overwrites the row in place, and a stamp asking only
-    /// "still off?" would switch the account on to a secret nobody here has seen,
-    /// and hand out the recovery set that goes with it.
-    /// </remarks>
+    /// <remarks>A setup on another device overwrites the row in place, so the stamp checks the secret, not only "still off".</remarks>
     [Fact]
     public async Task SwitchNothingOnForASecretThatWasReplaced()
     {
@@ -228,12 +197,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
     /// A removal called off before the pass reaches it takes neither the factor
     /// nor the codes.
     /// </summary>
-    /// <remarks>
-    /// The sweep lists the accounts whose waiting period is over and removes them
-    /// one at a time, and calling the removal off lands in the gap between the
-    /// two. Told by the listing alone, the pass took the factor - and the recovery
-    /// codes with it - off an owner who had just kept it.
-    /// </remarks>
+    /// <remarks>The sweep removes listed accounts one at a time, and the call-off lands between.</remarks>
     [Fact]
     public async Task LeaveTheFactorWhoseRemovalWasCalledOff()
     {
@@ -260,14 +224,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
     /// A reissue asked for a factor that is gone hands out nothing and stores
     /// nothing.
     /// </summary>
-    /// <remarks>
-    /// The state is read, the password and the code are checked, and then the set
-    /// is written - and a mailed removal coming due in that gap needs no code of
-    /// its own. Written without looking at what it changed, this answered the
-    /// owner with ten recovery codes for a factor that was off and left the rows
-    /// behind no factor at all, where the next one the account switches on would
-    /// accept them.
-    /// </remarks>
+    /// <remarks>A mailed removal can come due between the checks and the write, so the write looks at what it changes.</remarks>
     [Fact]
     public async Task IssueNoRecoveryCodesForAFactorThatIsGone()
     {
@@ -289,13 +246,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
     /// <summary>
     /// A reissue asked for a setup nobody ever confirmed hands out nothing.
     /// </summary>
-    /// <remarks>
-    /// The row exists while a setup is in flight, and it is not a factor: the
-    /// account is not protected by it, the QR may be sitting on a screen nobody
-    /// owns, and the secret is replaced in place by the next setup that starts.
-    /// A set written against it would be a way past a factor the account has not
-    /// switched on, and it survives into whatever secret takes that row next.
-    /// </remarks>
+    /// <remarks>A row in setup is not a factor, and its secret is replaced in place by the next setup.</remarks>
     [Fact]
     public async Task IssueNoRecoveryCodesForASetupThatWasNeverConfirmed()
     {
@@ -328,21 +279,11 @@ public class AccountWriteRacesShould : IntegrationTestBase
             .Should().BeNull("nothing was issued, so nothing is dated");
     }
 
-    // ── The name ──
-
     /// <summary>
     /// A rename the storage will not take comes back as a duplicate rather than
     /// as a failure of the storage engine.
     /// </summary>
-    /// <remarks>
-    /// Two unique structures stand over that write: lower("Username") over the
-    /// account, which a name taken between the service's read and the write runs
-    /// into, and IX_UsernameHistories_OldUsername over the history, which needs
-    /// no race at all - an account that once took its previous name back is
-    /// about to leave behind a name the history already holds. Untranslated,
-    /// both reached the reader as a 500 on the very form that exists to let them
-    /// choose another name.
-    /// </remarks>
+    /// <remarks>lower("Username") over the account and IX_UsernameHistories_OldUsername over the history both stand over the write.</remarks>
     [Fact]
     public async Task RefuseARenameTheHistoryAlreadyHolds()
     {
@@ -406,18 +347,11 @@ public class AccountWriteRacesShould : IntegrationTestBase
             "a refused write leaves the account under the name it had");
     }
 
-    // ── Password and address ──
-
     /// <summary>
     /// A password change leaves no live reset link behind it, including one issued
     /// while the change was under way.
     /// </summary>
-    /// <remarks>
-    /// Only the link the change came in through used to be spent. A second letter
-    /// requested a moment earlier outlived the change, and whoever held it could
-    /// set the password again over the one its owner had just chosen - which is
-    /// the whole of what a reset link is for.
-    /// </remarks>
+    /// <remarks>A reset link outliving the change could set the password again.</remarks>
     [Fact]
     public async Task LeaveNoLiveResetLinkAfterThePasswordChanges()
     {
@@ -444,12 +378,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
     /// An address taken while the confirmation letter waited is refused as taken,
     /// not as a failure of the storage engine.
     /// </summary>
-    /// <remarks>
-    /// Nothing holds the address between the request and the click: the check that
-    /// it is free is a read, and whoever writes it first owns it. The unique index
-    /// over lower("Email") is what actually decides, and this is the shape its
-    /// refusal reaches the caller in.
-    /// </remarks>
+    /// <remarks>The unique index over lower("Email") decides; this is how its refusal reaches the caller.</remarks>
     [Fact]
     public async Task RefuseAPendingAddressSomebodyElseTook()
     {
@@ -475,8 +404,6 @@ public class AccountWriteRacesShould : IntegrationTestBase
             "the request is over: an address that can never be confirmed would keep the " +
             "profile advertising a change nobody can complete");
     }
-
-    // ── Seeding ──
 
     /// <summary>Whole seconds: the columns keep microseconds and are compared.</summary>
     private static DateTimeOffset Moment() =>

@@ -2,26 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * What the reader sees after inviting an assistant to the blog.
- *
- * Nothing in the roster can answer for it: the invited person joins the list
- * of assistants when the invitation is accepted, which is somebody else's
- * doing, later. The section used to say it in the corner and leave the screen
- * exactly as it was; it now keeps a block of the invitations that are out,
- * read from the invitation endpoint, because the blog itself carries only the
- * assistants who have already accepted.
- *
- * What each test here catches:
- *  - the block left out, or fed from the blog: an invitation that went out
- *    leaves no trace on the page that sent it;
- *  - the kind read in a spelling the endpoint does not use: it spells roles
- *    in lower case, "assistant", the way the game twin does (ToApiString), and
- *    a filter on any other spelling finds nothing and leaves the block empty;
- *  - the row taken from the reload alone: nothing to show when that read does
- *    not come back;
- *  - the toast put back beside the block: one event announced twice.
- */
+// An invited assistant joins the roster only on acceptance, so the block of
+// invitations still out, read from the invitation endpoint (the kind in lower
+// case, as ToApiString spells it), is the answer to inviting one.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -35,10 +18,7 @@ import RolesSection from "./RolesSection.vue";
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
 
-/**
- * An invitation as this endpoint serves it — the kind in lower case, the way
- * the blog API spells every role.
- */
+/** An invitation as the endpoint serves it, the kind in lower case. */
 const invitation = (
   id: string,
   username: string,
@@ -160,7 +140,7 @@ describe("Blog RolesSection assistant invitation", () => {
     expect(waiting(wrapper)).toContain(
       `отправлено ${formatDateFull(FRESH.createdUtc)}`,
     );
-    // And not among the assistants: accepting is what puts a name there.
+    // Not among the assistants: accepting is what puts a name there.
     expect(wrapper.findAll(".staff-list")[0].text()).not.toContain("Кандидат");
   });
 
@@ -206,8 +186,7 @@ describe("Blog RolesSection assistant invitation", () => {
     await invite(wrapper, "Кандидат");
 
     expect(waiting(wrapper)).toBe("");
-    // Where the press was, and in no plate (the owner's rule of 26 September
-    // 2026, UI_STANDARDS "Всплывающие сообщения").
+    // Where the press was, and in no plate.
     expect(wrapper.get(".invite-row + .action-result").text()).toBe(
       "Не удалось пригласить ассистента",
     );
@@ -215,11 +194,7 @@ describe("Blog RolesSection assistant invitation", () => {
   });
 });
 
-/**
- * Taking an assistant off. The confirmation runs the request itself: it waits
- * for the answer, prints a refusal in itself and closes on success alone, and
- * the request carries the flags that keep the interceptor quiet about it.
- */
+// The confirmation runs the removal, prints a refusal in itself and closes on success alone.
 describe("Blog RolesSection assistant removal", () => {
   beforeEach(() => {
     [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));

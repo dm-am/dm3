@@ -6,11 +6,10 @@ using DM.Domain.Forum.Features.Boards;
 namespace DM.Domain.Forum.Authorization;
 
 /// <inheritdoc />
-internal class BoardIntentionResolver : IIntentionResolver<ForumIntention, Board>
+internal class BoardIntentionResolver : IIntentionResolver<BoardIntention, Board>
 {
     private readonly IAccessPolicyConverter _accessPolicyConverter;
 
-    /// <inheritdoc />
     public BoardIntentionResolver(
         IAccessPolicyConverter accessPolicyConverter)
     {
@@ -18,15 +17,15 @@ internal class BoardIntentionResolver : IIntentionResolver<ForumIntention, Board
     }
 
     /// <inheritdoc />
-    public bool IsAllowed(IAuthorizationSubject user, ForumIntention intention, Board target)
+    public bool IsAllowed(IAuthorizationSubject user, BoardIntention intention, Board target)
     {
         switch (intention)
         {
-            case ForumIntention.CreateTopic when user.IsAuthenticated:
+            case BoardIntention.CreateTopic when user.IsAuthenticated:
                 var userPolicy = _accessPolicyConverter.Convert(user.Role);
                 return (target.CreateTopicPolicy & userPolicy) != BoardAccessPolicy.None &&
                        user.MaySpeak();
-            case ForumIntention.AdministrateTopics when user.IsAuthenticated:
+            case BoardIntention.AdministrateTopics when user.IsAuthenticated:
                 return AdministratesTopics(user, target);
             default:
                 return false;

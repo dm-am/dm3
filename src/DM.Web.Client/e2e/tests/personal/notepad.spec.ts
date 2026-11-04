@@ -1,7 +1,5 @@
 import { test, expect, type APIRequestContext } from "@playwright/test";
-import { authenticatedContext } from "../../fixtures/auth";
-
-const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
+import { API_BASE_URL, authenticatedContext } from "../../fixtures/auth";
 
 let authContext: APIRequestContext;
 const createdEntryIds: string[] = [];
@@ -14,31 +12,26 @@ test.afterAll(async () => {
   // Best-effort cleanup of everything this worker created; a second delete of
   // an entry a test already removed is expected and its answer is ignored.
   for (const id of createdEntryIds) {
-    await authContext.delete(`${API_URL}/v1/users/me/notepad/${id}`);
+    await authContext.delete(`${API_BASE_URL}/v1/users/me/notepad/${id}`);
   }
   if (authContext) await authContext.dispose();
 });
 
 /**
- * Creates an entry and returns it, so every test owns the entry it works on.
- *
- * The read, update and delete tests used to share one entry created by the
- * test before them and opened with `test.skip(!createdEntryId, ...)`. With
- * fullyParallel the tests of one file can land in different workers, where a
- * module-level id set elsewhere simply does not exist — so those three
- * reported green exactly when they had nothing to work on. Both halves are
- * fixed here: the entry is per test, and a creation that fails fails the test.
- *
- * A single resource travels inside an envelope — see API_DESIGN.md.
+ * Creates an entry and returns it, so every test owns the entry it works on:
+ * with fullyParallel the tests of one file can land in different workers. A
+ * single resource travels inside an envelope (API_DESIGN.md).
  */
 async function createEntry(title: string) {
-  const response = await authContext.post(`${API_URL}/v1/users/me/notepad`, {
-    headers: { "Content-Type": "application/json" },
-    data: {
-      title,
-      content: "[b]Test content[/b] from E2E tests",
+  const response = await authContext.post(
+    `${API_BASE_URL}/v1/users/me/notepad`,
+    {
+      data: {
+        title,
+        content: "[b]Test content[/b] from E2E tests",
+      },
     },
-  });
+  );
 
   expect(response.status()).toBe(201);
   const { resource } = await response.json();
@@ -49,7 +42,9 @@ async function createEntry(title: string) {
 
 test.describe("Notepad API", () => {
   test("should get my notepad entries", async () => {
-    const response = await authContext.get(`${API_URL}/v1/users/me/notepad`);
+    const response = await authContext.get(
+      `${API_BASE_URL}/v1/users/me/notepad`,
+    );
 
     expect(response.ok()).toBeTruthy();
     const data = await response.json();
@@ -67,7 +62,7 @@ test.describe("Notepad API", () => {
     const entry = await createEntry("E2E Read Entry");
 
     const response = await authContext.get(
-      `${API_URL}/v1/users/me/notepad/${entry.id}`,
+      `${API_BASE_URL}/v1/users/me/notepad/${entry.id}`,
     );
 
     expect(response.ok()).toBeTruthy();
@@ -81,9 +76,8 @@ test.describe("Notepad API", () => {
     const entry = await createEntry("E2E Update Entry");
 
     const response = await authContext.patch(
-      `${API_URL}/v1/users/me/notepad/${entry.id}`,
+      `${API_BASE_URL}/v1/users/me/notepad/${entry.id}`,
       {
-        headers: { "Content-Type": "application/json" },
         data: {
           title: "Updated E2E Entry",
         },
@@ -99,14 +93,14 @@ test.describe("Notepad API", () => {
     const entry = await createEntry("E2E Delete Entry");
 
     const response = await authContext.delete(
-      `${API_URL}/v1/users/me/notepad/${entry.id}`,
+      `${API_BASE_URL}/v1/users/me/notepad/${entry.id}`,
     );
 
     expect(response.status()).toBe(204);
   });
 
   test("should require authentication", async ({ request }) => {
-    const response = await request.get(`${API_URL}/v1/users/me/notepad`);
+    const response = await request.get(`${API_BASE_URL}/v1/users/me/notepad`);
     expect(response.status()).toBe(401);
   });
 });

@@ -51,7 +51,7 @@ internal class GameNotepadService : IGameNotepadService
     /// <inheritdoc />
     public async Task<IEnumerable<NotepadEntry>> GetMasterEntries(Guid gameId, CancellationToken ct = default)
     {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Master, gameId, null, ct);
+        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Master, gameId, null);
         return await _repository.GetEntriesAsync(NotepadType.Master, gameId, null, ct);
     }
 
@@ -66,7 +66,7 @@ internal class GameNotepadService : IGameNotepadService
     /// <inheritdoc />
     public async Task<IEnumerable<NotepadEntry>> GetPlayerEntries(Guid gameId, Guid characterId, CancellationToken ct = default)
     {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Player, gameId, characterId, ct);
+        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.Player, gameId, characterId);
         return await _repository.GetEntriesAsync(NotepadType.Player, gameId, characterId, ct);
     }
 
@@ -81,7 +81,7 @@ internal class GameNotepadService : IGameNotepadService
     /// <inheritdoc />
     public async Task<IEnumerable<NotepadEntry>> GetCharacterMasterEntries(Guid gameId, Guid characterId, CancellationToken ct = default)
     {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.CharacterMaster, gameId, characterId, ct);
+        await ThrowIfNotAuthorizedAsync(NotepadIntention.Read, NotepadType.CharacterMaster, gameId, characterId);
         return await _repository.GetEntriesAsync(NotepadType.CharacterMaster, gameId, characterId, ct);
     }
 
@@ -93,14 +93,6 @@ internal class GameNotepadService : IGameNotepadService
 
     #region Common Operations
 
-    /// <summary>
-    /// One notepad entry, whichever of the three notepads it belongs to.
-    /// </summary>
-    /// <remarks>
-    /// The three public methods differed in the notepad type and in whether the
-    /// entry hangs off a character; everything else - the authorization call, the
-    /// nine fields, the write - was the same text three times.
-    /// </remarks>
     private async Task<NotepadEntry> CreateEntry(
         NotepadType notepadType,
         Guid gameId,
@@ -108,7 +100,7 @@ internal class GameNotepadService : IGameNotepadService
         CreateNotepadEntry createEntry,
         CancellationToken ct)
     {
-        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, notepadType, gameId, ownerId, ct);
+        await ThrowIfNotAuthorizedAsync(NotepadIntention.Create, notepadType, gameId, ownerId);
 
         var internalDto = new CreateNotepadEntryInternal
         {
@@ -127,34 +119,13 @@ internal class GameNotepadService : IGameNotepadService
     }
 
     /// <inheritdoc />
-    public async Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default)
-    {
-        var entry = await _repository.GetEntryAsync(entryId, ct);
-        if (entry == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
-        }
-
-        ThrowIfNotAGameNotepad(entry);
-
-        await HiddenContainerRefusal.AsNotFound(RefusalMessage.NotepadEntryNotFound,
-            () => ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Read, entry, ct));
-        return entry;
-    }
+    public Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default) =>
+        AllowedEntry(entryId, NotepadIntention.Read, ct);
 
     /// <inheritdoc />
     public async Task<NotepadEntry> UpdateEntry(Guid entryId, UpdateNotepadEntry updateEntry, CancellationToken ct = default)
     {
-        var entry = await _repository.GetEntryAsync(entryId, ct);
-        if (entry == null)
-        {
-            throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
-        }
-
-        ThrowIfNotAGameNotepad(entry);
-
-        await HiddenContainerRefusal.AsNotFound(RefusalMessage.NotepadEntryNotFound,
-            () => ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Edit, entry, ct));
+        await AllowedEntry(entryId, NotepadIntention.Edit, ct);
 
         var internalDto = new UpdateNotepadEntryInternal
         {
@@ -174,23 +145,37 @@ internal class GameNotepadService : IGameNotepadService
         var entry = await _repository.GetEntryAsync(entryId, ct);
         if (entry == null)
         {
-            return; // Already deleted
+            return;
         }
 
         ThrowIfNotAGameNotepad(entry);
 
         try
         {
-            await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Delete, entry, ct);
+            await ThrowIfNotAuthorizedForEntryAsync(NotepadIntention.Delete, entry);
         }
         catch (HttpException refusal) when (HiddenContainerRefusal.IsAbsence(refusal))
         {
-            // An entry of a game the reader may not open is as gone to him as one
-            // already deleted, and answers the same way: see HiddenContainerRefusal.
+            // An entry of a game the reader may not open is as gone as a deleted one.
             return;
         }
 
         await _repository.DeleteEntryAsync(entryId, UserId, ct);
+    }
+
+    /// <summary>
+    /// An entry of a game the reader may not open answers as a missing one.
+    /// </summary>
+    private async Task<NotepadEntry> AllowedEntry(Guid entryId, NotepadIntention intention, CancellationToken ct)
+    {
+        var entry = await _repository.GetEntryAsync(entryId, ct) ??
+                    throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.NotepadEntryNotFound);
+
+        ThrowIfNotAGameNotepad(entry);
+
+        await HiddenContainerRefusal.AsNotFound(RefusalMessage.NotepadEntryNotFound,
+            () => ThrowIfNotAuthorizedForEntryAsync(intention, entry));
+        return entry;
     }
 
     #endregion
@@ -201,44 +186,28 @@ internal class GameNotepadService : IGameNotepadService
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId,
-        Guid? authorId,
-        CancellationToken ct)
+        Guid? authorId)
     {
         var context = new NotepadAuthContext
         {
             NotepadType = notepadType,
-            ContainerId = containerId,
-            OwnerId = ownerId,
-            AuthorId = authorId,
-            GameRoles = Array.Empty<GameRole>()
+            AuthorId = authorId
         };
 
-        // The condition, and not an unconditional read: a notepad type this
-        // service does not answer for reaches no game and no roles, which is
-        // what the switch this replaced did by having no default branch.
-        if (notepadType is NotepadType.Master or NotepadType.CharacterMaster or NotepadType.Player)
-        {
-            var game = await _gameService.GetAsync(containerId);
-            context.GameRoles = game.GetRoles(UserId);
+        var game = await _gameService.GetAsync(containerId);
+        context.GameRoles = game.GetRoles(UserId);
 
-            // Only the player notepad hangs off a character, and only then is
-            // there an author of one to ask about.
-            if (notepadType == NotepadType.Player && ownerId.HasValue)
-            {
-                var character = await _characterService.GetAsync(ownerId.Value);
-                context.CharacterOwnerId = character?.Author?.UserId;
-            }
+        if (notepadType == NotepadType.Player && ownerId.HasValue)
+        {
+            var character = await _characterService.GetAsync(ownerId.Value);
+            context.CharacterOwnerId = character.Author?.UserId;
         }
 
         return context;
     }
 
     /// <summary>
-    /// The three notepads this service answers for. A notepad entry is one row
-    /// in one table shared with the blog and personal notepads, and the entry
-    /// endpoints take an id and nothing else - so an id belonging to somebody
-    /// else's notepad has to be refused here, before an authorization context
-    /// this resolver cannot build gets built out of it.
+    /// The entry table is shared with the blog and personal notepads, and the entry endpoints take an id alone.
     /// </summary>
     private static void ThrowIfNotAGameNotepad(NotepadEntry entry)
     {
@@ -249,39 +218,25 @@ internal class GameNotepadService : IGameNotepadService
     }
 
     /// <summary>
-    /// Authorization for a question about the notepad as a whole - listing its
-    /// entries or adding one. No entry exists yet, so there is no author to
-    /// name, and the resolver settles both on access alone.
-    /// </summary>
-    private Task ThrowIfNotAuthorizedAsync(
-        NotepadIntention intention,
-        NotepadType notepadType,
-        Guid containerId,
-        Guid? ownerId,
-        CancellationToken ct) =>
-        ThrowIfNotAuthorizedAsync(intention, notepadType, containerId, ownerId, null, ct);
-
-    /// <summary>
-    /// Authorization for a question about one entry. Editing belongs to its
-    /// author alone and deleting to the author and the game master, so the
-    /// author has to reach the resolver: a context without one refuses both.
+    /// A context without the author refuses Edit and Delete.
     /// </summary>
     private Task ThrowIfNotAuthorizedForEntryAsync(
         NotepadIntention intention,
-        NotepadEntry entry,
-        CancellationToken ct) =>
+        NotepadEntry entry) =>
         ThrowIfNotAuthorizedAsync(
-            intention, entry.NotepadType, entry.ContainerId, entry.OwnerId, entry.AuthorId, ct);
+            intention, entry.NotepadType, entry.ContainerId, entry.OwnerId, entry.AuthorId);
 
+    /// <summary>
+    /// Listing or adding has no entry yet, so no author.
+    /// </summary>
     private async Task ThrowIfNotAuthorizedAsync(
         NotepadIntention intention,
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId,
-        Guid? authorId,
-        CancellationToken ct)
+        Guid? authorId = null)
     {
-        var context = await BuildAuthContextAsync(notepadType, containerId, ownerId, authorId, ct);
+        var context = await BuildAuthContextAsync(notepadType, containerId, ownerId, authorId);
         _intentionManager.ThrowIfForbidden(intention, context);
     }
 

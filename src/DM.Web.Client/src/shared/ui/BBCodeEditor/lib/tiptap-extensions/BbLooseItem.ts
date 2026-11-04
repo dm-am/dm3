@@ -14,6 +14,7 @@
  */
 
 import { Node, mergeAttributes } from "@tiptap/core";
+import { kept } from "./kept";
 
 export const BbLooseItem = Node.create({
   name: "bbLooseItem",
@@ -26,20 +27,8 @@ export const BbLooseItem = Node.create({
 
   addAttributes() {
     return {
-      open: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-bb-open"),
-        renderHTML: (attributes) =>
-          attributes.open === null ? {} : { "data-bb-open": attributes.open },
-      },
-      close: {
-        default: null,
-        parseHTML: (element) => element.getAttribute("data-bb-close"),
-        renderHTML: (attributes) =>
-          attributes.close === null
-            ? {}
-            : { "data-bb-close": attributes.close },
-      },
+      open: kept("data-bb-open"),
+      close: kept("data-bb-close"),
     };
   },
 
@@ -51,5 +40,3 @@ export const BbLooseItem = Node.create({
     return ["div", mergeAttributes(HTMLAttributes, { "data-bb-tag": "li" }), 0];
   },
 });
-
-export default BbLooseItem;

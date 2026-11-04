@@ -1,5 +1,4 @@
 using DM.Infrastructure.Core;
-using DM.Infrastructure.Core.Storage;
 using DM.Infrastructure.Mail;
 using DM.Infrastructure.Messaging;
 using DM.Infrastructure.Messaging.GeneralBus;
@@ -27,10 +26,7 @@ internal static class HostedServiceExtensions
     /// <param name="services">Service collection.</param>
     public static IServiceCollection AddDmHostedServices(this IServiceCollection services)
     {
-        // Nothing on the publishing side used to declare an exchange, so both of
-        // these existed only because some consumer had subscribed first. On a
-        // stand where a worker had never started, every publish went nowhere and
-        // said nothing.
+        // Declared by the publisher, so a publish never depends on a consumer having subscribed first.
         services.AddDmPublishedExchanges(
             InvokedEventsTransport.ExchangeName, MailTransport.ExchangeName);
 
@@ -41,8 +37,6 @@ internal static class HostedServiceExtensions
         // them out of the migration is what lets the migration stay generated.
         services.AddHostedService<ExpressionIndexInitializer>();
 
-        // The transport half of the event outbox: requests of this host write
-        // the rows, so the relay lives and dies with the writer.
         services.AddHostedService<OutboxRelayService>();
 
         services.AddHostedService<TokenCleanupService>();

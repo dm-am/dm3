@@ -5,5 +5,7 @@ namespace DM.Domain.Core.Mail.ViewModels;
 /// Username is chosen after email confirmation.
 /// </summary>
 /// <param name="ConfirmationLinkUrl">Link to activate the user and choose username</param>
+/// <param name="LinkLifetimeHours">How long the link lives, as the server holds it</param>
 public record RegistrationConfirmationViewModel(
-    string ConfirmationLinkUrl);
+    string ConfirmationLinkUrl,
+    int LinkLifetimeHours);

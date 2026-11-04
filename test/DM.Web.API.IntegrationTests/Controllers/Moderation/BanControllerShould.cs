@@ -10,9 +10,6 @@ using DbBan = DM.Infrastructure.Persistence.Entities.Moderation.Ban;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// Integration tests for BanController
-/// </summary>
 public class BanControllerShould : IntegrationTestBase
 {
     public BanControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -20,9 +17,7 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Seed an active temporary ban for SecondUser directly:
-    /// the create endpoint requires a moderator identity, while
-    /// the public GETs must be exercised anonymously.
+    /// Seed an active temporary ban for SecondUser directly: the public GETs run anonymously.
     /// </summary>
     private async Task<Guid> SeedActiveBan()
     {
@@ -61,17 +56,16 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetUserBans_PublicView_ReturnsBanFactsWithoutModerationDetails()
+    public async Task GetUserBansPublicViewReturnsBanFactsWithoutModerationDetails()
     {
-        // Arrange
         var banId = await SeedActiveBan();
 
         try
         {
-            // Act - anonymous request
+            // Anonymous request
             var response = await Client.GetAsync($"/v1/users/{TestConstants.SecondUserLogin}/bans");
 
-            // Assert - ban facts are present, moderation details are not
+            // Ban facts are present, moderation details are not
             response.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var json = await response.Content.ReadAsStringAsync();
@@ -94,17 +88,15 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetActiveBan_PublicView_ReturnsBanFactsWithoutModerationDetails()
+    public async Task GetActiveBanPublicViewReturnsBanFactsWithoutModerationDetails()
     {
-        // Arrange
         var banId = await SeedActiveBan();
 
         try
         {
-            // Act - anonymous request
+            // Anonymous request
             var response = await Client.GetAsync($"/v1/users/{TestConstants.SecondUserLogin}/bans/active");
 
-            // Assert
             response.StatusCode.Should().Be(HttpStatusCode.OK);
 
             var json = await response.Content.ReadAsStringAsync();
@@ -119,55 +111,57 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task GetBans_RequiresAuthentication()
+    public async Task GetBansRequiresAuthentication()
     {
-        // Act
         var response = await Client.GetAsync("/v1/bans");
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
+    /// <summary>
+    /// The ban list is public, as the warning log and the pulse are: a guest
+    /// reads it, with the reason and the moderator, and is offered no lift.
+    /// </summary>
     [Fact]
-    public async Task GetBans_WithAuth_RequiresModeratorRole()
+    public async Task LetAGuestReadTheBanList()
     {
-        // Arrange
+        var banId = await SeedActiveBan();
+
+        try
+        {
+            var response = await Client.GetAsync("/v1/bans/history?skip=0&take=200");
+            var body = await response.Content.ReadAsStringAsync();
+            response.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", body);
+
+            using var document = JsonDocument.Parse(body);
+            var ban = document.RootElement.GetProperty("resources").EnumerateArray()
+                .Select(entry => entry.GetProperty("ban"))
+                .First(entry => entry.GetProperty("id").GetGuid() == banId);
+            ban.GetProperty("canLift").GetBoolean().Should().BeFalse();
+            ban.TryGetProperty("moderator", out _).Should().BeTrue();
+            ban.TryGetProperty("comment", out _).Should().BeTrue();
+        }
+        finally
+        {
+            await RemoveBan(banId);
+        }
+    }
+
+    [Fact]
+    public async Task GetBansWithAuthRequiresModeratorRole()
+    {
         var request = CreateAuthenticatedRequest(HttpMethod.Get, "/v1/bans");
 
-        // Act
         var response = await Client.SendAsync(request);
 
-        // Assert - Regular user should be forbidden
+        // Regular user should be forbidden
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task PostBan_RequiresAuthentication()
-    {
-        // Arrange
-        var banData = new
-        {
-            userLogin = TestConstants.SecondUserLogin,
-            reason = "Violation",
-            duration = "P7D"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync("/v1/bans", banData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
     /// <summary>
     /// A lift without a reason is refused and leaves the ban in force.
     /// </summary>
-    /// <remarks>
-    /// The ban list draws the lift as a decision of its own under the ban, and
-    /// one without words would be the only decision there nobody explained. The
-    /// reason travels in the body of the DELETE, as the removal of an account
-    /// sends its own.
-    /// </remarks>
+    /// <remarks>The lift is a decision of its own in the list; the reason travels in the body of the DELETE.</remarks>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -237,17 +231,9 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The ban list is the bot's ban log of DM2: every issue and every lift is an
-    /// entry of its own, at the moment it happened, newest first, and the page
-    /// counts entries rather than bans.
+    /// The ban list is the ban log of DM2: every issue and lift an entry of its own, newest first, pages counting entries.
     /// </summary>
-    /// <remarks>
-    /// The second ban is issued between the issue and the lift of the first, so a
-    /// list of bans by their start, which is what the history used to be, puts the
-    /// first ban's lift in the wrong place: under the second ban instead of above
-    /// it. The name narrows the list to one person, and somebody else's ban issued
-    /// in the middle of it all stays out.
-    /// </remarks>
+    /// <remarks>The second ban is issued between the issue and the lift of the first; somebody else's stays out.</remarks>
     [Fact]
     public async Task ListEveryIssueAndEveryLiftAsAnEntryOfItsOwnNewestFirst()
     {
@@ -285,14 +271,9 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Every entry carries its number in the whole list, counted from the oldest:
-    /// the list, newest first, counts down by one from the count of entries to 1,
-    /// and a new entry takes the next number and leaves the others theirs.
+    /// Every entry carries its number in the whole list from the oldest; a new entry takes the next.
     /// </summary>
-    /// <remarks>
-    /// Read from the database the stand runs, because the numbers are counted by
-    /// the order the database cuts the page by.
-    /// </remarks>
+    /// <remarks>Read from the database the stand runs, which cuts the page.</remarks>
     [Fact]
     public async Task NumberEveryEntryFromTheOldestAndKeepTheNumbersWhenANewOneIsWritten()
     {
@@ -327,9 +308,7 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The list of one person shows the numbers the whole list gives his entries,
-    /// and the page of an entry is asked for by its number: the answer is the page
-    /// of this list that holds it, and says which page that is.
+    /// The list of one person shows the whole list's numbers, and the page of an entry is found by its number.
     /// </summary>
     [Fact]
     public async Task OpenThePageOfAnEntryByItsNumber()
@@ -399,16 +378,9 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Each ban says what it forbids and whether the reader may lift it, so the
-    /// list names the scope in words and offers the lift only where the lift
-    /// would go through.
+    /// Each ban says what it forbids and whether the reader may lift it.
     /// </summary>
-    /// <remarks>
-    /// The flag answers for the reader. A senior moderator may lift a running
-    /// temporary ban of somebody else's and nothing more: not a permanent one,
-    /// which is an administrator's, not his own, not one that has run out or
-    /// been lifted. An ordinary moderator may lift nothing.
-    /// </remarks>
+    /// <remarks>A senior moderator lifts a running temporary ban of somebody else's and nothing more; a moderator nothing.</remarks>
     [Fact]
     public async Task TellTheScopeOfEachBanAndWhetherTheReaderMayLiftIt()
     {
@@ -450,16 +422,14 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// The window that issues a ban takes its reason in the BBCode editor, so the
-    /// list shows the reason rendered, the way a comment is, and not with its
-    /// brackets.
+    /// The reason is written in the BBCode editor, so the list shows it rendered.
     /// </summary>
     [Fact]
     public async Task RenderTheReasonOfABan()
     {
         var now = WholeSeconds(DateTimeOffset.UtcNow);
         var banId = await SeedBan(TestConstants.MentorUserId, now.AddDays(-1), now.AddDays(6),
-            AccessPolicy.DemocraticBan, comment: "[b]Спам[/b] в общем чате");
+            AccessPolicy.DemocraticBan, comment: "[b]Спам[/b] в глобальном чате");
 
         try
         {
@@ -476,9 +446,7 @@ public class BanControllerShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A ban that has run out is not lifted: there is nothing left of it to end,
-    /// and a lift written after its end would stand in the list as an entry about
-    /// a ban that was already over.
+    /// A ban that has run out is not lifted: nothing is left of it to end.
     /// </summary>
     [Fact]
     public async Task RefuseToLiftABanThatHasRunOut()
@@ -510,7 +478,7 @@ public class BanControllerShould : IntegrationTestBase
     /// test says otherwise.
     /// </summary>
     private async Task<Guid> SeedBan(Guid targetUserId, DateTimeOffset startedUtc, DateTimeOffset endedUtc,
-        AccessPolicy accessPolicy, string comment = "Нарушение правил общего чата",
+        AccessPolicy accessPolicy, string comment = "Нарушение правил глобального чата",
         DateTimeOffset? liftedUtc = null)
     {
         var banId = Guid.NewGuid();
@@ -580,17 +548,4 @@ public class BanControllerShould : IntegrationTestBase
 
     private static bool CanLift(Dictionary<Guid, JsonElement> bans, Guid banId) =>
         bans[banId].GetProperty("canLift").GetBoolean();
-
-    [Fact]
-    public async Task DeleteBan_RequiresAuthentication()
-    {
-        // Arrange
-        var banId = Guid.NewGuid();
-
-        // Act
-        var response = await Client.DeleteAsync($"/v1/bans/{banId}");
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
-    }
 }

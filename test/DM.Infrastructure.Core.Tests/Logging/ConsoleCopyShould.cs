@@ -14,15 +14,8 @@ namespace DM.Infrastructure.Core.Tests.Logging;
 /// The console copy of a line carries what the line was about.
 /// </summary>
 /// <remarks>
-/// It is the copy the container runtime keeps, and the only one that survives the
-/// log store being down - which is exactly when somebody reads it. Written with
-/// the default template it held a timestamp, a level and the rendered message,
-/// and dropped every property on the event: the fallback could not name the user,
-/// the correlation token or the trace of any line it had kept.
-///
-/// Asserted on the formatter rather than by capturing the console, because the
-/// sink resolves the stream it writes to on its own terms and a test that
-/// redirected it would be measuring that resolution.
+/// The console copy is the one left when the log store is down. Asserted on the formatter: the sink
+/// resolves its stream on its own terms.
 /// </remarks>
 public class ConsoleCopyShould
 {

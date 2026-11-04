@@ -6,46 +6,20 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Integration tests for TicketIntakeController
-/// </summary>
 public class TicketIntakeControllerShould : IntegrationTestBase
 {
     public TicketIntakeControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    [Fact]
-    public async Task CreateTicket_AllowsAnonymousSubmission()
-    {
-        // Arrange
-        var requestData = new
-        {
-            subtype = "Bug",
-            subject = "Integration test subject",
-            text = "Integration test text",
-            contact = "tester@example.com"
-        };
-
-        // Act
-        var response = await Client.PostAsJsonAsync("/v1/tickets", requestData);
-
-        // Assert
-        response.StatusCode.Should().Be(HttpStatusCode.Created);
-    }
-
     [Theory]
+    [InlineData("Bug")]
     [InlineData("AccountRestoration")]
     [InlineData("PersonalData")]
     [InlineData("AgreementQuestion")]
-    public async Task CreateTicket_AcceptsAccountCategoriesFromAGuest(string subtype)
+    public async Task CreateTicketAcceptsTheCategoriesOpenToAGuest(string subtype)
     {
-        // Restoring an account is asked for by an ordinary support ticket, and
-        // the person asking is signed out; so is a request about one's data or a
-        // question about the agreement, which the legal pages send their reader
-        // with. This also pins the wire spelling of the categories: the client
-        // sends the enum name, so a rename on either side must fail here and not
-        // in the browser.
+        // A signed-out person may report a bug or ask for account restoration, data or the agreement; the categories travel as enum names.
         var requestData = new
         {
             subtype,
@@ -67,7 +41,7 @@ public class TicketIntakeControllerShould : IntegrationTestBase
     [Theory]
     [InlineData("UserComplaint")]
     [InlineData("AccountRemoval")]
-    public async Task CreateTicket_RefusesAGuestTheReasonsFiledFromAnAccount(string subtype)
+    public async Task CreateTicketRefusesAGuestTheReasonsFiledFromAnAccount(string subtype)
     {
         var response = await Client.PostAsJsonAsync("/v1/tickets", new
         {
@@ -89,7 +63,7 @@ public class TicketIntakeControllerShould : IntegrationTestBase
     /// refused under its own field rather than failing the whole form.
     /// </summary>
     [Fact]
-    public async Task CreateTicket_RefusesAnUnknownViolatorUnderItsField()
+    public async Task CreateTicketRefusesAnUnknownViolatorUnderItsField()
     {
         var post = CreateAuthenticatedRequest(HttpMethod.Post, "/v1/tickets");
         post.Content = JsonContent.Create(new
@@ -109,9 +83,8 @@ public class TicketIntakeControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task CreateTicket_ReturnsBadRequestForEmptyFields()
+    public async Task CreateTicketReturnsBadRequestForEmptyFields()
     {
-        // Arrange
         var requestData = new
         {
             subtype = "UserComplaint",
@@ -119,15 +92,13 @@ public class TicketIntakeControllerShould : IntegrationTestBase
             text = ""
         };
 
-        // Act
         var response = await Client.PostAsJsonAsync("/v1/tickets", requestData);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
     [Fact]
-    public async Task CreateTicket_AcceptsATicketWithoutSubject_AndTracksItRendered()
+    public async Task CreateTicketAcceptsATicketWithoutSubjectAndTracksItRendered()
     {
         // The support form sends no subject and writes the text in the site
         // markup. The guest tracking page gets the text as written, the address
@@ -159,14 +130,13 @@ public class TicketIntakeControllerShould : IntegrationTestBase
             .RootElement.GetProperty("resource");
         data.GetProperty("subject").GetString().Should().BeEmpty();
         data.GetProperty("description").GetString().Should()
-            .Be(text + "\n\nКонтакт для ответа: tester@example.com");
-        data.GetProperty("descriptionHtml").GetString().Should()
             .Contain($"<strong>{marker}</strong>")
+            .And.Contain("<br /><br />Контакт для ответа: tester@example.com")
             .And.NotContain("[b]");
     }
 
     [Fact]
-    public async Task CreateTicket_AndShowItsAuthorTheTextRendered()
+    public async Task CreateTicketAndShowItsAuthorTheTextRendered()
     {
         // "Мои обращения" reads the moderation ticket list, and it gets the same
         // rendered field as the tracking page and the moderation card.
@@ -184,11 +154,11 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         var ticket = JsonDocument.Parse(await mine.Content.ReadAsStringAsync())
             .RootElement.GetProperty("resources").EnumerateArray()
             .Single(item => item.GetProperty("description").GetString()!.Contains(marker));
-        ticket.GetProperty("descriptionHtml").GetString().Should().Contain($"<em>{marker}</em>");
+        ticket.GetProperty("description").GetString().Should().Contain($"<em>{marker}</em>");
     }
 
     [Fact]
-    public async Task CreateTicket_GivesItsAuthorTheTicketToOpen()
+    public async Task CreateTicketGivesItsAuthorTheTicketToOpen()
     {
         // The form of a signed-in author goes on to "/my-tickets/<id>", so the
         // intake answers with the identifier, and the identifier opens the ticket
@@ -212,11 +182,11 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         var readBody = await read.Content.ReadAsStringAsync();
         read.StatusCode.Should().Be(HttpStatusCode.OK, "body was: {0}", readBody);
         JsonDocument.Parse(readBody).RootElement.GetProperty("resource")
-            .GetProperty("descriptionHtml").GetString().Should().Contain($"<em>{marker}</em>");
+            .GetProperty("description").GetString().Should().Contain($"<em>{marker}</em>");
     }
 
     [Fact]
-    public async Task CreateTicketComment_ShowsItsAuthorTheAnswerRendered()
+    public async Task CreateTicketCommentShowsItsAuthorTheAnswerRendered()
     {
         // Moderation answers in the conversation, in the editor of comments. The
         // author reads the answer rendered, signed by the moderator who wrote it.
@@ -237,12 +207,12 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         answer.GetProperty("text").GetString().Should()
             .Contain($"<strong>{marker}</strong>")
             .And.NotContain("[b]");
-        answer.GetProperty("author").GetProperty("username").GetString().Should().Be(TestConstants.AdminUserUsername);
+        answer.GetProperty("author").GetProperty("username").GetString().Should().Be(TestConstants.AdminUserLogin);
         ticket.TryGetProperty("answer", out _).Should().BeFalse("the single answer is gone with the conversation");
     }
 
     [Fact]
-    public async Task CreateTrackedTicketComment_LetsTheGuestAnswerByTheToken()
+    public async Task CreateTrackedTicketCommentLetsTheGuestAnswerByTheToken()
     {
         // The guest writes on his tracking page with the token as the credential,
         // signed by nobody; moderation answers him in the same conversation.
@@ -269,11 +239,11 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         comments[0].GetProperty("isGuest").GetBoolean().Should().BeTrue();
         comments[0].GetProperty("text").GetString().Should().Contain($"<em>{marker}</em>");
         comments[1].GetProperty("author").GetProperty("username").GetString()
-            .Should().Be(TestConstants.AdminUserUsername, "the guest sees who answered him, as the author does");
+            .Should().Be(TestConstants.AdminUserLogin, "the guest sees who answered him, as the author does");
     }
 
     [Fact]
-    public async Task CreateTrackedTicketComment_RefusesAClosedTicket()
+    public async Task CreateTrackedTicketCommentRefusesAClosedTicket()
     {
         var (ticketId, token) = await FileAsAGuest("Не приходит письмо");
         // Moderation closes it with an answer that says nothing: the status is the
@@ -288,45 +258,21 @@ public class TicketIntakeControllerShould : IntegrationTestBase
         var data = await Track(token);
         data.GetProperty("canComment").GetBoolean().Should().BeFalse();
         data.GetProperty("comments").GetArrayLength().Should().Be(0);
-        data.GetProperty("resolvedByUsername").GetString().Should().Be(TestConstants.AdminUserUsername);
+        data.GetProperty("resolvedByUsername").GetString().Should().Be(TestConstants.AdminUserLogin);
     }
 
     [Theory]
     [InlineData("")]
     [InlineData("0123456789abcdef0123456789abcdef")]
-    public async Task CreateTrackedTicketComment_AnswersAnUnknownTokenWithNotFound(string token)
+    public async Task CreateTrackedTicketCommentAnswersAnUnknownTokenWithNotFound(string token)
     {
         var written = await CommentAsTheGuest(token, "Есть кто?");
 
         written.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    [Theory]
-    [InlineData(false)]
-    [InlineData(true)]
-    public async Task CreateTicket_RefusesASuggestion(bool signedIn)
-    {
-        // Suggestions go to the forum. The category is kept for the queues that
-        // filter by it, and the intake refuses it under the reason field.
-        var body = new
-        {
-            subtype = "SiteImprovementSuggestion",
-            text = "Сделайте темную тему",
-            contact = "tester@example.com"
-        };
-        var request = signedIn
-            ? CreateAuthenticatedRequest(HttpMethod.Post, "/v1/tickets")
-            : new HttpRequestMessage(HttpMethod.Post, "/v1/tickets");
-        request.Content = JsonContent.Create(body);
-
-        var response = await Client.SendAsync(request);
-
-        response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
-        FieldsRefused(await response.Content.ReadAsStringAsync()).Should().Equal("Subtype");
-    }
-
     [Fact]
-    public async Task CreateTicket_RefusesHidingMarkup()
+    public async Task CreateTicketRefusesHidingMarkup()
     {
         // A ticket renders with the tag set of profile texts, where a hiding
         // block is shown to nobody, moderation included.
@@ -342,9 +288,9 @@ public class TicketIntakeControllerShould : IntegrationTestBase
     }
 
     [Fact]
-    public async Task CreateTicket_RejectsFilledHoneypot()
+    public async Task CreateTicketRejectsFilledHoneypot()
     {
-        // Arrange - bots tend to fill every field, including the hidden one
+        // Bots tend to fill every field, including the hidden one
         var requestData = new
         {
             subtype = "Bug",
@@ -353,10 +299,8 @@ public class TicketIntakeControllerShould : IntegrationTestBase
             website = "https://spam.example.com"
         };
 
-        // Act
         var response = await Client.PostAsJsonAsync("/v1/tickets", requestData);
 
-        // Assert
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 

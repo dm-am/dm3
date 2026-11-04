@@ -1,6 +1,5 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Web.API.Shared.Authentication;
 using DM.Web.API.Shared.Dto;
 using DM.Web.API.Features.Community.Users;
@@ -14,40 +13,20 @@ namespace DM.Web.API.Features.Forum.Topics;
 /// <summary>
 /// Topic management endpoints
 /// </summary>
-/// <remarks>
-/// Provides CRUD operations for forum topics within boards.
-/// Topics contain the main discussion content and associated comments.
-///
-/// ## Available Operations
-/// - List topics in a board (with pagination)
-/// - Create, read, update, delete topics
-/// - Like/unlike topics
-/// - Mark topic comments as read
-///
-/// ## Access Control
-/// - Viewing: Controlled by board's ViewPolicy
-/// - Creating: Controlled by board's CreateTopicPolicy
-/// - Editing: Author or moderators
-/// - Deleting: Author or moderators
-/// - Liking: Authenticated users (cannot like own topics)
-/// </remarks>
 [ApiController]
 [Route("v1/topics")]
 [ApiExplorerSettings(GroupName = "Forum")]
 [Tags("Forum Topics")]
 public class TopicController : ControllerBase
 {
-    private readonly ITopicApiService _topicApiService;
-    private readonly ITopicLikeApiService _likeApiService;
-    private readonly IForumCommentApiService _commentApiService;
+    private readonly TopicApiService _topicApiService;
+    private readonly TopicLikeApiService _likeApiService;
+    private readonly ForumCommentApiService _commentApiService;
 
-    /// <summary>
-    /// Creates a new instance of TopicController
-    /// </summary>
     public TopicController(
-        ITopicApiService topicApiService,
-        ITopicLikeApiService likeApiService,
-        IForumCommentApiService commentApiService)
+        TopicApiService topicApiService,
+        TopicLikeApiService likeApiService,
+        ForumCommentApiService commentApiService)
     {
         _topicApiService = topicApiService;
         _likeApiService = likeApiService;
@@ -145,19 +124,12 @@ public class TopicController : ControllerBase
     public async Task<IActionResult> PostBoardTopic(string id, [FromBody] CreateTopicRequest request)
     {
         var result = await _topicApiService.Create(id, request);
-        return CreatedAtRoute(nameof(TopicController.GetTopic), new { id = result.Resource.Id }, result);
+        return CreatedAtRoute(nameof(GetTopic), new { id = result.Resource.Id }, result);
     }
 
     /// <summary>
     /// Get topic details
     /// </summary>
-    /// <remarks>
-    /// Returns detailed information about a specific topic including:
-    /// - Topic title and content
-    /// - Author information
-    /// - Comment count and likes
-    /// - Creation and last update timestamps
-    /// </remarks>
     /// <param name="id">Topic identifier (GUID)</param>
     /// <response code="200">Topic details</response>
     /// <response code="404">Topic not found</response>
@@ -201,26 +173,6 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> GetFirstUnreadTopicComment(string alias, int num) =>
         Ok(await _commentApiService.GetFirstUnread(alias, num));
-
-    /// <summary>
-    /// Get topic discussion with comments and permission flags
-    /// </summary>
-    /// <remarks>
-    /// Returns a unified discussion view with:
-    /// - Paginated comments
-    /// - Permission flags (CanEdit, CanDelete, CanLike) for each comment
-    /// - Total likes count across all comments
-    /// - CanComment flag for the current user
-    /// </remarks>
-    /// <param name="id">Topic identifier (GUID)</param>
-    /// <param name="q">Paging parameters</param>
-    /// <response code="200">Discussion with comments and metadata</response>
-    /// <response code="404">Topic not found</response>
-    [HttpGet("{id}/discussion", Name = nameof(GetTopicDiscussion))]
-    [ProducesResponseType(typeof(DiscussionResponse), StatusCodes.Status200OK)]
-    [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> GetTopicDiscussion(Guid id, [FromQuery] PagingQuery q) =>
-        Ok(await _commentApiService.GetDiscussion(id, q));
 
     /// <summary>
     /// Update topic
@@ -346,7 +298,7 @@ public class TopicController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
     public async Task<IActionResult> ReadTopicComments(Guid id)
     {
-        await _commentApiService.MarkAsRead(id);
+        await _commentApiService.MarkTopicAsRead(id);
         return NoContent();
     }
 

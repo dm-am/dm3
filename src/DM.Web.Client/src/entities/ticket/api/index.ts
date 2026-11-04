@@ -5,9 +5,6 @@ export type {
   TicketDetails,
   TicketStatus,
   TicketSubtype,
-  CreateTicketIntake,
-  CreateTicketIntakeResult,
   TrackedTicket,
   AnswerStatus,
-  AnswerTicketRequest,
 } from "./ticketApi";

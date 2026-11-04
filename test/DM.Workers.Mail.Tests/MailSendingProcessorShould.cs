@@ -1,7 +1,6 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Mail;
 using DM.Infrastructure.Mail.Configuration;
 using DM.Testing;
@@ -16,18 +15,8 @@ namespace DM.Workers.Mail.Tests;
 /// What the worker writes about a letter is not the letter.
 /// </summary>
 /// <remarks>
-/// The log of this host is shipped off the machine, and a letter has three things in
-/// it that do not belong there: the body, which carries the activation and password
-/// reset links; the address it goes to, which is a reader's; and the credentials the
-/// session to the relay is opened with. The one line written per letter is where all
-/// three are within reach at once, which is why it is asserted about rather than
-/// read.
-///
-/// Nothing here opens a socket. The relay host is left empty on purpose: MailKit
-/// refuses a zero-length host by argument check, before any name resolution and any
-/// connection, and everything asserted below is written before that call. A test that
-/// pointed at a port instead would be asserting about the network of whichever
-/// machine happened to run it.
+/// The log is shipped off the machine, and the line per letter has the body, the address and the relay
+/// credentials within reach. The relay host is empty: MailKit refuses it before any connection.
 /// </remarks>
 public class MailSendingProcessorShould
 {
@@ -86,7 +75,7 @@ public class MailSendingProcessorShould
             ReplyToAddress = "noreply@dm.am"
         }),
         _logger,
-        new FixedCorrelationToken());
+        new FixedCorrelationToken(Guid.NewGuid()));
 
     private static EmailLetter Letter(bool withInlineImages)
     {
@@ -111,11 +100,5 @@ public class MailSendingProcessorShould
         }
 
         return letter;
-    }
-
-    /// <summary>The token the request that asked for the letter would have carried.</summary>
-    private sealed class FixedCorrelationToken : ICorrelationTokenProvider
-    {
-        public Guid Current { get; } = Guid.NewGuid();
     }
 }

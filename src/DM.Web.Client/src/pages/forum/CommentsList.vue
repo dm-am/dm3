@@ -17,60 +17,29 @@ const boardsStore = useBoardsStore();
 const { comments, commentsLoading, commentsError } = storeToRefs(boardsStore);
 const { isCompactLayout } = storeToRefs(useUiStore());
 
-// Filter setup
 const { filterState, searchParams, hasActiveFilters } = useCommentsFilter();
 
-// Generate a key for dependency tracking (triggers on any param change)
+// One key for any change of the search parameters
 const paramsKey = computed(() => JSON.stringify(searchParams.value));
 
-// Watch for filter changes and reload comments
-watch(
-  paramsKey,
-  () => {
-    if (boardsStore.selectedTopic) {
-      boardsStore.searchComments(searchParams.value);
-    }
-  },
-  { immediate: false },
-);
+watch(paramsKey, () => {
+  if (boardsStore.selectedTopic) {
+    boardsStore.searchComments(searchParams.value);
+  }
+});
 
 useCommentHashScroll(() => comments.value?.resources);
 
-// Calculate comment number based on paging
 function getCommentNumber(index: number): number {
   if (!comments.value?.paging) return index + 1;
   return comments.value.paging.skip + index + 1;
 }
 
-// The item shows the refusal and keeps its editor open, so these hand the
-// store's answer straight back to it.
-function handleEdit(id: string, text: string) {
-  return boardsStore.updateComment(id, text);
-}
-
-// The flags are the item's confirmation's, which prints a refusal in itself:
-// dropped here, the interceptor said the same refusal a second time.
-function handleDelete(
-  id: string,
-  options?: Parameters<typeof boardsStore.deleteComment>[1],
-) {
-  return boardsStore.deleteComment(id, options);
-}
-
-function handleLike(id: string) {
-  return boardsStore.likeComment(id);
-}
-
-function handleUnlike(id: string) {
-  return boardsStore.unlikeComment(id);
-}
-
-// Moderator warning (doc 4.2.4.1) — shared dialog wiring.
+// Moderator warning: the shared dialog wiring.
 const { warnComment: handleWarn } = useCommentWarnDialog((id) =>
   comments.value?.resources.find((c) => c.id === id),
 );
 
-// Raw BBCode source fetch for the edit form (AuthorEdit audience).
 const fetchEditSource = (id: string) =>
   forumApi.getCommentForUpdate(id as CommentId);
 
@@ -78,17 +47,12 @@ function retryLoad() {
   boardsStore.searchComments(searchParams.value);
 }
 
-// Paging scrolls the comments block (top paging + list) back into view
-// instead of the page top — the topic header above is not re-shown.
+// Paging scrolls back to the comments, not to the topic header above.
 const sectionRef = ref<HTMLElement | null>(null);
-function pagingAnchor(): HTMLElement | null {
-  return sectionRef.value;
-}
 </script>
 
 <template>
   <div ref="sectionRef" class="comments-section">
-    <!-- Paging at top -->
     <PagingWithSeparators
       v-if="comments && comments.paging"
       :paging="comments.paging"
@@ -98,27 +62,20 @@ function pagingAnchor(): HTMLElement | null {
       }"
       :use-query="true"
       query-key="number"
-      :scroll-anchor="pagingAnchor"
+      :scroll-anchor="() => sectionRef"
     />
 
-    <!-- Loading: the skeleton stands in before the first page only, so a refetch
-         keeps the comments already on screen. The store holds the stale rows on
-         purpose while it revalidates, and blanking them here threw that away: on
-         the busiest comment surface of the site a change of page, filter or sort
-         wiped the list, while the same change in a game or a blog left it in
-         place. Same condition as DiscussionSection, which this list is the
-         reference for. -->
+    <!-- Before the first page only: a refetch keeps the stale comments on screen,
+         as DiscussionSection does. -->
     <CommentSkeleton v-if="commentsLoading && !comments?.resources.length" />
 
-    <!-- Error state: a failed load must not be presented as fake-empty.
-         Shown only when there are no stale comments to keep on screen. -->
+    <!-- A failed load is not an empty list; shown only without stale comments. -->
     <ErrorState
       v-else-if="commentsError && !comments?.resources.length"
       message="Не удалось загрузить комментарии"
       :retry="retryLoad"
     />
 
-    <!-- Empty state -->
     <secondary-text
       v-else-if="comments && !comments.resources.length"
       class="comments-none"
@@ -130,7 +87,6 @@ function pagingAnchor(): HTMLElement | null {
       }}
     </secondary-text>
 
-    <!-- Comments list -->
     <div v-else-if="comments" class="comments-list">
       <CommentItem
         v-for="(comment, index) in comments.resources"
@@ -149,15 +105,14 @@ function pagingAnchor(): HTMLElement | null {
         :number="getCommentNumber(index)"
         :search-query="filterState.search"
         :fetch-edit-source="fetchEditSource"
-        :submit-edit="handleEdit"
-        :submit-delete="handleDelete"
-        :submit-like="handleLike"
-        :submit-unlike="handleUnlike"
+        :submit-edit="boardsStore.updateComment"
+        :submit-delete="boardsStore.deleteComment"
+        :submit-like="boardsStore.likeComment"
+        :submit-unlike="boardsStore.unlikeComment"
         @warn="handleWarn"
       />
     </div>
 
-    <!-- Paging at bottom -->
     <PagingWithSeparators
       v-if="comments && comments.paging"
       :paging="comments.paging"
@@ -167,14 +122,13 @@ function pagingAnchor(): HTMLElement | null {
       }"
       :use-query="true"
       query-key="number"
-      :scroll-anchor="pagingAnchor"
+      :scroll-anchor="() => sectionRef"
     />
   </div>
 </template>
 
 <style scoped lang="sass">
-// Paging blocks sit $medium from the comment list; the tighter $small
-// rhythm between the comments themselves lives on the inner wrapper.
+// The tighter rhythm between the comments lives on the inner wrapper.
 .comments-section
   display: flex
   flex-direction: column

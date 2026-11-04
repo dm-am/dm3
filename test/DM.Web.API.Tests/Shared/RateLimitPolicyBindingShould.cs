@@ -4,7 +4,6 @@ using System.Linq;
 using System.Reflection;
 using DM.Web.API.Shared.RateLimiting;
 using AwesomeAssertions;
-using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.RateLimiting;
 using Xunit;
 
@@ -14,25 +13,8 @@ namespace DM.Web.API.Tests.Shared;
 /// Which endpoints spend a budget, and which budget.
 /// </summary>
 /// <remarks>
-/// The limit is one attribute. Deleting it, or writing a new controller by
-/// copying a neighbour and dropping it, removes the budget and breaks nothing:
-/// the integration suite starts the host with RateLimiting:Enabled false and the
-/// CI job passes DM_RateLimiting__Enabled false, because a limiter that counts
-/// turns a suite of several hundred requests into a source of 429s. So every
-/// endpoint under a budget is only ever exercised without one, and the login
-/// endpoint could go a release with no limit on password guessing while every
-/// test stayed green.
-///
-/// The registry below is what makes the binding reviewable. Adding a line is the
-/// claim "this endpoint needs a budget of its own", removing one is the claim
-/// that it no longer does, and neither can happen without a diff somebody reads.
-/// It is asserted in both directions: an endpoint that lost its attribute turns
-/// the first test red, one that gained a policy nobody wrote down turns the
-/// second.
-///
-/// Read off the attributes rather than over the wire, for the reason
-/// RateLimitPartitioningShould states next door: the limiter is framework code,
-/// and what this project decides is which policy goes where.
+/// The tests run with the limiter off, so every budgeted endpoint is exercised without one; the registry
+/// makes the binding reviewable and is asserted both ways, off the attributes.
 /// </remarks>
 public class RateLimitPolicyBindingShould
 {
@@ -43,12 +25,7 @@ public class RateLimitPolicyBindingShould
     /// Every endpoint under a policy: a controller when the whole of it is
     /// limited, a controller and an action when only that action is.
     /// </summary>
-    /// <remarks>
-    /// Named by namespace and type rather than by the type alone, because the
-    /// short name is not unique - there are two ProfileControllers in the tree.
-    /// Moving or renaming a controller therefore turns this red, which is what
-    /// naming an endpoint at all costs.
-    /// </remarks>
+    /// <remarks>Named by namespace and type: there are two ProfileControllers.</remarks>
     private static readonly Dictionary<string, string> Registry = new(StringComparer.Ordinal)
     {
         ["Account.Authentication.AuthenticationController"] = RateLimitPolicies.Auth,
@@ -57,11 +34,7 @@ public class RateLimitPolicyBindingShould
         ["Account.Credentials.CredentialsController"] = RateLimitPolicies.Auth,
         ["Account.Recovery.RecoveryController"] = RateLimitPolicies.Auth,
         ["Account.Registration.RegistrationController"] = RateLimitPolicies.Auth,
-        // The second factor is counted per endpoint because it is counted per two
-        // different things. What the owner does to his own factor carries a
-        // session and spends his own budget; the mailed removal path carries
-        // nothing and spends the address budget of the credential surface, which
-        // is the only budget an anonymous caller can be held to.
+        // The owner's own factor spends his budget; the mailed removal path spends the address budget.
         ["Account.TwoFactor.TwoFactorController.CancelTwoFactorRemoval"] = RateLimitPolicies.Auth,
         ["Account.TwoFactor.TwoFactorController.ClearTwoFactorForColleague"] = RateLimitPolicies.TwoFactor,
         ["Account.TwoFactor.TwoFactorController.ConfirmTwoFactor"] = RateLimitPolicies.TwoFactor,
@@ -97,6 +70,7 @@ public class RateLimitPolicyBindingShould
         ["General.Tickets.TicketIntakeController.CreateTrackedTicketComment"] = RateLimitPolicies.Auth,
         ["General.Tickets.TicketIntakeController.TrackTicketIntake"] = RateLimitPolicies.Auth,
         ["General.Upload.UploadController.DirectUpload"] = RateLimitPolicies.Uploads,
+        ["General.Upload.UploadController.PatchUpload"] = RateLimitPolicies.Default,
         ["Personal.Blacklists.BlacklistController"] = RateLimitPolicies.Default,
         ["Personal.Invitations.InvitationController"] = RateLimitPolicies.Default,
         ["Personal.Notepads.NotepadController"] = RateLimitPolicies.Default,
@@ -186,13 +160,7 @@ public class RateLimitPolicyBindingShould
     /// A name an endpoint asks for and a limiter the host registers are two
     /// separate lists, and only the second one counts anything.
     /// </summary>
-    /// <remarks>
-    /// The third side of the triangle the two tests above draw. A constant that
-    /// no policy record declares is not a compile error and not a startup error:
-    /// it throws on the first request to the endpoint that asks for it, which in
-    /// a suite running with the limiter switched off is the first request in
-    /// production.
-    /// </remarks>
+    /// <remarks>A constant no policy declares throws on the first request to its endpoint.</remarks>
     [Fact]
     public void RegisterALimiterForEveryPolicyAnEndpointAsksFor()
     {
@@ -205,17 +173,7 @@ public class RateLimitPolicyBindingShould
     /// <summary>
     /// Whose minute the second factor's own settings spend.
     /// </summary>
-    /// <remarks>
-    /// Asserted because the failure is invisible from every direction. The whole
-    /// controller sat in the credential budget - five requests per address per
-    /// minute, the number sized for online password guessing - and switching a
-    /// factor on costs four requests in one sitting, after the sign-in that got
-    /// the person there has spent one of the five. One mistyped confirmation code
-    /// answered 429; behind carrier-grade NAT, where one address is a
-    /// neighbourhood, so did the first request. The integration suite could not
-    /// see any of it: it runs with the limiter switched off, which is why this is
-    /// asserted on the table rather than by counting to 429.
-    /// </remarks>
+    /// <remarks>Switching a factor on costs four requests, more than the credential budget leaves after sign-in.</remarks>
     [Fact]
     public void CountTheFactorsOwnSettingsPerAccountAndNotPerAddress()
     {
@@ -235,12 +193,7 @@ public class RateLimitPolicyBindingShould
     /// <summary>
     /// The mailed removal path stays on the address budget.
     /// </summary>
-    /// <remarks>
-    /// It is reachable without a session, so there is no account to hold it to,
-    /// and it is a guessing surface plus a way to make the site send letters.
-    /// Moving it into the per-account policy next door would count it per address
-    /// anyway - the fallback for guests - but at the laxer number.
-    /// </remarks>
+    /// <remarks>Reachable without a session, so there is no account to hold it to.</remarks>
     [Fact]
     public void CountTheMailedRemovalPathPerAddress()
     {

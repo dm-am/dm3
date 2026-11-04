@@ -5,54 +5,44 @@ using System.Threading.Tasks;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Invitations;
 using DM.Web.API.Shared.Dto;
-using DomainGameInvitation = DM.Domain.Game.Features.Games.GameInvitation;
+using DomainGameInvitation = DM.Domain.Game.Features.Invitations.GameInvitation;
 
 namespace DM.Web.API.Features.Game.Invitations;
 
-/// <inheritdoc />
-internal class GameInvitationApiService : IGameInvitationApiService
+public class GameInvitationApiService
 {
     private readonly IGameInvitationService _memberService;
 
-    /// <inheritdoc />
     public GameInvitationApiService(IGameInvitationService memberService)
     {
         _memberService = memberService;
     }
 
-    /// <inheritdoc />
     public async Task<IEnumerable<GameInvitation>> GetGameInvitations(Guid gameId)
     {
         var invitations = await _memberService.GetPendingInvitations(gameId);
         return invitations.Select(MapToDto);
     }
 
-    /// <inheritdoc />
     public async Task<GameInvitation> InvitePlayer(Guid gameId, string username)
     {
         var invitation = await _memberService.InvitePlayer(gameId, username);
         return MapToDto(invitation);
     }
 
-    /// <inheritdoc />
     public async Task<GameInvitation> InviteReader(Guid gameId, string username)
     {
         var invitation = await _memberService.InviteReader(gameId, username);
         return MapToDto(invitation);
     }
 
-    /// <inheritdoc />
     public async Task<GameInvitation> InviteAssistant(Guid gameId, string username)
     {
         var invitation = await _memberService.InviteAssistant(gameId, username);
         return MapToDto(invitation);
     }
 
-    /// <inheritdoc />
-    public Task CancelInvitation(Guid tokenId)
-    {
-        return _memberService.CancelInvitation(tokenId);
-    }
+    public Task CancelInvitation(Guid tokenId) => _memberService.CancelInvitation(tokenId);
 
     private static GameInvitation MapToDto(DomainGameInvitation info)
     {
@@ -61,12 +51,7 @@ internal class GameInvitationApiService : IGameInvitationApiService
             Id = info.TokenId,
             GameId = info.GameId,
             GameTitle = info.GameTitle,
-            InvitedUser = new UserRef
-            {
-                Id = info.InvitedUser.UserId,
-                Username = info.InvitedUser.Username,
-                LastActivityUtc = info.InvitedUser.LastActivityUtc
-            },
+            InvitedUser = UserRefMappers.ToUserRef(info.InvitedUser),
             InviterUsername = info.InvitedBy.Username,
             Type = info.TargetRole.ToApiString(),
             CreatedUtc = info.CreatedUtc,

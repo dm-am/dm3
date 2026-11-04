@@ -5,13 +5,6 @@ namespace DM.Domain.Account.Configuration;
 /// <summary>
 /// How long the account area keeps data that has served its purpose.
 /// </summary>
-/// <remarks>
-/// These are product decisions — how long a spent token stays readable, how long
-/// an unfinished registration holds its email address, how long a moderator has
-/// to look at a name change — and every one of them used to be a literal inside
-/// a background job of the HTTP host, where nothing outside a running host could
-/// read it, call it or test it.
-/// </remarks>
 public static class AccountRetentionPolicy
 {
     /// <summary>

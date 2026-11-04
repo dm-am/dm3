@@ -1,27 +1,17 @@
 using System;
-using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dto;
-using DM.Domain.Core.Uploads;
-using DM.Testing;
-using DM.Web.API.Features.Community.Users;
 using DM.Web.API.Features.Moderation.Bans;
-using DM.Web.API.Features.Moderation.Warnings;
 using AwesomeAssertions;
 using Xunit;
-using DomainBan = DM.Domain.Moderation.Features.Warnings.Ban;
+using DomainBan = DM.Domain.Moderation.Features.Bans.Ban;
 
 namespace DM.Web.API.Tests.Features.Moderation;
 
 /// <summary>
-/// "Banned right now" is one predicate — not lifted, already started, not yet
-/// ended — read at the moment the injected clock reports, the same clock the ban
-/// queries use. The mapping used to answer it with its own expression that had
-/// no start bound and read the wall clock, so a listing and the enforcement
-/// could disagree about the same ban. The moments below are deliberately far
-/// from the wall clock: an implementation reading DateTimeOffset.UtcNow answers
-/// the opposite in every case here.
+/// "Banned right now" is one predicate, not lifted, started and not ended, read at the injected clock the
+/// ban queries use. The moments are far from the wall clock, so reading it fails every case.
 /// </summary>
-public class BanMappingShould : UnitTestBase
+public class BanMappingShould
 {
 
     [Fact]
@@ -57,12 +47,7 @@ public class BanMappingShould : UnitTestBase
     }
 
     /// <summary>
-    /// Who lifted the ban, when and why reaches the moderation view. The row was
-    /// soft-deleted on lifting, so no query returned it, the two audit fields were
-    /// mapped with Ignore(), and IsLifted was false on everything a moderator could
-    /// see. Who lifted it then came as a bare identifier the list could not sign
-    /// the lift with, then as a name the list could not link; it is the user now,
-    /// as the moderator who issued the ban is.
+    /// Who lifted the ban, when and why reaches the moderation view, the lifter as a user.
     /// </summary>
     [Fact]
     public void CarryTheLiftAuditIntoTheModerationView()

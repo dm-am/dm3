@@ -5,10 +5,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import { useGameDisplay } from "./useGameDisplay";
-import type { GameRef } from "./types";
-import { GameStatus } from "./types";
-import type { Served } from "@/shared/api/models";
-import type { UserRef } from "@/shared/api/models/common";
+import type { Game, GameRef } from "./gameTypes";
+import { GameStatus } from "./gameTypes";
+import { formatDateFull } from "@/shared/lib/utils/datetime";
+import { useAuthStore } from "@/shared/stores/auth";
+import { type UserRef, ClosedReason } from "@/shared/api/models/common";
+import { asServed } from "@/shared/api/models";
 
 // Pinia must be active so `useGameDisplay` — which touches Pinia-backed
 // state via `useAuthStore` — can resolve its dependencies. Re-created
@@ -16,10 +18,6 @@ import type { UserRef } from "@/shared/api/models/common";
 beforeEach(() => {
   setActivePinia(createPinia());
 });
-
-function asServed<T>(value: T): Served<T> {
-  return value as Served<T>;
-}
 
 function makeUser(username: string, id: string): UserRef {
   return {
@@ -167,5 +165,143 @@ describe("useGameDisplay.buildAssistantTooltip — games table master column too
     expect(
       buildAssistantTooltip([{ username: "helper1" }, { username: "helper2" }]),
     ).toBe("Ассистенты: helper1, helper2");
+  });
+});
+
+/** A game with its three dates apart, so each line names the one it reads. */
+function makeDatedGame(overrides: Partial<Game> = {}): Game {
+  return {
+    ...makeGame(),
+    createdUtc: "2026-01-05T10:00:00Z",
+    activatedUtc: "2026-02-10T11:30:00Z",
+    closedUtc: "2026-03-15T12:45:00Z",
+    ...overrides,
+  } as Game;
+}
+
+const recruiting = (isOpen: boolean) =>
+  asServed({
+    isOpen,
+    pcCount: 2,
+    pcLimit: undefined,
+    startedUtc: "2026-02-20T09:15:00Z",
+    isSubsequent: false,
+  });
+
+describe("useGameDisplay status — the status column, its date and its tooltip", () => {
+  it("names the status the way the filter does", () => {
+    const { formatStatus } = useGameDisplay();
+    expect(formatStatus(makeGame({ status: GameStatus.Draft }))).toBe(
+      "Оформляется",
+    );
+    expect(formatStatus(makeGame({ recruitment: recruiting(true) }))).toBe(
+      "Набор игроков",
+    );
+    expect(formatStatus(makeGame({ recruitment: recruiting(false) }))).toBe(
+      "Идет игра",
+    );
+    const closed = (closedReason: ClosedReason) =>
+      makeGame({ status: GameStatus.Closed, closedReason });
+    expect(formatStatus(closed(ClosedReason.Finished))).toBe("Завершена");
+    expect(formatStatus(closed(ClosedReason.Frozen))).toBe("Заморожена");
+    expect(formatStatus(closed(ClosedReason.None))).toBe("Закрыта");
+  });
+
+  it("lists in the tooltip every date the game has passed", () => {
+    const { buildStatusTooltip } = useGameDisplay();
+    const created = `Создание игры: ${formatDateFull("2026-01-05T10:00:00Z")}`;
+    const started = `Начало игры: ${formatDateFull("2026-02-10T11:30:00Z")}`;
+
+    expect(
+      buildStatusTooltip(makeDatedGame({ status: GameStatus.Draft })),
+    ).toBe(created);
+    expect(
+      buildStatusTooltip(makeDatedGame({ recruitment: recruiting(true) })),
+    ).toBe(
+      [
+        created,
+        started,
+        `Начало последнего набора: ${formatDateFull("2026-02-20T09:15:00Z")}`,
+      ].join("\n"),
+    );
+    expect(
+      buildStatusTooltip(makeDatedGame({ status: GameStatus.Closed })),
+    ).toBe(
+      [
+        created,
+        started,
+        `Закрытие игры: ${formatDateFull("2026-03-15T12:45:00Z")}`,
+      ].join("\n"),
+    );
+  });
+});
+
+describe("useGameDisplay unread — the counters of a game and their tooltips", () => {
+  it("counts a missing counter as none", () => {
+    const { getUnreadPosts, getUnreadComments, hasUnread } = useGameDisplay();
+    const silent = makeGame({
+      unreadPostsCount: undefined,
+      unreadCommentsCount: undefined,
+    });
+    expect(getUnreadPosts(silent)).toBe(0);
+    expect(getUnreadComments(silent)).toBe(0);
+    expect(hasUnread(silent)).toBe(false);
+  });
+
+  it("has unread content when either counter is above zero", () => {
+    const { getUnreadPosts, getUnreadComments, hasUnread } = useGameDisplay();
+    const posts = makeGame({ unreadPostsCount: asServed(3) });
+    const comments = makeGame({ unreadCommentsCount: asServed(4) });
+    expect(getUnreadPosts(posts)).toBe(3);
+    expect(getUnreadComments(comments)).toBe(4);
+    expect(hasUnread(posts)).toBe(true);
+    expect(hasUnread(comments)).toBe(true);
+  });
+
+  it("calls the counters totals for a guest and unread for a signed-in reader", () => {
+    const { formatUnreadPostsTooltip, formatUnreadCommentsTooltip } =
+      useGameDisplay();
+    expect(formatUnreadPostsTooltip(3)).toBe("Постов: 3");
+    expect(formatUnreadCommentsTooltip(4)).toBe("Комментариев: 4");
+
+    useAuthStore().user = { username: "reader" } as never;
+    expect(formatUnreadPostsTooltip(3)).toBe("Непрочитанных постов: 3");
+    expect(formatUnreadCommentsTooltip(4)).toBe(
+      "Непрочитанных комментариев: 4",
+    );
+  });
+});
+
+describe("useGameDisplay.isNewHighlight — the green of a games list", () => {
+  const startedAgo = (ms: number) => new Date(Date.now() - ms).toISOString();
+
+  it("marks a game started a minute ago while it is active", () => {
+    const { isNewHighlight } = useGameDisplay();
+    expect(
+      isNewHighlight({
+        activatedUtc: startedAgo(60_000),
+        status: GameStatus.Active,
+      }),
+    ).toBe(true);
+  });
+
+  it("never marks a closed game, however fresh its start", () => {
+    const { isNewHighlight } = useGameDisplay();
+    expect(
+      isNewHighlight({
+        activatedUtc: startedAgo(60_000),
+        status: GameStatus.Closed,
+      }),
+    ).toBe(false);
+  });
+
+  it("leaves an active game started over a week ago unmarked", () => {
+    const { isNewHighlight } = useGameDisplay();
+    expect(
+      isNewHighlight({
+        activatedUtc: startedAgo(8 * 24 * 60 * 60 * 1000),
+        status: GameStatus.Active,
+      }),
+    ).toBe(false);
   });
 });

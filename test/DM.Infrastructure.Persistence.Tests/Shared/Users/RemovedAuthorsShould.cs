@@ -4,6 +4,7 @@ using System.Text.RegularExpressions;
 using AwesomeAssertions;
 using DM.Infrastructure.Persistence.Shared.Queries;
 using DM.Infrastructure.Persistence.Shared.Users;
+using DM.Testing;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
@@ -14,19 +15,9 @@ namespace DM.Infrastructure.Persistence.Tests.Shared.Users;
 /// A content read lifts the account filter and nothing else, and the nested user it
 /// then reaches is nobody when the account is removed.
 /// </summary>
-/// <remarks>
-/// The two halves only work together. Lifting the filter is what keeps the row a removed
-/// account wrote; the formula is what keeps the account itself out of the answer. A lift
-/// that took the other filters with it would hand back removed topics and posts, and a
-/// formula that forgot the flag would hand back the removed name, address and avatar -
-/// both through a query that looks exactly like the one before.
-/// </remarks>
+/// <remarks>The lift keeps the rows a removed account wrote; the formula keeps the account out of the answer.</remarks>
 public class RemovedAuthorsShould
 {
-    private static DmDbContext Probe() => new(new DbContextOptionsBuilder<DmDbContext>()
-        // Statement text only: the connection is never opened.
-        .UseNpgsql("Host=localhost;Database=removed-authors-probe;Username=probe;Password=probe")
-        .Options);
 
     private static readonly Func<DbUser?, DM.Domain.Core.Dto.GeneralUser> Nested =
         ExpressionSplicer.Expand(GeneralUserProjections.Projection).Compile();
@@ -58,7 +49,7 @@ public class RemovedAuthorsShould
     [Fact]
     public void LiftTheAccountFilterAndKeepEveryOther()
     {
-        using var probe = Probe();
+        using var probe = ProbeContext.Open();
 
         var sql = probe.Posts
             .KeepingRemovedAuthors()

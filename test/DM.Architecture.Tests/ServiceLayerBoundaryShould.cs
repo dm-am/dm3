@@ -1,8 +1,5 @@
 using System;
-using System.IO;
 using ArchUnitNET.Domain;
-using ArchUnitNET.Fluent;
-using ArchUnitNET.Loader;
 using ArchUnitNET.xUnitV3;
 using AwesomeAssertions;
 using Microsoft.AspNetCore.Mvc;
@@ -18,31 +15,19 @@ namespace DM.Architecture.Tests;
 /// text, because a domain service reached through a using alias leaves nothing
 /// in the file for a textual check to find.
 /// </summary>
-/// <remarks>
-/// What reading the IL does not see, measured rather than assumed: a type used
-/// only inside an `async` method body. The compiler moves that body into a
-/// generated state machine, the loader keeps generated types out of the model,
-/// and the dependency ends up on a type no rule here can name. A class taking
-/// DmDbContext in a signature or a field is caught; the same class resolving it
-/// inside an async method is not, and almost all data access on this side is
-/// written that way. HostStorageBoundaryShould covers the same ground over the
-/// sources for exactly that reason.
-/// </remarks>
+/// <remarks>The IL does not see a type used only inside an async body; HostStorageBoundaryShould reads the sources.</remarks>
 public class ServiceLayerBoundaryShould
 {
     // Every DM assembly the host drags into the output directory. A marker-type
     // list would silently stop covering a Domain project added later.
-    private static readonly ArchitectureModel Solution = new ArchLoader()
-        .LoadFilteredDirectory(AppContext.BaseDirectory, "DM.*.dll", SearchOption.TopDirectoryOnly)
-        .Build();
+    private static readonly ArchitectureModel Solution = ArchitectureSolution.Model;
 
     private static readonly IObjectProvider<Class> Controllers = Classes()
         .That().AreAssignableTo(typeof(ControllerBase))
         .As("MVC controllers");
 
-    // Matched on the declaring assembly rather than the namespace: 6 compliant
-    // controllers import DM.Domain.*.Features.* for query DTOs while injecting
-    // nothing but an ApiService, and a namespace rule would flag them.
+    // Matched on the declaring assembly rather than the namespace: controllers import
+    // DM.Domain.*.Features.* for query DTOs while injecting nothing but an ApiService.
     //
     // Every abstraction the domain publishes, not only the ones whose name ends
     // in Service: a controller reaching straight for I*Repository, IIntentionManager

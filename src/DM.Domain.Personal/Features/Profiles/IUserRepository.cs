@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using DM.Domain.Core.Dto;
+using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
 
 namespace DM.Domain.Personal.Features.Profiles;
@@ -11,23 +13,13 @@ namespace DM.Domain.Personal.Features.Profiles;
 /// </summary>
 public interface IUserRepository : IUserReadRepository
 {
-    // ═══ READ (Personal-specific) ═══
-
-    /// <summary>
-    /// Get user details by email (for account operations)
-    /// </summary>
-    Task<UserDetails?> GetUserDetailsByEmail(string email);
-
-    // ═══ WRITE ═══
+    // Write
 
     /// <summary>
     /// Update user and settings
     /// </summary>
     Task UpdateUser(UpdateUserEntity userUpdate, UpdateUserSettingsEntity settingsUpdate);
 
-    /// <summary>
-    /// Replace user contacts
-    /// </summary>
     Task ReplaceUserContacts(Guid userId, IEnumerable<UserContactEntity> contacts);
 
     /// <summary>
@@ -101,17 +93,14 @@ public class UpdateUserEntity
     /// <summary>
     /// Rating disability flag
     /// </summary>
-    public DM.Domain.Core.Dto.Optional<bool>? RatingDisabled { get; set; }
+    public Optional<bool>? RatingDisabled { get; set; }
 
     /// <summary>
     /// Show birthday to other users
     /// </summary>
-    public DM.Domain.Core.Dto.Optional<bool>? ShowBirthday { get; set; }
+    public Optional<bool>? ShowBirthday { get; set; }
 
-    /// <summary>
-    /// Upload ID for new avatar
-    /// </summary>
-    public DM.Domain.Core.Dto.Optional<Guid>? AvatarUploadId { get; set; }
+    public Optional<Guid>? AvatarUploadId { get; set; }
 }
 
 /// <summary>
@@ -127,7 +116,7 @@ public class UpdateUserSettingsEntity
     /// <summary>
     /// Color theme
     /// </summary>
-    public DM.Domain.Core.Dto.Optional<DM.Domain.Core.Enums.Theme>? Theme { get; set; }
+    public Optional<Theme>? Theme { get; set; }
 
     /// <summary>
     /// Whether the time zone below is part of this update.
@@ -145,29 +134,9 @@ public class UpdateUserSettingsEntity
     public string? TimeZoneId { get; set; }
 
     /// <summary>
-    /// Comments per page setting
+    /// Page size of every paged list
     /// </summary>
-    public DM.Domain.Core.Dto.Optional<int>? CommentsPerPage { get; set; }
-
-    /// <summary>
-    /// Topics per page setting
-    /// </summary>
-    public DM.Domain.Core.Dto.Optional<int>? TopicsPerPage { get; set; }
-
-    /// <summary>
-    /// Messages per page setting
-    /// </summary>
-    public DM.Domain.Core.Dto.Optional<int>? MessagesPerPage { get; set; }
-
-    /// <summary>
-    /// Posts per page setting
-    /// </summary>
-    public DM.Domain.Core.Dto.Optional<int>? PostsPerPage { get; set; }
-
-    /// <summary>
-    /// Entities per page setting
-    /// </summary>
-    public DM.Domain.Core.Dto.Optional<int>? EntitiesPerPage { get; set; }
+    public Optional<int>? PageSize { get; set; }
 }
 
 /// <summary>
@@ -190,13 +159,7 @@ public class UserContactEntity
     /// </summary>
     public string ContactType { get; set; } = null!;
 
-    /// <summary>
-    /// Contact value
-    /// </summary>
     public string ContactValue { get; set; } = null!;
 
-    /// <summary>
-    /// Sort order
-    /// </summary>
     public int SortOrder { get; set; }
 }

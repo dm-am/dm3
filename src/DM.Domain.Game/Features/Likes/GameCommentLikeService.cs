@@ -9,12 +9,8 @@ using DM.Domain.Game.Features.Comments;
 
 namespace DM.Domain.Game.Features.Likes;
 
-/// <summary>
-/// Game comment like service
-/// </summary>
 /// <remarks>
-/// The game's blacklist is not asked: a like is feedback, and the list closes
-/// the discussion and the application only (GameRoleExtensions.IsBlacklisted).
+/// The game's blacklist is not asked: a like is feedback.
 /// </remarks>
 internal class GameCommentLikeService : IGameCommentLikeService
 {
@@ -46,9 +42,6 @@ internal class GameCommentLikeService : IGameCommentLikeService
         await _likeOperations.UnlikeAsync(comment);
     }
 
-    /// <summary>
-    /// The comment, with the caller's right to move a like on it already checked.
-    /// </summary>
     private async Task<Comment> LikeableComment(Guid commentId)
     {
         var comment = await _commentService.GetAsync(commentId);

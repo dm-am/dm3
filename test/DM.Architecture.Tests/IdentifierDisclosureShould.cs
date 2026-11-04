@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -13,21 +14,8 @@ namespace DM.Architecture.Tests;
 /// written down as a decision and recorded when it is given.
 /// </summary>
 /// <remarks>
-/// Disclosing existence is a recorded trade, not an oversight: a registration
-/// form has to say an address is taken, and a recovery form has to distinguish a
-/// typo from a letter that was sent. What the trade costs is that a bulk scan of
-/// those surfaces is possible, and what makes it acceptable is that a scan leaves
-/// a trace — one entry per disclosing answer, countable per client address.
-///
-/// Both halves are asserted against each other, in both directions, because
-/// either one alone is worthless. A surface that discloses and does not record
-/// makes the whole recorded exception a paragraph describing something that is
-/// not true. A table entry with no surface behind it says the site discloses
-/// something it no longer does, and the reader budgets a risk that is gone.
-///
-/// Nothing fails when either drifts: the endpoint answers, the document reads
-/// well, and the difference shows up only to somebody reading both at once with
-/// the question already in mind.
+/// Disclosing existence is a recorded trade made acceptable by one entry per disclosing answer, so
+/// the document and the surfaces are held to each other both ways.
 /// </remarks>
 public class IdentifierDisclosureShould
 {
@@ -48,7 +36,7 @@ public class IdentifierDisclosureShould
     public void RecordEverySurfaceTheDocumentDeclares()
     {
         var documented = Documented
-            .Matches(File.ReadAllText(Path.Combine(RepositoryRoot, Convention)))
+            .Matches(File.ReadAllText(Path.Combine(RepositoryLayout.Root, Convention)))
             .Select(match => match.Groups[1].Value)
             .ToHashSet(StringComparer.Ordinal);
 
@@ -73,17 +61,11 @@ public class IdentifierDisclosureShould
     /// <summary>
     /// The identifier that was probed stays out of the entry.
     /// </summary>
-    /// <remarks>
-    /// Entries live for a month and are read through a dashboard, so writing the
-    /// value would leave a month of exactly the addresses and names every scan
-    /// went looking for — the record of the abuse becoming a better list than the
-    /// abuse produced. Scale and source are recoverable from the event and the
-    /// caller's address without it.
-    /// </remarks>
+    /// <remarks>Entries live for a month: the value would make the record a better list than the scan.</remarks>
     [Fact]
     public void KeepTheProbedIdentifierOutOfTheEntry()
     {
-        var helper = File.ReadAllText(Path.Combine(RepositoryRoot,
+        var helper = File.ReadAllText(Path.Combine(RepositoryLayout.Root,
             "src", "DM.Web.API", "Features", "Account", "IdentifierProbeLog.cs"));
 
         helper.Should().Contain("{ClientAddress}",
@@ -94,16 +76,10 @@ public class IdentifierDisclosureShould
     }
 
     private static HashSet<string> RecordedSurfaces() => Directory
-        .EnumerateFiles(Path.Combine(RepositoryRoot, "src", "DM.Web.API"), "*.cs",
+        .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src", "DM.Web.API"), "*.cs",
             SearchOption.AllDirectories)
-        .Where(IsAuthored)
+        .Where(RepositoryFiles.IsAuthored)
         .SelectMany(path => Recorded.Matches(File.ReadAllText(path)))
         .Select(match => match.Groups[1].Value)
         .ToHashSet(StringComparer.Ordinal);
-
-    private static bool IsAuthored(string path) => !path
-        .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
-        .Any(segment => segment is "obj" or "bin");
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

@@ -3,7 +3,6 @@ using System.Linq;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Account.Features.Authentication;
 using DM.Domain.Account.Features.Deactivation;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
@@ -11,11 +10,11 @@ using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Testing;
+using DM.Testing.Dsl;
 using AwesomeAssertions;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using Xunit;
-using RemovedAccount = DM.Domain.Account.Features.Deactivation.RemovedAccount;
 
 namespace DM.Domain.Account.Tests.Features.Deactivation;
 
@@ -23,30 +22,30 @@ public class DeactivationServiceShould : UnitTestBase
 {
     private const string TargetEmail = "target@dm.am";
 
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IUserLookupService _userLookupService;
-    private readonly IDeactivationRepository _repository;
-    private readonly IAccountRemover _remover;
-    private readonly IAccountRemovalMailSender _removalMailSender;
-    private readonly IAccountRestorationMailSender _restorationMailSender;
-    private readonly DeactivationService _service;
+    private readonly IIdentityProvider identityProvider;
+    private readonly IUserLookupService userLookupService;
+    private readonly IDeactivationRepository repository;
+    private readonly IAccountRemover remover;
+    private readonly IAccountRemovalMailSender removalMailSender;
+    private readonly IAccountRestorationMailSender restorationMailSender;
+    private readonly DeactivationService service;
 
     public DeactivationServiceShould()
     {
-        _identityProvider = Mock<IIdentityProvider>();
-        _userLookupService = Mock<IUserLookupService>();
-        _repository = Mock<IDeactivationRepository>();
-        _remover = Mock<IAccountRemover>();
-        _removalMailSender = Mock<IAccountRemovalMailSender>();
-        _restorationMailSender = Mock<IAccountRestorationMailSender>();
+        identityProvider = Mock<IIdentityProvider>();
+        userLookupService = Mock<IUserLookupService>();
+        repository = Mock<IDeactivationRepository>();
+        remover = Mock<IAccountRemover>();
+        removalMailSender = Mock<IAccountRemovalMailSender>();
+        restorationMailSender = Mock<IAccountRestorationMailSender>();
 
-        _service = new DeactivationService(
-            _identityProvider,
-            _userLookupService,
-            _repository,
-            _remover,
-            _removalMailSender,
-            _restorationMailSender,
+        service = new DeactivationService(
+            identityProvider,
+            userLookupService,
+            repository,
+            remover,
+            removalMailSender,
+            restorationMailSender,
             Mock<ILogger<DeactivationService>>());
     }
 
@@ -66,9 +65,9 @@ public class DeactivationServiceShould : UnitTestBase
         AuthenticateAs(UserRole.SeniorModerator);
         ArrangeTarget("Target", targetUserId, UserRole.RegularUser);
 
-        await _service.DeactivateByModeration("Target", "Запрос в обращении 1234");
+        await service.DeactivateByModeration("Target", "Запрос в обращении 1234");
 
-        await _remover.Received(1).Remove(targetUserId, Arg.Any<CancellationToken>());
+        await remover.Received(1).Remove(targetUserId, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -85,9 +84,9 @@ public class DeactivationServiceShould : UnitTestBase
         AuthenticateAs(UserRole.SeniorModerator);
         ArrangeTarget("Target", Guid.NewGuid(), UserRole.RegularUser);
 
-        await _service.DeactivateByModeration("Target", "Запрос в обращении 1234");
+        await service.DeactivateByModeration("Target", "Запрос в обращении 1234");
 
-        await _removalMailSender.Received(1).SendCompleted(TargetEmail);
+        await removalMailSender.Received(1).SendCompleted(TargetEmail);
     }
 
     /// <summary>
@@ -100,11 +99,11 @@ public class DeactivationServiceShould : UnitTestBase
         ArrangeTarget("Target", Guid.NewGuid(), UserRole.RegularUser);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.DeactivateByModeration("Target", "Просто так"));
+            () => service.DeactivateByModeration("Target", "Просто так"));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        await _remover.DidNotReceive().Remove(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _removalMailSender.DidNotReceive().SendCompleted(Arg.Any<string>());
+        await remover.DidNotReceive().Remove(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await removalMailSender.DidNotReceive().SendCompleted(Arg.Any<string>());
     }
 
     /// <summary>
@@ -119,11 +118,11 @@ public class DeactivationServiceShould : UnitTestBase
         ArrangeTarget("Target", Guid.NewGuid(), targetRole);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.DeactivateByModeration("Target", "Есть основания"));
+            () => service.DeactivateByModeration("Target", "Есть основания"));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        await _remover.DidNotReceive().Remove(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _removalMailSender.DidNotReceive().SendCompleted(Arg.Any<string>());
+        await remover.DidNotReceive().Remove(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await removalMailSender.DidNotReceive().SendCompleted(Arg.Any<string>());
     }
 
     /// <summary>
@@ -137,11 +136,11 @@ public class DeactivationServiceShould : UnitTestBase
         ArrangeTarget("Target", Guid.NewGuid(), UserRole.RegularUser);
 
         var exception = await Assert.ThrowsAsync<HttpBadRequestException>(
-            () => _service.DeactivateByModeration("Target", "   "));
+            () => service.DeactivateByModeration("Target", "   "));
 
         exception.ValidationErrors.Should().ContainKey("reason");
-        await _remover.DidNotReceive().Remove(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _removalMailSender.DidNotReceive().SendCompleted(Arg.Any<string>());
+        await remover.DidNotReceive().Remove(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await removalMailSender.DidNotReceive().SendCompleted(Arg.Any<string>());
     }
 
     /// <summary>
@@ -156,9 +155,9 @@ public class DeactivationServiceShould : UnitTestBase
         AuthenticateAs(UserRole.SeniorModerator);
         ArrangeRemoved("Target", targetUserId);
 
-        await _service.RestoreByModeration("Target");
+        await service.RestoreByModeration("Target");
 
-        await _repository.Received(1).Restore(targetUserId, Arg.Any<CancellationToken>());
+        await repository.Received(1).Restore(targetUserId, Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -175,9 +174,9 @@ public class DeactivationServiceShould : UnitTestBase
         AuthenticateAs(UserRole.SeniorModerator);
         ArrangeRemoved("Target", Guid.NewGuid());
 
-        await _service.RestoreByModeration("Target");
+        await service.RestoreByModeration("Target");
 
-        await _restorationMailSender.Received(1).SendRestored(TargetEmail);
+        await restorationMailSender.Received(1).SendRestored(TargetEmail);
     }
 
     /// <summary>
@@ -190,11 +189,11 @@ public class DeactivationServiceShould : UnitTestBase
         ArrangeRemoved("Target", Guid.NewGuid());
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.RestoreByModeration("Target"));
+            () => service.RestoreByModeration("Target"));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().Restore(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
+        await repository.DidNotReceive().Restore(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
     }
 
     /// <summary>
@@ -205,15 +204,15 @@ public class DeactivationServiceShould : UnitTestBase
     public async Task RefuseTheRestorationOfAnAccountNobodyRemoved()
     {
         AuthenticateAs(UserRole.SeniorModerator);
-        _repository.GetRemovedByUsername("Living", Arg.Any<CancellationToken>())
-            .Returns((RemovedAccount?)null);
+        repository.GetRemovedByUsername("Living", Arg.Any<CancellationToken>())
+            .Returns((RemovedAccountRow?)null);
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.RestoreByModeration("Living"));
+            () => service.RestoreByModeration("Living"));
 
         exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
-        await _repository.DidNotReceive().Restore(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
+        await repository.DidNotReceive().Restore(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
     }
 
     /// <summary>
@@ -231,16 +230,16 @@ public class DeactivationServiceShould : UnitTestBase
     public async Task RefuseToBringBackTheReservedName(string storedName)
     {
         AuthenticateAs(UserRole.SeniorModerator);
-        _repository.GetRemovedByUsername("asked", Arg.Any<CancellationToken>())
+        repository.GetRemovedByUsername("asked", Arg.Any<CancellationToken>())
             .Returns(ArrangedAccount(storedName, Guid.NewGuid()));
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.RestoreByModeration("asked"));
+            () => service.RestoreByModeration("asked"));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Conflict);
         exception.Message.Should().Be(RefusalMessage.ReservedNameNotRestorable);
-        await _repository.DidNotReceive().Restore(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
-        await _restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
+        await repository.DidNotReceive().Restore(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
     }
 
     /// <summary>
@@ -253,11 +252,11 @@ public class DeactivationServiceShould : UnitTestBase
         AuthenticateAs(UserRole.Admin);
         ArrangeRemovedList(totalCount: 3, ArrangedAccount("Target", Guid.NewGuid()));
 
-        var (accounts, paging) = await _service.GetRemovedAccounts(new RemovedAccountsQuery { Search = "tar" });
+        var (accounts, paging) = await service.GetRemovedAccounts(new RemovedAccountsQuery { Search = "tar" });
 
         accounts.Should().ContainSingle().Which.Username.Should().Be("Target");
         paging.TotalEntitiesCount.Should().Be(3);
-        await _repository.Received(1).CountRemoved("tar", Arg.Any<CancellationToken>());
+        await repository.Received(1).CountRemoved("tar", Arg.Any<CancellationToken>());
     }
 
     /// <summary>
@@ -274,7 +273,7 @@ public class DeactivationServiceShould : UnitTestBase
         AuthenticateAs(UserRole.SeniorModerator);
         ArrangeRemovedList(totalCount: 1, ArrangedAccount("Target", Guid.NewGuid()));
 
-        var (accounts, _) = await _service.GetRemovedAccounts(new RemovedAccountsQuery());
+        var (accounts, _) = await service.GetRemovedAccounts(new RemovedAccountsQuery());
 
         accounts.Should().ContainSingle().Which.Email.Should().BeNull();
     }
@@ -289,7 +288,7 @@ public class DeactivationServiceShould : UnitTestBase
         AuthenticateAs(UserRole.Admin);
         ArrangeRemovedList(totalCount: 1, ArrangedAccount("Target", Guid.NewGuid()));
 
-        var (accounts, _) = await _service.GetRemovedAccounts(new RemovedAccountsQuery());
+        var (accounts, _) = await service.GetRemovedAccounts(new RemovedAccountsQuery());
 
         accounts.Should().ContainSingle().Which.Email.Should().Be(TargetEmail);
     }
@@ -305,22 +304,18 @@ public class DeactivationServiceShould : UnitTestBase
         ArrangeRemovedList(totalCount: 1, ArrangedAccount("Target", Guid.NewGuid()));
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.GetRemovedAccounts(new RemovedAccountsQuery()));
+            () => service.GetRemovedAccounts(new RemovedAccountsQuery()));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().GetRemoved(
+        await repository.DidNotReceive().GetRemoved(
             Arg.Any<string?>(), Arg.Any<PagingData>(), Arg.Any<CancellationToken>());
     }
 
     private void AuthenticateAs(UserRole role) =>
-        _identityProvider.Current.Returns(Identity.Success(
-            new AuthenticatedUser { UserId = Guid.NewGuid(), Role = role, Username = "Moderator" },
-            new Session { Id = Guid.NewGuid() },
-            UserSettings.Default,
-            "token"));
+        identityProvider.Current.Returns(Identities.User(Guid.NewGuid(), "Moderator", role));
 
     private void ArrangeTarget(string username, Guid userId, UserRole role) =>
-        _userLookupService.GetAsync(username).Returns(new GeneralUser
+        userLookupService.GetAsync(username).Returns(new GeneralUser
         {
             UserId = userId,
             Username = username,
@@ -329,17 +324,17 @@ public class DeactivationServiceShould : UnitTestBase
         });
 
     private void ArrangeRemoved(string username, Guid userId) =>
-        _repository.GetRemovedByUsername(username, Arg.Any<CancellationToken>())
+        repository.GetRemovedByUsername(username, Arg.Any<CancellationToken>())
             .Returns(ArrangedAccount(username, userId));
 
-    private void ArrangeRemovedList(int totalCount, params RemovedAccount[] accounts)
+    private void ArrangeRemovedList(int totalCount, params RemovedAccountRow[] accounts)
     {
-        _repository.CountRemoved(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(totalCount);
-        _repository.GetRemoved(Arg.Any<string?>(), Arg.Any<PagingData>(), Arg.Any<CancellationToken>())
+        repository.CountRemoved(Arg.Any<string?>(), Arg.Any<CancellationToken>()).Returns(totalCount);
+        repository.GetRemoved(Arg.Any<string?>(), Arg.Any<PagingData>(), Arg.Any<CancellationToken>())
             .Returns(accounts.ToList());
     }
 
-    private static RemovedAccount ArrangedAccount(string username, Guid userId) => new(
+    private static RemovedAccountRow ArrangedAccount(string username, Guid userId) => new(
         userId,
         username,
         TargetEmail,

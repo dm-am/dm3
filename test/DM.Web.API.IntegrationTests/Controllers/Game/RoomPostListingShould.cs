@@ -2,7 +2,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Enums;
-using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Xunit;
 using static DM.Web.API.IntegrationTests.Helpers.RoomPostsTestHelper;
@@ -14,10 +13,7 @@ namespace DM.Web.API.IntegrationTests.Controllers.Game;
 /// carrying its number in the room.
 /// </summary>
 /// <remarks>
-/// Over HTTP, because the parameters are the contract: a name the binder does not
-/// know is ignored rather than refused, and the list then answers 200 with the
-/// whole room, which reads as "the filter found everything".
-///
+/// Over HTTP: an unknown parameter is ignored, not refused.
 /// One room of five live posts and a removed one between them, written a minute
 /// apart:
 ///
@@ -42,9 +38,7 @@ public class RoomPostListingShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// A post keeps its place in the room on every view of it. The removed post
-    /// between #3 and #4 is what tells the room's numbering from a count of rows
-    /// that forgot the soft delete.
+    /// A post keeps its place in the room on every view; the removed post between #3 and #4 tells numbering from counting.
     /// </summary>
     [Fact]
     public async Task NumberEveryPostByItsPlaceInTheRoomWhateverTheView()

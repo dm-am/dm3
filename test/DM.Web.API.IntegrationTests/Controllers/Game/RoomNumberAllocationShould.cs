@@ -1,6 +1,3 @@
-using System;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Rooms;
@@ -15,14 +12,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
 /// <summary>
-/// RoomNumber is the address of a room: every link to one is
-/// /games/{game}/rooms/{number} and the number is what the address resolves by.
-/// No write path filled it in, so every room the application built carried zero
-/// and all rooms of a game shared one address - the seed, which writes its
-/// numbers by hand, was the only place the feature looked like it worked.
-/// The number is allocated as MAX+1, which two creates read alike unless
-/// creation is serialized per game. So is the place of a new room in the list
-/// of the game, its OrderNumber.
+/// RoomNumber is the address a room resolves by, and its OrderNumber the place in the list: both MAX+1, so
+/// creation is serialized per game.
 /// </summary>
 public class RoomNumberAllocationShould : IntegrationTestBase
 {
@@ -79,9 +70,7 @@ public class RoomNumberAllocationShould : IntegrationTestBase
     }
 
     /// <summary>
-    /// Every new room takes the place after the last one. Two rooms that read
-    /// the last place alike share one, and the list then shows them in an
-    /// order no move of the master made.
+    /// Every new room takes the place after the last one.
     /// </summary>
     [Fact]
     public async Task PlaceConcurrentRoomsOfOneGameOneAfterAnother()

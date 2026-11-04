@@ -39,14 +39,8 @@ const GROUPS = new RegExp(`(.{${RECOVERY_GROUP}})(?=.)`, "g");
 const SEPARATORS = /[-\s]/g;
 
 /**
- * What the server would keep of this text: the code without its formatting.
- *
- * The client repeats the server's own parse rather than inventing a looser one,
- * so the field cannot produce an entry the server will refuse on shape alone.
- * Six digits is a device code; anything else goes to the recovery set, where
- * RecoveryCodeFactory.Normalize raises the case, reads I and L as one and O as
- * zero (the three characters a handwritten code loses to the digits beside
- * them) and drops everything outside the alphabet, dashes and spaces included.
+ * The code as the server keeps it, by the server's own parse: six digits is a
+ * device code, anything else a recovery code (RecoveryCodeFactory.Normalize).
  */
 const significant = (mode: CodeMode, raw: string): string => {
   if (mode !== "recovery") {
@@ -85,24 +79,13 @@ export interface CodeInput {
   /** A whole code is entered: six digits, or sixteen symbols. */
   isComplete: ComputedRef<boolean>;
   /**
-   * The last edit lost more than the separators the field draws itself: a
-   * letter, a punctuation mark, a symbol past the end of the code.
-   *
-   * It exists for the screen that checks a full code by itself. A recovery code
-   * pasted into the digit field holds exactly six digits, so the field is full
-   * and looks like a code from the authenticator, and the check would spend one
-   * of the five attempts the server allows on an entry nobody meant to send.
-   * The button stays where it is either way: what he typed is his to send.
+   * The last edit lost more than the field's own separators: a recovery code
+   * pasted into the digit field would fill it and spend one of five attempts.
    */
   droppedSymbols: Ref<boolean>;
   /**
-   * How many positions a whole code of this kind takes on screen, dashes
-   * included.
-   *
-   * Not written onto the field as `maxlength`: the browser applies that before
-   * an input event is raised, so a recovery code pasted into the digit field
-   * arrived already cut and the parse read a fragment of it. The length is
-   * kept by the parse instead, which knows both kinds of code.
+   * How many positions a whole code takes, dashes included. Not a maxlength:
+   * the browser cuts a paste before the input event.
    */
   maxLength: ComputedRef<number>;
   /** Bind to `@input`. */
@@ -116,20 +99,9 @@ export interface CodeInput {
 }
 
 /**
- * The second-factor code field.
- *
- * The filtering sits on `input` and not on `keydown` on purpose: a key press is
- * one of the ways text arrives and not the common one here. A code is pasted
- * from a password manager, filled by the one-time-code autofill of the
- * platform, or typed on a soft keyboard that emits no key events at all. A
- * keydown filter passes all three straight through, and the field then shows an
- * entry the server refuses.
- *
- * The caret is placed by the count of significant symbols in front of it rather
- * than by its offset in the string, because the string the reader sees is not
- * the string he typed: dashes appear between his symbols as he goes. Kept by
- * offset, an edit in the middle of a recovery code threw the caret to the end
- * after every keystroke.
+ * The second-factor code field. Filtered on input, not keydown: paste,
+ * autofill and soft keyboards send no key events. The caret is kept by the
+ * count of significant symbols, since dashes appear as the reader types.
  */
 export function useCodeInput(options: UseCodeInputOptions): CodeInput {
   const inputRef = ref<HTMLInputElement | null>(null);
@@ -139,20 +111,14 @@ export function useCodeInput(options: UseCodeInputOptions): CodeInput {
   const mode = (): CodeMode => toValue(options.mode);
 
   /**
-   * Write the filtered text back into the field and put the caret where the
-   * reader left it, after the same number of significant symbols.
-   *
-   * The element is written to directly, not only through the ref: the caret has
-   * to be set on the text that is on screen now, and a value that only reaches
-   * the DOM on the next render would take the caret with it.
+   * Writes the filtered text and the caret to the element at once: a value that
+   * reached the DOM on the next render would take the caret with it.
    */
   const apply = (raw: string, caret: number): void => {
     const current = mode();
     const before = significant(current, raw.slice(0, caret)).length;
     const next = formatted(current, raw);
-    // Measured before the write, on what actually arrived: the separators are
-    // the field's own and cost nothing, everything else the parse threw away
-    // was somebody's text.
+    // Measured before the write: only text other than the separators counts as lost.
     droppedSymbols.value =
       raw.replace(SEPARATORS, "").length !== significant(current, raw).length;
     value.value = next;
@@ -180,28 +146,16 @@ export function useCodeInput(options: UseCodeInputOptions): CodeInput {
   };
 
   /**
-   * Say that the value changed, by the one road every change takes: the
-   * `input` event of the field.
-   *
-   * The screen around this field hangs things on that event: it clears the
-   * refusal the server gave the previous code, and decides whether to check the
-   * new one. When the composable edits the value itself the browser sends no
-   * event of its own (the key press was taken away from it), and the screen was
-   * left showing "Код не подошел" under a code that had since changed. Raising
-   * the same event instead of adding a second channel keeps one path for every
-   * edit, whoever made it.
+   * Raises the field's input event for an edit made here, the one path the
+   * screen listens on (it clears the previous refusal).
    */
   const notify = (element: HTMLInputElement): void => {
     element.dispatchEvent(new Event("input", { bubbles: true }));
   };
 
   /**
-   * The two keys a dash would otherwise kill.
-   *
-   * Backspace with a dash in front of the caret takes the symbol BEFORE the
-   * dash; Delete with a dash behind the caret takes the symbol AFTER it. Left
-   * alone, either key deletes the dash, the reformat puts it straight back, and
-   * the reader sees a key that does nothing.
+   * Backspace and Delete next to a dash take the symbol beyond it, or the
+   * reformat would put the dash back and the key would do nothing.
    */
   const onKeydown = (event: KeyboardEvent): void => {
     if (event.key !== "Backspace" && event.key !== "Delete") return;
@@ -221,9 +175,7 @@ export function useCodeInput(options: UseCodeInputOptions): CodeInput {
       return;
     }
 
-    // A dash never ends the formatted code, so a dash under the caret always
-    // has a symbol after it; the length is checked anyway, because the value
-    // may have been put there from outside.
+    // A dash never ends the code; checked anyway for a value set from outside.
     if (text[at] !== "-" || at + 2 > text.length) return;
 
     event.preventDefault();
@@ -235,9 +187,7 @@ export function useCodeInput(options: UseCodeInputOptions): CodeInput {
 
   const reset = (): void => setValue("");
 
-  // The mode is switched by the screen (the segments above the field), and
-  // whatever is still in the field is rewritten under the new rules rather than
-  // thrown away; a screen that wants an empty field on the switch calls reset.
+  // Switched by the screen; what is in the field is rewritten under the new rules.
   watch(mode, () => setValue(value.value));
 
   const normalized = computed(() => significant(mode(), value.value));

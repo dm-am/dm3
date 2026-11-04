@@ -7,9 +7,6 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Moderation.Features.Tickets;
 
-/// <summary>
-/// Repository for moderation ticket operations
-/// </summary>
 public interface ITicketRepository
 {
     /// <summary>
@@ -32,9 +29,6 @@ public interface ITicketRepository
     Task<(IEnumerable<Ticket> tickets, PagingResult paging)> GetUserTickets(Guid userId, PagingQuery query,
         TicketStatus? status = null, TicketSubtype? subtype = null, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get ticket by ID
-    /// </summary>
     Task<Ticket?> Get(Guid ticketId, CancellationToken ct = default);
 
     /// <summary>
@@ -48,9 +42,6 @@ public interface ITicketRepository
     /// </summary>
     Task<IReadOnlyList<TicketComment>> GetComments(Guid ticketId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Create a new ticket
-    /// </summary>
     Task<Ticket> Create(CreateTicketEntity ticket, CancellationToken ct = default);
 
     /// <summary>

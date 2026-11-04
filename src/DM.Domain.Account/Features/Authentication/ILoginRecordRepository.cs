@@ -27,17 +27,15 @@ public interface ILoginRecordRepository
     /// Get unique IP addresses for a user (successful logins only)
     /// </summary>
     /// <param name="userId">User identifier</param>
-    /// <param name="days">Number of days to look back</param>
     /// <returns>Aggregated IP info sorted by last seen descending</returns>
-    Task<IReadOnlyList<UserIpInfo>> GetUserIps(Guid userId, int days = 365);
+    Task<IReadOnlyList<UserIpInfo>> GetUserIps(Guid userId);
 
     /// <summary>
     /// Get users who share IP addresses with the target user (successful logins only)
     /// </summary>
     /// <param name="userId">Target user identifier</param>
-    /// <param name="days">Number of days to look back</param>
     /// <returns>Linked profiles sorted by shared IP count descending</returns>
-    Task<IReadOnlyList<LinkedProfile>> GetLinkedProfiles(Guid userId, int days = 365);
+    Task<IReadOnlyList<LinkedProfile>> GetLinkedProfiles(Guid userId);
 
     /// <summary>
     /// Get recent login history for a user (both successful and failed)

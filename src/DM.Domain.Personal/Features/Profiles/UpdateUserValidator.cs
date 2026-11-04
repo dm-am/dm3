@@ -8,7 +8,6 @@ namespace DM.Domain.Personal.Features.Profiles;
 /// <inheritdoc />
 internal class UpdateUserValidator : AbstractValidator<UpdateUser>
 {
-    /// <inheritdoc />
     public UpdateUserValidator()
     {
         Unless(u => u.Status == null, () =>
@@ -23,10 +22,8 @@ internal class UpdateUserValidator : AbstractValidator<UpdateUser>
             RuleFor(u => u.Location)
                 .MaximumLength(100).WithMessage(ValidationError.Long));
 
-        // The extended information is the one profile field written in BBCode,
-        // and it renders on the Profile surface, which declares neither [mod]
-        // nor [private]. The tag is not markup there, so it hides nothing and
-        // the line is shown on a page anyone may open.
+        // The extended information renders on the Profile surface, which declares
+        // neither [mod] nor [private], so there the tag would hide nothing.
         Unless(u => u.Info == null, () =>
             RuleFor(u => u.Info)
                 .Must(info => !PrivateBlockMarkup.ContainsPrivateMarkup(info))
@@ -34,7 +31,7 @@ internal class UpdateUserValidator : AbstractValidator<UpdateUser>
 
         Unless(u => u.Contacts == null, () =>
         {
-            RuleFor(u => u.Contacts)
+            RuleFor(u => u.Contacts!)
                 .Must(c => c.Count <= 10).WithMessage(ValidationError.TooMany);
             RuleForEach(u => u.Contacts).ChildRules(contact =>
             {
@@ -48,24 +45,7 @@ internal class UpdateUserValidator : AbstractValidator<UpdateUser>
         });
 
         Unless(u => u.Settings == null, () =>
-        {
-            Unless(u => u.Settings.Paging == null, () =>
-            {
-                RuleFor(u => u.Settings.Paging.CommentsPerPage)
-                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
-
-                RuleFor(u => u.Settings.Paging.MessagesPerPage)
-                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
-
-                RuleFor(u => u.Settings.Paging.PostsPerPage)
-                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
-
-                RuleFor(u => u.Settings.Paging.TopicsPerPage)
-                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
-
-                RuleFor(u => u.Settings.Paging.EntitiesPerPage)
-                    .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid);
-            });
-        });
+            RuleFor(u => u.Settings!.PageSize)
+                .Must(PagingPolicy.Allows).WithMessage(ValidationError.Invalid));
     }
 }

@@ -1,20 +1,14 @@
 using System;
 using DM.Domain.Blog.Features.Publications;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Publications;
 
-public class UpdatePublicationValidatorShould : UnitTestBase
+public class UpdatePublicationValidatorShould
 {
-    private readonly UpdatePublicationValidator validator;
-
-    public UpdatePublicationValidatorShould()
-    {
-        validator = new UpdatePublicationValidator();
-    }
+    private readonly UpdatePublicationValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -24,8 +18,7 @@ public class UpdatePublicationValidatorShould : UnitTestBase
             PublicationId = Guid.NewGuid(),
             Title = "Updated Publication",
             Content = "Updated content",
-            Preview = "Updated preview",
-            IsPublished = true
+            Preview = "Updated preview"
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
@@ -59,7 +52,7 @@ public class UpdatePublicationValidatorShould : UnitTestBase
         var input = new UpdatePublication
         {
             PublicationId = Guid.NewGuid(),
-            Title = new string('a', 301)
+            Title = new string('a', PublicationFieldLimits.TitleMaxLength + 1)
         };
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
@@ -85,7 +78,7 @@ public class UpdatePublicationValidatorShould : UnitTestBase
         var input = new UpdatePublication
         {
             PublicationId = Guid.NewGuid(),
-            Preview = new string('a', 501)
+            Preview = new string('a', PublicationFieldLimits.PreviewMaxLength + 1)
         };
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Preview)
@@ -98,7 +91,7 @@ public class UpdatePublicationValidatorShould : UnitTestBase
         var input = new UpdatePublication
         {
             PublicationId = Guid.NewGuid(),
-            Preview = new string('a', 500)
+            Preview = new string('a', PublicationFieldLimits.PreviewMaxLength)
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();
@@ -107,13 +100,6 @@ public class UpdatePublicationValidatorShould : UnitTestBase
     /// <summary>
     /// Hiding markup on a surface that does not declare it.
     /// </summary>
-    /// <remarks>
-    /// The tag is not markup here, so it hides nothing: the line the author
-    /// wrote for one reader is published with the tag still around it. Refused
-    /// at the save path rather than erased, because a draft is not an attack
-    /// and a paragraph that vanished without a word is looked for instead of
-    /// rewritten.
-    /// </remarks>
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {

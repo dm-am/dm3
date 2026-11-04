@@ -34,7 +34,6 @@ internal class TelegramWebhookHandler : IWebhookHandler
     private readonly IBotLinkService _botLinkService;
     private readonly ILogger<TelegramWebhookHandler> _logger;
 
-    /// <inheritdoc />
     public TelegramWebhookHandler(
         IBotLinkService botLinkService,
         ILogger<TelegramWebhookHandler> logger)

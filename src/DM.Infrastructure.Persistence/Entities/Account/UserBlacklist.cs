@@ -39,9 +39,6 @@ public class UserBlacklist
     [ForeignKey(nameof(OwnerId))]
     public virtual User Owner { get; set; } = null!;
 
-    /// <summary>
-    /// Blocked user
-    /// </summary>
     [ForeignKey(nameof(BlockedUserId))]
     public virtual User BlockedUser { get; set; } = null!;
 

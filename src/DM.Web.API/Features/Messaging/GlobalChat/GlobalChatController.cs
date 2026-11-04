@@ -1,13 +1,10 @@
 using System;
 using System.Threading.Tasks;
-using DM.Domain.Core.Dto;
 using DM.Web.API.Features.Messaging.Messages;
 using DM.Web.API.Shared.Authentication;
-using DM.Web.API.Shared.BbRendering;
 using DM.Web.API.Shared.Dto;
 using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Mvc;
-using System.ComponentModel.DataAnnotations;
 
 namespace DM.Web.API.Features.Messaging.GlobalChat;
 
@@ -25,12 +22,9 @@ namespace DM.Web.API.Features.Messaging.GlobalChat;
 [Tags("Global Chat")]
 public class GlobalChatController : ControllerBase
 {
-    private readonly IMessagingApiService _apiService;
+    private readonly MessagingApiService _apiService;
 
-    /// <summary>
-    /// Creates a new instance of GlobalChatController
-    /// </summary>
-    public GlobalChatController(IMessagingApiService apiService)
+    public GlobalChatController(MessagingApiService apiService)
     {
         _apiService = apiService;
     }
@@ -53,7 +47,7 @@ public class GlobalChatController : ControllerBase
         [FromQuery] string? cursor = null,
         [FromQuery] Guid? aroundMessageId = null,
         [FromQuery] DateTimeOffset? nearTimestampUtc = null,
-        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50) =>
+        [FromQuery][PageSize] int limit = 50) =>
         Ok(await _apiService.GetGlobalChatMessagesAsync(cursor, aroundMessageId, nearTimestampUtc, limit));
 
     /// <summary>
@@ -70,16 +64,10 @@ public class GlobalChatController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
-    public async Task<IActionResult> PostGlobalChatMessage([FromBody] CreateMessageInput input)
+    public async Task<IActionResult> PostGlobalChatMessage([FromBody] MessageInput input)
     {
-        // Surface is GlobalChatMessage so the safe-image parser applies; the
-        // response is re-projected from the domain (see MessageTextResolver),
-        // this carrier only ferries the raw text into the create pipeline.
-        var message = new Message { Text = new GlobalChatBbText { Value = input.Text } };
-        var result = await _apiService.CreateGlobalChatMessageAsync(message);
-        // Points at the route that can actually serve the line it names. The
-        // Location header used to name the private-message route, which answers
-        // 404 for a global chat message.
+        var result = await _apiService.CreateGlobalChatMessageAsync(input.Text);
+        // The private-message route answers 404 for a global chat line.
         return CreatedAtRoute(nameof(GetGlobalChatMessage), new { id = result.Resource.Id }, result);
     }
 
@@ -125,11 +113,8 @@ public class GlobalChatController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PatchGlobalChatMessage(Guid id, [FromBody] UpdateMessageInput input)
-    {
-        var message = new Message { Text = new GlobalChatBbText { Value = input.Text } };
-        return Ok(await _apiService.UpdateGlobalChatMessageAsync(id, message));
-    }
+    public async Task<IActionResult> PatchGlobalChatMessage(Guid id, [FromBody] MessageInput input) =>
+        Ok(await _apiService.UpdateGlobalChatMessageAsync(id, input.Text));
 
     /// <summary>
     /// Delete a global chat message

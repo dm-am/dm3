@@ -25,10 +25,9 @@ namespace DM.Web.API.Features.General.Search;
 [Tags("Search")]
 public class MessageSearchController : ControllerBase
 {
-    private readonly IMessageSearchApiService _apiService;
+    private readonly MessageSearchApiService _apiService;
 
-    /// <inheritdoc />
-    public MessageSearchController(IMessageSearchApiService apiService)
+    public MessageSearchController(MessageSearchApiService apiService)
     {
         _apiService = apiService;
     }
@@ -69,19 +68,15 @@ public class MessageSearchController : ControllerBase
     [ProducesResponseType(typeof(ValidationProblemDetails), StatusCodes.Status400BadRequest)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status429TooManyRequests)]
-    // Names taken from the query vocabulary in API_DESIGN.md: the free-text
-    // filter is `search` everywhere, a username filter is spelled out, and a
-    // date bound is `<field>FromUtc`/`<field>ToUtc`. This endpoint and
-    // /v1/search/forum sit in one folder and used to take the search string
-    // under two different names.
+    // Names from the query vocabulary in API_DESIGN.md.
     public async Task<IActionResult> SearchMessages(
-        [FromQuery][Required][StringLength(500, MinimumLength = 1)] string search,
+        [FromQuery][Required][StringLength(500)] string search,
         [FromQuery(Name = "in")] string[]? @in = null,
         [FromQuery] string? authorUsername = null,
         [FromQuery] DateTimeOffset? createdFromUtc = null,
         [FromQuery] DateTimeOffset? createdToUtc = null,
         [FromQuery] string? cursor = null,
-        [FromQuery][Range(1, 100, ErrorMessage = "Размер страницы должен быть от 1 до 100")] int limit = 50) =>
+        [FromQuery][PageSize] int limit = 50) =>
         Ok(await _apiService.SearchAsync(search, @in ?? Array.Empty<string>(), authorUsername,
             createdFromUtc, createdToUtc, cursor, limit));
 }

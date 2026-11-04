@@ -7,7 +7,6 @@ namespace DM.Domain.Blog.Features.Publications;
 /// <inheritdoc />
 internal class UpdatePublicationValidator : AbstractValidator<UpdatePublication>
 {
-    /// <inheritdoc />
     public UpdatePublicationValidator()
     {
         RuleFor(x => x.PublicationId)

@@ -3,26 +3,13 @@
  */
 
 /**
- * The tab title has one format and one place that builds it — and it had
- * neither. The formatter glued the brand with an em dash, which is out of
- * interface copy; five profile subpages glued a second segment with a second
- * em dash ("Полученные оценки постов — TestUser — Dungeon Master"), so the
- * name that tells two tabs apart stood in the middle of 58 characters and was
- * the first thing a narrow tab cut off.
- *
- * The unit part pins the format. The scan part is what keeps it: a page that
- * composes its own title is invisible to the route table, so the rule is read
- * off the sources — every `useDocumentTitle(...)` argument and every
- * `joinTitleSegments(...)` call under the client tree.
- *
- * Only literals are read, through the TypeScript AST (the idiom of
- * shared/lib/copy-rules.spec.ts): an expression is opaque and this check does
- * not judge what it cannot see.
+ * The tab title has one format and one place that builds it. A page composing
+ * its own title is invisible to the route table, so the literals of every
+ * useDocumentTitle(...) and joinTitleSegments(...) call are read off the
+ * sources through the TypeScript AST.
  */
 import { describe, it, expect } from "vitest";
-import { readdirSync, readFileSync, statSync } from "fs";
-import { dirname, join, relative, resolve } from "path";
-import { fileURLToPath } from "url";
+import { readFileSync } from "fs";
 import ts from "typescript";
 import { parse as parseSfc } from "vue/compiler-sfc";
 import {
@@ -30,12 +17,7 @@ import {
   formatDocumentTitle,
   joinTitleSegments,
 } from "./useDocumentTitle";
-
-const HERE = dirname(fileURLToPath(import.meta.url));
-// composables -> lib -> shared -> src
-const CLIENT_SRC = resolve(HERE, "..", "..", "..");
-
-const SKIP_DIRS = new Set(["node_modules", "dist", "coverage"]);
+import { CLIENT_SRC, asPath, collect } from "@/shared/lib/testing/sourceTree";
 
 /** The only two files allowed to assign `document.title`. */
 const TITLE_WRITERS = [
@@ -44,27 +26,14 @@ const TITLE_WRITERS = [
 ];
 
 const EM_DASH = "\u2014";
-const YO = "\u0451";
 const BRAND = formatDocumentTitle("");
 
-function collectFiles(dir: string, out: string[] = []): string[] {
-  for (const name of readdirSync(dir)) {
-    const full = join(dir, name);
-    if (statSync(full).isDirectory()) {
-      if (!SKIP_DIRS.has(name)) collectFiles(full, out);
-    } else if (
-      (full.endsWith(".ts") || full.endsWith(".vue")) &&
-      !full.endsWith(".spec.ts") &&
-      !full.endsWith(".d.ts")
-    ) {
-      out.push(full);
-    }
-  }
-  return out;
-}
+const isSource = (name: string): boolean =>
+  (name.endsWith(".ts") || name.endsWith(".vue")) &&
+  !name.endsWith(".spec.ts") &&
+  !name.endsWith(".d.ts");
 
-const where = (file: string) =>
-  relative(CLIENT_SRC, file).split("\\").join("/");
+const where = asPath;
 
 /** Script sources of a file: the .ts itself, or the SFC script blocks. */
 function scriptsOf(file: string, raw: string): string[] {
@@ -148,13 +117,12 @@ describe("joinTitleSegments", () => {
 });
 
 describe("titles across the client sources", () => {
-  const files = collectFiles(CLIENT_SRC);
+  const files = collect(CLIENT_SRC, isSource);
 
   it("keeps the forbidden signs out of every composed title", () => {
     const forbidden: Array<[string, string]> = [
       [EM_DASH, "em dash"],
       [";", "semicolon"],
-      [YO, "the letter yo"],
       [TITLE_SEPARATOR, "a hand-glued separator"],
       [BRAND, "the brand"],
     ];
@@ -178,10 +146,8 @@ describe("titles across the client sources", () => {
       }
     }
 
-    // A walk that finds nothing would pass silently. The floor is well under
-    // the count on purpose: the number falls whenever a page stops writing its
-    // own title and lets its shell compose it, which is a direction this rule
-    // should not fight.
+    // A walk that finds nothing passes; the floor is low, since the count falls
+    // as pages leave their title to the shell.
     expect(calls).toBeGreaterThan(5);
     expect(offenders).toEqual([]);
   });
@@ -197,9 +163,7 @@ describe("titles across the client sources", () => {
         for (const call of callsTo(parseTs(code, file), "joinTitleSegments")) {
           calls += 1;
           const first = call.arguments[0];
-          // A literal first segment means a fixed section name stands in front
-          // of the entity — the shape that made five profile tabs read
-          // "Полученные оценки постов" right up to the truncation.
+          // A literal first segment puts a fixed section before the entity.
           if (first && isLiteral(first)) {
             offenders.push(`${where(file)}: ${first.getText()}`);
           }

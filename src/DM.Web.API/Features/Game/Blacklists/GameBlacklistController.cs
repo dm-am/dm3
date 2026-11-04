@@ -1,4 +1,3 @@
-using System;
 using System.Threading.Tasks;
 using DM.Web.API.Swagger;
 using DM.Web.API.Shared.Authentication;
@@ -28,15 +27,12 @@ namespace DM.Web.API.Features.Game.Blacklists;
 [EnableRateLimiting(RateLimitPolicies.Default)]
 public class GameBlacklistController : ControllerBase
 {
-    private readonly IBlacklistApiService _blacklistApiService;
-    private readonly IGameApiService _gameApiService;
+    private readonly BlacklistApiService _blacklistApiService;
+    private readonly GameApiService _gameApiService;
 
-    /// <summary>
-    /// Creates a new instance of GameBlacklistController
-    /// </summary>
     public GameBlacklistController(
-        IBlacklistApiService blacklistApiService,
-        IGameApiService gameApiService)
+        BlacklistApiService blacklistApiService,
+        GameApiService gameApiService)
     {
         _blacklistApiService = blacklistApiService;
         _gameApiService = gameApiService;
@@ -66,7 +62,7 @@ public class GameBlacklistController : ControllerBase
     /// Add new blacklisted user in game
     /// </summary>
     /// <param name="id">Game public ID (5 letters) or GUID</param>
-    /// <param name="user">User to blacklist</param>
+    /// <param name="request">User to blacklist</param>
     /// <response code="201">User successfully added to blacklist</response>
     /// <response code="400">Some user properties were invalid</response>
     /// <response code="401">User must be authenticated</response>
@@ -82,10 +78,10 @@ public class GameBlacklistController : ControllerBase
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> PostBlacklist(string id, [FromBody] User user)
+    public async Task<IActionResult> PostBlacklist(string id, [FromBody] BlockUserRequest request)
     {
         var gameId = await _gameApiService.ResolveId(id);
-        var result = await _blacklistApiService.Create(gameId, user);
+        var result = await _blacklistApiService.Create(gameId, request);
         return StatusCode(StatusCodes.Status201Created, result);
     }
 
@@ -93,23 +89,23 @@ public class GameBlacklistController : ControllerBase
     /// Delete blacklisted user in game
     /// </summary>
     /// <param name="id">Game public ID (5 letters) or GUID</param>
-    /// <param name="login">User login</param>
+    /// <param name="username">Username</param>
     /// <response code="204">User successfully removed from blacklist</response>
     /// <response code="401">User must be authenticated</response>
     /// <response code="403">User is not authorized to un-blacklist users in this game</response>
     /// <response code="409">User is not in the blacklist</response>
     /// <response code="404">Game not found</response>
-    [HttpDelete("{id}/blacklist/{login}", Name = nameof(DeleteBlacklist))]
+    [HttpDelete("{id}/blacklist/{username}", Name = nameof(DeleteBlacklist))]
     [AuthenticationRequired]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status403Forbidden)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status409Conflict)]
     [ProducesResponseType(typeof(ProblemDetails), StatusCodes.Status404NotFound)]
-    public async Task<IActionResult> DeleteBlacklist(string id, string login)
+    public async Task<IActionResult> DeleteBlacklist(string id, string username)
     {
         var gameId = await _gameApiService.ResolveId(id);
-        await _blacklistApiService.Delete(gameId, login);
+        await _blacklistApiService.Delete(gameId, username);
         return NoContent();
     }
 }

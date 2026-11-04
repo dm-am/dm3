@@ -7,9 +7,7 @@ using System.Collections.Generic;
 
 namespace BBCodeParser.Tags
 {
-    // DM3 change against the original: one token of the reader. The original
-    // carried the text before a tag and the tag itself in one result; the text
-    // is its own token now.
+    // DM3 change against the original: one token of the reader; text is a token of its own.
     public class TagResult
     {
         public TagType TagType { get; set; }

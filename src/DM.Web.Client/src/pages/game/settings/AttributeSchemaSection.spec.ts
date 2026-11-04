@@ -3,32 +3,19 @@
  */
 
 /**
- * Saving the character sheet of a game.
- *
- * A save replaces the whole set and the server drops the values of every
- * specification the new set leaves out, across every character of the game.
- * Two guards stand between a lead and that, and both are this section's to
- * carry: the version the sheet was read at, which the server refuses when
- * somebody else has saved since, and the warning the editor raises while the
- * game has characters.
- *
- * The refusal by version is the one that has to be shown rather than toasted.
- * The reader is standing in the editor holding a sheet they have just written;
- * throwing it away and reloading over them would cost them the work, so the
- * draft stays, the sheet is read again behind it, and one line says what
- * happened. That is the whole of doc 4.2.2.10 on this point.
- *
- * Both guards are answers to what the section does not know, so both are
- * pinned here at their weakest point: the version is the one the draft was
- * built on and not whatever the details happen to hold when Save is pressed,
- * and an unread roster is treated as a roster with characters in it.
+ * Saving the character sheet of a game, which drops the values of every
+ * specification the new set leaves out. Its two guards are pinned at their
+ * weakest point: the version the draft was built on, and an unread roster
+ * taken for one with characters.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent, h, ref, type PropType } from "vue";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import {
+  characterApi,
   gameApi,
+  gameCatalogApi,
   useGameDetailsStore,
   AttributeSpecificationType,
   type AttributeSchemaDraft,
@@ -40,21 +27,10 @@ import { attributeSchemaTemplateApi } from "@/entities/attribute-schema-template
 import { useToast } from "@/shared/lib/composables/useToast";
 import AttributeSchemaSection from "./AttributeSchemaSection.vue";
 
-/**
- * The two reads behind the "Схема атрибутов" list. Served empty: the list is
- * the editor's own subject, and left unserved these would go to the network.
- */
 function serveEmptySources() {
-  vi.spyOn(attributeSchemaTemplateApi, "getTemplates").mockResolvedValue({
-    data: { resources: [], paging: null },
-    error: null,
-  } as unknown as Awaited<
-    ReturnType<typeof attributeSchemaTemplateApi.getTemplates>
-  >);
-  vi.spyOn(gameApi, "getParticipatingGames").mockResolvedValue({
-    data: { resources: [], paging: null },
-    error: null,
-  } as unknown as Awaited<ReturnType<typeof gameApi.getParticipatingGames>>);
+  const empty = { data: { resources: [], paging: null }, error: null } as never;
+  vi.spyOn(attributeSchemaTemplateApi, "getTemplates").mockResolvedValue(empty);
+  vi.spyOn(gameCatalogApi, "getParticipatingGames").mockResolvedValue(empty);
 }
 
 const STORED_SPEC: AttributeSpecification = {
@@ -71,14 +47,8 @@ const STORED_SPEC: AttributeSpecification = {
 
 const THE_VERSION = 7;
 
-/**
- * The editor is a double: what it draws is its own spec's business, and what
- * this file needs of it is the draft it holds, the flags the section hands it,
- * and a way to press Save. Its buttons stand for editing an attribute, for
- * pressing "Сохранить" on the action bar, and for answering "Сохранить" in the
- * data-loss question, which sends the save with the refusal flags and keeps
- * what the section answered.
- */
+// Its buttons: an edit, "Сохранить" on the bar, and "Сохранить" in the
+// data-loss question, which sends the refusal flags and keeps the answer.
 const editorStub = defineComponent({
   props: {
     modelValue: { type: Object, default: null },
@@ -142,14 +112,13 @@ const character = (status: Character["status"]): Character =>
     status,
   }) as unknown as Character;
 
-type RosterAnswer = Awaited<ReturnType<typeof gameApi.getCharacters>>;
+type RosterAnswer = Awaited<ReturnType<typeof characterApi.getCharacters>>;
 
-/** The roster read the section runs when the store holds none. */
 function serveRoster(refused: boolean) {
   const answer = refused
     ? { data: null, error: { status: 500, type: "", title: "", traceId: "" } }
     : { data: { resources: [], paging: null }, error: null };
-  vi.spyOn(gameApi, "getCharacters").mockResolvedValue(
+  vi.spyOn(characterApi, "getCharacters").mockResolvedValue(
     answer as unknown as RosterAnswer,
   );
 }
@@ -169,8 +138,6 @@ function mountSection(
     schema: { specifications: [STORED_SPEC], version: THE_VERSION },
   } as unknown as Game;
   store.characters = characters;
-  // The re-read behind the section is a double everywhere except where the
-  // question is what a refused read does to the page under it.
   if (!options.rereadForReal) {
     vi.spyOn(store, "loadGame").mockResolvedValue({ ok: true });
   }
@@ -184,7 +151,6 @@ function mountSection(
   return { wrapper, store };
 }
 
-/** The body of the single replacement the section sent. */
 const sentBody = (replace: ReturnType<typeof vi.spyOn>) =>
   replace.mock.calls.at(-1)?.[1] as {
     specifications: AttributeSpecification[];
@@ -201,10 +167,10 @@ const draftTitles = (wrapper: VueWrapper) =>
       .props("modelValue") as AttributeSchemaDraft
   ).specifications.map((s) => s.title);
 
-function serveReplacement(status?: number) {
+function serveReplacement(status?: number, title = "") {
   return vi.spyOn(gameApi, "replaceAttributeSchema").mockResolvedValue(
     status
-      ? { data: null, error: { status, type: "", title: "", traceId: "" } }
+      ? { data: null, error: { status, type: "", title, traceId: "" } }
       : ({
           data: { resource: { specifications: [], version: THE_VERSION + 1 } },
           error: null,
@@ -233,10 +199,7 @@ describe("saving the sheet", () => {
   });
 
   it("sends the version the draft was built on, not the one the details now hold", async () => {
-    // The information form one section up re-reads the game after its own save,
-    // and the details move under a draft nobody has touched. A version taken
-    // off them at that moment claims a sheet this draft was never written
-    // against, and the server accepts the replacement it was meant to refuse.
+    // Another section's save re-reads the game under an untouched draft.
     const replace = serveReplacement();
     const { wrapper, store } = mountSection();
     await flushPromises();
@@ -258,9 +221,7 @@ describe("saving the sheet", () => {
   });
 
   it("opens on the stored sheet with the identifiers the server gave it", async () => {
-    // A specification keeps the values characters wrote against it only while
-    // the save sends its id back; a draft built with fresh ids would empty
-    // every sheet in the game.
+    // Fresh ids would empty every sheet in the game.
     const { wrapper } = mountSection();
     await flushPromises();
 
@@ -271,9 +232,12 @@ describe("saving the sheet", () => {
   });
 });
 
+// The server words the conflict; the section says its words, not a copy.
+const CONFLICT = "Пока вы правили, схему сохранил кто-то другой";
+
 describe("a sheet somebody else has already changed", () => {
   it("says so in the section, keeps the draft and reads the sheet again", async () => {
-    serveReplacement(409);
+    serveReplacement(409, CONFLICT);
     const { wrapper, store } = mountSection();
     await flushPromises();
 
@@ -281,9 +245,7 @@ describe("a sheet somebody else has already changed", () => {
     await wrapper.find(".stub-save").trigger("click");
     await flushPromises();
 
-    expect(refusalOf(wrapper)).toBe(
-      "Схему только что изменили. Проверьте и сохраните снова",
-    );
+    expect(refusalOf(wrapper)).toBe(CONFLICT);
     expect(draftTitles(wrapper)).toEqual(["Мировоззрение"]);
     expect(store.loadGame).toHaveBeenCalledWith("the-game", {
       keepCurrentOnError: true,
@@ -291,9 +253,7 @@ describe("a sheet somebody else has already changed", () => {
   });
 
   it("carries the version that re-read brought when the lead saves again", async () => {
-    // Otherwise the second attempt repeats the version the first was refused
-    // for, and the reader is left pressing a button that can only refuse.
-    const replace = serveReplacement(409);
+    const replace = serveReplacement(409, CONFLICT);
     const { wrapper, store } = mountSection();
     await flushPromises();
 
@@ -318,10 +278,8 @@ describe("a sheet somebody else has already changed", () => {
   });
 
   it("keeps the game, the draft and the line when that re-read is refused", async () => {
-    // The shell draws the settings only while the details are in the store, so
-    // emptying them over a refusal of a read nobody asked for takes the page
-    // down, and the draft with it, in the one branch that promised to keep it.
-    serveReplacement(409);
+    // The shell draws the settings only while the game is in the store.
+    serveReplacement(409, CONFLICT);
     vi.spyOn(gameApi, "getGame").mockResolvedValue({
       data: null,
       error: { status: 500, type: "", title: "", traceId: "" },
@@ -335,13 +293,11 @@ describe("a sheet somebody else has already changed", () => {
 
     expect(store.game).not.toBeNull();
     expect(draftTitles(wrapper)).toEqual(["Мировоззрение"]);
-    expect(refusalOf(wrapper)).toBe(
-      "Схему только что изменили. Проверьте и сохраните снова",
-    );
+    expect(refusalOf(wrapper)).toBe(CONFLICT);
   });
 
   it("drops the line and the edit when the lead gives up on it", async () => {
-    serveReplacement(409);
+    serveReplacement(409, CONFLICT);
     const { wrapper } = mountSection();
     await flushPromises();
 
@@ -367,9 +323,6 @@ describe("the data-loss warning", () => {
   });
 
   it("is raised while the roster has not answered", async () => {
-    // The read of the roster was refused, so the section cannot tell whether
-    // there are filled sheets behind the set it is about to replace. The
-    // replacement is not reversible, so not knowing is a reason to ask.
     const { wrapper } = mountSection([], { rosterRefused: true });
     await flushPromises();
 
@@ -378,10 +331,8 @@ describe("the data-loss warning", () => {
     );
   });
 
-  it("is not raised by an application that was declined", async () => {
-    // A declined application never entered the game, so there is no filled
-    // sheet behind it to lose.
-    const { wrapper } = mountSection([character("Declined")]);
+  it("is not raised by a roster that answered with nobody", async () => {
+    const { wrapper } = mountSection([]);
     await flushPromises();
 
     expect(wrapper.find(".editor-stub").attributes("data-has-characters")).toBe(
@@ -390,31 +341,19 @@ describe("the data-loss warning", () => {
   });
 });
 
-/**
- * How a save of the sheet is reported.
- *
- * Nothing on this section moves when one goes through: the table under the
- * editor holds the rows it held before, the page stays where it was, and for
- * that reason the save used to be announced by a message in the corner. The
- * answer belongs to the editor's own button instead, and the section is what
- * works out whether to draw it - `saved` is the whole of what it hands over.
- *
- * What each test catches, given that a button reading "Сохранить" forever
- * looks perfectly normal:
- *  - remember() left out of save(): the button never answers;
- *  - remember() above the refusal return: a save the server threw out reads as
- *    a save that happened;
- *  - the snapshot taken of what was sent rather than of the draft the re-read
- *    rebuilt: the button goes back to "Сохранить" over a sheet nobody touched,
- *    the moment the server normalises anything;
- *  - a snapshot that never moves again: the button stays "Сохранено" over a
- *    draft the lead has since rewritten;
- *  - the toast put back beside the button: one save announced twice.
- */
+describe("the section of the character sheet", () => {
+  it("is titled by the glossary's name of the sheet", async () => {
+    const { wrapper } = mountSection();
+    await flushPromises();
+
+    expect(wrapper.get("h2").text()).toBe("Схема атрибутов");
+  });
+});
+
+// The editor's own button answers a save; `saved` is all the section hands it.
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
 
-/** What the section tells the editor about the draft under it. */
 const savedFlag = (wrapper: VueWrapper) =>
   wrapper.find(".editor-stub").attributes("data-saved");
 
@@ -470,7 +409,7 @@ describe("reporting a save of the sheet", () => {
   });
 
   it("does not call it saved when the server refuses the version", async () => {
-    serveReplacement(409);
+    serveReplacement(409, CONFLICT);
     const { wrapper } = mountSection();
     await flushPromises();
 
@@ -482,14 +421,7 @@ describe("reporting a save of the sheet", () => {
   });
 });
 
-/**
- * The save the data-loss question sends.
- *
- * The question prints a refusal in itself and closes on success alone, so the
- * section hands it the answer and says nothing of its own: a line under the
- * editor or a plate in the corner would say the same refusal a second time,
- * beside the window that already says it.
- */
+// The question prints its own refusal, so the section says nothing of its own.
 describe("a save sent from the data-loss question", () => {
   beforeEach(() => {
     [...toast.toasts.value].forEach((t) => toast.dismiss(t.id));
@@ -511,7 +443,7 @@ describe("a save sent from the data-loss question", () => {
   });
 
   it("hands the refusal by version to the window and keeps the draft", async () => {
-    serveReplacement(409);
+    serveReplacement(409, CONFLICT);
     const { wrapper, store } = mountSection([character("Active")]);
     await flushPromises();
 
@@ -530,8 +462,7 @@ describe("a save sent from the data-loss question", () => {
   });
 
   it("hands any other refusal to the window without a plate", async () => {
-    // A 400 and not a 5xx: the section keeps quiet about a 5xx on either path,
-    // and only a refusal it would otherwise put on a plate tells the two apart.
+    // A 400: a refusal the section would otherwise plate tells the paths apart.
     serveReplacement(400);
     const { wrapper } = mountSection([character("Active")]);
     await flushPromises();

@@ -1,347 +1,33 @@
 using System;
-using System.Collections.Generic;
-using System.Linq;
 using System.Net;
-using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Configuration;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Identity;
 using DM.Domain.Game.Authorization;
-using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.PostReviews;
-using DM.Testing.Dsl;
-using DM.Testing;
-using DM.Testing.Markup;
+using DM.Domain.Game.Tests.Dsl;
 using AwesomeAssertions;
-using FluentValidation;
-using FluentValidation.Results;
 using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostReviews;
 
-public class PostReviewServiceShould : UnitTestBase
+/// <summary>
+/// Reading a review and removing one: a review is only as readable as its post,
+/// and a removal records whose hand it was.
+/// </summary>
+public class PostReviewServiceShould : PostReviewServiceTestBase
 {
-    private readonly IValidator<CreatePostReview> _createValidator;
-    private readonly IValidator<UpdatePostReview> _updateValidator;
-    private readonly IIntentionManager _intentionManager;
-    private readonly IPostReviewRepository _repository;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly PostReviewService _service;
-    private readonly Guid _currentUserId;
-
-    public PostReviewServiceShould()
-    {
-        _createValidator = Mock<IValidator<CreatePostReview>>();
-        _createValidator.ValidateAsync(Arg.Any<CreatePostReview>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult());
-
-        _updateValidator = Mock<IValidator<UpdatePostReview>>();
-        _updateValidator.ValidateAsync(Arg.Any<UpdatePostReview>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult());
-
-        _intentionManager = Mock<IIntentionManager>();
-
-        _repository = Mock<IPostReviewRepository>();
-
-        _currentUserId = Guid.NewGuid();
-
-        // Past probation by default. Zero is the newbie answer, and every case
-        // about a newbie says so for itself; leaving it as the default made the
-        // probation rule fire in cases that are not about it at all.
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-
-        // Nothing reviewed by default, as the posts and games of a fresh case are.
-        Reviewed();
-        RecentlyReviewedGames();
-
-        _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
-
-        _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Create().Returns(Guid.NewGuid());
-
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        _service = new PostReviewService(
-            _createValidator,
-            _updateValidator,
-            _intentionManager,
-            _repository,
-            _identityProvider,
-            _guidFactory,
-            _dateTimeProvider,
-            new TagNamesAsTyped());
-    }
-
-    #region Create Tests
-
-    [Fact]
-    public async Task AuthorizeCreateAction()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-
-        SetupSuccessfulCreate(postId, postAuthorId, gameId);
-
-        await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        _intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Create);
-    }
-
-    [Fact]
-    public async Task ThrowNotFoundWhenPostDoesNotExist()
-    {
-        var postId = Guid.NewGuid();
-        _repository.GetPostInfoAsync(postId, _currentUserId).Returns((PostInfo?)null);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-
-        var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.NotFound);
-    }
-
-    [Fact]
-    public async Task ThrowForbiddenWhenReviewingOwnPost()
-    {
-        var postId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-        var postInfo = new PostInfo { AuthorId = _currentUserId, GameId = gameId };
-
-        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-
-        var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task ThrowForbiddenWhenNewbieTryingToCreateNonNeutralReview()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-        var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
-
-        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(50); // Newbie
-
-        var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-    }
-
-    [Fact]
-    public async Task AllowNewbieToCreateNeutralReview()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-        var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
-        var expectedReview = new PostReview { Id = Guid.NewGuid(), PostId = postId };
-
-        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(50); // Newbie
-        Reviewed();
-        RecentlyReviewedGames();
-        _repository.CreateAsync(Arg.Any<CreatePostReviewEntity>(), Arg.Any<int>()).Returns(expectedReview);
-
-        var result = await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Neutral });
-
-        result.Should().NotBeNull();
-    }
-
-    [Fact]
-    public async Task ThrowConflictWhenReviewAlreadyExists()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-        var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
-
-        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-        Reviewed(postId);
-        RecentlyReviewedGames();
-
-        var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Conflict);
-    }
-
-    /// <summary>
-    /// The three-day window is a conflict with what the rater did in the game,
-    /// not a rate limit: the page that offered the form did not know of the
-    /// review written since, and the reader is told the rule in its own words.
-    /// </summary>
-    [Fact]
-    public async Task ThrowConflictWithTheRuleWhenCooldownNotExpired()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-        var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
-
-        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-        Reviewed();
-        RecentlyReviewedGames(gameId);
-
-        var act = async () => await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Conflict &&
-                        e.Message == "Оценивать посты в одной игре можно раз в три дня");
-    }
-
-    /// <summary>
-    /// The post is looked up as the rater, not as nobody.
-    /// </summary>
-    /// <remarks>
-    /// Room access is the only thing standing between a rating and a post in a
-    /// private room, and it is applied where the post is read. Reading it without
-    /// saying who is asking let anybody who learned an identifier move its
-    /// author's quality rating from outside the game.
-    /// </remarks>
-    [Fact]
-    public async Task ReadThePostAsTheRaterSoRoomAccessApplies()
-    {
-        var postId = Guid.NewGuid();
-        SetupSuccessfulCreate(postId, Guid.NewGuid(), Guid.NewGuid());
-
-        await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        await _repository.Received(1).GetPostInfoAsync(postId, _currentUserId);
-    }
-
-    /// <summary>
-    /// The counter the post author is owed rides on the call that writes the
-    /// review, and is not a write of its own.
-    /// </summary>
-    /// <remarks>
-    /// QualityRating is stored and not summed: two writes meant two commits, and
-    /// a refusal between them left the profile carrying a review that does not
-    /// exist with nothing to recompute it from. The repository takes the delta as
-    /// an argument now, so the pair cannot come apart above it — what it does with
-    /// them is asserted against Postgres in PostReviewRepositoryShould.
-    /// </remarks>
-    [Fact]
-    public async Task UpdateUserQualityRatingOnPositiveReview()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-
-        SetupSuccessfulCreate(postId, postAuthorId, gameId);
-
-        await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Positive });
-
-        await _repository.Received(1).CreateAsync(
-            Arg.Is<CreatePostReviewEntity>(e => e.PostAuthorId == postAuthorId), 1);
-    }
-
-    [Fact]
-    public async Task UpdateUserQualityRatingOnNegativeReview()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-
-        SetupSuccessfulCreate(postId, postAuthorId, gameId, ReviewSign.Negative);
-
-        await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Negative });
-
-        await _repository.Received(1).CreateAsync(
-            Arg.Is<CreatePostReviewEntity>(e => e.PostAuthorId == postAuthorId), -1);
-    }
-
-    [Fact]
-    public async Task NotUpdateUserQualityRatingOnNeutralReview()
-    {
-        var postId = Guid.NewGuid();
-        var postAuthorId = Guid.NewGuid();
-        var gameId = Guid.NewGuid();
-
-        SetupSuccessfulCreate(postId, postAuthorId, gameId, ReviewSign.Neutral);
-
-        await _service.CreateAsync(new CreatePostReview { PostId = postId, Sign = ReviewSign.Neutral });
-
-        await _repository.Received(1).CreateAsync(Arg.Any<CreatePostReviewEntity>(), 0);
-    }
-
-    #endregion
-
-    #region Reviewable Tests
-
-    /// <summary>
-    /// The flag rides on every page of posts, so a guest, whom the intention
-    /// already refuses, costs no query at all.
-    /// </summary>
-    [Fact]
-    public async Task AnswerAGuestWithoutAskingTheDatabase()
-    {
-        _intentionManager.IsAllowed(PostReviewIntention.Create).Returns(false);
-
-        var result = await _service.ReviewableAsync([new ReviewCandidate(Guid.NewGuid(), Guid.NewGuid(), Guid.NewGuid())]);
-
-        result.Should().BeEmpty();
-        await _repository.DidNotReceiveWithAnyArgs().SelectReviewedPostIdsAsync(default, default!);
-        await _repository.DidNotReceiveWithAnyArgs().SelectGamesReviewedSinceAsync(default, default!, default);
-    }
-
-    /// <summary>
-    /// One page, every rule of the write, and two queries for all of it: the
-    /// rater's own post, a post he rated, a post of a game he rated in during the
-    /// window, and the one post left that he may rate.
-    /// </summary>
-    [Fact]
-    public async Task JudgeAPageOfPostsByTheRulesOfTheWriteInTwoQueries()
-    {
-        _intentionManager.IsAllowed(PostReviewIntention.Create).Returns(true);
-        var game = Guid.NewGuid();
-        var coolingGame = Guid.NewGuid();
-        var own = new ReviewCandidate(Guid.NewGuid(), _currentUserId, game);
-        var rated = new ReviewCandidate(Guid.NewGuid(), Guid.NewGuid(), game);
-        var cooling = new ReviewCandidate(Guid.NewGuid(), Guid.NewGuid(), coolingGame);
-        var open = new ReviewCandidate(Guid.NewGuid(), Guid.NewGuid(), game);
-        Reviewed(rated.PostId);
-        RecentlyReviewedGames(coolingGame);
-
-        var result = await _service.ReviewableAsync([own, rated, cooling, open]);
-
-        result.Should().BeEquivalentTo([open.PostId]);
-        await _repository.Received(1).SelectReviewedPostIdsAsync(_currentUserId, Arg.Any<IReadOnlyCollection<Guid>>());
-        await _repository.Received(1).SelectGamesReviewedSinceAsync(_currentUserId,
-            Arg.Any<IReadOnlyCollection<Guid>>(), Arg.Any<DateTimeOffset>());
-    }
-
-    #endregion
-
-    #region Get Tests
-
     [Fact]
     public async Task ThrowNotFoundWhenReviewDoesNotExist()
     {
         var postId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
         ReachablePost(postId);
-        _repository.GetAsync(reviewId).Returns((PostReview?)null);
+        repository.GetAsync(reviewId).Returns((PostReview?)null);
 
-        var act = async () => await _service.GetAsync(postId, reviewId);
+        var act = async () => await service.GetAsync(postId, reviewId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -354,9 +40,9 @@ public class PostReviewServiceShould : UnitTestBase
         var reviewId = Guid.NewGuid();
         var review = new PostReview { Id = reviewId, PostId = postId };
         ReachablePost(postId);
-        _repository.GetAsync(reviewId).Returns(review);
+        repository.GetAsync(reviewId).Returns(review);
 
-        var result = await _service.GetAsync(postId, reviewId);
+        var result = await service.GetAsync(postId, reviewId);
 
         result.Should().Be(review);
     }
@@ -364,24 +50,18 @@ public class PostReviewServiceShould : UnitTestBase
     /// <summary>
     /// A review is only as readable as the post it is about.
     /// </summary>
-    /// <remarks>
-    /// The read used to go by review identifier alone, while the create path
-    /// next to it scopes its post read by room access. So the body of a review
-    /// on a post in a private room — and with it the post author and the game —
-    /// came back to anybody holding the identifier.
-    /// </remarks>
     [Fact]
     public async Task RefuseAReviewOfAPostTheReaderCannotOpen()
     {
         var postId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
-        _repository.GetPostInfoAsync(postId, _currentUserId).Returns((PostInfo?)null);
+        repository.GetPostInfoAsync(postId, currentUserId).Returns((PostInfo?)null);
 
-        var act = async () => await _service.GetAsync(postId, reviewId);
+        var act = async () => await service.GetAsync(postId, reviewId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
-        await _repository.DidNotReceive().GetAsync(reviewId);
+        await repository.DidNotReceive().GetAsync(reviewId);
     }
 
     /// <summary>
@@ -393,225 +73,17 @@ public class PostReviewServiceShould : UnitTestBase
         var postId = Guid.NewGuid();
         var reviewId = Guid.NewGuid();
         ReachablePost(postId);
-        _repository.GetAsync(reviewId).Returns(new PostReview { Id = reviewId, PostId = Guid.NewGuid() });
+        repository.GetAsync(reviewId).Returns(new PostReview { Id = reviewId, PostId = Guid.NewGuid() });
 
-        var act = async () => await _service.GetAsync(postId, reviewId);
+        var act = async () => await service.GetAsync(postId, reviewId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
     private void ReachablePost(Guid postId) =>
-        _repository.GetPostInfoAsync(postId, _currentUserId)
+        repository.GetPostInfoAsync(postId, currentUserId)
             .Returns(new PostInfo { AuthorId = Guid.NewGuid(), GameId = Guid.NewGuid() });
-
-    #endregion
-
-    #region Update Tests
-
-    [Fact]
-    public async Task AuthorizeEditAction()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = new PostReview
-        {
-            Id = reviewId,
-            Author = new GeneralUser { UserId = _currentUserId },
-            PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
-            Sign = ReviewSign.Neutral,
-            CreatedUtc = DateTimeOffset.UtcNow
-        };
-        _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
-
-        await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
-
-        _intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Edit, review);
-    }
-
-    [Fact]
-    public async Task ThrowForbiddenWhenEditWindowExpired()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = new PostReview
-        {
-            Id = reviewId,
-            Author = new GeneralUser { UserId = _currentUserId },
-            PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
-            Sign = ReviewSign.Neutral,
-            CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-16) // Past edit window
-        };
-        _repository.GetAsync(reviewId).Returns(review);
-
-        var act = async () => await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-    }
-
-    /// <summary>
-    /// The whole point of the edit: a review is a sign and the sentence under
-    /// it, and both reach storage.
-    /// </summary>
-    [Fact]
-    public async Task SaveTheEditedTextWithTheSign()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = EditableReview(reviewId);
-        _repository.GetAsync(reviewId).Returns(review);
-        UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
-            .Returns(review)
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
-                written = e;
-            });
-
-        await _service.UpdateAsync(new UpdatePostReview
-        {
-            ReviewId = reviewId,
-            Sign = ReviewSign.Negative,
-            Text = "Перечитал и передумал"
-        });
-
-        written.Should().NotBeNull();
-        written!.Sign.Should().Be(ReviewSign.Negative);
-        written.Text.Should().Be("Перечитал и передумал");
-        written.ModifiedByUserId.Should().Be(_currentUserId);
-    }
-
-    /// <summary>
-    /// An omitted field keeps what is stored: correcting a typo must not reset
-    /// the rating, and re-picking the sign must not blank the sentence.
-    /// </summary>
-    [Fact]
-    public async Task LeaveTheTextAloneWhenTheRequestDoesNotCarryIt()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = EditableReview(reviewId);
-        _repository.GetAsync(reviewId).Returns(review);
-        UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
-            .Returns(review)
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
-                written = e;
-            });
-
-        await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
-
-        written.Should().NotBeNull();
-        written!.Text.Should().BeNull();
-    }
-
-    /// <summary>
-    /// The body renders on the Comment surface, where [mod] is a green
-    /// moderator block. The create path unwraps it for an author below
-    /// Moderator; an edit that did not would be the way around that rule.
-    /// </summary>
-    [Fact]
-    public async Task UnwrapAModBlockAnOrdinaryAuthorPutInTheEditedText()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = EditableReview(reviewId);
-        _repository.GetAsync(reviewId).Returns(review);
-        UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
-            .Returns(review)
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
-                written = e;
-            });
-
-        await _service.UpdateAsync(new UpdatePostReview
-        {
-            ReviewId = reviewId,
-            Text = "[mod]Предупреждение[/mod]"
-        });
-
-        written!.Text.Should().Be("Предупреждение");
-    }
-
-    /// <summary>
-    /// Probation holds on the way out as well: a newbie publishes the neutral
-    /// review the form allows them, and an edit is not a second door to a plus.
-    /// </summary>
-    [Fact]
-    public async Task ThrowForbiddenWhenANewbieMovesTheirReviewOffNeutral()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = EditableReview(reviewId, ReviewSign.Neutral);
-        _repository.GetAsync(reviewId).Returns(review);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(10);
-
-        var act = async () => await _service.UpdateAsync(
-            new UpdatePostReview { ReviewId = reviewId, Sign = ReviewSign.Positive });
-
-        await act.Should().ThrowAsync<HttpException>()
-            .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
-        await _repository.DidNotReceive().UpdateAsync(Arg.Any<UpdatePostReviewEntity>());
-    }
-
-    /// <summary>
-    /// The same newbie may still fix the wording of what they wrote.
-    /// </summary>
-    [Fact]
-    public async Task LetANewbieEditTheTextOfTheirNeutralReview()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = EditableReview(reviewId, ReviewSign.Neutral);
-        _repository.GetAsync(reviewId).Returns(review);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(10);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
-
-        await _service.UpdateAsync(new UpdatePostReview
-        {
-            ReviewId = reviewId,
-            Sign = ReviewSign.Neutral,
-            Text = "Поправил опечатку"
-        });
-
-        await _repository.Received(1).UpdateAsync(Arg.Any<UpdatePostReviewEntity>());
-    }
-
-    /// <summary>
-    /// An omitted sign keeps the stored one, and it is what tells the write that
-    /// the post author's counter does not move.
-    /// </summary>
-    /// <remarks>
-    /// The mirror of the text rule above. The counter is moved by the write, from
-    /// the row it locks — an edit that names no sign leaves the contribution of
-    /// that row exactly where it was — so a service that filled the field in with
-    /// the sign it had read would turn every typo correction into a counter move
-    /// computed from a state somebody else may already have changed.
-    /// </remarks>
-    [Fact]
-    public async Task LeaveTheSignAloneWhenTheRequestDoesNotCarryIt()
-    {
-        var reviewId = Guid.NewGuid();
-        var review = EditableReview(reviewId);
-        _repository.GetAsync(reviewId).Returns(review);
-        UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
-            .Returns(review)
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
-                written = e;
-            });
-
-        await _service.UpdateAsync(new UpdatePostReview { ReviewId = reviewId, Text = "Поправил опечатку" });
-
-        written.Should().NotBeNull();
-        written!.Sign.Should().BeNull();
-    }
-
-    #endregion
-
-    #region Delete Tests
 
     [Fact]
     public async Task AuthorizeDeleteAction()
@@ -621,16 +93,16 @@ public class PostReviewServiceShould : UnitTestBase
         var review = new PostReview
         {
             Id = reviewId,
-            Author = new GeneralUser { UserId = _currentUserId },
+            Author = new GeneralUser { UserId = currentUserId },
             PostAuthor = new GeneralUser { UserId = postAuthorId },
             Sign = ReviewSign.Neutral
         };
-        _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
+        repository.GetAsync(reviewId).Returns(review);
+        repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
 
-        await _service.DeleteAsync(reviewId);
+        await service.DeleteAsync(reviewId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Delete, review);
+        intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Delete, review);
     }
 
     /// <summary>
@@ -648,21 +120,16 @@ public class PostReviewServiceShould : UnitTestBase
             PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
             Sign = ReviewSign.Negative
         };
-        _repository.GetAsync(reviewId).Returns(review);
+        repository.GetAsync(reviewId).Returns(review);
         UpdatePostReviewEntity? written = null;
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>())
-            .Returns(review)
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdatePostReviewEntity>(0);
-                written = e;
-            });
+        repository.UpdateAsync(Arg.Do<UpdatePostReviewEntity>(e => written = e))
+            .Returns(review);
 
-        await _service.DeleteAsync(reviewId);
+        await service.DeleteAsync(reviewId);
 
         written.Should().NotBeNull();
         written!.IsRemoved.Should().BeTrue();
-        written.DeletedByUserId.Should().Be(_currentUserId);
+        written.DeletedByUserId.Should().Be(currentUserId);
         written.DeletedUtc.Should().NotBeNull();
     }
 
@@ -678,89 +145,17 @@ public class PostReviewServiceShould : UnitTestBase
         var review = new PostReview
         {
             Id = reviewId,
-            Author = new GeneralUser { UserId = _currentUserId },
+            Author = new GeneralUser { UserId = currentUserId },
             PostAuthor = new GeneralUser { UserId = postAuthorId },
             Sign = ReviewSign.Positive,
             CreatedUtc = DateTimeOffset.UtcNow.AddDays(-30)
         };
-        _repository.GetAsync(reviewId).Returns(review);
-        _repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
+        repository.GetAsync(reviewId).Returns(review);
+        repository.UpdateAsync(Arg.Any<UpdatePostReviewEntity>()).Returns(review);
 
-        await _service.DeleteAsync(reviewId);
+        await service.DeleteAsync(reviewId);
 
-        await _repository.Received(1).UpdateAsync(
+        await repository.Received(1).UpdateAsync(
             Arg.Is<UpdatePostReviewEntity>(e => e.IsRemoved == true));
     }
-
-    #endregion
-
-    #region CanEdit Tests
-
-    [Fact]
-    public void ReturnTrueWhenWithinEditWindow()
-    {
-        var review = new PostReview { CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-5) };
-
-        var result = _service.CanEdit(review);
-
-        result.Should().BeTrue();
-    }
-
-    [Fact]
-    public void ReturnFalseWhenOutsideEditWindow()
-    {
-        // The window is the quarter of an hour a post and a comment give their
-        // author, not the day the sibling review entities used to give this one.
-        var review = new PostReview { CreatedUtc = DateTimeOffset.UtcNow.AddMinutes(-16) };
-
-        var result = _service.CanEdit(review);
-
-        result.Should().BeFalse();
-    }
-
-    #endregion
-
-    /// <summary>
-    /// A review of the current user, published just now, so the edit window is
-    /// open and the only thing under test is what the update itself does.
-    /// </summary>
-    private PostReview EditableReview(Guid reviewId, ReviewSign sign = ReviewSign.Positive) => new()
-    {
-        Id = reviewId,
-        Author = new GeneralUser { UserId = _currentUserId },
-        PostAuthor = new GeneralUser { UserId = Guid.NewGuid() },
-        Sign = sign,
-        CreatedUtc = DateTimeOffset.UtcNow
-    };
-
-    private void SetupSuccessfulCreate(Guid postId, Guid postAuthorId, Guid gameId, ReviewSign sign = ReviewSign.Positive)
-    {
-        var postInfo = new PostInfo { AuthorId = postAuthorId, GameId = gameId };
-        var expectedReview = new PostReview
-        {
-            Id = Guid.NewGuid(),
-            PostId = postId,
-            Sign = sign,
-            PostAuthor = new GeneralUser { UserId = postAuthorId }
-        };
-
-        _repository.GetPostInfoAsync(postId, _currentUserId).Returns(postInfo);
-        _repository.GetUserPostCountAsync(_currentUserId).Returns(200);
-        Reviewed();
-        RecentlyReviewedGames();
-        _repository.CreateAsync(Arg.Any<CreatePostReviewEntity>(), Arg.Any<int>()).Returns(expectedReview);
-    }
-
-    /// <summary>The posts among the asked ones the rater has a review of.</summary>
-    private void Reviewed(params Guid[] postIds) =>
-        _repository.SelectReviewedPostIdsAsync(_currentUserId, Arg.Any<IReadOnlyCollection<Guid>>())
-            .Returns(callInfo => (IReadOnlyCollection<Guid>)callInfo.Arg<IReadOnlyCollection<Guid>>()
-                .Where(postIds.Contains).ToArray());
-
-    /// <summary>The games among the asked ones the rater reviewed a post in since the cutoff.</summary>
-    private void RecentlyReviewedGames(params Guid[] gameIds) =>
-        _repository.SelectGamesReviewedSinceAsync(_currentUserId, Arg.Any<IReadOnlyCollection<Guid>>(),
-                Arg.Any<DateTimeOffset>())
-            .Returns(callInfo => (IReadOnlyCollection<Guid>)callInfo.Arg<IReadOnlyCollection<Guid>>()
-                .Where(gameIds.Contains).ToArray());
 }

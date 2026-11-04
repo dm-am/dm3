@@ -1,12 +1,7 @@
 <script setup lang="ts">
 /**
- * "Входы", a section of the profile's "Модерация" tab: the address the account
- * is registered to, the addresses it signs in from, and the history of its
- * sign-ins, the last behind a reveal.
- *
- * The two lists are the site's tables (DataTable), as the games and blogs of
- * the profile are: they used to be tables of a look of their own, with grey
- * headers of another size and rules of another colour.
+ * "Входы" of the "Модерация" tab: the registered address, the addresses of the
+ * sign-ins and their history behind a reveal, in the site's tables.
  */
 import { computed, ref } from "vue";
 import { useExpandableSection } from "@/shared/lib/composables/useExpandableSection";
@@ -47,8 +42,7 @@ const historyRows = computed(() =>
   })),
 );
 
-// Login-history table — a content expandable section (unified reveal
-// animation + the page-wide "Развернуть/Свернуть все" toggle).
+// A content reveal: the shared animation and "Развернуть все".
 const showLoginHistory = ref(false);
 const historyZoneRef = ref<HTMLElement | null>(null);
 const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
@@ -60,7 +54,7 @@ const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
 </script>
 
 <template>
-  <section class="mod-section">
+  <section>
     <BlockTitle>Входы</BlockTitle>
 
     <StatLine v-if="email" label="Почта" :value="email" class="mod-ip_email" />
@@ -111,7 +105,7 @@ const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .mod-ip_email
   margin-bottom: $small
@@ -120,7 +114,7 @@ const { toggle: toggleLoginHistory, zoneBindings: historyZoneBindings } =
   margin: 0 0 $small
   color: $text
 
-// A reveal is pressed like a link of the text and answers the pointer as one.
+// A reveal is pressed like a link of the text.
 .mod-ip_history
   display: block
   margin-top: $small

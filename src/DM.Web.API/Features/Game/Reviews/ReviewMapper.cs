@@ -1,4 +1,3 @@
-using DM.Domain.Core.Dto;
 using DM.Domain.Game.Features.GameReviews;
 using DM.Domain.Game.Features.PostReviews;
 using DM.Web.API.Features.Community.Users;
@@ -11,18 +10,12 @@ namespace DM.Web.API.Features.Game.Reviews;
 /// Compile-time mapper for game and post reviews.
 /// </summary>
 /// <remarks>
-/// Both review texts carry the render-context envelope CommentMapper gives a
-/// comment, and for the same reason: the review editor asks for author_edit
-/// (getPostReviewForEdit, getGameReviewForEdit), and the converter honors it
-/// only when the envelope names the author. Without one the author's fetch
-/// degrades to Display, and Display is not the source: it turns "--" into
-/// &amp;ndash; and reading-only markup into HTML the editor cannot turn back
-/// into BBCode, so saving what the editor was handed rewrote the review.
-/// Any other viewer's author_edit still degrades to Display.
+/// The review texts name their author, as a comment does: the review editor reads
+/// AuthorEdit, the BBCode as saved, which nobody else is given.
 /// </remarks>
 [Mapper]
 [UseStaticMapper(typeof(BbTextMappers))]
-internal partial class ReviewMapper
+public partial class ReviewMapper
 {
     [UseMapper]
     private readonly UserMapper _userMapper;
@@ -38,7 +31,7 @@ internal partial class ReviewMapper
     public PostReviewDto ToPostReview(PostReview review)
     {
         var result = ToPostReviewCore(review);
-        AttachAuthor(result.Text, review.Author);
+        result.Text?.BindAuthor(review.Author?.UserId);
         return result;
     }
 
@@ -48,7 +41,7 @@ internal partial class ReviewMapper
     public GameReviewDto ToGameReview(GameReview review)
     {
         var result = ToGameReviewCore(review);
-        AttachAuthor(result.Text, review.Author);
+        result.Text?.BindAuthor(review.Author?.UserId);
         return result;
     }
 
@@ -56,19 +49,6 @@ internal partial class ReviewMapper
     private partial PostReviewDto ToPostReviewCore(PostReview review);
 
     [MapperRequiredMapping(RequiredMappingStrategy.Target)]
+    [MapperIgnoreTarget(nameof(GameReviewDto.Viewer))]
     private partial GameReviewDto ToGameReviewCore(GameReview review);
-
-    private static void AttachAuthor(BbText? text, GeneralUser? author)
-    {
-        if (text is null)
-        {
-            return;
-        }
-
-        text.Context = new RenderContextEnvelope
-        {
-            Surface = text.Surface,
-            PostAuthorUserId = author?.UserId
-        };
-    }
 }

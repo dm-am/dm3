@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -11,17 +12,7 @@ namespace DM.Architecture.Tests;
 /// <summary>
 /// The pattern a date is rendered with is written in one file.
 /// </summary>
-/// <remarks>
-/// It used to be a literal at the call site, seventeen times across nine files,
-/// and a literal repeated that many times is not a format but a coincidence: one
-/// copy in the events panel said "DD.MM" where its neighbour eleven lines down
-/// said "DD.MM.YYYY", and nothing in the file says which of the two the panel
-/// meant. Changing how the site spells a date meant finding all seventeen, and
-/// the eighteenth was written the day after.
-///
-/// Asserted against the sources rather than through a render: the defect is that
-/// the string exists in more than one place, which no rendered output shows.
-/// </remarks>
+/// <remarks>Asserted against the sources: the defect is the string in more than one place.</remarks>
 public class DateFormatSpellingShould
 {
     /// <summary>Where the patterns are declared, and the only file allowed to spell them.</summary>
@@ -35,12 +26,11 @@ public class DateFormatSpellingShould
     private static readonly Regex Literal = new(
         @"[""'`]DD\.MM[^""'`]*[""'`]", RegexOptions.Compiled);
 
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 
     [Fact]
     public void SpellTheDatePatternInOnePlace()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
         var client = Path.Combine(root, "src", "DM.Web.Client", "src");
 
         var home = Path.Combine(root, Home.Replace('/', Path.DirectorySeparatorChar));
@@ -60,9 +50,7 @@ public class DateFormatSpellingShould
 
             foreach (var line in File.ReadAllLines(path))
             {
-                // Prose describing the format is not the format. A comment naming
-                // it is how the reader learns what a call renders, and forbidding
-                // that would only move the duplication out of reach of this rule.
+                // A comment naming the format is prose, not the format.
                 var code = line.TrimStart();
                 if (code.StartsWith("//", StringComparison.Ordinal) ||
                     code.StartsWith("*", StringComparison.Ordinal) ||

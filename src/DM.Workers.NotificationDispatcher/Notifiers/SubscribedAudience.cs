@@ -14,14 +14,8 @@ internal static class SubscribedAudience
 {
     /// <summary>
     /// Everyone subscribed to the author or to one of the assistants under the
-    /// given setting, minus the team itself.
+    /// given setting, minus the team itself, which the team generators tell.
     /// </summary>
-    /// <remarks>
-    /// The team is left out because the generators aimed at the team tell them,
-    /// and a set is what the removal needs: a subscriber who follows both the
-    /// author and an assistant is one recipient, and the same person may sit on
-    /// both sides of the subtraction.
-    /// </remarks>
     /// <param name="subscriptions">Subscription repository</param>
     /// <param name="authorId">Author or master of the entity</param>
     /// <param name="assistantIds">Assistants of the entity</param>

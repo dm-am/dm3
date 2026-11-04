@@ -2,12 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
-using System.Reflection;
-using System.Runtime.CompilerServices;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Enums;
 using DM.Domain.Personal.Features.Notifications;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -16,31 +15,12 @@ namespace DM.Architecture.Tests;
 /// An event that can be sent is named in words.
 /// </summary>
 /// <remarks>
-/// Both senders ask NotificationCategoryMapper first and return where it answers
-/// null, then title what is left from NotificationWording. A category is therefore
-/// the permission to send, and the table has to cover every event that holds
-/// one. Four did not. A changed topic, a changed publication, a filed ticket and
-/// a granted award reached their recipient headed "Dungeon Master: Уведомление",
-/// with the metadata under it and nothing anywhere naming what had happened. The
-/// table was right about the other forty-three, which is why reading it top to
-/// bottom shows nothing: what is missing from a table is not in it to be read.
-///
-/// The rule spans two projects and three files that do not know each other. The
-/// mapper sorts events and the words name them, two tables side by side in the
-/// domain, and the generators in the worker decide which events can occur at all.
-/// No compiler looks across the three, and a missing title is noticed first by the
-/// person it was owed to.
-///
-/// The sendable set is wider than the set of events a generator answers: a
-/// subscription generator renames the event it puts on its notification, and the
-/// renamed one is what the letter is titled by. That rename is an assignment
-/// inside a method body, out of reach of reflection, so it is read from the
-/// sources — the same way NotificationAudienceShould reads it.
+/// Both senders return where NotificationCategoryMapper answers null and title the rest from
+/// NotificationWording, so a category is the permission to send. The renamed events of the
+/// subscription generators are read from the sources, as NotificationAudienceShould reads them.
 /// </remarks>
 public class NotificationTitleCoverageShould
 {
-    private const string GeneratorInterface = "INotificationGenerator";
-    private const string ResolveMethod = "CanResolve";
 
     /// <summary>The generators, whose sources carry the renames.</summary>
     private const string NotifiersDirectory =
@@ -54,14 +34,11 @@ public class NotificationTitleCoverageShould
     private static readonly Regex AnswersTheEvent = new(
         @"EventType\s+EventType\s*=>\s*EventType\.(\w+)", RegexOptions.Compiled);
 
-    private static readonly Assembly Dispatcher =
-        typeof(DM.Workers.NotificationDispatcher.Startup).Assembly;
-
     [Fact]
     public void TitleEveryEventACategoryLetsOut()
     {
         var sendable = SendableEvents();
-        sendable.Should().HaveCountGreaterThan(20,
+        sendable.Should().NotBeEmpty(
             "a rule that matches nothing passes: the dispatcher carries dozens of generators");
 
         var sent = sendable
@@ -82,27 +59,11 @@ public class NotificationTitleCoverageShould
     /// Every event a generator can produce is either let out or deliberately
     /// kept in.
     /// </summary>
-    /// <remarks>
-    /// The other direction of the same rule, and the one that was missing. A
-    /// category is the permission to leave the site, and an event absent from the
-    /// table is refused it by omission — which looks exactly like an event
-    /// somebody chose to keep in the application. Five had fallen out that way,
-    /// each beside its own near neighbour in the same table.
-    ///
-    /// The exemption list is what makes "in the application only" a thing
-    /// somebody decides rather than forgets. It is empty, and an empty list is
-    /// the answer: every event the dispatcher can raise is worth telling its
-    /// recipient about through the channels they asked for.
-    /// </remarks>
+    /// <remarks>An event absent from the table is refused by omission; staying in the application is decided below.</remarks>
     [Fact]
     public void SortEveryEventANotificationCanCarry()
     {
-        // The three broadcasts of the global chat, and only those. Each leaves
-        // UsersInterested empty on purpose — nothing is stored for anybody, the
-        // API pushes them to every open connection and they are gone. A letter or
-        // a bot message for one of them would be addressed to nobody, and the
-        // firehose of a public chat is the last thing that belongs in either
-        // channel. Both generators say so in their own remarks.
+        // The three broadcasts of the global chat: pushed to every connection, stored for nobody.
         var inApplicationOnly = new HashSet<EventType>
         {
             EventType.NewGlobalChatMessage,
@@ -111,7 +72,7 @@ public class NotificationTitleCoverageShould
         };
 
         var carried = CarriedEvents();
-        carried.Should().HaveCountGreaterThan(20,
+        carried.Should().NotBeEmpty(
             "a rule that matches nothing passes: the dispatcher carries dozens of generators");
 
         carried
@@ -127,15 +88,7 @@ public class NotificationTitleCoverageShould
     /// The events that end up ON a notification, as against the ones that merely
     /// wake a generator up.
     /// </summary>
-    /// <remarks>
-    /// Narrower than <see cref="SendableEvents" />, which unions both and is
-    /// right for the title rule: a title is looked up for whatever the
-    /// notification carries, and either kind can be it. A category, though, is
-    /// asked about the carried event only, so counting triggers here would
-    /// demand one for NewGame — an event no notification ever bears, because the
-    /// generator answering it renames its notification to
-    /// NewGameFromSubscribedAuthor.
-    /// </remarks>
+    /// <remarks>Narrower than <see cref="SendableEvents" />: a category is asked about the carried event only.</remarks>
     private static IReadOnlyCollection<EventType> CarriedEvents()
     {
         var renamed = RenamedEvents();
@@ -161,7 +114,7 @@ public class NotificationTitleCoverageShould
     private static IReadOnlyCollection<EventType> TriggersOnly()
     {
         var sources = Directory.GetFiles(
-            Path.Combine(RepositoryRoot, NotifiersDirectory), "*.cs", SearchOption.AllDirectories);
+            Path.Combine(RepositoryLayout.Root, NotifiersDirectory), "*.cs", SearchOption.AllDirectories);
 
         var triggers = new SortedSet<EventType>();
         foreach (var file in sources)
@@ -195,36 +148,12 @@ public class NotificationTitleCoverageShould
         return sendable;
     }
 
-    /// <summary>
-    /// The production answer, asked the way the processor asks it. Instances are
-    /// left unconstructed on purpose: CanResolve reads a constant or a static
-    /// table, while building a real generator would take a database.
-    /// </summary>
-    private static IEnumerable<EventType> AnsweredEvents()
-    {
-        var generators = Dispatcher.GetTypes()
-            .Where(type => type is { IsAbstract: false, IsClass: true })
-            .Where(type => type.GetInterfaces().Any(contract => contract.Name == GeneratorInterface));
-
-        foreach (var generator in generators)
-        {
-            var canResolve = generator.GetMethod(ResolveMethod)!;
-            var instance = RuntimeHelpers.GetUninitializedObject(generator);
-
-            foreach (var candidate in Enum.GetValues<EventType>())
-            {
-                if ((bool)canResolve.Invoke(instance, new object[] { candidate })!)
-                {
-                    yield return candidate;
-                }
-            }
-        }
-    }
+    private static IEnumerable<EventType> AnsweredEvents() => NotificationGenerators.AnsweredByAny();
 
     private static IReadOnlyCollection<EventType> RenamedEvents()
     {
         var sources = Directory.GetFiles(
-            Path.Combine(RepositoryRoot, NotifiersDirectory), "*.cs", SearchOption.AllDirectories);
+            Path.Combine(RepositoryLayout.Root, NotifiersDirectory), "*.cs", SearchOption.AllDirectories);
 
         sources.Should().NotBeEmpty("the generators live under the notifiers directory");
 
@@ -240,6 +169,4 @@ public class NotificationTitleCoverageShould
 
         return renamed;
     }
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

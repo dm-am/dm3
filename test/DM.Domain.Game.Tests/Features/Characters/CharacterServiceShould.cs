@@ -1,150 +1,53 @@
 using System;
-using System.Collections.Generic;
 using System.Net;
-using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Authorization;
-using DM.Domain.Core.Content;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
-using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
-using DM.Domain.Core.Identity;
-using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.Characters;
 using DM.Domain.Game.Features.GameAttributeSchemas;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.AttributeSchemas;
+using DM.Domain.Game.Features.Blacklists;
 using GameDto = DM.Domain.Game.Features.Games.Game;
-using DM.Domain.Game.Features.Subscriptions;
+using DM.Domain.Game.Tests.Dsl;
 using DM.Testing.Dsl;
-using DM.Testing;
 using AwesomeAssertions;
-using FluentValidation;
-using FluentValidation.Results;
 using NSubstitute;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
 
-public class CharacterServiceShould : UnitTestBase
+public class CharacterServiceShould : CharacterServiceTestBase
 {
-    private readonly IGameService _gameService;
-    private readonly IIntentionManager _intentionManager;
-    private readonly ICharacterRepository _repository;
-    private readonly IUnreadCountersRepository _unreadCountersRepository;
-    private readonly IEventProducer _producer;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly IGuidFactory _guidFactory;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly IBbTagNameCase _tagNames;
-    private readonly CharacterService _service;
-    private readonly Guid _currentUserId;
-
-    public CharacterServiceShould()
-    {
-        var createValidator = Mock<IValidator<CreateCharacter>>();
-        createValidator.ValidateAsync(Arg.Any<ValidationContext<CreateCharacter>>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult());
-
-        var updateValidator = Mock<IValidator<UpdateCharacter>>();
-        updateValidator.ValidateAsync(Arg.Any<ValidationContext<UpdateCharacter>>(), Arg.Any<CancellationToken>())
-            .Returns(new ValidationResult());
-
-        _gameService = Mock<IGameService>();
-        _intentionManager = Mock<IIntentionManager>();
-
-        _repository = Mock<ICharacterRepository>();
-
-        var attributeValueFiller = Mock<ICharacterAttributeValueFiller>();
-        attributeValueFiller.Fill(Arg.Any<IEnumerable<Character>>(), Arg.Any<GameDto>(), Arg.Any<Guid>())
-            .Returns(Task.CompletedTask);
-
-        _unreadCountersRepository = Mock<IUnreadCountersRepository>();
-        _unreadCountersRepository.IncrementAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>())
-            .Returns(Task.CompletedTask);
-
-        var subscriptionService = Mock<IGameSubscriptionService>();
-
-        _producer = Mock<IEventProducer>();
-        _producer.SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
-        _producer.SendAsync(Arg.Any<IEnumerable<EventType>>(), Arg.Any<Guid>()).Returns(Task.CompletedTask);
-
-        _currentUserId = Guid.NewGuid();
-        _identityProvider = Mock<IIdentityProvider>();
-        _identityProvider.Current.Returns(Identities.User(_currentUserId, UserRole.RegularUser));
-
-        _guidFactory = Mock<IGuidFactory>();
-        _guidFactory.Create().Returns(Guid.NewGuid());
-
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
-
-        // The text as it came, unless a test says otherwise.
-        _tagNames = Mock<IBbTagNameCase>();
-        _tagNames.ToLowerCase(Arg.Any<string?>(), Arg.Any<BbTagSet>()).Returns(ci => ci.ArgAt<string?>(0));
-
-        _service = new CharacterService(
-            createValidator,
-            updateValidator,
-            _gameService,
-            _intentionManager,
-            _repository,
-            attributeValueFiller,
-            _unreadCountersRepository,
-            subscriptionService,
-            _producer,
-            _identityProvider,
-            _guidFactory,
-            _dateTimeProvider,
-            _tagNames);
-    }
-
     /// <summary>
-    /// The save path writes the names of the tags of a value in the site markup
-    /// in lower case; a value of any other type is plain text and stays as typed.
+    /// The save path stores every value as typed, the markup of a BBCode value
+    /// with the case of its tag names (BBCODE_RENDERING.md, "Регистр имен").
     /// </summary>
     [Fact]
-    public async Task WriteTheTagNamesOfAMarkupValueInLowerCase()
+    public async Task StoreEveryValueAsTyped()
     {
         var gameId = Guid.NewGuid();
         var markupSpecId = Guid.NewGuid();
         var textSpecId = Guid.NewGuid();
-        _gameService.GetAsync(gameId).Returns(new GameDto
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Master" },
-            BlacklistedUsers = Array.Empty<BlacklistedUser>()
-        });
-        _repository.GetGameSchema(gameId).Returns(new GameAttributeSchema
-        {
-            Specifications = new[]
-            {
-                new AttributeSpecification { Id = markupSpecId, Title = "M", Type = AttributeSpecificationType.BbCode },
-                new AttributeSpecification { Id = textSpecId, Title = "T", Type = AttributeSpecificationType.Text }
-            }
-        });
-        _tagNames.ToLowerCase("[B]сила[/B]", BbTagSet.Common).Returns("[b]сила[/b]");
+        gameService.GetAsync(gameId).Returns(GameBuilder.Bare(gameId));
 
         CreateCharacterEntity? captured = null;
-        _repository.Create(Arg.Any<CreateCharacterEntity>())
-            .Returns(new Character { Id = Guid.NewGuid(), GameId = gameId })
-            .AndDoes(ci => captured = ci.ArgAt<CreateCharacterEntity>(0));
+        repository.Create(Arg.Do<CreateCharacterEntity>(e => captured = e))
+            .Returns(new Character { Id = Guid.NewGuid(), GameId = gameId });
 
-        await _service.CreateAsync(new CreateCharacter
+        await service.CreateAsync(new CreateCharacter
         {
             GameId = gameId,
             Name = "Герой",
             Attributes = new[]
             {
-                new Domain.Game.Features.Games.CharacterAttribute { Id = markupSpecId, Value = "[B]сила[/B]" },
-                new Domain.Game.Features.Games.CharacterAttribute { Id = textSpecId, Value = "[B]сила[/B]" }
+                new CharacterAttribute { Id = markupSpecId, Value = "[B]сила[/B]" },
+                new CharacterAttribute { Id = textSpecId, Value = "[B]сила[/B]" }
             }
         });
 
-        captured!.Attributes.Should().Contain(a => a.Id == markupSpecId && a.Value == "[b]сила[/b]");
-        captured.Attributes.Should().Contain(a => a.Id == textSpecId && a.Value == "[B]сила[/B]");
+        captured!.Attributes.Should().OnlyContain(a => a.Value == "[B]сила[/B]");
     }
 
     [Fact]
@@ -152,18 +55,13 @@ public class CharacterServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var createCharacter = new CreateCharacter { GameId = gameId, Name = "Test Character" };
-        var game = new GameDto
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
-            BlacklistedUsers = Array.Empty<BlacklistedUser>()
-        };
-        _gameService.GetAsync(gameId).Returns(game);
-        _repository.Create(Arg.Any<CreateCharacterEntity>()).Returns(new Character { Id = Guid.NewGuid() });
+        var game = GameBuilder.Bare(gameId);
+        gameService.GetAsync(gameId).Returns(game);
+        repository.Create(Arg.Any<CreateCharacterEntity>()).Returns(new Character { Id = Guid.NewGuid() });
 
-        await _service.CreateAsync(createCharacter);
+        await service.CreateAsync(createCharacter);
 
-        _intentionManager.Received(1).ThrowIfForbidden(GameIntention.CreateCharacter, game);
+        intentionManager.Received(1).ThrowIfForbidden(GameIntention.CreateCharacter, game);
     }
 
     [Fact]
@@ -172,18 +70,12 @@ public class CharacterServiceShould : UnitTestBase
         var gameId = Guid.NewGuid();
         var characterId = Guid.NewGuid();
         var createCharacter = new CreateCharacter { GameId = gameId, Name = "Test Character" };
-        var game = new GameDto
-        {
-            Id = gameId,
-            Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
-            BlacklistedUsers = Array.Empty<BlacklistedUser>()
-        };
-        _gameService.GetAsync(gameId).Returns(game);
-        _repository.Create(Arg.Any<CreateCharacterEntity>()).Returns(new Character { Id = characterId });
+        gameService.GetAsync(gameId).Returns(GameBuilder.Bare(gameId));
+        repository.Create(Arg.Any<CreateCharacterEntity>()).Returns(new Character { Id = characterId });
 
-        await _service.CreateAsync(createCharacter);
+        await service.CreateAsync(createCharacter);
 
-        await _producer.Received(1).SendAsync(EventType.NewCharacter, characterId);
+        await producer.Received(1).SendAsync(EventType.NewCharacter, characterId);
     }
 
     [Fact]
@@ -195,21 +87,21 @@ public class CharacterServiceShould : UnitTestBase
         {
             Id = gameId,
             Master = new GeneralUser { UserId = Guid.NewGuid(), Username = "Author" },
-            BlacklistedUsers = new[] { new BlacklistedUser { UserId = _currentUserId } }
+            BlacklistedUsers = new[] { new BlacklistedUser { UserId = currentUserId } }
         };
-        _gameService.GetAsync(gameId).Returns(game);
+        gameService.GetAsync(gameId).Returns(game);
         // The gate carries the same rule and would refuse in generic words; the
         // list is asked first so the refusal says why.
-        _intentionManager
+        intentionManager
             .When(manager => manager.ThrowIfForbidden(GameIntention.CreateCharacter, Arg.Any<GameDto>()))
             .Do(_ => throw new IntentionManagerException(
-                Identities.User(_currentUserId, UserRole.RegularUser).User, GameIntention.CreateCharacter));
+                Identities.User(currentUserId, UserRole.RegularUser).User, GameIntention.CreateCharacter));
 
-        var act = async () => await _service.CreateAsync(createCharacter);
+        var act = async () => await service.CreateAsync(createCharacter);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromGame);
-        await _repository.DidNotReceive().Create(Arg.Any<CreateCharacterEntity>());
+        await repository.DidNotReceive().Create(Arg.Any<CreateCharacterEntity>());
     }
 
     /// <summary>
@@ -222,11 +114,11 @@ public class CharacterServiceShould : UnitTestBase
     {
         var characterId = OwnCharacterInAGameThatListsTheOwner(status);
 
-        var act = async () => await _service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Other" });
+        var act = async () => await service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Other" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromGame);
-        await _repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
+        await repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
     }
 
     /// <summary>
@@ -240,9 +132,9 @@ public class CharacterServiceShould : UnitTestBase
     {
         var characterId = OwnCharacterInAGameThatListsTheOwner(status);
 
-        await _service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Other" });
+        await service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Other" });
 
-        await _repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
+        await repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
     }
 
     /// <summary>
@@ -253,18 +145,18 @@ public class CharacterServiceShould : UnitTestBase
     {
         var gameId = Guid.NewGuid();
         var characterId = Guid.NewGuid();
-        _repository.GetForUpdate(characterId).Returns(new CharacterToUpdate
+        repository.GetForUpdate(characterId).Returns(new CharacterToUpdate
         {
             Id = characterId,
             GameId = gameId,
-            AuthorId = _currentUserId,
+            AuthorId = currentUserId,
             Status = status,
             GameAssistantIds = Array.Empty<Guid>()
         });
-        _gameService.GetAsync(gameId).Returns(new GameDto
+        gameService.GetAsync(gameId).Returns(new GameDto
         {
             Id = gameId,
-            BlacklistedUsers = [new BlacklistedUser { UserId = _currentUserId }]
+            BlacklistedUsers = [new BlacklistedUser { UserId = currentUserId }]
         });
         return characterId;
     }
@@ -273,9 +165,9 @@ public class CharacterServiceShould : UnitTestBase
     public async Task ThrowNotFoundWhenCharacterDoesNotExist()
     {
         var characterId = Guid.NewGuid();
-        _repository.FindCharacter(characterId).Returns((Character?)null);
+        repository.FindCharacter(characterId).Returns((Character?)null);
 
-        var act = async () => await _service.GetAsync(characterId);
+        var act = async () => await service.GetAsync(characterId);
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -284,24 +176,17 @@ public class CharacterServiceShould : UnitTestBase
     /// <summary>
     /// An identifier nobody answers to is a 404, on every verb.
     /// </summary>
-    /// <remarks>
-    /// The read behind these two used to materialize with FirstAsync, so an
-    /// unknown character reached the caller as a server fault while the endpoint
-    /// documented 404. Fixed where it started rather than guarded at each call
-    /// site: the third caller had already grown a second query of its own to work
-    /// around exactly this.
-    /// </remarks>
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
     public async Task AnswerNotFoundWhenTheCharacterIsUnknown(bool deleting)
     {
         var characterId = Guid.NewGuid();
-        _repository.GetForUpdate(characterId).Returns((CharacterToUpdate?)null);
+        repository.GetForUpdate(characterId).Returns((CharacterToUpdate?)null);
 
         Func<Task> act = deleting
-            ? () => _service.DeleteAsync(characterId)
-            : () => _service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Any" });
+            ? () => service.DeleteAsync(characterId)
+            : () => service.UpdateAsync(new UpdateCharacter { CharacterId = characterId, Name = "Any" });
 
         await act.Should().ThrowAsync<HttpException>()
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
@@ -313,12 +198,12 @@ public class CharacterServiceShould : UnitTestBase
         var characterId = Guid.NewGuid();
         var updateCharacter = new UpdateCharacter { CharacterId = characterId, Name = "Updated Character" };
         var characterForUpdate = new CharacterToUpdate { Id = characterId };
-        _repository.GetForUpdate(characterId).Returns(characterForUpdate);
-        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+        repository.GetForUpdate(characterId).Returns(characterForUpdate);
+        repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
-        await _service.UpdateAsync(updateCharacter);
+        await service.UpdateAsync(updateCharacter);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.Edit, characterForUpdate);
+        intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.Edit, characterForUpdate);
     }
 
     [Fact]
@@ -336,28 +221,23 @@ public class CharacterServiceShould : UnitTestBase
         var game = new GameDto
         {
             Id = gameId,
-            Master = new GeneralUser { UserId = _currentUserId, Username = "Master" },
+            Master = new GeneralUser { UserId = currentUserId, Username = "Master" },
             Assistants = [],
             Players = []
         };
-        _gameService.GetAsync(gameId).Returns(game);
+        gameService.GetAsync(gameId).Returns(game);
 
         var characterForUpdate = new CharacterToUpdate
         {
             Id = characterId,
             GameId = gameId,
-            GameMasterId = _currentUserId
+            GameMasterId = currentUserId
         };
-        _repository.GetForUpdate(characterId).Returns(characterForUpdate);
+        repository.GetForUpdate(characterId).Returns(characterForUpdate);
 
         UpdateCharacterEntity? captured = null;
-        _repository.Update(Arg.Any<UpdateCharacterEntity>())
-            .Returns(new Character { Id = characterId })
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdateCharacterEntity>(0);
-                captured = e;
-            });
+        repository.Update(Arg.Do<UpdateCharacterEntity>(e => captured = e))
+            .Returns(new Character { Id = characterId });
 
         var updateCharacter = new UpdateCharacter
         {
@@ -365,17 +245,17 @@ public class CharacterServiceShould : UnitTestBase
             Name = "Updated",
             Attributes = new[]
             {
-                new Domain.Game.Features.Games.CharacterAttribute { Id = visibleSpecId, Value = "visible" }
+                new CharacterAttribute { Id = visibleSpecId, Value = "visible" }
             }
         };
 
-        await _service.UpdateAsync(updateCharacter);
+        await service.UpdateAsync(updateCharacter);
 
         captured.Should().NotBeNull();
         captured!.Attributes.Should().ContainSingle(a => a.Id == visibleSpecId && a.Value == "visible");
         captured.Attributes.Should().NotContain(a => a.Id == hiddenSpecId);
         // Lead can see hidden values -> no schema/stored lookup needed.
-        await _repository.DidNotReceive().GetGameSchema(Arg.Any<Guid>());
+        await repository.DidNotReceive().GetGameSchema(Arg.Any<Guid>());
     }
 
     [Fact]
@@ -397,7 +277,7 @@ public class CharacterServiceShould : UnitTestBase
             Assistants = [],
             Players = []
         };
-        _gameService.GetAsync(gameId).Returns(game);
+        gameService.GetAsync(gameId).Returns(game);
 
         var characterForUpdate = new CharacterToUpdate
         {
@@ -406,7 +286,7 @@ public class CharacterServiceShould : UnitTestBase
             AuthorId = authorId,
             GameMasterId = game.Master.UserId
         };
-        _repository.GetForUpdate(characterId).Returns(characterForUpdate);
+        repository.GetForUpdate(characterId).Returns(characterForUpdate);
 
         var schema = new GameAttributeSchema
         {
@@ -416,26 +296,21 @@ public class CharacterServiceShould : UnitTestBase
                 new AttributeSpecification { Id = hiddenSpecId, Title = "H", IsHidden = true }
             }
         };
-        _repository.GetGameSchema(gameId).Returns(schema);
+        repository.GetGameSchema(gameId).Returns(schema);
 
-        _repository.FindCharacter(characterId).Returns(new Character
+        repository.FindCharacter(characterId).Returns(new Character
         {
             Id = characterId,
             GameId = gameId,
             Attributes = new[]
             {
-                new Domain.Game.Features.Games.CharacterAttribute { Id = hiddenSpecId, Value = "secret" }
+                new CharacterAttribute { Id = hiddenSpecId, Value = "secret" }
             }
         });
 
         UpdateCharacterEntity? captured = null;
-        _repository.Update(Arg.Any<UpdateCharacterEntity>())
-            .Returns(new Character { Id = characterId })
-            .AndDoes(ci =>
-            {
-                var e = ci.ArgAt<UpdateCharacterEntity>(0);
-                captured = e;
-            });
+        repository.Update(Arg.Do<UpdateCharacterEntity>(e => captured = e))
+            .Returns(new Character { Id = characterId });
 
         var updateCharacter = new UpdateCharacter
         {
@@ -443,13 +318,13 @@ public class CharacterServiceShould : UnitTestBase
             Name = "Updated",
             Attributes = new[]
             {
-                new Domain.Game.Features.Games.CharacterAttribute { Id = visibleSpecId, Value = "visible" },
+                new CharacterAttribute { Id = visibleSpecId, Value = "visible" },
                 // Submitter tries to blank the hidden value they could not see.
-                new Domain.Game.Features.Games.CharacterAttribute { Id = hiddenSpecId, Value = string.Empty }
+                new CharacterAttribute { Id = hiddenSpecId, Value = string.Empty }
             }
         };
 
-        await _service.UpdateAsync(updateCharacter);
+        await service.UpdateAsync(updateCharacter);
 
         captured.Should().NotBeNull();
         captured!.Attributes.Should().Contain(a => a.Id == visibleSpecId && a.Value == "visible");
@@ -461,42 +336,37 @@ public class CharacterServiceShould : UnitTestBase
     {
         var characterId = Guid.NewGuid();
         var character = new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid() };
-        _repository.GetForUpdate(characterId).Returns(character);
-        _repository.Delete(characterId, _currentUserId).Returns(Task.CompletedTask);
+        repository.GetForUpdate(characterId).Returns(character);
+        repository.Delete(characterId, currentUserId).Returns(Task.CompletedTask);
 
-        await _service.DeleteAsync(characterId);
+        await service.DeleteAsync(characterId);
 
-        _intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.Delete, character);
+        intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.Delete, character);
         // The author of the removal travels with it: ISoftDeletable promises who deleted the
         // row, and the column stays empty unless the service hands the identity over.
-        await _repository.Received(1).Delete(characterId, _currentUserId);
+        await repository.Received(1).Delete(characterId, currentUserId);
     }
 
     /// <summary>
-    /// A field the caller may not set is refused, not dropped. The update asked
-    /// IsAllowed and, on a no, left the value out: the request came back 200 with
-    /// the character unchanged, which is exactly what a successful edit looks like.
-    /// The same shape guarded the privacy policy beside this flag, the closed and
-    /// attached flags of a forum topic and the text of a game post; each of those
-    /// is held by a test of its own, because one test for a shape leaves the other
-    /// three points free to go back to dropping in silence.
+    /// A field the caller may not set is refused, not dropped: a 200 with the
+    /// character unchanged is exactly what a successful edit looks like.
     /// </summary>
     [Fact]
     public async Task RefuseAnNpcFlagTheCallerMayNotSet()
     {
         var characterId = Guid.NewGuid();
-        _repository.GetForUpdate(characterId).Returns(
+        repository.GetForUpdate(characterId).Returns(
             new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid(), IsNpc = false });
-        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+        repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
-        await _service.UpdateAsync(new UpdateCharacter
+        await service.UpdateAsync(new UpdateCharacter
         {
             CharacterId = characterId,
             Name = "Updated",
             IsNpc = true
         });
 
-        _intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.EditMasterSettings);
+        intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.EditMasterSettings);
     }
 
     /// <summary>
@@ -507,18 +377,18 @@ public class CharacterServiceShould : UnitTestBase
     public async Task NotAskForMasterSettingsWhenTheNpcFlagIsUnchanged()
     {
         var characterId = Guid.NewGuid();
-        _repository.GetForUpdate(characterId).Returns(
+        repository.GetForUpdate(characterId).Returns(
             new CharacterToUpdate { Id = characterId, GameId = Guid.NewGuid(), IsNpc = true });
-        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+        repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
-        await _service.UpdateAsync(new UpdateCharacter
+        await service.UpdateAsync(new UpdateCharacter
         {
             CharacterId = characterId,
             Name = "Updated",
             IsNpc = true
         });
 
-        _intentionManager.DidNotReceive().ThrowIfForbidden(CharacterIntention.EditMasterSettings);
+        intentionManager.DidNotReceive().ThrowIfForbidden(CharacterIntention.EditMasterSettings);
     }
 
     /// <summary>
@@ -530,23 +400,23 @@ public class CharacterServiceShould : UnitTestBase
     public async Task RefuseAnAccessPolicyTheCallerMayNotSet()
     {
         var characterId = Guid.NewGuid();
-        _repository.GetForUpdate(characterId).Returns(
+        repository.GetForUpdate(characterId).Returns(
             new CharacterToUpdate
             {
                 Id = characterId,
                 GameId = Guid.NewGuid(),
                 AccessPolicy = CharacterAccessPolicy.NoAccess
             });
-        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+        repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
-        await _service.UpdateAsync(new UpdateCharacter
+        await service.UpdateAsync(new UpdateCharacter
         {
             CharacterId = characterId,
             Name = "Updated",
             AccessPolicy = CharacterAccessPolicy.EditAllowed
         });
 
-        _intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.EditPrivacySettings);
+        intentionManager.Received(1).ThrowIfForbidden(CharacterIntention.EditPrivacySettings);
     }
 
     /// <summary>
@@ -556,22 +426,22 @@ public class CharacterServiceShould : UnitTestBase
     public async Task NotAskForPrivacySettingsWhenTheAccessPolicyIsUnchanged()
     {
         var characterId = Guid.NewGuid();
-        _repository.GetForUpdate(characterId).Returns(
+        repository.GetForUpdate(characterId).Returns(
             new CharacterToUpdate
             {
                 Id = characterId,
                 GameId = Guid.NewGuid(),
                 AccessPolicy = CharacterAccessPolicy.EditAllowed
             });
-        _repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
+        repository.Update(Arg.Any<UpdateCharacterEntity>()).Returns(new Character { Id = characterId });
 
-        await _service.UpdateAsync(new UpdateCharacter
+        await service.UpdateAsync(new UpdateCharacter
         {
             CharacterId = characterId,
             Name = "Updated",
             AccessPolicy = CharacterAccessPolicy.EditAllowed
         });
 
-        _intentionManager.DidNotReceive().ThrowIfForbidden(CharacterIntention.EditPrivacySettings);
+        intentionManager.DidNotReceive().ThrowIfForbidden(CharacterIntention.EditPrivacySettings);
     }
 }

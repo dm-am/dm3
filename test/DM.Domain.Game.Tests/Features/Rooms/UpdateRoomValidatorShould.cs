@@ -2,23 +2,27 @@ using System;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Game.Features.Rooms;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Rooms;
 
-public class UpdateRoomValidatorShould : UnitTestBase
+public class UpdateRoomValidatorShould
 {
     private readonly UpdateRoomValidator validator = new();
 
-    [Fact]
-    public void PassForValidInput()
+    /// <summary>
+    /// One character is a title; the bound is the only other rule.
+    /// </summary>
+    [Theory]
+    [InlineData(1)]
+    [InlineData(RoomFieldLimits.TitleMaxLength)]
+    public void PassATitleFromOneCharacterToTheBound(int length)
     {
         var input = new UpdateRoom
         {
             RoomId = Guid.NewGuid(),
-            Title = "Tavern"
+            Title = new string('a', length)
         };
 
         var result = validator.TestValidate(input);
@@ -38,27 +42,30 @@ public class UpdateRoomValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    [Theory]
-    [InlineData(true)]
-    [InlineData(false)]
-    public void FailWhenAnEnumFieldIsNotInEnum(bool onType)
+    [Fact]
+    public void FailWhenTypeIsNotInEnum()
     {
         var input = new UpdateRoom
         {
             RoomId = Guid.NewGuid(),
-            Type = onType ? (RoomType)30000 : null,
-            AccessType = onType ? null : (RoomAccessType)30000
+            Type = (RoomType)30000
         };
 
         var result = validator.TestValidate(input);
-        if (onType)
+        result.ShouldHaveValidationErrorFor(r => r.Type).WithErrorMessage(ValidationError.Invalid);
+    }
+
+    [Fact]
+    public void FailWhenAccessTypeIsNotInEnum()
+    {
+        var input = new UpdateRoom
         {
-            result.ShouldHaveValidationErrorFor(r => r.Type).WithErrorMessage(ValidationError.Invalid);
-        }
-        else
-        {
-            result.ShouldHaveValidationErrorFor(r => r.AccessType).WithErrorMessage(ValidationError.Invalid);
-        }
+            RoomId = Guid.NewGuid(),
+            AccessType = (RoomAccessType)30000
+        };
+
+        var result = validator.TestValidate(input);
+        result.ShouldHaveValidationErrorFor(r => r.AccessType).WithErrorMessage(ValidationError.Invalid);
     }
 
     [Fact]
@@ -94,7 +101,7 @@ public class UpdateRoomValidatorShould : UnitTestBase
         var input = new UpdateRoom
         {
             RoomId = Guid.NewGuid(),
-            Title = new string('a', 101)
+            Title = new string('a', RoomFieldLimits.TitleMaxLength + 1)
         };
 
         var result = validator.TestValidate(input);

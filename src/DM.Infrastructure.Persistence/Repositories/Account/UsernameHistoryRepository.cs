@@ -1,18 +1,29 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using System.Threading;
 using System.Threading.Tasks;
 using DM.Domain.Account.Features.UsernameChange;
 using DM.Domain.Core.Users;
+using DM.Infrastructure.Persistence.Entities.Account;
 using Microsoft.EntityFrameworkCore;
-using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.UsernameHistory;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
 /// <inheritdoc />
 internal class UsernameHistoryRepository : IUsernameHistoryRepository
 {
+    internal static readonly Expression<Func<UsernameHistory, UsernameHistoryEntry>> Projection =
+        h => new UsernameHistoryEntry
+        {
+            UsernameHistoryId = h.UsernameHistoryId,
+            OldUsername = h.OldUsername,
+            NewUsername = h.NewUsername,
+            ChangedUtc = h.ChangedUtc,
+            ApprovedByUsername = h.ApprovedBy != null ? h.ApprovedBy.Username : null
+        };
+
     private readonly DmDbContext _dbContext;
 
     public UsernameHistoryRepository(DmDbContext dbContext)
@@ -26,14 +37,7 @@ internal class UsernameHistoryRepository : IUsernameHistoryRepository
         return await _dbContext.UsernameHistories
             .Where(h => h.UserId == userId)
             .OrderByDescending(h => h.ChangedUtc)
-            .Select(h => new UsernameHistoryEntry
-            {
-                UsernameHistoryId = h.UsernameHistoryId,
-                OldUsername = h.OldUsername,
-                NewUsername = h.NewUsername,
-                ChangedUtc = h.ChangedUtc,
-                ApprovedByUsername = h.ApprovedBy != null ? h.ApprovedBy.Username : null
-            })
+            .Select(Projection)
             .ToListAsync(ct);
     }
 
@@ -57,14 +61,7 @@ internal class UsernameHistoryRepository : IUsernameHistoryRepository
         return await _dbContext.UsernameHistories
             .Where(h => h.UserId == userId)
             .OrderByDescending(h => h.ChangedUtc)
-            .Select(h => new UsernameHistoryEntry
-            {
-                UsernameHistoryId = h.UsernameHistoryId,
-                OldUsername = h.OldUsername,
-                NewUsername = h.NewUsername,
-                ChangedUtc = h.ChangedUtc,
-                ApprovedByUsername = h.ApprovedBy != null ? h.ApprovedBy.Username : null
-            })
+            .Select(Projection)
             .FirstOrDefaultAsync(ct);
     }
 }

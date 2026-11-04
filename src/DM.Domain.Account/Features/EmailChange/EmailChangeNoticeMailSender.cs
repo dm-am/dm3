@@ -8,22 +8,17 @@ using Microsoft.Extensions.Options;
 namespace DM.Domain.Account.Features.EmailChange;
 
 /// <inheritdoc cref="IEmailChangeNoticeMailSender" />
-internal class EmailChangeNoticeMailSender : AccountMailSender, IEmailChangeNoticeMailSender
+internal class EmailChangeNoticeMailSender(
+    ITemplateRenderer renderer,
+    IMailSender mailSender,
+    IEmailAssetsProvider emailAssetsProvider,
+    IOptions<SiteAddressConfiguration> siteAddresses)
+    : AccountMailSender(renderer, mailSender, emailAssetsProvider, siteAddresses), IEmailChangeNoticeMailSender
 {
-    public EmailChangeNoticeMailSender(
-        ITemplateRenderer renderer,
-        IMailSender mailSender,
-        IEmailAssetsProvider emailAssetsProvider,
-        IOptions<SiteAddressConfiguration> siteAddresses)
-        : base(renderer, mailSender, emailAssetsProvider, siteAddresses)
-    {
-    }
-
     /// <inheritdoc />
     public Task SendRequested(string currentEmail, string newEmail)
     {
-        const string subject = "Dungeon Master: запрос на смену почты";
-        return Send(currentEmail, subject, new EmailChangeWarningViewModel(
+        return Deliver(currentEmail, "запрос на смену почты", new EmailChangeWarningViewModel(
             CurrentEmail: currentEmail,
             NewEmail: newEmail));
     }
@@ -31,8 +26,7 @@ internal class EmailChangeNoticeMailSender : AccountMailSender, IEmailChangeNoti
     /// <inheritdoc />
     public Task SendCompleted(string previousEmail, string newEmail)
     {
-        const string subject = "Dungeon Master: почта изменена";
-        return Send(previousEmail, subject, new EmailChangeCompletedViewModel(
+        return Deliver(previousEmail, "почта изменена", new EmailChangeCompletedViewModel(
             PreviousEmail: previousEmail,
             NewEmail: newEmail,
             SupportUrl: SiteLink("support?reason=access")));

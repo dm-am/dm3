@@ -24,7 +24,7 @@ namespace DM.Domain.Account.Features.Deactivation;
 /// <param name="Role">Role the account had</param>
 /// <param name="RegisteredUtc">When the account was registered</param>
 /// <param name="LastActivityUtc">When it was last seen, if it ever was</param>
-public record RemovedAccount(
+public record RemovedAccountRow(
     Guid UserId,
     string Username,
     string? Email,

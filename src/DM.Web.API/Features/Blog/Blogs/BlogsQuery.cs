@@ -18,12 +18,6 @@ public class BlogsQuery : PagingQuery
     /// <summary>
     /// Blog statuses to show, OR between them (Draft, Active, Closed). Empty = all.
     /// </summary>
-    /// <remarks>
-    /// Plural and repeatable, like <c>statuses</c> on the mirrored /v1/games. The
-    /// two lists took the same filter under two names and two encodings, and a
-    /// consumer that carried <c>status</c> over from here to there got a 200 and
-    /// the unfiltered set.
-    /// </remarks>
     public IReadOnlyCollection<ModuleStatus>? Statuses { get; set; }
 
     /// <summary>
@@ -34,7 +28,7 @@ public class BlogsQuery : PagingQuery
     public IReadOnlyCollection<PremoderationStatus>? PremoderationStatuses { get; set; }
 
     /// <summary>
-    /// Sort field: title, status, popularity, created (default), activated, closed
+    /// Sort field (default: created)
     /// </summary>
     public string? SortBy { get; set; }
 
@@ -52,10 +46,6 @@ public class BlogsQuery : PagingQuery
     /// <summary>
     /// Filter by host usernames - returns blogs where user is owner OR assistant (case-insensitive, OR logic)
     /// </summary>
-    /// <remarks>
-    /// Same name as on /v1/games. "Who runs it" and "who wrote it" are two
-    /// filters, so the hosts of a game are not <c>authorUsernames</c> either.
-    /// </remarks>
     public IReadOnlyCollection<string>? HostUsernames { get; set; }
 
     /// <summary>

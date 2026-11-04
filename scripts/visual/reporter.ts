@@ -4,7 +4,6 @@ import { join } from "path";
 
 interface Row {
   state: string;
-  project: string;
   status: string;
   differs: string[];
   error?: string;
@@ -31,7 +30,6 @@ export default class FramesReporter implements Reporter {
       differs.length === 0;
     this.rows.push({
       state: test.title,
-      project: test.parent.project()?.name ?? "",
       status: result.status,
       differs,
       error: unexplained
@@ -50,7 +48,7 @@ export default class FramesReporter implements Reporter {
         `\nstates taken: ${this.rows.filter((r) => r.status === "passed").length}, not reached: ${broken.length}`,
       );
       for (const r of broken)
-        console.log(`BROKEN   ${r.project.padEnd(8)} ${r.state}: ${r.error}`);
+        console.log(`BROKEN   ${r.state}: ${r.error}`);
       return;
     }
     const same = this.rows.filter((r) => r.status === "passed").length;
@@ -59,10 +57,10 @@ export default class FramesReporter implements Reporter {
       "",
       ...changed.map(
         (r) =>
-          `DIFFERS  ${r.project.padEnd(8)} ${r.state}: ${r.differs.join(", ")}`,
+          `DIFFERS  ${r.state}: ${r.differs.join(", ")}`,
       ),
       ...broken.map(
-        (r) => `BROKEN   ${r.project.padEnd(8)} ${r.state}: ${r.error}`,
+        (r) => `BROKEN   ${r.state}: ${r.error}`,
       ),
     ];
     mkdirSync(this.options.report, { recursive: true });

@@ -2,20 +2,6 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The offer to move the account's time zone to the device's.
- *
- * Nothing but the reader writes that zone: a login that moved it would let a
- * stolen session restamp the message warning about it. The gates here are about
- * the offer appearing when, and only when, it has something true to say — and
- * about it being asked once, because a question already answered is noise.
- *
- * The last four are about the press that failed. The offer leaves the screen
- * on its press, so a refusal used to end in one red line with no way back on
- * this device: the mark said the question was answered. Now a refusal takes
- * the mark off, and the refusal itself is said once - by the interceptor for
- * the statuses it announces, by this module for the rest.
- */
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -39,45 +25,30 @@ vi.mock("@/shared/lib/utils/timeZone", async () => {
   return { ...actual, deviceTimeZone: () => DEVICE };
 });
 
-const paging = {
-  postsPerPage: 10,
-  commentsPerPage: 10,
-  topicsPerPage: 10,
-  messagesPerPage: 10,
-  entitiesPerPage: 10,
-};
-
-/**
- * The account answers with this zone; null is the account that has none.
- *
- * Wrapped the way the API wraps a single resource. Answered bare, the stub let
- * through code that read the envelope as the answer and found no zone in it.
- */
-function accountKeeps(timeZoneId: string | null) {
+// Wrapped as the API wraps a single resource; an account with no zone comes
+// without the field, since the API leaves a null out.
+function accountKeeps(timeZoneId?: string) {
   vi.spyOn(personalApi, "getMyPreferences").mockResolvedValue({
-    data: { resource: { theme: Theme.Light, paging, timeZoneId } },
+    data: {
+      resource: {
+        theme: Theme.Light,
+        pageSize: 10,
+        ...(timeZoneId === undefined ? {} : { timeZoneId }),
+      },
+    },
     error: null,
   } as unknown as Awaited<ReturnType<typeof personalApi.getMyPreferences>>);
 }
 
 type Written = Awaited<ReturnType<typeof personalApi.updateMyPreferences>>;
 
-/** The account takes the zone. */
 function accountTakes() {
   return vi
     .spyOn(personalApi, "updateMyPreferences")
     .mockResolvedValue({ data: null, error: null } as Written);
 }
 
-/**
- * The account refuses the zone with this status and this title.
- *
- * Status 0 is a request that got no answer at all, the way the client spells
- * a dead connection. The interceptor is not on the path here - the api module
- * is stubbed - so "announced by the interceptor" is a question of the status
- * alone, which is how announcedByInterceptor answers it in the running client
- * too.
- */
+// Status 0 is a dead connection; the interceptor is off the path, so the status alone decides.
 function accountRefuses(status: number, title = "") {
   return vi.spyOn(personalApi, "updateMyPreferences").mockResolvedValue({
     data: null,
@@ -85,7 +56,6 @@ function accountRefuses(status: number, title = "") {
   } as Written);
 }
 
-/** Presses the offer and waits for the server's answer to land. */
 async function press() {
   const { toasts } = useToast();
   toasts.value[0].action?.();
@@ -104,23 +74,21 @@ async function run(signedIn = true) {
   return useToast().toasts.value;
 }
 
-describe("the time zone offer", () => {
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    localStorage.clear();
-    setAccountTimeZone(null);
-    const { toasts, dismiss } = useToast();
-    [...toasts.value].forEach((toast) => dismiss(toast.id));
-  });
+beforeEach(() => {
+  vi.restoreAllMocks();
+  localStorage.clear();
+  setAccountTimeZone(null);
+  const { toasts, dismiss } = useToast();
+  [...toasts.value].forEach((toast) => dismiss(toast.id));
+});
 
+describe("the time zone offer", () => {
   it("offers the device zone when the account keeps another one", async () => {
     accountKeeps("Europe/Moscow");
 
     const toasts = await run();
 
     expect(toasts).toHaveLength(1);
-    // The sentence names the setting rather than either zone, and the verb
-    // between the brackets is what the reader presses.
     expect(toasts[0].message).toBe(
       "Часовой пояс не совпадает с устройством, [синхронизировать]?",
     );
@@ -129,7 +97,7 @@ describe("the time zone offer", () => {
 
   // An account with no zone keeps UTC, which is a zone like any other here.
   it("speaks up for an account that names no zone at all", async () => {
-    accountKeeps(null);
+    accountKeeps();
 
     expect(await run()).toHaveLength(1);
   });
@@ -147,9 +115,6 @@ describe("the time zone offer", () => {
     expect(read).not.toHaveBeenCalled();
   });
 
-  // One press and the account keeps the zone this device is in. A reader who
-  // wants some other zone has the field in the settings; this is the answer for
-  // the one who moved.
   it("writes the device zone when the reader takes the offer", async () => {
     accountKeeps("Europe/Moscow");
     const write = accountTakes();
@@ -158,16 +123,10 @@ describe("the time zone offer", () => {
     const toasts = await press();
 
     expect(write).toHaveBeenCalledWith({ timeZoneId: DEVICE });
-    // A press that went through is the answer: the question stays closed on
-    // this device, and nothing is said about it - the offer is gone, and the
-    // zones now agree.
     expect(localStorage.getItem(ASKED_KEY)).toBe(DEVICE);
     expect(toasts.filter((toast) => toast.type !== "info")).toHaveLength(0);
   });
 
-  // A press the server refused is not an answer. The offer left the screen on
-  // the press, and with the mark still standing there was no second try on this
-  // device short of the settings page.
   it("asks again at the next start when the press was refused", async () => {
     accountKeeps("Europe/Moscow");
     accountRefuses(500);
@@ -182,8 +141,6 @@ describe("the time zone offer", () => {
     expect(await run()).toHaveLength(1);
   });
 
-  // One carrier per refusal: the interceptor has already spoken for these, and
-  // a second sentence in the corner would be the same failure told twice.
   it.each([0, 401, 429, 500])(
     "says nothing of its own about a refusal the interceptor announced (%i)",
     async (status) => {
@@ -197,8 +154,6 @@ describe("the time zone offer", () => {
     },
   );
 
-  // The statuses nobody else announces are this module's to say, in the
-  // server's own words when it had any, and naming the setting when it did not.
   it("relays the server's own sentence for a refusal nobody announced", async () => {
     accountKeeps("Europe/Moscow");
     accountRefuses(404, "Аккаунт не найден");
@@ -225,7 +180,6 @@ describe("the time zone offer", () => {
     ]);
   });
 
-  // The offer is not a question the reader has to answer twice.
   it("asks once per zone", async () => {
     accountKeeps("Europe/Moscow");
 
@@ -236,7 +190,6 @@ describe("the time zone offer", () => {
     expect(await run()).toHaveLength(0);
   });
 
-  // A device somewhere else is a new question, and it has not been answered.
   it("asks again when the device has moved somewhere else", async () => {
     accountKeeps("Europe/Moscow");
     localStorage.setItem(ASKED_KEY, "Asia/Tokyo");
@@ -245,22 +198,8 @@ describe("the time zone offer", () => {
   });
 });
 
-/**
- * The clock the page shows a signed-in reader's time by is the account's
- * (siteTime), and this is what hands it over: read from the preferences at the
- * start and at a sign-in, dropped at the sign-out, and kept on the device for
- * the first frame of the next visit.
- */
 describe("the zone of the account on the page", () => {
   const ZONE_KEY = "dm3-account-time-zone";
-
-  beforeEach(() => {
-    vi.restoreAllMocks();
-    localStorage.clear();
-    setAccountTimeZone(null);
-    const { toasts, dismiss } = useToast();
-    [...toasts.value].forEach((toast) => dismiss(toast.id));
-  });
 
   it("is the zone the preferences name", async () => {
     accountKeeps("Asia/Tokyo");
@@ -272,15 +211,13 @@ describe("the zone of the account on the page", () => {
   });
 
   it("is UTC for an account that names none, as the letters read it", async () => {
-    accountKeeps(null);
+    accountKeeps();
 
     await run();
 
     expect(accountTimeZone.value).toBe("UTC");
   });
 
-  // The offer was answered on this device long ago, and the zone is still
-  // read: the page needs it whether there is anything to offer or not.
   it("is read when the offer has nothing to say", async () => {
     accountKeeps(DEVICE);
     localStorage.setItem(ASKED_KEY, DEVICE);

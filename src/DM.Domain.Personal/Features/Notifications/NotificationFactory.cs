@@ -8,7 +8,6 @@ internal class NotificationFactory : INotificationFactory
 {
     private readonly IGuidFactory _guidFactory;
 
-    /// <inheritdoc />
     public NotificationFactory(
         IGuidFactory guidFactory)
     {

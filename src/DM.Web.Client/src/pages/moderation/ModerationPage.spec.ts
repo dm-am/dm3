@@ -2,18 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The door of the moderation zone.
- *
- * A viewer below a section's role used to get the section's address opened and
- * a line "Страница доступна только ..." where its content would be, under a
- * heading of a page that was not his. What a reader may not open is not drawn:
- * the shell answers such an address with the 403 page of the site, whole, and
- * mounts the section only for those its row of the table admits.
- *
- * The routes here are the zone's own names over stand-in pages, so the role
- * each one asks for is the table's and not a copy of it.
- */
+// The shell answers a section above the viewer's role with the site's 403
+// page. The routes are the zone's own names, so the roles are the table's.
 import { describe, it, expect, afterEach, beforeEach } from "vitest";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
@@ -49,7 +39,7 @@ function zoneRouter() {
           {
             name: "moderation-bans",
             path: "bans",
-            meta: { title: "Последние баны" },
+            meta: { title: "Последние баны", requiresAuth: false },
             component: Section,
           },
           {
@@ -119,9 +109,11 @@ beforeEach(() => {
 
 describe("the door of the moderation zone", () => {
   const CASES: Array<[string, UserRole | null, string, boolean]> = [
-    ["a player", UserRole.RegularUser, "/moderation/bans", false],
-    ["a mentor", UserRole.Mentor, "/moderation/bans", false],
+    // The ban list is public: its route asks no sign-in, and no role either.
+    ["a guest", null, "/moderation/bans", true],
+    ["a player", UserRole.RegularUser, "/moderation/bans", true],
     ["a moderator", UserRole.Moderator, "/moderation/bans", true],
+    ["a player", UserRole.RegularUser, "/moderation/awards", false],
     ["a moderator", UserRole.Moderator, "/moderation/tags", false],
     ["a senior moderator", UserRole.SeniorModerator, "/moderation/tags", true],
     ["a moderator", UserRole.Moderator, "/moderation/awards/series/7", false],

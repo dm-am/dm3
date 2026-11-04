@@ -58,7 +58,6 @@ public interface ITwoFactorRemovalService
     /// Take the factor off every account whose waiting period has run out.
     /// </summary>
     /// <returns>How many were taken off</returns>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<int> RunDue(CancellationToken cancellationToken = default);
 
     /// <summary>

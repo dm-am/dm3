@@ -1,18 +1,7 @@
 /**
  * @vitest-environment jsdom
  */
-
-/**
- * The lift of a ban, which asks for its reason now.
- *
- * The ban list draws a lift as a decision of its own under the ban, "Снятие
- * бана от имя, дата", with the reason as its words; a lift without them would be
- * the one decision in the list nobody explained, so the server refuses it and
- * the form does not send it. The window stays the question the confirmation
- * was: whose ban goes, and that it goes now.
- */
 import { afterEach, beforeEach, describe, it, expect, vi } from "vitest";
-import { defineComponent, h } from "vue";
 import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import { setScrollContainer } from "@/shared/lib/scroll";
@@ -21,18 +10,12 @@ import LiftBanDialog from "./LiftBanDialog.vue";
 const liftBan = vi.hoisted(() => vi.fn());
 
 vi.mock("@/entities/moderation", () => ({
-  moderationApi: { liftBan },
+  banApi: { liftBan },
 }));
 
-vi.mock("vue-final-modal", () => ({
-  VueFinalModal: defineComponent({
-    name: "VueFinalModal",
-    setup:
-      (_props, { slots }) =>
-      () =>
-        h("div", { class: "vfm-content" }, slots.default?.()),
-  }),
-}));
+vi.mock("vue-final-modal", async () =>
+  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+);
 
 const OWNED = { ownsRefusal: true, ownsRateLimit: true };
 
@@ -90,7 +73,7 @@ describe("the lift ban dialog", () => {
     expect(shut(w)).toEqual([]);
   });
 
-  it("sends the reason, padding gone, and closes on success", async () => {
+  it("sends the reason as typed and closes on success", async () => {
     liftBan.mockResolvedValue({ data: null, error: null });
 
     const w = render();
@@ -98,7 +81,7 @@ describe("the lift ban dialog", () => {
 
     expect(liftBan).toHaveBeenCalledWith(
       "b-1",
-      "Одно из предупреждений снижено до одного балла",
+      "  Одно из предупреждений снижено до одного балла  ",
       OWNED,
     );
     expect(w.emitted("success")).toHaveLength(1);

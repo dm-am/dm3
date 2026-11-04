@@ -11,6 +11,5 @@ public class UpdateNotepadEntry
     /// <summary>Entry content</summary>
     public string? Content { get; set; }
 
-    /// <summary>Sort order</summary>
     public int? SortOrder { get; set; }
 }

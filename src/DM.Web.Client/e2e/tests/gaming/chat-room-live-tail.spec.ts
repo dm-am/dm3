@@ -1,6 +1,9 @@
 import type { APIRequestContext } from "@playwright/test";
-import { test, expect } from "../../fixtures/auth";
-import { AT_BOTTOM_THRESHOLD_PX } from "../../../src/shared/lib/utils/liveTail";
+import { API_BASE_URL, test, expect } from "../../fixtures/auth";
+import {
+  AT_BOTTOM_THRESHOLD_PX,
+  LIVE_TAIL_POLL_INTERVAL_MS,
+} from "../../../src/shared/lib/utils/liveTail";
 
 /**
  * A message arriving in a game chat room must not drag a reader who has
@@ -21,28 +24,10 @@ import { AT_BOTTOM_THRESHOLD_PX } from "../../../src/shared/lib/utils/liveTail";
  *  - that appending rows underneath the reader does not move him by itself.
  *    That is the browser's own behaviour, and the page's guard is worth
  *    nothing if the platform moves him anyway.
- *
- * Headless by construction: it drives the preview build through the standard
- * fixtures and never asks for a window.
  */
 
-const API_URL = process.env.VITE_API_URL || "http://localhost:5000";
-
-/**
- * How long the page may take to notice a message that is already on the
- * server. A chat room has no push of its own: it re-reads its newest page on
- * the site-wide live-tail cadence (LIVE_TAIL_POLL_INTERVAL_MS, thirty seconds
- * at the time of writing), so an arrival is due within one interval of being
- * written, and the rest is the request itself. The wait below is a poll, not a
- * sleep: it ends the moment the row appears.
- *
- * The interval is spelled here instead of imported because that constant lives
- * in the API client module, which pulls axios, the interceptors and the whole
- * alias graph into a test loader that resolves none of it. The threshold above
- * IS imported: its module is a leaf, and a copied threshold is the exact
- * mistake its own comment was written about.
- */
-const TAIL_ARRIVAL_TIMEOUT_MS = 45_000;
+/** One poll of the live tail plus the request and the render. */
+const TAIL_ARRIVAL_TIMEOUT_MS = LIVE_TAIL_POLL_INTERVAL_MS + 15_000;
 
 /** Opening a game room is a whole page, and the run may not have it to itself. */
 const PAGE_LOAD_TIMEOUT_MS = 30_000;
@@ -74,7 +59,7 @@ interface ChatRoomToWriteIn {
 async function resolveChatRoomToWriteIn(
   api: APIRequestContext,
 ): Promise<ChatRoomToWriteIn> {
-  const gamesResponse = await api.get(`${API_URL}/v1/games?take=50`);
+  const gamesResponse = await api.get(`${API_BASE_URL}/v1/games?take=50`);
   expect(
     gamesResponse.ok(),
     `GET /v1/games answered ${gamesResponse.status()}`,
@@ -88,14 +73,16 @@ async function resolveChatRoomToWriteIn(
     // and asking the rooms of every one of fifty games is fifty requests spent.
     if (!(game.participation ?? []).includes("Authority")) continue;
 
-    const roomsResponse = await api.get(`${API_URL}/v1/games/${game.id}/rooms`);
+    const roomsResponse = await api.get(
+      `${API_BASE_URL}/v1/games/${game.id}/rooms`,
+    );
     if (!roomsResponse.ok()) continue;
     const { resources: rooms } = await roomsResponse.json();
 
     for (const room of rooms ?? []) {
       if (room.type !== "Chat") continue;
       const probe = await api.get(
-        `${API_URL}/v1/chat-rooms/${room.id}/messages?limit=50`,
+        `${API_BASE_URL}/v1/chat-rooms/${room.id}/messages?limit=50`,
       );
       if (!probe.ok()) continue;
       return {
@@ -119,12 +106,10 @@ async function say(
   text: string,
 ): Promise<string> {
   const response = await api.post(
-    `${API_URL}/v1/chat-rooms/${roomId}/messages`,
-    { headers: { "Content-Type": "application/json" }, data: { text } },
+    `${API_BASE_URL}/v1/chat-rooms/${roomId}/messages`,
+    { data: { text } },
   );
-  // An unmet precondition is a failure, not a reason to stand down: a test
-  // that cannot put a message in the room proves nothing about what the room
-  // does when one arrives.
+  // An unmet precondition is a failure, not a reason to stand down.
   expect(
     response.status(),
     `POST of a room message answered ${response.status()}`,
@@ -144,15 +129,12 @@ test.describe("the live tail of a game chat room", () => {
     // A short window over a tall room is what the rule is about, and the
     // window is `calc(100vh - 360px)`: the height is pinned so the run does
     // not depend on the browser the project happens to be.
-    await page.setViewportSize({ width: 1280, height: 640 });
+    await page.setViewportSize({ width: 1920, height: 640 });
     await page.goto(`/game/${room.gameId}/chat-rooms/${room.roomNumber}`);
 
     const messages = page.locator(".chat-messages");
-    // The room opening is a precondition, not an assertion, and it is a whole
-    // page: the shell, the game's room list and then the messages. The default
-    // five seconds is a measurement of how loaded the machine is - three
-    // browser projects against one preview server ran past it - so the wait is
-    // given room. It is a poll either way and ends when the room is on screen.
+    // The room opening is a whole page (the shell, the game's room list, then
+    // the messages), so the wait is given room.
     await expect(messages.locator(".chat-message-row").first()).toBeVisible({
       timeout: PAGE_LOAD_TIMEOUT_MS,
     });

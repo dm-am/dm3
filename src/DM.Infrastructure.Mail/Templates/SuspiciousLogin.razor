@@ -1,18 +1,7 @@
 @*
-    Уведомление о входе с незнакомого устройства.
-
-    Страна, адрес и устройство приходят необязательными: детектор мог их не
-    определить. Пустую строку показывать нельзя — вместо нее строка таблицы не
-    печатается вовсе, иначе письмо утверждает "устройство: " и выглядит сломанным.
-
-    Адрес назван IP-адресом, а не адресом: словом "адрес" соседние письма
-    зовут почтовый ящик ("Текущий адрес", "Новый адрес", "Прежний адрес"), и в
-    наборе из тринадцати писем одно слово не может значить две разные вещи.
-
-    Адрес стоит выше страны: строка называет, откуда пришел вход, а страна
-    поясняет ее. Сам по себе адрес читателю мало что говорит - своего он чаще
-    всего не знает, а на телефоне тот меняется с каждым подключением, - поэтому
-    под ним идет страна, на которой читатель и узнает чужой вход.
+    A row the detector could not fill is not printed at all.
+    "IP-адрес", because the other letters call a mailbox "адрес".
+    The IP address above the country: it names where the login came from, the country is what the reader knows.
 *@
 <EmailLayout Title="Незнакомое устройство">
     <div style="@EmailConstants.BoxStyles">
@@ -27,21 +16,21 @@
                 <td style="@EmailConstants.FactLabelStyles">IP-адрес</td>
                 <td style="@EmailConstants.FactValueStyles">@Model.IpAddress</td>
             </tr>
-            }
+        }
         @if (!string.IsNullOrWhiteSpace(Model.Country))
         {
             <tr>
                 <td style="@EmailConstants.FactLabelStyles">Страна</td>
                 <td style="@EmailConstants.FactValueStyles">@Model.Country</td>
             </tr>
-            }
+        }
         @if (!string.IsNullOrWhiteSpace(Model.DeviceInfo))
         {
             <tr>
                 <td style="@EmailConstants.FactLabelStyles">Устройство</td>
                 <td style="@EmailConstants.FactValueStyles">@Model.DeviceInfo</td>
             </tr>
-            }
+        }
     </table>
     </div>
 </EmailLayout>

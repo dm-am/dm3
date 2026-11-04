@@ -1,12 +1,6 @@
-/**
- * The words every moderation decision is signed with, "<Что> от <кого>,
- * <когда>": a noun phrase before "от" that reads whole (the owner, 05.10: "Все
- * должно выглядеть и читаться нормально со всеми от. И все должно быть
- * унифицировано"), the points of a warning and of a change of them in brackets
- * beside the kind; and the scope of a ban, in the words of DM2's ban log.
- */
+// A decision is signed "what от whom, when", the first part a noun phrase that reads whole.
 import { describe, it, expect } from "vitest";
-import { BanType } from "../api/moderationApi";
+import { BanType } from "../api/banApi";
 import {
   banScopeLabel,
   banTermLabel,
@@ -32,11 +26,7 @@ describe("the kind of a warning", () => {
   });
 });
 
-/**
- * The owner asked on 12.10 for "Изменение баллов (x баллов)". The change is
- * named by the points it left, in brackets as a warning's are, and a change
- * to nothing counts its nothing.
- */
+// The change is named by the points it left; a change to nothing counts its nothing.
 describe("the kind of a change of the points", () => {
   it.each([
     [1, "Изменение баллов (1 балл)"],
@@ -48,13 +38,7 @@ describe("the kind of a change of the points", () => {
   });
 });
 
-/**
- * The scope of a ban as DM2's ban log names it, "демократический бан" or
- * "полный бан" (the owner, 12.10, line 45: "Баны надо в таком формате"). The
- * term is not in it: the entry says the end date instead. A ban without an end
- * is "бессрочный", a word the site already uses, and not a date five hundred
- * years away as on DM2.
- */
+// A ban without an end is "бессрочный", not a date a hundred years ahead.
 describe("the scope of a ban", () => {
   it.each([
     ["DemocraticBan", "демократический бан"],

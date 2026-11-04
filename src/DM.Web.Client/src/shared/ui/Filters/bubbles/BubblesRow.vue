@@ -4,7 +4,6 @@
  *
  * Wraps filter bubbles and provides "Сбросить" link.
  */
-defineOptions({ name: "BubblesRow" });
 
 withDefaults(
   defineProps<{
@@ -36,7 +35,7 @@ const emit = defineEmits<{
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Filters" as *
+@use "@/assets/styles/FilterBubbles" as *
 
 +filter-bubbles
 </style>

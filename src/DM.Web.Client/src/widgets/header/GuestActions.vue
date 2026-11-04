@@ -14,20 +14,17 @@ import { REDIRECT_QUERY_KEY, resumeTarget } from "@/shared/lib/auth";
 const route = useRoute();
 const router = useRouter();
 
-// Store email for passing between modals
 const registeredEmail = ref("");
+const registeredHours = ref<number>();
 const prefillEmail = ref("");
 
-// Where the viewer was going when the guard (or an expired session) sent them
-// here. Captured the moment the dialog is asked for, because handleActionParam
-// strips the query straight away; spent once, on a sign-in that succeeded.
+// Captured when the dialog is asked for, since handleActionParam strips the query at once.
 const pendingRedirect = ref<string | null>(null);
 
 function resumeAfterLogin() {
   const target = pendingRedirect.value;
   pendingRedirect.value = null;
-  // replace, not push: the home page the guard substituted is not a step the
-  // viewer took, and "Назад" must not lead back into the refusal.
+  // replace, not push: "Назад" must not lead back into the refusal.
   if (target) void router.replace(target);
 }
 
@@ -47,12 +44,7 @@ const { open: openLogin, close: closeLogin } = useModal({
       closeLogin();
       openRecovery();
     },
-    // The second activation letter is not a dialog of its own any more: the
-    // sign-in card sends it and states the outcome where the reader is
-    // standing, so there is nothing here to open for it.
-    // Neither the phone nor the recovery codes. The mailed path is the only
-    // way back from there, and it starts here rather than in the recovery
-    // dialog next door: that one resets a password, which this reader knows.
+    // Not the recovery dialog: that one resets a password, which this reader knows.
     onCantPassSecondFactor: () => {
       closeLogin();
       openTwoFactorRemoval();
@@ -67,8 +59,9 @@ const { open: openLogin, close: closeLogin } = useModal({
 const { open: openRegistrar, close: closeRegistrar } = useModal({
   component: RegistrationForm,
   attrs: {
-    onSuccess: (email: string) => {
+    onSuccess: (email: string, hours?: number) => {
       registeredEmail.value = email;
+      registeredHours.value = hours;
       closeRegistrar();
       openRegistrarSuccess();
     },
@@ -92,6 +85,9 @@ const { open: openRegistrarSuccess, close: closeRegistrarSuccess } = useModal({
     get email() {
       return registeredEmail.value;
     },
+    get hours() {
+      return registeredHours.value;
+    },
     onConfirm: () => closeRegistrarSuccess(),
   },
 });
@@ -113,40 +109,33 @@ const { open: openTwoFactorRemoval, close: closeTwoFactorRemoval } = useModal({
   },
 });
 
-// Handle ?action= query param to open modals from other pages
+const DIALOG_OF_ACTION = new Map<string, () => unknown>([
+  ["login", openLogin],
+  ["register", openRegistrar],
+  ["reset", openRecovery],
+  ["recovery", openRecovery],
+  ["two-factor", openTwoFactorRemoval],
+]);
+
+// ?action= opens a dialog from another page.
 function handleActionParam() {
   const action = route.query.action as string;
   if (action) {
-    // Remove only the consumed keys, keep the rest of the query intact
     const query = { ...route.query };
     delete query.action;
     delete query[REDIRECT_QUERY_KEY];
-    // Read before the query is rewritten. resumeTarget refuses anything that
-    // is not a path on this site: the value arrives through the URL.
+    // Read before the query is rewritten; resumeTarget refuses anything off this site.
     pendingRedirect.value = resumeTarget(route.query[REDIRECT_QUERY_KEY]);
     router.replace({ query });
     prefillEmail.value = "";
 
-    if (action === "login") {
-      openLogin();
-    } else if (action === "register") {
-      openRegistrar();
-    } else if (action === "reset" || action === "recovery") {
-      openRecovery();
-    } else if (action === "two-factor") {
-      // The request to switch the second factor off, which the sign-in card
-      // opens from its code step. The support page names it too, under the
-      // reason a reader who lost the phone picks there, so the way is one
-      // click from where he is and not a sign-in he cannot finish.
-      openTwoFactorRemoval();
-    }
+    DIALOG_OF_ACTION.get(action)?.();
   }
 }
 
 onMounted(handleActionParam);
 watch(() => route.query.action, handleActionParam);
 
-// Extract handlers to avoid inline arrow functions in template
 function handleLoginClick() {
   prefillEmail.value = "";
   // A deliberate click on "Вход" is not a refused navigation: nothing to resume.
@@ -192,7 +181,7 @@ function handleRecoveryClick() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 
 .action-link
   vertical-align: baseline

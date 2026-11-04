@@ -17,16 +17,7 @@ namespace DM.Infrastructure.Core.Tests.Logging;
 /// <summary>
 /// The level of the log is a deployment decision, and a deployment can make it.
 /// </summary>
-/// <remarks>
-/// It was compiled in: Debug in Development and Information everywhere else,
-/// with nothing reading configuration. So the only way to see the Debug lines an
-/// incident needs - refused authentications among them - was to set the
-/// environment to Development, which is not a logging switch: the same flag
-/// mounts Swagger, allows inline script and drops HSTS.
-///
-/// Asserted through AddDmLogging rather than on the private reader, because the
-/// defect was never in parsing a level - it was that nothing read one.
-/// </remarks>
+/// <remarks>Development is not a logging switch: it mounts Swagger and drops HSTS. Asserted through AddDmLogging.</remarks>
 [Collection(StaticLoggerCollection.Name)]
 public class MinimumLogLevelShould
 {

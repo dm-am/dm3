@@ -65,8 +65,5 @@ public static class ValidationError
     /// </summary>
     public const string MustBePositive = nameof(MustBePositive);
 
-    /// <summary>
-    /// The field value is unchanged from the current value
-    /// </summary>
     public const string Unchanged = nameof(Unchanged);
 }

@@ -2,31 +2,14 @@
  * @vitest-environment jsdom
  */
 
-/**
- * An image of the global chat stands behind a spoiler only in the compact
- * layout (docs/architecture/BBCODE_RENDERING.md, "Картинки общего чата"). The
- * server wraps every one of them in a spoiler marked data-bb-gate="image",
- * since the layout is the reader's and the server does not know it, and this
- * component decides by the layout it draws the message in.
- */
-import { describe, it, expect, vi, afterEach } from "vitest";
+/** An image of the global chat stands behind the server's spoiler only in the compact layout. */
+import { describe, it, expect, afterEach } from "vitest";
 import { mount, enableAutoUnmount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import ChatMessage from "./ChatMessage.vue";
 import type { MessageWithContinuation } from "@/shared/lib/utils/chat";
 
 enableAutoUnmount(afterEach);
-
-// A class and not an arrow: the header of a message is a one-line row
-// (FitRow), which constructs its observer with `new`.
-vi.stubGlobal(
-  "ResizeObserver",
-  class {
-    observe = vi.fn();
-    unobserve = vi.fn();
-    disconnect = vi.fn();
-  },
-);
 
 const IMAGE =
   '<img src="https://example.com/a.png" alt="" class="bb-image" data-bb-tag="img" />';
@@ -47,7 +30,9 @@ const message = {
 } as unknown as MessageWithContinuation;
 
 function heads(compact: boolean) {
-  const wrapper = mount(ChatMessage, { props: { message, compact } });
+  const wrapper = mount(ChatMessage, {
+    props: { message, compact, maxHeight: 500 },
+  });
   return { wrapper, heads: () => wrapper.findAll(".msg-text .spoiler-head") };
 }
 

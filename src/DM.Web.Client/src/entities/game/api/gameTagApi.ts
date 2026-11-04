@@ -1,5 +1,6 @@
 import type { ListEnvelope } from "@/shared/api/models/common";
-import { Api } from "@/shared/api";
+import { Api, RENDER_AUDIENCE } from "@/shared/api";
+import type { RequestOptions } from "@/shared/api/interceptor";
 
 export type ModerationTagGroup = {
   id: string;
@@ -17,78 +18,34 @@ export type ModerationTag = {
   groupId: string;
   groupTitle: string;
   title: string;
-  /** The description as typed, the markup included: what the edit window holds. */
+  /**
+   * Rendered, for the card of the tag; as typed on the author_edit audience,
+   * which the edit window reads.
+   */
   description?: string;
-  /** The same description as the server renders it, for the card of the tag. */
-  descriptionHtml?: string;
   sortOrder: number;
   gamesCount: number;
 };
 
-export type CreateTagGroupRequest = {
+/** For both the creation and the replacement of a group. */
+type TagGroupRequest = {
   title: string;
   description?: string;
   sortOrder: number;
   maxTagsPerGame?: number | null;
 };
 
-export type UpdateTagGroupRequest = {
-  title: string;
-  description?: string;
-  sortOrder: number;
-  maxTagsPerGame?: number | null;
-};
-
-export type CreateTagRequest = {
+/** For both the creation and the replacement of a tag. */
+type TagRequest = {
   groupId: string;
   title: string;
   description?: string;
   sortOrder: number;
 };
 
-export type UpdateTagRequest = {
-  groupId: string;
-  title: string;
-  description?: string;
-  sortOrder: number;
-};
-
-/**
- * The refusal a caller takes over because its own screen carries it.
- *
- * A screen that answers a failure where the reader is looking — the strip in
- * place of a list, the card in place of a sheet — is the one carrier of that
- * failure, and the response interceptor has to stay quiet or the same sentence
- * stands in two places at once. The methods below pass this through untouched;
- * every call that leaves it out is unchanged, because the client then sees
- * nothing and the interceptor speaks as it always did.
- *
- * Declared here rather than imported: `shared/api` keeps its own copy of the
- * type to itself, and the client reads the two fields off the request by name,
- * so a structural twin carries them just as well.
- */
-type RefusalFlags = {
-  /** The screen shows a 403 and a 5xx itself. */
-  ownsRefusal?: boolean;
-  /** The screen shows a 429 itself, the wait included. */
-  ownsRateLimit?: boolean;
-};
-
-/**
- * Administration of the tag catalog games are classified by.
- *
- * The endpoints sit under `moderation/tags` because editing the catalog is a
- * staff privilege, but a tag is game vocabulary — `gameApi` reads it and games
- * carry it — so the client belongs to this slice rather than to moderation.
- */
+// Written under moderation/, but a tag is game vocabulary, so the client lives here.
 export default new (class GameTagApi {
-  /**
-   * Get all tag groups
-   *
-   * @param options Set by a caller whose screen shows the failure itself: the
-   * tag section draws a failed load in place of both its panels.
-   */
-  public getTagGroups(options?: RefusalFlags) {
+  public getTagGroups(options?: RequestOptions) {
     return Api.get<ListEnvelope<ModerationTagGroup>>(
       "moderation/tags/groups",
       undefined,
@@ -97,20 +54,7 @@ export default new (class GameTagApi {
     );
   }
 
-  /**
-   * Get a tag group by ID
-   */
-  public getTagGroup(groupId: string) {
-    return Api.get<ModerationTagGroup>(`moderation/tags/groups/${groupId}`);
-  }
-
-  /**
-   * Create a new tag group
-   */
-  public createTagGroup(
-    request: CreateTagGroupRequest,
-    options?: RefusalFlags,
-  ) {
+  public createTagGroup(request: TagGroupRequest, options?: RequestOptions) {
     return Api.post<ModerationTagGroup>(
       "moderation/tags/groups",
       request,
@@ -118,13 +62,10 @@ export default new (class GameTagApi {
     );
   }
 
-  /**
-   * Update a tag group
-   */
   public updateTagGroup(
     groupId: string,
-    request: UpdateTagGroupRequest,
-    options?: RefusalFlags,
+    request: TagGroupRequest,
+    options?: RequestOptions,
   ) {
     return Api.put<ModerationTagGroup>(
       `moderation/tags/groups/${groupId}`,
@@ -133,20 +74,11 @@ export default new (class GameTagApi {
     );
   }
 
-  /**
-   * Delete a tag group
-   */
-  public deleteTagGroup(groupId: string, options?: RefusalFlags) {
+  public deleteTagGroup(groupId: string, options?: RequestOptions) {
     return Api.delete(`moderation/tags/groups/${groupId}`, undefined, options);
   }
 
-  /**
-   * Get all tags
-   *
-   * @param options As in getTagGroups — the tag section reads both at once and
-   * shows whichever failure comes back in one place.
-   */
-  public getTags(options?: RefusalFlags) {
+  public getTags(options?: RequestOptions) {
     return Api.get<ListEnvelope<ModerationTag>>(
       "moderation/tags",
       undefined,
@@ -155,35 +87,28 @@ export default new (class GameTagApi {
     );
   }
 
-  /**
-   * Get a tag by ID
-   */
-  public getTag(tagId: string) {
-    return Api.get<ModerationTag>(`moderation/tags/${tagId}`);
+  /** The tag with its description as typed, for the edit window. */
+  public getTagForEdit(tagId: string) {
+    return Api.get<ModerationTag>(
+      `moderation/tags/${tagId}`,
+      undefined,
+      RENDER_AUDIENCE.AuthorEdit,
+    );
   }
 
-  /**
-   * Create a new tag
-   */
-  public createTag(request: CreateTagRequest, options?: RefusalFlags) {
+  public createTag(request: TagRequest, options?: RequestOptions) {
     return Api.post<ModerationTag>("moderation/tags", request, options);
   }
 
-  /**
-   * Update a tag
-   */
   public updateTag(
     tagId: string,
-    request: UpdateTagRequest,
-    options?: RefusalFlags,
+    request: TagRequest,
+    options?: RequestOptions,
   ) {
     return Api.put<ModerationTag>(`moderation/tags/${tagId}`, request, options);
   }
 
-  /**
-   * Delete a tag
-   */
-  public deleteTag(tagId: string, options?: RefusalFlags) {
+  public deleteTag(tagId: string, options?: RequestOptions) {
     return Api.delete(`moderation/tags/${tagId}`, undefined, options);
   }
 })();

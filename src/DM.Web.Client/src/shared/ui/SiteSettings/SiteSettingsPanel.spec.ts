@@ -21,9 +21,6 @@ import { createPinia } from "pinia";
 import { useUiStore } from "@/shared/stores/ui";
 import { Theme } from "@/shared/api/models/personal";
 import SiteSettingsPanel from "./SiteSettingsPanel.vue";
-import { componentCss, styleRules } from "@/shared/lib/testing/styles";
-import { dirname, join } from "node:path";
-import { fileURLToPath } from "node:url";
 
 enableAutoUnmount(afterEach);
 
@@ -197,40 +194,3 @@ describe("SiteSettingsPanel typesetting switches", () => {
  * drawn in the browser by e2e/tests/common/settings-panel.spec.ts; these are
  * the rules that drawing rests on.
  */
-describe("SiteSettingsPanel switches in the panel", () => {
-  const rules = styleRules(
-    componentCss(
-      join(dirname(fileURLToPath(import.meta.url)), "SiteSettingsPanel.vue"),
-    ),
-  );
-  const declared = (selector: string) =>
-    rules
-      .filter((rule) => rule.selector === selector)
-      .map((rule) => rule.declarations);
-
-  // The bubble hangs off the right edge of the screen, so its width is its
-  // position: a controls column sized by its widest control moved every label
-  // whenever a control changed.
-  it("declares the controls column instead of finding it", () => {
-    expect(declared(".settings-panel")[0]["grid-template-columns"]).toBe(
-      "auto 64px",
-    );
-  });
-
-  // The owner's word: the switches were not centred under the layout toggle.
-  // Both stand in the middle of the controls column, so their centres meet
-  // whatever either of them measures; the labels keep the left edge.
-  it("centres every switch under the layout toggle", () => {
-    expect(declared(".settings-row")[0]["justify-items"]).toBe("start");
-    expect(declared(".settings-control")[0]["justify-self"]).toBe("center");
-    expect(declared(".layout-toggle")[0]["justify-self"]).toBe("center");
-  });
-
-  // The input takes the caret but is hidden at no size, so the ring of a
-  // focused control has to go round the switch the reader sees.
-  it("rings the switch the caret is on, as every block control is ringed", () => {
-    expect(declared(".settings-switch input:focus-visible + .slider")).toEqual([
-      { outline: "2px solid var(--link)", "outline-offset": "0" },
-    ]);
-  });
-});

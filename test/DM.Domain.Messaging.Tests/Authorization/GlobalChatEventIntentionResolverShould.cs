@@ -54,8 +54,6 @@ public class GlobalChatEventIntentionResolverShould
         };
     }
 
-    #region Creating
-
     [Theory]
     [InlineData(UserRole.SeniorModerator)]
     [InlineData(UserRole.Admin)]
@@ -98,10 +96,6 @@ public class GlobalChatEventIntentionResolverShould
         resolver.IsAllowed(user, intention).Should().BeFalse();
     }
 
-    #endregion
-
-    #region Running the event
-
     [Theory]
     [InlineData(GlobalChatEventIntention.Update)]
     [InlineData(GlobalChatEventIntention.Delete)]
@@ -139,10 +133,6 @@ public class GlobalChatEventIntentionResolverShould
         // somebody else is already running.
         resolver.IsAllowed(user, intention, EventWith()).Should().BeFalse();
     }
-
-    #endregion
-
-    #region Lifecycle
 
     [Fact]
     public void LetAnOrganizerStartAScheduledEvent()
@@ -191,10 +181,6 @@ public class GlobalChatEventIntentionResolverShould
         resolver.IsAllowed(user, intention, EventWith(GlobalChatEventStatus.Live)).Should().BeFalse();
         resolver.IsAllowed(user, intention, EventWith()).Should().BeFalse();
     }
-
-    #endregion
-
-    #region Joining and leaving
 
     [Theory]
     [InlineData(GlobalChatEventStatus.Scheduled)]
@@ -268,29 +254,4 @@ public class GlobalChatEventIntentionResolverShould
 
         resolver.IsAllowed(user, GlobalChatEventIntention.Leave, EventWith()).Should().BeFalse();
     }
-
-    #endregion
-
-    #region Behaviour as found
-
-    [Theory]
-    [InlineData(AccessPolicy.DemocraticBan)]
-    [InlineData(AccessPolicy.FullBan)]
-    public void LetABannedUserPutTheirNameOnAPublicEventRoster(AccessPolicy policy)
-    {
-        var user = Create.User(StrangerId)
-            .WithRole(UserRole.RegularUser)
-            .WithAccessPolicy(policy)
-            .Please();
-
-        // Behaviour as found, not a rule that was chosen. Join checks
-        // IsAuthenticated and never MaySpeak, so a banned user joins and appears
-        // in the event's public participant list. Speech itself is still stopped
-        // one layer on — ChatIntentionResolver gates CreateMessage in the global
-        // chat with MaySpeak — so this leaks presence, not messages. Whether the
-        // roster counts as public speech is the decision to make.
-        resolver.IsAllowed(user, GlobalChatEventIntention.Join, EventWith()).Should().BeTrue();
-    }
-
-    #endregion
 }

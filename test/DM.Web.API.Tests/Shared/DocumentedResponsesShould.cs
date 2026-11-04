@@ -12,23 +12,8 @@ namespace DM.Web.API.Tests.Shared;
 /// An action documents exactly the status codes it declares.
 /// </summary>
 /// <remarks>
-/// Swashbuckle builds one branch of the published schema out of two sources
-/// that nothing joins: the codes come from <c>ProducesResponseType</c>, the
-/// sentence describing each comes from a <c>&lt;response&gt;</c> line in the doc
-/// comment above it. Where they disagree the schema still builds, and the
-/// disagreement leaves the repository in the artefact a client is generated
-/// from.
-///
-/// Both directions had already happened. Activation described a 404 for
-/// "token expired or not found" while the service answers 410 and never 404, so
-/// a generated client carried a handler for a branch that does not exist and
-/// none for the branch that does. Reading a room documented a 404 with no
-/// attribute to carry it, so the code vanished from the schema entirely and the
-/// most common failure of that endpoint was undocumented.
-///
-/// Read out of the source rather than out of the built assembly: the doc
-/// comment is not compiled into anything this test could reflect over, and the
-/// XML file Swashbuckle reads is a build artefact of the same two halves.
+/// Swashbuckle takes the codes from <c>ProducesResponseType</c> and the sentences from <c>&lt;response&gt;</c>
+/// lines, and nothing joins them. Read out of the source: the doc comment is compiled into nothing to reflect over.
 /// </remarks>
 public class DocumentedResponsesShould
 {
@@ -37,10 +22,7 @@ public class DocumentedResponsesShould
         @"<response\s+code=""(\d{3})""", RegexOptions.Compiled);
 
     /// <summary>
-    /// The status code of a declared response type, by name or by bare number.
-    /// Matched on a line already known to carry the attribute: the type argument
-    /// is <c>typeof(Envelope&lt;Room&gt;)</c> often enough that a pattern reaching
-    /// across the whole attribute stops at the wrong bracket.
+    /// The status code of a declared response type, by name or by bare number, on a line known to carry the attribute.
     /// </summary>
     private static readonly Regex DeclaredCode = new(
         @"StatusCodes\.Status(\d{3})\w*|,\s*(\d{3})\s*\)", RegexOptions.Compiled);

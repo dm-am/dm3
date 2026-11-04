@@ -1,5 +1,4 @@
 using System;
-using System.Collections.Generic;
 using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
@@ -9,73 +8,72 @@ using DM.Domain.Account.Features.PasswordChange;
 using DM.Domain.Account.Features.Security;
 using DM.Domain.Account.Features.TwoFactor;
 using DM.Domain.Core.Abstractions;
-using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Events;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Core.Identity;
 using DM.Testing;
+using DM.Testing.Dsl;
 using AwesomeAssertions;
 using FluentValidation;
 using FluentValidation.Results;
 using Microsoft.Extensions.Options;
 using NSubstitute;
-using NSubstitute.ExceptionExtensions;
 using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.PasswordChange;
 
 public class PasswordChangeServiceShould : UnitTestBase
 {
-    private readonly IValidator<UserPasswordChange> _validator;
-    private readonly IPasswordChangeRepository _repository;
-    private readonly IAuthenticationService _authenticationService;
-    private readonly IIdentityProvider _identityProvider;
-    private readonly ISecurityManager _securityManager;
-    private readonly ICompromisedPasswordChecker _compromisedPasswordChecker;
-    private readonly IEventProducer _eventProducer;
-    private readonly IPasswordChangeMailSender _notificationSender;
-    private readonly ISecurityAuditRepository _auditService;
-    private readonly IDateTimeProvider _dateTimeProvider;
-    private readonly ITwoFactorRepository _twoFactorRepository;
-    private readonly PasswordChangeService _service;
+    private readonly IValidator<UserPasswordChange> validator;
+    private readonly IPasswordChangeRepository repository;
+    private readonly ISessionService sessionService;
+    private readonly IIdentityProvider identityProvider;
+    private readonly ISecurityManager securityManager;
+    private readonly ICompromisedPasswordChecker compromisedPasswordChecker;
+    private readonly IEventProducer eventProducer;
+    private readonly IPasswordChangeMailSender notificationSender;
+    private readonly ISecurityAuditRepository auditService;
+    private readonly IDateTimeProvider dateTimeProvider;
+    private readonly ITwoFactorRepository twoFactorRepository;
+    private readonly PasswordChangeService service;
 
     public PasswordChangeServiceShould()
     {
-        _validator = Mock<IValidator<UserPasswordChange>>();
-        _repository = Mock<IPasswordChangeRepository>();
-        _authenticationService = Mock<IAuthenticationService>();
-        _identityProvider = Mock<IIdentityProvider>();
-        _securityManager = Mock<ISecurityManager>();
-        _compromisedPasswordChecker = Mock<ICompromisedPasswordChecker>();
-        _eventProducer = Mock<IEventProducer>();
-        _notificationSender = Mock<IPasswordChangeMailSender>();
-        _auditService = Mock<ISecurityAuditRepository>();
-        _dateTimeProvider = Mock<IDateTimeProvider>();
-        _twoFactorRepository = Mock<ITwoFactorRepository>();
+        validator = Mock<IValidator<UserPasswordChange>>();
+        repository = Mock<IPasswordChangeRepository>();
+        sessionService = Mock<ISessionService>();
+        identityProvider = Mock<IIdentityProvider>();
+        securityManager = Mock<ISecurityManager>();
+        compromisedPasswordChecker = Mock<ICompromisedPasswordChecker>();
+        eventProducer = Mock<IEventProducer>();
+        notificationSender = Mock<IPasswordChangeMailSender>();
+        auditService = Mock<ISecurityAuditRepository>();
+        dateTimeProvider = Mock<IDateTimeProvider>();
+        twoFactorRepository = Mock<ITwoFactorRepository>();
         var config = Options.Create(new TokenConfiguration
         {
             PasswordResetTokenLifetimeHours = 24
         });
 
-        _validator.ValidateAsync(
+        validator.ValidateAsync(
                 Arg.Any<ValidationContext<UserPasswordChange>>(),
                 Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
-        _dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
 
-        _service = new PasswordChangeService(
-            _validator,
-            _securityManager,
-            _compromisedPasswordChecker,
-            _repository,
-            _authenticationService,
-            _identityProvider,
-            _eventProducer,
-            _notificationSender,
-            _auditService,
-            _dateTimeProvider,
-            _twoFactorRepository,
+        service = new PasswordChangeService(
+            validator,
+            securityManager,
+            compromisedPasswordChecker,
+            repository,
+            sessionService,
+            identityProvider,
+            eventProducer,
+            notificationSender,
+            auditService,
+            dateTimeProvider,
+            twoFactorRepository,
             config);
     }
 
@@ -88,10 +86,10 @@ public class PasswordChangeServiceShould : UnitTestBase
             NewPassword = "newpass"
         };
 
-        _identityProvider.Current.Returns(Identity.Guest());
+        identityProvider.Current.Returns(Identity.Guest());
 
         var exception = await Assert.ThrowsAsync<HttpException>(
-            () => _service.Change(passwordChange));
+            () => service.Change(passwordChange));
 
         exception.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
@@ -106,15 +104,11 @@ public class PasswordChangeServiceShould : UnitTestBase
             NewPassword = "samepass"
         };
 
-        _identityProvider.Current.Returns(Identity.Success(
-                new AuthenticatedUser { UserId = userId, Role = UserRole.RegularUser, Salt = "salt", PasswordHash = "hash" },
-                new Session { Id = Guid.NewGuid() },
-                UserSettings.Default,
-                "token"));
-        _securityManager.ComparePasswords("samepass", "salt", "hash").Returns(true);
+        SignIn(userId);
+        securityManager.ComparePasswords("samepass", "salt", "hash").Returns(true);
 
         var exception = await Assert.ThrowsAsync<HttpBadRequestException>(
-            () => _service.Change(passwordChange));
+            () => service.Change(passwordChange));
 
         exception.ValidationErrors.Should().ContainKey(nameof(passwordChange.NewPassword));
     }
@@ -129,16 +123,12 @@ public class PasswordChangeServiceShould : UnitTestBase
             NewPassword = "compromised123"
         };
 
-        _identityProvider.Current.Returns(Identity.Success(
-                new AuthenticatedUser { UserId = userId, Role = UserRole.RegularUser, Salt = "salt", PasswordHash = "hash" },
-                new Session { Id = Guid.NewGuid() },
-                UserSettings.Default,
-                "token"));
-        _securityManager.ComparePasswords(passwordChange.NewPassword, "salt", "hash").Returns(false);
-        _compromisedPasswordChecker.IsCompromisedAsync(passwordChange.NewPassword).Returns(true);
+        SignIn(userId);
+        securityManager.ComparePasswords(passwordChange.NewPassword, "salt", "hash").Returns(false);
+        compromisedPasswordChecker.IsCompromisedAsync(passwordChange.NewPassword).Returns(true);
 
         var exception = await Assert.ThrowsAsync<HttpBadRequestException>(
-            () => _service.Change(passwordChange));
+            () => service.Change(passwordChange));
 
         exception.ValidationErrors.Should().ContainKey(nameof(passwordChange.NewPassword));
     }
@@ -153,28 +143,24 @@ public class PasswordChangeServiceShould : UnitTestBase
             NewPassword = "newpass123"
         };
 
-        _identityProvider.Current.Returns(Identity.Success(
-                new AuthenticatedUser { UserId = userId, Username = "testuser", Email = "test@example.com", Role = UserRole.RegularUser, Salt = "salt", PasswordHash = "hash" },
-                new Session { Id = Guid.NewGuid() },
-                UserSettings.Default,
-                "token"));
-        _securityManager.ComparePasswords(passwordChange.NewPassword, "salt", "hash").Returns(false);
-        _compromisedPasswordChecker.IsCompromisedAsync(passwordChange.NewPassword).Returns(false);
-        _securityManager.GeneratePassword(passwordChange.NewPassword).Returns(("newhash", "newsalt"));
+        SignIn(userId);
+        securityManager.ComparePasswords(passwordChange.NewPassword, "salt", "hash").Returns(false);
+        compromisedPasswordChecker.IsCompromisedAsync(passwordChange.NewPassword).Returns(false);
+        securityManager.GeneratePassword(passwordChange.NewPassword).Returns(("newhash", "newsalt"));
 
-        var result = await _service.Change(passwordChange);
+        var result = await service.Change(passwordChange);
 
         result.UserId.Should().Be(userId);
-        await _repository.Received(1).UpdatePassword(userId, "newhash", "newsalt", null);
-        await _authenticationService.Received(1).LogoutElsewhere();
-        await _authenticationService.DidNotReceive().LogoutAll(Arg.Any<Guid>());
-        await _eventProducer.Received(1).SendAsync(EventType.PasswordChanged, userId);
-        await _notificationSender.Received(1).Send("test@example.com");
+        await repository.Received(1).UpdatePassword(userId, "newhash", "newsalt", null);
+        await sessionService.Received(1).LogoutElsewhere();
+        await sessionService.DidNotReceive().LogoutAll(Arg.Any<Guid>());
+        await eventProducer.Received(1).SendAsync(EventType.PasswordChanged, userId);
+        await notificationSender.Received(1).Send("test@example.com");
         // A login begun with the old password does not outlive it. Changing a
         // password is a statement that the account may be compromised, and a
         // half-finished sign-in that survives the statement is one the
         // statement did not cover.
-        await _twoFactorRepository.Received(1).RemoveChallengesOf(
+        await twoFactorRepository.Received(1).RemoveChallengesOf(
             userId, Arg.Any<CancellationToken>());
     }
 
@@ -199,22 +185,22 @@ public class PasswordChangeServiceShould : UnitTestBase
             NewPassword = "newpass123"
         };
 
-        _identityProvider.Current.Returns(Identity.Guest());
-        _repository.FindUser(tokenId, Arg.Any<DateTimeOffset>()).Returns(user);
-        _securityManager.ComparePasswords(passwordChange.NewPassword, user.Salt, user.PasswordHash).Returns(false);
-        _compromisedPasswordChecker.IsCompromisedAsync(passwordChange.NewPassword).Returns(false);
-        _securityManager.GeneratePassword(passwordChange.NewPassword).Returns(("newhash", "newsalt"));
+        identityProvider.Current.Returns(Identity.Guest());
+        repository.FindUser(tokenId, Arg.Any<DateTimeOffset>()).Returns(user);
+        securityManager.ComparePasswords(passwordChange.NewPassword, user.Salt, user.PasswordHash).Returns(false);
+        compromisedPasswordChecker.IsCompromisedAsync(passwordChange.NewPassword).Returns(false);
+        securityManager.GeneratePassword(passwordChange.NewPassword).Returns(("newhash", "newsalt"));
 
-        var result = await _service.Change(passwordChange);
+        var result = await service.Change(passwordChange);
 
         result.UserId.Should().Be(userId);
-        await _repository.Received(1).UpdatePassword(userId, "newhash", "newsalt", tokenId);
-        await _authenticationService.Received(1).LogoutAll(userId);
-        await _authenticationService.DidNotReceive().LogoutElsewhere();
-        await _eventProducer.Received(1).SendAsync(EventType.PasswordChanged, userId);
+        await repository.Received(1).UpdatePassword(userId, "newhash", "newsalt", tokenId);
+        await sessionService.Received(1).LogoutAll(userId);
+        await sessionService.DidNotReceive().LogoutElsewhere();
+        await eventProducer.Received(1).SendAsync(EventType.PasswordChanged, userId);
         // A reset from the mailbox kills the unfinished logins of the account
         // just as the form inside a session does.
-        await _twoFactorRepository.Received(1).RemoveChallengesOf(
+        await twoFactorRepository.Received(1).RemoveChallengesOf(
             userId, Arg.Any<CancellationToken>());
     }
 
@@ -222,11 +208,10 @@ public class PasswordChangeServiceShould : UnitTestBase
     public async Task ReturnTokenInfoReadyForValidToken()
     {
         var tokenId = Guid.NewGuid();
-        _repository.TokenValid(tokenId, Arg.Any<DateTimeOffset>()).Returns(true);
+        repository.TokenValid(tokenId, Arg.Any<DateTimeOffset>()).Returns(true);
 
-        var result = await _service.GetTokenInfo(tokenId);
+        var result = await service.GetTokenInfo(tokenId);
 
-        result.Should().NotBeNull();
         result!.Status.Should().Be("ready");
     }
 
@@ -234,11 +219,21 @@ public class PasswordChangeServiceShould : UnitTestBase
     public async Task ReturnNullForNonExistentToken()
     {
         var tokenId = Guid.NewGuid();
-        _repository.TokenValid(tokenId, Arg.Any<DateTimeOffset>()).Returns(false);
-        _repository.FindUser(tokenId, Arg.Any<DateTimeOffset>()).Returns((AuthenticatedUser?)null);
+        repository.TokenValid(tokenId, Arg.Any<DateTimeOffset>()).Returns(false);
+        repository.FindUser(tokenId, Arg.Any<DateTimeOffset>()).Returns((AuthenticatedUser?)null);
 
-        var result = await _service.GetTokenInfo(tokenId);
+        var result = await service.GetTokenInfo(tokenId);
 
         result.Should().BeNull();
+    }
+
+    /// <summary>A signed-in reader whose stored password is the hash "hash" with the salt "salt".</summary>
+    private void SignIn(Guid userId)
+    {
+        var identity = Identities.User(userId, "testuser");
+        identity.User.Email = "test@example.com";
+        identity.User.Salt = "salt";
+        identity.User.PasswordHash = "hash";
+        identityProvider.Current.Returns(identity);
     }
 }

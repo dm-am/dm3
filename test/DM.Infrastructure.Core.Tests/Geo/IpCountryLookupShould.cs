@@ -12,12 +12,7 @@ namespace DM.Infrastructure.Core.Tests.Geo;
 /// <summary>
 /// The country of an address, read out of a local table of ranges.
 /// </summary>
-/// <remarks>
-/// One letter prints this, the warning about a login from a device the account
-/// has not seen. Everything here is about the answer being either right or
-/// absent: a letter about security that names the wrong country costs a password
-/// reset and a ticket, and one that names none costs a line.
-/// </remarks>
+/// <remarks>One letter prints this; the answer is either right or absent.</remarks>
 public class IpCountryLookupShould : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"dm3-country-{Guid.NewGuid():N}.csv");
@@ -122,16 +117,9 @@ public class IpCountryLookupShould : IDisposable
     }
 
     /// <summary>
-    /// The table the deployment downloads: user-country of sapics/ip-location-db.
-    /// No header and no quotes, both families in one file, every IPv6 address in
-    /// its compressed spelling, and no line at all over space no country holds.
+    /// The table the deployment downloads, user-country of sapics/ip-location-db: no header, no quotes, both
+    /// families, IPv6 compressed. The lines are the publisher's, picked for where compression lands.
     /// </summary>
-    /// <remarks>
-    /// The lines are copied from the publisher's file. The IPv6 ones are picked
-    /// to make the compression land in different places: a run of zeros at the
-    /// end, one between groups with more groups after it, and both ends of a
-    /// range folded the same way.
-    /// </remarks>
     [Fact]
     public void ReadTheTableTheDeploymentDownloads()
     {

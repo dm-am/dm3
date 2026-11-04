@@ -18,6 +18,5 @@ public interface ITwoFactorCleanupProcessor
     /// Delete every unconfirmed setup older than the setup window.
     /// </summary>
     /// <returns>How many were deleted</returns>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task<int> DeleteAbandonedAsync(CancellationToken cancellationToken = default);
 }

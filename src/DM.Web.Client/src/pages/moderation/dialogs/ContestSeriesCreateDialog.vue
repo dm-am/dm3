@@ -1,17 +1,11 @@
 <script setup lang="ts">
-/**
- * ContestSeriesCreateDialog — create a contest series (type / number /
- * year / results topic). Dialog twin of the former hand-rolled modal
- * in ModerationAwards.vue. Suggests number = max + 1 within the chosen
- * contest type.
- *
- * The window runs the request (Dialog `action`): it waits for the answer,
- * prints a refusal in itself - a series with this number and year already
- * there as well as a refusal the interceptor used to say in a plate over it -
- * and closes on success alone.
- */
+/** Creates a contest series, suggesting the next number of the type. The window runs the request. */
 import { ref, computed, watch } from "vue";
-import { achievementApi } from "@/entities/achievement";
+import {
+  achievementApi,
+  CONTEST_SERIES_MIN_YEAR,
+  CONTEST_SERIES_YEARS_AHEAD,
+} from "@/entities/achievement";
 import { siteTime } from "@/shared/lib/utils/datetime";
 import {
   ContestType,
@@ -23,6 +17,7 @@ import Form from "@/shared/ui/Form/Form.vue";
 import FormField from "@/shared/ui/Form/FormField.vue";
 import { Select, type SelectOption } from "@/shared/ui/Select";
 import { YearInput } from "@/shared/ui/DatePicker";
+import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 const props = defineProps<{
   /** Existing series — used to suggest the next number per type. */
@@ -42,6 +37,8 @@ const typeOptions: SelectOption[] = [
 const contestType = ref<ContestType>(ContestType.Literary);
 const number = ref(1);
 const year = ref<number | null>(siteTime().year());
+/** The latest year the server takes: one past the current. */
+const latestYear = siteTime().year() + CONTEST_SERIES_YEARS_AHEAD;
 /** What the year field says is wrong with it, shown under it. */
 const yearReason = ref<string | null>(null);
 const topicUrl = ref("");
@@ -53,21 +50,19 @@ function suggestNumber(type: ContestType): number {
   return maxN + 1;
 }
 
-// Suggest the next number for the initially selected and re-selected type
+// The next number for the type chosen first and on every change
 number.value = suggestNumber(contestType.value);
 watch(contestType, (type) => {
   number.value = suggestNumber(type);
 });
 
-// The year field takes only a year of four digits from 2000 to 2100, and
-// says why it does not take anything else.
+// A year of four digits the server takes; the field says why it takes nothing else.
 const canSubmit = computed(
   () => number.value >= 1 && year.value !== null && !yearReason.value,
 );
 
 /**
- * Enter in a field sends the form as "Создать" does, and the window runs its
- * action whatever the button says. While the button is shut, so is Enter: a
+ * Enter sends the form as "Создать" does, so it is shut with the button: a
  * year the field did not take would otherwise go out as the last one it did.
  */
 function holdEnter(e: KeyboardEvent) {
@@ -82,7 +77,7 @@ async function send() {
       year: year.value!,
       topicUrl: topicUrl.value.trim() || null,
     },
-    { ownsRefusal: true, ownsRateLimit: true },
+    OWNS_REFUSAL,
   );
   if (!result.error) emit("success");
   return result;
@@ -131,8 +126,8 @@ async function send() {
         <YearInput
           id="series-year"
           v-model="year"
-          :min="2000"
-          :max="2100"
+          :min="CONTEST_SERIES_MIN_YEAR"
+          :max="latestYear"
           @reason="yearReason = $event"
         />
       </FormField>

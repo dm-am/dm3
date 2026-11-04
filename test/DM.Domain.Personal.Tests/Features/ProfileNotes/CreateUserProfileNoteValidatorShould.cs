@@ -1,12 +1,11 @@
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Personal.Features.ProfileNotes;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.ProfileNotes;
 
-public class CreateUserProfileNoteValidatorShould : UnitTestBase
+public class CreateUserProfileNoteValidatorShould
 {
     private readonly CreateUserProfileNoteValidator validator = new();
 

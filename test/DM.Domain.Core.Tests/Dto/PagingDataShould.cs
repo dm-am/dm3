@@ -9,15 +9,7 @@ namespace DM.Domain.Core.Tests.Dto;
 /// range the query may ask for.
 /// </summary>
 /// <remarks>
-/// Skip is bound as [0, int.MaxValue] and turned into a 1-based entity number by
-/// adding one. At the top of that range the addition wrapped: the number came out
-/// negative, the page was clamped back to one, and the envelope answered "page 1,
-/// skip 0" to a request that had just run an offset of two billion and found
-/// nothing. Nothing anywhere disagreed — the request succeeded, the list was
-/// empty, and the answer described the beginning of the list.
-///
-/// Rare, and cheap to hold: the arithmetic is one expression shared by every
-/// paged read in the site.
+/// Skip goes up to int.MaxValue and becomes an entity number by adding one, which must not wrap.
 /// </remarks>
 public class PagingDataShould
 {

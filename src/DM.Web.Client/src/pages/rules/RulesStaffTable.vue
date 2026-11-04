@@ -1,24 +1,17 @@
 <script setup lang="ts">
-/**
- * RulesStaffTable - Staff/administration table
- *
- * Displays site administration with their roles and responsibilities, on the
- * list the rules page draws its other tables with (ExpandableList): a plain
- * table of three columns at every width, its rows plain rows that hold links.
- */
-
 import { computed, onMounted, ref } from "vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
 import {
   ExpandableList,
   type ExpandableListColumn,
 } from "@/shared/ui/ExpandableList";
-import { UserLink } from "@/entities/user";
+import { ErrorState } from "@/shared/ui/ErrorState";
+import { UserLink, userApi } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/community";
-import { userApi } from "@/entities/user";
 import { ROLE_INFO, STAFF_ROLES } from "@/shared/config/roles";
 import { ADMIN_LINKS } from "@/shared/config/helpLinks";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import { describeFailureOrWait } from "@/shared/lib/errors";
 
 interface RoleGroup {
   role: UserRole;
@@ -39,19 +32,21 @@ const roleGroups = ref<RoleGroup[]>(
   STAFF_ROLES.map((role) => ({ role, users: [] })),
 );
 const loading = ref(true);
-const error = ref(false);
+const failure = ref<string | null>(null);
 
-// All four role requests are batched: one loading state, one error state
-// (with a single inline retry) instead of per-row spinners/errors.
+const LOAD_FAILURE = "Не удалось загрузить состав администрации";
+
+// One loading state and one error state for the four requests, not one per row.
 async function loadRoleGroups() {
   loading.value = true;
-  error.value = false;
+  failure.value = null;
   const results = await Promise.all(
     STAFF_ROLES.map((role) => userApi.getUsersByRole(role)),
   );
   loading.value = false;
-  if (results.some(({ error: reqError }) => reqError)) {
-    error.value = true;
+  const failed = results.find(({ error }) => error)?.error;
+  if (failed) {
+    failure.value = describeFailureOrWait(failed, LOAD_FAILURE);
     return;
   }
   roleGroups.value = STAFF_ROLES.map((role, index) => ({
@@ -72,13 +67,18 @@ const rows = computed<StaffRow[]>(() =>
   })),
 );
 
-// Every column holds its longest word ("Администраторы" in bold, a login
-// whole), and the room over that is shared (ExpandableList).
-const columns: ExpandableListColumn<StaffRow>[] = [
-  { key: "title", label: "Роль" },
-  { key: "description", label: "Функции" },
-  { key: "users", label: "Состав" },
-];
+// "Роль" and "Состав" are as wide as what they hold, a role name or a login on
+// one line, and "Функции" takes the rest (ExpandableList's fit). Without its
+// members the table keeps the roles and loses the column; the error under it
+// says why.
+const columns = computed(() => {
+  const shown: ExpandableListColumn<StaffRow>[] = [
+    { key: "title", label: "Роль", fit: true },
+    { key: "description", label: "Функции" },
+  ];
+  if (!failure.value) shown.push({ key: "users", label: "Состав", fit: true });
+  return shown;
+});
 </script>
 
 <template>
@@ -111,12 +111,6 @@ const columns: ExpandableListColumn<StaffRow>[] = [
       <template #cell-users="{ item }">
         <!-- One shimmer line per cell while the batched request is in flight -->
         <span v-if="loading" class="skeleton-line" aria-hidden="true" />
-        <span v-else-if="error" class="load-error"
-          >Не удалось загрузить.
-          <button type="button" class="retry-link" @click="loadRoleGroups">
-            Повторить
-          </button></span
-        >
         <template v-else-if="item.users.length">
           <span
             v-for="user in item.users"
@@ -129,6 +123,13 @@ const columns: ExpandableListColumn<StaffRow>[] = [
         <span v-else class="no-users">{{ VALUE_UNAVAILABLE }}</span>
       </template>
     </ExpandableList>
+
+    <ErrorState
+      v-if="failure"
+      class="staff-error"
+      :message="failure"
+      :retry="loadRoleGroups"
+    />
 
     <p class="useful-links">
       <span class="links-label">Полезные ссылки:</span>{{ " "
@@ -147,13 +148,10 @@ const columns: ExpandableListColumn<StaffRow>[] = [
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Links" as *
 @use "@/assets/styles/Skeleton" as *
 
-// The last block of the rules page: the space above it is the step between
-// the blocks of the page, and none goes under it. The page ends where it ends,
-// and what stands under the page is the shell's to space; a margin here stood
-// on top of that, and the rules ended 80 above it.
+// The last block of the page: what stands under the page is the shell's to space.
 .admin-section
   margin-top: $big
 
@@ -162,12 +160,10 @@ const columns: ExpandableListColumn<StaffRow>[] = [
 .role-title
   font-weight: 700
 
-// Two visual lines inside ONE cell, so the break belongs to the nickname and
-// not to a layout on the cell: a cell that laid its children out would be the
-// flex box this table left. 2px is the former gap.
+// Two lines inside one cell: the break belongs to the nickname, not to a layout of the cell.
 .role-nickname
   display: block
-  margin-top: 2px
+  margin-top: $tiny
   color: $text-muted
   font-size: $secondary-font-size
 
@@ -176,46 +172,37 @@ const columns: ExpandableListColumn<StaffRow>[] = [
   font-size: $secondary-font-size
   line-height: 1.4
 
-// One name per line inside the cell, the same way: the line break is on the
-// item, the cell only holds the column width.
+// One name per line, the same way: the break is on the item.
 .user-item
   display: block
   line-height: 1.4
 
   & + &
-    margin-top: 2px
+    margin-top: $tiny
 
 .no-users
   color: $text-muted
 
-// One shimmer line per cell while the batched role request is loading
+// One shimmer line per cell while the batched role request is loading: a login's length, a small
+// line's height.
 .skeleton-line
   display: block
-  width: 90px
+  width: 3 * $big
   max-width: 100%
-  height: 14px
+  height: $secondary-font-size
   +skeleton-shimmer
 
-.load-error
-  color: $text-muted
-  font-size: $secondary-font-size
+// $small: the error belongs to the table above it, as the links under it do.
+.staff-error
+  margin-top: $small
 
-// font-size overrides the mixin's "font: inherit" (the shorthand resets
-// size), so it must stay after the include; the "&" block keeps the CSS
-// cascade order explicit (avoids the Sass mixed-decls deprecation).
-.retry-link
-  +inline-link-button
-  &
-    font-size: $secondary-font-size
-
-// $small, not $medium: the muted caption belongs to the table above it,
-// so it sits close (same table-to-caption distance as the forum pages).
+// $small: the muted caption belongs to the table above it, as on the forum pages.
 .useful-links
   margin-top: $small
   +muted-links-line
 
   .links-label
-    font-weight: 500
+    font-weight: 400
 
   a
     +muted-link

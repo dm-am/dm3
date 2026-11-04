@@ -9,8 +9,6 @@
 import { ref } from "vue";
 import { SvgIcon } from "@/shared/ui/Icon";
 
-defineOptions({ name: "FilterButton" });
-
 const props = withDefaults(
   defineProps<{
     /** Button label */
@@ -31,10 +29,6 @@ const emit = defineEmits<{
 
 const buttonRef = ref<HTMLButtonElement | null>(null);
 
-function handleClick(event: MouseEvent) {
-  emit("click", event);
-}
-
 // Dropdown state/wrapper is owned by the parent (see component doc comment).
 // On Escape we ask the parent to close it and return focus to this trigger.
 function handleEscape() {
@@ -52,7 +46,7 @@ function handleEscape() {
     :class="{ active }"
     :aria-expanded="active"
     :aria-label="label"
-    @click="handleClick"
+    @click="emit('click', $event)"
     @keydown.esc="handleEscape"
   >
     <SvgIcon name="filter" class="filter-icon" />
@@ -61,7 +55,7 @@ function handleEscape() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Inputs" as *
+@use "@/assets/styles/Buttons" as *
 
 // Icon-specific additions only — base visual comes from the unified +button mixin.
 .filter-btn

@@ -4,7 +4,6 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Infrastructure.Persistence.Repositories.Forum;
 using AwesomeAssertions;
-using Microsoft.EntityFrameworkCore;
 using Xunit;
 using DbBoard = DM.Infrastructure.Persistence.Entities.Forum.Board;
 using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
@@ -18,17 +17,8 @@ namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 /// the plan happened to return first.
 /// </summary>
 /// <remarks>
-/// The board's last comment is found in two statements — an aggregate for the newest
-/// timestamp per board, then the rows carrying those timestamps — because a per-group
-/// "top 1" does not translate. The second statement can hand back several rows for one
-/// board, and picking among them by timestamp alone leaves the choice to whatever order
-/// the rows arrived in. Equal timestamps are not exotic: the DM2 import produces them by
-/// the thousand, and so does a busy second on a live board.
-///
-/// Arrival order is the whole point, so it is what varies between the two halves of the
-/// assertion: the same two comments, seeded in one order and then in the other, have to
-/// name the same comment. A selection settled by the identifier answers both the same
-/// way; one settled by nothing answers each way once.
+/// A per-group "top 1" does not translate, so the second statement can return several rows for a board;
+/// equal timestamps are common after the DM2 import. The same comments seeded both ways must name one.
 /// </remarks>
 public class BoardLastCommentTieShould
 {
@@ -62,9 +52,7 @@ public class BoardLastCommentTieShould
     /// </summary>
     private static DmDbContext Seeded(params Guid[] commentIds)
     {
-        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var context = InMemoryStore.Open();
 
         context.Users.Add(new DbUser
         {
@@ -104,7 +92,7 @@ public class BoardLastCommentTieShould
     private static async Task<Guid?> LastCommentIdAsync(params Guid[] commentIds)
     {
         using var context = Seeded(commentIds);
-        var boards = await new BoardRepository(context).SelectBoards(null);
+        var boards = await new BoardRepository(context).SelectBoards();
         return boards.Single().LastComment?.Id;
     }
 
@@ -145,7 +133,7 @@ public class BoardLastCommentTieShould
         context.Comments.Add(newest);
         await context.SaveChangesAsync();
 
-        var boards = await new BoardRepository(context).SelectBoards(null);
+        var boards = await new BoardRepository(context).SelectBoards();
 
         boards.Single().LastComment!.Id.Should().Be(EarlierId,
             "time decides first, and the identifier only speaks when time has nothing to say");

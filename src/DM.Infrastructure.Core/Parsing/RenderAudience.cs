@@ -1,8 +1,7 @@
 namespace DM.Infrastructure.Core.Parsing;
 
 /// <summary>
-/// Semantic intent for BBCode rendering — drives visibility filtering
-/// and output format. Audience is the intent, not the format.
+/// The intent of a rendering, which drives the visibility filter.
 /// </summary>
 public enum RenderAudience
 {
@@ -13,25 +12,18 @@ public enum RenderAudience
     Display = 0,
 
     /// <summary>
-    /// Author loading own content into the editor. Tags are rendered with
-    /// data-bb-* round-trip attributes, the privacy tags verbatim, so the
-    /// client can serialize them back to BBCode. Authorship is verified
-    /// per field at render time: the endpoint only supplies the author id
-    /// in the render envelope, and a missing id means "not the author"
-    /// and yields Display.
+    /// The author loading own content into the editor: the stored BBCode as
+    /// typed, nothing rendered. A missing author id at render time yields Display.
     /// </summary>
     AuthorEdit = 1,
 
     /// <summary>
-    /// Plain-text channel (email, notification digests, search index).
-    /// Privacy-sensitive tags are unconditionally stripped. Viewer
-    /// is treated as anonymous.
+    /// Plain-text channel (mail, search). Hiding tags are always stripped.
     /// </summary>
     PlainText = 2,
 
     /// <summary>
-    /// Link preview / cross-post embed. Uses the NSFW-safe tag set
-    /// and unconditionally strips privacy-sensitive tags.
+    /// Embed: the NSFW-safe tag set, hiding tags always stripped.
     /// </summary>
     EmbedSafe = 3
 }

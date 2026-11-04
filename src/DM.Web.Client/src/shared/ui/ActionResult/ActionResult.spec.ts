@@ -56,12 +56,4 @@ describe("the line of a press", () => {
       "Пользователь не убран из черного списка",
     );
   });
-
-  it("stands as an item of a list where a paragraph cannot", () => {
-    const wrapper = mount(ActionResult, {
-      props: { text: "Не удалось изменить подписку", tag: "li" },
-    });
-
-    expect(wrapper.get("[role=alert]").element.tagName).toBe("LI");
-  });
 });

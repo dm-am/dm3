@@ -15,7 +15,6 @@ internal class IntentionManager : IIntentionManager
     private readonly IEnumerable<IIntentionResolver> _resolvers;
     private readonly ILogger<IntentionManager> _logger;
 
-    /// <inheritdoc />
     public IntentionManager(
         IAuthorizationContextProvider authorizationContextProvider,
         IEnumerable<IIntentionResolver> resolvers,
@@ -37,10 +36,7 @@ internal class IntentionManager : IIntentionManager
             return matchingResolver.IsAllowed(_authorizationContextProvider.CurrentSubject, intention);
         }
 
-        // Counted as well as logged. Refusing is the right answer to a question
-        // nobody wrote an answer for, and it is the same answer the rules give when
-        // they mean it - so without a number nobody notices a whole feature quietly
-        // refusing everybody.
+        // Counted: otherwise this reads exactly like a refusal the rules meant.
         AuthorizationMetrics.ResolverMissing.Add(1,
             new KeyValuePair<string, object?>("intention", typeof(TIntention).Name),
             new KeyValuePair<string, object?>("target", "none"));
@@ -74,7 +70,7 @@ internal class IntentionManager : IIntentionManager
     {
         if (!IsAllowed(intention))
         {
-            throw new IntentionManagerException(_authorizationContextProvider.CurrentSubject, GetIntentionEnum(intention));
+            throw new IntentionManagerException(_authorizationContextProvider.CurrentSubject, (Enum)(object)intention);
         }
     }
 
@@ -84,12 +80,7 @@ internal class IntentionManager : IIntentionManager
     {
         if (!IsAllowed(intention, target))
         {
-            throw new IntentionManagerException(_authorizationContextProvider.CurrentSubject, GetIntentionEnum(intention), target);
+            throw new IntentionManagerException(_authorizationContextProvider.CurrentSubject, (Enum)(object)intention, target);
         }
-    }
-
-    private static Enum GetIntentionEnum<TIntention>(TIntention intention)
-    {
-        return (Enum)Enum.Parse(typeof(TIntention), intention?.ToString() ?? string.Empty);
     }
 }

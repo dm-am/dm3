@@ -3,63 +3,45 @@ name: .NET
 on:
   push:
     branches: [ main, dev ]
-    # The installer pins a release by tag and says why: a tag names one tree, so
-    # the same command a month later brings up the same site. Nothing published
-    # an image under that name, so the documented install path pulled a tag the
-    # registry had never heard of.
+    # The installer pins a release by tag, and a tag names one tree.
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, dev ]
-  # The full set once a day on dev, the default branch and so the one schedule
-  # runs on. A push runs what its paths need (the changes job below), and what
-  # changes without a commit - an advisory against a package, a base image, a
-  # runner - is found here rather than by the next unrelated push.
+  # The full set once a week on dev, the one branch a schedule runs on: what changes without a
+  # commit (an advisory, a base image, a runner) is found here and not by the next unrelated push.
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * 0'
 
 # Least privilege by default; the publish job widens it for itself only.
 permissions:
   contents: read
 
-# A newer push to the same branch supersedes the run in flight — except on the
-# refs that publish. Cancelling between two legs of the publish matrix leaves the
-# registry holding half of a release, and the run that superseded it will not
-# rebuild the half that made it.
-#
-# What guarantees that one tag means one commit is promote-images, which sets the
-# moving names after every publisher has finished; this only keeps a superseded
-# run from leaving orphaned digests behind. On a pull request there is nothing to
-# publish, so superseding is free.
+# A newer push to the same branch supersedes the run in flight, except on the refs that
+# publish: cancelling between two legs of the publish matrix leaves the registry with half a
+# release. promote-images is what makes one tag mean one commit; this only keeps a superseded
+# run from leaving orphaned digests.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ !(github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
 
 env:
   REGISTRY: ghcr.io
-  # Image names must match what docker/docker-compose.yml pulls
-  # (ghcr.io/<owner>/dm-api, dm-worker-*), otherwise CI publishes artifacts
-  # no deployment ever consumes.
+  # Must match the image names docker/docker-compose.yml pulls (ghcr.io/<owner>/dm-api, dm-worker-*).
   IMAGE_PREFIX: ${{ github.repository_owner }}/dm
 
-# Every job pins its runner image: ubuntu-latest becomes Ubuntu 26 on 2026-10-19, and we move when we choose.
+# Every job pins its runner image, so we move when we choose. timeout-minutes ends a hang
+# instead of holding the branch for GitHub's six hours; it is far above the real time on
+# purpose, since a ceiling guessed close turns a slow runner into a red build.
 jobs:
-  # Which jobs this change needs, from the one map of paths in
-  # scripts/ci-paths.json. The pre-push hook and scripts/gates.sh read the same
-  # map through the same script, so what CI skips is what the hook skipped.
-  #
-  # The base of a push is the last green run of this workflow on the branch,
-  # not github.event.before: a push that follows a red one would otherwise
-  # compare against the red commit and skip the very jobs that were red. Every
-  # green run proved what changed since the green run before it, so the tree of
-  # the last one is the tree whose every group has passed. A tree diff against
-  # it holds across a force push too, and a commit the clone no longer has is a
-  # diff git cannot build, which the script answers with the full set. A pull
-  # request compares with the merge base of its target, the way review reads it.
-  # Tags and the schedule run everything.
-  #
-  # Built in rather than dorny/paths-filter: that action compares a push with
-  # github.event.before, which is the hole described above, and it would be a
-  # second reader of the map in a syntax the hook cannot run.
+  # Which jobs this change needs, from the one map of paths in scripts/ci-paths.json; the
+  # pre-push hook and scripts/gates.sh read the same map through the same script. A push is
+  # compared with the last green run of this workflow on the branch, not github.event.before:
+  # after a red push that would compare against the red commit and skip the jobs that were
+  # red. A tree diff holds across a force push, and a commit the clone no longer has is a
+  # diff git cannot build, which the script answers with the full set. A pull request is
+  # compared with the merge base of its target. Tags and the schedule run everything. Built
+  # in rather than dorny/paths-filter, which compares with github.event.before and would be
+  # a second reader of the map.
   changes:
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -83,9 +65,7 @@ jobs:
     - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
-    # The summary of this job says which groups of paths changed and, for every
-    # job, whether it runs and why: a skipped job is one line on the run page,
-    # never a silence.
+    # The summary says which groups of paths changed and whether each job runs and why.
     - name: Select the jobs this change needs
       id: select
       env:
@@ -116,9 +96,6 @@ jobs:
   build:
     needs: [changes]
     if: needs.changes.outputs.build == 'true'
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 40
     runs-on: ubuntu-24.04
     steps:
@@ -129,26 +106,17 @@ jobs:
         dotnet-version: 10.0.x
     - name: Restore dependencies
       run: dotnet restore
-    # .editorconfig declares a final newline and no trailing whitespace for the
-    # whole tree, and nothing checked it: 134 C# files had drifted out of the
-    # first rule. A file without a final newline adds a line to every diff that
-    # touches it, so review reads noise instead of the change, and the count only
-    # grows. The whitespace subcommand is deliberate: it skips the analyzer pass,
-    # which would make this a slow gate on rules the project never declared. It
-    # is narrower than .editorconfig, though, and the comment used to claim they
-    # were equal. It reformats C# only, and inside C# it leaves trailing
-    # whitespace in comment lines alone, so trim_trailing_whitespace outside C#
-    # and inside comments is on review, not on this step.
+    # .editorconfig declares a final newline and no trailing whitespace for the tree, and
+    # nothing checked it. The whitespace subcommand skips the analyzer pass; it reformats C#
+    # only and leaves trailing whitespace in comment lines alone, so the rest is on review.
     - name: Format
       run: dotnet format DM.sln whitespace --verify-no-changes
-    # Release is what ships (docker/app.Dockerfile publishes -c Release), so it
-    # is what gets compiled and tested here.
+    # Release is what ships (docker/app.Dockerfile publishes -c Release).
     - name: Build
       run: dotnet build --no-restore -c Release
-    # StatusDocumentShould runs scripts/docs/build-status.mjs --check, and the
-    # script reads the client through the TypeScript compiler from the client's
-    # node_modules, so the packages have to be installed before the tests run.
-    # The same Node as the frontend job: FrontendToolchainShould holds them equal.
+    # StatusDocumentShould runs scripts/docs/build-status.mjs --check, which reads the client
+    # through the TypeScript compiler of its node_modules, so packages are installed before
+    # the tests. The same Node as the frontend job.
     - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
@@ -159,11 +127,7 @@ jobs:
       working-directory: src/DM.Web.Client
     - name: Test
       run: dotnet test --no-build -c Release --verbosity normal --logger trx --results-directory TestResults --collect:"XPlat Code Coverage"
-    # The cobertura was collected and uploaded with if-no-files-found: error - a
-    # guarantee that the file exists, with no threshold anywhere, so deleting
-    # tests or adding a module without any passed every gate green. The frontend
-    # has had a ratchet since it had tests at all; this is the same rule for the
-    # solution, and the numbers live next to the reason in the script.
+    # A threshold on the merged coverage; the numbers live next to the reason in the script.
     - name: Coverage threshold
       run: bash scripts/check-coverage.sh
     - name: Upload test results
@@ -179,9 +143,8 @@ jobs:
         name: coverage-reports
         path: TestResults/**/coverage.cobertura.xml
         if-no-files-found: error
-    # The contract only existed inside a running Development container: Swagger
-    # is not served in production. The integration suite writes it out so it can
-    # be diffed between builds and consumed outside the process.
+    # Swagger is not served in production, so the integration suite writes the contract out
+    # for diffing between builds.
     - name: Upload OpenAPI contract
       uses: actions/upload-artifact@v7
       if: always()
@@ -193,9 +156,6 @@ jobs:
   frontend:
     needs: [changes]
     if: needs.changes.outputs.frontend == 'true'
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     runs-on: ubuntu-24.04
     defaults:
@@ -203,20 +163,18 @@ jobs:
         working-directory: src/DM.Web.Client
     steps:
     - uses: actions/checkout@v7
-    # The exact patch, not the major. npm ships inside the Node tarball, so the
-    # Node version decides which npm reads the lock file: '24' floated onto a
-    # patch carrying npm 11.17.0 while the file had been written on the owner's
-    # machine by the 11.6.2 that comes with 24.13.0, and `npm ci` rejected it -
-    # a red build whose cause was a number nobody had written down anywhere.
-    # The version lives in src/DM.Web.Client/package.json under engines, here,
-    # and in src/DM.Web.Client/Dockerfile; FrontendToolchainShould holds the
-    # three equal.
+    # The exact patch, not the major: npm ships inside the Node tarball and decides which npm
+    # reads package-lock.json, and a floating '24' made `npm ci` reject a lock file written
+    # by 24.13.0. The version lives in package.json (engines), here and in
+    # src/DM.Web.Client/Dockerfile; FrontendToolchainShould holds the three equal.
     - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
     - run: npm ci
+    - name: Dead code
+      run: npm run knip
     - name: Lint
       run: npm run lint:ci
     - run: npm run type-check
@@ -230,37 +188,35 @@ jobs:
         path: src/DM.Web.Client/coverage/
         if-no-files-found: warn
 
-  # The end-to-end tier, which until now ran nowhere: 32 spec files and the 235
-  # tests in them, which only ever ran on the owner's machine, so nothing stopped a merge
-  # from breaking them and nobody found out until the next manual run.
-  #
-  # It needs a real stack, not a mock — the suite talks to the API over HTTP and
-  # asserts on what a browser renders — so the shape below is the one zap-scan
-  # already uses, plus a seed.
+  # The end-to-end tier: a real stack, not a mock, since the suite talks to the API over HTTP
+  # and asserts on what a browser renders. The shape is the one zap-scan uses, plus a seed.
   e2e:
     needs: [changes]
     if: needs.changes.outputs.e2e == 'true'
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 45
     runs-on: ubuntu-24.04
+    # The suite in shares, one leg per share on a runner and a stack of its own. The count
+    # comes from strategy.job-total, so a leg added or removed cannot leave a share that no
+    # leg runs.
+    strategy:
+      # Every leg runs to its end: a red leg cancelling the others would hide their failures
+      # and flakes.
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     env:
-      # Every compose invocation in this job means the pair, and repeating the
-      # flags five times is how one of them ends up missing the overlay.
+      # Every compose invocation in this job means the pair; repeating the flags is how one
+      # of them ends up missing the overlay.
       COMPOSE_FILE: docker-compose.yml:docker-compose.e2e.yml
-      # docker/.env.example ends with Development for local work, and a tier that
-      # exercises Development proves nothing about the build that ships: Swagger
-      # is mapped only there, and the content policy of the API relaxes its
-      # script-src for it. Through the environment rather than by rewriting a
-      # line of the file, the way the throwaway encryption key below is handed
-      # in: compose prefers the environment over .env.
+      # docker/.env.example ends with Development, and a tier that exercises Development
+      # proves nothing about the build that ships (Swagger is mapped only there, and the
+      # content policy relaxes script-src). Through the environment, which compose prefers
+      # over .env.
       ASPNETCORE_ENVIRONMENT: Production
     steps:
     - uses: actions/checkout@v7
 
-    # Pinned to the patch, and to the same patch as everywhere else - see the
-    # frontend job for why the major alone reddened a build.
+    # Pinned to the patch, as everywhere (see the frontend job).
     - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
@@ -270,32 +226,17 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
 
-    # docker/.env.example ships the encryption key and the imgproxy signing pair
-    # empty, and compose declares all three with ${...:?}, which rejects an empty
-    # value as hard as a missing one. They go into the job environment rather
-    # than into .env: compose prefers the environment over the file, so no step
-    # has to edit a line of a file it does not own, and the values die with the
-    # runner.
+    # docker/.env.example ships the encryption key empty, and compose declares it with
+    # ${...:?}, which rejects an empty value as hard as a missing one. init-env.sh creates
+    # docker/.env with throwaway values that die with the runner.
     - name: Generate the throwaway secrets compose refuses to start without
-      run: |
-        echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
-        echo "IMGPROXY_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-        echo "IMGPROXY_SALT=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
+      run: bash docker/scripts/init-env.sh local
 
-    - name: Create .env for Docker Compose
-      run: cp docker/.env.example docker/.env
-
-    # Load-bearing, not a convenience. One /games load is 17 API requests — 3 for
-    # the page and 14 for the site shell — against a global budget of 100 per
-    # address per minute, so a 38-test spec file burns the whole minute in three
-    # tests and every test after that fails on a data-loading error that looks
-    # exactly like a stale selector. RateLimiting:Enabled=false registers every
-    # policy as a no-op, which is what a single-address test runner needs.
-    #
-    # Generated here rather than committed: docker-compose.yml and
-    # docker-compose.preview.yml are the combination that gets deployed and the
-    # compose-topology job validates exactly that pair. A knob that must never
-    # reach a server does not belong in that set.
+    # Load-bearing: one page load is a dozen and more API requests against a global budget of
+    # 100 per address per minute, so a long spec file burns the minute in a few tests and the
+    # rest fail on data-loading errors that look like stale selectors. Generated here, not
+    # committed: docker-compose.yml and docker-compose.preview.yml are the deployed
+    # combination, and a knob that must never reach a server does not belong in that set.
     - name: Overlay that turns rate limiting off and lets the preview origin in
       run: |
         cat > docker/docker-compose.e2e.yml <<'YAML'
@@ -303,20 +244,15 @@ jobs:
           dmapi:
             environment:
               DM_RateLimiting__Enabled: "false"
-              # The port the suite serves the built bundle from. The API derives
-              # the origins a browser may call it from - its public address plus
-              # the site's own hosts - and adds the two development ports only
-              # when the environment is Development, which this job is not. Left
-              # out, every request from the page carries an origin the API does
-              # not answer to: CORS drops the responses and the origin check
-              # refuses the writes, so the specs fail on locators that never fill.
+              # The port the suite serves the built bundle from. The API adds the two
+              # development ports only in Development, which this job is not; without it CORS
+              # drops the responses and the origin check refuses the writes.
               DM_SiteAddressConfiguration__AdditionalOrigins__0: "http://localhost:5174"
         YAML
 
-    # --build on the migration line too. Its image is the API image, and the API
-    # image is now the tag the registry publishes: compose pulls a missing image
-    # before it considers building one, so a plain "up" here would migrate the
-    # database with the published build and test a commit that is not this one.
+    # --build on the migration line too: its image is the API image, and compose pulls a
+    # missing image before it considers building one, so a plain "up" would migrate with the
+    # published build and test a commit that is not this one.
     - name: Start the stack
       working-directory: docker
       run: |
@@ -325,17 +261,14 @@ jobs:
         docker compose up -d postgres rabbitmq mailpit jaeger
         docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
-        # The two workers the stand scripts start beside the API: notifications
-        # are born in one of them, and a suite against the API alone reads a
-        # notifications page that stays empty.
+        # The two workers the stand scripts start beside the API: notifications are born in one.
         docker compose up -d --build --wait dm-mail-worker dm-notification-worker
 
     - name: Wait for API health
       run: timeout 60 bash -c 'until curl -sf http://localhost:5000/_health; do sleep 2; done'
 
-    # The suite asserts against seeded accounts and content: global setup logs in
-    # as admin@test.local before the first spec, and an unseeded database fails
-    # the whole run in that one step.
+    # The suite asserts against seeded accounts: global setup logs in as admin@test.local
+    # before the first spec.
     - name: Seed the database
       working-directory: docker
       run: docker compose run --rm -T --build seeder all
@@ -344,42 +277,40 @@ jobs:
       working-directory: src/DM.Web.Client
       run: npm ci
 
-    # Chromium only. The config declares nine projects; the other eight would
-    # multiply both the wall clock and the request count by nine to re-verify the
-    # same assertions against engines whose behaviour differences this suite does
-    # not test for. Cross-browser belongs on a schedule, where a two-hour matrix
-    # costs nobody a review cycle — not on a pull request.
+    # Chromium only: the other projects of the config would multiply the wall clock and the
+    # request count to re-verify the same assertions. Cross-browser belongs on a schedule.
     - name: Install Chromium
       working-directory: src/DM.Web.Client
       run: npx playwright install --with-deps chromium
 
-    # playwright.config.ts builds the bundle and serves it with vite preview on
-    # port 5174. The API validates Origin twice - the CORS policy and the check
-    # that stands in for a CSRF token read one derived list - and 5174 is not in
-    # it under Production, so the overlay above adds it for this run.
+    # playwright.config.ts builds the bundle and serves it with vite preview on port 5174,
+    # which is not an allowed origin under Production, so the overlay above adds it. The share
+    # goes after "--": the script stays the one definition of how the suite runs. The config
+    # runs fullyParallel, so shares are cut by test and not by spec file.
     - name: Run the suite
       working-directory: src/DM.Web.Client
-      run: npm run test:e2e:fast
+      run: npm run test:e2e:fast -- --shard=${{ matrix.shard }}/${{ strategy.job-total }}
 
-    # retries: 2 in CI means a test that failed twice and passed on the third
-    # attempt leaves the job green, and the only evidence used to be inside an
-    # HTML artifact somebody has to download and open. A flake that nobody sees
-    # is a test on its way to being deleted for being "always red anyway", so the
-    # count and the names go on the run page itself, whether the suite passed or
-    # not. The reporter that writes the file is declared in playwright.config.ts.
+    # retries: 2 in CI hides a test that failed twice and passed on the third, unless the
+    # count and the names go on the run page itself. The reporter is declared in
+    # playwright.config.ts. Each leg writes the summary of its own share, and the heading
+    # names it.
     - name: Flaky tests of this run
       if: always()
       working-directory: src/DM.Web.Client
-      # Node rather than jq: the job already installs it, and the same script runs
-      # on a developer machine. A spec is flaky when Playwright retried it into a
-      # pass; suites nest, so the walk is recursive.
+      env:
+        SHARD: ${{ matrix.shard }}/${{ strategy.job-total }}
+      # Node rather than jq: the job installs it, and the same script runs on a developer
+      # machine. A spec is flaky when Playwright retried it into a pass; suites nest, so the
+      # walk is recursive.
       run: |
         node -e '
           const fs = require("fs");
           const report = "playwright-report/results.json";
           const summary = process.env.GITHUB_STEP_SUMMARY;
+          const share = "shard " + process.env.SHARD;
           if (!fs.existsSync(report)) {
-            fs.appendFileSync(summary, "No Playwright report at " + report + "\n");
+            fs.appendFileSync(summary, "No Playwright report of " + share + " at " + report + "\n");
             process.exit(0);
           }
           const flaky = [];
@@ -392,22 +323,23 @@ jobs:
             for (const child of suite.suites || []) walk(child);
           };
           walk(JSON.parse(fs.readFileSync(report, "utf8")));
-          const lines = ["### Playwright: " + flaky.length + " flaky test(s)"];
+          const lines = ["### Playwright " + share + ": " + flaky.length + " flaky test(s)"];
           for (const name of flaky) lines.push("- " + name);
           fs.appendFileSync(summary, lines.join("\n") + "\n");
         '
 
+    # The artifact names its share: an artifact name is unique within a run, so three legs
+    # under one name would fail all but the first.
     - name: Upload Playwright report
       uses: actions/upload-artifact@v7
       if: always()
       with:
-        name: playwright-report
+        name: playwright-report-${{ matrix.shard }}
         path: src/DM.Web.Client/playwright-report/
         if-no-files-found: warn
 
-    # A red run whose only evidence is a browser-side timeout is not diagnosable.
-    # Half the failure modes here are server-side: a migration that did not
-    # apply, a rejected Origin, a 500 behind a spinner.
+    # Half the failure modes are server-side (a migration that did not apply, a rejected
+    # Origin, a 500 behind a spinner), which a browser timeout does not show.
     - name: API logs on failure
       if: failure()
       working-directory: docker
@@ -416,9 +348,6 @@ jobs:
   dependency-scan:
     needs: [changes]
     if: needs.changes.outputs.dependency-scan == 'true'
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 20
     runs-on: ubuntu-24.04
     steps:
@@ -427,30 +356,24 @@ jobs:
       uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
-    # Gate, not a report: any advisory outside the reviewed allow-list fails
-    # the job. Entries live in .github/vulnerability-allowlist.txt with the
-    # reason they are accepted.
+    # A gate, not a report: any advisory outside .github/vulnerability-allowlist.txt fails
+    # the job; entries carry their reason.
     - name: .NET vulnerable packages
       run: ./scripts/check-vulnerable-packages.sh
-    # Pinned to the patch, and to the same patch as everywhere else - see the
-    # frontend job for why the major alone reddened a build.
+    # Pinned to the patch, as everywhere (see the frontend job).
     - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
         cache: 'npm'
         cache-dependency-path: src/DM.Web.Client/package-lock.json
-    # --omit=dev on purpose: an advisory in vite/eslint/playwright is a
-    # tooling problem for dependabot to raise as a PR, not a reason to block
-    # every push. What ships to a browser is what gates the build.
+    # --omit=dev: an advisory in vite, eslint or playwright is for dependabot to raise as a
+    # PR, not a reason to block every push.
     - name: npm audit (production dependencies)
       run: cd src/DM.Web.Client && npm ci && npm audit --omit=dev --audit-level=high
 
-  # CodeQL and the ZAP scan, pulled into this graph so that publishing can wait
-  # for them. They used to live in a workflow of their own, triggered by the same
-  # push and reachable from no `needs` at all.
-  #
-  # Called on every run: each of its jobs carries its own condition, handed in
-  # from the map, so a scan the change does not need is skipped by name there.
+  # CodeQL and the ZAP scan, in this graph so that publishing waits for them. Called on every
+  # run; each of its jobs carries its own condition from the map, so a scan the change does
+  # not need is skipped by name.
   security:
     needs: [changes]
     uses: ./.github/workflows/security.yml
@@ -461,16 +384,11 @@ jobs:
       codeql: ${{ needs.changes.outputs.codeql == 'true' }}
       zap-scan: ${{ needs.changes.outputs.zap-scan == 'true' }}
 
-  # DM.Architecture.Tests and the client unit specs, for a change the build job
-  # is not called for: both read the documents, the agent configuration and the
-  # client, and a rename there reddens them. The build job runs the same
-  # architecture tests inside the solution, so the map calls this one only
-  # without it, and the frontend job runs the same specs, so they are skipped
-  # here whenever it runs.
+  # DM.Architecture.Tests and the client unit specs for a change the build job is not called
+  # for: both read documents, agent configuration and the client. Build runs the same
+  # architecture tests and the frontend job the same specs, so each is skipped here when its
+  # job runs.
   docs:
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     needs: [changes]
     if: needs.changes.outputs.docs == 'true'
@@ -481,8 +399,8 @@ jobs:
       uses: actions/setup-dotnet@v6
       with:
         dotnet-version: 10.0.x
-    # StatusDocumentShould reads the client through the TypeScript compiler of
-    # its node_modules, as in the build job.
+    # StatusDocumentShould reads the client through the TypeScript compiler of its
+    # node_modules, as in the build job.
     - uses: actions/setup-node@v7
       with:
         node-version: '24.13.0'
@@ -499,16 +417,12 @@ jobs:
       working-directory: src/DM.Web.Client
 
   publish:
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     needs: [changes, build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security, docs]
     runs-on: ubuntu-24.04
-    # Every check succeeded or was skipped by the map, written out rather than
-    # left to the implicit success(): that one counts a skipped check as a
-    # reason to skip the publisher too. Failed and cancelled are named, since
-    # failure() alone lets a check cancelled by concurrency through.
+    # Every check succeeded or was skipped by the map, written out because the implicit
+    # success() counts a skipped check as a reason to skip the publisher; failed and cancelled
+    # are named, since failure() alone lets a check cancelled by concurrency through.
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
     permissions:
       contents: read
@@ -525,8 +439,7 @@ jobs:
     steps:
     - uses: actions/checkout@v7
 
-    # A renamed or mistyped project must fail here in one second, not five
-    # minutes later inside a Docker restore layer.
+    # A mistyped project fails here in a second, not five minutes into a restore layer.
     - name: Verify project exists
       run: test -f "src/${{ matrix.project }}/${{ matrix.project }}.csproj"
 
@@ -545,11 +458,8 @@ jobs:
       uses: docker/metadata-action@v6
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-${{ matrix.image_suffix }}
-        # One tag, and it names a commit. The moving names - latest, the branch,
-        # the release tag - are set by promote-images once every publisher has
-        # finished, because each leg of this matrix finishes at its own moment: set
-        # here, "latest" was whatever mixture of commits the legs happened to end
-        # in, and a leg that failed left the others carrying the name alone.
+        # One tag, and it names a commit. promote-images sets the moving names once every
+        # publisher has finished: set per leg, "latest" ended up a mixture of commits.
         tags: type=sha,prefix=
 
     - name: Build and push image
@@ -563,27 +473,16 @@ jobs:
         build-args: |
           PROJECT_NAME=${{ matrix.project }}
           SOURCE_REVISION=${{ github.sha }}
-        # A scope per image. Left unnamed, all four builds write the default scope
-        # of the same ref and overwrite one another's index: the cache is present,
-        # paid for, and useless.
+        # A scope per image: unnamed, the builds overwrite one another's cache index.
         cache-from: type=gha,scope=${{ matrix.image_suffix }}
         cache-to: type=gha,mode=max,scope=${{ matrix.image_suffix }}
 
-  # The frontend has its own context and Dockerfile, so it cannot ride the
-  # publish matrix without conditionals in every step. Until this job existed the
-  # SPA image was never built by CI at all: the only thing that referenced it was
-  # a compose service pointing at a directory that does not exist.
+  # The frontend has its own context and Dockerfile, so it cannot ride the publish matrix.
   publish-frontend:
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     needs: [changes, build, frontend, e2e, dependency-scan, compose-topology, deployment-smoke, security, docs]
     runs-on: ubuntu-24.04
-    # Every check succeeded or was skipped by the map, written out rather than
-    # left to the implicit success(): that one counts a skipped check as a
-    # reason to skip the publisher too. Failed and cancelled are named, since
-    # failure() alone lets a check cancelled by concurrency through.
+    # The condition of publish.
     if: ${{ !cancelled() && !contains(needs.*.result, 'failure') && !contains(needs.*.result, 'cancelled') && github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/dev' || startsWith(github.ref, 'refs/tags/v')) }}
     permissions:
       contents: read
@@ -606,11 +505,7 @@ jobs:
       uses: docker/metadata-action@v6
       with:
         images: ${{ env.REGISTRY }}/${{ env.IMAGE_PREFIX }}-front
-        # One tag, and it names a commit. The moving names - latest, the branch,
-        # the release tag - are set by promote-images once every publisher has
-        # finished, because each leg of this matrix finishes at its own moment: set
-        # here, "latest" was whatever mixture of commits the legs happened to end
-        # in, and a leg that failed left the others carrying the name alone.
+        # One tag naming a commit, as in publish.
         tags: type=sha,prefix=
 
     - name: Build and push image
@@ -623,18 +518,11 @@ jobs:
         cache-from: type=gha,scope=front
         cache-to: type=gha,mode=max,scope=front
 
-# The moving names of the images, set once and after everything that could
-  # still fail.
-  #
-  # Each publisher pushes one tag, and it names a commit. "latest", the branch
-  # name and the release tag are what a deployment actually pulls, and until this
-  # job existed each leg of the publish matrix set them for itself, at whatever
-  # moment it happened to finish: a leg that failed left the other three carrying
-  # the name alone, and compose pins all four to one tag on the promise that they
-  # came from one commit. Nothing downstream detects the mixture.
-  #
-  # imagetools create copies a manifest by digest, so nothing is rebuilt here and
-  # the bytes a moving name resolves to are the bytes that were tested.
+# The moving names of the images, set once and after everything that could still fail. Each
+# publisher pushes one tag naming a commit; "latest", the branch name and the release tag
+# are what a deployment pulls, and set per matrix leg they could end up carrying a mixture.
+# imagetools create copies a manifest by digest, so the bytes a moving name resolves to are
+# the bytes that were tested.
   promote-images:
     timeout-minutes: 10
     runs-on: ubuntu-24.04
@@ -672,28 +560,19 @@ jobs:
           done
         done
 
-  # A build context that does not exist, an overlay that no longer parses or a
-  # service renamed out from under the installer must fail here, not on the
-  # server. This is the check that would have caught the frontend context
-  # pointing at a directory removed long ago.
+  # A build context that does not exist, an overlay that no longer parses or a service
+  # renamed out from under the installer must fail here, not on the server.
   compose-topology:
     needs: [changes]
     if: needs.changes.outputs.compose-topology == 'true'
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     runs-on: ubuntu-24.04
     steps:
     - uses: actions/checkout@v7
 
-    # Through scripts rather than inline, the way shellcheck already was: every
-    # check of this job needs docker and nothing else, so all of it belongs in
-    # the local set too - and a job whose cheap half stays here keeps the class
-    # open, because editing a deployment file still reddens a push on the half
-    # that stayed. A command written out in two places is also one edit away from
-    # checking two different things. What each script checks, and why, is in the
-    # script.
+    # Through scripts, not inline: every check of this job needs only docker, so it belongs in
+    # the local set too, and a command written out in two places is one edit from checking two
+    # different things. What each script checks, and why, is in the script.
     - name: The compose files and the installer must describe one deployment
       run: bash scripts/deployment/check-compose-topology.sh
 
@@ -709,19 +588,12 @@ jobs:
     - name: Every shell script must pass shellcheck
       run: bash scripts/check-shell-scripts.sh
 
-  # The pair that actually gets deployed had never been started by anything: e2e
-  # brings up the base stack plus its own overlay and talks to the API directly,
-  # so nginx, its basic auth, the SPA container and every route through the edge
-  # were executed for the first time on the server. Three of the deployment
-  # defects this repository has already fixed - the API port outside the
-  # perimeter, the session cookie, the unreachable transform layer - are that one
-  # class, and none of them could have failed a gate.
+  # The pair that is actually deployed: e2e starts the base stack plus its own overlay and
+  # talks to the API directly, so nginx, its basic auth, the SPA container and every route
+  # through the edge ran for the first time on the server. This job starts that pair.
   deployment-smoke:
     needs: [changes]
     if: needs.changes.outputs.deployment-smoke == 'true'
-    # Ends a hang instead of holding the branch for the six hours
-    # GitHub allows by default. Deliberately far above the real time:
-    # a ceiling guessed close turns a slow runner into a red build.
     timeout-minutes: 30
     runs-on: ubuntu-24.04
     steps:
@@ -730,20 +602,12 @@ jobs:
     - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v4
 
-    # The same three the end-to-end tier generates, and for the same reason:
-    # compose declares them with ${...:?} and stops on interpolation before it
-    # starts anything.
+    # The same as in the end-to-end tier: compose declares the key with ${...:?} and stops on
+    # interpolation before it starts anything.
     - name: Generate the throwaway secrets compose refuses to start without
-      run: |
-        echo "DM_CryptoConfiguration__KeyBase64=$(openssl rand -base64 32)" >> "$GITHUB_ENV"
-        echo "IMGPROXY_KEY=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-        echo "IMGPROXY_SALT=$(openssl rand -hex 32)" >> "$GITHUB_ENV"
-
-    - name: Create .env for Docker Compose
-      run: cp docker/.env.example docker/.env
-
-    # The repository ships no credentials, and without the file docker creates a
-    # directory in its place and nginx does not start.
+      run: bash docker/scripts/init-env.sh local
+    # The repository ships no credentials; without the file docker creates a directory in its
+    # place and nginx does not start.
     - name: Generate the stand credentials
       env:
         DM_PREVIEW_PASSWORD: smoke-test-password
@@ -754,29 +618,20 @@ jobs:
       env:
         COMPOSE_FILE: docker-compose.yml:docker-compose.preview.yml
         ASPNETCORE_ENVIRONMENT: Production
-      # imgproxy on the list because nginx resolves the hosts it proxies to at
-      # start-up: the transform location names imgproxy literally, so without
-      # that container the edge exits with "host not found in upstream" and the
-      # whole job waits on a health check that will never pass. It is part of
-      # the pair being deployed, not a convenience. Object storage comes first
-      # and with --wait: the site starts without it, so this line is the one
-      # place an image the registry no longer serves, or a bucket the server did
-      # not create, stops the job.
+      # Object storage comes first and with --wait: the site starts without it, so this line is
+      # where an image the registry no longer serves, or a bucket the server did not create,
+      # stops the job.
       run: |
         docker compose up -d --wait storage seaweedfs
-        docker compose up -d postgres rabbitmq imgproxy mailpit jaeger
+        docker compose up -d postgres rabbitmq mailpit jaeger
         docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
         docker compose up -d --build --wait nginx
 
-    # The same script an operator runs against the public address after the
-    # containers have been replaced. Written out here as well, the two lists were
-    # one edit away from a pipeline that checks something the operator does not.
-    #
-    # The object storage check and the nightly backup ride along for the same
-    # reason: an operator runs both against the server, and this is the one
-    # Linux host where the host network reaches the published port the way it
-    # does there. A new SeaweedFS tag or digest is taken only with this green.
+    # The same script an operator runs against the public address after the containers have
+    # been replaced. The storage check and the nightly backup ride along: an operator runs
+    # both against the server, and this is the one Linux host where the host network reaches
+    # the published port as it does there. A new SeaweedFS tag is taken only with this green.
     - name: The edge answers where the deployment needs it to
       env:
         BACKUP_DIR: ${{ runner.temp }}/storage-backup

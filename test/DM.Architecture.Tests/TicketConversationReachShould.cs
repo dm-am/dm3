@@ -12,27 +12,9 @@ namespace DM.Architecture.Tests;
 /// The conversation of a ticket is read by the tickets and by nothing else.
 /// </summary>
 /// <remarks>
-/// A ticket is a conversation with moderation about access recovery, personal data
-/// or a complaint about a person, and its comments are kept in a table of their
-/// own rather than among the comments of the discussions because those feed what
-/// the whole site reads: the count behind an achievement, the snapshot a warning
-/// takes of the text it names and shows in the open log, the search. A table of
-/// its own is out of all of them only as long as nobody new reads it, and a read
-/// is one line in a repository written by copying its neighbour - the line that
-/// joins the conversation into a count or a snapshot shows on no page until a
-/// stranger reads it there.
-///
-/// So the readers are named. The table is reached through the context set or the
-/// navigation of a ticket, both spelled TicketComments, or through a generic set
-/// of its entity; the files below are the ones allowed to spell any of them: the
-/// model, the ticket repository and its projections, the seed, and the generators
-/// of the notifications about tickets, which read the comment they announce.
-///
-/// The model is allowed as a whole rather than by the name of the context: it
-/// declares the set and the relation and reads nothing, and whichever of its
-/// files spells the relation is found by what it does
-/// (<see cref="SchemaSources.ModelFiles"/>), so cutting the context into a file
-/// per module moves nothing here.
+/// Ticket comments have a table of their own, out of the counts, snapshots and search the whole site
+/// reads, so the readers are named. The model is allowed as a whole, found by
+/// <see cref="SchemaSources.ModelFiles"/>.
 /// </remarks>
 public class TicketConversationReachShould
 {
@@ -52,7 +34,7 @@ public class TicketConversationReachShould
         "DM.Infrastructure.Persistence/Entities/Moderation/TicketComment.cs",
         "DM.Infrastructure.Persistence/Repositories/Moderation/TicketRepository.cs",
         "DM.Infrastructure.Persistence/Repositories/Moderation/ModerationMapper.cs",
-        "DM.Tools.Seeder/Seeding/DataSeeder.Moderation.cs",
+        "DM.Tools.Seeder/Seeding/DataSeeder.Tickets.cs",
     ];
 
     /// <summary>
@@ -97,8 +79,7 @@ public class TicketConversationReachShould
     }
 
     /// <summary>
-    /// A named reader that no longer reaches the table is an open door nobody uses
-    /// and the next file renamed into its place walks through.
+    /// A named reader that no longer reaches the table is an open door.
     /// </summary>
     [Fact]
     public void KeepTheListOfReadersHonest()

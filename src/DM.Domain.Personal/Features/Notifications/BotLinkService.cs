@@ -19,7 +19,7 @@ internal class BotLinkService : IBotLinkService
     private readonly IDateTimeProvider _dateTimeProvider;
     private readonly IBotLinkRepository _repository;
 
-    private static readonly TimeSpan CodeLifetime = TimeSpan.FromMinutes(10);
+    private const int CodeLength = 6;
     private static readonly string[] ValidChannelTypes = { "discord", "telegram" };
 
     public BotLinkService(
@@ -41,10 +41,9 @@ internal class BotLinkService : IBotLinkService
         var userId = _identityProvider.Current.User.UserId;
         var now = _dateTimeProvider.Now;
 
-        // Remove any existing pending tokens for this user
         await _repository.RemoveExistingTokens(userId, ct);
 
-        // Create new token - first 6 chars of GUID become the human-readable code
+        // The first characters of the GUID become the human-readable code
         var tokenId = _guidFactory.Create();
         var token = new CreateToken
         {
@@ -56,33 +55,28 @@ internal class BotLinkService : IBotLinkService
 
         await _repository.CreateLinkToken(token, ct);
 
-        var code = tokenId.ToString()[..6].ToUpperInvariant();
+        var code = tokenId.ToString()[..CodeLength].ToUpperInvariant();
         return new BotLinkCode
         {
             Code = code,
-            ExpiresUtc = now.Add(CodeLifetime)
+            ExpiresUtc = now.Add(BotLinkCode.Lifetime)
         };
     }
 
     /// <inheritdoc />
     public async Task<BotLinkResult> VerifyAndLink(string code, string channelType, string externalId, CancellationToken ct = default)
     {
-        if (string.IsNullOrWhiteSpace(code) || code.Length != 6)
-            return new BotLinkResult { Success = false, Error = "Invalid code format" };
+        if (string.IsNullOrWhiteSpace(code) || code.Length != CodeLength)
+            return new BotLinkResult { Success = false, Error = "Неверный формат кода" };
 
         ValidateChannelType(channelType);
 
         var token = await _repository.FindValidToken(code, ct);
         if (token == null)
-            return new BotLinkResult { Success = false, Error = "Invalid or expired code" };
+            return new BotLinkResult { Success = false, Error = "Код неверный или истек" };
 
-        // Mark token as used
         await _repository.MarkTokenUsed(token.TokenId, ct);
-
-        // Set external channel ID on user
         await _repository.SetChannelId(token.UserId, channelType, externalId, ct);
-
-        // Initialize notification preferences with defaults
         await _repository.InitializeChannelPreferences(token.UserId, channelType, ct);
 
         var username = await _repository.GetUsername(token.UserId, ct);
@@ -95,10 +89,7 @@ internal class BotLinkService : IBotLinkService
         ValidateChannelType(channelType);
         var userId = _identityProvider.Current.User.UserId;
 
-        // Clear external channel ID
         await _repository.SetChannelId(userId, channelType, null, ct);
-
-        // Clear notification preferences for this channel
         await _repository.ClearChannelPreferences(userId, channelType, ct);
     }
 
@@ -129,11 +120,8 @@ internal class BotLinkService : IBotLinkService
             ? preferences.Discord
             : preferences.Telegram;
 
-        // Preferences exist exactly while the channel is connected: linking writes
-        // them together with the external id and disconnecting clears them together
-        // with it. Their absence therefore means "there is nothing to configure", and
-        // that is said out loud instead of being answered with a 200 that changed
-        // nothing and a body showing the old values.
+        // Preferences exist exactly while the channel is connected, so their absence
+        // is refused rather than answered with a 200 that changed nothing.
         if (current == null)
         {
             throw new HttpException(HttpStatusCode.Conflict,

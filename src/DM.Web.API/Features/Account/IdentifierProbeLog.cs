@@ -1,4 +1,8 @@
+using System;
+using System.Linq;
+using DM.Domain.Core.Exceptions;
 using DM.Web.API.Shared.Http;
+using FluentValidation;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 
@@ -8,10 +12,8 @@ namespace DM.Web.API.Features.Account;
 /// Recording of the responses that tell a caller whether an identifier is registered
 /// </summary>
 /// <remarks>
-/// Registration needs to say "this email is taken" and account recovery needs to
-/// say which letter it sent, so both surfaces disclose existence by design — see
-/// the recorded exception in docs/conventions/SECURITY.md. What is not acceptable
-/// is that a bulk scan of those surfaces leaves no trace, and this is that trace:
+/// These surfaces disclose existence by design (the recorded exception in
+/// docs/conventions/SECURITY.md); a bulk scan of them must still leave a trace,
 /// one event per disclosing answer, countable per address.
 /// </remarks>
 internal static class IdentifierProbeLog
@@ -25,12 +27,21 @@ internal static class IdentifierProbeLog
     /// <param name="outcome">What the caller learned</param>
     public static void IdentifierDisclosed(this ILogger logger,
         HttpContext httpContext, string surface, string outcome) =>
-        // The probed identifier is deliberately absent: entries live for a month
-        // and are read through a dashboard, so writing it would leave a month of
-        // the addresses every scan went looking for. The scale and the source are
-        // recoverable from the event and the caller's address; a count by value,
-        // if one is ever needed, is taken over an HMAC of the identifier.
+        // Not the probed identifier: entries live a month, a list of what scans looked for.
         logger.LogInformation(
             "Identifier existence disclosed by {Surface} as {Outcome} to {ClientAddress}",
             surface, outcome, httpContext.GetClientAddress());
+
+    /// <summary>
+    /// Whether a refusal told the caller that the field's value is somebody else's,
+    /// from the validator or from the write that lost the race for the value
+    /// </summary>
+    public static bool DisclosesTaken(this Exception refusal, string field) => refusal switch
+    {
+        ValidationException validation => validation.Errors.Any(e =>
+            e.PropertyName == field && e.ErrorMessage == ValidationError.Taken),
+        HttpBadRequestException badRequest => badRequest.ValidationErrors.TryGetValue(field, out var error) &&
+                                              error == ValidationError.Taken,
+        _ => false
+    };
 }

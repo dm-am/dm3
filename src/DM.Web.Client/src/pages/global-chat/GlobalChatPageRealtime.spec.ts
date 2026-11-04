@@ -2,19 +2,8 @@
  * @vitest-environment jsdom
  */
 
-/**
- * What the chat does when its socket comes back.
- *
- * The feed was always caught up on that transition; the events strip was not.
- * It is read once, when the page mounts, and afterwards only a push about an
- * event starting or ending moves it — which is precisely what a socket that is
- * down does not deliver. So a tab that lost the connection over an event and
- * regained it afterwards went on announcing an event that had ended, and the
- * page gave the reader no way to find out but a reload.
- *
- * The page's own spec next door parses the template and runs without a DOM;
- * this one mounts the page, so it lives in a file of its own.
- */
+// What the chat does when its socket comes back: the feed is caught up, and so
+// is the events strip, which only pushes move and a down socket does not deliver.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { nextTick } from "vue";
 import { flushPromises, mount, enableAutoUnmount } from "@vue/test-utils";
@@ -28,17 +17,14 @@ const { api, socket, scrollToIndex } = vi.hoisted(() => ({
     getMessagesAround: vi.fn(),
     getMessagesNearDate: vi.fn(),
   },
-  // Filled by the mock factory below, which is where `ref` can be reached.
+  // Filled by the mock factory below, where `ref` can be reached.
   socket: { isConnected: null as unknown as { value: boolean } },
   scrollToIndex: vi.fn(),
 }));
 
 vi.mock("@/entities/global-chat/api/globalChatApi", () => ({ default: api }));
 
-/**
- * Stands in for the shared connection so the test can drive the one thing the
- * page watches. The real composable negotiates a hub connection on connect().
- */
+/** The shared connection, driven by the test; the real one negotiates a hub on connect(). */
 vi.mock("@/shared/lib/composables/useSignalR", async () => {
   const { ref } = await import("vue");
   socket.isConnected = ref(false);
@@ -52,10 +38,7 @@ vi.mock("@/shared/lib/composables/useSignalR", async () => {
   };
 });
 
-/**
- * The virtualizer, replaced by the one thing asked of it here: which row the
- * page scrolls to. The real one measures elements, and jsdom lays nothing out.
- */
+/** The virtualizer, reduced to the row the page scrolls to; jsdom lays nothing out. */
 vi.mock("@/shared/lib/composables/useVirtualScroll", async () => {
   const { ref } = await import("vue");
   return {
@@ -75,8 +58,7 @@ vi.mock("vue-router", () => ({
   useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
-// The page opens a warning dialog through it at setup; mounting the real modal
-// machinery would drag a teleport target in for a dialog nothing here opens.
+// The page opens a warning dialog through it; nothing here opens one.
 vi.mock("vue-final-modal", () => ({
   useModal: () => ({ open: vi.fn(), close: vi.fn() }),
 }));
@@ -115,12 +97,7 @@ const messagePage = (ids: number[]) => ({
 
 let pinia: Pinia;
 
-/**
- * Moves the clock forward for everything that reads Date.now(). The socket
- * coming up leaves the events list alone when it has only just been read, and
- * on mount it always has been: without this every reconnect in this file would
- * be one that happened a moment after the page opened.
- */
+/** Moves Date.now() forward: the socket leaves a list read a moment ago alone, and mount has just read it. */
 function pretendTimePassed(ms: number) {
   const now = Date.now();
   vi.spyOn(Date, "now").mockReturnValue(now + ms);
@@ -176,12 +153,7 @@ describe("GlobalChatPage, the socket coming back", () => {
     expect(api.getEvents).toHaveBeenCalled();
   });
 
-  /**
-   * The page reads the events on mount, and the first connection normally
-   * follows a moment later: reading them again there asks the same question
-   * twice on every open of the chat, and the two answers can land in either
-   * order.
-   */
+  // The first connection lands a moment after mount, which has read the events already.
   it("does not read the events twice when the socket comes up on open", async () => {
     await openChat();
     expect(api.getEvents).toHaveBeenCalledTimes(1);
@@ -192,12 +164,7 @@ describe("GlobalChatPage, the socket coming back", () => {
     expect(api.getEvents).toHaveBeenCalledTimes(1);
   });
 
-  /**
-   * And not when the connection lands while that read is still in flight,
-   * which is the ordinary case on a slow answer. The moment of the read used
-   * to be written down when the answer came back, so at this point nothing had
-   * been recorded yet and the socket asked the same question a second time.
-   */
+  // Nor when the connection lands while that read is in flight.
   it("does not read the events twice when the socket comes up during the read", async () => {
     let answer!: (value: unknown) => void;
     api.getEvents.mockReturnValueOnce(
@@ -218,11 +185,7 @@ describe("GlobalChatPage, the socket coming back", () => {
     expect(api.getEvents).toHaveBeenCalledTimes(1);
   });
 
-  /**
-   * Going down is not a transition worth a request: there is nothing to read
-   * the list from, and the socket dropping cannot have changed it. The feed is
-   * still caught up on it, for messages that landed before the drop.
-   */
+  // Going down changes nothing to read; the feed is still caught up on it.
   it("asks for the events only on the way up", async () => {
     socket.isConnected.value = true;
     await openChat();
@@ -236,22 +199,14 @@ describe("GlobalChatPage, the socket coming back", () => {
     expect(api.getMessages).toHaveBeenCalled();
   });
 
-  /**
-   * A reader at the tail is still at the tail once the window is reloaded, and
-   * a window of fifty is replaced by another window of fifty: a full page is
-   * what the server answers with whenever the chat holds fifty live messages.
-   * So counting them says the feed has not moved at the one moment every line
-   * on it has been replaced, and the reader is left wherever the old offset
-   * happens to land, reading the middle of a conversation he has not seen.
-   */
+  // A window of fifty replaced by fifty: the last message, not the count, says the feed moved.
   it("keeps a reader at the tail there when the window is reloaded", async () => {
     api.getMessages.mockResolvedValue(messagePage(run(0)));
     await openChat();
     const store = useGlobalChatStore();
     scrollToIndex.mockClear();
 
-    // The socket dropped, and by the time it was back the whole window had
-    // aged out: fifty held against fifty strangers.
+    // The window aged out while the socket was down: fifty held against fifty strangers.
     api.getMessages.mockResolvedValue(messagePage(run(100)));
     socket.isConnected.value = true;
     await flushPromises();
@@ -262,14 +217,7 @@ describe("GlobalChatPage, the socket coming back", () => {
     expect(scrollToIndex).toHaveBeenCalled();
   });
 
-  /**
-   * The reader who scrolled up decides the fate of the window, and the page is
-   * the only one who can measure that: the store holds no scroll position.
-   * Passing the measurement on is what stops a drift wider than a page from
-   * replacing every line under a reader who is in the middle of it, so the call
-   * that forgets to pass it leaves the store reading the reader as if he stood
-   * at the tail.
-   */
+  // The store holds no scroll position, so the page passes where the reader stands.
   it("tells the store where the reader stands", async () => {
     api.getMessages.mockResolvedValue(messagePage(run(0)));
     await openChat();
@@ -279,21 +227,12 @@ describe("GlobalChatPage, the socket coming back", () => {
     document.dispatchEvent(new Event("visibilitychange"));
     await flushPromises();
 
-    // A boolean, whatever its value: the call that forgets the argument leaves
-    // the store on its default and reads like a reader standing at the tail,
-    // which is the one case where replacing the window is safe.
+    // A boolean: a call that forgets it reads like a reader at the tail.
     expect(poll).toHaveBeenCalledWith(expect.any(Boolean));
   });
 
-  /**
-   * The tab coming back to the screen is a re-read in every case, live socket
-   * included: nothing replays what the hub sent while the tab was away, and a
-   * background socket the browser throttled reports itself connected all the
-   * same. The tick of the fallback timer steps aside for a live socket on
-   * purpose, and it used to be what the return of the tab ran, so the one
-   * moment the reader is looking at the page again was the one moment nothing
-   * was checked.
-   */
+  // The tab coming back re-reads in every case, a live socket included: the hub
+  // replays nothing and a throttled socket still reports itself connected.
   it("re-reads the feed and the events when the tab comes back", async () => {
     socket.isConnected.value = true;
     await openChat();

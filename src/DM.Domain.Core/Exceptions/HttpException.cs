@@ -1,5 +1,3 @@
-using System;
-using System.Collections.Generic;
 using System.Net;
 
 namespace DM.Domain.Core.Exceptions;
@@ -44,13 +42,10 @@ public class HttpBadRequestException : HttpException
     /// </summary>
     public IDictionary<string, string> ValidationErrors { get; }
 
-    /// <summary>
-    /// New HTTP Bad Request exception
-    /// </summary>
     /// <param name="errors">Key-value list of invalid client fields and errors</param>
     /// <param name="message">Client message</param>
     public HttpBadRequestException(IDictionary<string, string> errors,
-        string message = "Invalid request parameters")
+        string message = RefusalMessage.InvalidData)
         : base(HttpStatusCode.BadRequest, message) => ValidationErrors = errors;
 }
 

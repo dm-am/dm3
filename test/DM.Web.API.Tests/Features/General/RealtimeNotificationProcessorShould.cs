@@ -20,16 +20,8 @@ namespace DM.Web.API.Tests.Features.General;
 /// A push reaches the connections of its recipients, and nobody else.
 /// </summary>
 /// <remarks>
-/// Two addressing modes share one method and which one a message gets is decided
-/// by whether the event is one of the global chat's own. Global chat is public,
-/// those carry no recipient list and go to every open connection, guests
-/// included.
-/// Everything else is personal and may only ever reach the connections the map
-/// holds, because the map is the whole of the guarantee that an anonymous
-/// connection cannot become a per-user target - a guarantee stated in the
-/// comments of the hub and of the connection service, and until now held by
-/// nothing else. An early return for guests, or a fallback to broadcasting when
-/// nobody is connected, would break it without failing anything.
+/// Global chat events carry no recipients and go to every connection, guests included; everything else
+/// reaches only the connections the map holds, which keeps an anonymous connection from becoming a target.
 /// </remarks>
 public class RealtimeNotificationProcessorShould : UnitTestBase
 {
@@ -71,10 +63,7 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
     }
 
     /// <summary>
-    /// The start and the end of a chat event travel the same way. They change what
-    /// the strip above the feed shows for everyone watching a public chat, and the
-    /// generator addresses them to nobody: through the connection map they would
-    /// reach no one at all, which is indistinguishable from not being sent.
+    /// The start and the end of a chat event go to everyone watching the public chat.
     /// </summary>
     [Theory]
     [InlineData(EventType.GlobalChatEventStarted)]

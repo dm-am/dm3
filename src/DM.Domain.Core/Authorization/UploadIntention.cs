@@ -16,7 +16,7 @@ public enum UploadIntention
     Delete = 2,
 
     /// <summary>
-    /// List all uploads across users (moderator+, per doc 4.2.3.8.9)
+    /// List all uploads across users (moderator+)
     /// </summary>
     ListAll = 3,
 

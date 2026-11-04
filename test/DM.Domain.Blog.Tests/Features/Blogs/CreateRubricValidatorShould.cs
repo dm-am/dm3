@@ -1,20 +1,14 @@
 using System;
 using DM.Domain.Blog.Features.Blogs;
 using DM.Domain.Core.Exceptions;
-using DM.Testing;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
 
-public class CreateRubricValidatorShould : UnitTestBase
+public class CreateRubricValidatorShould
 {
-    private readonly CreateRubricValidator validator;
-
-    public CreateRubricValidatorShould()
-    {
-        validator = new CreateRubricValidator();
-    }
+    private readonly CreateRubricValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -57,7 +51,7 @@ public class CreateRubricValidatorShould : UnitTestBase
         var input = new CreateRubric
         {
             BlogId = Guid.NewGuid(),
-            Title = new string('a', 101)
+            Title = new string('a', BlogFieldLimits.RubricTitleMaxLength + 1)
         };
         var result = validator.TestValidate(input);
         result.ShouldHaveValidationErrorFor(x => x.Title)
@@ -70,7 +64,7 @@ public class CreateRubricValidatorShould : UnitTestBase
         var input = new CreateRubric
         {
             BlogId = Guid.NewGuid(),
-            Title = new string('a', 100)
+            Title = new string('a', BlogFieldLimits.RubricTitleMaxLength)
         };
         var result = validator.TestValidate(input);
         result.ShouldNotHaveAnyValidationErrors();

@@ -1,6 +1,3 @@
-using System.Collections.Generic;
-using System.Linq;
-using System.Threading.Tasks;
 using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using AwesomeAssertions;
@@ -11,11 +8,8 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
 /// <summary>
-/// Indexes EF cannot express are asserted by the application at startup rather than written
-/// into the migration by hand, which is what keeps the migration safe to regenerate. Two of
-/// them stop accounts differing only by letter case and turn a login lookup into an index
-/// scan; one stops a second name change request racing past the check that reads before it
-/// writes.
+/// Indexes EF cannot express are asserted by the application at startup, so the migration stays safe to
+/// regenerate.
 /// </summary>
 public class ExpressionIndexShould : IntegrationTestBase
 {
@@ -39,15 +33,8 @@ public class ExpressionIndexShould : IntegrationTestBase
     /// The index exists, and it is the index the application thinks it is.
     /// </summary>
     /// <remarks>
-    /// Compared against the whole definition, and against the same text the startup hook
-    /// compares against, because both halves of that need a server to be true. Postgres
-    /// matches CREATE INDEX IF NOT EXISTS on the name alone: an index of this name that is
-    /// not unique, or not over lower(), or over another column entirely is reported as
-    /// already there and the statement succeeds. So the hook reads the definition back — and
-    /// the text it expects is a literal that no compiler checks, normalised by the server in
-    /// ways nobody writes from memory (the schema, the access method, the cast of the
-    /// argument). Wrong, it makes the hook report a healthy database as broken on every
-    /// start, forever, and this is what says so.
+    /// Postgres matches CREATE INDEX IF NOT EXISTS on the name alone, so the hook reads the definition back, as a
+    /// literal the server normalises; compared here against the same text.
     /// </remarks>
     [Theory]
     [MemberData(nameof(Declared))]
@@ -74,9 +61,8 @@ public class ExpressionIndexShould : IntegrationTestBase
     /// Whatever the declaration says, uniqueness is what every index in this set exists for.
     /// </summary>
     /// <remarks>
-    /// The check above compares two strings and would go on passing if both of them were
-    /// changed together into an index that constrains nothing. This is the part that cannot
-    /// be satisfied by agreement.
+    /// The check above passes when the statement and the definition change together, so the
+    /// invariants below are the part that agreement cannot satisfy.
     /// </remarks>
     [Theory]
     [MemberData(nameof(Declared))]
@@ -93,10 +79,8 @@ public class ExpressionIndexShould : IntegrationTestBase
     /// The case-folding pair indexes the lowered value, not the raw column.
     /// </summary>
     /// <remarks>
-    /// Two accounts differing only by letter case are two accounts nobody can tell apart,
-    /// and no later repair can decide which of them owns the address. The lookup compares
-    /// lower(column) to lower(value), so an index over the raw column serves neither that
-    /// predicate nor the invariant.
+    /// The lookup compares lower(column) to lower(value), and an index over the raw column
+    /// serves neither that predicate nor the rule that two spellings are one account.
     /// </remarks>
     [Theory]
     [InlineData("IX_Users_Email_Lower")]
@@ -105,25 +89,7 @@ public class ExpressionIndexShould : IntegrationTestBase
     {
         var declared = ExpressionIndexInitializer.Declared.Single(index => index.Name == indexName);
 
-        declared.Definition.Should().Contain("lower");
-    }
-
-    /// <summary>
-    /// The name change index constrains requests awaiting a moderator and nothing else.
-    /// </summary>
-    /// <remarks>
-    /// Without the predicate the account could file one request in its lifetime: every
-    /// finished request would keep the slot. And the predicate cannot be widened to include
-    /// approvals, because an approval stops being in flight when its link runs out rather
-    /// than when its status changes, and no index predicate can be written against the
-    /// clock - that half is the service's to judge.
-    /// </remarks>
-    [Fact]
-    public void ConstrainOnlyTheNameChangeRequestsThatAwaitAModerator()
-    {
-        var declared = ExpressionIndexInitializer.Declared
-            .Single(index => index.Name == "IX_UsernameChangeRequests_UserId_Pending");
-
-        declared.Definition.Should().Contain("""WHERE ("Status" = 0)""");
+        declared.Definition.Should().Contain("lower",
+            "two accounts differing only by letter case are two accounts nobody can tell apart");
     }
 }

@@ -6,7 +6,6 @@ using System.Threading.Tasks;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Subscriptions;
 using DM.Domain.Personal.Features.Notifications;
-using DM.Infrastructure.Persistence;
 using DM.Infrastructure.Persistence.Entities.Forum;
 using DM.Workers.NotificationDispatcher.Notifiers.Forum;
 using AwesomeAssertions;
@@ -19,13 +18,8 @@ namespace DM.Workers.NotificationDispatcher.Tests;
 /// The actor of a "topic changed" notification, read off the edit history.
 /// </summary>
 /// <remarks>
-/// ActorId is what the blacklist filter groups by: a notification with no actor
-/// is delivered to everybody subscribed, including the people who blocked the
-/// person who caused it. The topic row keeps its author and no editor, so this
-/// generator has one source for the actor and one only — the TopicEdits history
-/// the update path writes. The author is deliberately not a fallback: editing a
-/// topic is open to moderators and administrators, and substituting the author
-/// would hold the notification against the wrong person's blacklist.
+/// ActorId is what the blacklist filter groups by, and TopicEdits is its only source: moderators edit
+/// topics too, so the author is no fallback.
 /// </remarks>
 [Collection(NotificationDatabaseCollection.Name)]
 public class ChangedTopicActorShould
@@ -37,9 +31,7 @@ public class ChangedTopicActorShould
     private static readonly Guid SubscriberId = Guid.Parse("00000000-0000-0000-0000-0000000000f9");
 
     /// <summary>
-    /// Writes a board, an author, an editor and one topic, and returns the topic
-    /// and the editor. Every identifier is fresh, so the tests do not see each
-    /// other's edits.
+    /// Writes a board, an author, an editor and one topic under fresh identifiers.
     /// </summary>
     private async Task<(Guid TopicId, Guid AuthorId, Guid EditorId)> AddTopicAsync(int topicNumber)
     {
@@ -60,7 +52,6 @@ public class ChangedTopicActorShould
             Title = "Раздел " + topicNumber,
             Alias = "board-" + topicNumber,
             Order = topicNumber,
-            ViewPolicy = BoardAccessPolicy.Guest,
             CreateTopicPolicy = BoardAccessPolicy.RegularUser
         });
         await context.SaveChangesAsync();

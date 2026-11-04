@@ -14,11 +14,7 @@ namespace DM.Web.API.IntegrationTests.Helpers;
 /// A game with one room of its own, and the posts, reviews and read marks the
 /// room suites put into it.
 /// </summary>
-/// <remarks>
-/// A fresh game per test rather than the seeded room: the fixture's database is
-/// shared, and a room other suites write into holds a number of posts nobody here
-/// can state.
-/// </remarks>
+/// <remarks>A fresh game per test: a shared room holds a number of posts nobody here can state.</remarks>
 public static class RoomPostsTestHelper
 {
     /// <summary>
@@ -32,9 +28,10 @@ public static class RoomPostsTestHelper
         Guid MasterCharacterId,
         Guid PlayerCharacterId);
 
+    /// <summary>The title of the game <see cref="AddGameWithRoomAsync" /> writes.</summary>
+    public const string GameTitle = "Game for the room reads";
+
     /// <summary>An approved, active game with one room and two characters in it.</summary>
-    /// <param name="dbFixture">Database fixture for direct DB access</param>
-    /// <param name="access">Who the room is open to</param>
     public static async Task<SeededRoom> AddGameWithRoomAsync(
         DatabaseFixture dbFixture, RoomAccessType access = RoomAccessType.Open)
     {
@@ -49,7 +46,7 @@ public static class RoomPostsTestHelper
         {
             GameId = gameId,
             PublicId = Guid.NewGuid().ToString("N")[..10],
-            Title = "Game for the room reads",
+            Title = GameTitle,
             MasterId = master.UserId,
             Status = ModuleStatus.Active,
             PremoderationStatus = PremoderationStatus.Approved,
@@ -72,13 +69,6 @@ public static class RoomPostsTestHelper
     }
 
     /// <summary>One post, written straight to the table.</summary>
-    /// <param name="dbFixture">Database fixture for direct DB access</param>
-    /// <param name="roomId">Room the post is in</param>
-    /// <param name="authorId">Who wrote it</param>
-    /// <param name="characterId">Character it is written by, or null</param>
-    /// <param name="createdUtc">Moment it was written</param>
-    /// <param name="text">In-game text</param>
-    /// <param name="isRemoved">Whether it has been deleted</param>
     public static async Task<Guid> AddPostAsync(
         DatabaseFixture dbFixture,
         Guid roomId,
@@ -110,11 +100,6 @@ public static class RoomPostsTestHelper
     /// Reviews of one post, a new reviewer each: a review is one person's, and
     /// the table refuses a second from the same author.
     /// </summary>
-    /// <param name="dbFixture">Database fixture for direct DB access</param>
-    /// <param name="room">Room the post is in</param>
-    /// <param name="postId">Post under review</param>
-    /// <param name="postAuthorId">Author of the post</param>
-    /// <param name="reviews">Sign and moment of each review</param>
     public static async Task AddReviewsAsync(
         DatabaseFixture dbFixture,
         SeededRoom room,
@@ -146,10 +131,6 @@ public static class RoomPostsTestHelper
     /// The reader's mark on the room: everything written after
     /// <paramref name="lastReadUtc"/> is unread for them.
     /// </summary>
-    /// <param name="dbFixture">Database fixture for direct DB access</param>
-    /// <param name="room">Room being read</param>
-    /// <param name="userId">Reader</param>
-    /// <param name="lastReadUtc">Moment the room was last read</param>
     public static async Task MarkReadAsync(
         DatabaseFixture dbFixture, SeededRoom room, Guid userId, DateTime lastReadUtc)
     {

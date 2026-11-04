@@ -1,5 +1,6 @@
-using System;
 using System.Threading.Tasks;
+using DM.Domain.Account.Features.Mail;
+using DM.Domain.Core.Abstractions;
 using DM.Domain.Core.Dates;
 using DM.Domain.Core.Geo;
 using DM.Domain.Core.Mail;
@@ -15,17 +16,20 @@ internal class SuspiciousLoginNotificationSender : ISuspiciousLoginNotificationS
     private readonly IMailSender _mailSender;
     private readonly IEmailAssetsProvider _emailAssetsProvider;
     private readonly IIpCountryLookup _countryLookup;
+    private readonly IDateTimeProvider _dateTimeProvider;
 
     public SuspiciousLoginNotificationSender(
         ITemplateRenderer renderer,
         IMailSender mailSender,
         IEmailAssetsProvider emailAssetsProvider,
-        IIpCountryLookup countryLookup)
+        IIpCountryLookup countryLookup,
+        IDateTimeProvider dateTimeProvider)
     {
         _renderer = renderer;
         _mailSender = mailSender;
         _emailAssetsProvider = emailAssetsProvider;
         _countryLookup = countryLookup;
+        _dateTimeProvider = dateTimeProvider;
     }
 
     /// <inheritdoc />
@@ -33,11 +37,9 @@ internal class SuspiciousLoginNotificationSender : ISuspiciousLoginNotificationS
         string email, string? ipAddress, string? userAgent, string? timeZoneId)
     {
         var deviceInfo = UserAgentParser.Parse(userAgent);
-        var timestamp = ReaderTime.Format(DateTimeOffset.UtcNow, timeZoneId);
+        var timestamp = ReaderTime.Format(_dateTimeProvider.Now, timeZoneId);
 
-        // The country stands in the letter for the reader and the address for
-        // support: few people know their own address, and none of them knows it
-        // on a phone, where it changes with the connection.
+        // The country stands in the letter for the reader and the address for support.
         var emailBody = await _renderer.RenderAsync(new SuspiciousLoginViewModel(
             IpAddress: ipAddress,
             DeviceInfo: deviceInfo,
@@ -47,7 +49,7 @@ internal class SuspiciousLoginNotificationSender : ISuspiciousLoginNotificationS
         await _mailSender.SendAsync(new EmailLetter
         {
             Address = email,
-            Subject = "Dungeon Master: вход с незнакомого устройства",
+            Subject = MailSubject.Of("вход с незнакомого устройства"),
             Body = emailBody,
             LinkedResources = [_emailAssetsProvider.GetLogo()]
         });

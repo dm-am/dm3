@@ -7,19 +7,12 @@
  * - Native number spinners hidden, replaced by explicit stepper buttons
  * - Enter applies, blur does not (avoids accidental apply)
  */
-import { ref, watch, computed } from "vue";
+import { ref, watch, computed, useId } from "vue";
 import { FilterApplyButton } from "../primitives";
 import type { NumericRangePickerProps } from "../types";
 
-defineOptions({ name: "NumericRangePicker" });
-
 const props = withDefaults(defineProps<NumericRangePickerProps>(), {
-  minLabel: "От",
-  maxLabel: "До",
-  minPlaceholder: "",
-  maxPlaceholder: "",
   allowNegative: false,
-  step: 1,
 });
 
 const emit = defineEmits<{
@@ -27,16 +20,19 @@ const emit = defineEmits<{
   clear: [];
 }>();
 
-// The ids the two captions point at. Random suffix, because nothing stops a
-// page from holding two range pickers and an id has to be unique on it. Same
-// shape as FormField generates.
-const uid = `numeric-range-${Math.random().toString(36).slice(2, 9)}`;
+// Ids for the two captions: a page may hold two range pickers.
+const uid = `numeric-range-${useId()}`;
 const minId = `${uid}-min`;
 const maxId = `${uid}-max`;
 
-// Local state for inputs (strings to preserve empty/intermediate states)
+// Strings, to keep empty and half-typed states.
 const minInput = ref(props.minValue?.toString() ?? "");
 const maxInput = ref(props.maxValue?.toString() ?? "");
+
+const sides = [
+  { name: "min", id: minId, label: "От", model: minInput },
+  { name: "max", id: maxId, label: "До", model: maxInput },
+] as const;
 
 watch(
   () => props.minValue,
@@ -52,7 +48,7 @@ watch(
   },
 );
 
-/** Parse input string to integer (null for empty/invalid), clamping negatives when disallowed */
+/** The parsed integer, null for empty or invalid; negatives clamped where not allowed. */
 function parseInput(value: string): number | null {
   const trimmed = value.trim();
   if (!trimmed || trimmed === "-") return null;
@@ -82,11 +78,7 @@ const showClear = computed(
 );
 
 function handleApply() {
-  // The guard belongs here and not only on the button. The button is locked by
-  // `:disabled="!canApply"`, but Enter in a field does not travel through the
-  // button, so an inverted range applied from the keyboard while the control
-  // said it could not be applied. Every path into the emit now answers to the
-  // one condition, this one included.
+  // Guarded here too: Enter in a field does not go through the disabled button.
   if (!canApply.value) return;
   emit("apply", parsedMin.value, parsedMax.value);
 }
@@ -104,35 +96,37 @@ function handleKeydown(event: KeyboardEvent) {
   }
 }
 
-/** Block keypress for non-digit characters (allow "-" only when allowNegative & at start) */
-function handleKeypress(event: KeyboardEvent, target: "min" | "max") {
-  const ch = event.key;
-  // Allow control keys handled by handleKeydown / browser defaults
-  if (ch.length !== 1) return;
-  if (/\d/.test(ch)) return;
-  if (props.allowNegative && ch === "-") {
-    const input = event.target as HTMLInputElement;
-    const value = target === "min" ? minInput.value : maxInput.value;
-    // Allow "-" only at position 0 and only once
-    if (input.selectionStart === 0 && !value.startsWith("-")) return;
-  }
+/** Digits, and with allowNegative one "-" at the start. */
+const allowed = computed(() => (props.allowNegative ? /^-?\d*$/ : /^\d*$/));
+
+/** The field's value with its selection replaced by what is typed or pasted. */
+function edited(input: HTMLInputElement, text: string): string {
+  const start = input.selectionStart ?? input.value.length;
+  const end = input.selectionEnd ?? start;
+  return input.value.slice(0, start) + text + input.value.slice(end);
+}
+
+/**
+ * What would leave the field more than a number does not land in it; a paste
+ * keeps the digits it holds. Before the edit, on beforeinput: a phone's
+ * keyboard sends no keypress, and the field took anything there.
+ */
+function handleBeforeInput(event: InputEvent, target: "min" | "max") {
+  const text = event.data;
+  if (!text) return;
+  const input = event.target as HTMLInputElement;
+  const next = edited(input, text);
+  if (allowed.value.test(next)) return;
   event.preventDefault();
+  if (event.inputType !== "insertFromPaste") return;
+  const digits = props.allowNegative
+    ? next.replace(/[^\d-]/g, "").replace(/(?!^)-/g, "")
+    : next.replace(/\D/g, "");
+  if (target === "min") minInput.value = digits;
+  else maxInput.value = digits;
 }
 
-/** Sanitize pasted content */
-function handlePaste(event: ClipboardEvent, target: "min" | "max") {
-  const text = event.clipboardData?.getData("text") ?? "";
-  const cleaned = props.allowNegative
-    ? text.replace(/[^\d-]/g, "").replace(/(?!^)-/g, "")
-    : text.replace(/[^\d]/g, "");
-  if (cleaned !== text) {
-    event.preventDefault();
-    if (target === "min") minInput.value = cleaned;
-    else maxInput.value = cleaned;
-  }
-}
-
-/** Increment/decrement helpers. Empty input treated as 0. */
+/** An empty field counts as 0. */
 function adjust(target: "min" | "max", delta: number) {
   const current = target === "min" ? parsedMin.value : parsedMax.value;
   const base = current ?? 0;
@@ -153,68 +147,37 @@ function canDecrement(target: "min" | "max"): boolean {
 <template>
   <div class="numeric-range-picker">
     <div class="range-row">
-      <label class="range-label" :for="minId">{{ minLabel }}</label>
-      <div class="stepper">
-        <button
-          type="button"
-          class="stepper-btn"
-          :disabled="!canDecrement('min')"
-          aria-label="Уменьшить"
-          @click="adjust('min', -step)"
-        >
-          −
-        </button>
-        <input
-          :id="minId"
-          v-model="minInput"
-          type="text"
-          inputmode="numeric"
-          class="stepper-input"
-          :placeholder="minPlaceholder"
-          @keydown="handleKeydown"
-          @keypress="handleKeypress($event, 'min')"
-          @paste="handlePaste($event, 'min')"
-        />
-        <button
-          type="button"
-          class="stepper-btn"
-          aria-label="Увеличить"
-          @click="adjust('min', step)"
-        >
-          +
-        </button>
-      </div>
-      <label class="range-label" :for="maxId">{{ maxLabel }}</label>
-      <div class="stepper">
-        <button
-          type="button"
-          class="stepper-btn"
-          :disabled="!canDecrement('max')"
-          aria-label="Уменьшить"
-          @click="adjust('max', -step)"
-        >
-          −
-        </button>
-        <input
-          :id="maxId"
-          v-model="maxInput"
-          type="text"
-          inputmode="numeric"
-          class="stepper-input"
-          :placeholder="maxPlaceholder"
-          @keydown="handleKeydown"
-          @keypress="handleKeypress($event, 'max')"
-          @paste="handlePaste($event, 'max')"
-        />
-        <button
-          type="button"
-          class="stepper-btn"
-          aria-label="Увеличить"
-          @click="adjust('max', step)"
-        >
-          +
-        </button>
-      </div>
+      <template v-for="side in sides" :key="side.name">
+        <label class="range-label" :for="side.id">{{ side.label }}</label>
+        <div class="stepper">
+          <button
+            type="button"
+            class="stepper-btn"
+            :disabled="!canDecrement(side.name)"
+            aria-label="Уменьшить"
+            @click="adjust(side.name, -1)"
+          >
+            −
+          </button>
+          <input
+            :id="side.id"
+            v-model="side.model.value"
+            type="text"
+            inputmode="numeric"
+            class="stepper-input"
+            @keydown="handleKeydown"
+            @beforeinput="handleBeforeInput($event, side.name)"
+          />
+          <button
+            type="button"
+            class="stepper-btn"
+            aria-label="Увеличить"
+            @click="adjust(side.name, 1)"
+          >
+            +
+          </button>
+        </div>
+      </template>
     </div>
     <div class="range-actions">
       <FilterApplyButton
@@ -251,10 +214,7 @@ function canDecrement(target: "min" | "max"): boolean {
   color: $text-muted
   white-space: nowrap
 
-// A field of the page (owner's standard, 28 September 2026): $control-height
-// high, frame included, level with "Применить" under it, on the ground of
-// every field. It kept a measure of the panel's own, a height from the
-// padding, on the solid $bg-element of the panel, into which it vanished.
+// A field of the page: $control-height high, level with "Применить" under it.
 .stepper
   display: flex
   flex: 1
@@ -273,7 +233,7 @@ function canDecrement(target: "min" | "max"): boolean {
 
 .stepper-btn
   flex-shrink: 0
-  width: 24px
+  width: $tap-target-min
   padding: 0
   font-size: $font-size
   font-family: inherit
@@ -297,8 +257,6 @@ function canDecrement(target: "min" | "max"): boolean {
   &:last-child
     border-left: 1px solid $border
 
-// The text of the field: the 14 of a field of the page, as high as the frame
-// leaves it.
 .stepper-input
   flex: 1
   min-width: 0
@@ -313,8 +271,7 @@ function canDecrement(target: "min" | "max"): boolean {
   color: $text
   outline: none
 
-  // The frame is drawn by the wrapper, which takes the ring on :focus-within;
-  // a second ring here would sit inside the first.
+  // The wrapper draws the frame and its :focus-within ring; a second ring would sit inside it.
   &:focus
     box-shadow: none
 

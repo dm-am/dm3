@@ -16,17 +16,8 @@ namespace DM.Infrastructure.Persistence.Tests.Shared.Comments;
 /// Two pages of one discussion are two halves of the same list, not two lists.
 /// </summary>
 /// <remarks>
-/// The order is asked for once per page, and a page is a range of it. When the keys of
-/// that order repeat across rows, nothing says the two asks arrange those rows the same
-/// way: a comment that moved between them lands on both pages, and the one that took its
-/// place lands on neither. Equal keys are ordinary here, not exotic. The DM2 import gives
-/// thousands of comments one timestamp, a busy second does the same, and sorting by likes
-/// ties every comment nobody has liked yet.
-///
-/// Arrival order is what the defect hangs on, so it is what varies between the two halves
-/// of the assertion: the same four comments, seeded in one order and then in the other,
-/// have to page identically. An order settled by the identifier answers both the same way;
-/// one settled by nothing answers each way once.
+/// Each page asks for the order again, and equal keys are ordinary (the DM2 import, a busy second, no likes).
+/// The same comments seeded both ways must page identically.
 /// </remarks>
 public class CommentSortingShould
 {
@@ -54,9 +45,7 @@ public class CommentSortingShould
     /// </summary>
     private static DmDbContext Seeded(IEnumerable<Guid> commentIds)
     {
-        var context = new DmDbContext(new DbContextOptionsBuilder<DmDbContext>()
-            .UseInMemoryDatabase(Guid.NewGuid().ToString())
-            .Options);
+        var context = InMemoryStore.Open();
 
         context.Users.Add(new DbUser
         {

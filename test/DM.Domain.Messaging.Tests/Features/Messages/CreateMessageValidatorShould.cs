@@ -1,21 +1,15 @@
 using System;
+using DM.Domain.Core.Content;
 using DM.Domain.Core.Exceptions;
 using DM.Domain.Messaging.Features.Messages;
-using DM.Testing;
-using AwesomeAssertions;
 using FluentValidation.TestHelper;
 using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Features.Messages;
 
-public class CreateMessageValidatorShould : UnitTestBase
+public class CreateMessageValidatorShould
 {
-    private readonly CreateMessageValidator validator;
-
-    public CreateMessageValidatorShould()
-    {
-        validator = new CreateMessageValidator();
-    }
+    private readonly CreateMessageValidator validator = new();
 
     [Fact]
     public void PassForValidInput()
@@ -77,7 +71,7 @@ public class CreateMessageValidatorShould : UnitTestBase
         var input = new CreateMessage
         {
             ChatId = Guid.NewGuid(),
-            Text = new string('x', 50001)
+            Text = new string('x', BodyTextLimits.MaxLength + 1)
         };
 
         var result = validator.TestValidate(input);
@@ -91,7 +85,7 @@ public class CreateMessageValidatorShould : UnitTestBase
         var input = new CreateMessage
         {
             ChatId = Guid.NewGuid(),
-            Text = new string('x', 50000)
+            Text = new string('x', BodyTextLimits.MaxLength)
         };
 
         var result = validator.TestValidate(input);
@@ -102,11 +96,7 @@ public class CreateMessageValidatorShould : UnitTestBase
     /// Hiding markup on a surface that does not declare it.
     /// </summary>
     /// <remarks>
-    /// The tag is not markup here, so it hides nothing: the line the author
-    /// wrote for one reader is published with the tag still around it. Refused
-    /// at the save path rather than erased, because a draft is not an attack
-    /// and a paragraph that vanished without a word is looked for instead of
-    /// rewritten.
+    /// Refused rather than erased: a paragraph that vanished without a word is looked for, not rewritten.
     /// </remarks>
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()

@@ -1,35 +1,14 @@
 <script setup lang="ts">
-/**
- * GameCharacter — the sheet of one character, read-only.
- *
- * The name of a character used to lead to the roster of the whole game, with a
- * `scrollTo` query no roster ever read, so a name meant "the cast of this game"
- * and nothing narrower. The sheet is served per character (GET
- * /v1/characters/{id}) and until now was fetched only by the edit form.
- *
- * The values are drawn by CharacterForm in its `view` mode: the same schema
- * order the edit form lays out, so the two cannot drift. BbCode attributes
- * arrive as server-rendered HTML (Display audience) and go through ContentText
- * inside that component, never through v-html on a raw string
- * (docs/architecture/BBCODE_RENDERING.md).
- *
- * No lifecycle action lives here. Accepting an application, exiling, marking a
- * character dead and deleting an NPC are one screen of their own, and
- * CharacterManageLink is the same way in that the roster uses.
- *
- * Two notepads hang under the sheet and neither is shown to anybody who could
- * not read it on the server. "Заметки игрока" belong to the player who owns
- * the character and are the one notepad of a game its master cannot open;
- * "Заметки мастера" belong to the master and the assistants and are closed to
- * that player. The section is absent rather than refused, because a section
- * captioned "the notes the master keeps about you" would say plenty on its own.
- */
+// The sheet of one character, read-only: CharacterForm in its view mode, so it
+// keeps the order of the edit form. A notepad nobody may read on the server is
+// left out rather than refused: its caption alone would say too much.
 import { computed, ref, watch } from "vue";
 import { useRoute } from "vue-router";
 import { storeToRefs } from "pinia";
 import {
   characterStatusLabel,
-  gameApi,
+  characterApi,
+  gameNotepadApi,
   useGameDetailsStore,
   type Character,
 } from "@/entities/game";
@@ -38,11 +17,16 @@ import { CharacterForm } from "@/features/edit-character";
 import { CharacterManageLink } from "@/features/game-actions";
 import { AvatarImg } from "@/shared/ui/AvatarImg";
 import { ErrorState } from "@/shared/ui/ErrorState";
-import { SvgIcon } from "@/shared/ui/Icon";
+import { BackLink } from "@/shared/ui/Layout";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { NotepadBoard, type NotepadAdapter } from "@/widgets/notepad";
+import {
+  CharacterCardSkeleton,
+  CharacterSheetSkeleton,
+} from "@/shared/ui/Skeleton";
+import { NotepadBoard, adapterOf } from "@/widgets/notepad";
 import { useZoneSection } from "@/shared/lib/composables/useZoneSection";
-import { describeFailure, describeRateLimit } from "@/shared/lib/errors";
+import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import { refusalHere } from "@/shared/lib/errors";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();
@@ -50,21 +34,13 @@ const { game, isMaster, isAssistant } = storeToRefs(gameStore);
 const { user } = storeToRefs(useAuthStore());
 
 const character = ref<Character | null>(null);
-const loading = ref(false);
-const failure = ref<string | null>(null);
 
 const gameId = computed(() => route.params.id as string);
 const characterId = computed(() => route.params.characterId as string);
 
-// The zone shell titles its sub-pages out of meta.section, and a character's
-// name is data — announced here, so the heading and the tab still read "{game}
-// | {character}" and still come from one place.
+// The name is data, so it cannot sit in meta.section.
 useZoneSection(() => character.value?.name);
 
-// The schema belongs to the game, not to the character: it is what turns the
-// stored attribute values into named rows. The shell renders this page only
-// once the game has loaded, so the empty schema is a guard and not a state
-// anybody sees.
 const schema = computed(() => game.value?.schema ?? { specifications: [] });
 
 const statusLabel = computed(() =>
@@ -76,12 +52,7 @@ const rosterLink = computed(() => ({
   params: { id: game.value?.publicId || gameId.value },
 }));
 
-// The two notepad gates, each the client half of a server rule.
-//
-// "Заметки игрока": the owner of the character and nobody else — the game
-// leads included, which is what separates this notepad from every other one in
-// a game (NotepadIntentionResolver, Player). An NPC has no owner, so it has no
-// player notes at all.
+// The owner alone, the leads excluded (NotepadIntentionResolver, Player).
 const ownsCharacter = computed(
   () =>
     !!user.value &&
@@ -89,73 +60,35 @@ const ownsCharacter = computed(
     character.value.author.id === user.value.id,
 );
 
-// "Заметки мастера": master and assistants, the two HasEditAccess admits. The
-// curating mentor is not one of them. Kept for every character rather than for
-// NPCs alone — the notes are about the character, not about who moves it.
+// The two HasEditAccess admits.
 const leadsTheGame = computed(() => isMaster.value || isAssistant.value);
 
-const playerNotesAdapter: NotepadAdapter = {
-  list: () => gameApi.getCharacterNotepad(characterId.value),
-  create: (input) => gameApi.createCharacterNote(characterId.value, input),
-  update: (id, input) =>
-    gameApi.updateCharacterNote(characterId.value, id, input),
-  remove: (id, options) =>
-    gameApi.deleteCharacterNote(characterId.value, id, options),
-};
+const playerNotesAdapter = adapterOf(() =>
+  gameNotepadApi.ofCharacter(characterId.value),
+);
 
-const masterNotesAdapter: NotepadAdapter = {
-  list: () => gameApi.getCharacterMasterNotepad(characterId.value),
-  create: (input) =>
-    gameApi.createCharacterMasterNote(characterId.value, input),
-  update: (id, input) =>
-    gameApi.updateCharacterMasterNote(characterId.value, id, input),
-  remove: (id, options) =>
-    gameApi.deleteCharacterMasterNote(characterId.value, id, options),
-};
+const masterNotesAdapter = adapterOf(() =>
+  gameNotepadApi.ofCharacterMaster(characterId.value),
+);
 
 const LOAD_FAILURE = "Не удалось загрузить персонажа";
 
-/**
- * The page answers a failed read itself, in the card below, so the read takes
- * the refusal over and the interceptor says nothing about a 403, a 429 or a
- * 5xx. Without that the same sentence stood twice: once on the card in the
- * middle of the page, once on a plate in the corner. The plate alone would not
- * do — a sheet that failed to load leaves an empty page, and the card is what
- * says which page is empty and offers the read again.
- *
- * An expired session and a dead connection stay with the interceptor: neither
- * is about this character, and only the interceptor knows the other address of
- * the site.
- */
-const OWNS_REFUSAL = { ownsRefusal: true, ownsRateLimit: true } as const;
+// A session that ran out and a request that never left stay on the plate.
+const {
+  loading,
+  error: failure,
+  run,
+} = useGuardedRequest({
+  message: (error) => refusalHere(error, LOAD_FAILURE) ?? LOAD_FAILURE,
+});
 
-async function load() {
-  const id = characterId.value;
-  if (!id) return;
-  loading.value = true;
-  failure.value = null;
-  const { data, error } = await gameApi.getCharacter(id, OWNS_REFUSAL);
-  // A late answer for a character the reader has already left.
-  if (characterId.value !== id) return;
-  loading.value = false;
-  if (error) {
-    character.value = null;
-    // A wait is said in the shared wording, the one the interceptor would have
-    // raised: it is the only one that names the seconds the server asked for.
-    failure.value =
-      error.status === 429
-        ? describeRateLimit(error.retryAfterSeconds)
-        : describeFailure(error, LOAD_FAILURE);
-    return;
-  }
-  // A 200 with nothing in it: no sentence to read out of the server, so the
-  // page says the same thing it says about a refused request.
-  if (!data?.resource) {
-    character.value = null;
-    failure.value = LOAD_FAILURE;
-    return;
-  }
-  character.value = data.resource;
+function load() {
+  return run(
+    () => characterApi.getCharacter(characterId.value),
+    (data) => {
+      character.value = data?.resource ?? null;
+    },
+  );
 }
 
 watch(characterId, () => load(), { immediate: true });
@@ -163,33 +96,17 @@ watch(characterId, () => load(), { immediate: true });
 
 <template>
   <div class="game-character">
-    <router-link :to="rosterLink" class="back-link">
-      <SvgIcon name="chevronLeft" />
-      Назад к персонажам
-    </router-link>
+    <BackLink :to="rosterLink" label="Назад к персонажам" />
 
-    <!-- Loading twin of the head below: the portrait at its own size, the name
-         line and three meta lines beside it, then the rows of the sheet. -->
-    <div v-if="loading" class="character-skeleton" aria-hidden="true">
-      <div class="skeleton-title" />
-      <div class="skeleton-head">
-        <div class="skeleton-portrait" />
-        <div class="skeleton-meta">
-          <div v-for="i in 3" :key="i" class="skeleton-line" />
-        </div>
-      </div>
-      <div v-for="i in 4" :key="i" class="skeleton-row">
-        <div class="skeleton-label" />
-        <div class="skeleton-value" />
-      </div>
+    <div v-if="loading" class="character-loading">
+      <CharacterCardSkeleton :count="1" />
+      <CharacterSheetSkeleton />
     </div>
 
     <ErrorState v-else-if="failure" :message="failure" :retry="load" />
 
     <template v-else-if="character">
       <div class="character-head">
-        <!-- Character: no avatar = no image (differs from the User default
-             silhouette). -->
         <AvatarImg
           :picture="character.picture"
           :alt="character.name"
@@ -202,10 +119,10 @@ watch(characterId, () => load(), { immediate: true });
             {{ statusLabel }}
           </SecondaryText>
           <SecondaryText v-if="character.author" class="meta-line">
-            Игрок: <UserLink :user="character.author" />
+            Игрок: <UserLink :user="character.author" hide-badge />
           </SecondaryText>
           <SecondaryText v-else-if="character.isNpc" class="meta-line">
-            НПС
+            Неигровой персонаж
           </SecondaryText>
           <SecondaryText class="meta-line">
             Постов: {{ character.totalPostsCount }}
@@ -243,16 +160,14 @@ watch(characterId, () => load(), { immediate: true });
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Skeleton" as *
-
 .game-character
   min-height: $grid-step * 50
 
-.back-link
-  display: inline-flex
-  align-items: center
-  gap: $tiny
-  margin-bottom: $medium
+// The head over the sheet, as far apart as .character-head stands from it.
+.character-loading
+  display: flex
+  flex-direction: column
+  gap: $medium
 
 .character-head
   display: flex
@@ -269,66 +184,10 @@ watch(characterId, () => load(), { immediate: true });
   flex: 1
   min-width: 0
 
-// The notepads sit under the sheet, separated from it and from each other the
-// way the sheet's own blocks are.
 .character-notepad
   margin-top: $big
 
 .meta-line
-  display: block
-
   & + &
     margin-top: $tiny
-
-// Loading twin — the geometry of the head and of the first rows of the sheet.
-.character-skeleton
-  display: flex
-  flex-direction: column
-  gap: $medium
-
-.skeleton-head
-  display: flex
-  align-items: flex-start
-  gap: $medium
-
-.skeleton-title
-  width: $grid-step * 50
-  height: $grid-step * 6
-  +skeleton-shimmer
-
-// Square, as the portrait it stands for: a picture is never rounded. The
-// mixin is called last (a declaration after it trips the sass mixed-decls
-// warning).
-.skeleton-portrait
-  flex-shrink: 0
-  width: $grid-step * 30
-  height: $grid-step * 30
-  +skeleton-shimmer($square: true)
-
-.skeleton-meta
-  flex: 1
-  min-width: 0
-  display: flex
-  flex-direction: column
-  gap: $small
-
-.skeleton-line
-  width: 40%
-  height: $grid-step * 4
-  +skeleton-shimmer
-
-.skeleton-row
-  display: flex
-  flex-direction: column
-  gap: $tiny
-
-.skeleton-label
-  width: $grid-step * 25
-  height: $grid-step * 3
-  +skeleton-shimmer
-
-.skeleton-value
-  width: 80%
-  height: $grid-step * 4
-  +skeleton-shimmer
 </style>

@@ -1,0 +1,151 @@
+// The field of a guest card: the label and its row, the field, the strip
+// under it, the value plate.
+@use "Themes" as *
+@use "Variables" as *
+@use "Buttons" as *
+@use "AuthTokens" as *
+@use "Inputs" as *
+
+.auth-surface .auth-label
+  display: block
+  // One step of the rhythm, the only gap between a label and its field.
+  margin: 0 0 8px
+  font-size: $auth-font-size
+  font-weight: 700
+
+/// The label and the field's escape hatch ("Не могу войти") on one line, the
+/// label floated: a flex row copies as two lines, a float carries no break.
+/// The space between the two is the global .copy-space.
+.auth-surface .auth-label-row
+  // flow-root contains the float, which carries the label's step down to the
+  // field.
+  display: flow-root
+  text-align: right
+
+  .auth-label
+    float: left
+    // The row's alignment is for the hatch.
+    text-align: left
+
+  a
+    font-size: $secondary-font-size
+
+// The room the eye of a password field takes at the right edge, which every
+// field of the card leaves.
+$auth-toggle-space: 44px
+
+/// The field wrapper: it places the eye and owns the strip below the field.
+.auth-surface .auth-field
+  position: relative
+  margin-bottom: $auth-strip
+  // Read by PasswordInput: this field is taller and its eye further in.
+  --password-toggle-space: #{$auth-toggle-space}
+  --password-toggle-inset: #{$small}
+
+// The frame, the ground and the ring are the site's field (InputsGlobal.sass),
+// neutral in every state: what is wrong is said in words under the field.
+.auth-surface .auth-field input
+  box-sizing: border-box
+  width: 100%
+  height: $auth-control-height
+  padding: 0 $auth-toggle-space 0 $auth-field-inset
+  font: inherit
+  // The cover of Chrome's autofill colour and the ring over it are the
+  // site's field's (Inputs.sass): a cover of its own here would drop the ring.
+
+/// The one multi-line field: the frame of the single-line one, its height from
+/// its rows.
+.auth-surface .auth-field textarea
+  box-sizing: border-box
+  width: 100%
+  padding: 13px $auth-field-inset
+  font: inherit
+  // Vertical only: dragged wider it tears the card.
+  resize: vertical
+
+/// The code field: the whole width of the card, the code centred.
+.auth-surface .auth-field input.auth-input--code
+  padding-left: $auth-field-inset
+  padding-right: $auth-field-inset
+  text-align: center
+  // The spacing makes the symbols countable; the indent hands it back after
+  // the last one.
+  letter-spacing: .3em
+  text-indent: .3em
+
+  // The mask of the code.
+  &::placeholder
+    +placeholder-ink
+
+/// A recovery code is longer, so its spacing is tighter.
+.auth-surface .auth-field input.auth-input--code.auth-input--code-recovery
+  letter-spacing: .1em
+  text-indent: .1em
+
+/// The line under a field pulls itself into the strip 3px below it and holds
+/// the rest open, so nothing below moves. It must follow .auth-field directly:
+/// only adjacent margins collapse.
+.auth-surface .auth-field + .auth-message
+  margin: calc(#{$auth-strip-gap} - #{$auth-strip}) 0 0
+  min-height: calc(#{$auth-strip} - #{$auth-strip-gap})
+
+.auth-surface .auth-message
+  font-size: $secondary-font-size
+  line-height: 1.4
+  color: $text-muted
+
+.auth-surface .auth-message--error
+  color: $accent-red
+
+/// A strip held open for a refusal and empty until one arrives: hidden and
+/// not dropped, so the height stays.
+.auth-surface .auth-message--reserved:not(.auth-message--error)
+  visibility: hidden
+
+/// The strength scale stands 6px under the field: at 3px it read as part of
+/// the frame.
+.auth-surface .auth-field + .auth-meter
+  margin: calc(6px - #{$auth-strip}) 0 .5rem
+
+/// A settled value that cannot be edited here: a plate and not a disabled
+/// field, the disabled recipe behind text at full strength.
+.auth-surface .auth-value
+  position: relative
+  z-index: 0
+  display: flex
+  align-items: center
+  box-sizing: border-box
+  // A floor, not a height: a long address takes several lines.
+  min-height: $auth-control-height
+  margin-bottom: 1rem
+  padding: $small $auth-field-inset
+  border: 1px solid transparent
+  border-radius: $border-radius
+  cursor: default
+  // An address has no spaces to break at.
+  word-break: break-all
+
+  // The fill, pulled over the transparent frame so the plate measures like a
+  // field.
+  &::before
+    content: ""
+    position: absolute
+    inset: -1px
+    z-index: -1
+    pointer-events: none
+    border-radius: inherit
+    background-color: $control-fill-overlay
+    border: 1px solid $control-border-overlay
+    opacity: $disabled-opacity
+
+  // The hatch at the strength a disabled control reaches by nesting.
+  &::after
+    content: ""
+    position: absolute
+    inset: 0
+    z-index: -1
+    pointer-events: none
+    border-radius: inherit
+    background-color: currentColor
+    opacity: $disabled-opacity * $disabled-hatch-opacity
+    mask-image: $disabled-hatch-mask

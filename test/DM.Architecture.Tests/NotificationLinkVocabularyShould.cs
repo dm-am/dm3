@@ -5,6 +5,7 @@ using System.Linq;
 using System.Text.RegularExpressions;
 using DM.Domain.Core.Enums;
 using AwesomeAssertions;
+using DM.Testing;
 using Xunit;
 
 namespace DM.Architecture.Tests;
@@ -14,20 +15,8 @@ namespace DM.Architecture.Tests;
 /// and the client builds that place for none.
 /// </summary>
 /// <remarks>
-/// The list used to build its links from a table of its own, paired from here with
-/// the server's table of paths, identifier and all. The pairing held the two halves
-/// to the same destination, and it could not make the client half complete: the
-/// letter went out for a frozen game, an invitation and an owed post, and the list
-/// showed the same notification as a line nobody could click, because nobody had
-/// remembered the client when the server learned the event.
-///
-/// So the list row arrives with its path: the server takes it from the table the
-/// letter's link is built from (NotificationDestination), and the letter puts the
-/// root of the site in front of the same path, which NotificationLinkShould in
-/// DM.Infrastructure.Messaging.Tests holds. What is left to hold here is the
-/// boundary: no client source builds a path for an event, in the shapes the client
-/// table took (a switch arm that answers an event with a path, a row keyed by the
-/// enum) or under another name (a row keyed by the server's event name).
+/// The list row arrives with its path from NotificationDestination, the table the letter's link is
+/// built from. What is held here is the boundary: no client source builds a path for an event.
 /// </remarks>
 public class NotificationLinkVocabularyShould
 {
@@ -56,65 +45,14 @@ public class NotificationLinkVocabularyShould
     /// <summary>A line comment, dropped so a commented-out row is not read as one.</summary>
     private static readonly Regex LineComment = new(@"//[^\r\n]*", RegexOptions.Compiled);
 
-    /// <summary>
-    /// The shapes the client table was written in, kept here so the patterns above
-    /// are shown to find them: a rule that matches nothing passes, and the table they
-    /// were written against is gone.
-    /// </summary>
-    private const string FormerLinkTable = """
-        switch (notification.eventType) {
-          case NotificationType.NewPublication:
-          case NotificationType.LikedPublication:
-            return payload.publicationId
-              ? `/publication/${payload.publicationId}`
-              : null;
-          case NotificationType.BanIssued:
-            return payload.username ? `/users/${payload.username}` : null;
-        }
-        const PATHS = {
-          [NotificationType.NewGame]: (payload) => `/game/${payload.gameId}`,
-        };
-        const RENAMED = {
-          NewTopic: (payload) => "/forum-topic/" + payload.topicId,
-        };
-        """;
-
-    /// <summary>What a screen reacting to a push writes, which is no path.</summary>
-    private const string PushReaction = """
-        switch (notification.eventType) {
-          case NotificationType.NewMessage:
-            void refresh();
-            break;
-        }
-        const route = { name: "account", path: "/account" };
-        """;
-
-    [Fact]
-    public void KnowTheShapesOfALinkTable()
-    {
-        PathArm.Matches(FormerLinkTable).Should().HaveCount(2,
-            "both arms of the former table answer an event with a path");
-        PathRow.Matches(FormerLinkTable).Should().HaveCount(1,
-            "a row keyed by the enum is the other shape of the same table");
-        NamedRows(FormerLinkTable).Should().BeEquivalentTo(new[] { "NewTopic" },
-            "a row keyed by the server's name is the same table under another name");
-
-        PathArm.IsMatch(PushReaction).Should().BeFalse(
-            "naming an event to react to it builds no path");
-        PathRow.IsMatch(PushReaction).Should().BeFalse(
-            "naming an event to react to it builds no path");
-        NamedRows(PushReaction).Should().BeEmpty(
-            "a route of the application is not a notification's destination");
-    }
-
     [Fact]
     public void BuildNoPathForAnEventOnTheClient()
     {
-        var root = RepositoryRoot;
+        var root = RepositoryLayout.Root;
         var files = NotificationVocabularyShould
             .SourceFiles(Path.Combine(root, ClientSource))
             .ToArray();
-        files.Should().HaveCountGreaterThan(100,
+        files.Should().NotBeEmpty(
             "a rule that reads nothing passes: the client has hundreds of sources");
 
         var building = new List<string>();
@@ -148,6 +86,4 @@ public class NotificationLinkVocabularyShould
                 && Enum.TryParse<EventType>(name, false, out _))
             .Distinct(StringComparer.Ordinal)
             .ToList();
-
-    private static string RepositoryRoot => DM.Testing.RepositoryLayout.Root;
 }

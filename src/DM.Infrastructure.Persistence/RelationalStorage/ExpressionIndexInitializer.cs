@@ -12,32 +12,15 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 /// Declares and asserts the relational indexes EF Core cannot express in the model.
 /// </summary>
 /// <remarks>
-/// EF has no model-level expression index, so an index over <c>lower(column)</c> can only
-/// reach the database as raw SQL. Written into the migration by hand it becomes content the
-/// migration generator does not know about, and regenerating the migration — the documented
-/// way to change the schema — drops it silently. Asserting it here instead keeps the
-/// migration entirely generated, which is what makes regenerating it safe.
-///
-/// This class is the authority for the index set it declares, re-asserts on every start and
-/// therefore heals databases that already exist, and never drops anything — dropping is
-/// destructive and belongs to an explicit operation, not to a startup hook.
-///
-/// Postgres compares the name and nothing else, so CREATE INDEX IF NOT EXISTS succeeds
-/// against an index that is not unique, or not over lower(), or over another column
-/// entirely, and reports success either way. So the definition is read back and compared
-/// rather than inferred from the statement having run: healing reaches existence, and a
-/// disagreement is reported instead — recreating an index under load is not a thing a
-/// startup hook does behind anybody's back.
-///
-/// CREATE INDEX IF NOT EXISTS is idempotent, so a restart with everything in place costs one
-/// catalogue lookup per index, plus one read of pg_indexes.
+/// Asserted at startup so the migration stays entirely generated. Never drops anything.
+/// CREATE INDEX IF NOT EXISTS matches on the name alone, so the definition is read back
+/// and a disagreement is logged rather than repaired.
 /// </remarks>
 public class ExpressionIndexInitializer : IHostedService
 {
     private readonly IServiceProvider _serviceProvider;
     private readonly ILogger<ExpressionIndexInitializer> _logger;
 
-    /// <inheritdoc />
     public ExpressionIndexInitializer(
         IServiceProvider serviceProvider,
         ILogger<ExpressionIndexInitializer> logger)
@@ -91,15 +74,6 @@ public class ExpressionIndexInitializer : IHostedService
         new("IX_Users_Username_Lower",
             """CREATE UNIQUE INDEX IF NOT EXISTS "IX_Users_Username_Lower" ON "Users" (lower("Username"))""",
             """CREATE UNIQUE INDEX "IX_Users_Username_Lower" ON public."Users" USING btree (lower(("Username")::text))"""),
-        // One name change request may await a moderator per account. The service
-        // reads before it writes, and two requests sent at once both read nothing:
-        // the queue would then hold two rows for one asking, and approving both
-        // renames the account twice. Only Pending is constrained - an approval
-        // stops being in flight when its link runs out rather than when a status
-        // changes, and no index predicate can be written against the clock.
-        new("IX_UsernameChangeRequests_UserId_Pending",
-            """CREATE UNIQUE INDEX IF NOT EXISTS "IX_UsernameChangeRequests_UserId_Pending" ON "UsernameChangeRequests" ("UserId") WHERE "Status" = 0""",
-            """CREATE UNIQUE INDEX "IX_UsernameChangeRequests_UserId_Pending" ON public."UsernameChangeRequests" USING btree ("UserId") WHERE ("Status" = 0)"""),
     ];
 
     /// <inheritdoc />
@@ -111,25 +85,17 @@ public class ExpressionIndexInitializer : IHostedService
         {
             await dbContext.Database.ExecuteSqlRawAsync(index.Statement, ct);
 
-            // AS "Value": SingleOrDefault composes over the raw SQL, and a
-            // composed scalar SqlQuery selects the column by exactly that name —
-            // without the alias every assertion of this pass fell into the catch
-            // below on every start, and nobody read what it logged.
+            // AS "Value": a composed scalar SqlQuery selects the column by that name.
             var actual = await dbContext.Database
                 .SqlQuery<string>($"""SELECT indexdef AS "Value" FROM pg_indexes WHERE indexname = {index.Name}""")
                 .SingleOrDefaultAsync(ct);
 
             if (actual == index.Definition)
             {
-                _logger.LogDebug("Expression index asserted: {IndexName}", index.Name);
                 return;
             }
 
-            // The statement above said nothing about this: it matches on the name alone, so
-            // an index of that name built any other way is reported as already there. What
-            // is lost then is not speed but the invariant — two accounts differing only by
-            // letter case can be registered in a race, and no later repair can decide which
-            // of them owns the address.
+            // An index of that name built another way leaves case-insensitive uniqueness unenforced.
             _logger.LogError(
                 "Expression index {IndexName} exists with a different definition: {Definition}. " +
                 "Case-insensitive uniqueness of the login and the address is not enforced",
@@ -137,10 +103,7 @@ public class ExpressionIndexInitializer : IHostedService
         }
         catch (Exception exception)
         {
-            // A failed startup takes the whole site down; this leaves it serving with the
-            // invariant unenforced and says so loudly. Neither is good, and the second is
-            // the recoverable one — but it is recovered by rebuilding the index, not by
-            // waiting, because what slips through meanwhile cannot be undone afterwards.
+            // Serving with the invariant unenforced and saying so beats taking the site down.
             _logger.LogError(exception, "Could not assert expression index {IndexName}", index.Name);
         }
     }

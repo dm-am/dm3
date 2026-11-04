@@ -1,77 +1,42 @@
 using System;
 using System.Collections.Generic;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Core.Exceptions;
+using DM.Domain.Game.Features.GameAttributeSchemas;
 
 namespace DM.Domain.Game.Features.Characters;
 
-/// <summary>
-/// Repository for character operations
-/// </summary>
 public interface ICharacterRepository
 {
-    #region Validation
-
-    /// <summary>
-    /// Get the character sheet of a game
-    /// </summary>
     Task<GameAttributeSchema> GetGameSchema(Guid gameId);
 
     /// <summary>
-    /// Get the character sheet of the game a character belongs to
+    /// The sheet of the game the character belongs to
     /// </summary>
     Task<GameAttributeSchema> GetCharacterSchema(Guid characterId);
 
-    #endregion
-
-    #region Read
-
-    /// <summary>
-    /// Get all characters in a game
-    /// </summary>
     Task<IEnumerable<Character>> GetCharacters(Guid gameId);
 
-    /// <summary>
-    /// Find single character
-    /// </summary>
     Task<Character?> FindCharacter(Guid characterId);
 
-    /// <summary>
-    /// Get character for update
-    /// </summary>
     Task<CharacterToUpdate?> GetForUpdate(Guid characterId);
 
-    /// <summary>
-    /// Check if user has other active characters in game
-    /// </summary>
     Task<bool> HasOtherActiveCharacters(Guid gameId, Guid userId, Guid excludeCharacterId);
 
-    #endregion
-
-    #region Write
-
-    /// <summary>
-    /// Create character
-    /// </summary>
     Task<Character> Create(CreateCharacterEntity createCharacter);
 
-    /// <summary>
-    /// Update character
-    /// </summary>
     Task<Character> Update(UpdateCharacterEntity updateCharacter);
 
-    /// <summary>
-    /// Delete character
-    /// </summary>
-    /// <param name="characterId">Character identifier</param>
-    /// <param name="deletedByUserId">User who removed the character</param>
     Task Delete(Guid characterId, Guid deletedByUserId);
 
-    /// <summary>
-    /// Decline pending characters when user is blocked
-    /// </summary>
     Task<int> DeclinePendingCharacters(Guid gameId, Guid userId, CancellationToken ct = default);
+}
 
-    #endregion
+internal static class CharacterRepositoryExtensions
+{
+    public static async Task<CharacterToUpdate> GetForUpdateOrThrow(this ICharacterRepository repository, Guid characterId) =>
+        await repository.GetForUpdate(characterId) ??
+        throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CharacterNotFound);
 }

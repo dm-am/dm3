@@ -49,7 +49,6 @@ public interface IUsernameChangeService
     /// <summary>
     /// Rollback a completed username change (moderator action)
     /// </summary>
-    /// <param name="requestId">Request ID</param>
     /// <returns>Updated request entry</returns>
     Task<UsernameChangeRequestEntry> RollbackAsync(Guid requestId);
 }

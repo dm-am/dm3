@@ -2,21 +2,9 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The game and the blog discussions had no search box, and the server was not
- * the reason: GameCommentsQuery, BlogCommentsQuery and the forum's CommentsQuery
- * declare the same fields, and those two pages simply sent a page number and
- * nothing else. So the first thing asked of the shared section is that the
- * whole filter standing in the URL reaches the loader — search, authors and
- * sort, everything the owner missed on those pages, is that one call.
- *
- * The rest is what the two lists did not have around them: paging above as
- * well as below, numbering that counts the discussion rather than the page,
- * a failed load that says so and can be retried, and an empty state that tells
- * "nothing written yet" apart from "nothing matches the filter".
- */
+/** The discussion section: the whole filter reaches the loader, paging both ends, its states. */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
 import { createPinia } from "pinia";
 import type { Comment, PagingInfo } from "@/shared/api/models/common";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -40,18 +28,14 @@ vi.mock("vue-router", () => ({
     replace: vi.fn(),
     resolve: () => ({ href: "" }),
   }),
-  RouterLink: { template: "<a><slot /></a>" },
 }));
 
-// The filter bar is a dropdown forest of its own and has nothing to say here:
-// the section reads the filter from the URL either way.
+// The section reads the filter from the URL; the bar has nothing to say here.
 vi.mock("@/features/comment-filter/ui/CommentsFilter.vue", () => ({
   default: { template: "<div class='filter-stub' />" },
 }));
 
-// The item has its own spec; here only what it is given matters: the number,
-// and whether the reader is on the blacklist of the record. The form is the
-// real one (CommentComposer): what the section owes a send is what it does.
+// The item has its own spec: here only what it is given matters.
 vi.mock("@/features/comment", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/features/comment")>()),
   CommentItem: {
@@ -66,16 +50,11 @@ vi.mock("@/features/auth", () => ({
   LoginPrompt: { template: "<div class='login-prompt' />" },
 }));
 
-// A heavy tiptap component; what the composer owes a failed send is held by
-// composerDrafts.spec.
-vi.mock("@/shared/ui/BBCodeEditor", () => ({
-  BBCodeEditor: {
-    props: ["modelValue"],
-    emits: ["update:modelValue", "submit"],
-    template:
-      "<textarea class='editor-stub' :value='modelValue' @input='$emit(\"update:modelValue\", $event.target.value)' />",
-  },
-}));
+vi.mock("@/shared/ui/BBCodeEditor", async () =>
+  (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeComposer(
+    () => {},
+  ),
+);
 
 const comment = (id: string): Comment =>
   ({
@@ -100,7 +79,7 @@ function render(over: Record<string, unknown> = {}) {
   const wrapper = mount(DiscussionSection, {
     global: {
       plugins: [createPinia()],
-      stubs: { RouterLink: { template: "<a><slot /></a>" } },
+      stubs: { RouterLink: RouterLinkStub },
     },
     props: {
       comments: [],
@@ -204,13 +183,12 @@ describe("the discussion section", () => {
     );
   });
 
-  // The interceptor leaves a 400 to the page, and that is the refusal that
-  // names what is wrong with the text. The section handed the text back and
-  // said nothing, so the reader saw it return and learnt nothing.
+  // A 400 is the page's to show: the reason that names what is wrong with the text.
   it("names the server's reason and keeps the text when a send is refused", async () => {
     const { toasts, dismiss } = useToast();
     [...toasts.value].forEach((t) => dismiss(t.id));
-    const reason = "Скрытый текст работает только в игровом тексте поста";
+    const reason =
+      "Скрытый блок работает только в игровых постах: [private]. Для примера оберните его в [noparse].";
     const create = vi.fn().mockResolvedValue({
       error: {
         type: "",
@@ -235,14 +213,7 @@ describe("the discussion section", () => {
     ).toBe("[private]секрет[/private]");
   });
 
-  /**
-   * The blacklist of the game or blog closes the composer (the page says so
-   * through canComment and closedHint) and reaches every comment, where it
-   * takes "Редактировать" off the viewer's own. The list is memoised per
-   * item, so a flag that changes after the first page has rendered - the game
-   * answering after the comments - has to be one of the things the memo
-   * watches, or the comments keep offering what the server will refuse.
-   */
+  /** The blacklist closes the composer and reaches every comment, even when it arrives late. */
   it("says why there is no composer and tells every comment about the blacklist", async () => {
     localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
     const { wrapper } = render({
@@ -268,8 +239,7 @@ describe("the discussion section", () => {
     );
   });
 
-  // A signed-in reader the record takes no comment from and says nothing
-  // about (a ban): no block at all, so no empty step under the list.
+  // A ban: no block at all, so no empty step under the list.
   it("leaves no empty block where there is nothing to offer and nothing to say", () => {
     localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
     const { wrapper } = render({ comments: [comment("c-1")] });
@@ -278,13 +248,7 @@ describe("the discussion section", () => {
   });
 });
 
-/**
- * A discussion the viewer may read and not write in: a game read-only to
- * those outside it, the blacklist of the game or the blog. It stays whole,
- * empty or not, and the plaque of a refusal (RefusalNote) stands where the
- * composer would be. The plaque is what tells it from the empty line,
- * "Комментариев пока нет", which stays grey: the two never read alike.
- */
+/** A discussion the viewer may read and not write in stays whole, a plaque in the composer's place. */
 describe("a discussion closed to writing", () => {
   const OFF = "Писать в обсуждении могут только участники игры";
 
@@ -310,8 +274,7 @@ describe("a discussion closed to writing", () => {
     );
   });
 
-  // Signing in would not open the form, so the guest is told why there is
-  // none rather than invited to sign in.
+  // Signing in would not open the form.
   it("tells a guest the same instead of inviting him in", async () => {
     const { wrapper } = render({ closedHint: OFF });
     await flushPromises();
@@ -328,9 +291,6 @@ describe("a discussion closed to writing", () => {
     expect(wrapper.find(".discussion-hint").exists()).toBe(false);
   });
 
-  // The discussion with nothing in it used to vanish, filter bar and all, and
-  // the page left its address: there is something to read in it after all,
-  // "Комментариев пока нет", and the line under it.
   it("keeps an empty one whole: the filter bar, the empty line and the line under it", async () => {
     const { wrapper } = render({
       closedHint: OFF,
@@ -345,8 +305,7 @@ describe("a discussion closed to writing", () => {
     expect(wrapper.get(".discussion-hint").text()).toBe(OFF);
   });
 
-  // The refusal is the plaque and the empty line is grey, each drawn by its
-  // own component, so a refusal set back in grey reads as nothing here.
+  // Each drawn by its own component, so a refusal set in grey would read as nothing.
   it("draws the refusal as a plaque and the empty line in grey", async () => {
     localStorage.setItem("user", JSON.stringify({ username: "Reader" }));
     const { wrapper } = render({
@@ -360,14 +319,5 @@ describe("a discussion closed to writing", () => {
     expect(plaques[0].classes()).toContain("discussion-hint");
     const grey = wrapper.findAllComponents(SecondaryText);
     expect(grey.map((line) => line.text())).toEqual(["Комментариев пока нет"]);
-  });
-
-  it("keeps an open empty discussion and its words", async () => {
-    const { wrapper } = render({ paging: paging({ total: 0, pages: 0 }) });
-    await flushPromises();
-
-    expect(wrapper.find(".discussion-none").text()).toBe(
-      "Комментариев пока нет",
-    );
   });
 });

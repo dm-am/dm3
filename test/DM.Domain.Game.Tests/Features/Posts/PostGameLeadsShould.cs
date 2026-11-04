@@ -1,5 +1,5 @@
 using System;
-using DM.Domain.Game.Features.Games;
+using DM.Domain.Game.Features.Posts;
 using AwesomeAssertions;
 using Xunit;
 
@@ -9,12 +9,7 @@ namespace DM.Domain.Game.Tests.Features.Posts;
 /// Who the post reports as a lead of its game.
 /// </summary>
 /// <remarks>
-/// The renderer's widest permission hangs off this list: a lead sees every
-/// [private] block in the game, addressed to them or not. The list is composed
-/// from two fields a projection has to fill, and a projection that filled
-/// neither used to produce a one-element list holding Guid.Empty — the id an
-/// anonymous reader carries. That is the leak this covers, from the side that
-/// produced the list rather than the side that read it.
+/// A lead sees every [private] block in the game, so an unfilled field must not become Guid.Empty, the guest's id.
 /// </remarks>
 public class PostGameLeadsShould
 {
@@ -22,7 +17,7 @@ public class PostGameLeadsShould
     private static readonly Guid AssistantId = Guid.Parse("22222222-2222-2222-2222-222222222222");
 
     [Fact]
-    public void NameNobody_WhenTheProjectionFilledNeitherField()
+    public void NameNobodyWhenTheProjectionFilledNeitherField()
     {
         new Post().GameLeadUserIds.Should().BeEmpty();
     }
@@ -40,7 +35,7 @@ public class PostGameLeadsShould
     }
 
     [Fact]
-    public void DropAnEmptyMaster_AndKeepTheAssistants()
+    public void DropAnEmptyMasterAndKeepTheAssistants()
     {
         var post = new Post { GameAssistantUserIds = [AssistantId] };
 

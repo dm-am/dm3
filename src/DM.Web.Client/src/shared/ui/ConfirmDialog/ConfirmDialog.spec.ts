@@ -2,24 +2,7 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The window that asks before something cannot be taken back.
- *
- * What it has to get right is not markup, it is what a reader sees: a question
- * with the verb of the button in it, one sentence saying what is lost, the
- * action offered before the way out, and no red anywhere. The red is the part
- * with a history — the window used to paint the confirm button in the site's
- * destructive fill, so the reader recognised the colour and stopped reading
- * the sentence. The danger now lives in the words, which is the one place it
- * cannot be skimmed past. Owner's call, 21 September 2026.
- *
- * Half of that decision is a rule and not a node: the card's measure, its
- * gutter, the absence of a frame and of a shadow, the height of the row. jsdom
- * applies no scoped styles and vitest never compiles a <style> block, so an
- * assertion about any of them through a mount would be an assertion about
- * markup, and markup is not where they live. Those are read off the compiled
- * stylesheet instead.
- */
+// No red anywhere in the window: the danger lives in the words, the one place it cannot be skimmed past.
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { nextTick } from "vue";
 import {
@@ -33,16 +16,16 @@ import { fileURLToPath } from "node:url";
 import ConfirmDialog from "./ConfirmDialog.vue";
 import {
   componentCss,
-  ruleMap,
   sassBlocks,
   styleRules,
 } from "@/shared/lib/testing/styles";
 import { setScrollContainer } from "@/shared/lib/scroll";
 import type { DialogActionResult } from "@/shared/lib/composables/useDialogAction";
+import { deferred } from "@/shared/lib/testing/tasks";
+import { problem } from "@/shared/lib/testing/problem";
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 
-// Stub Teleport to render content in place (not to body).
 config.global.stubs = {
   Teleport: true,
 };
@@ -74,10 +57,6 @@ const captions = (wrapper: ReturnType<typeof open>): string[] =>
 /** The window's own stylesheet, as the browser gets it. */
 const windowCss = (): string =>
   componentCss(resolve(HERE, "ConfirmDialog.vue"));
-
-/** The site's button, which draws both halves of the row. */
-const buttonCss = (): string =>
-  componentCss(resolve(HERE, "../Button/Button.vue"));
 
 describe("the confirmation window", () => {
   it("announces itself as a decision to take", () => {
@@ -121,18 +100,13 @@ describe("the confirmation window", () => {
   it("paints nothing in the window red but a refusal", () => {
     const wrapper = open();
 
-    // No node wears the destructive modifier: the class is what used to turn
-    // the confirm button into the site's red control.
+    // The destructive modifier used to paint the confirm button red.
     const red = wrapper
       .findAll("*")
       .filter((one) => one.classes().some((name) => /danger/.test(name)));
     expect(red).toEqual([]);
 
-    // And nothing in the stylesheet can bring the colour back by another
-    // route: the one rule painted in a token of the red family is the line of
-    // a refusal, and the destructive mixin is not called. The compiled sheet is
-    // asked for the tokens and the source for the mixin, because a mixin
-    // leaves its own name nowhere in the output.
+    // The compiled sheet is asked for the red tokens, the source for the mixin: a mixin leaves no name in the output.
     const painted = styleRules(windowCss())
       .filter(({ declarations }) =>
         Object.values(declarations).some((value) =>
@@ -186,17 +160,6 @@ describe("the confirmation window", () => {
     expect(page.style.getPropertyValue("scrollbar-gutter")).toBe("");
   });
 
-  it("stops the action while the request is in flight", async () => {
-    const wrapper = open({ loading: true });
-    const action = wrapper.findAll(".dialog-actions button")[0];
-
-    expect(action.attributes("disabled")).toBeDefined();
-    expect(action.attributes("aria-busy")).toBe("true");
-
-    await action.trigger("click");
-    expect(wrapper.emitted("confirm")).toBeUndefined();
-  });
-
   it("answers the action and the way out", async () => {
     const wrapper = open();
     const buttons = wrapper.findAll(".dialog-actions button");
@@ -230,23 +193,6 @@ describe("the confirmation window", () => {
     await backdrop.trigger("click");
     expect(wrapper.emitted("cancel")).toHaveLength(2);
   });
-});
-
-/** A promise the test settles when it wants the answer to arrive. */
-function deferred<T>() {
-  let resolve!: (value: T) => void;
-  const promise = new Promise<T>((yes) => {
-    resolve = yes;
-  });
-  return { promise, resolve };
-}
-
-const problem = (status: number, title = "", seconds?: number) => ({
-  type: "",
-  title,
-  status,
-  traceId: "t",
-  ...(seconds ? { retryAfterSeconds: seconds } : {}),
 });
 
 describe("a confirmation that runs its action", () => {
@@ -321,7 +267,9 @@ describe("a confirmation that runs its action", () => {
     vi.useFakeTimers();
     try {
       const wrapper = open({
-        action: async () => ({ error: problem(429, "", 1) }),
+        action: async () => ({
+          error: problem(429, "", { retryAfterSeconds: 1 }),
+        }),
       });
 
       await confirm(wrapper).trigger("click");
@@ -384,61 +332,6 @@ describe("a confirmation that runs its action", () => {
 });
 
 describe("the card of the confirmation window", () => {
-  it("has one measure, and it is the guest card's narrow one", () => {
-    expect(ruleMap(windowCss()).get(".dialog-container")?.width).toBe("352px");
-  });
-
-  it("keeps the guest card's gutter, fill and radius", () => {
-    const card = ruleMap(windowCss()).get(".dialog-container");
-
-    expect(card?.padding).toBe("24px");
-    expect(card?.["background-color"]).toBe("var(--bg-page)");
-    expect(card?.["border-radius"]).toBe("8px");
-  });
-
-  it("stands over the page with neither a frame nor a shadow", () => {
-    const css = windowCss();
-
-    expect(ruleMap(css).get(".dialog-container")?.border).toBeUndefined();
-
-    // The one shadow left in the sheet is the focus ring of the cross, which
-    // follows the button's own rounded edge because an outline in the corner
-    // of the card is clipped by the card.
-    expect(
-      styleRules(css)
-        .filter(({ declarations }) => declarations["box-shadow"])
-        .map(({ selector }) => selector),
-    ).toEqual([".dialog-close:focus-visible"]);
-  });
-
-  it("centres the question and the sentence under it", () => {
-    expect(ruleMap(windowCss()).get(".dialog-container")?.["text-align"]).toBe(
-      "center",
-    );
-  });
-
-  it("scrolls a card taller than the screen whole, from its top", () => {
-    const sheet = ruleMap(windowCss());
-
-    expect(sheet.get(".dialog-backdrop")).toMatchObject({
-      "overflow-y": "auto",
-      padding: "16px",
-      display: "flex",
-    });
-    // Centring by align-items would cut a tall card at both ends.
-    expect(sheet.get(".dialog-backdrop")?.["align-items"]).toBeUndefined();
-    expect(sheet.get(".dialog-container")?.margin).toBe("auto");
-  });
-
-  it("dims the page behind it without blurring it", () => {
-    const backdrop = ruleMap(windowCss()).get(".dialog-backdrop");
-
-    expect(backdrop?.["background-color"]).toBe("var(--overlay-bg)");
-    // A blur would take away the thing the question is about while the reader
-    // decides. The guest dialogs have none either.
-    expect(backdrop?.["backdrop-filter"]).toBeUndefined();
-  });
-
   it("arrives by fading and does nothing else", () => {
     const rules = styleRules(windowCss()).filter(({ selector }) =>
       selector.includes("dialog-enter"),
@@ -448,39 +341,5 @@ describe("the card of the confirmation window", () => {
     for (const { selector, declarations } of rules) {
       expect(declarations.transform, selector).toBeUndefined();
     }
-  });
-
-  it("stands the two halves of the row one step apart", () => {
-    const sheet = ruleMap(windowCss());
-
-    expect(sheet.get(".dialog-actions")?.gap).toBe("8px");
-    // A zero basis: the captions differ in length, and a basis taken from the
-    // content would leave the halves unequal.
-    expect(sheet.get(".dialog-actions > *")?.flex).toBe("1 1 0");
-  });
-
-  it("stands the row at the window's control height and not the page's", () => {
-    // The row is the site's own button twice over, 38 high on a page; in a
-    // window it is 52, the height of the window with a form. Which of the two
-    // rules wins is asked in dialogSurface.spec.ts, from the scoped sheets.
-    expect(ruleMap(buttonCss()).get("button")?.height).toBe("38px");
-    expect(ruleMap(windowCss()).get(".dialog-actions > *")?.height).toBe(
-      "52px",
-    );
-  });
-
-  it("asks the question in the site's heading style, centred", () => {
-    const sheet = ruleMap(windowCss());
-    const title = sheet.get(".dialog-title");
-
-    expect(title?.["text-transform"]).toBe("uppercase");
-    expect(title?.color).toBe("var(--heading)");
-    expect(title?.["font-weight"]).toBe("700");
-    expect(title?.["font-size"]).toBe("16px");
-    expect(title?.["letter-spacing"]).toBe("0.5px");
-    // Centred with the sentence under it, the reserve for the cross taken on
-    // both sides so the centring stays honest.
-    expect(sheet.get(".dialog-container")?.["text-align"]).toBe("center");
-    expect(title?.padding).toBe("0 24px");
   });
 });

@@ -20,10 +20,9 @@ namespace DM.Web.API.Features.Moderation.Moderators;
 [Tags("Moderation")]
 public class ModeratorsController : ControllerBase
 {
-    private readonly IModeratorsApiService _moderatorsApiService;
+    private readonly ModeratorsApiService _moderatorsApiService;
 
-    /// <inheritdoc />
-    public ModeratorsController(IModeratorsApiService moderatorsApiService)
+    public ModeratorsController(ModeratorsApiService moderatorsApiService)
     {
         _moderatorsApiService = moderatorsApiService;
     }

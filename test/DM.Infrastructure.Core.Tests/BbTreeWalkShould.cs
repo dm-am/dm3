@@ -11,40 +11,9 @@ namespace DM.Infrastructure.Core.Tests;
 /// carries every rule the walk has.
 /// </summary>
 /// <remarks>
-/// The walk was rewritten from three recursive renderers into one iterative
-/// one, and the only thing that made that rewrite safe was that the output did
-/// not move. Nothing was checking that: the resilience tests assert lengths on a
-/// tree of identical nodes, and a length says nothing about order - an
-/// implementation that emitted every closing tag before its children would
-/// satisfy it to the byte.
-///
-/// The expected strings below were produced by the recursive renderer, running
-/// on this fixture before the rewrite. They are a record of what it did, not a
-/// judgement of what it should do: the fixture deliberately avoids the two
-/// spellings that were meant to change (an unquoted attribute, and nesting past
-/// the depth guard), so any difference here is a regression rather than an
-/// intention.
-///
-/// Two expectations have since been moved on purpose, and they are the only
-/// ones.
-///
-/// The recursive renderer dropped the text children of a list on the HTML path,
-/// so "мимо" and "тоже мимо" - words their author typed and got back, whole, on
-/// every later edit - reached no reader. The HTML expectation below carried that
-/// silence as a fact: one ul, the two items, and nothing between or around
-/// them. Now the words are there, and the list markup
-/// steps aside for them rather than swallowing them or wrapping them into
-/// invented items: text before the first item comes out ahead of the list, text
-/// between two items splits it, and each ul still holds only li. See
-/// TagNode.EmitList for why that shape and not another, and
-/// BbListTextShould for the cases the rule is pinned on.
-///
-/// The text output carried the substitutions of the HTML: entities for the
-/// characters markup reserves, a break tag for the newline, an entity for the
-/// dash. It is plain text now (see NodeTree.ToText): the characters as typed, the
-/// newline as a newline, and the parser's text table in place of the aliases.
-/// The words it keeps and their order are what they were.
-///
+/// The walk is iterative; the expected strings pin its output byte for byte, order included, which a
+/// length check cannot. Text between list items is lifted out of the list markup in HTML (see
+/// TagNode.EmitList and BbListTextShould), and the text output is plain text (see NodeTree.ToText).
 /// What the fixture pins, in order of appearance:
 /// - an attribute value substituted into both the opening and the closing markup;
 /// - a tag nested inside another;
@@ -68,7 +37,7 @@ public class BbTreeWalkShould
         "[pre]a -- b[/pre][empty][/empty][tab]a < b & c";
 
     [Fact]
-    public void EmitTheSameHtml_AsTheRecursiveWalkDid_SaveForTheListTextItDropped()
+    public void EmitTheFixtureAsHtml()
     {
         Parse().ToHtml().Should().Be(
             "<div class=\"quote\"><div class=\"quote-author\">Автор</div>" +
@@ -82,7 +51,7 @@ public class BbTreeWalkShould
     }
 
     [Fact]
-    public void EmitTheSameWords_AsTheRecursiveWalkDid_AsPlainText()
+    public void EmitTheFixtureAsPlainText()
     {
         Parse().ToText().Should().Be(
             "жирный ~ текст\n" +
@@ -93,7 +62,7 @@ public class BbTreeWalkShould
     }
 
     [Fact]
-    public void EmitTheSameBbCode_AsTheRecursiveWalkDid()
+    public void EmitTheFixtureAsBbCode()
     {
         Parse().ToBb().Should().Be(
             "[quote=\"Автор\"][b]жирный[/b] -- текст[/quote]\n" +
@@ -103,9 +72,7 @@ public class BbTreeWalkShould
     }
 
     /// <summary>
-    /// The tag set is built here rather than taken from BbParserProvider: this
-    /// is a test of the walk, and a set that changes for product reasons would
-    /// move the expected strings for reasons that have nothing to do with it.
+    /// The tag set is built here, not taken from BbParserProvider: product changes must not move these strings.
     /// </summary>
     private static BBCodeParser.Nodes.NodeTree Parse()
     {

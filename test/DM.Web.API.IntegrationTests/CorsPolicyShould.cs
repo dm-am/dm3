@@ -1,4 +1,3 @@
-using System;
 using System.Net;
 using AwesomeAssertions;
 using Xunit;
@@ -6,22 +5,8 @@ using Xunit;
 namespace DM.Web.API.IntegrationTests;
 
 /// <summary>
-/// The CORS policy is two hand kept lists, and both of them fail quietly.
-///
-/// A request header missing from the allow list is never sent at all: the
-/// preflight comes back without it and the browser cancels the request before it
-/// leaves. That is what the client's Idempotency-Key hit, attached to every file
-/// upload while the policy listed seven other headers and not that one, with the
-/// checked in dev setup already cross origin: the SPA on 5173, the API on 5000,
-/// no Vite proxy between them. A response header missing from the exposed list
-/// does arrive and stays unreadable to the page, which covers Location on 201
-/// and Retry-After on 429, the one the client's 429 handler reads.
-///
-/// Neither fault shows up where a reverse proxy serves the SPA and the API from
-/// one origin, because then there is no preflight and no cross origin response
-/// to hide anything from. The published contract puts the API on its own host,
-/// so these tests drive the policy directly instead of waiting for the topology
-/// to catch up with the document.
+/// The CORS policy is two hand-kept lists, and both fail quietly: an unlisted request header is never sent, an
+/// unexposed response header is unreadable to the page. The API has its own host, so the policy is driven directly.
 /// </summary>
 public class CorsPolicyShould : IntegrationTestBase
 {
@@ -35,7 +20,6 @@ public class CorsPolicyShould : IntegrationTestBase
     [Theory]
     [InlineData("content-type")]
     [InlineData("cache-control")]
-    [InlineData("x-requested-with")]
     [InlineData("x-dm-audience")]
     [InlineData("x-dm-correlation-token")]
     [InlineData("idempotency-key")]
@@ -57,20 +41,32 @@ public class CorsPolicyShould : IntegrationTestBase
     [Fact]
     public async Task RefuseAPreflightForAnUnlistedHeader()
     {
-        // The other half of the theory above: the policy is a list, not
-        // AllowAnyHeader. Without this, allowing everything would satisfy every
-        // case above while handing each listed origin a blank cheque.
-        //
-        // The answer is the list itself, not a refusal: the middleware replies
-        // with what it allows and leaves the comparison to the browser, which
-        // will not send the call. So the check is that the unlisted name is not
-        // in the answer, over a list that is not empty either.
+        // The policy is a list, not AllowAnyHeader: the unlisted name is absent from a non-empty answer.
         var response = await SendPreflightAsync("/v1/uploads", "POST", "x-dm-unlisted");
 
         var allowed = AllowedRequestHeaders(response);
         allowed.Should().NotBeEmpty("the policy names the headers it accepts");
         allowed.Should().NotContain(header =>
             string.Equals(header, "x-dm-unlisted", StringComparison.OrdinalIgnoreCase));
+    }
+
+    [Fact]
+    public async Task AllowTheNegotiatePreflightOfTheHub()
+    {
+        // The SignalR client marks its negotiate call with both headers; refused, live events never connect.
+        string[] requested = ["x-requested-with", "x-signalr-user-agent"];
+        var response = await SendPreflightAsync(
+            "/hubs/notifications/negotiate?negotiateVersion=1", "POST", string.Join(",", requested));
+
+        response.StatusCode.Should().Be(HttpStatusCode.NoContent);
+        CommaSeparated(response, "Access-Control-Allow-Origin").Should().Equal(AllowedOrigin);
+        CommaSeparated(response, "Access-Control-Allow-Credentials").Should().Equal("true");
+        var allowed = AllowedRequestHeaders(response);
+        foreach (var header in requested)
+        {
+            allowed.Should().Contain(name => string.Equals(name, header, StringComparison.OrdinalIgnoreCase),
+                "the client sends {0}", header);
+        }
     }
 
     [Fact]
@@ -100,9 +96,7 @@ public class CorsPolicyShould : IntegrationTestBase
         CommaSeparated(response, "Access-Control-Allow-Headers");
 
     /// <summary>
-    /// A missing header reads as an empty list rather than throwing: an absent
-    /// allow list is exactly the failure under test, and it has to fail as an
-    /// assertion, not as an exception from the reading helper.
+    /// A missing header reads as an empty list, so the failure is an assertion rather than an exception.
     /// </summary>
     private static string[] CommaSeparated(HttpResponseMessage response, string headerName) =>
         response.Headers.TryGetValues(headerName, out var values)

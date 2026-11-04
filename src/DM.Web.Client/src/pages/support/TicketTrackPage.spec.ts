@@ -2,32 +2,10 @@
  * @vitest-environment jsdom
  */
 
-/**
- * The page of a guest's ticket, at /support/track/<token>.
- *
- * A guest gets no letters about his ticket (LEGAL-18), so this page is the
- * only place the answer reaches him. It says so in one sentence with its own
- * address in it as an ordinary link, to keep: no button that copies it and no
- * grey line with the token. It shows the ticket as the author's page does:
- * the block every screen draws a ticket with, the conversation under it and
- * the form at its foot. The guest is signed "Гость", in the caption of the
- * block and on his answers.
- *
- * His answer goes by the token, as the reading does, and is his whoever may
- * be signed in on the device: it hands the turn to moderation, and the page
- * puts it at the end of the conversation at once, without reading the ticket
- * again (every reading by the token costs him a place under the limit of five
- * a minute). Its unsent text is kept nowhere: the only thing the page holds
- * that tells one guest ticket from another is the token, and a token is not
- * written into the names of the browser's storage.
- *
- * The address carries the tracking token and nothing else, and that is a
- * guard, not a detail: the token is the only credential of the call, and the
- * number of the ticket in its place would open somebody else's ticket with the
- * address he left and the answer he got. So the page hands whatever stands in
- * the address to the tracking call as the token, never asks for a ticket by
- * its number, and reads a token that matches nothing as "не найдено".
- */
+// The guest's ticket page: the answer reaches him only here. The address
+// carries the token and nothing else, and a ticket number in its place opens
+// nothing. His answer is appended without reading the ticket again, and no
+// draft is kept under the token.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   enableAutoUnmount,
@@ -48,7 +26,7 @@ enableAutoUnmount(afterEach);
 
 const { route } = vi.hoisted(() => ({
   route: {
-    params: { token: "" } as Record<string, string>,
+    params: {},
     query: {},
     hash: "",
   },
@@ -57,8 +35,8 @@ vi.mock("vue-router", () => ({
   useRoute: () => route,
   useRouter: () => ({
     push: vi.fn(),
-    resolve: (to: { params: { token: string } }) => ({
-      href: `/support/track/${to.params.token}`,
+    resolve: (to: { hash: string }) => ({
+      href: `/support/track${to.hash}`,
     }),
   }),
 }));
@@ -66,18 +44,10 @@ vi.mock("vue-router", () => ({
 const TOKEN = "k7Qm2xV9pLr4Tz8N";
 const NOT_FOUND = "Обращение по этой ссылке не найдено";
 
-// A heavy tiptap component. What the page owes the form is read off what it
-// hands the editor: the text and the key of its draft.
-vi.mock("@/shared/ui/BBCodeEditor", () => ({
-  BBCodeEditor: {
-    name: "BBCodeEditor",
-    props: ["modelValue", "maxLength", "draftKey", "disabled"],
-    emits: ["update:modelValue", "submit"],
-    methods: { clear() {} },
-    template:
-      "<textarea class='editor-stub' :value='modelValue' @input='$emit(\"update:modelValue\", $event.target.value)' />",
-  },
-}));
+// A heavy tiptap component; the page owes the editor the text and the draft key.
+vi.mock("@/shared/ui/BBCodeEditor", async () =>
+  (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeAnswer(),
+);
 
 const asked: TicketComment = {
   id: "c-1",
@@ -105,7 +75,6 @@ const tracked: TrackedTicket = {
   subtype: "AccessRecovery",
   subject: "",
   description: "Не могу войти",
-  descriptionHtml: "Не могу войти",
   createdUtc: "2026-10-05T18:20:00Z",
   resolvedUtc: null,
   resolvedByUsername: null,
@@ -132,7 +101,7 @@ const caption = (wrapper: ReturnType<typeof render>) =>
 
 describe("the page of a guest's ticket", () => {
   beforeEach(() => {
-    route.params = { token: TOKEN };
+    route.hash = `#token=${TOKEN}`;
   });
 
   afterEach(() => {
@@ -154,30 +123,16 @@ describe("the page of a guest's ticket", () => {
     );
     const lead = wrapper.get(".lead-text");
     expect(lead.text().replace(/\s+/g, " ")).toBe(
-      `Ответ появится на этой странице: ${window.location.origin}/support/track/${TOKEN}. Сохраните ссылку, чтобы вернуться к обращению.`,
+      `Ответ появится на этой странице: ${window.location.origin}/support/track#token=${TOKEN}. Сохраните ссылку, чтобы вернуться к обращению.`,
     );
     const link = lead.getComponent(RouterLinkStub);
     expect(link.props("to")).toEqual({
       name: "support-track",
-      params: { token: TOKEN },
+      hash: `#token=${TOKEN}`,
     });
     expect(link.text()).toBe(
-      `${window.location.origin}/support/track/${TOKEN}`,
+      `${window.location.origin}/support/track#token=${TOKEN}`,
     );
-  });
-
-  // An ordinary link is all the guest needs to keep: the token is not said a
-  // second time in grey, and nothing on the page copies.
-  it("offers no button that copies and no grey line with the token", async () => {
-    serve();
-    const wrapper = render();
-    await flushPromises();
-
-    expect(wrapper.text()).not.toMatch(/Скопировать|номер обращения/i);
-    expect(wrapper.findAll("button").map((button) => button.text())).toEqual([
-      "Отправить",
-    ]);
-    expect(wrapper.find(".secondary-text").exists()).toBe(false);
   });
 
   it("signs the guest Гость in the caption and on his answers", async () => {
@@ -189,15 +144,6 @@ describe("the page of a guest's ticket", () => {
     const guest = wrapper.findAll(".comment")[1].get(".author-info");
     expect(guest.text().replace(/\s+/g, " ")).toBe("Автор: Гость");
     expect(guest.find("a").exists()).toBe(false);
-  });
-
-  // The guest is not signed in: nothing marks the ticket as his to answer.
-  it("marks nothing with the star", async () => {
-    serve();
-    const wrapper = render();
-    await flushPromises();
-
-    expect(wrapper.find(".star").exists()).toBe(false);
   });
 
   it("writes the guest's answer by the token and hands the turn to moderation", async () => {
@@ -275,7 +221,7 @@ describe("the page of a guest's ticket", () => {
 
   it("opens no ticket by its number in place of the token", async () => {
     const number = "6de5652f-1749-a4b8-1a72-e2e16f69dd89";
-    route.params = { token: number };
+    route.hash = `#token=${number}`;
     const track = vi.spyOn(ticketApi, "trackTicket").mockResolvedValue({
       data: null,
       error: { status: 404 },

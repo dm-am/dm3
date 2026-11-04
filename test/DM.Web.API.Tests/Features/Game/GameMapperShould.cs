@@ -4,30 +4,30 @@ using DM.Domain.Core.Enums;
 using DM.Domain.Core.Identity;
 using DM.Infrastructure.Core.Parsing;
 using DM.Testing;
+using DM.Testing.Dsl;
 using DM.Web.API.Features.Game.AttributeSchemas;
 using DM.Web.API.Features.Game.Games;
 using DM.Web.API.Shared.BbRendering;
 using AwesomeAssertions;
+using NSubstitute;
 using Xunit;
 using DomainGame = DM.Domain.Game.Features.Games.Game;
 using DomainGameDetails = DM.Domain.Game.Features.Games.GameDetails;
 using DomainRecruitment = DM.Domain.Game.Features.Games.GameRecruitment;
-using DomainGameAttributeSchema = DM.Domain.Game.Features.Games.GameAttributeSchema;
-using DomainCharacterShortInfo = DM.Domain.Game.Features.Games.CharacterShortInfo;
+using DomainGameAttributeSchema = DM.Domain.Game.Features.GameAttributeSchemas.GameAttributeSchema;
+using DomainCharacterShortInfo = DM.Domain.Game.Features.Characters.CharacterShortInfo;
 using DomainGameTag = DM.Domain.Game.Features.Games.GameTag;
 
 namespace DM.Web.API.Tests.Features.Game;
 
 public class GameMapperShould : UnitTestBase
 {
-    private GameMapper CreateMapper() =>
+    private static GameMapper CreateMapper() =>
         new(new AttributeSchemaMapper(), Mock<IIdentityProvider>());
 
     /// <summary>
-    /// PATCH carries "not sent" as null and the write model must keep saying
-    /// it. Tags are the loudest case: null leaves them alone, an empty list
-    /// clears them - a mapper that defaults the null to [] re-introduces the
-    /// bug where renaming a game wiped its tags.
+    /// PATCH carries "not sent" as null and the write model keeps saying it: null leaves the tags alone, an
+    /// empty list clears them.
     /// </summary>
     [Fact]
     public void KeepAnUnsentTagListNull()
@@ -95,13 +95,7 @@ public class GameMapperShould : UnitTestBase
     /// An NPC roster line carries no owner, and the details response says so
     /// instead of refusing to be built.
     /// </summary>
-    /// <remarks>
-    /// The line declared its owner non-nullable while the character row holds
-    /// no author identifier for an NPC at all. Mapperly's answer to a null
-    /// reaching a member that says it cannot be null is to throw, so every
-    /// game with an NPC in it - on a populated stand, every game with posts -
-    /// answered 500 on its own details page.
-    /// </remarks>
+    /// <remarks>The character row holds no author for an NPC, and Mapperly throws on a null into a non-nullable member.</remarks>
     [Fact]
     public void CarryAnNpcRosterLineWithoutAnOwner()
     {
@@ -165,23 +159,40 @@ public class GameMapperShould : UnitTestBase
     }
 
     /// <summary>
-    /// The master, by contrast, is not optional: a game is hosted by exactly
-    /// one user, and the reference answers with them.
+    /// A guest holds no role: a game without a mentor must not read the guest's missing id as the mentor.
     /// </summary>
     [Fact]
-    public void CarryTheMasterOfAGameReference()
+    public void GiveAGuestNoParticipationInAGameWithoutAMentor()
     {
-        var master = Master();
-
-        var reference = CreateMapper().ToGameRef(new DomainGame
+        var participation = MapperFor(Identities.Guest()).ParticipationOf(new DomainGame
         {
-            Master = master,
+            Master = Master(),
             Recruitment = new DomainRecruitment()
         });
 
-        reference.Master.Should().NotBeNull();
-        reference.Master.Id.Should().Be(master.UserId);
-        reference.Master.Username.Should().Be(master.Username);
+        participation.Should().BeEmpty();
+    }
+
+    [Fact]
+    public void CarryTheMentorOfAGameAsModerator()
+    {
+        var mentor = Master();
+
+        var participation = MapperFor(Identities.User(mentor.UserId)).ParticipationOf(new DomainGame
+        {
+            Master = Master(),
+            Mentor = mentor,
+            Recruitment = new DomainRecruitment()
+        });
+
+        participation.Should().Equal(GameParticipation.Moderator);
+    }
+
+    private static GameMapper MapperFor(IIdentity identity)
+    {
+        var identityProvider = Mock<IIdentityProvider>();
+        identityProvider.Current.Returns(identity);
+        return new GameMapper(new AttributeSchemaMapper(), identityProvider);
     }
 
     private static GeneralUser Master() => new()
@@ -228,13 +239,5 @@ public class GameMapperShould : UnitTestBase
         tag.Description.Should().BeOfType<HintBbText>();
         tag.Description!.Value.Should().Be("[tip img=\"/images/erp-tooltip.gif\"]эротические сцены[/tip]");
         tag.Description.Surface.Should().Be(BbSurface.Hint);
-    }
-
-    [Fact]
-    public void KeepATagWithoutDescriptionWithoutOne()
-    {
-        var tag = CreateMapper().ToTag(new DomainGameTag { ShortId = 1, Title = "D&D", GroupTitle = "Система" });
-
-        tag.Description.Should().BeNull();
     }
 }

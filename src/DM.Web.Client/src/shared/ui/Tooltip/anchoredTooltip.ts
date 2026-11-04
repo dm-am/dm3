@@ -3,10 +3,10 @@ import AnchoredTooltipHost from "./AnchoredTooltipHost.vue";
 
 /**
  * A tooltip for text that has no component to wrap it in <Tooltip>: server
- * HTML shown through v-html, where bbcodeInteractive.ts hears the pointer. It
- * is the site's own bubble (TooltipBubble), one per page, pointed at whatever
- * rectangle the caller names: the line of a hidden block under the pointer
- * rather than the whole block, whose top may be off the screen.
+ * HTML shown through v-html, where bbcodePrivateRecipients.ts hears the
+ * pointer. It is the site's own bubble (TooltipBubble), one per page, pointed
+ * at whatever rectangle the caller names: the line of a hidden block under the
+ * pointer rather than the whole block, whose top may be off the screen.
  *
  * The text is shown as text, through Vue's text binding. It is never read as
  * markup: the recipients of a hidden block are names the players wrote.
@@ -60,10 +60,4 @@ export function hideAnchoredTooltip(owner?: object): void {
 /** Whose bubble is up, or null. */
 export function anchoredTooltipOwner(): object | null {
   return current?.owner ?? null;
-}
-
-/** The bubble on screen, for "was this press inside it", or null. */
-export function anchoredTooltipElement(): HTMLElement | null {
-  if (!current || !host) return null;
-  return host.querySelector<HTMLElement>(`#${current.id}`);
 }

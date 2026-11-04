@@ -1,5 +1,4 @@
 using System;
-using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Community.Features.Achievements;
 
@@ -10,7 +9,6 @@ namespace DM.Domain.Community.Features.Achievements;
 /// </summary>
 public class AchievementType
 {
-    /// <summary>Identifier.</summary>
     public Guid Id { get; set; }
 
     /// <summary>Stable tier code ("POSTS_100").</summary>
@@ -23,8 +21,8 @@ public class AchievementType
     public int Threshold { get; set; }
 
     /// <summary>
-    /// Visual tier (1=bronze, 2=silver, 3=gold, 4=platinum).
-    /// Does not affect logic, UI only.
+    /// The metal of the tile on <see cref="Catalogs.TierScale"/>: a chain climbs
+    /// bronze, silver, gold, platinum. Does not affect logic, UI only.
     /// </summary>
     public int? Tier { get; set; }
 
@@ -32,30 +30,21 @@ public class AchievementType
     public AchievementCategory Category { get; set; } = null!;
 }
 
-/// <summary>Request to create a new tier in the achievement catalog.</summary>
 public class CreateAchievementType
 {
-    /// <summary>Stable code.</summary>
     public string Code { get; set; } = string.Empty;
-    /// <summary>Tier title.</summary>
     public string Title { get; set; } = string.Empty;
-    /// <summary>Unlock threshold.</summary>
     public int Threshold { get; set; }
-    /// <summary>Tier (visual style 1-4).</summary>
+    /// <summary>Tier on <see cref="Catalogs.TierScale"/>.</summary>
     public int? Tier { get; set; }
-    /// <summary>Parent category identifier.</summary>
     public Guid AchievementCategoryId { get; set; }
 }
 
-/// <summary>Request to partially update a tier.</summary>
+/// <summary>Request to partially update a tier; a null field is left as it is.</summary>
 public class UpdateAchievementType
 {
-    /// <summary>Identifier of the record being updated.</summary>
     public Guid Id { get; set; }
-    /// <summary>New title (null = leave unchanged).</summary>
     public string? Title { get; set; }
-    /// <summary>New threshold (null = leave unchanged).</summary>
     public int? Threshold { get; set; }
-    /// <summary>New tier (null = leave unchanged).</summary>
     public int? Tier { get; set; }
 }

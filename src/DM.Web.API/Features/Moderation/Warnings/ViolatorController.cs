@@ -20,10 +20,9 @@ namespace DM.Web.API.Features.Moderation.Warnings;
 [Tags("Violators")]
 public class ViolatorController : ControllerBase
 {
-    private readonly IViolatorApiService _violatorApiService;
+    private readonly ViolatorApiService _violatorApiService;
 
-    /// <inheritdoc />
-    public ViolatorController(IViolatorApiService violatorApiService)
+    public ViolatorController(ViolatorApiService violatorApiService)
     {
         _violatorApiService = violatorApiService;
     }

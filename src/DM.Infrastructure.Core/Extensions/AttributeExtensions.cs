@@ -12,9 +12,6 @@ public static class AttributeExtensions
     /// <summary>
     /// Get single attribute of given type
     /// </summary>
-    /// <param name="structValue"></param>
-    /// <typeparam name="TStruct"></typeparam>
-    /// <typeparam name="TAttr"></typeparam>
     /// <returns>The attribute instance</returns>
     /// <exception cref="AmbiguousAttributesException"></exception>
     public static TAttr GetAttribute<TStruct, TAttr>(this TStruct structValue)
@@ -32,9 +29,6 @@ public static class AttributeExtensions
     /// <summary>
     /// Get all attributes of given type
     /// </summary>
-    /// <param name="structValue"></param>
-    /// <typeparam name="TStruct"></typeparam>
-    /// <typeparam name="TAttr"></typeparam>
     /// <returns>Array of attribute instances</returns>
     private static TAttr[] GetAllAttributes<TStruct, TAttr>(this TStruct structValue)
         where TStruct : struct
@@ -68,19 +62,14 @@ public static class AttributeExtensions
 /// </summary>
 internal class AmbiguousAttributesException : Exception
 {
-    /// <inheritdoc />
     public AmbiguousAttributesException(Type attrType)
         : base($"Ambiguous attributes of type {attrType.FullName} found.")
     {
     }
 }
 
-/// <summary>
-/// No attribute found
-/// </summary>
 public class AttributeNotFoundException : Exception
 {
-    /// <inheritdoc />
     public AttributeNotFoundException(Type attrType, Type enumType)
         : base($"Attribute of type {attrType.FullName} not found at enum {enumType.FullName}.")
     {
