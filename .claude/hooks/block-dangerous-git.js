@@ -89,7 +89,7 @@ function findViolation(rawCommand) {
   return null;
 }
 
-module.exports = { findViolation };
+module.exports = { findViolation, commandSegments, stripHeredocBodies };
 
 // As a hook it reads JSON on stdin; as a module it hands findViolation to the test.
 if (require.main === module) {

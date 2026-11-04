@@ -63,15 +63,15 @@ The rules live in [PATTERNS.md](../../docs/conventions/PATTERNS.md),
 A Must fix or Should fix finding means `Request changes`. The skill's `Blocked`
 means a risk nobody qualified could verify, never "serious findings present".
 
-## Известные ложные срабатывания
+## Known false positives
 
-Эти претензии разбирались и отклонены, снова их не выносить:
+These claims were examined and rejected. Do not raise them again:
 
-- **"Route ordering bug"**. ASP.NET Core разводит literal и template сам,
-  порядок объявления действий на это не влияет.
-- **"MinimumLength=1 у пароля на входе"**. Вход не место для правил стойкости:
-  неверный пароль отсекает сравнение хешей, а строгое правило только подскажет
-  атакующему длину.
-- **"Ошибка поля (400 с `errors`) на недействительный токен"**. Токен из ссылки
-  не поле формы, статус берется из таблицы кодов API_DESIGN.md (истекший токен
-  отвечает 410).
+- **"Route ordering bug"**. ASP.NET Core tells a literal segment from a template
+  itself, the order the actions are declared in does not matter.
+- **"MinimumLength=1 on the password at login"**. Login is no place for strength
+  rules: the hash comparison turns a wrong password away, and a strict rule would
+  only tell an attacker the length.
+- **"A field error (400 with `errors`) for an invalid token"**. A token from a
+  link is not a form field, the status comes from the code table of API_DESIGN.md
+  (an expired token answers 410).

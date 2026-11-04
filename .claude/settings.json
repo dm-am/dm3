@@ -15,7 +15,19 @@
       "Bash(git gc:*)",
       "Bash(git prune:*)",
       "Bash(git reflog expire:*)",
-      "Bash(dotnet ef migrations add:*)"
+      "Bash(dotnet ef migrations add:*)",
+      "Bash(python *)",
+      "Bash(python3 *)",
+      "PowerShell(python *)",
+      "PowerShell(python3 *)",
+      "Skill(anthropic-skills:jahro-commands)",
+      "Skill(anthropic-skills:jahro-logging)",
+      "Skill(anthropic-skills:jahro-migration)",
+      "Skill(anthropic-skills:jahro-production)",
+      "Skill(anthropic-skills:jahro-setup)",
+      "Skill(anthropic-skills:jahro-snapshots)",
+      "Skill(anthropic-skills:jahro-troubleshooting)",
+      "Skill(anthropic-skills:jahro-watcher)"
     ]
   },
   "hooks": {
@@ -30,6 +42,10 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-new-migrations.js\""
+          },
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-in-subagents.js\""
           }
         ]
       },
@@ -39,6 +55,15 @@
           {
             "type": "command",
             "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-new-migrations.js\""
+          }
+        ]
+      },
+      {
+        "matcher": "mcp__Claude_Browser__.*|mcp__claude-in-chrome__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/block-in-subagents.js\""
           }
         ]
       }
