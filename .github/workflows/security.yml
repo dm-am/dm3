@@ -66,6 +66,8 @@ jobs:
           # security-extended, not security-and-quality, which adds maintainability queries that
           # bury real findings under style alerts.
           queries: security-extended
+          # What the analysis leaves out, and why, is in the file.
+          config-file: ./.github/codeql/codeql-config.yml
 
       - name: Setup .NET
         if: matrix.language == 'csharp'
