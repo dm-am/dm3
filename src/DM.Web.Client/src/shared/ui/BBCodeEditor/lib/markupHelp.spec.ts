@@ -10,12 +10,12 @@ import { existsSync } from "fs";
 import { dirname, join } from "path";
 import { fileURLToPath } from "url";
 import type { Editor } from "@tiptap/vue-3";
-import { bbcodeToHtml } from "@/shared/lib/utils/bbcodeToHtml";
+import { bbcodeToHtml } from "@/shared/lib/bbcode/bbcodeToHtml";
 import {
   CONTEXT_TAGS,
   type BBCodeContext,
-} from "@/shared/lib/utils/bbcodeTagSet";
-import { validateBBCode } from "@/shared/lib/utils/bbcodeWarnings";
+} from "@/shared/lib/bbcode/bbcodeTagSet";
+import { validateBBCode } from "@/shared/lib/bbcode/bbcodeWarnings";
 import { compileSass, styleRules } from "@/shared/lib/testing/styles";
 import BBCodeEditor from "../BBCodeEditor.vue";
 import { HELP_ENTRIES, chordLabel, typedPieces } from "./markupHelp";

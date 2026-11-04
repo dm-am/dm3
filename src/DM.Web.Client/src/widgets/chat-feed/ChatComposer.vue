@@ -3,7 +3,7 @@
 import { ref } from "vue";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { ActionResult } from "@/shared/ui/ActionResult";
-import type { BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
+import type { BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import type { ActionResult as SendResult } from "@/shared/lib/composables/useActionResult";
 import { BODY_TEXT_MAX_LENGTH } from "@/shared/lib/constants/content";
 

@@ -20,9 +20,9 @@ import { afterEach, describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { Editor } from "@tiptap/core";
 import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
-import { bbcodeToHtml } from "@/shared/lib/utils/bbcodeToHtml";
-import { htmlToBbcode } from "@/shared/lib/utils/htmlToBbcode";
-import { validateBBCode } from "@/shared/lib/utils/bbcodeWarnings";
+import { bbcodeToHtml } from "@/shared/lib/bbcode/bbcodeToHtml";
+import { htmlToBbcode } from "@/shared/lib/bbcode/htmlToBbcode";
+import { validateBBCode } from "@/shared/lib/bbcode/bbcodeWarnings";
 import {
   asBothSidesRead,
   refusesSave,

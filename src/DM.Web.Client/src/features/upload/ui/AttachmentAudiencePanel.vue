@@ -12,7 +12,7 @@ import type { UploadAudience } from "@/shared/api/models/common/upload";
 import { useAnchoredPanel } from "@/shared/lib/composables/useAnchoredPanel";
 import { Button } from "@/shared/ui/Button";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
-import { recipientsCaption } from "@/shared/lib/utils/bbcodePrivateRecipients";
+import { recipientsCaption } from "@/shared/lib/bbcode/bbcodePrivateRecipients";
 import {
   audienceRecipients,
   everyReader,

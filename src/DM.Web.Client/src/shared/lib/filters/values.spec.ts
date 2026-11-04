@@ -14,7 +14,7 @@ import {
   formatDateRangeForDisplay,
   formatNumberRangeForDisplay,
   parsePageNumber,
-} from "./utils";
+} from "./values";
 
 describe("parsePageNumber", () => {
   it("reads a page out of the query", () => {

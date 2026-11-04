@@ -4,8 +4,8 @@
  */
 
 import { expect } from "vitest";
-import { bbcodeToHtml } from "@/shared/lib/utils/bbcodeToHtml";
-import { htmlToBbcode } from "@/shared/lib/utils/htmlToBbcode";
+import { bbcodeToHtml } from "@/shared/lib/bbcode/bbcodeToHtml";
+import { htmlToBbcode } from "@/shared/lib/bbcode/htmlToBbcode";
 
 /**
  * Test that BBCode survives round-trip conversion

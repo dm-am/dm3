@@ -9,8 +9,8 @@
       "name": "client-read-by-server",
       "paths": [
         "src/DM.Web.Client/src/assets/styles/**",
-        "src/DM.Web.Client/src/shared/lib/utils/bbcodeGrammar.cases.ts",
-        "src/DM.Web.Client/src/shared/lib/utils/hintMarkup.cases.ts",
+        "src/DM.Web.Client/src/shared/lib/bbcode/bbcodeGrammar.cases.ts",
+        "src/DM.Web.Client/src/shared/lib/bbcode/hintMarkup.cases.ts",
         "src/DM.Web.Client/src/shared/lib/testing/markupCorpus.golden.json",
         "src/DM.Web.Client/src/shared/lib/testing/markupAlphabet.ts"
       ],

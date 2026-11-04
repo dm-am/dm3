@@ -20,7 +20,7 @@ import {
   BbMention,
   ModBlock,
 } from "./tiptap-extensions";
-import { cleanPastedHtml } from "@/shared/lib/utils/bbcodePaste";
+import { cleanPastedHtml } from "@/shared/lib/bbcode/bbcodePaste";
 import { isChord } from "./editorKeys";
 
 /** Whitespace kept: by default the parser folds runs of spaces and drops a line's leading ones. */

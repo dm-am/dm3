@@ -5,7 +5,7 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { TruncatedContent } from "@/shared/ui/TruncatedContent";
 import { ContentText } from "@/shared/ui/Content";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
-import type { BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
+import type { BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import { vBbcodeInteractive } from "@/shared/directives";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/trimHtmlWhitespace";
 import { formatChatTime, openImageGates } from "@/shared/lib/utils/chat";

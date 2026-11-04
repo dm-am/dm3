@@ -5,7 +5,7 @@ import {
   NSFW_SHOW_TEXT,
   NSFW_HIDE_TEXT,
   NSFW_WARNING_TEXT,
-} from "@/shared/lib/utils/bbcodeConstants";
+} from "@/shared/lib/bbcode/bbcodeConstants";
 import {
   registerExpandable,
   notifyExpandableChanged,

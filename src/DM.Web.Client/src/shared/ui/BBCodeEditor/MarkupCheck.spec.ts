@@ -10,7 +10,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { nextTick } from "vue";
-import type { BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
+import type { BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import BBCodeEditor from "./BBCodeEditor.vue";
 import { styleRules } from "@/shared/lib/testing/styles";
 import { editorCss, editorShell } from "@/shared/lib/testing/editorShell";

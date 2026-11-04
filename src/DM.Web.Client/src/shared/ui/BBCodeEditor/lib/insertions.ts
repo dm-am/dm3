@@ -7,8 +7,8 @@
 import {
   isWritableValue,
   isWritablePrivateValue,
-} from "@/shared/lib/utils/bbcodeSpelling";
-import { isPixels, MAX_PIXELS } from "@/shared/lib/utils/bbcodeTagSet";
+} from "@/shared/lib/bbcode/bbcodeSpelling";
+import { isPixels, MAX_PIXELS } from "@/shared/lib/bbcode/bbcodeTagSet";
 import type { InputField } from "../InsertPanel.vue";
 import { insertAtCaret, wrapSelection, type EditorTarget } from "./sourceField";
 

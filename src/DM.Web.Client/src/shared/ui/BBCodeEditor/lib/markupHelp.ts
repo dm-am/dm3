@@ -7,9 +7,9 @@ import {
   NSFW_SHOW_TEXT,
   SPOILER_HIDE_TEXT,
   SPOILER_SHOW_TEXT,
-} from "@/shared/lib/utils/bbcodeConstants";
-import { MAX_PIXELS } from "@/shared/lib/utils/bbcodeTagSet";
-import { privateRecipientsLine } from "@/shared/lib/utils/bbcodePrivateRecipients";
+} from "@/shared/lib/bbcode/bbcodeConstants";
+import { MAX_PIXELS } from "@/shared/lib/bbcode/bbcodeTagSet";
+import { privateRecipientsLine } from "@/shared/lib/bbcode/bbcodePrivateRecipients";
 
 /** A chord of the editor: Ctrl (Cmd on a Mac), maybe Shift, and a letter. */
 export interface HelpChord {

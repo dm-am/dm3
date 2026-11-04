@@ -1,5 +1,5 @@
 import { afterEach } from "vitest";
-import { cleanupBbcodeInteractive } from "@/shared/lib/utils/bbcodeCleanup";
+import { cleanupBbcodeInteractive } from "@/shared/lib/bbcode/bbcodeCleanup";
 
 /**
  * Puts server markup on the page, brought to life by `init`, and takes it

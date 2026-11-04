@@ -20,7 +20,7 @@ import {
   EDITOR_CORE_OPTIONS,
   visualEditorProps,
 } from "../editorExtensions";
-import { bbcodeToHtml } from "@/shared/lib/utils/bbcodeToHtml";
+import { bbcodeToHtml } from "@/shared/lib/bbcode/bbcodeToHtml";
 
 // Track created editors so they are destroyed after each test.
 // An undestroyed editor leaves ProseMirror DOMObserver flush timers

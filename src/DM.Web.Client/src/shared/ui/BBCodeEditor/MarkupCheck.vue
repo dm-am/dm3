@@ -12,8 +12,8 @@ import { symbols } from "@/shared/lib/utils/icons";
 import {
   validateBBCode,
   type BBCodeIssue,
-} from "@/shared/lib/utils/bbcodeWarnings";
-import { type BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
+} from "@/shared/lib/bbcode/bbcodeWarnings";
+import { type BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 
 const props = defineProps<{
   /** The BBCode source. */

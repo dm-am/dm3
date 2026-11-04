@@ -1,4 +1,4 @@
-import { isSafeAddress } from "@/shared/lib/utils/bbcodeAddresses";
+import { isSafeAddress } from "@/shared/lib/bbcode/bbcodeAddresses";
 import { toInternalPath } from "@/shared/lib/utils/internalUrl";
 
 // The server writes the address on a line of its own, rendered with no tag for a bare

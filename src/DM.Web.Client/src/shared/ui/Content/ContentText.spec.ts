@@ -6,7 +6,7 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import ContentText from "./ContentText.vue";
-import { NSFW_SHOW_TEXT } from "@/shared/lib/utils/bbcodeConstants";
+import { NSFW_SHOW_TEXT } from "@/shared/lib/bbcode/bbcodeConstants";
 
 /**
  * A shocking block as the server writes it. Making it interactive rewrites the

@@ -146,7 +146,7 @@ Spec лежит рядом с исходником ([PATTERNS.md](../conventions
 
 - Скрытый блок не попадает к тому, кто не вправе его видеть, ни на одной поверхности, ни в текстовом виде, встраивании и поиске (`BbMarkupPropertiesShould`, `SearchTextProjectionPropertiesShould`). Что скрыто, отвечает эталон `HiddenTextOracle`, написанный по BBCODE_RENDERING.md, а не по коду. Блок, которого читатель не читает, не оставляет следа.
 - Сохранение отвергает ровно то, что отвергает правило.
-- Превью, проверка разметки (с ней и строка, на которую указывает отказ сохранения) и прием адресов на клиенте сверяются с сервером через корпус [markupCorpus.golden.json](../../src/DM.Web.Client/src/shared/lib/testing/markupCorpus.golden.json). Его пишет `BbMarkupCorpusShould`, и этот тест краснеет, когда файл расходится с сервером, алфавитом или генератором. Читает его [bbcodeProperties.spec.ts](../../src/DM.Web.Client/src/shared/lib/utils/bbcodeProperties.spec.ts), оговоренные отличия превью перечислены в шапке [bbcodeToHtml.ts](../../src/DM.Web.Client/src/shared/lib/utils/bbcodeToHtml.ts).
+- Превью, проверка разметки (с ней и строка, на которую указывает отказ сохранения) и прием адресов на клиенте сверяются с сервером через корпус [markupCorpus.golden.json](../../src/DM.Web.Client/src/shared/lib/testing/markupCorpus.golden.json). Его пишет `BbMarkupCorpusShould`, и этот тест краснеет, когда файл расходится с сервером, алфавитом или генератором. Читает его [bbcodeProperties.spec.ts](../../src/DM.Web.Client/src/shared/lib/bbcode/bbcodeProperties.spec.ts), оговоренные отличия превью перечислены в шапке [bbcodeToHtml.ts](../../src/DM.Web.Client/src/shared/lib/bbcode/bbcodeToHtml.ts).
 - Визуальный режим редактора не переносит слово через границу скрытого блока (`visualMode.spec.ts`, допустимые перестройки там же).
 - Разбор линеен по длине текста: `BbParserCostShould` на сервере, раздел "the cost of reading" в bbcodeProperties.spec.ts на клиенте.
 
@@ -156,14 +156,14 @@ Spec лежит рядом с исходником ([PATTERNS.md](../conventions
 
 ```bash
 cd src/DM.Web.Client
-DM_MARKUP_SEED=-155307970 DM_MARKUP_PATH="0:0:3" npx vitest run --root src/ shared/lib/utils/bbcodeProperties.spec.ts
+DM_MARKUP_SEED=-155307970 DM_MARKUP_PATH="0:0:3" npx vitest run --root src/ shared/lib/bbcode/bbcodeProperties.spec.ts
 ```
 
 По умолчанию сид у каждой проверки постоянный, и прогон пробует одни и те же тексты. Чтобы поискать дальше, `DM_MARKUP_RUNS` задает число текстов, `DM_MARKUP_SALT` на сервере и `DM_MARKUP_SEED` на клиенте сдвигают набор. Корпус для такого поиска пишется в отдельный файл, и клиент читает его оттуда же:
 
 ```bash
 DM_MARKUP_CORPUS=/tmp/corpus.json DM_MARKUP_RUNS=4000 DM_MARKUP_SALT=a dotnet test test/DM.Infrastructure.Core.Tests --filter BbMarkupCorpusShould
-cd src/DM.Web.Client && DM_MARKUP_CORPUS=/tmp/corpus.json npx vitest run --root src/ shared/lib/utils/bbcodeProperties.spec.ts -t corpus
+cd src/DM.Web.Client && DM_MARKUP_CORPUS=/tmp/corpus.json npx vitest run --root src/ shared/lib/bbcode/bbcodeProperties.spec.ts -t corpus
 ```
 
 После правки сервера, алфавита или генератора корпус пишется заново и коммитится вместе с правкой:

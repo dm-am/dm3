@@ -1,5 +1,5 @@
 import { vi } from "vitest";
-import { PRIVATE_HOVER_DELAY } from "@/shared/lib/utils/bbcodePrivateRecipients";
+import { PRIVATE_HOVER_DELAY } from "@/shared/lib/bbcode/bbcodePrivateRecipients";
 
 /**
  * The words of the hidden block's tooltip once the pointer rests on `piece`:

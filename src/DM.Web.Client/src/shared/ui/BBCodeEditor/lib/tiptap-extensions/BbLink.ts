@@ -9,8 +9,8 @@
  */
 
 import { Mark, mergeAttributes } from "@tiptap/core";
-import { DEFAULT_LINK_TEXT } from "@/shared/lib/utils/bbcodeConstants";
-import { sanitizeUrl } from "@/shared/lib/utils/bbcodeAddresses";
+import { DEFAULT_LINK_TEXT } from "@/shared/lib/bbcode/bbcodeConstants";
+import { sanitizeUrl } from "@/shared/lib/bbcode/bbcodeAddresses";
 import { kept } from "./kept";
 
 declare module "@tiptap/core" {
