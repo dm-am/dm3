@@ -1,4 +1,4 @@
-import { nextTick, ref, watch, type Ref } from "vue";
+import { nextTick, onScopeDispose, ref, watch, type Ref } from "vue";
 import {
   useRoute,
   useRouter,
@@ -44,6 +44,8 @@ interface RoomView extends RoomOpeningOptions {
   enteredRoom: string | null;
   markedRoomId: string | null;
   pendingTarget: { postId: string; mark: boolean } | null;
+  /** The room is off the page: a post on its way up stays where it is. */
+  gone: boolean;
 }
 
 function hashPostId(view: RoomView): string | null {
@@ -150,14 +152,17 @@ async function settleView(view: RoomView, entering: boolean) {
     leaveFilterForHashedPost(view);
     return;
   }
-  if (target) await revealPost(target.postId, target.mark);
+  if (target) await revealPost(view, target.postId, target.mark);
   markRoomRead(view);
 }
 
-// The mark goes on the card, whose own fill would hide a tint around it.
-async function revealPost(postId: string, mark: boolean) {
+// The mark goes on the card, whose own fill would hide a tint around it. A
+// room gone during the wait finds nothing of its own by the id any more.
+async function revealPost(view: RoomView, postId: string, mark: boolean) {
   await nextTick();
+  if (view.gone) return;
   await new Promise((resolve) => requestAnimationFrame(resolve));
+  if (view.gone) return;
   const article = document.getElementById(`post-${postId}`);
   if (!article) return;
   const container = getScrollContainer();
@@ -225,7 +230,9 @@ export function useRoomOpening(options: RoomOpeningOptions) {
     enteredRoom: null,
     markedRoomId: null,
     pendingTarget: null,
+    gone: false,
   };
+  onScopeDispose(() => (view.gone = true));
 
   // After the render, so the shell's reset on a change of game runs first.
   watch(
