@@ -7,10 +7,10 @@ on:
     tags: [ 'v*' ]
   pull_request:
     branches: [ main, dev ]
-  # The full set once a day on dev, the one branch a schedule runs on: what changes without a
+  # The full set once a week on dev, the one branch a schedule runs on: what changes without a
   # commit (an advisory, a base image, a runner) is found here and not by the next unrelated push.
   schedule:
-    - cron: '0 2 * * *'
+    - cron: '0 2 * * 0'
 
 # Least privilege by default; the publish job widens it for itself only.
 permissions:
