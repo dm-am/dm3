@@ -62,6 +62,8 @@ export function useFeedPosition(options: {
     // The virtualizer draws the row after it has scrolled to it.
     nextTick(() => {
       setTimeout(() => {
+        // Gone with the feed: the page may be left before the timer fires.
+        if (!list.value) return;
         const element = document.getElementById(`msg-${id}`);
         if (element) markArrival(element);
       }, 100);
