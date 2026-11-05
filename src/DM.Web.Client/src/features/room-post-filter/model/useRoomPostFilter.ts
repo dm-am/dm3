@@ -6,7 +6,7 @@ import {
   dateToApiEnd,
   dateToApiStart,
   isValidDate,
-} from "@/shared/lib/filters/utils";
+} from "@/shared/lib/filters/values";
 import type { RoomPostsFilter } from "@/entities/game";
 
 const SORT_FIELDS = ["created", "rating", "reviewcount", "lastreview"] as const;

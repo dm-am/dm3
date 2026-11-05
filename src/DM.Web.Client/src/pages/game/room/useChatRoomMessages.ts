@@ -15,7 +15,7 @@ import {
   useGuardedRequest,
   type UseGuardedRequestReturn,
 } from "@/shared/lib/composables/useGuardedRequest";
-import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { initBbcodeInteractive } from "@/shared/lib/bbcode/bbcodeInteractive";
 import type { ChatRoomAdmission } from "./useChatRoomAdmission";
 
 export const PAGE_SIZE = 50;

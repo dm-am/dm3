@@ -169,6 +169,23 @@ export const REGISTER = {
   "src/pages/game/settings/GameInfoSection.vue": { functions: {
     "watch(game)": { complexity: 17 },
   } },
+  "src/shared/lib/bbcode/bbcodeGrammar.spec.ts": { functions: {
+    "seen": { complexity: 27 },
+  } },
+  "src/shared/lib/bbcode/bbcodeSpelling.ts": { functions: {
+    "readOpening": { lines: 113, complexity: 41 },
+  } },
+  "src/shared/lib/bbcode/bbcodeToHtml.ts": { functions: {
+    "HtmlWriter.container > runs.map:paragraphs": { complexity: 21 },
+    "HtmlWriter.inline": { complexity: 16 },
+  } },
+  "src/shared/lib/bbcode/bbcodeWarnings.ts": { functions: {
+    "wordIssue": { complexity: 35 },
+  } },
+  "src/shared/lib/bbcode/htmlToBbcode.ts": { functions: {
+    "BbcodeWriter.markedLink": { complexity: 16 },
+    "BbcodeWriter.node": { lines: 116, complexity: 59 },
+  } },
   "src/shared/lib/composables/createFilterDispatcher.ts": { functions: {
     "createFilterDispatcher": { lines: 98 },
   } },
@@ -215,23 +232,6 @@ export const REGISTER = {
   "src/shared/lib/testing/toastScan.ts": { functions: {
     "expressionAt": { complexity: 18 },
     "scanOf": { lines: 181 },
-  } },
-  "src/shared/lib/utils/bbcodeGrammar.spec.ts": { functions: {
-    "seen": { complexity: 27 },
-  } },
-  "src/shared/lib/utils/bbcodeSpelling.ts": { functions: {
-    "readOpening": { lines: 113, complexity: 41 },
-  } },
-  "src/shared/lib/utils/bbcodeToHtml.ts": { functions: {
-    "HtmlWriter.container > runs.map:paragraphs": { complexity: 21 },
-    "HtmlWriter.inline": { complexity: 16 },
-  } },
-  "src/shared/lib/utils/bbcodeWarnings.ts": { functions: {
-    "wordIssue": { complexity: 35 },
-  } },
-  "src/shared/lib/utils/htmlToBbcode.ts": { functions: {
-    "BbcodeWriter.markedLink": { complexity: 16 },
-    "BbcodeWriter.node": { lines: 116, complexity: 59 },
   } },
   "src/shared/ui/Form/FormField.vue": { functions: {
     "bindControl": { complexity: 19 },

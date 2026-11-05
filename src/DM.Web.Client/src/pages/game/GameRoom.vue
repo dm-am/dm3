@@ -8,7 +8,7 @@ import {
   useZoneSection,
 } from "@/shared/lib/composables/useZoneSection";
 import { useScrollToElement } from "@/shared/lib/composables/useScrollToElement";
-import { parsePageNumber } from "@/shared/lib/filters/utils";
+import { parsePageNumber } from "@/shared/lib/filters/values";
 import { RoomPostFilter, useRoomPostFilter } from "@/features/room-post-filter";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";

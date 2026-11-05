@@ -250,7 +250,7 @@ function emDashCount(file: string, raw: string): number {
 /** Where the em dash stays: grammar, or a separator between two values. */
 const EM_DASH_BUDGET: { file: string; count: number }[] = [
   // The separator of a date range and of a number range in filter chips.
-  { file: "shared/lib/filters/utils.ts", count: 2 },
+  { file: "shared/lib/filters/values.ts", count: 2 },
   // Credits: a role, the omitted copula, the name that holds it.
   { file: "widgets/footer/Footer.vue", count: 4 },
   // Definitions in the legal pages and the rules: the omitted copula.

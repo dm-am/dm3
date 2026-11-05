@@ -5,7 +5,7 @@
  * docs/guides/TESTING.md, "Генеративные проверки разметки".
  */
 import fc from "fast-check";
-import { type BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
+import { type BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import { MARKUP_ALPHABET } from "./markupAlphabet";
 import { asBothSidesRead } from "./markupCorpus";
 

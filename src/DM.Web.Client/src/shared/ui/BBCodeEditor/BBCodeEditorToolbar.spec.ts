@@ -6,7 +6,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { nextTick } from "vue";
 import type { Editor } from "@tiptap/vue-3";
-import type { BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
+import type { BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import BBCodeEditor from "./BBCodeEditor.vue";
 import InsertPanel from "./InsertPanel.vue";

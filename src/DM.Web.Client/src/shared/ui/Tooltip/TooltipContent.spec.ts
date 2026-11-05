@@ -21,8 +21,8 @@ import { nextTick } from "vue";
 import { mount } from "@vue/test-utils";
 import TooltipContent from "./TooltipContent.vue";
 import { trackInput } from "./inputSource";
-import { HINT_MARKUP_PAIRS } from "@/shared/lib/utils/hintMarkup.cases";
-import { hintToHtml } from "@/shared/lib/utils/hintMarkup";
+import { HINT_MARKUP_PAIRS } from "@/shared/lib/bbcode/hintMarkup.cases";
+import { hintToHtml } from "@/shared/lib/bbcode/hintMarkup";
 import { VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
 
 /** The server's markup of the pair whose input holds the given spelling. */

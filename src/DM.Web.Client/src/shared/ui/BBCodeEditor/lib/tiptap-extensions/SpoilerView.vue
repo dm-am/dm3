@@ -5,7 +5,7 @@ import { NodeViewWrapper, NodeViewContent, nodeViewProps } from "@tiptap/vue-3";
 import {
   SPOILER_SHOW_TEXT,
   SPOILER_HIDE_TEXT,
-} from "@/shared/lib/utils/bbcodeConstants";
+} from "@/shared/lib/bbcode/bbcodeConstants";
 import {
   registerExpandable,
   notifyExpandableChanged,

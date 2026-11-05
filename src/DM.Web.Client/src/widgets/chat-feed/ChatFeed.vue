@@ -10,8 +10,8 @@ import { ActionResult } from "@/shared/ui/ActionResult";
 import { DashSeparator } from "@/shared/ui/DashSeparator";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { ChatMessageSkeleton } from "@/shared/ui/Skeleton";
-import type { BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
-import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import type { BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
+import { initBbcodeInteractive } from "@/shared/lib/bbcode/bbcodeInteractive";
 import {
   groupMessagesWithSeparators,
   isDateSeparator,

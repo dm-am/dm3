@@ -9,12 +9,12 @@ import {
   getCurrentInstance,
 } from "vue";
 import { useEditor, EditorContent } from "@tiptap/vue-3";
-import { bbcodeToHtml } from "@/shared/lib/utils/bbcodeToHtml";
-import { htmlToBbcode } from "@/shared/lib/utils/htmlToBbcode";
+import { bbcodeToHtml } from "@/shared/lib/bbcode/bbcodeToHtml";
+import { htmlToBbcode } from "@/shared/lib/bbcode/htmlToBbcode";
 import {
   type BBCodeContext,
   CONTEXT_TAGS,
-} from "@/shared/lib/utils/bbcodeTagSet";
+} from "@/shared/lib/bbcode/bbcodeTagSet";
 import InsertPanel from "./InsertPanel.vue";
 import MarkupHelpDialog from "./MarkupHelpDialog.vue";
 import BBCodeEditorToolbar, {

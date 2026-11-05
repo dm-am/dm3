@@ -3,7 +3,7 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
-import { isValidDate, parsePageNumber } from "@/shared/lib/filters/utils";
+import { isValidDate, parsePageNumber } from "@/shared/lib/filters/values";
 import type { PulseSearchParams } from "@/entities/game";
 
 export type PulseSortBy = "lastreview" | "rating" | "reviewcount";

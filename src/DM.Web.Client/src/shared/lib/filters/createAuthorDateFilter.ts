@@ -22,7 +22,7 @@ import {
   parseStringFromUrl,
   toQueryValue,
   validateSortField,
-} from "./utils";
+} from "./values";
 
 /** Longest author name accepted out of the URL. */
 const MAX_AUTHOR_LENGTH = 20;

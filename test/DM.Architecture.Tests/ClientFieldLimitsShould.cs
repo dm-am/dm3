@@ -101,7 +101,7 @@ public class ClientFieldLimitsShould
             Member<int>(Community, "DM.Domain.Community.Features.UserEndorsements.UserEndorsementFieldLimits", "TextMaxLength") },
         { "pages/profile/ProfileViolations.vue", "WARNING_LIMIT", "Violator.WarningPointsScale", Violator.WarningPointsScale },
         { User, "NEWBIE_POST_THRESHOLD", "ProbationPolicy.NewbiePostThreshold", ProbationPolicy.NewbiePostThreshold },
-        { "shared/lib/utils/bbcodeTagSet.ts", "MAX_PIXELS", "ParameterLimits.MaxPixels", BBCodeParser.Tags.ParameterLimits.MaxPixels },
+        { "shared/lib/bbcode/bbcodeTagSet.ts", "MAX_PIXELS", "ParameterLimits.MaxPixels", BBCodeParser.Tags.ParameterLimits.MaxPixels },
 
         { Code, "DIGIT_LENGTH", "TotpCalculator.Digits",
             Member<int>(Account, "DM.Domain.Account.Features.TwoFactor.TotpCalculator", "Digits") },
@@ -153,7 +153,7 @@ public class ClientFieldLimitsShould
         { ModerationReason, "REASON_MAX_LENGTH", "WarningPolicy.ReasonMaxLength",
             DM.Domain.Moderation.Features.Warnings.WarningPolicy.ReasonMaxLength },
 
-        { "shared/lib/utils/bbcodeTagSet.ts", "MAX_DEPTH", "BbParser.TreeMaxDepth",
+        { "shared/lib/bbcode/bbcodeTagSet.ts", "MAX_DEPTH", "BbParser.TreeMaxDepth",
             Member<int>(typeof(BBCodeParser.BbParser).Assembly, "BBCodeParser.BbParser", "TreeMaxDepth") },
     };
 

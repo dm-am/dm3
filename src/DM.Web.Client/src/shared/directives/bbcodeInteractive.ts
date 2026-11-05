@@ -1,6 +1,6 @@
 import type { Directive } from "vue";
-import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
-import { cleanupBbcodeInteractive } from "@/shared/lib/utils/bbcodeCleanup";
+import { initBbcodeInteractive } from "@/shared/lib/bbcode/bbcodeInteractive";
+import { cleanupBbcodeInteractive } from "@/shared/lib/bbcode/bbcodeCleanup";
 
 /**
  * Brings the server's markup of an element to life (spoilers, NSFW, images,

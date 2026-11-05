@@ -8,7 +8,7 @@ import { personalApi, userApi, type UpdateProfilePayload } from "../api";
 import type { UploadedAvatar } from "../model/useAvatarUpload";
 import { useCommunityStore } from "../model/communityStore";
 import { refusalHere } from "@/shared/lib/errors";
-import { isSameUsername } from "./helpers";
+import { isSameUsername } from "./roles";
 import { fetchUser } from "./session";
 
 /**

@@ -17,7 +17,7 @@ internal static class BbGrammarTable
 {
 
     internal static string File => Path.Combine(RepositoryLayout.Root,
-        "src", "DM.Web.Client", "src", "shared", "lib", "utils", "bbcodeGrammar.cases.ts");
+        "src", "DM.Web.Client", "src", "shared", "lib", "bbcode", "bbcodeGrammar.cases.ts");
 
     private static readonly Lazy<IReadOnlyList<GrammarRow>> Loaded = new(Load);
 

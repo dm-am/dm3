@@ -23,7 +23,7 @@
  */
 
 import { Node, mergeAttributes } from "@tiptap/core";
-import { sanitizeUrl } from "@/shared/lib/utils/bbcodeAddresses";
+import { sanitizeUrl } from "@/shared/lib/bbcode/bbcodeAddresses";
 import { kept } from "./kept";
 
 export interface BbImageOptions {

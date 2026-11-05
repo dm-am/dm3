@@ -29,7 +29,7 @@ import { useActionResult } from "@/shared/lib/composables/useActionResult";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import { useFetchData } from "@/shared/lib/composables/useFetchData";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
-import { parsePageNumber } from "@/shared/lib/filters/utils";
+import { parsePageNumber } from "@/shared/lib/filters/values";
 
 const route = useRoute();
 const gameStore = useGameDetailsStore();

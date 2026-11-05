@@ -7,8 +7,8 @@
 import { readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { type BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
-import { type BBCodeIssue } from "@/shared/lib/utils/bbcodeWarnings";
+import { type BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
+import { type BBCodeIssue } from "@/shared/lib/bbcode/bbcodeWarnings";
 
 // ============================================================================
 // SURFACES

@@ -26,14 +26,14 @@
 import { afterEach, describe, expect, it } from "vitest";
 import fc from "fast-check";
 import { Editor } from "@tiptap/core";
-import { bbcodeToHtml } from "@/shared/lib/utils/bbcodeToHtml";
-import { htmlToBbcode } from "@/shared/lib/utils/htmlToBbcode";
-import type { BBCodeContext } from "@/shared/lib/utils/bbcodeTagSet";
+import { bbcodeToHtml } from "@/shared/lib/bbcode/bbcodeToHtml";
+import { htmlToBbcode } from "@/shared/lib/bbcode/htmlToBbcode";
+import type { BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import {
   BBCODE_GRAMMAR_CASES,
   type GrammarCase,
   type GrammarSurface,
-} from "@/shared/lib/utils/bbcodeGrammar.cases";
+} from "@/shared/lib/bbcode/bbcodeGrammar.cases";
 import { inThePreview, type Run } from "@/shared/lib/testing/markupReading";
 import {
   literal,

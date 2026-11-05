@@ -1,6 +1,6 @@
 import type { PostAttachment, RoomAccess } from "@/entities/game";
 import type { UploadAudience } from "@/shared/api/models/common/upload";
-import { privateRecipientsLine } from "@/shared/lib/utils/bbcodePrivateRecipients";
+import { privateRecipientsLine } from "@/shared/lib/bbcode/bbcodePrivateRecipients";
 
 /** A character the author can show a file to: "Вася" by its checkbox. */
 export interface AudienceCandidate {

@@ -2,7 +2,7 @@ import { nextTick, onMounted, onUnmounted, type Ref } from "vue";
 import { roomApi } from "@/entities/game";
 import { LIVE_TAIL_POLL_INTERVAL_MS } from "@/shared/lib/utils/liveTail";
 import type { CursorEnvelope, Message } from "@/shared/api/models/common";
-import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { initBbcodeInteractive } from "@/shared/lib/bbcode/bbcodeInteractive";
 import { isNearBottom, tailUpdate } from "@/shared/lib/utils/liveTail";
 import type { ChatRoomAdmission } from "./useChatRoomAdmission";
 import { PAGE_SIZE, type ChatRoomMessages } from "./useChatRoomMessages";

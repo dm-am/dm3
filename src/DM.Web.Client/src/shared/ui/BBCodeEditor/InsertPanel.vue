@@ -2,7 +2,7 @@
 // Fields in FormField's recipe, not FormField: a window's FormField rules reach nested ones by class.
 import { onBeforeUnmount, onMounted, ref, useId } from "vue";
 import { useAnchoredPanel } from "@/shared/lib/composables/useAnchoredPanel";
-import { addressRefusal } from "@/shared/lib/utils/bbcodeAddresses";
+import { addressRefusal } from "@/shared/lib/bbcode/bbcodeAddresses";
 import Button from "@/shared/ui/Button/Button.vue";
 
 export interface InputField {

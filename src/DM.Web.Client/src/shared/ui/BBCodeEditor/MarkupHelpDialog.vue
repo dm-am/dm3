@@ -3,8 +3,8 @@
 import { computed, ref, watch } from "vue";
 import Dialog from "@/shared/ui/Layout/Dialog.vue";
 import DialogTitle from "@/shared/ui/Layout/DialogTitle.vue";
-import { cleanupBbcodeInteractive } from "@/shared/lib/utils/bbcodeCleanup";
-import { initBbcodeInteractive } from "@/shared/lib/utils/bbcodeInteractive";
+import { cleanupBbcodeInteractive } from "@/shared/lib/bbcode/bbcodeCleanup";
+import { initBbcodeInteractive } from "@/shared/lib/bbcode/bbcodeInteractive";
 import {
   HELP_ENTRIES,
   chordLabel,

@@ -5,7 +5,7 @@ import dayjs from "dayjs";
 import type { Message } from "@/shared/api/models/common/message";
 import type { UserRole } from "../model/types";
 import { EDIT_TIME_LIMIT_MINUTES } from "@/shared/lib/utils/chat";
-import { userIsModerator } from "./helpers";
+import { userIsModerator } from "./roles";
 
 interface UserWithRole {
   username: string;

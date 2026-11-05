@@ -20,7 +20,7 @@ public class HintMarkupShould
 {
 
     private static string PairsFile => Path.Combine(RepositoryLayout.Root,
-        "src", "DM.Web.Client", "src", "shared", "lib", "utils", "hintMarkup.cases.ts");
+        "src", "DM.Web.Client", "src", "shared", "lib", "bbcode", "hintMarkup.cases.ts");
 
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
 

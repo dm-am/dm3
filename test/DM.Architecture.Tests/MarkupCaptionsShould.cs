@@ -16,7 +16,7 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class MarkupCaptionsShould
 {
-    private const string ConstantsFile = "shared/lib/utils/bbcodeConstants.ts";
+    private const string ConstantsFile = "shared/lib/bbcode/bbcodeConstants.ts";
 
     private static readonly BbParserWrapper Page = new BbParserProvider().GetForSurface(BbSurface.Comment);
 
