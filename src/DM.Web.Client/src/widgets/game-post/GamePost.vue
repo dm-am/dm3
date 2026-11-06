@@ -476,14 +476,18 @@ const { open: attachmentsOpen, toggle: toggleAttachments } = useAttachmentsFold(
   &:last-child
     margin-bottom: $block-margin
 
-// DM2's td[colspan=3]: the number in the very corner of the card's padding.
+// The number or the arrow as far from the right border as the character name is
+// from the left: the card's 5px and the 5px margin of the author column.
 .post-footer
   display: flex
   justify-content: flex-end
+  padding-right: 5px
   line-height: 15px
 
-// The wrapper takes the number's size, so the footer keeps the height of a bare number.
+// The wrapper takes the number's size so its line is the number's line, and 2px under it
+// set the number's ink 10px above the bottom border, as far as from the right one.
 .post-number-tip
+  padding-bottom: $tiny
   font-size: $tertiary-font-size
 
 // Link colour: every "go to the post" looks like a link.
@@ -503,11 +507,11 @@ const { open: attachmentsOpen, toggle: toggleAttachments } = useAttachmentsFold(
 // The clip mirrors the number: its ink as far from the top and right borders.
 .attachments-toggle
   position: absolute
-  top: 8.6px
-  right: 5.55px
+  top: 10.6px
+  right: 10.55px
 
   &.counted
-    right: 5px
+    right: 10px
 
 // The strip over the text, its left edge on the text's, 22px of air under it.
 .attachments-fold :deep(.attachments-strip)
