@@ -226,6 +226,8 @@ public partial class AgentToolingShould
         "block-dangerous-git.test.js",
         "block-new-migrations.test.js",
         "lint-edited-file.test.js",
+        "block-in-subagents.test.js",
+        "lint-agent-files.test.js",
         "ci-paths.mjs",
         "npm ci --dry-run",
         "compare-code.test.mjs",

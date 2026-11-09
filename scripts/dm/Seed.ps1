@@ -39,11 +39,11 @@ function Invoke-Seed {
     try {
         $response = Invoke-Step -CaptureOutput -Label "Users" -Command $script:DockerPath -Arguments "compose run --rm -T --build seeder users"
         if ($null -eq $response) { exit 1 }
-        Write-Step -Label "Users" -Result (Get-SeedSummary -Output $response -Prefix "users")
+        Write-CompletedStep -Label "Users" -Total 1 -Detail (Get-SeedSummary -Output $response -Prefix "users")
 
         $compResponse = Invoke-Step -CaptureOutput -Label "Content" -Command $script:DockerPath -Arguments "compose run --rm -T --build seeder content"
         if ($null -eq $compResponse) { exit 1 }
-        Write-Step -Label "Content" -Result (Get-SeedSummary -Output $compResponse -Prefix "content")
+        Write-CompletedStep -Label "Content" -Total 1 -Detail (Get-SeedSummary -Output $compResponse -Prefix "content")
     } finally {
         Pop-Location
     }
@@ -61,6 +61,9 @@ function Invoke-Seed {
     Write-Host ""
     Write-Host "Ready!" -ForegroundColor Green
     Write-Host ""
-    Write-Host "  Password: Test123!"
+    Write-Host "  Password:  " -ForegroundColor DarkGray -NoNewline
+    Write-Host "Test123!"
+    Write-Host "  Accounts:  " -ForegroundColor DarkGray -NoNewline
+    Write-Host "SolohinLex, TestModerator, TestUser, Player_One..."
     Write-Host ""
 }

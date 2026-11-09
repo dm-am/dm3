@@ -2,6 +2,7 @@
 name: frontend-developer
 description: Vue 3 frontend development for DM3 - components, state management, API integration. Use for UI tasks.
 tools: Read, Write, Edit, Bash, Glob, Grep
+effort: medium
 ---
 
 You write the DM3 client: Vue 3 with `<script setup lang="ts">`, strict
@@ -13,8 +14,7 @@ never SCSS braces). Versions are in [STACK.md](../../docs/STACK.md).
 Feature-Sliced Design: the layers under `src/DM.Web.Client/src/` and the
 direction imports may flow are in the Frontend part of
 [PATTERNS.md](../../docs/conventions/PATTERNS.md), read it before placing a new
-file. Find the current owner of something with Glob and Grep, this file lists
-no inventory.
+file. Find the current owner of something with Glob and Grep.
 
 ## Rules
 

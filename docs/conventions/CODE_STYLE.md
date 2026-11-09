@@ -196,6 +196,7 @@ DataAnnotations. Журнал пишут аутентификация, бизн�
 ниже, ревью не проходит, а найденный признак снимается, не перекладывается.
 Эталон стиля для признака 17 это код quilin и Evengard (дерево `b8331728` и
 `upstream/main`), имена только по [GLOSSARY.md](../references/GLOSSARY.md).
+Признаки 21-26 взяты из [рубрики судьи SlopCodeBench](https://github.com/SprocketLab/slop-code-bench/blob/main/configs/rubrics/llm_judge.jsonl).
 
 Гейты клиента собраны в [реестре](../../src/DM.Web.Client/src/gates/README.md),
 тесты архитектуры лежат в `test/DM.Architecture.Tests`.
@@ -220,8 +221,14 @@ DataAnnotations. Журнал пишут аутентификация, бизн�
 16. Многословный код: вложенность вместо раннего выхода, длинная запись вместо короткой. Держит в части размера и сложности: eslint (`complexity`, `max-lines`, `max-lines-per-function`, лимиты в [sizeRatchet.js](../../src/DM.Web.Client/src/gates/sizeRatchet.js)) и для таблиц стилей [sassSizeRatchet.spec.ts](../../src/DM.Web.Client/src/gates/sassSizeRatchet.spec.ts) на клиенте, [SizeRatchetShould](../../test/DM.Architecture.Tests/SizeRatchetShould.cs) на сервере.
 17. Чужой стиль, не похожий на эталон.
 18. Голос ИИ в текстах интерфейса, ошибок, документов и коммитов. Держит в части знаков машинного текста: [copy-rules.spec.ts](../../src/DM.Web.Client/src/shared/lib/copy-rules.spec.ts) и [codeStyle.spec.ts](../../src/DM.Web.Client/src/gates/codeStyle.spec.ts) в интерфейсе, [DocumentPunctuationShould](../../test/DM.Architecture.Tests/DocumentPunctuationShould.cs) в документах.
-19. Непрошенное: добавленное без слова владельца.
+19. Непрошеное: добавленное без слова владельца.
 20. Тесты, где все подменено: мок на мок.
+21. Тихий обход ошибки: запасной путь прячет сбой, повтор выбрасывает промежуточные ошибки, общая фраза там, где причину скрывать незачем, true и false или особое значение вместо ошибки.
+22. Тихая починка плохого ввода: усечь, привести тип, угадать или создать недостающее и продолжить вместо отказа.
+23. Проверка для вида: запускается, но исход не меняет, или расходится с тем, что требует предметная область.
+24. Заглушки и недоделанные заготовки: функция вместо работы возвращает пустышку, остатки шаблона без поведения.
+25. Строка вместо перечисления для режимов, видов и состояний.
+26. Непрочитанный результат вызова, от которого зависит исход.
 
 ### Документы
 
@@ -233,7 +240,7 @@ DataAnnotations. Журнал пишут аутентификация, бизн�
 6. Битые и пустые ссылки. Держит в части битых: [DocumentReferencesShould](../../test/DM.Architecture.Tests/DocumentReferencesShould.cs) (файл и якорь), [DocumentedPathsShould](../../test/DM.Architecture.Tests/DocumentedPathsShould.cs).
 7. Длина: абзац остается, только если отвечает на то, чего нельзя узнать из кода. Держит в части размера: [DocumentSizeShould](../../test/DM.Architecture.Tests/DocumentSizeShould.cs), для инструкций агентов [AgentInstructionSizeShould](../../test/DM.Architecture.Tests/AgentInstructionSizeShould.cs).
 8. Пустая структура.
-9. Непрошенное: планы, отчеты, чеклисты агентов. Держит в части документа без ссылки от README: [DocumentReachabilityShould](../../test/DM.Architecture.Tests/DocumentReachabilityShould.cs).
+9. Непрошеное: планы, отчеты, чеклисты агентов. Держит в части документа без ссылки от README: [DocumentReachabilityShould](../../test/DM.Architecture.Tests/DocumentReachabilityShould.cs).
 10. Термины: одно слово на одну вещь, русское вместо английского. Держит в части снятых слов: [InterfaceVocabularyShould](../../test/DM.Architecture.Tests/InterfaceVocabularyShould.cs).
 11. Русский текст против правил раздела выше. Держат проверки, названные у этих правил.
 12. Инструкции агентам, которые повторяют правило из другого места или пересказывают код. Держит в части размера: [AgentInstructionSizeShould](../../test/DM.Architecture.Tests/AgentInstructionSizeShould.cs).

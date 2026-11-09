@@ -83,13 +83,18 @@ $($addressLines -join "`n")
 # interpolates docker/.env before it will so much as list containers.
 if ($Command -ne 'help') { Initialize-Environment }
 
-switch ($Command) {
-    'start'  { Start-Services }
-    'stop'   { Stop-Services }
-    'reset'  { Reset-Services }
-    'seed'   { Invoke-Seed }
-    'e2e'    { Start-EndToEndStand }
-    'status' { Show-Status }
-    'logs'   { Show-Logs }
-    'help'   { Show-Help }
+try {
+    switch ($Command) {
+        'start'  { Start-Services }
+        'stop'   { Stop-Services }
+        'reset'  { Reset-Services }
+        'seed'   { Invoke-Seed }
+        'e2e'    { Start-EndToEndStand }
+        'status' { Show-Status }
+        'logs'   { Show-Logs }
+        'help'   { Show-Help }
+    }
+} finally {
+    # Ctrl+C skips the step line that would show the cursor again.
+    try { [Console]::CursorVisible = $true } catch {}
 }

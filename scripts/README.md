@@ -48,7 +48,7 @@
 | [dm/Seed.ps1](dm/Seed.ps1) | Команда `seed`: запускает сид разовым контейнером и перезапускает API, чтобы тот пересчитал стартовые проекции | `dm.ps1` | [LOCAL_SETUP.md](../docs/guides/LOCAL_SETUP.md#тестовые-данные) |
 | [dm/Services.ps1](dm/Services.ps1) | Команды `start`, `stop`, `reset`: поднимает инфраструктуру и ждет здоровья сервисов, затем API, останавливает, стирает тома | `dm.ps1` | [LOCAL_SETUP.md](../docs/guides/LOCAL_SETUP.md#команды) |
 | [dm/Status.ps1](dm/Status.ps1) | Команды `status` и `logs`: сервисы docker и процессы стенда вне docker, в первую очередь два дев-сервера сразу | `dm.ps1` | [LOCAL_SETUP.md](../docs/guides/LOCAL_SETUP.md#команды) |
-| [dm/Steps.ps1](dm/Steps.ps1) | Строки шагов вида "шаг: результат" и процессы за ними, общие для всех команд, чтение `dm/addresses.txt`. При сбое печатает stderr первым | `dm.ps1` | шапка файла |
+| [dm/Steps.ps1](dm/Steps.ps1) | Строки шагов (в консоли с анимацией и отметкой, в захваченном выводе "шаг: результат") и процессы за ними, общие для всех команд, чтение `dm/addresses.txt`. При сбое печатает stderr первым | `dm.ps1` | шапка файла |
 | [dm/addresses.txt](dm/addresses.txt) | Адреса локальных сервисов, один список для `dm.ps1` и `dm.sh` | `dm.ps1`, `dm.sh` | шапка файла |
 
 ## Сводка состояния

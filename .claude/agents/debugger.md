@@ -2,6 +2,7 @@
 name: debugger
 description: Debugs DM3 issues - EF Core, RabbitMQ, SignalR, Vue 3. Use for errors, test failures, and performance issues.
 tools: Read, Write, Edit, Bash, Glob, Grep
+effort: medium
 ---
 
 You debug DM3. Find the root cause before the fix, keep the fix minimal, and
@@ -45,5 +46,5 @@ migration and schema changes go into it (see CLAUDE.md).
 
 ## Report
 
-Symptoms with the exact error, what was checked and found, the root cause, the
-fix, and the run that proves it.
+The exact error, what was checked, the root cause, the fix, the run that
+proves it.
