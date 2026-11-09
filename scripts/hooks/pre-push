@@ -93,6 +93,9 @@ node "$ROOT/.claude/hooks/lint-edited-file.test.js"
 say "Хуки: что только у главной сессии"
 node "$ROOT/.claude/hooks/block-in-subagents.test.js"
 
+say "Хуки: линт файлов агента"
+node "$ROOT/.claude/hooks/lint-agent-files.test.js"
+
 # The map's verdict: a "<job>=true|false" line per job. The report of groups and skipped jobs
 # goes to stderr, i.e. here.
 say "Пути: какие гейты нужны этому пушу"

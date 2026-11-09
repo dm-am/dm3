@@ -24,7 +24,7 @@ public partial class AgentToolingShould
     /// dependency-scan writes `npm ci &amp;&amp; npm audit ...` in one step.
     /// </remarks>
     private static readonly Regex GateSyntax = new(
-        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-monitoring\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js|compare-code\.test\.mjs|ci-paths\.mjs)",
+        @"(npm run [a-z0-9:-]+|npm ci\b(?: --[a-z-]+)*|npm audit [^\r\n)]+|dotnet (?:format|build|test)[^\r\n)]*|check-vulnerable-packages\.sh|check-coverage\.sh|check-shell-scripts\.sh|check-compose-topology\.sh|check-nginx-configuration\.sh|check-server-installer\.sh|check-monitoring\.sh|block-dangerous-git\.test\.js|block-new-migrations\.test\.js|lint-edited-file\.test\.js|block-in-subagents\.test\.js|lint-agent-files\.test\.js|compare-code\.test\.mjs|ci-paths\.mjs)",
         RegexOptions.Compiled);
 
     /// <summary>The gate commands of a shell script, in the order it runs them.</summary>
@@ -76,6 +76,8 @@ public partial class AgentToolingShould
         "block-dangerous-git.test.js",
         "block-new-migrations.test.js",
         "lint-edited-file.test.js",
+        "block-in-subagents.test.js",
+        "lint-agent-files.test.js",
         "compare-code.test.mjs",
         "npm run test:conventions",
     };

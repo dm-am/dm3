@@ -1,6 +1,8 @@
-# The step lines scripts/dm.ps1 prints and the processes it runs behind them,
-# for every command; scripts/dm.ps1 dot-sources this file. A step line is
-# "<step>: <result>", one per line, with no redrawing.
+# The step lines scripts/dm.ps1 prints and the processes it runs behind them, for every
+# command; scripts/dm.ps1 dot-sources this file. In a console a step is one line that
+# redraws while it runs and ends as "[+] <step> [n/n] <detail>". When the output is captured
+# nothing redraws and a step prints plain "<step>: <result>" lines, since a captured carriage
+# return only garbles the log.
 
 # The addresses of the local services, read from addresses.txt: the file scripts/dm.sh reads
 # too, so the two scripts cannot name different sets. Returns an ordered name -> url map.
@@ -14,14 +16,55 @@ function Get-Addresses {
     return $addresses
 }
 
-function Write-Step {
-    param([string]$Label, [string]$Result, [switch]$Failed)
+$script:StepLabelWidth = 18
+$script:StepDots = @('.', '..', '...')
+$script:StepsRedraw = $false
+try { $script:StepsRedraw = -not [Console]::IsOutputRedirected } catch {}
+$script:StepFrameLength = 0
 
-    if ($Failed) {
-        Write-Host "  ${Label}: $Result" -ForegroundColor Red
-    } else {
-        Write-Host "  ${Label}: $Result"
+function Write-AnimatedStep {
+    param([string]$Label, [int]$Current, [int]$Total, [string]$Detail = "", [int]$DotFrame = 0)
+
+    if (-not $script:StepsRedraw) { return }
+    try { [Console]::CursorVisible = $false } catch {}
+    $dots = $script:StepDots[$DotFrame % 3].PadRight(3)
+    $pad = " " * ($script:StepLabelWidth - $Label.Length)
+    $text = if ($Detail) { "  [ ] $Label$pad[$Current/$Total]  $Detail  $dots" } else { "  [ ] $Label$pad[$Current/$Total]  $dots" }
+    Write-Host "`r$text" -NoNewline
+    $script:StepFrameLength = $text.Length
+}
+
+# The last line of a step, padded to the last frame: a shorter text would leave its tail on screen.
+function Write-FinishedStep {
+    param([string]$Mark, [string]$Color, [string]$Label, [int]$Count, [int]$Total, [string]$Detail)
+
+    try { [Console]::CursorVisible = $true } catch {}
+    $pad = " " * ($script:StepLabelWidth - $Label.Length)
+    $text = if ($Detail) { "  [_] $Label$pad[$Count/$Total]  $Detail" } else { "  [_] $Label$pad[$Count/$Total]" }
+
+    Write-Host "`r  [" -NoNewline
+    Write-Host $Mark -ForegroundColor $Color -NoNewline
+    Write-Host $text.PadRight($script:StepFrameLength).Substring(4)
+}
+
+function Write-CompletedStep {
+    param([string]$Label, [int]$Total, [string]$Detail = "")
+
+    if (-not $script:StepsRedraw) {
+        Write-Host "  ${Label}: $(if ($Detail) { $Detail } else { 'done' })"
+        return
     }
+    Write-FinishedStep -Mark "+" -Color Green -Label $Label -Count $Total -Total $Total -Detail $Detail
+}
+
+function Write-FailedStep {
+    param([string]$Label, [int]$Current, [int]$Total, [string]$Detail = "")
+
+    if (-not $script:StepsRedraw) {
+        Write-Host "  ${Label}: $(if ($Detail) { $Detail } else { 'failed' })" -ForegroundColor Red
+        return
+    }
+    Write-FinishedStep -Mark "-" -Color Red -Label $Label -Count $Current -Total $Total -Detail $Detail
 }
 
 # A failure gets more than one line because the step line is a fixed width and the reason
@@ -52,12 +95,15 @@ function Wait-ServicesHealthy {
         [int]$TimeoutSeconds = 120
     )
 
+    $total = $Services.Count
     $pending = [System.Collections.Generic.HashSet[string]]::new()
+    $readyNames = [System.Collections.Generic.List[string]]::new()
     foreach ($svc in $Services) {
         $pending.Add($svc.Name) | Out-Null
     }
 
     $elapsed = 0
+    $frame = 0
 
     while ($pending.Count -gt 0 -and $elapsed -lt $TimeoutSeconds) {
         foreach ($svc in $Services) {
@@ -65,20 +111,27 @@ function Wait-ServicesHealthy {
             $status = & $script:DockerPath inspect $svc.Name --format='{{.State.Health.Status}}' 2>$null
             if ($status -eq "healthy") {
                 $pending.Remove($svc.Name) | Out-Null
-                Write-Step -Label $Label -Result "$($svc.Label) healthy"
+                $readyNames.Add($svc.Label) | Out-Null
+                if (-not $script:StepsRedraw) { Write-Host "  ${Label}: $($svc.Label) healthy" }
             }
         }
+
+        Write-AnimatedStep -Label $Label -Current $readyNames.Count -Total $total -Detail ($readyNames -join " > ") -DotFrame $frame
 
         if ($pending.Count -gt 0) {
             Start-Sleep -Milliseconds 400
             $elapsed += 0.4
+            $frame++
         }
     }
 
-    if ($pending.Count -eq 0) { return $true }
+    if ($pending.Count -eq 0) {
+        if ($script:StepsRedraw) { Write-CompletedStep -Label $Label -Total $total -Detail ($readyNames -join " > ") }
+        return $true
+    }
 
     $failedNames = ($Services | Where-Object { $pending.Contains($_.Name) } | ForEach-Object { $_.Label }) -join ", "
-    Write-Step -Failed -Label $Label -Result "not healthy after ${TimeoutSeconds}s: $failedNames"
+    Write-FailedStep -Label $Label -Current $readyNames.Count -Total $total -Detail "not healthy after ${TimeoutSeconds}s: $failedNames"
     return $false
 }
 
@@ -90,19 +143,23 @@ function Wait-SimpleStep {
     )
 
     $elapsed = 0
+    $frame = 0
 
     while ($elapsed -lt $TimeoutSeconds) {
+        Write-AnimatedStep -Label $Label -Current 0 -Total 1 -DotFrame $frame
+
         $result = & $Check
         if ($result) {
-            Write-Step -Label $Label -Result "done"
+            Write-CompletedStep -Label $Label -Total 1
             return $true
         }
 
         Start-Sleep -Milliseconds 500
         $elapsed += 0.5
+        $frame++
     }
 
-    Write-Step -Failed -Label $Label -Result "timeout after ${TimeoutSeconds}s"
+    Write-FailedStep -Label $Label -Current 0 -Total 1 -Detail "timeout after ${TimeoutSeconds}s"
     return $false
 }
 
@@ -130,12 +187,12 @@ function Invoke-Step {
 
     # The process output is not shown, so a long step announces itself: silence for the
     # minutes a build takes reads as a hang.
-    Write-Step -Label $Label -Result "running"
+    if (-not $script:StepsRedraw) { Write-Host "  ${Label}: running" }
 
     try {
         $process.Start() | Out-Null
     } catch {
-        Write-Step -Failed -Label $Label -Result "failed to start: $_"
+        Write-FailedStep -Label $Label -Current 0 -Total 1 -Detail "failed to start: $_"
         return $null
     }
 
@@ -145,15 +202,22 @@ function Invoke-Step {
     $stdoutTask = $process.StandardOutput.ReadToEndAsync()
     $stderrTask = $process.StandardError.ReadToEndAsync()
 
+    $frame = 0
+    while (-not $process.HasExited) {
+        Write-AnimatedStep -Label $Label -Current 0 -Total 1 -DotFrame $frame
+        Start-Sleep -Milliseconds 400
+        $frame++
+    }
+
     $process.WaitForExit()
 
     if ($process.ExitCode -eq 0) {
         if ($CaptureOutput) { return $stdoutTask.Result }
-        Write-Step -Label $Label -Result "done"
+        Write-CompletedStep -Label $Label -Total 1
         return $true
     }
 
-    Write-Step -Failed -Label $Label -Result "exit code $($process.ExitCode)"
+    Write-FailedStep -Label $Label -Current 0 -Total 1 -Detail "exit code $($process.ExitCode)"
     Write-ProcessFailure -StdOut $stdoutTask.Result -StdErr $stderrTask.Result
     return $null
 }

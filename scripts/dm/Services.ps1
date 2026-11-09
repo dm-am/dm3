@@ -15,7 +15,7 @@ function Start-Infrastructure {
     # alertmanager comes up with prometheus: started apart, prometheus evaluates its rules
     # into nothing.
     if (-not (Invoke-Step -Label "Starting" -Command $script:DockerPath -Arguments "compose up -d postgres rabbitmq storage seaweedfs mailpit jaeger loki prometheus alertmanager grafana")) {
-        Write-Step -Failed -Label "Infrastructure" -Result "start failed"
+        Write-FailedStep -Label "Infrastructure" -Current 0 -Total $infraServices.Count -Detail "start failed"
         exit 1
     }
 
@@ -49,7 +49,7 @@ function Start-Applications {
 
     & $script:DockerPath compose up -d dm-mail-worker dm-notification-worker dmapi 2>&1 | Out-Null
     if ($LASTEXITCODE -ne 0) {
-        Write-Step -Failed -Label "Applications" -Result "start failed"
+        Write-FailedStep -Label "Applications" -Current 0 -Total $appServices.Count -Detail "start failed"
         exit 1
     }
 
@@ -65,13 +65,16 @@ function Show-Ready {
     Write-Host ""
     $addresses = Get-Addresses
     foreach ($name in $addresses.Keys) {
-        Write-Host ("  {0,-11}{1}" -f $name, $addresses[$name])
+        $row = "  {0,-11}{1}" -f $name, $addresses[$name]
+        if ($name -eq "API") { Write-Host $row } else { Write-Host $row -ForegroundColor DarkGray }
     }
     Write-Host ""
-    Write-Host "  Test data:    powershell -File .\scripts\dm.ps1 seed"
+    Write-Host "  Test data: " -ForegroundColor DarkGray -NoNewline
+    Write-Host "powershell -File .\scripts\dm.ps1 seed"
+    Write-Host "  Frontend:  " -ForegroundColor DarkGray -NoNewline
     # --prefix instead of "cd ... && npm run dev": Windows PowerShell rejects && as a
     # statement separator.
-    Write-Host "  Run frontend: npm --prefix `"$ProjectRoot\src\DM.Web.Client`" run dev"
+    Write-Host "npm --prefix `"$ProjectRoot\src\DM.Web.Client`" run dev"
     Write-Host ""
 }
 

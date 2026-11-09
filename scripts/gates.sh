@@ -99,7 +99,8 @@ hook_tests() {
   node "$ROOT/.claude/hooks/block-dangerous-git.test.js" &&
     node "$ROOT/.claude/hooks/block-new-migrations.test.js" &&
     node "$ROOT/.claude/hooks/lint-edited-file.test.js" &&
-    node "$ROOT/.claude/hooks/block-in-subagents.test.js"
+    node "$ROOT/.claude/hooks/block-in-subagents.test.js" &&
+    node "$ROOT/.claude/hooks/lint-agent-files.test.js"
 }
 
 in_client() { (cd "$CLIENT" && "$@"); }

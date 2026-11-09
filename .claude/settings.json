@@ -78,6 +78,17 @@
           }
         ]
       }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node \"$CLAUDE_PROJECT_DIR/.claude/hooks/lint-agent-files.js\"",
+            "timeout": 400
+          }
+        ]
+      }
     ]
   },
   "enabledPlugins": {
