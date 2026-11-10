@@ -22,10 +22,8 @@ public class PublicationControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// A notification names a publication by transliterated title, tilde and base64 of the guid; both spellings
-    /// reach the handler and are refused by it.
-    /// </summary>
+    // A notification names a publication by transliterated title, tilde and base64 of the guid;
+    // both spellings reach the handler and are refused by it.
     [Fact]
     public async Task GetPublicationAcceptsTheReadableGuidANotificationCarries()
     {

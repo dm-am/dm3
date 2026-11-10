@@ -2,13 +2,9 @@
  * @vitest-environment node
  */
 
-/**
- * The twelve places that read `?number=` used to parse it themselves, in two
- * spellings that agreed on every case listed here. The cases are the ones the
- * spellings actually differed in wording about — an absent parameter, a
- * cleared one, a word, a zero, a repeated parameter — so a change to the one
- * remaining parser has to keep answering them the same way.
- */
+// The cases are the ones the spellings actually differed in wording about — an
+// absent parameter, a cleared one, a word, a zero, a repeated parameter — so a
+// change to the one remaining parser has to keep answering them the same way.
 import { describe, it, expect } from "vitest";
 import {
   formatDateRangeForDisplay,
@@ -40,13 +36,8 @@ describe("parsePageNumber", () => {
   });
 });
 
-/**
- * The wording of a range in a filter bubble. Every list filter shows the same
- * two kinds of range, and each one used to spell its own: the pulse wrote
- * "от 5 до 20" where the rest of the site wrote "5 — 20", and "с ... по ..."
- * where the rest wrote a dash. The cases below are the three shapes a range
- * can arrive in, so a filter put back on its own wording fails here.
- */
+// The cases below are the three shapes a range can arrive in, so a filter put
+// back on its own wording fails here.
 describe("formatNumberRangeForDisplay", () => {
   it("puts a dash between the two ends", () => {
     expect(formatNumberRangeForDisplay(5, 20)).toBe("5 — 20");

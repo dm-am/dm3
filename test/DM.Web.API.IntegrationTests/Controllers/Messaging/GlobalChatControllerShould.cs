@@ -10,9 +10,6 @@ public class GlobalChatControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Get global chat events should return OK (public endpoint)
-    /// </summary>
     [Fact]
     public async Task GetGlobalChatEventsWhenNotAuthenticatedReturnsOk()
     {
@@ -21,9 +18,6 @@ public class GlobalChatControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// Get active global chat event should return OK or NoContent (depending on whether an event is active)
-    /// </summary>
     [Fact]
     public async Task GetActiveGlobalChatEventWhenNoneActiveReturnsNoContent()
     {

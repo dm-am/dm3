@@ -114,10 +114,7 @@ public class BlogInvitationServiceShould : UnitTestBase
         await blogService.Received(1).GetUnfiltered(blogId, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The blog's list closes comments only. Inviting somebody it holds is the
-    /// owner's own decision, and the invitation is sent.
-    /// </summary>
+    // Inviting somebody it holds is the owner's own decision, and the invitation is sent.
     [Fact]
     public async Task InviteAUserTheBlogBlacklisted()
     {
@@ -142,11 +139,9 @@ public class BlogInvitationServiceShould : UnitTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// An invitation reaches its addressee signed with the inviter's name, so it
-    /// is not created for somebody who keeps the inviter on their personal list -
-    /// and the refusal names nobody and gives no reason.
-    /// </summary>
+    // An invitation reaches its addressee signed with the inviter's name, so it is not created for
+    // somebody who keeps the inviter on their personal list - and the refusal names nobody and
+    // gives no reason.
     [Fact]
     public async Task RefuseToInviteSomebodyWhoBlockedTheInviter()
     {
@@ -170,10 +165,8 @@ public class BlogInvitationServiceShould : UnitTestBase
             Arg.Any<IEnumerable<Guid>>(), Arg.Any<CreateBlogInvitationEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The inviter's own list restricts the people on it, not its owner: inviting
-    /// somebody one blocked is that owner's decision alone.
-    /// </summary>
+    // The inviter's own list restricts the people on it, not its owner: inviting somebody one
+    // blocked is that owner's decision alone.
     [Fact]
     public async Task InviteSomebodyTheInviterBlocked()
     {
@@ -243,12 +236,8 @@ public class BlogInvitationServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// A reader invitation is redeemed past the public subscription door.
-    /// </summary>
-    /// <remarks>
-    /// BlogUserService.Subscribe refuses a blog whose drafts are private, the very blog an invitation exists for.
-    /// </remarks>
+    // BlogUserService.Subscribe refuses a blog whose drafts are private, the very blog an
+    // invitation exists for.
     [Fact]
     public async Task SubscribeTheReaderWithoutThePublicDoor()
     {

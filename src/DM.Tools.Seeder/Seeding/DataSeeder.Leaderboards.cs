@@ -18,17 +18,8 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// A period the boards are read over: its first moment, the moment after its
-    /// last, and whether it is the current month.
-    /// </summary>
     private sealed record CoverageWindow(DateTimeOffset Start, DateTimeOffset End, bool IsCurrentMonth);
 
-    /// <summary>
-    /// Ensures every rating and blog leaderboard has a full top-10 for the periods the site shows by
-    /// default: the current month and the closed periods of the digest topics (the last closed month
-    /// and the previous year). The post and volume boards fill from organic data.
-    /// </summary>
     /// <remarks>
     /// Idempotent per window: coverage is measured as the boards measure it, only the missing part is added.
     /// </remarks>
@@ -77,11 +68,8 @@ internal sealed partial class DataSeeder
         result.Details.Add("Ensured full top-10 rating coverage for the current month, the last closed month and the previous year");
     }
 
-    /// <summary>
-    /// Rating boards: TopPlayersByRating + TopGamesByRating. Both sum
-    /// PostReview.SignValue; the window is measured exactly as the boards do
-    /// before topping up.
-    /// </summary>
+    // Both sum PostReview.SignValue; the window is measured exactly as the boards do before topping
+    // up.
     private async Task CoverRatingBoards(
         CoverageWindow window, List<DbUser> users, DateTimeOffset weekStart,
         List<Guid> nonDraftGameIds, HashSet<Guid> usedPostIds, ComprehensiveSeedResult result)
@@ -133,11 +121,9 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// The posts a window tops up, in the order of the ranking the boards end up
-    /// showing: one post per distinct (game, author) first, so one batch lights
-    /// up `target` distinct games AND `target` distinct authors.
-    /// </summary>
+    // The posts a window tops up, in the order of the ranking the boards end up showing: one post
+    // per distinct (game, author) first, so one batch lights up `target` distinct games AND
+    // `target` distinct authors.
     private async Task<List<(Guid PostId, Guid AuthorId, Guid GameId)>> PickCoveragePosts(
         CoverageWindow window, DateTimeOffset weekStart, List<Guid> nonDraftGameIds, HashSet<Guid> usedPostIds,
         int target)
@@ -187,11 +173,8 @@ internal sealed partial class DataSeeder
         return picked;
     }
 
-    /// <summary>
-    /// A moment inside the window for a coverage review. In the current month it
-    /// stays before the week start and six hours before now, so the freshest
-    /// review on the site remains the organic one.
-    /// </summary>
+    // In the current month it stays before the week start and six hours before now, so the freshest
+    // review on the site remains the organic one.
     private DateTimeOffset CoverageReviewDate(CoverageWindow window, DateTimeOffset weekStart)
     {
         var (winStart, winEnd, isCurrentMonth) = window;
@@ -201,11 +184,6 @@ internal sealed partial class DataSeeder
         return winStart.AddMinutes(minutes == 0 ? 0 : _random.Next(0, minutes));
     }
 
-    /// <summary>
-    /// Blog boards: TopBlogsByRating (publication likes) + TopBlogsByPosts +
-    /// TopBlogAuthorsByVolume. All three read publications dated in the window;
-    /// every blog without one gets a publication (with a few likes).
-    /// </summary>
     private async Task CoverBlogBoards(
         CoverageWindow window, List<DbUser> users, List<DbBlog> blogs, Dictionary<Guid, int> nextPublicationNumber,
         ComprehensiveSeedResult result)
@@ -266,10 +244,8 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// Recalculates the popularity scores of the fixture through the same
-    /// processors the running site uses, at the seed epoch.
-    /// </summary>
+    // Recalculates the popularity scores of the fixture through the same processors the running
+    // site uses, at the seed epoch.
     private async Task UpdatePopularityScores(ComprehensiveSeedResult result)
     {
         var (_, games) = await _gamePopularity.UpdateScoresAsync(_now);
@@ -309,7 +285,6 @@ internal sealed partial class DataSeeder
             likesCreated += AddLikes(comment.CommentId, LikeEntityType.Comment, comment.AuthorId, users);
         }
 
-        // Publications
         var publications = await _dbContext.Set<Publication>()
             .Where(p => !p.IsRemoved)
             .Select(p => new { p.PublicationId, p.AuthorId })
@@ -335,10 +310,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Created {likesCreated} likes");
     }
 
-    /// <summary>
-    /// Random likes on one entity, from users other than its author.
-    /// </summary>
-    /// <returns>How many likes it got.</returns>
     private int AddLikes(Guid entityId, LikeEntityType entityType, Guid? authorId, List<DbUser> users, int minimum = 0)
     {
         var likesCreated = 0;

@@ -15,9 +15,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// Bot channels connected on the stand, the way a real link connects them.
-    /// </summary>
     /// <remarks>
     /// The external id and the settings preferences are written together: BotLinkService reads the second.
     /// Nothing is delivered, the stand has no bot token. The primary account has Discord, the moderator Telegram.
@@ -92,10 +89,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Connected {connected} bot channel(s)");
     }
 
-    /// <summary>
-    /// What the primary account and each companion write to each other, one
-    /// script per conversation, taken in turn.
-    /// </summary>
     private static readonly string[][] DirectChatScripts =
     [
         new[]
@@ -116,9 +109,6 @@ internal sealed partial class DataSeeder
         },
     ];
 
-    /// <summary>
-    /// Private correspondence for the development accounts.
-    /// </summary>
     /// <remarks>
     /// A chat without a last-message pointer is not listed. The pointer is set after the save, as for the rooms.
     /// </remarks>
@@ -165,9 +155,8 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Created {pending.Count} direct chats for {primary.Username}");
     }
 
-    /// <summary>
-    /// Saves, then points each chat at its last message: EF refuses to order the Chat and Message cycle.
-    /// </summary>
+    // Saves, then points each chat at its last message: EF refuses to order the Chat and Message
+    // cycle.
     private async Task SaveLinkingLastMessages(IEnumerable<(Chat Chat, Guid LastMessageId)> pending)
     {
         await _dbContext.SaveChangesAsync();
@@ -180,11 +169,6 @@ internal sealed partial class DataSeeder
         await _dbContext.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// One conversation of the primary account with a companion: the chat, its
-    /// two participants and the script, the primary account writing first.
-    /// </summary>
-    /// <returns>The chat and its last message, which is linked after the save.</returns>
     private async Task<(Chat Chat, Guid LastMessageId)> SeedDirectChat(
         DbUser primary, DbUser companion, string[] script, int hoursAgo,
         ComprehensiveSeedResult result)
@@ -291,15 +275,10 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Created {result.MessagesCreated} global chat messages");
     }
 
-    /// <summary>A global chat event the seed converges on, by its title.</summary>
     private sealed record GlobalChatEventTemplate(
         string Title, string Description, DateTimeOffset StartsUtc, TimeSpan? Duration, bool IsOpen,
         GlobalChatEventStatus Status);
 
-    /// <summary>
-    /// After every reseed: one open Live event running now and two Scheduled ones, one open and one
-    /// closed with invited participants. Descriptions are BBCode.
-    /// </summary>
     private static GlobalChatEventTemplate[] GlobalChatEventTemplates(DateTimeOffset now) =>
     [
         new(
@@ -399,10 +378,6 @@ internal sealed partial class DataSeeder
     }
 
 
-    /// <summary>
-    /// One event as the domain creates it: the event, its organizer as a
-    /// participant, and on a closed event the invited participants.
-    /// </summary>
     private void AddGlobalChatEvent(
         GlobalChatEventTemplate template, DbUser organizer, IReadOnlyList<DbUser> invitees)
     {

@@ -21,7 +21,9 @@ const AT_LEAST = 30;
 /** A stand-in for `${...}` inside a template literal: it carries no full stop. */
 const HOLE = "X";
 
-// --- reading literals out of a script ---------------------------------------
+function opensLiteral(ch: string): boolean {
+  return ch === '"' || ch === "'" || ch === "`";
+}
 
 /**
  * The string and template literals in a slice of script, with every `${...}`
@@ -35,7 +37,7 @@ function literalsIn(text: string): string[] {
   let i = 0;
   while (i < text.length) {
     const quote = text[i];
-    if (quote !== '"' && quote !== "'" && quote !== "`") {
+    if (!opensLiteral(quote)) {
       i += 1;
       continue;
     }
@@ -115,8 +117,6 @@ function literalsOf(source: string, name: string): string[] {
   }
   return out;
 }
-
-// --- reading the call sites -------------------------------------------------
 
 interface Prop {
   /** The literal when the attribute carries one, the expression otherwise. */

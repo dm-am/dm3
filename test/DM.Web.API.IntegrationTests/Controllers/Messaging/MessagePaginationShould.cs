@@ -11,10 +11,8 @@ using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 
-/// <summary>
-/// Messages are paged by the total order (CreatedUtc, MessageId): same-instant messages are routine after an
-/// import, and a timestamp alone leaves the boundary to the plan.
-/// </summary>
+// Messages are paged by the total order (CreatedUtc, MessageId): same-instant messages are routine
+// after an import, and a timestamp alone leaves the boundary to the plan.
 public class MessagePaginationShould : IntegrationTestBase
 {
     private const int SameInstantCount = 7;
@@ -41,9 +39,6 @@ public class MessagePaginationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The window around a message keeps the messages that share the target's timestamp.
-    /// </summary>
     [Fact]
     public async Task KeepSameInstantNeighboursInTheWindowAroundAMessage()
     {
@@ -65,9 +60,7 @@ public class MessagePaginationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The anchor takes one of the requested slots.
-    /// </summary>
+    // The anchor takes one of the requested slots.
     [Theory]
     [InlineData(1)]
     [InlineData(2)]
@@ -128,10 +121,8 @@ public class MessagePaginationShould : IntegrationTestBase
         return scope.ServiceProvider.GetRequiredService<IMessageRepository>();
     }
 
-    /// <summary>
-    /// Creates a chat whose messages all carry one timestamp, oldest first in the
-    /// total order — the state the ordering is supposed to make deterministic.
-    /// </summary>
+    // Creates a chat whose messages all carry one timestamp, oldest first in the total order — the
+    // state the ordering is supposed to make deterministic.
     private async Task<(Guid ChatId, List<Guid> MessageIds)> CreateChat()
     {
         var chatId = Guid.NewGuid();

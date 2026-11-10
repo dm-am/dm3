@@ -42,7 +42,7 @@ public static class AchievementMetricResolver
         };
     }
 
-    /// <summary>Days between registration and the evaluation moment (integer, non-negative).</summary>
+    // Days between registration and the evaluation moment (integer, non-negative).
     private static int DaysSinceRegistration(GeneralUser user, DateTimeOffset now)
     {
         if (!user.RegisteredUtc.HasValue) return 0;

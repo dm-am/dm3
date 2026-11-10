@@ -39,9 +39,6 @@ public class Notification
     /// </summary>
     public string Metadata { get; set; } = null!;
 
-    /// <summary>
-    /// Recipients of the notification
-    /// </summary>
     public List<NotificationRecipient> Recipients { get; set; } = [];
 }
 
@@ -52,9 +49,6 @@ public class Notification
 [Table("NotificationRecipients")]
 public class NotificationRecipient
 {
-    /// <summary>
-    /// Notification identifier, part of the primary key
-    /// </summary>
     public Guid NotificationId { get; set; }
 
     /// <summary>

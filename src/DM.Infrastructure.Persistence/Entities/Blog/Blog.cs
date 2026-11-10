@@ -155,15 +155,9 @@ public class Blog : ISoftDeletable
     [InverseProperty(nameof(Publication.Blog))]
     public virtual ICollection<Publication> Publications { get; set; } = [];
 
-    /// <summary>
-    /// Blog assistants
-    /// </summary>
     [InverseProperty(nameof(BlogAssistant.Blog))]
     public virtual ICollection<BlogAssistant> Assistants { get; set; } = [];
 
-    /// <summary>
-    /// Blog blacklist
-    /// </summary>
     [InverseProperty(nameof(BlogBlacklist.Blog))]
     public virtual ICollection<BlogBlacklist> Blacklist { get; set; } = [];
 

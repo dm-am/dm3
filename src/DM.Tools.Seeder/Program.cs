@@ -64,10 +64,8 @@ internal static class Program
         }
     }
 
-    /// <summary>
-    /// One phase on a host of its own, so that "all" lays out what "users" and then "content" lay out
-    /// in two processes, as the stand scripts seed.
-    /// </summary>
+    // One phase on a host of its own, so that "all" lays out what "users" and then "content" lay
+    // out in two processes, as the stand scripts seed.
     private static async Task<T> RunPhase<T>(Func<DataSeeder, Task<T>> phase)
     {
         // Args are commands: Host.CreateDefaultBuilder would reject a bare positional argument.
@@ -76,10 +74,8 @@ internal static class Program
         return await phase(scope.ServiceProvider.GetRequiredService<DataSeeder>());
     }
 
-    /// <summary>
-    /// The tool's composition, in one place so that the container it runs on is
-    /// the container a test can build.
-    /// </summary>
+    // The tool's composition, in one place so that the container it runs on is the container a test
+    // can build.
     internal static IHostBuilder CreateHostBuilder() => Host
         .CreateDefaultBuilder()
         // Scope validation only: the domain scans bring in API services this tool never resolves.
@@ -174,7 +170,6 @@ internal static class Program
         }
     }
 
-    /// <summary>The counters that moved, joined; the ones that did not are left out.</summary>
     private static string Summarize(IEnumerable<(string Label, int Value)> counters)
     {
         var created = counters

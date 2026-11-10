@@ -5,8 +5,8 @@
 // The frame of a chat room of a game and the name of the room in the heading.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { defineComponent, h, type Ref } from "vue";
-import { mount, flushPromises } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia } from "pinia";
 import { useGameDetailsStore } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
 import type { Message } from "@/shared/api/models/common";
@@ -22,10 +22,11 @@ import { ErrorState } from "@/shared/ui/ErrorState";
 import GameChatRoom from "./GameChatRoom.vue";
 import { mockGetChatMessages } from "./GameChatRoom.doubles";
 import {
+  FRAME_STUBS,
   NOTHING,
   message,
+  mountRoom,
   openRoomAs,
-  keep,
   page,
   standInRoomOne,
   under,
@@ -34,9 +35,6 @@ import {
 
 vi.mock("@/entities/game/api/roomApi", async () =>
   (await import("./GameChatRoom.doubles")).roomApi(),
-);
-vi.mock("vue-router", async () =>
-  (await import("./GameChatRoom.doubles")).vueRouter(),
 );
 
 describe("GameChatRoom frame", () => {
@@ -177,11 +175,10 @@ describe("GameChatRoom heading", () => {
 
   it("names the room once, in the zone's heading, with its archive marker", async () => {
     const pinia = createPinia();
-    setActivePinia(pinia);
-    useGameDetailsStore().rooms = [
+    useGameDetailsStore(pinia).rooms = [
       { id: "r-1", roomNumber: 1, title: "Таверна", isArchived: true },
     ] as never;
-    useAuthStore().user = { username: "player" } as never;
+    useAuthStore(pinia).user = { username: "player" } as never;
 
     let section!: Ref<string | undefined>;
     let marker!: Ref<string | undefined>;
@@ -192,15 +189,7 @@ describe("GameChatRoom heading", () => {
         return () => h(GameChatRoom);
       },
     });
-    const room = keep(
-      mount(Shell, {
-        global: {
-          plugins: [pinia],
-          stubs: { RouterLink: true, BBCodeEditor: true, ChatMessage: true },
-        },
-      }),
-    );
-    await flushPromises();
+    const room = await mountRoom(Shell, { pinia, stubs: FRAME_STUBS });
 
     expect(section.value).toBe("Таверна");
     expect(marker.value).toBe("архив");

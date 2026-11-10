@@ -12,9 +12,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Authorization;
 
-/// <summary>
-/// A refusal names the intention that was refused: its message is the title of the response.
-/// </summary>
+// A refusal names the intention that was refused: its message is the title of the response.
 public class IntentionManagerShould
 {
     private static IntentionManager Manager(params IIntentionResolver[] resolvers) =>

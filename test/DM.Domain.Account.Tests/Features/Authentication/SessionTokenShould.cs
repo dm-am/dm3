@@ -11,9 +11,7 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Authentication;
 
-/// <summary>
-/// A session token opens to the pair it was minted with, and to nothing else.
-/// </summary>
+// A session token opens to the pair it was minted with, and to nothing else.
 public class SessionTokenShould
 {
     private static readonly Guid UserId = Guid.Parse("5e55a0de-0000-4000-8000-000000000001");
@@ -34,7 +32,7 @@ public class SessionTokenShould
         (await SessionToken.Read(cipher, token)).Should().Be(new SessionToken(UserId, SessionId));
     }
 
-    /// <summary>The cookies already handed out carry this payload.</summary>
+    // The cookies already handed out carry this payload.
     [Fact]
     public async Task OpenATokenOfThePayloadAlreadyIssued()
     {

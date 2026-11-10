@@ -323,10 +323,8 @@ internal class AuthenticationService : IAuthenticationService
         return await CreateAuthenticationResult(user, session, settings);
     }
 
-    /// <summary>
-    /// The refusal a locked account answers with, and the owner's journal entry
-    /// for it when the address belongs to somebody.
-    /// </summary>
+    // The refusal a locked account answers with, and the owner's journal entry for it when the
+    // address belongs to somebody.
     private async Task<IIdentity> RefuseWhileLocked(
         LoginAttemptOrigin origin, string email, SessionContext? context)
     {
@@ -344,10 +342,8 @@ internal class AuthenticationService : IAuthenticationService
         return Identity.Fail(AuthenticationError.AccountLocked, remainingSeconds);
     }
 
-    /// <summary>
-    /// The password is proven and a second factor is owed: a challenge for the
-    /// second step instead of a session.
-    /// </summary>
+    // The password is proven and a second factor is owed: a challenge for the second step instead
+    // of a session.
     private async Task<IIdentity> OweSecondFactor(
         AuthenticatedUser user, string email, bool rememberMe, SessionContext? context,
         CancellationToken cancellationToken)
@@ -374,10 +370,8 @@ internal class AuthenticationService : IAuthenticationService
         return Identity.SecondFactorRequired(challenge.ChallengeId);
     }
 
-    /// <summary>
-    /// The refusal a wrong code answers with: counted under the counter of the
-    /// password step, and the challenge destroyed once it is out of attempts.
-    /// </summary>
+    // The refusal a wrong code answers with: counted under the counter of the password step, and
+    // the challenge destroyed once it is out of attempts.
     private async Task<IIdentity> RefuseWrongCode(
         TwoFactorChallengeState challenge, LoginAttemptOrigin origin, SessionContext? context,
         CancellationToken cancellationToken)
@@ -448,10 +442,8 @@ internal class AuthenticationService : IAuthenticationService
         user.AccessPolicy = user.EffectiveAccessPolicyAt(_dateTimeProvider.Now);
     }
 
-    /// <summary>
-    /// The refusal of an account moderation has removed or fully banned, with the
-    /// reason the journal records it under, or null for an open account.
-    /// </summary>
+    // The refusal of an account moderation has removed or fully banned, with the reason the journal
+    // records it under, or null for an open account.
     private (IIdentity Refusal, string Reason)? RefuseClosed(AuthenticatedUser user)
     {
         if (user.IsRemoved)

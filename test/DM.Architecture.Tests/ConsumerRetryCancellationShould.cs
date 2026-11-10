@@ -7,16 +7,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A subscription being retried still notices the host stopping.
-/// </summary>
 /// <remarks>
 /// The synchronous overload spends its waits in Thread.Sleep with no token, so a stopping host
 /// waits every attempt out. Asserted on the text: reaching it at runtime needs a refusing broker.
 /// </remarks>
 public class ConsumerRetryCancellationShould
 {
-    /// <summary>Every background service that subscribes to a queue.</summary>
     private static readonly string[] Consumers =
     [
         "src/DM.Web.API/Realtime/RealtimeNotificationConsumer.cs",
@@ -24,7 +20,7 @@ public class ConsumerRetryCancellationShould
         "src/DM.Workers.NotificationDispatcher/NotificationDispatcherConsumer.cs",
     ];
 
-    /// <summary>A rule that reads nothing passes.</summary>
+    // A rule that reads nothing passes.
     [Fact]
     public void FindEveryConsumerItNames() =>
         Consumers.Where(name => !File.Exists(Absolute(name)))

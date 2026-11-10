@@ -59,9 +59,7 @@ internal class CharacterAttributeValueFiller : ICharacterAttributeValueFiller
         }
     }
 
-    /// <summary>
-    /// The value checked against its specification, or an empty inconsistent one when absent.
-    /// </summary>
+    // The value checked against its specification, or an empty inconsistent one when absent.
     private CharacterAttribute FillAttribute(AttributeSpecification specification, CharacterAttribute? attribute)
     {
         if (attribute == null)

@@ -10,9 +10,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Storage;
 
-/// <summary>
-/// Gates the moderation pages that list everyone's uploads: moderator and above.
-/// </summary>
+// Gates the moderation pages that list everyone's uploads: moderator and above.
 public class UploadIntentionResolverShould
 {
     private readonly UploadIntentionResolver resolver = new();

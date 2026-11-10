@@ -11,18 +11,24 @@ import ProfileSubpageHeader from "./ProfileSubpageHeader.vue";
 import ProfileGameReviewsList from "./ProfileGameReviewsList.vue";
 import ProfileEndorsementsList from "./ProfileEndorsementsList.vue";
 import { useProfileSubpage } from "./useProfileSubpage";
+import type {
+  EndorsementsSubpageName,
+  GameReviewsSubpageName,
+  ProfileSubpageName,
+  TestimonialSide,
+} from "./profileSubpages";
 
 /** What stands under the header: which list component, scoped how. */
 type SubpageList =
   | {
       kind: "game-reviews";
-      mode: "received" | "written";
-      routeName: "received-game-reviews" | "given-game-reviews";
+      mode: TestimonialSide;
+      routeName: GameReviewsSubpageName;
     }
   | {
       kind: "endorsements";
-      mode: "received" | "written";
-      routeName: "received-endorsements" | "given-endorsements";
+      mode: TestimonialSide;
+      routeName: EndorsementsSubpageName;
     }
   | { kind: "rated-posts"; scope: "author" | "reviewer"; emptyText: string };
 
@@ -36,15 +42,7 @@ interface SubpageConfig {
   list: SubpageList;
 }
 
-const SUBPAGES: Record<
-  | "received-reviews"
-  | "given-reviews"
-  | "received-endorsements"
-  | "given-endorsements"
-  | "received-game-reviews"
-  | "given-game-reviews",
-  SubpageConfig
-> = {
+const SUBPAGES: Record<ProfileSubpageName, SubpageConfig> = {
   // Post ratings scoped to this user as the author (received) or the reviewer (given).
   "received-reviews": {
     label: "Полученные оценки постов",

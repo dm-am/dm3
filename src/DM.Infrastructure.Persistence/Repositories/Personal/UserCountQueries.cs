@@ -48,12 +48,8 @@ internal static class UserCountQueries
         Popularity,
     }
 
-    /// <summary>
-    /// One row per user with the number of rows counted for him in one table.
-    /// </summary>
     internal sealed class UserCount
     {
-        /// <summary>The user counted for.</summary>
         public Guid UserId { get; set; }
 
         /// <summary>
@@ -66,45 +62,29 @@ internal static class UserCountQueries
         public int? Count { get; set; }
     }
 
-    /// <summary>
-    /// A user row carrying the number the list is ordered or filtered by.
-    /// </summary>
     internal sealed class CountedUser
     {
         public User User { get; set; } = null!;
 
-        /// <summary>His counter.</summary>
         public int Count { get; set; }
     }
 
-    /// <summary>
-    /// Games the user runs as the master.
-    /// </summary>
     internal static IQueryable<UserCount> GamesMastered(DmDbContext context) =>
         context.Games
             .GroupBy(g => g.MasterId)
             .Select(g => new UserCount { UserId = g.Key, Count = g.Count() });
 
-    /// <summary>
-    /// Games the user runs as an assistant.
-    /// </summary>
     internal static IQueryable<UserCount> GamesAssisted(DmDbContext context) =>
         context.GameAssistants
             .Where(a => !a.Game.IsRemoved)
             .GroupBy(a => a.UserId)
             .Select(g => new UserCount { UserId = g.Key, Count = g.Count() });
 
-    /// <summary>
-    /// Blogs the user owns.
-    /// </summary>
     internal static IQueryable<UserCount> BlogsOwned(DmDbContext context) =>
         context.Blogs
             .GroupBy(b => b.AuthorId)
             .Select(g => new UserCount { UserId = g.Key, Count = g.Count() });
 
-    /// <summary>
-    /// Blogs the user runs as an assistant.
-    /// </summary>
     internal static IQueryable<UserCount> BlogsAssisted(DmDbContext context) =>
         context.BlogAssistants
             .Where(a => !a.Blog.IsRemoved)
@@ -134,9 +114,6 @@ internal static class UserCountQueries
             .GroupBy(s => s.TargetId)
             .Select(g => new UserCount { UserId = g.Key, Count = g.Count() });
 
-    /// <summary>
-    /// Left-join the users to one counter.
-    /// </summary>
     internal static IQueryable<CountedUser> WithCount(IQueryable<User> users, IQueryable<UserCount> counts) =>
         from u in users
         join c in counts on u.UserId equals c.UserId into matched
@@ -176,9 +153,6 @@ internal static class UserCountQueries
             _ => throw new ArgumentOutOfRangeException(nameof(counter), counter, "unknown user counter"),
         };
 
-    /// <summary>
-    /// Keep the users whose counter falls inside the range, still carrying it.
-    /// </summary>
     internal static IQueryable<CountedUser> InRangeCounted(
         IQueryable<CountedUser> counted, int? min, int? max)
     {

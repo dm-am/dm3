@@ -4,10 +4,11 @@
 import { ref, computed, nextTick } from "vue";
 import { RU_MONTHS_SHORT } from "@/shared/lib/utils/months";
 import { SvgIcon } from "@/shared/ui/Icon";
+import type { PickerMode } from "./types";
 
 const props = withDefaults(
   defineProps<{
-    mode?: "month" | "year";
+    mode?: PickerMode;
     /** Selected year. */
     year: number;
     /** Selected month, 1-12 (month mode). */

@@ -17,13 +17,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// "Ждем пост" is created from the site, with the body the site sends.
-/// </summary>
-/// <remarks>
-/// The caller and the player behind the character are the server's own facts, so the body is the character.
-/// Written out as a string, the way the client serializes it.
-/// </remarks>
+// The caller and the player behind the character are the server's own facts, so the body is the
+// character.
 public class PostPendencyCreationShould : IntegrationTestBase
 {
     public PostPendencyCreationShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -75,10 +70,6 @@ public class PostPendencyCreationShould : IntegrationTestBase
         Guid PlayerId,
         string PlayerUsername);
 
-    /// <summary>
-    /// An active game with one room, its master, and a player whose character
-    /// the room lets in.
-    /// </summary>
     private async Task<World> Seed()
     {
         var gameId = Guid.NewGuid();

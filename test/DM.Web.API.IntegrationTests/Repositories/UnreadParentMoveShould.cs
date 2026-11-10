@@ -9,9 +9,6 @@ using DbUnreadCounter = DM.Infrastructure.Persistence.Entities.Shared.UnreadCoun
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// A topic moved to another board takes its own unread markers and no others.
-/// </summary>
 /// <remarks>
 /// A marker names its entity and its container, and the move selects by the entity. Against the container Postgres:
 /// the set-based ExecuteUpdate decides which rows move.

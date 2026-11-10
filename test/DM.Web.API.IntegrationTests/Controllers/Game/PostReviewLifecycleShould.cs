@@ -12,21 +12,14 @@ using DbPostReview = DM.Infrastructure.Persistence.Entities.Game.PostReview;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// Editing and removing a post review, and the two numbers that have to agree
-/// with the result.
-/// </summary>
-/// <remarks>
-/// The sign is counted into the post's rating, summed over rows, and into the author's stored quality counter,
-/// moved by deltas, so a sign change asserts the delta. The reviews are seeded directly.
-/// </remarks>
+// The sign is counted into the post's rating, summed over rows, and into the author's stored
+// quality counter, moved by deltas, so a sign change asserts the delta.
 public class PostReviewLifecycleShould : IntegrationTestBase
 {
     public PostReviewLifecycleShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>The post every review here lands on, and the user who wrote it.</summary>
     private static Guid PostId => TestConstants.TestGamePostId;
 
     private static Guid PostAuthorId => TestConstants.TestUserId;
@@ -46,13 +39,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         TestConstants.SeniorModeratorUserId, TestConstants.SeniorModeratorUserLogin,
         UserRole.SeniorModerator);
 
-    /// <summary>
-    /// Seed one review of the fixture's game post.
-    /// </summary>
-    /// <param name="authorId">Who wrote it.</param>
-    /// <param name="sign">Its rating impact.</param>
-    /// <param name="ageMinutes">How long ago, which is what decides the edit window.</param>
-    /// <param name="text">What it says.</param>
+    // How long ago, which is what decides the edit window.
     private async Task<Guid> SeedReview(
         Guid authorId, short sign, int ageMinutes = 0, string text = "Исходный текст оценки")
     {
@@ -74,10 +61,8 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         return reviewId;
     }
 
-    /// <summary>
-    /// Put the user past probation, so a sign may be changed at all, and answer
-    /// with what to set it back to.
-    /// </summary>
+    // Put the user past probation, so a sign may be changed at all, and answer with what to set it
+    // back to.
     private async Task<int> PastProbation(Guid userId)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -96,8 +81,7 @@ public class PostReviewLifecycleShould : IntegrationTestBase
         await db.SaveChangesAsync();
     }
 
-    /// <summary>The rating and the review count the rated listing reports for the post.</summary>
-    /// <remarks>No hasReviews: hasReviews=false asks for the posts without any.</remarks>
+    // No hasReviews: hasReviews=false asks for the posts without any.
     private async Task<(int Rating, int ReviewCount)> ListedPost()
     {
         var response = await Client.GetAsync(
@@ -120,9 +104,6 @@ public class PostReviewLifecycleShould : IntegrationTestBase
     private async Task<HttpResponseMessage> Delete(Guid reviewId, GeneralUser user) =>
         await Client.SendAsync(CreateAuthenticatedRequest(HttpMethod.Delete, ReviewUrl(reviewId), user));
 
-    /// <summary>
-    /// The editor opens a review with the audience that hands its author the text as typed.
-    /// </summary>
     [Fact]
     public async Task HandTheAuthorTheTextAsTypedForEditing()
     {

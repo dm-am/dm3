@@ -8,6 +8,7 @@ import { signIn, completeSecondFactor } from "@/entities/user";
 import { AuthDialog } from "@/shared/ui/Layout";
 import { toast } from "./authForms.doubles";
 import { expectWaitRunsDown, problem } from "./authForms.fixtures";
+import LoginForm from "./LoginForm.vue";
 import {
   atSecondFactor,
   mountForm,
@@ -21,17 +22,15 @@ import {
 vi.mock("@/entities/user", async () =>
   (await import("./authForms.doubles")).userEntity(),
 );
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
-);
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
 );
 
-// Mocked, not stubbed: AuthDialog imports Dialog.vue directly.
-vi.mock("vue-final-modal", async () =>
-  (await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
-);
+// Mocked, not stubbed: AuthDialog imports Dialog.vue directly; the page keeps the real container.
+vi.mock("vue-final-modal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("vue-final-modal")>()),
+  ...(await import("@/shared/lib/testing/vueFinalModalStub")).vueFinalModal(),
+}));
 
 enableAutoUnmount(afterEach);
 
@@ -43,7 +42,7 @@ describe("LoginForm", () => {
 
     const wrapper = await submitCredentials();
 
-    expect(wrapper.emitted("success")).toBeUndefined();
+    expect(wrapper.findComponent(LoginForm).emitted("success")).toBeUndefined();
     expect(wrapper.text()).toContain(
       "Аккаунт находится в полном бане бессрочно",
     );
@@ -92,7 +91,7 @@ describe("LoginForm", () => {
 
     const wrapper = await submitCredentials();
 
-    expect(wrapper.emitted("success")).toBeUndefined();
+    expect(wrapper.findComponent(LoginForm).emitted("success")).toBeUndefined();
     expect(wrapper.text()).toContain("Неверная почта или пароль");
   });
 
@@ -114,7 +113,7 @@ describe("LoginForm", () => {
 
     const wrapper = await submitCredentials();
 
-    expect(wrapper.emitted("success")).toBeUndefined();
+    expect(wrapper.findComponent(LoginForm).emitted("success")).toBeUndefined();
     expect(wrapper.find("#login-password-message").text()).toBe(
       "Ошибка сервера",
     );
@@ -125,7 +124,7 @@ describe("LoginForm", () => {
 
     const wrapper = await submitCredentials();
 
-    expect(wrapper.emitted("success")).toBeUndefined();
+    expect(wrapper.findComponent(LoginForm).emitted("success")).toBeUndefined();
     expect(wrapper.find("#login-password-message").text()).toBe("");
   });
 
@@ -231,12 +230,12 @@ describe("LoginForm", () => {
 
     const wrapper = await submitCredentials();
 
-    expect(wrapper.emitted("success")).toHaveLength(1);
+    expect(wrapper.findComponent(LoginForm).emitted("success")).toHaveLength(1);
   });
 
   describe("the address", () => {
     it("is not objected to while it is still empty", async () => {
-      const wrapper = mountForm();
+      const wrapper = await mountForm();
       await flushPromises();
 
       await wrapper.find("#email").trigger("blur");
@@ -246,7 +245,7 @@ describe("LoginForm", () => {
     });
 
     it("is objected to for its shape, under the field", async () => {
-      const wrapper = mountForm();
+      const wrapper = await mountForm();
       await flushPromises();
 
       await wrapper.find("#email").setValue("lex@");
@@ -284,14 +283,14 @@ describe("LoginForm", () => {
 
   describe("the open dialog", () => {
     it("puts the caret in the first field that is empty", async () => {
-      const wrapper = mountForm();
+      const wrapper = await mountForm();
       await flushPromises();
 
       expect(document.activeElement).toBe(wrapper.find("#email").element);
     });
 
     it("skips the address it was handed", async () => {
-      const wrapper = mountForm("lex@dm.am");
+      const wrapper = await mountForm("lex@dm.am");
       await flushPromises();
 
       expect(document.activeElement).toBe(wrapper.find("#password").element);

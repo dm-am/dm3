@@ -165,10 +165,8 @@ public class GameReviewServiceShould : UnitTestBase
         await gameService.Received(1).GetAsync(gameId);
     }
 
-    /// <summary>
-    /// A game the reader may not open answers as a game that is not there, before
-    /// the review is looked at: its reviews are as hidden as the game.
-    /// </summary>
+    // A game the reader may not open answers as a game that is not there, before the review is
+    // looked at: its reviews are as hidden as the game.
     [Fact]
     public async Task AnswerAReviewOfAHiddenGameAsTheGameNotBeingThere()
     {
@@ -183,10 +181,7 @@ public class GameReviewServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound && e.Message == RefusalMessage.GameNotFound);
     }
 
-    /// <summary>
-    /// A review of another game, reached through this game's address, is not
-    /// this game's review.
-    /// </summary>
+    // A review of another game, reached through this game's address, is not this game's review.
     [Fact]
     public async Task AnswerAReviewOfAnotherGameAsAReviewThatIsNotThere()
     {
@@ -294,9 +289,8 @@ public class GameReviewServiceShould : UnitTestBase
             e.IsRemoved == true && e.DeletedByUserId == currentUserId && e.DeletedUtc != null));
     }
 
-    /// <summary>
-    /// The pencil is offered by this answer: the intention and the day the edit itself is refused by.
-    /// </summary>
+    // The pencil is offered by this answer: the intention and the day the edit itself is refused
+    // by.
     [Theory]
     [InlineData(true, 12, UserRole.RegularUser, true)]
     [InlineData(true, 48, UserRole.RegularUser, false)]
@@ -322,10 +316,8 @@ public class GameReviewServiceShould : UnitTestBase
         service.MayDelete(review).Should().Be(allowed);
     }
 
-    /// <summary>
-    /// The flag rides on every read of a game's details, so a guest, whom the
-    /// intention already refuses, costs no query at all.
-    /// </summary>
+    // The flag rides on every read of a game's details, so a guest, whom the intention already
+    // refuses, costs no query at all.
     [Fact]
     public async Task AnswerAGuestWithoutAskingTheDatabase()
     {
@@ -358,10 +350,8 @@ public class GameReviewServiceShould : UnitTestBase
         result.Should().Be(expected);
     }
 
-    /// <summary>
-    /// A review is written on a closed game, whatever closed it; the form and the
-    /// write answer alike.
-    /// </summary>
+    // A review is written on a closed game, whatever closed it; the form and the write answer
+    // alike.
     [Theory]
     [InlineData(ModuleStatus.Draft, ClosedReason.None, false)]
     [InlineData(ModuleStatus.Active, ClosedReason.None, false)]

@@ -10,12 +10,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import {
-  gameApi,
-  useGameDetailsStore,
-  type Game,
-  type Invitation,
-} from "@/entities/game";
+import { gameApi, useGameDetailsStore, type Invitation } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import type { GeneralError } from "@/shared/api/models/common";
@@ -78,13 +76,12 @@ async function mountSection(initial: Invitation[] = []) {
   setActivePinia(pinia);
   const store = useGameDetailsStore();
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    title: "Игра",
-    fullAssistants: [{ id: "u-1", username: "Помощник" }],
-    mentor: null,
-    pendingAssistant: EARLIER.invitedUser,
-  } as unknown as Game;
+    ...createMockGame("the-game-guid", "Игра"),
+    publicId: asServed("the-game"),
+    fullAssistants: asServed([createMockUser("u-1", "Помощник")]),
+    mentor: asServed(null),
+    pendingAssistant: asServed(EARLIER.invitedUser),
+  };
   vi.spyOn(store, "loadGame").mockResolvedValue({ ok: true });
 
   list = vi.fn().mockResolvedValue(served(initial));

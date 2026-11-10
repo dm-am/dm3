@@ -9,16 +9,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A value the deployment has to supply has no answer in the repository.
-/// </summary>
 /// <remarks>
 /// Each Require* refuses to start on an empty value, which a tracked default defeats; the values live
 /// in the Development overlay. Asserted on the files: a default is invisible from inside the process.
 /// </remarks>
 public class RequiredConfigurationShould
 {
-    /// <summary>Sections and keys a Require* call refuses to start without.</summary>
     private static readonly (string Section, string Key)[] Guarded =
     [
         ("ConnectionStrings", "Rdb"),
@@ -27,10 +23,6 @@ public class RequiredConfigurationShould
     ];
 
 
-    /// <summary>
-    /// Running from sources reaches the stack compose brings up, with the
-    /// credentials compose brings it up with.
-    /// </summary>
     /// <remarks>
     /// The development overlays reach the compose stack without the container, and the template is the
     /// source. The broker's guest password sits in every base file, so each overlay has to answer it.
@@ -136,11 +128,7 @@ public class RequiredConfigurationShould
         }
     }
 
-    /// <summary>
-    /// A settings file the SDK does not copy by itself has to be declared, and
-    /// declared as the item type that SDK actually globs.
-    /// </summary>
-    /// <remarks>Under the plain SDK appsettings.json is a None item, so a Content Update matches nothing.</remarks>
+    // Under the plain SDK appsettings.json is a None item, so a Content Update matches nothing.
     [Fact]
     public void CopyTheSettingsOfEveryHostWhoseSdkDoesNotDoItAlone()
     {
@@ -164,10 +152,7 @@ public class RequiredConfigurationShould
         }
     }
 
-    /// <summary>
-    /// The overlay stays out of the image.
-    /// </summary>
-    /// <remarks>An overlay in the image would start a deployment without variables against localhost.</remarks>
+    // An overlay in the image would start a deployment without variables against localhost.
     [Fact]
     public void PublishNoDevelopmentOverlayIntoTheImage()
     {
@@ -198,11 +183,9 @@ public class RequiredConfigurationShould
     private static string OverlaySettings(string host) =>
         Path.Combine(RepositoryLayout.Root, "src", host, "appsettings.Development.json");
 
-    /// <summary>True when the file answers the key with a non-empty value.</summary>
     private static bool Reads(string path, string section, string key) =>
         !string.IsNullOrEmpty(Answer(path, section, key));
 
-    /// <summary>The value the file gives the key, or null when it gives none.</summary>
     private static string? Answer(string path, string section, string key)
     {
         if (!File.Exists(path))

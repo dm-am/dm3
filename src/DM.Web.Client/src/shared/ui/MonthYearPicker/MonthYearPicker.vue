@@ -5,6 +5,7 @@ import { ref, computed, nextTick, onMounted, onUnmounted, watch } from "vue";
 import { RU_MONTHS_CAPITALIZED } from "@/shared/lib/utils/months";
 import { POPOVER_GAP, VIEWPORT_EDGE } from "@/shared/lib/constants/geometry";
 import MonthYearGrid from "./MonthYearGrid.vue";
+import type { PickerMode } from "./types";
 
 const props = withDefaults(
   defineProps<{
@@ -12,7 +13,7 @@ const props = withDefaults(
     year: number;
     /** Selected month, 1-12 (month mode). */
     month?: number;
-    mode?: "month" | "year";
+    mode?: PickerMode;
     /** Earliest selectable year (e.g. the site's founding year). Bounds
      * both the year grid and the month mode's year navigation. Defaults
      * to 11 years before maxYear (a 12-year grid). */

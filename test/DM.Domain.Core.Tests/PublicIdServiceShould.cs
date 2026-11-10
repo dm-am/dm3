@@ -6,9 +6,6 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests;
 
-/// <summary>
-/// The encoding every readable page address on the site is built out of.
-/// </summary>
 public class PublicIdServiceShould
 {
     private readonly PublicIdService service = new();

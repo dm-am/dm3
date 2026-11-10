@@ -8,10 +8,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 
-/// <summary>
-/// The board side of its topics: the summary a board keeps of them, and the order
-/// of its pinned ones
-/// </summary>
 internal partial class TopicRepository
 {
     /// <inheritdoc />

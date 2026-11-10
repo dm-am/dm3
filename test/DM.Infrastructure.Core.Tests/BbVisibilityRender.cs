@@ -8,10 +8,6 @@ using DM.Testing.Dsl;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The rendering of a text for one reader in the context of its post, for the tests of who sees [mod]
-/// and [private], and the readers they ask about.
-/// </summary>
 internal static class BbVisibilityRender
 {
     private static readonly IBbParserProvider ParserProvider = new BbParserProvider();
@@ -49,7 +45,7 @@ internal static class BbVisibilityRender
         return ParserProvider.GetForSurface(surface).RenderHtml(input, ctx);
     }
 
-    /// <summary>The render, or null where the page shows nothing: a tree too deep to build.</summary>
+    // The render, or null where the page shows nothing: a tree too deep to build.
     internal static string? RenderOrNull(Func<string> render)
     {
         try
@@ -71,7 +67,6 @@ internal static class BbVisibilityRender
         GameId = GameId
     };
 
-    /// <summary>The game post context of a reader, with one name of a hidden block addressed to one owner.</summary>
     internal static RenderContext AddressedCtx(IAuthorizationSubject viewer, string name, Guid owner) =>
         DisplayCtxForGamePost(viewer) with
         {

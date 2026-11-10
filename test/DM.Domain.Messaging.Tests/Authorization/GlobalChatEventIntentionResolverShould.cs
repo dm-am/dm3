@@ -11,11 +11,8 @@ using Xunit;
 
 namespace DM.Domain.Messaging.Tests.Authorization;
 
-/// <summary>
-/// Gates a site-wide chat event. An event is visible to everyone on the site, so
-/// the costly mistake is letting somebody who is not running it rename, retime or
-/// delete it out from under the people who are.
-/// </summary>
+// An event is visible to everyone on the site, so the costly mistake is letting somebody who is not
+// running it rename, retime or delete it out from under the people who are.
 public class GlobalChatEventIntentionResolverShould
 {
     private readonly GlobalChatEventIntentionResolver resolver = new();

@@ -217,7 +217,6 @@ internal class UnreadCountersRepository : IUnreadCountersRepository
     /// <summary>The reader's own markers and the anonymous ones, which stand in where the reader has none.</summary>
     private static Guid[] ReaderAndAnonymous(Guid userId) => new[] { userId, Guid.Empty }.Distinct().ToArray();
 
-    /// <summary>A marker with nothing unread, read at the given moment.</summary>
     private static Entities.Shared.UnreadCounter Fresh(
         Guid userId, Guid entityId, Guid parentId, UnreadEntryType entryType, DateTime lastReadUtc) => new()
         {

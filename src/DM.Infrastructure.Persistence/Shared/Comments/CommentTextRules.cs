@@ -4,9 +4,6 @@ using FluentValidation;
 
 namespace DM.Infrastructure.Persistence.Shared.Comments;
 
-/// <summary>
-/// The rules a comment text answers on creation and on edit alike.
-/// </summary>
 internal static class CommentTextRules
 {
     /// <remarks>

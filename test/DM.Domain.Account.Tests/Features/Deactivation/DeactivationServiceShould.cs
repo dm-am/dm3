@@ -49,15 +49,8 @@ public class DeactivationServiceShould : UnitTestBase
             Mock<ILogger<DeactivationService>>());
     }
 
-    /// <summary>
-    /// The only door out: a senior moderator removes an account from the
-    /// moderation screen, without the password of the person who asked.
-    /// </summary>
-    /// <remarks>
-    /// Nothing self-service is left beside it and nothing is deferred, so this
-    /// call is the whole of what removal means in the product. A reader who
-    /// wants his account gone writes to support and a person acts on it.
-    /// </remarks>
+    // The only door out: a senior moderator removes an account from the moderation screen, without
+    // the password of the person who asked.
     [Fact]
     public async Task RemoveAnAccountOnAModeratorsDecision()
     {
@@ -70,14 +63,7 @@ public class DeactivationServiceShould : UnitTestBase
         await remover.Received(1).Remove(targetUserId, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The owner of a removed account learns of it by letter and by nothing else.
-    /// </summary>
-    /// <remarks>
-    /// The account screens offer nothing about removal, because the decision is a
-    /// moderator's rather than a step its owner walks through. Without the letter
-    /// a person is left with an account that simply stopped answering.
-    /// </remarks>
+    // Without the letter a person is left with an account that simply stopped answering.
     [Fact]
     public async Task TellTheOwnerThatHisAccountIsGone()
     {
@@ -89,9 +75,6 @@ public class DeactivationServiceShould : UnitTestBase
         await removalMailSender.Received(1).SendCompleted(TargetEmail);
     }
 
-    /// <summary>
-    /// An ordinary moderator does not remove accounts.
-    /// </summary>
     [Fact]
     public async Task RefuseTheModerationRemovalBelowSeniorModerator()
     {
@@ -125,10 +108,8 @@ public class DeactivationServiceShould : UnitTestBase
         await removalMailSender.DidNotReceive().SendCompleted(Arg.Any<string>());
     }
 
-    /// <summary>
-    /// An account removed with nothing written down leaves no record of who took
-    /// the decision or why.
-    /// </summary>
+    // An account removed with nothing written down leaves no record of who took the decision or
+    // why.
     [Fact]
     public async Task RefuseTheModerationRemovalWithoutAReason()
     {
@@ -143,11 +124,6 @@ public class DeactivationServiceShould : UnitTestBase
         await removalMailSender.DidNotReceive().SendCompleted(Arg.Any<string>());
     }
 
-    /// <summary>
-    /// Restoration is the removal read backwards: a moderator names the account
-    /// and it answers again the same moment, with nothing to file and nothing to
-    /// wait for.
-    /// </summary>
     [Fact]
     public async Task RestoreAnAccountOnAModeratorsDecision()
     {
@@ -160,14 +136,8 @@ public class DeactivationServiceShould : UnitTestBase
         await repository.Received(1).Restore(targetUserId, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The owner learns his account is back the way he learned it was gone.
-    /// </summary>
-    /// <remarks>
-    /// He filed nothing and is waiting on no answer - somebody read his letter to
-    /// support and acted on it - so without this letter the only way to find out
-    /// is to keep trying to sign in.
-    /// </remarks>
+    // He filed nothing and is waiting on no answer - somebody read his letter to support and acted
+    // on it - so without this letter the only way to find out is to keep trying to sign in.
     [Fact]
     public async Task TellTheOwnerThatHisAccountIsBack()
     {
@@ -179,9 +149,6 @@ public class DeactivationServiceShould : UnitTestBase
         await restorationMailSender.Received(1).SendRestored(TargetEmail);
     }
 
-    /// <summary>
-    /// Restoring takes the rank removing takes.
-    /// </summary>
     [Fact]
     public async Task RefuseTheRestorationBelowSeniorModerator()
     {
@@ -196,10 +163,8 @@ public class DeactivationServiceShould : UnitTestBase
         await restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
     }
 
-    /// <summary>
-    /// An account nobody removed has nothing to restore, and its owner gets no
-    /// letter telling him otherwise.
-    /// </summary>
+    // An account nobody removed has nothing to restore, and its owner gets no letter telling him
+    // otherwise.
     [Fact]
     public async Task RefuseTheRestorationOfAnAccountNobodyRemoved()
     {
@@ -215,15 +180,8 @@ public class DeactivationServiceShould : UnitTestBase
         await restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
     }
 
-    /// <summary>
-    /// A removed row under the name that signs everything removed accounts wrote stays
-    /// removed, however it is asked for.
-    /// </summary>
-    /// <remarks>
-    /// Checked on the stored name: the lookup compares names without case, so the
-    /// moderator's spelling proves nothing about the row that would come back. The
-    /// DM2 import brings the shared "Аккаунт Удален" account in exactly like this.
-    /// </remarks>
+    // Checked on the stored name: the lookup compares names without case, so the moderator's
+    // spelling proves nothing about the row that would come back.
     [Theory]
     [InlineData("Аккаунт Удален")]
     [InlineData("Aккаунт удален")]
@@ -242,10 +200,6 @@ public class DeactivationServiceShould : UnitTestBase
         await restorationMailSender.DidNotReceive().SendRestored(Arg.Any<string>());
     }
 
-    /// <summary>
-    /// The list of the removed is the only place they can be found at all, and it
-    /// carries the search term and the page the caller asked for.
-    /// </summary>
     [Fact]
     public async Task ListTheRemovedAccountsWithTheirPage()
     {
@@ -278,10 +232,8 @@ public class DeactivationServiceShould : UnitTestBase
         accounts.Should().ContainSingle().Which.Email.Should().BeNull();
     }
 
-    /// <summary>
-    /// An administrator reads the addresses, which is what lets a support letter
-    /// be matched to the account it is about.
-    /// </summary>
+    // An administrator reads the addresses, which is what lets a support letter be matched to the
+    // account it is about.
     [Fact]
     public async Task ShowTheAddressesToAnAdministrator()
     {
@@ -293,10 +245,8 @@ public class DeactivationServiceShould : UnitTestBase
         accounts.Should().ContainSingle().Which.Email.Should().Be(TargetEmail);
     }
 
-    /// <summary>
-    /// The removed are hidden from the whole product, and this list does not open
-    /// them to a rank that could not act on them anyway.
-    /// </summary>
+    // The removed are hidden from the whole product, and this list does not open them to a rank
+    // that could not act on them anyway.
     [Fact]
     public async Task RefuseTheRemovedListBelowSeniorModerator()
     {

@@ -144,9 +144,6 @@ public class Upload : ISoftDeletable
     [ForeignKey(nameof(UserId))]
     public virtual User Owner { get; set; } = null!;
 
-    /// <summary>
-    /// User who deleted the upload
-    /// </summary>
     [ForeignKey(nameof(DeletedByUserId))]
     public virtual User? DeletedBy { get; set; }
 

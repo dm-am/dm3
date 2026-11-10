@@ -30,9 +30,6 @@ internal static partial class AchievementMapper
     public static partial IQueryable<DomainAchievementCategory> ProjectToCategory(
         this IQueryable<DbAchievementCategory> query);
 
-    /// <summary>
-    /// EF projection to the domain tier, category inlined
-    /// </summary>
     public static partial IQueryable<DomainAchievementType> ProjectToType(
         this IQueryable<DbAchievementType> query);
 

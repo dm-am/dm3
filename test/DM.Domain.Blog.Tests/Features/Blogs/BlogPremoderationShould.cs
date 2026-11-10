@@ -21,13 +21,7 @@ using BlogDto = DM.Domain.Blog.Features.Blogs.Blog;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
 
-/// <summary>
-/// The premoderation half of the blog service: the status a blog is created in,
-/// and the three moves that change it afterwards.
-/// </summary>
-/// <remarks>
-/// One case a move: the table itself is ModulePremoderationPolicyShould.
-/// </remarks>
+// One case a move: the table itself is ModulePremoderationPolicyShould.
 public class BlogPremoderationShould : BlogServiceTestBase
 {
     private readonly AuthenticatedUser author;
@@ -116,10 +110,8 @@ public class BlogPremoderationShould : BlogServiceTestBase
         capturedUpdate.SetMentorId.Should().BeTrue();
     }
 
-    /// <summary>
-    /// The two verdicts are a rank and nothing else, so they are asked of the
-    /// targetless intention — before the blog is read.
-    /// </summary>
+    // The two verdicts are a rank and nothing else, so they are asked of the targetless intention —
+    // before the blog is read.
     [Theory]
     [InlineData(ModulePremoderationTransition.SetApproved)]
     [InlineData(ModulePremoderationTransition.SetAwaitingEdits)]
@@ -161,11 +153,9 @@ public class BlogPremoderationShould : BlogServiceTestBase
             Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusBlogModeration)), blogId);
     }
 
-    /// <summary>
-    /// The author's move is a fact about the blog, so it is asked of the targeted
-    /// intention — and the mentor rank is not asked at all, because the owner
-    /// making this move normally does not hold it.
-    /// </summary>
+    // The author's move is a fact about the blog, so it is asked of the targeted intention — and
+    // the mentor rank is not asked at all, because the owner making this move normally does not
+    // hold it.
     [Fact]
     public async Task AskTheBlogWhoTheAuthorIsAndNotTheMentorRank()
     {
@@ -178,10 +168,8 @@ public class BlogPremoderationShould : BlogServiceTestBase
         intentionManager.DidNotReceive().ThrowIfForbidden(BlogIntention.SetStatusModeration);
     }
 
-    /// <summary>
-    /// Illegality is answered before authorization, as on the status machine: the
-    /// author gets a 400 naming the move, not a 403 about who they are.
-    /// </summary>
+    // Illegality is answered before authorization, as on the status machine: the author gets a 400
+    // naming the move, not a 403 about who they are.
     [Fact]
     public async Task RefuseAnIllegalSubmitBeforeAskingWhoTheCallerIs()
     {
@@ -194,14 +182,8 @@ public class BlogPremoderationShould : BlogServiceTestBase
         intentionManager.DidNotReceive().ThrowIfForbidden(BlogIntention.SubmitForApproval, Arg.Any<BlogDto>());
     }
 
-    /// <summary>
-    /// A blog the caller cannot find anywhere on the site does not exist for them
-    /// here either: the same status and the same message an unclaimed alias gets,
-    /// whatever state the blog behind the alias is in.
-    /// </summary>
-    /// <remarks>
-    /// Read without a scope, the codes 404, 400 and 403 would tell a stranger which hidden blogs exist.
-    /// </remarks>
+    // Read without a scope, the codes 404, 400 and 403 would tell a stranger which hidden blogs
+    // exist.
     [Theory]
     [InlineData(PremoderationStatus.Approved)]
     [InlineData(PremoderationStatus.AwaitingApproval)]
@@ -239,11 +221,8 @@ public class BlogPremoderationShould : BlogServiceTestBase
         await repository.DidNotReceive().UpdateBlog(Arg.Any<UpdateBlogEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The scope is the reader's ordinary one and nothing invented for this
-    /// endpoint: the same two gates a plain read applies, the private draft and
-    /// the pending verdict.
-    /// </summary>
+    // The scope is the reader's ordinary one and nothing invented for this endpoint: the same two
+    // gates a plain read applies, the private draft and the pending verdict.
     [Fact]
     public async Task ReadTheBlogUnderTheTwoGatesAnOrdinaryReadApplies()
     {
@@ -256,11 +235,8 @@ public class BlogPremoderationShould : BlogServiceTestBase
         intentionManager.Received(1).IsAllowed(BlogIntention.ViewPremoderationPending, Arg.Any<BlogDto>());
     }
 
-    /// <summary>
-    /// The verdict reads past all of that, and has to: the blogs it is passed on
-    /// are exactly the ones nobody outside them may open. The rank is what pays
-    /// for it, and it was asked before the blog was read.
-    /// </summary>
+    // The verdict reads past all of that, and has to: the blogs it is passed on are exactly the
+    // ones nobody outside them may open.
     [Theory]
     [InlineData(ModulePremoderationTransition.SetApproved)]
     [InlineData(ModulePremoderationTransition.SetAwaitingEdits)]
@@ -276,9 +252,6 @@ public class BlogPremoderationShould : BlogServiceTestBase
         intentionManager.Received(1).ThrowIfForbidden(BlogIntention.SetStatusModeration);
     }
 
-    /// <summary>
-    /// All four combinations of the two things that hold an author back.
-    /// </summary>
     [Theory]
     [InlineData(false, false, PremoderationStatus.Approved)]
     [InlineData(true, false, PremoderationStatus.AwaitingEdits)]

@@ -5,15 +5,8 @@ using Xunit;
 
 namespace DM.Domain.Community.Tests.Features.Statistics;
 
-/// <summary>
-/// Covers the stats period-window resolution: the new "all-time" period and
-/// the correctness of calendar year / month windows.
-/// </summary>
 public class CommunityStatsPeriodBoundsShould
 {
-    /// <summary>
-    /// Year 0 is the all-time period, with or without a month: no row is excluded by date.
-    /// </summary>
     [Theory]
     [InlineData(null)]
     [InlineData(6)]

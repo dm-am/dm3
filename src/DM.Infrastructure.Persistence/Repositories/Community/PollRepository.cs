@@ -148,8 +148,6 @@ internal class PollRepository : IPollRepository
             Details = poll.Details,
             IsAnonymous = poll.IsAnonymous,
             IsRemoved = false,
-            // The order of the options used to be the order of the document's
-            // array; the column spells it out.
             Options = poll.Options.Select((o, index) => new DbPollOption
             {
                 PollOptionId = o.Id,
@@ -197,10 +195,6 @@ internal class PollRepository : IPollRepository
         return (await LoadPoll(pollId)).ToPoll();
     }
 
-    /// <summary>
-    /// Takes the poll row for the rest of the edit and answers whether the poll
-    /// is anonymous as it stands under that lock.
-    /// </summary>
     private async Task<bool> LockPoll(Guid pollId)
     {
         // The poll row first, and the flag comes back with the lock rather
@@ -229,10 +223,6 @@ internal class PollRepository : IPollRepository
         return locked[0];
     }
 
-    /// <summary>
-    /// Writes the fields the edit names onto the tracked row and leaves the
-    /// others as they are.
-    /// </summary>
     private static void ApplyChanges(DbPoll dbPoll, string? title, string? details,
         DateTimeOffset? startDate, DateTimeOffset? endDate, bool? isAnonymous)
     {
@@ -262,9 +252,6 @@ internal class PollRepository : IPollRepository
         }
     }
 
-    /// <summary>
-    /// Clears the ballot of an anonymous poll the edit makes public.
-    /// </summary>
     private async Task ResetVotesIfMadePublic(Guid pollId, bool wasAnonymous, bool? isAnonymous)
     {
         // Off the locked value, not off the loaded row: what the reset turns

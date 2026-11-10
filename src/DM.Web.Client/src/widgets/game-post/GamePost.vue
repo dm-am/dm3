@@ -18,6 +18,7 @@ import {
   useAttachmentsFold,
 } from "@/features/upload";
 import { trimHtmlWhitespace } from "@/shared/lib/utils/trimHtmlWhitespace";
+import type { NavigationLevel } from "./navigationLevel";
 import { useAuthStore } from "@/shared/stores/auth";
 import { symbols } from "@/shared/lib/utils/icons";
 import { EDIT_TIME_LIMIT_MINUTES } from "@/shared/lib/utils/chat";
@@ -42,8 +43,7 @@ const props = withDefaults(
     number?: number;
     /** Featured post mode — shows navigation breadcrumb, anchor icon instead of number */
     showNavigation?: boolean;
-    /** "game" names the game and the room; "room" the room alone, on a page that is the game. */
-    navigationLevel?: "game" | "room";
+    navigationLevel?: NavigationLevel;
     /** Enable content truncation */
     truncatable?: boolean;
     /** Search query for highlighting matches in post text */

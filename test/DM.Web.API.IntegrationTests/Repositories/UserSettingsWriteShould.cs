@@ -10,15 +10,9 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The settings row has several independent writers — the profile update sets
-/// the theme and paging, the bot link sets channels, the preferences screen
-/// sets notification channels — so a writer may only touch its own columns.
-/// </summary>
-/// <remarks>
-/// The channel write is one INSERT ... ON CONFLICT whose update names only its column, and every paging column is NOT
-/// NULL; both exist only against a live Postgres.
-/// </remarks>
+// The settings row has several independent writers — the profile update sets the theme and paging,
+// the bot link sets channels, the preferences screen sets notification channels — so a writer may
+// only touch its own columns.
 public class UserSettingsWriteShould : IntegrationTestBase
 {
     public UserSettingsWriteShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -67,9 +61,6 @@ public class UserSettingsWriteShould : IntegrationTestBase
             "the rest of a fresh row is the defaults: a partial row is unrepresentable");
     }
 
-    /// <summary>
-    /// The first link of a channel creates the row too.
-    /// </summary>
     [Fact]
     public async Task CreateTheRowOnTheFirstLinkOfAChannel()
     {
@@ -85,9 +76,6 @@ public class UserSettingsWriteShould : IntegrationTestBase
         stored.PageSize.Should().Be(PagingPolicy.DefaultPageSize);
     }
 
-    /// <summary>
-    /// An unknown channel is refused whether the row exists or not.
-    /// </summary>
     [Fact]
     public async Task RefuseAChannelItDoesNotKnow()
     {
@@ -103,9 +91,7 @@ public class UserSettingsWriteShould : IntegrationTestBase
             .Should().BeFalse("a refused write leaves no row behind");
     }
 
-    /// <summary>
-    /// The page size column refuses NULL, so a partial row cannot be written.
-    /// </summary>
+    // The page size column refuses NULL, so a partial row cannot be written.
     [Fact]
     public async Task RefuseAPartialRow()
     {
@@ -122,10 +108,7 @@ public class UserSettingsWriteShould : IntegrationTestBase
             "a row without a page size is a partial document, and the schema refuses it");
     }
 
-    /// <summary>
-    /// Two creating writes leave one valid row: the second ON CONFLICT write lands on the row the first created.
-    /// </summary>
-    /// <remarks>Issued one after the other: both calls share one scoped context.</remarks>
+    // Issued one after the other: both calls share one scoped context.
     [Fact]
     public async Task CreateTheRowWholeOnTheSecondChannelWrite()
     {

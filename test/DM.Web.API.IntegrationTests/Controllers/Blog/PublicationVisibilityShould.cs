@@ -9,12 +9,10 @@ using Xunit;
 using DbBlog = DM.Infrastructure.Persistence.Entities.Blog.Blog;
 using DbPublication = DM.Infrastructure.Persistence.Entities.Blog.Publication;
 using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
+using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Blog;
 
-/// <summary>
-/// What a publication inside a blog nobody may open answers, end to end.
-/// </summary>
 /// <remarks>
 /// The listing reads the parent through the gated blog read, the single read and the profile widget must too.
 /// A hidden publication answers exactly what one that never existed answers, body included.
@@ -71,9 +69,6 @@ public class PublicationVisibilityShould : IntegrationTestBase
         inAwaitingApproval.Status.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// An administrator reads past both gates, as they do on the blog itself.
-    /// </summary>
     [Fact]
     public async Task StillGiveAnAdministratorAPublicationInAHiddenBlog()
     {
@@ -87,10 +82,8 @@ public class PublicationVisibilityShould : IntegrationTestBase
         inAwaitingApproval.Status.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// A publication in a blog anybody can open is unaffected: the refusal is
-    /// about visibility and not about the endpoint being shut.
-    /// </summary>
+    // A publication in a blog anybody can open is unaffected: the refusal is about visibility and
+    // not about the endpoint being shut.
     [Fact]
     public async Task StillGiveAStrangerAPublicationInAnOpenBlog()
     {
@@ -102,9 +95,6 @@ public class PublicationVisibilityShould : IntegrationTestBase
         response.Status.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// The public profile widget names nothing from a hidden blog.
-    /// </summary>
     [Fact]
     public async Task NameNoPublicationFromAHiddenBlogInTheProfileWidget()
     {
@@ -121,10 +111,6 @@ public class PublicationVisibilityShould : IntegrationTestBase
         named.Should().BeFalse("the only candidate lives in a blog the reader cannot open");
     }
 
-    /// <summary>
-    /// And the widget keeps working where it should: the same author's publication
-    /// in an open blog is named.
-    /// </summary>
     [Fact]
     public async Task StillNameAPublicationFromAnOpenBlogInTheProfileWidget()
     {
@@ -139,7 +125,7 @@ public class PublicationVisibilityShould : IntegrationTestBase
         resource.GetProperty("id").GetGuid().Should().Be(seeded.InPublicBlog);
     }
 
-    /// <summary>Status and body together: the body is what tells two 404s apart.</summary>
+    // Status and body together: the body is what tells two 404s apart.
     private sealed record Refusal(HttpStatusCode Status, string Body);
 
     private async Task<Refusal> Read(Guid publicationId, GeneralUser? caller)
@@ -153,9 +139,7 @@ public class PublicationVisibilityShould : IntegrationTestBase
             WithoutCorrelation(await response.Content.ReadAsStringAsync()));
     }
 
-    /// <summary>
-    /// The refusal document minus its correlation token, which differs per request by design.
-    /// </summary>
+    // The refusal document minus its correlation token, which differs per request by design.
     private static string WithoutCorrelation(string body)
     {
         if (string.IsNullOrWhiteSpace(body))
@@ -176,7 +160,6 @@ public class PublicationVisibilityShould : IntegrationTestBase
             .Select(p => $"{p.Name}={p.Value.GetRawText()}"));
     }
 
-    /// <summary>A caller holding the given site-wide role and no role in any blog.</summary>
     private async Task<GeneralUser> UserAsync(UserRole role)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -194,10 +177,6 @@ public class PublicationVisibilityShould : IntegrationTestBase
         Guid InAwaitingEditsBlog,
         Guid InPublicBlog);
 
-    /// <summary>
-    /// One author with four blogs differing in what hides them, a publication in each, and a second author whose
-    /// only publication is hidden; fresh identifiers.
-    /// </summary>
     private async Task<SeededPublications> SeedAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -242,21 +221,8 @@ public class PublicationVisibilityShould : IntegrationTestBase
             inPublicBlog.PublicationId);
     }
 
-    private static DbUser AddUser(DmDbContext dbContext, string prefix)
-    {
-        var userId = Guid.NewGuid();
-        var user = new DbUser
-        {
-            UserId = userId,
-            // Username is varchar(20) and uniquely indexed, so the id pads the prefix.
-            Username = $"{prefix}{userId:N}"[..20],
-            Email = $"{userId:N}@publicationvisibility.example",
-            PasswordHash = "hash",
-            Salt = "salt"
-        };
-        dbContext.Users.Add(user);
-        return user;
-    }
+    private static DbUser AddUser(DmDbContext dbContext, string prefix) =>
+        UserRows.Add(dbContext, prefix, "publicationvisibility.example");
 
     private static DbBlog AddBlog(
         DmDbContext dbContext,
@@ -281,10 +247,8 @@ public class PublicationVisibilityShould : IntegrationTestBase
         return blog;
     }
 
-    /// <summary>
-    /// Published, not a draft: what is under test is the parent blog and nothing
-    /// else, so the publication's own gate has to be out of the way.
-    /// </summary>
+    // Published, not a draft: what is under test is the parent blog and nothing else, so the
+    // publication's own gate has to be out of the way.
     private static DbPublication AddPublication(DmDbContext dbContext, Guid blogId, Guid authorId)
     {
         var now = DateTimeOffset.UtcNow;

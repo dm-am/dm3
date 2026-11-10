@@ -99,18 +99,7 @@ public class RegistrationServiceShould : UnitTestBase
         await mailSender.Received(1).Send(registration.Email, tokenId);
     }
 
-    /// <summary>
-    /// Registering again on an address that already has a pending row is the same
-    /// write, and the service asks nothing first.
-    /// </summary>
-    /// <remarks>
-    /// It used to ask whether the address had a pending registration and branch on
-    /// the answer, which stops being true the moment it is given: two submissions
-    /// of the form arriving together both heard "nothing pending" and both
-    /// inserted, and the loser was answered with a failure of the storage engine.
-    /// AddPending replaces whatever the address has, so there is nothing left to
-    /// decide here.
-    /// </remarks>
+    // AddPending replaces whatever the address has, so there is nothing left to decide here.
     [Fact]
     public async Task WriteThePendingRegistrationOfAnAddressThatAlreadyHasOne()
     {

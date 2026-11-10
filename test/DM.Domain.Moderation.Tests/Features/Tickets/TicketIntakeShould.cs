@@ -13,11 +13,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
-/// <summary>
-/// A ticket filed from the support and complaint forms, by a guest or from an
-/// account: the fields of the form as lines of its text, the violator it
-/// names, the address of a guest and his tracking token.
-/// </summary>
 public class TicketIntakeShould : TicketServiceTestBase
 {
     [Fact]
@@ -76,10 +71,6 @@ public class TicketIntakeShould : TicketServiceTestBase
             "[b]Страница[/b] не открывается\n\nКонтакт для ответа: guest@example.com");
     }
 
-    /// <summary>
-    /// The violator of an intake complaint is a name the reader typed, and what
-    /// is wrong with it stands under that field.
-    /// </summary>
     [Fact]
     public async Task RefuseAnUnknownViolatorUnderItsField()
     {
@@ -118,12 +109,8 @@ public class TicketIntakeShould : TicketServiceTestBase
         await ticketRepository.DidNotReceive().Create(Arg.Any<CreateTicketEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The violator a complaint names is filed on the ticket, for the rule that
-    /// keeps the complaint away from him, and written into its text as a line, as
-    /// the site spells his name: the ticket is read as its text and nothing beside
-    /// it.
-    /// </summary>
+    // The violator a complaint names is filed on the ticket, for the rule that keeps the complaint
+    // away from him
     [Fact]
     public async Task FileTheViolatorOfAnIntakeComplaintOnTheTicket()
     {
@@ -224,11 +211,6 @@ public class TicketIntakeShould : TicketServiceTestBase
         capturedEntity!.TrackingToken.Should().BeNull();
     }
 
-    /// <summary>
-    /// The link a complaint carries is called what the field of the form called
-    /// it: the decision for a complaint about a decision, the violation for
-    /// every other one.
-    /// </summary>
     [Theory]
     [InlineData(TicketSubtype.ModeratorDecisionComplaint, "Ссылка на решение")]
     [InlineData(TicketSubtype.SeniorModeratorDecisionComplaint, "Ссылка на решение")]

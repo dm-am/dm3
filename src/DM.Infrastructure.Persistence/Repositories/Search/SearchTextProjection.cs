@@ -39,9 +39,6 @@ internal static class SearchTextProjection
 
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
 
-    /// <summary>
-    /// The visible text of a body written for the given surface.
-    /// </summary>
     public static string Of(string? body, BbSurface surface)
     {
         if (string.IsNullOrWhiteSpace(body))
@@ -97,9 +94,6 @@ internal static class SearchTextProjection
         return file < 0 ? before : before[..file];
     }
 
-    /// <summary>
-    /// Control characters out, runs of whitespace down to one space.
-    /// </summary>
     /// <remarks>
     /// The control characters are not decoration: the preview marks a match with
     /// two of them, and one arriving from a body would be read as a mark.

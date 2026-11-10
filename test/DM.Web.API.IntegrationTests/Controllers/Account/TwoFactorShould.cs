@@ -16,10 +16,7 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
-/// <summary>
-/// The second factor from the outside: switched on, passed, replayed, recovered.
-/// </summary>
-/// <remarks>Over the real database: a step claim and a code spend are conditional updates.</remarks>
+// Over the real database: a step claim and a code spend are conditional updates.
 public class TwoFactorShould : IntegrationTestBase
 {
     public TwoFactorShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -35,7 +32,6 @@ public class TwoFactorShould : IntegrationTestBase
         return new Account(login, email, cookie);
     }
 
-    /// <summary>The step a moment falls in, and the code for that step.</summary>
     private static (long Step, string Code) CodeFor(string base32Secret, DateTime moment)
     {
         var totp = new Totp(Base32Encoding.ToBytes(base32Secret));
@@ -43,10 +39,7 @@ public class TwoFactorShould : IntegrationTestBase
             totp.ComputeTotp(moment));
     }
 
-    /// <summary>
-    /// A code for the step after the current one.
-    /// </summary>
-    /// <remarks>One step ahead is inside the window and never the step a previous call claimed.</remarks>
+    // One step ahead is inside the window and never the step a previous call claimed.
     private static (long Step, string Code) NextCode(string base32Secret) =>
         CodeFor(base32Secret, DateTime.UtcNow.AddSeconds(30));
 
@@ -59,11 +52,9 @@ public class TwoFactorShould : IntegrationTestBase
         return request;
     }
 
-    /// <summary>Switches the factor on: the Base32 secret and the recovery codes the confirmation issues.</summary>
     private Task<(string Secret, IReadOnlyList<string> Codes)> EnableFactor(Account account) =>
         UserTestHelper.EnableSecondFactor(Client, account.SessionCookie, TestConstants.Password);
 
-    /// <summary>The first step of a login, for an account that owes a factor.</summary>
     private async Task<string> BeginLogin(Account account)
     {
         var response = await Client.PostAsJsonAsync(
@@ -91,7 +82,6 @@ public class TwoFactorShould : IntegrationTestBase
         return Client.SendAsync(request);
     }
 
-    /// <summary>The answer carries the secret and the URI, once.</summary>
     [Fact]
     public async Task HandOverASecretAndAUriAndLeaveTheLoginSingleFactor()
     {
@@ -114,7 +104,6 @@ public class TwoFactorShould : IntegrationTestBase
         UserTestHelper.Cookie(login, "dm_session").Should().NotBeNullOrEmpty();
     }
 
-    /// <summary>The current password is not optional.</summary>
     [Fact]
     public async Task RefuseASetupWithoutTheCurrentPassword()
     {
@@ -127,9 +116,6 @@ public class TwoFactorShould : IntegrationTestBase
         (await Client.SendAsync(setup)).StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// What the table holds is an envelope, and the secret is inside it.
-    /// </summary>
     [Fact]
     public async Task StoreTheSecretOnlyInsideTheEnvelope()
     {
@@ -146,7 +132,6 @@ public class TwoFactorShould : IntegrationTestBase
         stored.ConfirmedUtc.Should().NotBeNull();
     }
 
-    /// <summary>Confirming ends every other session.</summary>
     [Fact]
     public async Task EndEveryOtherSessionOnConfirmation()
     {
@@ -160,7 +145,6 @@ public class TwoFactorShould : IntegrationTestBase
         (await Client.SendAsync(check)).StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    /// <summary>A good code finishes the login and mints the session.</summary>
     [Fact]
     public async Task FinishTheLoginWithACodeFromTheDevice()
     {
@@ -181,7 +165,6 @@ public class TwoFactorShould : IntegrationTestBase
             "the accepted step is what the replay guard remembers");
     }
 
-    /// <summary>The same code is not accepted twice.</summary>
     [Fact]
     public async Task RefuseACodeWhoseStepWasAlreadyAccepted()
     {
@@ -246,7 +229,6 @@ public class TwoFactorShould : IntegrationTestBase
         stored.Should().NotContainAny(codes.ToArray());
     }
 
-    /// <summary>A reissue retires the previous set whole.</summary>
     [Fact]
     public async Task InvalidateEveryCodeOfThePreviousSetOnReissue()
     {
@@ -271,7 +253,6 @@ public class TwoFactorShould : IntegrationTestBase
         (await FinishLogin(second, fresh[0])).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>The challenge is destroyed once the attempts run out.</summary>
     [Fact]
     public async Task DestroyTheChallengeWhenTheAttemptsRunOut()
     {
@@ -295,10 +276,7 @@ public class TwoFactorShould : IntegrationTestBase
             .Should().Be(0);
     }
 
-    /// <summary>
-    /// Five ways of failing, one answer.
-    /// </summary>
-    /// <remarks>Compared with the correlation token taken out: it differs in every response by design.</remarks>
+    // Compared with the correlation token taken out: it differs in every response by design.
     [Fact]
     public async Task AnswerEveryFailureOfTheSecondFactorTheSameWay()
     {
@@ -339,9 +317,6 @@ public class TwoFactorShould : IntegrationTestBase
         return document.ToJsonString(new JsonSerializerOptions { WriteIndented = false });
     }
 
-    /// <summary>
-    /// The mailed password reset hands out no session and lifts no factor.
-    /// </summary>
     [Fact]
     public async Task LeaveTheFactorStandingAfterAPasswordResetFromTheMailbox()
     {
@@ -382,7 +357,6 @@ public class TwoFactorShould : IntegrationTestBase
         UserTestHelper.Cookie(login, "dm_session").Should().BeNull();
     }
 
-    /// <summary>A password change kills unfinished logins.</summary>
     [Fact]
     public async Task DiscardUnfinishedLoginsWhenThePasswordChanges()
     {
@@ -403,9 +377,7 @@ public class TwoFactorShould : IntegrationTestBase
             "a login begun with the old one must not survive it");
     }
 
-    /// <summary>
-    /// Nothing that can pass the factor reaches the security journal.
-    /// </summary>
+    // Nothing that can pass the factor reaches the security journal.
     [Fact]
     public async Task WriteNeitherSecretNorRecoveryCodeIntoTheJournal()
     {
@@ -429,10 +401,7 @@ public class TwoFactorShould : IntegrationTestBase
         journal.Select(e => e.EventType).Should().Contain(SecurityEventType.TwoFactorRecoveryCodeUsed);
     }
 
-    /// <summary>
-    /// The entry about a spent recovery code says how many are left.
-    /// </summary>
-    /// <remarks>The count is taken after the row is stamped, an order only the real database shows.</remarks>
+    // The count is taken after the row is stamped, an order only the real database shows.
     [Fact]
     public async Task SayHowManyRecoveryCodesAreLeftInTheJournal()
     {
@@ -452,9 +421,6 @@ public class TwoFactorShould : IntegrationTestBase
         spent.Should().ContainSingle().Which.Details.Should().Be("Осталось резервных кодов: 9");
     }
 
-    /// <summary>
-    /// Switching the factor off costs the password and a second factor.
-    /// </summary>
     [Fact]
     public async Task SwitchTheFactorOffOnlyForBothHalves()
     {
@@ -487,9 +453,7 @@ public class TwoFactorShould : IntegrationTestBase
             .Should().Be(0, "the codes go with the factor they belonged to");
     }
 
-    /// <summary>
-    /// The status of the caller's own factor, and nothing that could pass it.
-    /// </summary>
+    // The status of the caller's own factor, and nothing that could pass it.
     [Fact]
     public async Task DescribeTheFactorWithoutDisclosingAnythingThatPassesIt()
     {

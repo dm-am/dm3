@@ -9,10 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The three statements PATTERNS makes about the domain layer, asserted rather than
-/// left to the absence of a line nobody would notice being added.
-/// </summary>
 /// <remarks>
 /// A reference is what the compiler accepts, so it cannot be asked about the boundary. Read out of
 /// the project files and sources: a project no executable references is invisible to a loader.
@@ -21,7 +17,6 @@ public class DomainBoundaryShould
 {
     private const string Kernel = "DM.Domain.Core";
 
-    /// <summary>Storage and transport, which the domain names through its own contracts.</summary>
     private static readonly string[] Infrastructure =
     [
         "Microsoft.EntityFrameworkCore",

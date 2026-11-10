@@ -7,22 +7,17 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A message no consumer could process has to stop somewhere a human can reach.
-/// </summary>
 /// <remarks>
 /// A queue with no dead-letter exchange has its poison messages dropped by the broker. Asserted
 /// against the sources: the parameters are built behind a live broker.
 /// </remarks>
 public class DeadLetterRoutingShould
 {
-    /// <summary>How every Rabbit consumer in the solution declares its topology.</summary>
     private const string ConsumerParameters = "new DmConsumerParameters(";
 
-    /// <summary>Assignment of the dead-letter exchange inside those parameters.</summary>
     private const string RoutesPoisonMessages = "DeadLetterExchange =";
 
-    /// <summary>Our own declaration of that exchange, which the client's has to match.</summary>
+    // Our own declaration of that exchange, which the client's has to match.
     private const string DeclaresTheDestination = "DeadLetterQueue.DeclareTerminal(";
 
     /// <summary>
@@ -35,9 +30,7 @@ public class DeadLetterRoutingShould
         .Where(path => File.ReadAllText(path).Contains(ConsumerParameters, StringComparison.Ordinal))
         .ToArray();
 
-    /// <summary>
-    /// A search that finds no consumer leaves the rules below green over nothing.
-    /// </summary>
+    // A search that finds no consumer leaves the rules below green over nothing.
     [Fact]
     public void FindEveryConsumer() =>
         Consumers.Should().NotBeEmpty();
@@ -65,12 +58,8 @@ public class DeadLetterRoutingShould
                 "an internal of a pinned version, and one that drifts is answered with 406 " +
                 "when the consumer subscribes");
 
-    /// <summary>The one file every subscription of this system goes through.</summary>
     private const string SharedConsumer = "src/DM.Infrastructure.Messaging/DmConsumer.cs";
 
-    /// <summary>
-    /// A consumer takes what it can finish, not what the queue holds.
-    /// </summary>
     /// <remarks>
     /// Without a prefetch limit the worker holds the whole queue unacknowledged, and the ready series
     /// shows it empty. global=false is spelled out: RabbitMQ 4.x refuses global=true.

@@ -21,14 +21,8 @@ using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Moderation;
 
-/// <summary>
-/// A warning keeps the text it was issued for, whatever happens to that text
-/// afterwards.
-/// </summary>
-/// <remarks>
-/// No edit history keeps the previous text, so the snapshot is a column written once; the address is not,
-/// it changes on its own. A later edit is no part of the log.
-/// </remarks>
+// No edit history keeps the previous text, so the snapshot is a column written once; the address is
+// not, it changes on its own.
 public class WarningEvidenceShould
 {
     private static readonly DateTimeOffset Written = new(2026, 5, 1, 10, 0, 0, TimeSpan.Zero);
@@ -58,11 +52,6 @@ public class WarningEvidenceShould
 
     private DmDbContext Context() => InMemoryStore.Open(_databaseName);
 
-    /// <summary>
-    /// A forum topic with one comment under it, and one message in each of the
-    /// three chats that matter here: the global one, a game room's, and a private
-    /// conversation.
-    /// </summary>
     private DmDbContext Seeded()
     {
         var context = Context();
@@ -159,10 +148,8 @@ public class WarningEvidenceShould
         snapshot.Should().Be(Offending);
     }
 
-    /// <summary>
-    /// One table holds four kinds of conversation and only the global chat is moderated: a game room's chat
-    /// and a private one answer with nothing, as their address does.
-    /// </summary>
+    // One table holds four kinds of conversation and only the global chat is moderated: a game
+    // room's chat and a private one answer with nothing, as their address does.
     [Fact]
     public async Task TakeNothingFromAChatOutsideModeration()
     {
@@ -176,9 +163,6 @@ public class WarningEvidenceShould
         fromDirect.Should().BeNull("a private conversation is not moderation's to copy");
     }
 
-    /// <summary>
-    /// And neither gets an address, as before: nothing about them is answered.
-    /// </summary>
     [Fact]
     public async Task AddressNoChatOutsideModeration()
     {
@@ -191,9 +175,6 @@ public class WarningEvidenceShould
         fromDirect.Url.Should().BeNull();
     }
 
-    /// <summary>
-    /// The author rewrites the comment, and the stored snapshot does not follow.
-    /// </summary>
     [Fact]
     public async Task KeepTheSnapshotWhenTheTextIsRewrittenAfterwards()
     {
@@ -223,10 +204,6 @@ public class WarningEvidenceShould
         stored!.EntitySnapshot.Should().Be(Offending);
     }
 
-    /// <summary>
-    /// Deleting the object takes the link with it and nothing else: the warning
-    /// still reads, and the snapshot is all that is left of what was written.
-    /// </summary>
     [Fact]
     public async Task SurviveTheDeletionOfTheObject()
     {
@@ -258,10 +235,8 @@ public class WarningEvidenceShould
         state.Url.Should().BeNull();
     }
 
-    /// <summary>
-    /// The addresses are the ones the client router serves, so the link the
-    /// moderator follows lands on the object rather than on a 404.
-    /// </summary>
+    // The addresses are the ones the client router serves, so the link the moderator follows lands
+    // on the object rather than on a 404.
     [Fact]
     public async Task AddressTheObjectTheWayTheClientRoutesIt()
     {
@@ -315,9 +290,6 @@ public class WarningEvidenceShould
         message.LogClosure.Should().BeNull();
     }
 
-    /// <summary>
-    /// A comment under a deleted topic is closed with it, and loses the address.
-    /// </summary>
     [Fact]
     public async Task CloseTheLogOverADeletedTopic()
     {
@@ -334,10 +306,6 @@ public class WarningEvidenceShould
         state.PlaceTitle.Should().Be("Тема", "moderation still reads where the text stood");
     }
 
-    /// <summary>
-    /// What moderation deleted stays out of the open log; what its author deleted
-    /// is the text the warning was given for and is shown, without an address.
-    /// </summary>
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -364,10 +332,8 @@ public class WarningEvidenceShould
         commentState.CreatedUtc.Should().Be(Written);
     }
 
-    /// <summary>
-    /// A game is read by the rules every game list reads it by, and its
-    /// discussion with it: no mode of the discussion shuts it to a reader.
-    /// </summary>
+    // A game is read by the rules every game list reads it by, and its discussion with it: no
+    // mode of the discussion shuts it to a reader.
     [Theory]
     [InlineData(ModuleStatus.Active, PremoderationStatus.Approved, DraftVisibility.Private,
         CommentsAccessMode.Public, false, null)]
@@ -421,9 +387,6 @@ public class WarningEvidenceShould
         state.PlaceTitle.Should().Be("Тайны Древних");
     }
 
-    /// <summary>
-    /// A blog the same way: public when a guest may open it.
-    /// </summary>
     [Theory]
     [InlineData(ModuleStatus.Active, PremoderationStatus.Approved, false, null)]
     [InlineData(ModuleStatus.Draft, PremoderationStatus.Approved, false, WarningLogClosure.PlaceNotPublic)]
@@ -465,10 +428,8 @@ public class WarningEvidenceShould
             : null);
     }
 
-    /// <summary>
-    /// A comment under a publication is placed at the publication, under its title, and addressed on its page.
-    /// </summary>
-    /// <remarks>A guest follows the link where the blog is open to him; a removed publication or blog takes it.</remarks>
+    // A guest follows the link where the blog is open to him; a removed publication or blog takes
+    // it.
     [Theory]
     [InlineData(ModuleStatus.Active, false, false, null)]
     [InlineData(ModuleStatus.Draft, false, false, WarningLogClosure.PlaceNotPublic)]
@@ -521,9 +482,6 @@ public class WarningEvidenceShould
             : $"/blogs/blogw/feed/{PublicationId}#comment-{PublicationCommentId}");
     }
 
-    /// <summary>
-    /// A private conversation and an object nothing finds are closed to the log.
-    /// </summary>
     [Fact]
     public async Task CloseTheLogOverWhatNoPlaceHolds()
     {
@@ -537,9 +495,6 @@ public class WarningEvidenceShould
         missing.LogClosure.Should().Be(WarningLogClosure.NotFound);
     }
 
-    /// <summary>
-    /// A warning naming no object asks nothing and answers nothing.
-    /// </summary>
     [Fact]
     public async Task AnswerNothingForAWarningThatNamesNoObject()
     {

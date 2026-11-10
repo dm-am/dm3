@@ -118,38 +118,46 @@ function changedPairs(options) {
       head.kind === "rev" ? treeFiles(head.sha, paths) : listWorktree(paths);
     for (const path of [...treeFiles(base.sha, paths), ...headFiles]) add(path);
   } else {
-    const range = head.kind === "rev" ? [base.sha, head.sha] : [base.sha];
-    const fields = git([
-      "diff",
-      "--no-ext-diff",
-      "--name-status",
-      "-z",
-      "-M",
-      ...range,
-      "--",
-      ...paths,
-    ])
-      .split("\0")
-      .filter(Boolean);
-    for (let i = 0; i < fields.length; ) {
-      const status = fields[i++];
-      if (status.startsWith("R") || status.startsWith("C"))
-        add(fields[i++], fields[i++]);
-      else add(fields[i++]);
-    }
-    if (head.kind === "worktree") {
-      const untracked = git([
-        "ls-files",
-        "-z",
-        "--others",
-        "--exclude-standard",
-        "--",
-        ...paths,
-      ]);
-      for (const path of untracked.split("\0").filter(Boolean)) add(path);
-    }
+    addDiffedPaths(base, head, paths, add);
   }
   return [...pairs.values()].sort((a, b) => (a.headPath < b.headPath ? -1 : 1));
+}
+
+/**
+ * The files git diff names between the sides: a rename or copy keeps both
+ * names, and the working tree adds its untracked files.
+ */
+function addDiffedPaths(base, head, paths, add) {
+  const range = head.kind === "rev" ? [base.sha, head.sha] : [base.sha];
+  const fields = git([
+    "diff",
+    "--no-ext-diff",
+    "--name-status",
+    "-z",
+    "-M",
+    ...range,
+    "--",
+    ...paths,
+  ])
+    .split("\0")
+    .filter(Boolean);
+  for (let i = 0; i < fields.length; ) {
+    const status = fields[i++];
+    if (status.startsWith("R") || status.startsWith("C"))
+      add(fields[i++], fields[i++]);
+    else add(fields[i++]);
+  }
+  if (head.kind === "worktree") {
+    const untracked = git([
+      "ls-files",
+      "-z",
+      "--others",
+      "--exclude-standard",
+      "--",
+      ...paths,
+    ]);
+    for (const path of untracked.split("\0").filter(Boolean)) add(path);
+  }
 }
 
 /** The tokens of one side's file; a lexer failure names the side and the place. */
@@ -161,6 +169,87 @@ function tokenize(sideName, path, content) {
       error.message = `${sideName} ${position(sourceText(content), error.at)}: ${error.message}`;
     }
     throw error;
+  }
+}
+
+/**
+ * The verdict on a pair both of whose files a lexer reads: "same", "comments"
+ * when only comments changed, or "differ" with the first differing token.
+ */
+function lexedVerdict(file, identical, options) {
+  // Under --all an identical file is read anyway: that is what checks the
+  // lexers against every file of the tree.
+  const a =
+    identical && !options.all
+      ? null
+      : tokenize("base", file.basePath, file.before);
+  if (identical) {
+    if (options.verbose) console.log(`  same    ${file.label}`);
+    return "same";
+  }
+  const difference = firstDifference(
+    a,
+    tokenize("head", file.headPath, file.after),
+  );
+  if (!difference) {
+    if (options.verbose)
+      console.log(`  same    ${file.label}  (comments only)`);
+    return "comments";
+  }
+  console.log(
+    `  code    ${file.label}${difference.treeOnly ? "  (same tokens, different syntax tree)" : ""}`,
+  );
+  console.log(`          base ${difference.base}`);
+  console.log(`          head ${difference.head}`);
+  return "differ";
+}
+
+/**
+ * The verdict on one pair of files: "same", "comments", "differ", "skipped"
+ * (a type the lexers do not read, under --all) or "failed" (a lexer could
+ * not read it). A pair that differs or failed is printed.
+ */
+function pairVerdict(file, options) {
+  const { basePath, headPath, before, after, label } = file;
+  const readable = isSupported(basePath) && isSupported(headPath);
+  if (options.all && !readable) return "skipped";
+  if (!before || !after) {
+    console.log(`  ${before ? "removed" : "added  "} ${label}`);
+    return "differ";
+  }
+  const identical = sourceText(before) === sourceText(after);
+  if (!readable) {
+    if (identical) return "same";
+    console.log(
+      `  ?       ${label}  (no lexer for this file type, so a change in it cannot be proved comment-only)`,
+    );
+    return "differ";
+  }
+  try {
+    return lexedVerdict(file, identical, options);
+  } catch (error) {
+    if (!(error instanceof LexError)) throw error;
+    console.log(`  error   ${label}: ${error.message}`);
+    return "failed";
+  }
+}
+
+/** The totals, and the published files whose XML needs a diff of its own. */
+function printTokenSummary(counts, published) {
+  const skipped =
+    counts.skipped > 0
+      ? `, ${counts.skipped} of a type the lexers do not read skipped`
+      : "";
+  console.log(
+    `same code: ${counts.same}, different: ${counts.differ}, unreadable: ${counts.failed}${skipped}`,
+  );
+  if (published.length > 0) {
+    console.log(
+      `\n${published.length} files of src/DM.Web.API changed in comments only. Their /// text goes into DM.Web.API.xml and the API document, which this tool does not read: diff that XML of the two builds too.`,
+    );
+    for (const label of published.slice(0, SHOWN)) console.log(`  ${label}`);
+    if (published.length > SHOWN)
+      console.log(`  ...and ${published.length - SHOWN} more`);
   }
 }
 
@@ -183,81 +272,36 @@ function compareTokens(options) {
   for (const { basePath, headPath } of pairs) {
     const before = baseFiles.get(basePath);
     const after = headFiles.get(headPath);
+    if (!before && !after) continue;
     const label =
       basePath === headPath ? headPath : `${basePath} -> ${headPath}`;
-    if (!before && !after) continue;
-    const readable = isSupported(basePath) && isSupported(headPath);
-    if (options.all && !readable) {
-      counts.skipped++;
-      continue;
-    }
-    if (!before || !after) {
-      counts.differ++;
-      console.log(`  ${before ? "removed" : "added  "} ${label}`);
-      continue;
-    }
-    const identical = sourceText(before) === sourceText(after);
-    if (!readable) {
-      if (identical) {
-        counts.same++;
-        continue;
-      }
-      counts.differ++;
-      console.log(
-        `  ?       ${label}  (no lexer for this file type, so a change in it cannot be proved comment-only)`,
-      );
-      continue;
-    }
-    try {
-      // Under --all an identical file is read anyway: that is what checks
-      // the lexers against every file of the tree.
-      const a =
-        identical && !options.all ? null : tokenize("base", basePath, before);
-      if (identical) {
-        counts.same++;
-        if (options.verbose) console.log(`  same    ${label}`);
-        continue;
-      }
-      const difference = firstDifference(a, tokenize("head", headPath, after));
-      if (!difference) {
-        counts.same++;
-        if (options.verbose) console.log(`  same    ${label}  (comments only)`);
-        if (PUBLISHED_DOCS.test(headPath)) published.push(label);
-        continue;
-      }
-      counts.differ++;
-      console.log(
-        `  code    ${label}${difference.treeOnly ? "  (same tokens, different syntax tree)" : ""}`,
-      );
-      console.log(`          base ${difference.base}`);
-      console.log(`          head ${difference.head}`);
-    } catch (error) {
-      if (!(error instanceof LexError)) throw error;
-      counts.failed++;
-      console.log(`  error   ${label}: ${error.message}`);
+    const file = { basePath, headPath, before, after, label };
+    const verdict = pairVerdict(file, options);
+    if (verdict === "comments") {
+      counts.same++;
+      if (PUBLISHED_DOCS.test(headPath)) published.push(label);
+    } else {
+      counts[verdict]++;
     }
   }
-  const skipped =
-    counts.skipped > 0
-      ? `, ${counts.skipped} of a type the lexers do not read skipped`
-      : "";
-  console.log(
-    `same code: ${counts.same}, different: ${counts.differ}, unreadable: ${counts.failed}${skipped}`,
-  );
-  if (published.length > 0) {
-    console.log(
-      `\n${published.length} files of src/DM.Web.API changed in comments only. Their /// text goes into DM.Web.API.xml and the API document, which this tool does not read: diff that XML of the two builds too.`,
-    );
-    for (const label of published.slice(0, SHOWN)) console.log(`  ${label}`);
-    if (published.length > SHOWN)
-      console.log(`  ...and ${published.length - SHOWN} more`);
-  }
+  printTokenSummary(counts, published);
   if (counts.failed > 0)
     throw new UsageError(`${counts.failed} files could not be read; see above`);
   return counts.differ === 0;
 }
 
 const TEXT_OUTPUT = /\.(?:js|mjs|css|html|json|svg|txt|xml|webmanifest|map)$/;
+
+/** Where two versions of a build file part, with the text around that place. */
+function showFirstDifference(name, left, right) {
+  let at = 0;
+  while (at < left.length && at < right.length && left[at] === right[at]) at++;
+  const excerpt = (text) =>
+    JSON.stringify(text.slice(Math.max(0, at - 60), at + 60));
+  console.log(`  changed ${name} at ${position(left, at)}`);
+  console.log(`          base ${excerpt(left)}`);
+  console.log(`          head ${excerpt(right)}`);
+}
 
 async function compareBuilds(options) {
   const { relabelScopeIds } = await import(
@@ -309,14 +353,7 @@ async function compareBuilds(options) {
       const right = read(name, b);
       if (left === right) continue;
       if (differ++ >= SHOWN) continue;
-      let at = 0;
-      while (at < left.length && at < right.length && left[at] === right[at])
-        at++;
-      const excerpt = (text) =>
-        JSON.stringify(text.slice(Math.max(0, at - 60), at + 60));
-      console.log(`  changed ${name} at ${position(left, at)}`);
-      console.log(`          base ${excerpt(left)}`);
-      console.log(`          head ${excerpt(right)}`);
+      showFirstDifference(name, left, right);
     }
     if (differ > SHOWN) console.log(`  ...and ${differ - SHOWN} more`);
     console.log(

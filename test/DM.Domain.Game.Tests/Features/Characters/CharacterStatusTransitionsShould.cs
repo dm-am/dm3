@@ -18,12 +18,8 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
 
-/// <summary>
-/// Every way out of a game, and every way back.
-/// </summary>
-/// <remarks>
-/// Each row asserts the right the transition needs, since that is what differs between ways to one status.
-/// </remarks>
+// Each row asserts the right the transition needs, since that is what differs between ways to one
+// status.
 public class CharacterStatusTransitionsShould : CharacterServiceTestBase
 {
     public CharacterStatusTransitionsShould()
@@ -72,10 +68,7 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
             Arg.Is<IEnumerable<EventType>>(e => e.Contains(raised)), characterId);
     }
 
-    /// <summary>
-    /// Reaching Retired says nothing about why. The three reasons are separate
-    /// columns, and the roster and the notifications read them.
-    /// </summary>
+    // The three reasons are separate columns, and the roster and the notifications read them.
     [Theory]
     [InlineData(CharacterStatusTransition.Kill, true, false, false)]
     [InlineData(CharacterStatusTransition.Exile, false, false, true)]
@@ -95,10 +88,8 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
         written.IsPlayerExiled.Should().Be(exiled ? true : null);
     }
 
-    /// <summary>
-    /// Coming back clears all three, or a resurrected character stays marked dead
-    /// and cannot be killed again, and a readmitted one stays marked exiled.
-    /// </summary>
+    // Coming back clears all three, or a resurrected character stays marked dead and cannot be
+    // killed again, and a readmitted one stays marked exiled.
     [Theory]
     [InlineData(CharacterStatusTransition.Resurrect)]
     [InlineData(CharacterStatusTransition.Readmit)]
@@ -131,9 +122,7 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
         { CharacterStatusTransition.Readmit, CharacterStatus.UnderReview },
     };
 
-    /// <summary>
-    /// A transition that makes no sense from here is the caller's mistake, so 400.
-    /// </summary>
+    // A transition that makes no sense from here is the caller's mistake, so 400.
     [Theory]
     [MemberData(nameof(IllegalTransitions))]
     public async Task RefuseATransitionThatDoesNotStartHere(
@@ -160,12 +149,8 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
         thrown.Which.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// From Retired the ways back are Resurrect and Readmit, the lead undoing his
-    /// own Kill or Exile (the resolver asks which of the two it was). Every other
-    /// transition, including any that would bring back what the player took out
-    /// of the game, does not start here.
-    /// </summary>
+    // From Retired the ways back are Resurrect and Readmit, the lead undoing his own Kill or Exile
+    // (the resolver asks which of the two it was).
     [Fact]
     public async Task LeaveOnlyTheLeadsUndoingsAsTheWaysBackFromRetired()
     {
@@ -183,12 +168,9 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdateCharacterEntity>());
     }
 
-    /// <summary>
-    /// The game's blacklist does not stand between a lead and his own moves: he
-    /// accepts the application he declined, or one the entry declined, revives
-    /// the character he killed and brings back the one he exiled, whoever the
-    /// list holds.
-    /// </summary>
+    // The game's blacklist does not stand between a lead and his own moves: he accepts the
+    // application he declined, or one the entry declined, revives the character he killed and
+    // brings back the one he exiled, whoever the list holds.
     [Theory]
     [InlineData(CharacterStatusTransition.Accept, CharacterStatus.Declined)]
     [InlineData(CharacterStatusTransition.Accept, CharacterStatus.UnderReview)]
@@ -207,10 +189,8 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
         await repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
     }
 
-    /// <summary>
-    /// Taking a character out of the game is not what the list closes: a lead
-    /// still kills, exiles and declines, and the author still leaves.
-    /// </summary>
+    // Taking a character out of the game is not what the list closes: a lead still kills, exiles
+    // and declines, and the author still leaves.
     [Theory]
     [InlineData(CharacterStatusTransition.Kill, CharacterStatus.Active)]
     [InlineData(CharacterStatusTransition.Exile, CharacterStatus.Active)]
@@ -228,9 +208,6 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
         await repository.Received(1).Update(Arg.Any<UpdateCharacterEntity>());
     }
 
-    /// <summary>
-    /// A character in the given status, existing.
-    /// </summary>
     private Guid Given(CharacterStatus status, Guid? authorId = null)
     {
         var characterId = Guid.NewGuid();
@@ -246,9 +223,6 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
         return characterId;
     }
 
-    /// <summary>
-    /// The game of this character, with the user on its blacklist.
-    /// </summary>
     private void BlacklistInTheGameOf(Guid characterId, Guid userId)
     {
         var gameId = repository.GetForUpdate(characterId).Result!.GameId;
@@ -259,9 +233,6 @@ public class CharacterStatusTransitionsShould : CharacterServiceTestBase
         });
     }
 
-    /// <summary>
-    /// Losing the last active character leaves the player, not the caller, with the game as a reader.
-    /// </summary>
     [Theory]
     [InlineData(CharacterStatusTransition.Kill)]
     [InlineData(CharacterStatusTransition.Exile)]

@@ -5,14 +5,12 @@
  * Displays a clickable item with optional avatar, label, hint, and navigation arrow.
  */
 import { SvgIcon } from "@/shared/ui/Icon";
-import { highlightMatch } from "@/shared/lib/utils/highlight";
 import type { DropdownItemProps } from "../types";
 
 withDefaults(defineProps<DropdownItemProps>(), {
   hint: undefined,
   avatarUrl: undefined,
   highlighted: false,
-  indent: false,
   hasSubOptions: false,
 });
 
@@ -26,18 +24,13 @@ const emit = defineEmits<{
   <button
     type="button"
     class="dropdown-item"
-    :class="{ highlighted, indented: indent }"
+    :class="{ highlighted }"
     @click.stop="emit('item-select')"
     @mouseenter="emit('mouseenter')"
   >
     <img v-if="avatarUrl" :src="avatarUrl" alt="" class="item-avatar" />
     <span class="item-content">
-      <span
-        v-if="searchQuery"
-        class="item-label"
-        v-html="highlightMatch(label, searchQuery)"
-      />
-      <span v-else class="item-label">{{ label }}</span>
+      <span class="item-label">{{ label }}</span>
       <span v-if="hint" class="item-hint">{{ hint }}</span>
     </span>
     <SvgIcon v-if="hasSubOptions" name="chevronRight" class="item-arrow" />
@@ -60,9 +53,6 @@ const emit = defineEmits<{
   border: none
   background: none
   color: $text
-
-  &.indented
-    padding-left: $large
 
   &:hover,
   &.highlighted

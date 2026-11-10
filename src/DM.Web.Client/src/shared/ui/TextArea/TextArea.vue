@@ -21,7 +21,7 @@ function adjustHeight() {
   const textarea = textareaRef.value;
   if (textarea) {
     textarea.style.height = "auto";
-    textarea.style.height = textarea.scrollHeight + "px";
+    textarea.style.height = `${textarea.scrollHeight}px`;
   }
 }
 

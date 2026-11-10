@@ -1,10 +1,10 @@
 using System.Net;
-using System.Net.Http.Json;
 using System.Text.Json;
 using DM.Domain.Core.Chats;
 using DM.Domain.Core.Dto;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Users;
+using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Microsoft.EntityFrameworkCore;
 using Xunit;
@@ -23,25 +23,21 @@ namespace DM.Web.API.IntegrationTests.Controllers.General;
 /// What the user may not do is not offered. Every row reads the flag as the page does and sends the message the
 /// page would, as the same viewer, against an expected value.
 /// </remarks>
-public class CanMessageFlagShould : IntegrationTestBase
+public class CanMessageFlagShould : ViewerRequestTestBase
 {
     public CanMessageFlagShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>What the addressee's blacklist holds about the writer.</summary>
     public enum Block
     {
         None,
 
-        /// <summary>The writer is on it, and the list closes private messages.</summary>
         WithPrivateMessagesClosed,
 
-        /// <summary>The writer is on it, and the list leaves private messages open.</summary>
         WithoutTheSwitch
     }
 
-    /// <summary>The conversation the field is asked about.</summary>
     public enum Conversation
     {
         Direct,
@@ -96,9 +92,6 @@ public class CanMessageFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A guest, the owner of the profile and the profile of "Аккаунт удален" are offered no message.
-    /// </summary>
     [Fact]
     public async Task OfferNoMessageToAGuestOnOnesOwnProfileOrToTheRemovedAccount()
     {
@@ -123,9 +116,8 @@ public class CanMessageFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The field of a correspondence is there exactly when its message is taken; a group of three is no correspondence.
-    /// </summary>
+    // The field of a correspondence is there exactly when its message is taken; a group of three is
+    // no correspondence.
     [Theory]
     [InlineData(Conversation.Direct, Block.None, true)]
     [InlineData(Conversation.Direct, Block.WithPrivateMessagesClosed, false)]
@@ -182,9 +174,7 @@ public class CanMessageFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A ban on public speech closes the global chat and leaves the private correspondence open.
-    /// </summary>
+    // A ban on public speech closes the global chat and leaves the private correspondence open.
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
@@ -222,9 +212,6 @@ public class CanMessageFlagShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The writes that hand a chat back carry the flag; the list of chats carries none.
-    /// </summary>
     [Fact]
     public async Task AnswerTheWritesOfAChatWithTheFlagAndLeaveItOffTheList()
     {
@@ -294,7 +281,6 @@ public class CanMessageFlagShould : IntegrationTestBase
         return new GeneralUser { UserId = userId, Username = user.Username, Role = UserRole.RegularUser };
     }
 
-    /// <summary>The owner puts the user on his personal blacklist.</summary>
     private async Task BlockAsync(GeneralUser owner, GeneralUser blocked)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -321,10 +307,8 @@ public class CanMessageFlagShould : IntegrationTestBase
             .Select(c => c.LastMessageId).SingleAsync();
     }
 
-    /// <summary>
-    /// The lines the case wrote in the global chat, with the chat's last message
-    /// put back to what it was before them.
-    /// </summary>
+    // The lines the case wrote in the global chat, with the chat's last message put back to what it
+    // was before them.
     private async Task DropGlobalMessagesAsync(GeneralUser writer, Guid? lastBefore)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -337,10 +321,6 @@ public class CanMessageFlagShould : IntegrationTestBase
             .ExecuteDeleteAsync();
     }
 
-    /// <summary>
-    /// The conversations of the case, their messages, markers and links, and the
-    /// blacklist entries of its people. The people stay.
-    /// </summary>
     private async Task DropAsync(IReadOnlyCollection<Guid> chats, params GeneralUser[] people)
     {
         var ids = people.Select(p => p.UserId).ToArray();
@@ -355,28 +335,12 @@ public class CanMessageFlagShould : IntegrationTestBase
             .ExecuteDeleteAsync();
     }
 
-    /// <summary>A request as the viewer, under an ordinary ban when asked; a guest sends none.</summary>
+    // The shared viewer request, with the ban last: most sends here are unbanned.
     private Task<HttpResponseMessage> SendAsync(
-        GeneralUser? user, HttpMethod method, string url, object? body = null, bool banned = false)
-    {
-        var request = user is null
-            ? new HttpRequestMessage(method, url)
-            : CreateAuthenticatedRequest(method, url, user);
-        if (user is not null && banned)
-        {
-            request.Headers.Add(TestAuthenticationMiddleware.TestUserAccessPolicyHeader,
-                AccessPolicy.DemocraticBan.ToString());
-        }
+        GeneralUser? user, HttpMethod method, string url, object? body = null, bool banned = false) =>
+        Send(user, banned, method, url, body);
 
-        if (body is not null)
-        {
-            request.Content = JsonContent.Create(body);
-        }
-
-        return Client.SendAsync(request);
-    }
-
-    /// <summary>A successful answer, read whole. The chat routes answer it bare.</summary>
+    // The chat routes answer it bare.
     private async Task<JsonElement> ReadAsync(
         GeneralUser? user, HttpMethod method, string url, object? body = null, bool banned = false)
     {
@@ -387,7 +351,6 @@ public class CanMessageFlagShould : IntegrationTestBase
         return document.RootElement.Clone();
     }
 
-    /// <summary>The profile the page reads, out of its envelope.</summary>
     private async Task<JsonElement> ProfileAsync(GeneralUser? user, string username, bool banned = false) =>
         (await ReadAsync(user, HttpMethod.Get, $"/v1/users/{Uri.EscapeDataString(username)}/profile",
             banned: banned)).GetProperty("resource");

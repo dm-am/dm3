@@ -15,11 +15,6 @@ namespace DM.Infrastructure.Mail;
 /// </summary>
 public static class MailRegistrationExtensions
 {
-    /// <summary>
-    /// Registers the mail services and the assembly's default types.
-    /// </summary>
-    /// <param name="services">Service collection.</param>
-    /// <returns>Service collection for chaining.</returns>
     public static IServiceCollection AddDmMail(this IServiceCollection services)
     {
         // Per scope: the scope disposes the channel, and a channel is not shared between threads.

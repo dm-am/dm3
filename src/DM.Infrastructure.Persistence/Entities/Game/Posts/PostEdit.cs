@@ -38,9 +38,6 @@ public class PostEdit
     [ForeignKey(nameof(PostId))]
     public virtual Post Post { get; set; } = null!;
 
-    /// <summary>
-    /// Editor user
-    /// </summary>
     [ForeignKey(nameof(EditorUserId))]
     public virtual User Editor { get; set; } = null!;
 }

@@ -77,6 +77,23 @@ function renderImage(node: Extract<BbNode, { t: "img" }>): string {
   return `<span class="bb-image-frame"${data} style="${vars.join(";")}">${img}</span>`;
 }
 
+/**
+ * A link typed without a caption shows the default one; the marker keeps that
+ * caption from coming back as typed.
+ */
+function renderLink(node: Extract<BbNode, { t: "link" }>): string {
+  const canonical = writeLink(node.href, node.text);
+  const marker =
+    node.text === null
+      ? ' data-bb-selfref="true"'
+      : attr("data-bb-text", node.text);
+  return (
+    `<a href="${escapeHtml(node.href)}" data-bb-tag="link"${marker}` +
+    `${attr("data-bb-source", node.source !== canonical && node.source)}` +
+    ` target="_blank" rel="noopener">${escapeText(node.text || DEFAULT_LINK_TEXT)}</a>`
+  );
+}
+
 /** The tags that stand in a line, and the element each is drawn with. */
 type InlineTag = "b" | "i" | "u" | "strike" | "code";
 
@@ -277,17 +294,15 @@ class HtmlWriter {
   }
 
   private privateAttrs(node: Extract<BbNode, { t: "private" }>): string {
-    return (
-      ` class="bb-private" data-bb-tag="private"` +
-      attr("data-bb-character", node.value) +
-      spellingAttrs(
-        node.open,
-        writePrivateOpening(node.value),
-        node.close,
-        "[/private]",
-      ) +
-      (node.close === null ? ' data-bb-unclosed="true"' : "")
-    );
+    return ` class="bb-private" data-bb-tag="private"${attr(
+      "data-bb-character",
+      node.value,
+    )}${spellingAttrs(
+      node.open,
+      writePrivateOpening(node.value),
+      node.close,
+      "[/private]",
+    )}${node.close === null ? ' data-bb-unclosed="true"' : ""}`;
   }
 
   private inline(node: BbNode): string {
@@ -300,18 +315,8 @@ class HtmlWriter {
         return `<span class="bb-noparse" data-bb-tag="noparse"${plainSpelling(node)}>${escapeLines(node.s)}</span>`;
       case "img":
         return renderImage(node);
-      case "link": {
-        const canonical = writeLink(node.href, node.text);
-        const marker =
-          node.text === null
-            ? ' data-bb-selfref="true"'
-            : attr("data-bb-text", node.text);
-        return (
-          `<a href="${escapeHtml(node.href)}" data-bb-tag="link"${marker}` +
-          `${attr("data-bb-source", node.source !== canonical && node.source)}` +
-          ` target="_blank" rel="noopener">${escapeText(node.text || DEFAULT_LINK_TEXT)}</a>`
-        );
-      }
+      case "link":
+        return renderLink(node);
       case "mention":
         return (
           `<a class="bb-mention" href="/users/${encodeURIComponent(node.login)}"` +

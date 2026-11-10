@@ -10,9 +10,6 @@ public class PagingResult
     /// </summary>
     public int TotalEntitiesCount { get; private set; }
 
-    /// <summary>
-    /// Current page number
-    /// </summary>
     public int CurrentPage { get; private set; }
 
     /// <summary>
@@ -20,13 +17,6 @@ public class PagingResult
     /// </summary>
     public int PageSize { get; private set; }
 
-    /// <summary>
-    /// Create paging data
-    /// </summary>
-    /// <param name="totalEntitiesCount">Total entities count</param>
-    /// <param name="entityNumber">Selected entity number</param>
-    /// <param name="pageSize">Page size</param>
-    /// <returns>New paging result instance</returns>
     public static PagingResult Create(int totalEntitiesCount, int entityNumber, int pageSize)
     {
         return new PagingResult
@@ -37,9 +27,6 @@ public class PagingResult
         };
     }
 
-    /// <summary>
-    /// Empty paging result
-    /// </summary>
     public static PagingResult Empty(int pageSize) => new()
     {
         TotalEntitiesCount = 0,

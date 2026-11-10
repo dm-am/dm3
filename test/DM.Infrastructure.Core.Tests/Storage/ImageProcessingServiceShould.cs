@@ -13,19 +13,12 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Storage;
 
-/// <summary>
-/// <see cref="ImageProcessingService"/>: magic-byte validation, decompression-bomb protection, EXIF strip,
-/// extension normalisation, the square thumbnails of an avatar.
-/// </summary>
 public class ImageProcessingServiceShould
 {
     private readonly ImageProcessingService _sut = new();
 
-    /// <summary>
-    /// Every upload type reaches the format check. A type added to the enum
-    /// without rules still fails closed, but as a server error on every file it
-    /// is sent; this is where it fails first.
-    /// </summary>
+    // A type added to the enum without rules still fails closed, but as a server error on every
+    // file it is sent; this is where it fails first.
     [Fact]
     public async Task ProcessAsyncHasRulesForEveryUploadType()
     {
@@ -111,9 +104,7 @@ public class ImageProcessingServiceShould
         image.Height.Should().Be(200);
     }
 
-    /// <summary>
-    /// The result carries the dimensions of the bytes it carries, so a page reserves the exact box.
-    /// </summary>
+    // The result carries the dimensions of the bytes it carries, so a page reserves the exact box.
     [Fact]
     public async Task ProcessAsyncReportsTheDimensionsOfTheStoredBytes()
     {
@@ -128,9 +119,6 @@ public class ImageProcessingServiceShould
         result.Height.Should().Be(150);
     }
 
-    /// <summary>
-    /// After a downscale the reported pair describes the stored file, not the one that arrived.
-    /// </summary>
     [Fact]
     public async Task ProcessAsyncReportsTheDownscaledDimensionsNotTheSubmittedOnes()
     {
@@ -208,10 +196,7 @@ public class ImageProcessingServiceShould
         result.Height.Should().Be(oversized / 2);
     }
 
-    /// <summary>
-    /// The same picture as an avatar, to show that the difference is the type and
-    /// not the picture.
-    /// </summary>
+    // The same picture as an avatar, to show that the difference is the type and not the picture.
     [Fact]
     public async Task ProcessAsyncStillDownscalesAnAvatarOfTheSameSize()
     {
@@ -246,10 +231,6 @@ public class ImageProcessingServiceShould
         result.Extension.Should().Be(".gif");
     }
 
-    /// <summary>
-    /// An animated GIF is stored animated: every frame survives the re-encode
-    /// that strips its metadata.
-    /// </summary>
     [Fact]
     public async Task ProcessAsyncKeepsEveryFrameOfAnAnimatedGif()
     {
@@ -261,10 +242,8 @@ public class ImageProcessingServiceShould
         stored.Count.Should().Be(3);
     }
 
-    /// <summary>
-    /// The pixel budget is the canvas times the frames: one-pixel frames on a quarter-budget canvas go over by
-    /// count, refused before decoding.
-    /// </summary>
+    // The pixel budget is the canvas times the frames: one-pixel frames on a quarter-budget canvas
+    // go over by count, refused before decoding.
     [Fact]
     public async Task ProcessAsyncCountsEveryFrameOfAnAnimationAgainstThePixelBudget()
     {
@@ -295,9 +274,6 @@ public class ImageProcessingServiceShould
         await act.Should().ThrowAsync<HttpBadRequestException>();
     }
 
-    /// <summary>
-    /// A file whose name and declared type say JPEG and whose bytes are a ZIP container, as a .docx is.
-    /// </summary>
     [Fact]
     public async Task ProcessAsyncRejectsAZipContainerCallingItselfAJpeg()
     {
@@ -325,9 +301,6 @@ public class ImageProcessingServiceShould
             .Which.ValidationErrors["file"].Should().StartWith("Допустимые форматы");
     }
 
-    /// <summary>
-    /// The refusal names every format the type accepts, as a reader knows them.
-    /// </summary>
     [Fact]
     public async Task ProcessAsyncNamesTheAvatarFormatsInTheRefusal()
     {
@@ -349,10 +322,6 @@ public class ImageProcessingServiceShould
             .Which.ValidationErrors["file"].Should().Be("Допустимые форматы: JPEG, PNG, WebP, GIF");
     }
 
-    /// <summary>
-    /// A real PNG renamed and re-declared as a JPEG keeps the extension its bytes
-    /// earn, not the one the request claimed.
-    /// </summary>
     [Fact]
     public async Task ProcessAsyncNormalizesAPostAttachmentExtensionFromItsBytes()
     {
@@ -380,10 +349,7 @@ public class ImageProcessingServiceShould
         processed.GetExifProfile().Should().BeNull();
     }
 
-    /// <summary>
-    /// A CMYK JPEG is stored in sRGB: browsers disagree on CMYK. A file with a profile is converted through
-    /// it and the profile goes.
-    /// </summary>
+    // A CMYK JPEG is stored in sRGB: browsers disagree on CMYK.
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -425,9 +391,6 @@ public class ImageProcessingServiceShould
 
     // --- Avatar thumbnails: squares cut at upload, stored beside the original ---
 
-    /// <summary>
-    /// Every side the API hands out is cut, a side longer than the picture by scaling it up.
-    /// </summary>
     [Theory]
     [InlineData(UploadType.UserAvatar)]
     [InlineData(UploadType.CharacterAvatar)]
@@ -448,9 +411,6 @@ public class ImageProcessingServiceShould
         }
     }
 
-    /// <summary>
-    /// The square of a wide picture is its middle: the sides are cut off, nothing is squeezed.
-    /// </summary>
     [Fact]
     public async Task ProcessAsyncCutsTheThumbnailFromTheCenterOfThePicture()
     {
@@ -482,9 +442,8 @@ public class ImageProcessingServiceShould
         }
     }
 
-    /// <summary>
-    /// The thumbnails are cut from the cleaned picture, so they carry no more of the camera than it does.
-    /// </summary>
+    // The thumbnails are cut from the cleaned picture, so they carry no more of the camera than it
+    // does.
     [Fact]
     public async Task ProcessAsyncStripsExifFromTheThumbnails()
     {
@@ -504,13 +463,9 @@ public class ImageProcessingServiceShould
         }
     }
 
-    /// <summary>
-    /// An animated avatar gets still thumbnails of its first frame, laid on the canvas.
-    /// </summary>
-    /// <remarks>
-    /// The encoder stores the first frame below as the red quarter alone at an offset, and the reader lays
-    /// it back on the canvas: stretched over the square instead, the quarter would fill it.
-    /// </remarks>
+    // The encoder stores the first frame below as the red quarter alone at an offset, and the
+    // reader lays it back on the canvas: stretched over the square instead, the quarter would fill
+    // it.
     [Fact]
     public async Task ProcessAsyncCutsAStillThumbnailOfTheFirstFrameOfAnAnimationOnItsCanvas()
     {
@@ -533,9 +488,8 @@ public class ImageProcessingServiceShould
         pixels.GetPixel(80, 80).ToColor()!.R.Should().BeGreaterThan(200, "and the red quarter stays in its corner");
     }
 
-    /// <summary>
-    /// An attachment is served by the endpoint that authorizes the caller, and a thumbnail would have none.
-    /// </summary>
+    // An attachment is served by the endpoint that authorizes the caller, and a thumbnail would
+    // have none.
     [Fact]
     public async Task ProcessAsyncCutsNoThumbnailOfAPostAttachment()
     {
@@ -563,8 +517,6 @@ public class ImageProcessingServiceShould
         return new MemoryStream(image.ToByteArray(format));
     }
 
-    /// <param name="width">Width of every frame.</param>
-    /// <param name="height">Height of every frame.</param>
     /// <param name="frames">How many frames, one for a still picture.</param>
     /// <param name="canvas">Side of the canvas the frames are laid on, 0 for the frame's own size.</param>
     private static MemoryStream CreateGifStream(int width, int height, int frames = 1, int canvas = 0)

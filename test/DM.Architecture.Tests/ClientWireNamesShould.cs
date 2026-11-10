@@ -19,10 +19,6 @@ using AccountUsernameChangeApprovalInfo = DM.Domain.Account.Features.UsernameCha
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The names the client and the server exchange are spelled the same on both sides: headers,
-/// the keys of a refusal, the titles a refusal is told apart by, statuses, filters and sort fields.
-/// </summary>
 /// <remarks>
 /// A misspelt name is no error on either side: the header is not read, the key is undefined, the
 /// sort falls back to the default. The client spells each once; both spellings are read here.
@@ -55,7 +51,6 @@ public class ClientWireNamesShould
         rendered.Should().Contain(asked, "an audience the server does not know is rendered as the default one");
     }
 
-    /// <summary>A key the server writes into a refusal, and how the client spells it where it reads it.</summary>
     public static TheoryData<string, string, string> RefusalKeys => new()
     {
         { "_pendingActivation", "features/auth/ui/LoginForm.vue", "errors[\"_pendingactivation\"]" },
@@ -85,7 +80,6 @@ public class ClientWireNamesShould
             "a title the server words differently turns the refusal into the general one");
     }
 
-    /// <summary>The client says an unfinished registration where the server's field error is absent, in its words.</summary>
     [Fact]
     public void SayAnUnfinishedRegistrationInTheServersWords() =>
         Constant("features/auth/lib/loginRefusal.ts", "REGISTRATION_PENDING")
@@ -124,7 +118,6 @@ public class ClientWireNamesShould
         Literals(union).Should().BeEquivalentTo(accepted, "a filter the query refuses answers 400");
     }
 
-    /// <summary>A client list of sort fields and the query type that names what it accepts.</summary>
     public static TheoryData<string, string, Type> SortFields => new()
     {
         { "features/blog-filter/model/types.ts", "SORT_OPTIONS", typeof(DM.Web.API.Features.Blog.Blogs.BlogsQuery) },
@@ -162,7 +155,6 @@ public class ClientWireNamesShould
 
     private const string ModuleMirrors = "shared/api/models/common/module-status.ts";
 
-    /// <summary>A client mirror of a server enum, the file it lives in and the enum it mirrors.</summary>
     public static TheoryData<string, string, Type> ModuleEnums => new()
     {
         { ModuleMirrors, "ModuleStatus", typeof(DM.Domain.Core.Enums.ModuleStatus) },
@@ -205,16 +197,13 @@ public class ClientWireNamesShould
             .Should().BeEmpty("the profile shows the progress getMetricValue reads, toward the tier the server awards");
     }
 
-    /// <summary>A string constant of the client.</summary>
     private static string Constant(string file, string name) =>
         Regex.Match(Source(file), @"\bconst\s+" + Regex.Escape(name) + @"\s*=\s*""(?<value>[^""]*)""")
             .Groups["value"].Value;
 
-    /// <summary>The string literals of a TypeScript union.</summary>
     private static string[] Literals(string union) =>
         Regex.Matches(union, @"""(?<value>[^""]+)""").Select(match => match.Groups["value"].Value).ToArray();
 
-    /// <summary>Every status the factories of a link check answer type produce.</summary>
     private static IEnumerable<string> Statuses(Type answer) => answer
         .GetMethods(BindingFlags.Public | BindingFlags.Static)
         .Where(method => method.ReturnType == answer)

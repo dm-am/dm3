@@ -1,8 +1,5 @@
 namespace DM.Domain.Account.Configuration;
 
-/// <summary>
-/// Configuration for password policy requirements
-/// </summary>
 /// <remarks>
 /// The composition rules are off: NIST SP 800-63B-4 (2024) SHALL NOT require them.
 /// </remarks>

@@ -52,9 +52,7 @@ public class TopicControllerShould : IntegrationTestBase
         content.Should().Contain("resource");
     }
 
-    /// <summary>
-    /// Get a topic id that never existed should return NotFound; Gone is for a soft-deleted row.
-    /// </summary>
+    // Get a topic id that never existed should return NotFound; Gone is for a soft-deleted row.
     [Fact]
     public async Task GetTopicWithNonExistentIdReturnsNotFound()
     {
@@ -65,9 +63,8 @@ public class TopicControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// Get a soft-deleted topic should return Gone: the service tells the two apart with an existence probe.
-    /// </summary>
+    // Get a soft-deleted topic should return Gone: the service tells the two apart with an
+    // existence probe.
     [Fact]
     public async Task GetTopicWithRemovedTopicReturnsGone()
     {

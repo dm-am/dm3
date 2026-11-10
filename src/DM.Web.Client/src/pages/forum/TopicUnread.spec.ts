@@ -9,20 +9,18 @@
  * nothing to land on.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { enableAutoUnmount, mount, flushPromises } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
+import type { Router } from "vue-router";
 import { createPinia, setActivePinia } from "pinia";
 import { useAuthStore } from "@/shared/stores";
 import { forumApi } from "@/entities/forum";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import TopicUnread from "./TopicUnread.vue";
-
-const replace = vi.hoisted(() => vi.fn());
 
 enableAutoUnmount(afterEach);
 
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: { alias: "general", num: "42" }, query: {} }),
-  useRouter: () => ({ replace }),
-}));
+/** The router of the screen last opened. */
+let router: Router;
 
 /** Where the screen sends the reader for this answer of the server. */
 async function landing(answer: unknown, pageSize?: number) {
@@ -35,10 +33,17 @@ async function landing(answer: unknown, pageSize?: number) {
   const asked = vi
     .spyOn(forumApi, "getFirstUnreadComment")
     .mockResolvedValue(answer as never);
-  mount(TopicUnread, { global: { plugins: [pinia] } });
+  ({ router } = await mountPage(TopicUnread, "/forum/general/42/unread", {
+    routes: [
+      ["topic-unread", "/forum/:alias/:num/unread"],
+      ["topic", "/forum/:alias/:num"],
+    ],
+    pinia,
+  }));
   await flushPromises();
   expect(asked).toHaveBeenCalledWith("general", 42);
-  return replace.mock.calls[0][0];
+  const { name, params, query, hash } = router.currentRoute.value;
+  return { name, params, query, hash };
 }
 
 const at = (commentNumber: number) => ({
@@ -46,12 +51,17 @@ const at = (commentNumber: number) => ({
   error: null,
 });
 
-const TOPIC = { name: "topic", params: { alias: "general", num: 42 } };
+// Params come back from the address as text.
+const TOPIC = {
+  name: "topic",
+  params: { alias: "general", num: "42" },
+  query: {},
+  hash: "",
+};
 
 describe("TopicUnread", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
-    replace.mockReset();
   });
 
   it.each<[number, number | undefined, object]>([
@@ -68,6 +78,16 @@ describe("TopicUnread", () => {
       expect(target).toEqual({ ...TOPIC, query, hash: "#comment-c-7" });
     },
   );
+
+  // With the jump in the history, Back would land on it and it would jump again.
+  it("takes the place of the jump, so Back does not land on it", async () => {
+    await landing(at(25), 10);
+
+    router.back();
+    await flushPromises();
+
+    expect(router.currentRoute.value.name).toBe("topic");
+  });
 
   it("opens the topic itself where there is no comment to land on", async () => {
     const target = await landing({ data: { resource: {} }, error: null });

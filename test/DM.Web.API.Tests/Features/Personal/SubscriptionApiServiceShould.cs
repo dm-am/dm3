@@ -17,10 +17,7 @@ using DomainSubscription = DM.Domain.Core.Subscriptions.Subscription;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
-/// <summary>
-/// The list's own subscribe follows only a game the reader may open.
-/// </summary>
-/// <remarks>The personal service knows nothing of games, so a hidden game answers the 404 of a missing one.</remarks>
+// The personal service knows nothing of games, so a hidden game answers the 404 of a missing one.
 public class SubscriptionApiServiceShould : UnitTestBase
 {
     private readonly ISubscriptionService _subscriptionService = Mock<ISubscriptionService>();

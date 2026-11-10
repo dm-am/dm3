@@ -10,10 +10,7 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// Large post for testing content expansion on homepage (~2000 chars).
-    /// Character: Diopside - a crystalline creature from D&amp;D.
-    /// </summary>
+    // Large post for testing content expansion on homepage (~2000 chars).
     private const string DiopsideLargePostText = """
         Кристаллы вдоль позвоночника резонировали с магией этого места. Диопсид замер, позволяя своим многочисленным отросткам ощутить потоки силы, пронизывающие древние стены. Столетия ожидания в темных глубинах не прошли даром — его восприятие обострилось до предела.
 
@@ -65,11 +62,6 @@ internal sealed partial class DataSeeder
         "На полу вы замечаете свежие следы крови, ведущие вглубь подземелья.",
     ];
 
-    /// <summary>
-    /// The posts of a game in its main room, spread evenly between its
-    /// activation and its closing, or now; the first post of the first finished
-    /// game is Diopside's large one.
-    /// </summary>
     private async Task SeedGamePosts(
         SeedingGame seeding, Room mainRoom, GameCast cast, List<DbUser> users, GameShowcase showcase,
         ComprehensiveSeedResult result)
@@ -137,9 +129,8 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// One post carries attachments, so the post block, the moderation list and the serving endpoint have one.
-    /// </summary>
+    // One post carries attachments, so the post block, the moderation list and the serving endpoint
+    // have one.
     private async Task SeedPostAttachment(Post post)
     {
         var attachmentBytes = ReadEmbeddedSeedBytes(DiopsideImage);
@@ -155,7 +146,6 @@ internal sealed partial class DataSeeder
         _dbContext.Uploads.Add(attachment);
     }
 
-    /// <summary>The dice rolls of the large Diopside post.</summary>
     private void SeedPostDiceRolls(Post post)
     {
         _dbContext.DiceRolls.AddRange(

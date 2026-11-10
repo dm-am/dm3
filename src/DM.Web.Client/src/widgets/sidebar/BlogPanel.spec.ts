@@ -10,6 +10,8 @@ import BlogPanel from "./BlogPanel.vue";
 import SidebarSectionTitle from "./SidebarSectionTitle.vue";
 import { blogApi, useBlogDetailsStore, type Blog } from "@/entities/blog";
 import { useAuthStore } from "@/entities/user";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import { UserRole, type PremoderationStatus } from "@/shared/api/models/common";
 
 const stubs = {
@@ -18,12 +20,10 @@ const stubs = {
   ConfirmDialog: true,
 };
 
-const blog = {
-  id: "b-1",
+const blog: Blog = {
+  ...createMockBlog("b-1", "Дневник приключенца"),
   publicId: "aaaab",
-  title: "Дневник приключенца",
-  status: "Active",
-  author: { id: "u-1", username: "Автор" },
+  author: createMockUser("u-1", "Автор"),
   assistants: [],
   unreadPublicationsCount: 6,
   unreadCommentsCount: 0,
@@ -45,7 +45,7 @@ const blog = {
       unreadCommentsCount: 3,
     },
   ],
-} as unknown as Blog;
+};
 
 function mountPanel(
   premoderationStatus?: PremoderationStatus,
@@ -244,7 +244,7 @@ describe("BlogPanel discussion row", () => {
       commentsCount: 0,
       viewer: { canComment: false },
       viewerBlacklisted: true,
-    } as unknown as Blog;
+    };
     await flushPromises();
 
     expect(hasRow(wrapper)).toBe(true);

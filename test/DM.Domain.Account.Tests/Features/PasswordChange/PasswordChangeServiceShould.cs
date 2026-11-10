@@ -227,7 +227,6 @@ public class PasswordChangeServiceShould : UnitTestBase
         result.Should().BeNull();
     }
 
-    /// <summary>A signed-in reader whose stored password is the hash "hash" with the salt "salt".</summary>
     private void SignIn(Guid userId)
     {
         var identity = Identities.User(userId, "testuser");

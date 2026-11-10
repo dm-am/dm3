@@ -76,7 +76,6 @@ public static class RemovedAccount
     private static string Fold(string value) =>
         value.ToLowerInvariant().Replace(DottedE, 'е');
 
-    /// <summary>The lower-case "е" with two dots, U+0451.</summary>
     private const char DottedE = (char)0x0451;
 
     private static string Skeleton(string value)

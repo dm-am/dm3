@@ -5,16 +5,15 @@
 // The last activity of a topic on the Topics tab, dated as the forum's table
 // dates it: by its last comment, or by its opening when nobody answered.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { useAuthStore } from "@/entities/user";
 import ProfileTopicsList from "./ProfileTopicsList.vue";
 
-const { mockGetAllTopics, routeQuery } = vi.hoisted(() => ({
+const { mockGetAllTopics } = vi.hoisted(() => ({
   mockGetAllTopics: vi.fn(),
-  /** The query of the address; empty but where a test sorts the listing. */
-  routeQuery: {} as Record<string, string>,
 }));
 
 vi.mock("@/entities/forum/api/forumApi", () => ({
@@ -24,12 +23,6 @@ vi.mock("@/entities/forum/api/forumApi", () => ({
     getBoards: vi.fn(),
     getNews: vi.fn(),
   },
-}));
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: { username: "author" }, query: routeQuery }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  RouterLink: { template: "<a><slot /></a>" },
 }));
 
 const topic = (id: string, number: number) => ({
@@ -65,19 +58,29 @@ afterEach(() => {
   mounted = null;
 });
 
-async function mountList() {
+/** The tab at the address of the profile, narrowed by `query` as a reader's filter would. */
+async function mountList(query: Record<string, string> = {}) {
   const pinia = createPinia();
   setActivePinia(pinia);
-  const wrapper = mount(ProfileTopicsList, {
+  const search = new URLSearchParams(query).toString();
+  const address = search ? `/users/author?${search}` : "/users/author";
+  const { wrapper } = await mountPage(ProfileTopicsList, address, {
+    routes: [
+      ["profile", "/users/:username"],
+      ["forum", "/forum/:alias"],
+      ["topic", "/forum/:alias/:number"],
+    ],
+    pinia,
     props: { username: "author" },
-    shallow: true,
-    global: {
-      plugins: [pinia],
-      stubs: {
-        RouterLink: { props: ["to"], template: `<a :href="to"><slot /></a>` },
-        Tooltip: { template: `<div><slot /></div>` },
-        DataTable: false,
-      },
+    stubs: {
+      Tooltip: { template: `<div><slot /></div>` },
+      TopicsFilter: true,
+      ErrorState: true,
+      Paging: true,
+      SvgIcon: true,
+      HumanDate: true,
+      UserLink: true,
+      RemovedAccountLink: true,
     },
   });
   mounted = wrapper;
@@ -123,6 +126,13 @@ describe("ProfileTopicsList last activity", () => {
       cell(wrapper, ANSWERED.title).get("human-date-stub").attributes("date"),
     ).toBe(ANSWERED.lastComment.createdUtc);
   });
+  it("leads the board cell to the board of the topic", async () => {
+    const wrapper = await mountList();
+
+    const link = wrapper.get("tr.table-row td.col-board a.board-link");
+    expect(link.attributes("href")).toBe("/forum/main");
+  });
+
   // Who was last stands before the date, as in the forum's table of topics.
   it("names who wrote last, and who opened a topic nobody answered", async () => {
     const wrapper = await mountList();
@@ -160,16 +170,8 @@ describe("ProfileTopicsList sorted column", () => {
     });
   });
 
-  afterEach(() => {
-    for (const key of Object.keys(routeQuery))
-      Reflect.deleteProperty(routeQuery, key);
-  });
-
   /** The tab, its table drawn for real, sorted as `query` says. */
-  async function sortedBy(query: Record<string, string> = {}) {
-    Object.assign(routeQuery, query);
-    return mountList();
-  }
+  const sortedBy = (query: Record<string, string> = {}) => mountList(query);
 
   /** The labels of the headers of the table. */
   const standing = (wrapper: VueWrapper) =>

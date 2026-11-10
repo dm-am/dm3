@@ -11,7 +11,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import ProfilePersonalInfo from "./ProfilePersonalInfo.vue";
 import { DateInput } from "@/shared/ui/DatePicker";
-import type { User } from "@/shared/api/models/community";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
@@ -27,7 +27,7 @@ afterEach(() => {
 const mountInfo = (own: Record<string, unknown> = {}) =>
   mount(ProfilePersonalInfo, {
     props: {
-      user: { username: "Reader", contacts: [] } as unknown as User,
+      user: { ...createMockUser("u-reader", "Reader"), contacts: [] },
       isEditMode: true,
       own: { visibility: { showBirthday: false }, ...own } as never,
     },

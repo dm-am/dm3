@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import Paging from "./Paging.vue";
 import {
   PAGES_FEWEST,
@@ -12,13 +13,6 @@ import {
   pageWindow,
 } from "./pageWindow";
 import { scrollBlockIntoView, scrollContentToTop } from "@/shared/lib/scroll";
-
-// Mock vue-router
-vi.mock("vue-router", () => ({
-  useRoute: () => ({
-    query: {},
-  }),
-}));
 
 // Mock the scroll helpers so click behavior can be asserted
 vi.mock("@/shared/lib/scroll", () => ({
@@ -46,61 +40,51 @@ describe("Paging", () => {
     params: { id: "123" },
   };
 
-  const mountPaging = (props = {}) => {
-    return mount(Paging, {
+  /** The strip on the list of record 123, at its first page. */
+  const mountPaging = async (props = {}) => {
+    const { wrapper } = await mountPage(Paging, "/test/123", {
+      routes: [["test-route", "/test/:id"]],
       props: {
         paging: defaultPaging,
         to: defaultTo,
         useQuery: true,
         ...props,
       },
-      global: {
-        stubs: {
-          RouterLink: RouterLinkStub,
-          Tooltip: TooltipStub,
-        },
-      },
+      stubs: { Tooltip: TooltipStub },
     });
+    return wrapper;
   };
 
-  // ============================================================================
-  // BASIC RENDERING
-  // ============================================================================
-
   describe("Basic Rendering", () => {
-    it("renders when pages > 1", () => {
-      const wrapper = mountPaging();
+    it("renders when pages > 1", async () => {
+      const wrapper = await mountPaging();
       expect(wrapper.find(".paging").exists()).toBe(true);
     });
 
-    it("does not render when pages <= 1", () => {
-      const wrapper = mountPaging({
+    it("does not render when pages <= 1", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 1 },
       });
       expect(wrapper.find(".paging").exists()).toBe(false);
     });
 
-    it("renders page numbers", () => {
-      const wrapper = mountPaging();
+    it("renders page numbers", async () => {
+      const wrapper = await mountPaging();
       const pageLinks = wrapper.findAll(".page-number");
       expect(pageLinks.length).toBeGreaterThan(0);
     });
 
-    it("highlights current page as active", () => {
-      const wrapper = mountPaging();
+    it("highlights current page as active", async () => {
+      const wrapper = await mountPaging();
       const activeLink = wrapper.find(".page-number.active");
       expect(activeLink.exists()).toBe(true);
       expect(activeLink.text()).toBe("5");
     });
   });
 
-  // ============================================================================
-  // NAVIGATION BUTTONS
-  // ============================================================================
-
   describe("Navigation Buttons", () => {
-    it("shows first page button (<<) when not near start", () => {
-      const wrapper = mountPaging({
+    it("shows first page button (<<) when not near start", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 20, current: 15 },
       });
       const navButtons = wrapper.findAll(".nav-button");
@@ -108,8 +92,8 @@ describe("Paging", () => {
       expect(firstButton).toBeDefined();
     });
 
-    it("shows last page button (>>) when not near end", () => {
-      const wrapper = mountPaging({
+    it("shows last page button (>>) when not near end", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 20, current: 5 },
       });
       const navButtons = wrapper.findAll(".nav-button");
@@ -117,8 +101,8 @@ describe("Paging", () => {
       expect(lastButton).toBeDefined();
     });
 
-    it("shows ellipsis (...) for navigation jumps", () => {
-      const wrapper = mountPaging({
+    it("shows ellipsis (...) for navigation jumps", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 20, current: 10 },
       });
       const navButtons = wrapper.findAll(".nav-button");
@@ -126,18 +110,14 @@ describe("Paging", () => {
       expect(ellipsisButtons.length).toBeGreaterThan(0);
     });
 
-    it("hides << and >> when total pages <= 10", () => {
-      const wrapper = mountPaging({
+    it("hides << and >> when total pages <= 10", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 8, current: 4 },
       });
       const navButtons = wrapper.findAll(".nav-button");
       expect(navButtons.length).toBe(0);
     });
   });
-
-  // ============================================================================
-  // ACCESSIBLE NAMES
-  // ============================================================================
 
   /**
    * The strip is punctuation and bare numbers: "<<", "...", ">>", "17". A
@@ -153,25 +133,25 @@ describe("Paging", () => {
       mountPaging({ paging: { ...defaultPaging, pages: 40, current: 20 } });
 
     /** What a reader announces: the label wins over the content. */
-    const announced = (selector: string): string[] =>
-      wide()
+    const announced = async (selector: string): Promise<string[]> =>
+      (await wide())
         .findAll(selector)
         .map((link) => link.attributes("aria-label") ?? link.text());
 
-    it("names every link in the strip", () => {
-      const names = announced("a");
+    it("names every link in the strip", async () => {
+      const names = await announced("a");
       expect(names.length).toBe(14);
       for (const name of names) expect(name).toMatch(/[\p{L}\p{N}]/u);
     });
 
-    it("names a page link by its page", () => {
-      expect(announced(".page-number")).toEqual(
+    it("names a page link by its page", async () => {
+      expect(await announced(".page-number")).toEqual(
         Array.from({ length: 10 }, (_, i) => `Страница ${16 + i}`),
       );
     });
 
-    it("names a jump link by where it goes", () => {
-      expect(announced(".nav-button")).toEqual([
+    it("names a jump link by where it goes", async () => {
+      expect(await announced(".nav-button")).toEqual([
         "Первая страница",
         "Назад",
         "Вперед",
@@ -180,21 +160,17 @@ describe("Paging", () => {
     });
   });
 
-  // ============================================================================
-  // PAGE WINDOW CALCULATION
-  // ============================================================================
-
   describe("Page Window", () => {
-    it("shows all pages when total <= 10", () => {
-      const wrapper = mountPaging({
+    it("shows all pages when total <= 10", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 8, current: 4 },
       });
       const pageLinks = wrapper.findAll(".page-number");
       expect(pageLinks.length).toBe(8);
     });
 
-    it("shows pages 1-10 when near start", () => {
-      const wrapper = mountPaging({
+    it("shows pages 1-10 when near start", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 20, current: 3 },
       });
       const pageLinks = wrapper.findAll(".page-number");
@@ -202,8 +178,8 @@ describe("Paging", () => {
       expect(pageLinks[pageLinks.length - 1].text()).toBe("10");
     });
 
-    it("shows last 10 pages when near end", () => {
-      const wrapper = mountPaging({
+    it("shows last 10 pages when near end", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 20, current: 18 },
       });
       const pageLinks = wrapper.findAll(".page-number");
@@ -211,8 +187,8 @@ describe("Paging", () => {
       expect(pageLinks[pageLinks.length - 1].text()).toBe("20");
     });
 
-    it("centers window around current page in middle", () => {
-      const wrapper = mountPaging({
+    it("centers window around current page in middle", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 20, current: 10 },
       });
       const pageLinks = wrapper.findAll(".page-number");
@@ -222,20 +198,15 @@ describe("Paging", () => {
     });
   });
 
-  // ============================================================================
-  // QUERY-BASED PAGINATION
-  // ============================================================================
-
   describe("Query-based Pagination", () => {
-    it("defaults queryKey to 'number'", () => {
-      const wrapper = mountPaging({ useQuery: true });
-      expect(wrapper.props("queryKey")).toBe("number");
+    it("defaults queryKey to 'number'", async () => {
+      const wrapper = await mountPaging({ useQuery: true });
+      expect(wrapper.findComponent(Paging).props("queryKey")).toBe("number");
+      expect(wrapper.get("[aria-label='Страница 6']").attributes("href")).toBe(
+        "/test/123?number=6",
+      );
     });
   });
-
-  // ============================================================================
-  // OPTIMISTIC UPDATE
-  // ============================================================================
 
   describe("Optimistic Update", () => {
     beforeEach(() => {
@@ -244,7 +215,7 @@ describe("Paging", () => {
     });
 
     it("updates current page immediately on click", async () => {
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, current: 1 },
       });
 
@@ -257,7 +228,7 @@ describe("Paging", () => {
     });
 
     it("scrolls the content to top when no scroll anchor is set", async () => {
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, current: 1 },
       });
 
@@ -269,7 +240,7 @@ describe("Paging", () => {
 
     it("scrolls the anchored block into view when scrollAnchor is set", async () => {
       const anchorEl = document.createElement("div");
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, current: 1 },
         scrollAnchor: () => anchorEl,
       });
@@ -281,7 +252,7 @@ describe("Paging", () => {
     });
 
     it("falls back to content top when the anchor getter returns null", async () => {
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, current: 1 },
         scrollAnchor: () => null,
       });
@@ -293,20 +264,16 @@ describe("Paging", () => {
     });
   });
 
-  // ============================================================================
-  // EDGE CASES
-  // ============================================================================
-
   describe("Edge Cases", () => {
-    it("handles zero pages", () => {
-      const wrapper = mountPaging({
+    it("handles zero pages", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 0, current: 0 },
       });
       expect(wrapper.find(".paging").exists()).toBe(false);
     });
 
-    it("handles large page numbers", () => {
-      const wrapper = mountPaging({
+    it("handles large page numbers", async () => {
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 1000, current: 500 },
       });
       expect(wrapper.find(".paging").exists()).toBe(true);
@@ -314,9 +281,6 @@ describe("Paging", () => {
       expect(pageLinks.length).toBe(10);
     });
   });
-  // ============================================================================
-  // FITTING THE LINE
-  // ============================================================================
 
   /**
    * One line at any width, with the dots: what does not fit is the numbers.
@@ -373,16 +337,16 @@ describe("Paging", () => {
       vi.unstubAllGlobals();
     });
 
-    const numbers = (wrapper: ReturnType<typeof mountPaging>) =>
+    const numbers = (wrapper: Awaited<ReturnType<typeof mountPaging>>) =>
       wrapper.findAll(".page-number").map((link) => Number(link.text()));
 
-    const strip = (wrapper: ReturnType<typeof mountPaging>) =>
+    const strip = (wrapper: Awaited<ReturnType<typeof mountPaging>>) =>
       wrapper.text().replace(/\s+/g, " ").trim();
 
     it("gives up numbers and keeps the dots and the jumps on a short line", async () => {
       // A label of 150 is 24, the four jumps 80: 210 holds five numbers.
       room = 210;
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 150, current: 120 },
       });
       await flushPromises();
@@ -392,7 +356,7 @@ describe("Paging", () => {
 
     it("shows ten where the line holds ten", async () => {
       room = 400;
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 150, current: 120 },
       });
       await flushPromises();
@@ -403,7 +367,7 @@ describe("Paging", () => {
 
     it("keeps the current page and one to each side however short the line", async () => {
       room = 100;
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 150, current: 120 },
       });
       await flushPromises();
@@ -412,7 +376,7 @@ describe("Paging", () => {
 
     it("measures again when the line changes width", async () => {
       room = 400;
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 150, current: 120 },
       });
       await flushPromises();
@@ -426,7 +390,7 @@ describe("Paging", () => {
     it("shows a short list whole and without jumps when it fits", async () => {
       // Eight one-digit pages take 64 of the 100: no window is needed.
       room = 100;
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 8, current: 1 },
       });
       await flushPromises();
@@ -436,7 +400,7 @@ describe("Paging", () => {
     it("gives a short list that does not fit whole a window and the jumps", async () => {
       // Eight pages at 8 would take 64 of the 60: the window of three comes in.
       room = 60;
-      const wrapper = mountPaging({
+      const wrapper = await mountPaging({
         paging: { ...defaultPaging, pages: 8, current: 1 },
       });
       await flushPromises();
@@ -472,7 +436,7 @@ describe("Paging", () => {
 
       it("shows three pages whole where they fit", async () => {
         room = 326;
-        const wrapper = mountPaging({
+        const wrapper = await mountPaging({
           paging: { ...defaultPaging, pages: 3, current: 1 },
         });
         await flushPromises();
@@ -484,13 +448,13 @@ describe("Paging", () => {
         // A number of 150 is 24 and 24 round it; the jumps 176. 340 holds
         // three, and a fourth would take 368.
         room = 340;
-        const wrapper = mountPaging({
+        const wrapper = await mountPaging({
           paging: { ...defaultPaging, pages: 150, current: 120 },
         });
         await flushPromises();
         expect(numbers(wrapper)).toEqual([119, 120, 121]);
         room = 380;
-        const wider = mountPaging({
+        const wider = await mountPaging({
           paging: { ...defaultPaging, pages: 150, current: 120 },
         });
         await flushPromises();
@@ -502,7 +466,7 @@ describe("Paging", () => {
         // too once the count changes: the strip is fitted again for them and
         // does not stay "1 2 3 ... >>".
         room = 330;
-        const wrapper = mountPaging({
+        const wrapper = await mountPaging({
           paging: { ...defaultPaging, pages: 3, current: 1 },
         });
         await flushPromises();

@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A number the owner of a game typed in is not recalculated behind their back.
-/// </summary>
 /// <remarks>
 /// RecruitmentPcLimit is what a master announces and gates nothing. Searched in the source: the new value
 /// is never derived by subtracting from the old one.
@@ -31,7 +28,6 @@ public class StatedNumbersShould
         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}"))
         .Where(path => !path.Contains($"{Path.DirectorySeparatorChar}Migrations{Path.DirectorySeparatorChar}"));
 
-    /// <summary>An assignment whose right-hand side subtracts from the field itself.</summary>
     private static Regex SelfDecrement(string field) => new(
         $@"{field}\s*=\s*[^;\r\n]*{field}[^;\r\n]*-\s*\d",
         RegexOptions.Compiled);

@@ -9,15 +9,9 @@ using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.Notifications;
 
-/// <summary>
-/// A notification reads the same whichever spelling its bag arrives in.
-/// </summary>
-/// <remarks>
-/// A letter reads GameId from the generator, and whatever reads the stored bag back reads gameId.
-/// </remarks>
+// A letter reads GameId from the generator, and whatever reads the stored bag back reads gameId.
 public class NotificationPayloadSpellingShould
 {
-    /// <summary>A notification about a game, as its generator writes it.</summary>
     private static readonly object Accepted = new
     {
         CharacterName = "Цири",
@@ -27,10 +21,6 @@ public class NotificationPayloadSpellingShould
         CreatedUtc = new DateTimeOffset(2026, 10, 12, 11, 43, 0, TimeSpan.Zero)
     };
 
-    /// <summary>
-    /// Every field a path is built from, so every event with a destination has the
-    /// identifier it needs.
-    /// </summary>
     private static readonly object Identified = new
     {
         GameId = "vedmak-dikaja-ohota~aBcD-1_2",
@@ -99,7 +89,6 @@ public class NotificationPayloadSpellingShould
     private static JsonElement Stored(object written) => JsonSerializer.Deserialize<JsonElement>(
         JsonSerializer.Serialize(written, new JsonSerializerOptions(JsonSerializerDefaults.Web)));
 
-    /// <summary>The fields of a letter in the order it prints them.</summary>
     private static IEnumerable<string> Lines(IEnumerable<KeyValuePair<string, string>> fields) =>
         fields.Select(field => $"{field.Key}: {field.Value}");
 }

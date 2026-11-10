@@ -16,23 +16,23 @@ import { expectRoundTrip } from "@/shared/lib/testing/converterRoundTrip";
  */
 describe("the cost of reading", () => {
   const FORMS: Array<[string, (n: number) => string]> = [
-    ["a name and spaces", (n) => "[img" + " ".repeat(n) + "x"],
-    ["pairs of parameters", (n) => "[img" + ' a="1"'.repeat(n) + " x"],
-    ["openings in a value", (n) => '[img alt="'.repeat(n) + "x"],
-    ["quotes in a row", (n) => '[spoiler text="' + '"'.repeat(n) + " x"],
+    ["a name and spaces", (n) => `[img${" ".repeat(n)}x`],
+    ["pairs of parameters", (n) => `[img${' a="1"'.repeat(n)} x`],
+    ["openings in a value", (n) => `${'[img alt="'.repeat(n)}x`],
+    ["quotes in a row", (n) => `[spoiler text="${'"'.repeat(n)} x`],
     ["hidden blocks never ended", (n) => '[private="a'.repeat(n)],
     ["tags never closed", (n) => "[b]".repeat(n)],
     ["closing tags with nothing open", (n) => "[/b]".repeat(n)],
     [
       "a verbatim block never closed",
-      (n) => "[noparse]" + "[private ".repeat(n),
+      (n) => `[noparse]${"[private ".repeat(n)}`,
     ],
     // Every [noparse] looks ahead for its closing tag, past every "[/" there
     // is: a reader that looked again from each of them would pay the square.
     ["examples never closed", (n) => "[b][noparse][/b]".repeat(n)],
     [
       "closing tags inside a hidden block",
-      (n) => "[b][private]" + "[/b]".repeat(n),
+      (n) => `[b][private]${"[/b]".repeat(n)}`,
     ],
   ];
 
@@ -79,7 +79,7 @@ describe("the cost of reading", () => {
 
   // Deeper than the server takes, the text is shown as typed (TreeMaxDepth).
   it("reads a tree deeper than the server takes as the text it is", () => {
-    const deep = "[b]".repeat(600) + "x" + "[/b]".repeat(600);
+    const deep = `${"[b]".repeat(600)}x${"[/b]".repeat(600)}`;
     expect(bbcodeToHtml(deep)).toBe(`<p>${deep}</p>`);
     expect(validateBBCode(deep).map((issue) => issue.reason)).toEqual([
       "too-deep",

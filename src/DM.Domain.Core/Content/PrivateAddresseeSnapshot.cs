@@ -96,7 +96,6 @@ public static class PrivateAddresseeSnapshot
     /// Names the name at fault, never who holds it now or held it before: a refusal
     /// is not a place to hand out roster facts.
     /// </remarks>
-    /// <param name="attribute">The tag attribute the author wrote.</param>
     public static string DescribeRenameRefusal(string attribute) =>
         $"Имя \"{attribute}\" в скрытом блоке теперь у другого персонажа. " +
         "Напишите нынешнее имя адресата или уберите блок.";
@@ -115,9 +114,6 @@ public static class PrivateAddresseeSnapshot
     /// Resolve every [private=...] block of edited text, keeping what an earlier
     /// save already resolved.
     /// </summary>
-    /// <param name="rawBbCode">Post text as stored after the edit.</param>
-    /// <param name="previousSnapshotJson">Snapshot the post carried before it.</param>
-    /// <param name="addressees">Characters the author could have named.</param>
     /// <returns>Snapshot JSON, <see cref="Empty"/> when nothing resolved.</returns>
     /// <exception cref="HttpException">
     /// The text names somebody the post has already frozen the same name to, and
@@ -267,7 +263,6 @@ public static class PrivateAddresseeSnapshot
     /// of addressees reads as a file marked for nobody, which closes it rather than
     /// opening it.
     /// </remarks>
-    /// <param name="json">The stored mark of the file.</param>
     public static PrivateAddresseeList? ReadList(string? json)
     {
         if (json == null) return null;
@@ -297,19 +292,13 @@ public static class PrivateAddresseeSnapshot
                 .Distinct().ToList());
     }
 
-    /// <summary>One frozen addressee, as the stored snapshot holds it.</summary>
     /// <param name="CharacterId">
     /// Null when the snapshot predates the field. Unknown, not absent: the
     /// entry stands, and every comparison that needs the character stands down.
     /// </param>
     /// <param name="CharacterName">Null for the same reason.</param>
-    /// <param name="OwnerUserId">The reader the block was frozen to.</param>
     private readonly record struct Entry(Guid? CharacterId, string? CharacterName, Guid OwnerUserId);
 
-    /// <summary>
-    /// Refuse the save when the written name resolves today to a character this
-    /// post did not freeze it to.
-    /// </summary>
     /// <remarks>
     /// Only an addition is a refusal. A frozen character the name no longer
     /// reaches — renamed, or gone from the room — is addressee-forever working
@@ -334,9 +323,6 @@ public static class PrivateAddresseeSnapshot
             throw new HttpException(HttpStatusCode.BadRequest, DescribeRenameRefusal(attribute));
     }
 
-    /// <summary>
-    /// Frozen entries with the names their characters go by now.
-    /// </summary>
     private static List<Entry> Refresh(
         IReadOnlyList<Entry> frozen,
         IReadOnlyDictionary<Guid, string> nameByCharacterId) =>
@@ -373,7 +359,7 @@ public static class PrivateAddresseeSnapshot
         return System.Text.Encoding.UTF8.GetString(stream.ToArray());
     }
 
-    /// <summary>The array of addressees, the one shape a block and a file keep them in.</summary>
+    // The array of addressees, the one shape a block and a file keep them in.
     private static void WriteEntries(Utf8JsonWriter writer, IEnumerable<Entry> entries)
     {
         writer.WriteStartArray();
@@ -391,9 +377,7 @@ public static class PrivateAddresseeSnapshot
         writer.WriteEndArray();
     }
 
-    /// <summary>
-    /// Stored entries per tag attribute value. Anything malformed reads as empty.
-    /// </summary>
+    // Anything malformed reads as empty.
     private static Dictionary<string, List<Entry>> ReadEntries(string? json)
     {
         var result = new Dictionary<string, List<Entry>>(StringComparer.Ordinal);
@@ -426,9 +410,6 @@ public static class PrivateAddresseeSnapshot
         }
     }
 
-    /// <summary>
-    /// One stored addressee: an object with the character beside the owner.
-    /// </summary>
     private static Entry? ReadEntry(JsonElement item)
     {
         if (item.ValueKind != JsonValueKind.Object ||
@@ -488,7 +469,6 @@ public static class PrivateAddresseeSnapshot
         return byName;
     }
 
-    /// <summary>Current name of every candidate character, by its id.</summary>
     private static Dictionary<Guid, string> IndexNamesByCharacterId(
         IEnumerable<PrivateAddressee> addressees)
     {

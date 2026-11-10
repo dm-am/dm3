@@ -13,10 +13,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostReviews;
 
-/// <summary>
-/// Reading a review and removing one: a review is only as readable as its post,
-/// and a removal records whose hand it was.
-/// </summary>
 public class PostReviewServiceShould : PostReviewServiceTestBase
 {
     [Fact]
@@ -64,9 +60,7 @@ public class PostReviewServiceShould : PostReviewServiceTestBase
         await repository.DidNotReceive().GetAsync(reviewId);
     }
 
-    /// <summary>
-    /// The route names a post and a review, and the two have to agree.
-    /// </summary>
+    // The route names a post and a review, and the two have to agree.
     [Fact]
     public async Task RefuseAReviewThatBelongsToAnotherPost()
     {
@@ -105,10 +99,8 @@ public class PostReviewServiceShould : PostReviewServiceTestBase
         intentionManager.Received(1).ThrowIfForbidden(PostReviewIntention.Delete, review);
     }
 
-    /// <summary>
-    /// A senior moderator may remove somebody else's review, so the removal has
-    /// to say whose hand it was and when. Written with the flag, in one call.
-    /// </summary>
+    // A senior moderator may remove somebody else's review, so the removal has to say whose hand it
+    // was and when.
     [Fact]
     public async Task RecordWhoRemovedTheReviewAndWhen()
     {
@@ -133,10 +125,8 @@ public class PostReviewServiceShould : PostReviewServiceTestBase
         written.DeletedUtc.Should().NotBeNull();
     }
 
-    /// <summary>
-    /// No window on the author's own delete — the way out after the correction
-    /// window has closed, as with a post and a comment.
-    /// </summary>
+    // No window on the author's own delete — the way out after the correction window has closed, as
+    // with a post and a comment.
     [Fact]
     public async Task LetTheAuthorDeleteLongAfterTheEditWindowClosed()
     {

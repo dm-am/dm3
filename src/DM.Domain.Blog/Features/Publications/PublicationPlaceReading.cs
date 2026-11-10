@@ -6,10 +6,8 @@ using DM.Domain.Core.Authorization;
 
 namespace DM.Domain.Blog.Features.Publications;
 
-/// <summary>
-/// Whether the viewer reads a publication: by the read of the publication
-/// itself, the one its discussion is read through.
-/// </summary>
+// Whether the viewer reads a publication: by the read of the publication itself, the one its
+// discussion is read through.
 internal class PublicationPlaceReading : IPlaceReading
 {
     private readonly IPublicationService _publications;

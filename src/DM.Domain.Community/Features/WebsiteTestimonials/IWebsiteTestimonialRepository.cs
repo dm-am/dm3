@@ -16,9 +16,6 @@ public interface IWebsiteTestimonialRepository
 
     Task<WebsiteTestimonial?> GetByAuthor(Guid authorId);
 
-    /// <summary>
-    /// Create new website testimonial
-    /// </summary>
     /// <remarks>
     /// Throws <see cref="DuplicateEntityException" /> when the author already has
     /// a live testimonial: the caller checks first, and this is the race where two

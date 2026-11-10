@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
-/// <summary>
-/// A like on a topic is on the topic the reader is handed back.
-/// </summary>
 /// <remarks>
 /// The page tells the reader's own like by the list of likers. Over HTTP, as
 /// <see cref="General.CommentLikesShould" /> is: the list is filled in a query.
@@ -51,10 +48,8 @@ public class TopicLikesShould : IntegrationTestBase
         Names(topic).Should().Equal([Liker.Username]);
     }
 
-    /// <summary>
-    /// The client replaces the topic it shows with the answer to an edit, so the
-    /// likes have to be on that answer too.
-    /// </summary>
+    // The client replaces the topic it shows with the answer to an edit, so the likes have to be on
+    // that answer too.
     [Fact]
     public async Task CarryTheLikeOnTheAnswerToAnEdit()
     {
@@ -70,10 +65,6 @@ public class TopicLikesShould : IntegrationTestBase
         Names(document.RootElement.GetProperty("resource")).Should().Equal([Liker.Username]);
     }
 
-    /// <summary>
-    /// The heart the reader filled empties again when he takes the like back: the
-    /// read shows his like while it stands and stops showing it once it is gone.
-    /// </summary>
     [Fact]
     public async Task ShowTheLikeUntilItIsTakenBack()
     {
@@ -89,10 +80,7 @@ public class TopicLikesShould : IntegrationTestBase
         Names((await ReadAsync($"/v1/topics/{topicId}", Liker)).GetProperty("resource")).Should().BeEmpty();
     }
 
-    /// <summary>
-    /// A topic by the test user on the test board. The number is this class's own:
-    /// the board is shared, and a topic number is unique on it.
-    /// </summary>
+    // The number is this class's own: the board is shared, and a topic number is unique on it.
     private async Task<(Guid TopicId, string Marker)> AddTopicAsync(int topicNumber)
     {
         var topicId = Guid.NewGuid();

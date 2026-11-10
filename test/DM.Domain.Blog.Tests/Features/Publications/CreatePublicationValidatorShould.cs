@@ -104,12 +104,8 @@ public class CreatePublicationValidatorShould
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// Hiding markup on a surface that does not declare it.
-    /// </summary>
-    /// <remarks>
-    /// Refused rather than erased: a paragraph that vanished without a word is looked for, not rewritten.
-    /// </remarks>
+    // Refused rather than erased: a paragraph that vanished without a word is looked for, not
+    // rewritten.
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {

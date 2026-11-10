@@ -7,9 +7,6 @@ using static DM.Architecture.Tests.ClientCopies;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The pencil is offered for as long as the server lets the author edit.
-/// </summary>
 /// <remarks>
 /// The answers carry no "may edit" of their own, so the client counts the window on its clock
 /// with a copy of the number, read out of its source here.

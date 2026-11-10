@@ -20,14 +20,8 @@ public enum SecurityEventType
     /// </summary>
     Logout = 3,
 
-    /// <summary>
-    /// Password was changed
-    /// </summary>
     PasswordChange = 4,
 
-    /// <summary>
-    /// Email was changed
-    /// </summary>
     EmailChange = 5,
 
     /// <summary>

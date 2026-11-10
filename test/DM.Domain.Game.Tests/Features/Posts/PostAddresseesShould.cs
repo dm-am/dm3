@@ -11,15 +11,9 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
-/// <summary>
-/// The addressees of the [private] blocks of a post: resolved against the room
-/// when the post is written, and frozen across its edits.
-/// </summary>
 public class PostAddresseesShould : PostServiceTestBase
 {
-    /// <summary>
-    /// The addressee rule of BBCODE_RENDERING.md reads a field only the save path fills.
-    /// </summary>
+    // The addressee rule of BBCODE_RENDERING.md reads a field only the save path fills.
     [Fact]
     public async Task ResolvePrivateAddresseesOfANewPost()
     {
@@ -65,11 +59,9 @@ public class PostAddresseesShould : PostServiceTestBase
         written!.PrivateAddresseeSnapshotJson.Should().Be(PrivateAddresseeSnapshot.Empty);
     }
 
-    /// <summary>
-    /// Addressee-forever survives an edit: a block resolved by the first save
-    /// keeps its owner even after the character loses access to the room, while
-    /// a block the edit introduced resolves against the roster it is saved with.
-    /// </summary>
+    // Addressee-forever survives an edit: a block resolved by the first save keeps its owner even
+    // after the character loses access to the room, while a block the edit introduced resolves
+    // against the roster it is saved with.
     [Fact]
     public async Task FreezeResolvedAddresseesAcrossAnEdit()
     {
@@ -108,11 +100,8 @@ public class PostAddresseesShould : PostServiceTestBase
         snapshot.Should().ContainKey("Борис").WhoseValue.Should().BeEquivalentTo(new[] { borisOwner });
     }
 
-    /// <summary>
-    /// An edit whose [private] name has changed hands since the post was saved
-    /// is refused before anything is written: which character the author meant
-    /// is not readable off the text.
-    /// </summary>
+    // An edit whose [private] name has changed hands since the post was saved is refused before
+    // anything is written: which character the author meant is not readable off the text.
     [Fact]
     public async Task RefuseAnEditWhosePrivateNameNowMeansAnotherCharacter()
     {

@@ -95,10 +95,6 @@ public static class DateRangeFilters
     /// </summary>
     private static bool CanExtendToNextDay(DateTimeOffset to) => to.DateTime <= DateTime.MaxValue.AddDays(-1);
 
-    /// <summary>
-    /// Substitute the predicate parameter with the property body to keep
-    /// call sites free of hand-written expression trees
-    /// </summary>
     private static Expression<Func<T, bool>> Compose<T, TValue>(
         Expression<Func<T, TValue>> property,
         Expression<Func<TValue, bool>> predicate)

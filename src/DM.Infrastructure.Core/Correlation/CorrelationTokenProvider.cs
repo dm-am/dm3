@@ -4,9 +4,6 @@ using Serilog.Context;
 
 namespace DM.Infrastructure.Core.Correlation;
 
-/// <summary>
-/// Correlation token storage
-/// </summary>
 internal class CorrelationTokenProvider : ICorrelationTokenProvider, ICorrelationTokenSetter
 {
     private Lazy<Guid> _token;

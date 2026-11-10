@@ -21,7 +21,6 @@ public static class ProbeContext
         return context.GetService<IDesignTimeModel>().Model;
     }
 
-    /// <summary>The rows the model seeds into the table of the entity.</summary>
     public static IReadOnlyCollection<IDictionary<string, object?>> SeedRows<TEntity>() =>
         DesignTimeModel().FindEntityType(typeof(TEntity))!.GetSeedData().ToList();
 }

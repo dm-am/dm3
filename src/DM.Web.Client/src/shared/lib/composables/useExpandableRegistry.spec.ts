@@ -84,7 +84,7 @@ describe("useExpandableRegistry", () => {
       const origExpand = h.expand.bind(h);
       h.expand = () => {
         origExpand();
-        notifyExpandableChanged(); // This used to kill pendingAction mid-loop
+        notifyExpandableChanged();
       };
       handles.push(h);
       registerExpandable(h);

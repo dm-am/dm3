@@ -8,10 +8,8 @@ using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The search of a discussion reads "%" and "_" as themselves, as every other
-/// search of the site does. One query serves all four discussions.
-/// </summary>
+// The search of a discussion reads "%" and "_" as themselves, as every other search of the site
+// does.
 public class CommentSearchShould : IntegrationTestBase
 {
     public CommentSearchShould(DatabaseFixture databaseFixture) : base(databaseFixture)

@@ -5,10 +5,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The personal module of the model: the blacklist of a user, the notes a user
-/// keeps on others, notepads and notifications.
-/// </summary>
 internal static class PersonalModel
 {
     internal static void Configure(ModelBuilder modelBuilder, bool isPostgres)

@@ -16,13 +16,7 @@ using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Messaging;
 
-/// <summary>
-/// Editing a message leaves a trace.
-/// </summary>
-/// <remarks>
-/// A warning on a global chat message reads from this history whether the author rewrote it. Re-sending the
-/// held text, or a write naming no editor, leaves the history alone.
-/// </remarks>
+// A warning on a global chat message reads from this history whether the author rewrote it.
 public class MessageEditRecordShould : UnitTestBase
 {
     private static readonly DateTimeOffset Created = new(2026, 5, 2, 10, 0, 0, TimeSpan.Zero);

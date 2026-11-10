@@ -8,9 +8,7 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests.Comments;
 
-/// <summary>
-/// A discussion that is not there to the reader answers as the comment not being there.
-/// </summary>
+// A discussion that is not there to the reader answers as the comment not being there.
 public class DiscussionRefusalShould
 {
     private readonly Guid commentId = Guid.NewGuid();

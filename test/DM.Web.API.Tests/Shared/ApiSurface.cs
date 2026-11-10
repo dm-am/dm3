@@ -7,10 +7,7 @@ using Microsoft.AspNetCore.Mvc.Routing;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// The actions the host exposes, asked of the assembly rather than listed.
-/// </summary>
-/// <remarks>One spelling, so a controller shape none of the rules expected is missed by all of them at once.</remarks>
+// One spelling, so a controller shape none of the rules expected is missed by all of them at once.
 internal static class ApiSurface
 {
     /// <summary>
@@ -20,7 +17,6 @@ internal static class ApiSurface
     public const BindingFlags ActionBinding =
         BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly;
 
-    /// <summary>The verbs that write.</summary>
     public static readonly Type[] MutatingAttributes =
     [
         typeof(HttpPostAttribute),
@@ -29,24 +25,19 @@ internal static class ApiSurface
         typeof(HttpDeleteAttribute),
     ];
 
-    /// <summary>Every controller the host can route to.</summary>
     public static IEnumerable<Type> Controllers() => typeof(Startup).Assembly
         .GetTypes()
         .Where(type => type.IsClass && !type.IsAbstract && typeof(ControllerBase).IsAssignableFrom(type));
 
-    /// <summary>Every method a controller declares.</summary>
     public static IEnumerable<MethodInfo> Actions() => Controllers()
         .SelectMany(controller => controller.GetMethods(ActionBinding));
 
-    /// <summary>Every action that answers a verb.</summary>
     public static IEnumerable<MethodInfo> RoutedActions() => Actions()
         .Where(action => action.GetCustomAttributes<HttpMethodAttribute>().Any());
 
-    /// <summary>Every action that writes.</summary>
     public static IEnumerable<MethodInfo> MutatingActions() => Actions()
         .Where(action => action.GetCustomAttributes()
             .Any(attribute => MutatingAttributes.Contains(attribute.GetType())));
 
-    /// <summary>An action under the name the rules of this tier report it by.</summary>
     public static string Named(MethodInfo action) => $"{action.DeclaringType!.Name}.{action.Name}";
 }

@@ -18,10 +18,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Tools.Seeder.Seeding;
 
-/// <summary>
-/// Development data seeder. Writes straight to the stores: it sets the timestamps, counters and
-/// ratings the domain services derive and would refuse.
-/// </summary>
+// Writes straight to the stores: it sets the timestamps, counters and ratings the domain services
+// derive and would refuse.
 internal sealed partial class DataSeeder
 {
     private readonly DmDbContext _dbContext;
@@ -36,27 +34,16 @@ internal sealed partial class DataSeeder
     private readonly CdnConfiguration _cdnConfig;
     private readonly ISymmetricCryptoService _cryptoService;
 
-    /// <summary>The account the stand is looked at through.</summary>
     private const string PrimaryLogin = "SolohinLex";
 
-    /// <summary>The password of every development account.</summary>
     private const string TestPassword = "Test123!";
 
-    /// <summary>
-    /// The only source of randomness in the seed, and a seeded one.
-    /// See <see cref="SeedDeterminism.Random"/>.
-    /// </summary>
+    // The only source of randomness in the seed, and a seeded one.
     private readonly Random _random;
 
-    /// <summary>
-    /// The instant every seeded timestamp is offset from.
-    /// See <see cref="SeedDeterminism.Epoch"/>.
-    /// </summary>
+    // The instant every seeded timestamp is offset from.
     private readonly DateTimeOffset _now;
 
-    /// <summary>
-    /// Creates a new instance of <see cref="DataSeeder"/>
-    /// </summary>
     public DataSeeder(
         DmDbContext dbContext,
         ISecurityManager securityManager,
@@ -86,29 +73,22 @@ internal sealed partial class DataSeeder
         _now = determinism.Epoch;
     }
 
-    /// <summary>
-    /// Start of the window the site means by "за неделю": seven days back.
-    /// </summary>
     /// <remarks>
     /// The homepage block filters by this boundary (getWeekStartUtc): the showcase post lands inside, coverage
     /// stays out. Rolling, not the calendar Monday, which empties the block once the seed is a week old.
     /// </remarks>
     private static DateTimeOffset WeekStartUtc(DateTimeOffset moment) => moment.AddDays(-7);
 
-    /// <summary>
-    /// A fixed identifier, number within series: drawn from the factory, it would move every identifier drawn after it.
-    /// </summary>
+    // A fixed identifier, number within series: drawn from the factory, it would move every
+    // identifier drawn after it.
     private static Guid FixedGuid(int series, int number) => new($"00000000-0000-0000-{series:x4}-{number:x12}");
 
     /// <summary>
-    /// Seed the content set: forum topics and comments, games, characters, posts,
-    /// blogs, publications, chat messages, reviews, polls and ratings.
     /// Requires the base users, so run <see cref="SeedTestUsers"/> first.
     /// </summary>
     /// <remarks>
     /// The order of the stages is part of the fixture: SeedDeterminism pins every row to the order of draws.
     /// </remarks>
-    /// <returns>Per-aggregate creation counts</returns>
     public async Task<ComprehensiveSeedResult> SeedComprehensiveData()
     {
         var result = new ComprehensiveSeedResult();
@@ -150,11 +130,6 @@ internal sealed partial class DataSeeder
         return result;
     }
 
-    /// <summary>
-    /// The content the rest of the run reads: profiles, the forum, the games,
-    /// the blogs and the chats.
-    /// </summary>
-    /// <returns>The games of the seed, for the reviews to name.</returns>
     private async Task<List<Guid>> SeedContent(List<DbUser> users, ComprehensiveSeedResult result)
     {
         await UpdateUserProfiles(users, result);
@@ -177,10 +152,6 @@ internal sealed partial class DataSeeder
         return gameIds;
     }
 
-    /// <summary>
-    /// What readers leave on the content: reviews, subscriptions, polls,
-    /// likes and post reviews, then the boards and the scores read from them.
-    /// </summary>
     private async Task SeedReviewsAndLikes(
         List<DbUser> users, List<Guid> gameIds, ComprehensiveSeedResult result)
     {
@@ -205,11 +176,6 @@ internal sealed partial class DataSeeder
         await UpdatePopularityScores(result);
     }
 
-    /// <summary>
-    /// The primary account of the stand: its profile, the ratings recomputed
-    /// from what the run wrote, the achievements, the bans, the drops and the
-    /// characters of the profile games table.
-    /// </summary>
     private async Task SeedSolohinLex(List<DbUser> users, ComprehensiveSeedResult result)
     {
         await SetupSolohinLexProfile(users, result);
@@ -231,7 +197,6 @@ internal sealed partial class DataSeeder
         await SeedSolohinLexPlayerCharacters(users, result);
     }
 
-    /// <summary>The tickets and the warnings the moderation pages are read against.</summary>
     private async Task SeedModeration(List<DbUser> users, ComprehensiveSeedResult result)
     {
         await SeedTickets(users, result);
@@ -239,7 +204,6 @@ internal sealed partial class DataSeeder
         await SeedWarnings(users, result);
     }
 
-    /// <summary>The removed account, and after everything else the notifications.</summary>
     private async Task SeedRemovedAccountAndNotifications(
         List<DbUser> users, ComprehensiveSeedResult result)
     {

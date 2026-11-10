@@ -5,6 +5,7 @@ import { SvgIcon } from "@/shared/ui/Icon";
 import { useMenuKeyboard } from "@/shared/lib/composables/useMenuKeyboard";
 import type { SortButtonProps } from "../types";
 import { useKeepInWindow } from "./useKeepInWindow";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 const props = defineProps<SortButtonProps>();
 
@@ -15,9 +16,9 @@ const emit = defineEmits<{
    * separate direction event while still reading their pre-click direction, and
    * undo the field event they had just been given.
    */
-  "sort-select": [sortBy: string, sortOrder?: "asc" | "desc"];
+  "sort-select": [sortBy: string, sortOrder?: SortDirection];
   /** Flipping the direction is its own action, so it stays its own event. */
-  "update:sortOrder": [value: "asc" | "desc"];
+  "update:sortOrder": [value: SortDirection];
 }>();
 
 const showDropdown = ref(false);

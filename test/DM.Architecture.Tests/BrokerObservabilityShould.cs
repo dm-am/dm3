@@ -5,9 +5,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The state of the bus is measured, not inferred from the processes on it.
-/// </summary>
 /// <remarks>
 /// A worker that stopped consuming looks the same as an idle one from its process, so the broker
 /// is scraped. Asserted on the configuration files, which live outside the solution.
@@ -22,9 +19,6 @@ public class BrokerObservabilityShould
     private const string Dashboard = "docker/grafana/dashboards/dm-consumers.json";
     private const string PushConsumer = "src/DM.Web.API/Realtime/RealtimeNotificationConsumer.cs";
 
-    /// <summary>
-    /// A trace does not end at the broker.
-    /// </summary>
     /// <remarks>
     /// Without the subscriptions to the client's activity sources every consumer trace is a root.
     /// Asserted on the composition: the test host removes the consumer.
@@ -42,7 +36,6 @@ public class BrokerObservabilityShould
             "that sent the message is a separate trace nobody can reach from it");
     }
 
-    /// <summary>Port the metrics plugin answers on.</summary>
     private const string MetricsPort = "15692";
 
     [Fact]
@@ -79,9 +72,6 @@ public class BrokerObservabilityShould
             "one from every metric the worker publishes about itself");
     }
 
-    /// <summary>
-    /// The queue realtime push is delivered over is a queue too.
-    /// </summary>
     /// <remarks>
     /// Matched as a prefix, read out of the consumer: the broker appends a suffix per subscription,
     /// so an exact matcher selects no series. Backslashes are dropped before the search.
@@ -100,8 +90,7 @@ public class BrokerObservabilityShould
             "healthy or broken, which reads as coverage and is silence");
     }
 
-    /// <summary>The queue the API subscribes to, as its consumer declares it.</summary>
-    /// <remarks>Read from the constant: the consumer passes the name by it.</remarks>
+    // Read from the constant: the consumer passes the name by it.
     private static string PushQueueName()
     {
         var declaration = Regex.Match(RepositoryFiles.Read(PushConsumer),

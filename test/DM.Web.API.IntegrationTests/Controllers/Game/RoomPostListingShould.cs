@@ -37,9 +37,8 @@ public class RoomPostListingShould : IntegrationTestBase
         public Guid RoomId => Seeded.RoomId;
     }
 
-    /// <summary>
-    /// A post keeps its place in the room on every view; the removed post between #3 and #4 tells numbering from counting.
-    /// </summary>
+    // A post keeps its place in the room on every view; the removed post between #3 and #4 tells
+    // numbering from counting.
     [Fact]
     public async Task NumberEveryPostByItsPlaceInTheRoomWhateverTheView()
     {
@@ -117,9 +116,7 @@ public class RoomPostListingShould : IntegrationTestBase
         narrowed.Total.Should().Be(1);
     }
 
-    /// <summary>
-    /// The review orders, ties closed on the writing order in the same direction.
-    /// </summary>
+    // The review orders, ties closed on the writing order in the same direction.
     [Fact]
     public async Task SortTheRoomByReviewCountAndByTheLatestReview()
     {
@@ -151,10 +148,8 @@ public class RoomPostListingShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// Filters do not open a room: a private room stays absent to whoever it is not
-    /// open to, filtered or not.
-    /// </summary>
+    // Filters do not open a room: a private room stays absent to whoever it is not open to,
+    // filtered or not.
     [Fact]
     public async Task KeepAPrivateRoomClosedToAFilteredRead()
     {
@@ -167,10 +162,8 @@ public class RoomPostListingShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// The number travels on the single-post reads and on the answer to an edit,
-    /// which is what the client puts back into the page it shows.
-    /// </summary>
+    // The number travels on the single-post reads and on the answer to an edit, which is what the
+    // client puts back into the page it shows.
     [Fact]
     public async Task NumberTheSinglePostAndTheEditedPost()
     {

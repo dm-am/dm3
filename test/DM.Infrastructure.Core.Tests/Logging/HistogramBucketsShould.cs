@@ -29,7 +29,7 @@ public class HistogramBucketsShould
     private static readonly double[] UploadSeconds =
         [0.005, 0.01, 0.025, 0.05, 0.075, 0.1, 0.25, 0.5, 0.75, 1, 2.5, 5, 7.5, 10];
 
-    /// <summary>The top boundary is the size the upload endpoint refuses above.</summary>
+    // The top boundary is the size the upload endpoint refuses above.
     private static readonly double[] Bytes = [1024, 4096, 16384, 65536, 262144, 1048576, 4194304, 10485760];
 
     [Fact]
@@ -50,10 +50,6 @@ public class HistogramBucketsShould
             .WhoseValue.Should().Equal(Bytes);
     }
 
-    /// <summary>
-    /// The finite boundaries of every histogram the host's meter provider exports,
-    /// by instrument name.
-    /// </summary>
     private static async Task<IReadOnlyDictionary<string, double[]>> ExportedBoundaries()
     {
         var capture = new BoundaryCapture();
@@ -101,7 +97,6 @@ public class HistogramBucketsShould
     private static IHostEnvironment Environment() =>
         new HostingEnvironment { EnvironmentName = Environments.Production };
 
-    /// <summary>An exporter that keeps the bucket boundaries of what it is handed.</summary>
     private sealed class BoundaryCapture : BaseExporter<Metric>
     {
         public Dictionary<string, double[]> Boundaries { get; } = new();

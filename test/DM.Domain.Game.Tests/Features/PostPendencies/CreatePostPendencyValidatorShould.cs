@@ -7,10 +7,8 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostPendencies;
 
-/// <summary>
-/// A pendency names a room and a character, and nothing else: the one who
-/// waits and the one waited for are not the caller's to say.
-/// </summary>
+// A pendency names a room and a character, and nothing else: the one who waits and the one waited
+// for are not the caller's to say.
 public class CreatePostPendencyValidatorShould
 {
     private readonly CreatePostPendencyValidator validator = new();

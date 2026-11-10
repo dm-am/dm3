@@ -54,7 +54,6 @@ const props = withDefaults(
     resizable?: boolean;
     isModerator?: boolean;
     maxLength?: number;
-    showCharCount?: boolean;
   }>(),
   {
     context: "common",
@@ -67,7 +66,6 @@ const props = withDefaults(
     resizable: true,
     isModerator: false,
     maxLength: 0, // 0 = no limit
-    showCharCount: true,
   },
 );
 
@@ -383,7 +381,6 @@ defineExpose({
 
     <!-- Outside the resizable area. -->
     <EditorStatusLine
-      v-if="showCharCount"
       :text="countedText"
       :max-length="maxLength"
       :draft="draftState"

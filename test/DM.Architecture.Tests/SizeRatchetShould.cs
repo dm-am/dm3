@@ -29,6 +29,10 @@ namespace DM.Architecture.Tests;
 /// a split onto one of the parts with a number no larger than before. Nothing
 /// here can be switched off by a pragma: there is no analyzer to suppress.
 ///
+/// Every record says in one line why its file or method stays whole: what makes
+/// it long and why a cut would not read better. A record with no reason fails,
+/// because one that cannot be given one is code to cut, not a length to hold.
+///
 /// Generated migrations are left out: EF writes them, and their length is the
 /// model's, not anyone's prose.
 /// </remarks>
@@ -44,41 +48,24 @@ public class SizeRatchetShould
 
     private const int MethodLimit = 80;
 
-    /// <summary>A file past its limit, at its length in lines.</summary>
-    /// <param name="File">Path from the repository root, forward slashes.</param>
     /// <param name="Lines">Measured length, a final newline adding no line.</param>
-    private sealed record FileRecord(string File, int Lines);
+    /// <param name="Why">What makes the file long and why a cut would not read better.</param>
+    private sealed record FileRecord(string File, int Lines, string Why);
 
-    /// <summary>A method past its limit, at its length in lines.</summary>
-    /// <param name="File">Path from the repository root, forward slashes.</param>
     /// <param name="Method">The method's name, with #2, #3 for later overloads.</param>
-    /// <param name="Lines">Lines from its signature to the end of its body.</param>
-    private sealed record MethodRecord(string File, string Method, int Lines);
+    /// <param name="Why">What makes the method long and why a cut would not read better.</param>
+    private sealed record MethodRecord(string File, string Method, int Lines, string Why);
 
-    private static readonly FileRecord[] RecordedFiles =
-    [
-        new("src/DM.Domain.Core/Enums/EventType.cs", 756),
-        new("src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs", 978),
-        new("test/DM.Web.API.IntegrationTests/Controllers/General/TopicAndReviewFlagShould.cs", 620),
-    ];
+    private static readonly FileRecord[] RecordedFiles = [];
 
     private static readonly MethodRecord[] RecordedMethods =
     [
-        new("src/BBCodeParser/Nodes/ErasedLines.cs", "Trim", 129),
-        new("src/DM.Domain.Personal/Features/Notifications/NotificationDestination.cs", "DestinationOf", 83),
-        new("src/DM.Infrastructure.Persistence/Repositories/Game/GameRepository.Catalog.cs", "ApplySorting", 89),
-        new("src/DM.Infrastructure.Persistence/Repositories/Game/GameRepository.Participants.cs", "EnrichGamesAsync", 159),
-        new("src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs", "BuildPageQuery", 101),
-        new("src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs", "GetQuery", 106),
-        new("src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.cs", "PopulateProfileCounters", 175),
-        new("src/DM.Web.API/Features/Personal/Webhooks/WebhookController.cs", "HandleWebhook", 85),
-        new("test/DM.Web.API.IntegrationTests/Controllers/General/RemovedAuthorContentShould.cs", "SeedRemovedAuthorAsync", 116),
+        new("src/DM.Infrastructure.Persistence/Repositories/Personal/UserRepository.ListPage.cs", "GetQuery", 106,
+            "One guarded Where per field of UserFilter, each standing alone: parts would only move the predicates of one filter apart."),
+        new("test/DM.Web.API.IntegrationTests/Controllers/General/RemovedAuthorContentShould.cs", "SeedRemovedAuthorAsync", 116,
+            "Seeds the one world every surface of the theory reads, a row per table, linked by the ids the World carries out: parts would hand those ids back and forth."),
     ];
 
-    /// <summary>
-    /// Every file past its limit is recorded at its length, and every record has a
-    /// file at that length behind it.
-    /// </summary>
     [Fact]
     public void HoldEveryFilePastItsLimitAtItsRecordedLength()
     {
@@ -90,19 +77,15 @@ public class SizeRatchetShould
         var problems = Disagreements(
             RecordedFiles.ToDictionary(entry => entry.File, entry => entry.Lines, StringComparer.Ordinal),
             measured,
-            key => $"new(\"{key}\", {measured.GetValueOrDefault(key)}),");
+            key => $"new(\"{key}\", {measured.GetValueOrDefault(key)}, \"why\"),");
 
         // Joined, so that the message lists every one rather than the first few.
         string.Join(Environment.NewLine, problems).Should().BeEmpty(
                 "a file is held at its recorded length: split a file past the limit rather " +
                 "than record it (a new record needs the owner's word), and lower a record " +
-                "the moment its file shrinks");
+                "the moment its file shrinks; " + HowToCut);
     }
 
-    /// <summary>
-    /// Every method past its limit is recorded at its length, and every record has a
-    /// method at that length behind it.
-    /// </summary>
     [Fact]
     public void HoldEveryMethodPastItsLimitAtItsRecordedLength()
     {
@@ -124,19 +107,34 @@ public class SizeRatchetShould
         var problems = Disagreements(
             RecordedMethods.ToDictionary(entry => Key(entry.File, entry.Method), entry => entry.Lines, StringComparer.Ordinal),
             measured,
-            key => $"new(\"{key.Replace(" :: ", "\", \"", StringComparison.Ordinal)}\", {measured.GetValueOrDefault(key)}),");
+            key => $"new(\"{key.Replace(" :: ", "\", \"", StringComparison.Ordinal)}\", {measured.GetValueOrDefault(key)}, \"why\"),");
 
         string.Join(Environment.NewLine, problems).Should().BeEmpty(
                 "a method is held at its recorded length: split a method past the limit " +
                 "rather than record it (a new record needs the owner's word), and lower a " +
-                "record the moment its method shrinks");
+                "record the moment its method shrinks; " + HowToCut);
     }
+
+    [Fact]
+    public void GiveEveryRecordItsReason()
+    {
+        var unexplained = RecordedFiles
+            .Where(entry => string.IsNullOrWhiteSpace(entry.Why))
+            .Select(entry => entry.File)
+            .Concat(RecordedMethods
+                .Where(entry => string.IsNullOrWhiteSpace(entry.Why))
+                .Select(entry => Key(entry.File, entry.Method)));
+
+        string.Join(Environment.NewLine, unexplained).Should().BeEmpty(
+                "a record holds a length only with its reason, in one line: what makes the " +
+                "code long and why a cut would not read better; with none to give, " + HowToCut);
+    }
+
+    private const string HowToCut =
+        "cut by meaning, each part named after what it does, never by size alone";
 
     private static string Key(string file, string method) => $"{file} :: {method}";
 
-    /// <summary>
-    /// The C# files of src and test a commit would carry, each with its limit.
-    /// </summary>
     /// <remarks>
     /// Asked of git, as DocumentSizeShould asks: a walk of the disk also reads
     /// what the ignore list keeps out, such as the dependencies of the client,
@@ -169,7 +167,6 @@ public class SizeRatchetShould
         return lines.Length > 1 && lines[^1].Length == 0 ? lines.Length - 1 : lines.Length;
     }
 
-    /// <summary>One line per measure on which the record and the tree disagree.</summary>
     private static List<string> Disagreements(
         IReadOnlyDictionary<string, int> recorded,
         IReadOnlyDictionary<string, int> measured,
@@ -187,9 +184,9 @@ public class SizeRatchetShould
 
             problems.Add((hasRecord, hasSize) switch
             {
-                (false, _) => $"{key}: {size} lines is past the limit and has no record ({entryFor(key)})",
+                (false, _) => $"{key}: {size} lines is past the limit and has no record ({entryFor(key)}): {HowToCut}",
                 (_, false) => $"{key}: back within the limit or gone: drop the record of {record}",
-                _ when size > record => $"{key}: grew from {record} to {size} lines",
+                _ when size > record => $"{key}: grew from {record} to {size} lines: {HowToCut}",
                 _ => $"{key}: shrank from {record} to {size} lines: lower the record to {size}",
             });
         }

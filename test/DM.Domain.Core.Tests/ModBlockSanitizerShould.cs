@@ -7,12 +7,7 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests;
 
-/// <summary>
-/// The rule that decides who may author a [mod] block.
-/// </summary>
-/// <remarks>
-/// Below Moderator the markers are stripped at save time and the inner text is kept.
-/// </remarks>
+// Below Moderator the markers are stripped at save time and the inner text is kept.
 public class ModBlockSanitizerShould
 {
     private const string Authored = "До [mod]служебная пометка[/mod] после";
@@ -33,11 +28,8 @@ public class ModBlockSanitizerShould
     public void KeepTheBlockForModeratorAndAbove(UserRole role) =>
         ModBlockSanitizer.SanitizeForAuthor(Authored, role).Should().Be(Authored);
 
-    /// <summary>
-    /// More than the parser reads as the tag, on purpose: every casing, and every
-    /// spelling with an attribute or a parameter, the kind a hand-written pattern
-    /// usually misses.
-    /// </summary>
+    // More than the parser reads as the tag, on purpose: every casing, and every spelling with an
+    // attribute or a parameter, the kind a hand-written pattern usually misses.
     [Theory]
     [InlineData("[MOD]громко[/MOD]", "громко")]
     [InlineData("[mod=Гоблин]с автором[/mod]", "с автором")]
@@ -47,10 +39,8 @@ public class ModBlockSanitizerShould
     public void UnwrapEveryFormOfTheMarker(string raw, string expected) =>
         ModBlockSanitizer.SanitizeForAuthor(raw, UserRole.RegularUser).Should().Be(expected);
 
-    /// <summary>
-    /// A tag that merely starts with the same three letters is a different tag,
-    /// and stripping it would eat an ordinary author's text.
-    /// </summary>
+    // A tag that merely starts with the same three letters is a different tag, and stripping it
+    // would eat an ordinary author's text.
     [Theory]
     [InlineData("[modify]правка[/modify]")]
     [InlineData("[mods]список[/mods]")]
@@ -58,10 +48,8 @@ public class ModBlockSanitizerShould
     public void LeaveEveryOtherTagAlone(string raw) =>
         ModBlockSanitizer.SanitizeForAuthor(raw, UserRole.RegularUser).Should().Be(raw);
 
-    /// <summary>
-    /// A marker taken out joins the text on either side of it, and the join is
-    /// not allowed to be a marker.
-    /// </summary>
+    // A marker taken out joins the text on either side of it, and the join is not allowed to be a
+    // marker.
     [Theory]
     [InlineData("[[mod]mod]FAKE[/[mod]mod]", "FAKE")]
     [InlineData("[[[mod]mod]mod]FAKE[/[/mod]mod]", "FAKE")]
@@ -72,11 +60,8 @@ public class ModBlockSanitizerShould
     public void UnwrapAMarkerThatTheRemovalOfAnotherWouldJoin(string raw, string expected) =>
         ModBlockSanitizer.SanitizeForAuthor(raw, UserRole.RegularUser).Should().Be(expected);
 
-    /// <summary>
-    /// The property itself, over every join of a handful of pieces: whatever an
-    /// author below Moderator typed, no marker of the tag is left in what is
-    /// stored, in any casing.
-    /// </summary>
+    // The property itself, over every join of a handful of pieces: whatever an author below
+    // Moderator typed, no marker of the tag is left in what is stored, in any casing.
     [Fact]
     public void LeaveNoMarkerInAnyJoinOfThePieces()
     {

@@ -8,27 +8,14 @@ using DbMessage = DM.Infrastructure.Persistence.Entities.Messaging.Message;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// The open log of warnings: the text a warning was given for, where it stood,
-/// and the pages of the log.
-/// </summary>
-/// <remarks>
-/// The text of a place a guest cannot read is shown to the readers of that place alone: see
-/// <see cref="WarningOpenLogPlaceReadingShould"/>.
-/// </remarks>
 public class WarningOpenLogShould : WarningOpenLogTestBase
 {
     public WarningOpenLogShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// The log is the page the rules link to, and it is read without an account.
-    /// </summary>
-    /// <remarks>
-    /// A copy of a text with no place the server can name is kept out of it: whether a guest could read the text
-    /// where it stood has no answer. The moderation list has it.
-    /// </remarks>
+    // A copy of a text with no place the server can name is kept out of it: whether a guest could
+    // read the text where it stood has no answer.
     [Fact]
     public async Task KeepAPlacelessTextOutOfTheOpenLog()
     {
@@ -68,11 +55,7 @@ public class WarningOpenLogShould : WarningOpenLogTestBase
         }
     }
 
-    /// <summary>
-    /// The text of a place a guest can read is shown as the place shows it:
-    /// rendered, with the place, its address and the date of the text.
-    /// </summary>
-    /// <remarks>The snapshot is the source, which may carry a hidden block; the log gets the rendering.</remarks>
+    // The snapshot is the source, which may carry a hidden block; the log gets the rendering.
     [Fact]
     public async Task ShowTheRenderedTextOfAnOpenPlaceInTheLog()
     {
@@ -145,11 +128,7 @@ public class WarningOpenLogShould : WarningOpenLogTestBase
         }
     }
 
-    /// <summary>
-    /// A text its author rewrote after the warning is shown in both logs as the
-    /// words the warning was given for, and neither row says it was rewritten.
-    /// </summary>
-    /// <remarks>The snapshot never changes, so the edit history of the object is not read.</remarks>
+    // The snapshot never changes, so the edit history of the object is not read.
     [Fact]
     public async Task ShowTheWarnedTextAfterAnEditWithoutSayingItWasEdited()
     {
@@ -210,9 +189,6 @@ public class WarningOpenLogShould : WarningOpenLogTestBase
         }
     }
 
-    /// <summary>
-    /// A warning issued from a profile names no content, and the row says so.
-    /// </summary>
     [Fact]
     public async Task AnswerAProfileWarningWithoutAnyText()
     {
@@ -260,11 +236,7 @@ public class WarningOpenLogShould : WarningOpenLogTestBase
         await db.Messages.IgnoreQueryFilters().Where(m => m.MessageId == messageId).ExecuteDeleteAsync();
     }
 
-    /// <summary>
-    /// A warning whose points were taken off stays in the open log, and the log
-    /// carries the second signature under it.
-    /// </summary>
-    /// <remarks>Nothing is erased: a reader tells a warning found unjustified from one never issued.</remarks>
+    // Nothing is erased: a reader tells a warning found unjustified from one never issued.
     [Fact]
     public async Task KeepACorrectedWarningInTheOpenLogWithBothSignatures()
     {
@@ -321,10 +293,7 @@ public class WarningOpenLogShould : WarningOpenLogTestBase
         }
     }
 
-    /// <summary>
-    /// The page a caller asked for, and the total the page control needs.
-    /// </summary>
-    /// <remarks>By the rows on the page: the envelope rounds its echo of skip.</remarks>
+    // By the rows on the page: the envelope rounds its echo of skip.
     [Fact]
     public async Task ServeTheRowsTheSkipAndTakeAskFor()
     {
@@ -348,13 +317,7 @@ public class WarningOpenLogShould : WarningOpenLogTestBase
         }
     }
 
-    /// <summary>
-    /// Warnings written in the same millisecond stand in one order, on every read.
-    /// </summary>
-    /// <remarks>
-    /// Ordered by the moment and the identifier: the DM2 import carries equal timestamps. The whole sequence of the page is
-    /// asserted.
-    /// </remarks>
+    // Ordered by the moment and the identifier: the DM2 import carries equal timestamps.
     [Fact]
     public async Task OrderWarningsOfTheSameMomentByIdentifier()
     {

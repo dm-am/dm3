@@ -16,9 +16,7 @@ public class BanControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Seed an active temporary ban for SecondUser directly: the public GETs run anonymously.
-    /// </summary>
+    // Seed an active temporary ban for SecondUser directly: the public GETs run anonymously.
     private async Task<Guid> SeedActiveBan()
     {
         var banId = Guid.NewGuid();
@@ -118,10 +116,8 @@ public class BanControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    /// <summary>
-    /// The ban list is public, as the warning log and the pulse are: a guest
-    /// reads it, with the reason and the moderator, and is offered no lift.
-    /// </summary>
+    // The ban list is public, as the warning log and the pulse are: a guest reads it, with the
+    // reason and the moderator, and is offered no lift.
     [Fact]
     public async Task LetAGuestReadTheBanList()
     {
@@ -158,10 +154,7 @@ public class BanControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// A lift without a reason is refused and leaves the ban in force.
-    /// </summary>
-    /// <remarks>The lift is a decision of its own in the list; the reason travels in the body of the DELETE.</remarks>
+    // The lift is a decision of its own in the list; the reason travels in the body of the DELETE.
     [Theory]
     [InlineData(false)]
     [InlineData(true)]
@@ -190,10 +183,6 @@ public class BanControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A lift with its reason goes through, and the history signs it by name: the
-    /// lift is an entry of its own, and the issue it ended stays where it was.
-    /// </summary>
     [Fact]
     public async Task LiftABanWithItsReasonAndSignItInTheHistory()
     {
@@ -230,10 +219,8 @@ public class BanControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The ban list is the ban log of DM2: every issue and lift an entry of its own, newest first, pages counting entries.
-    /// </summary>
-    /// <remarks>The second ban is issued between the issue and the lift of the first; somebody else's stays out.</remarks>
+    // The second ban is issued between the issue and the lift of the first; somebody else's stays
+    // out.
     [Fact]
     public async Task ListEveryIssueAndEveryLiftAsAnEntryOfItsOwnNewestFirst()
     {
@@ -270,10 +257,7 @@ public class BanControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Every entry carries its number in the whole list from the oldest; a new entry takes the next.
-    /// </summary>
-    /// <remarks>Read from the database the stand runs, which cuts the page.</remarks>
+    // Read from the database the stand runs, which cuts the page.
     [Fact]
     public async Task NumberEveryEntryFromTheOldestAndKeepTheNumbersWhenANewOneIsWritten()
     {
@@ -307,9 +291,6 @@ public class BanControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The list of one person shows the whole list's numbers, and the page of an entry is found by its number.
-    /// </summary>
     [Fact]
     public async Task OpenThePageOfAnEntryByItsNumber()
     {
@@ -354,10 +335,8 @@ public class BanControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A name nobody carries narrows the list to nothing, the way the warning log
-    /// answers it, rather than being ignored or refused.
-    /// </summary>
+    // A name nobody carries narrows the list to nothing, the way the warning log answers it, rather
+    // than being ignored or refused.
     [Fact]
     public async Task AnswerANameNobodyCarriesWithAnEmptyPage()
     {
@@ -377,10 +356,8 @@ public class BanControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Each ban says what it forbids and whether the reader may lift it.
-    /// </summary>
-    /// <remarks>A senior moderator lifts a running temporary ban of somebody else's and nothing more; a moderator nothing.</remarks>
+    // A senior moderator lifts a running temporary ban of somebody else's and nothing more; a
+    // moderator nothing.
     [Fact]
     public async Task TellTheScopeOfEachBanAndWhetherTheReaderMayLiftIt()
     {
@@ -421,9 +398,7 @@ public class BanControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The reason is written in the BBCode editor, so the list shows it rendered.
-    /// </summary>
+    // The reason is written in the BBCode editor, so the list shows it rendered.
     [Fact]
     public async Task RenderTheReasonOfABan()
     {
@@ -445,9 +420,7 @@ public class BanControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A ban that has run out is not lifted: nothing is left of it to end.
-    /// </summary>
+    // A ban that has run out is not lifted: nothing is left of it to end.
     [Fact]
     public async Task RefuseToLiftABanThatHasRunOut()
     {
@@ -507,10 +480,8 @@ public class BanControllerShould : IntegrationTestBase
         await db.Bans.Where(b => banIds.Contains(b.BanId)).ExecuteDeleteAsync();
     }
 
-    /// <summary>
-    /// The moment to the whole second: the column keeps microseconds and the
-    /// clock ticks, and an entry is compared with the moment it was written at.
-    /// </summary>
+    // The moment to the whole second: the column keeps microseconds and the clock ticks, and an
+    // entry is compared with the moment it was written at.
     private static DateTimeOffset WholeSeconds(DateTimeOffset moment) =>
         new(moment.Ticks - moment.Ticks % TimeSpan.TicksPerSecond, moment.Offset);
 
@@ -535,13 +506,11 @@ public class BanControllerShould : IntegrationTestBase
 
     private static int Number(JsonElement entry) => entry.GetProperty("number").GetInt32();
 
-    /// <summary>The numbers of the entries of the given bans, in the order of the page.</summary>
     private static List<int> NumbersOf(JsonElement root, params Guid[] banIds) => Entries(root)
         .Where(e => BanId(e) is { } id && banIds.Contains(id))
         .Select(Number)
         .ToList();
 
-    /// <summary>The bans of the page, each read off the entry that issued it.</summary>
     private static Dictionary<Guid, JsonElement> IssuedBans(JsonElement root) => Entries(root)
         .Where(e => Kind(e) == "Issued")
         .ToDictionary(e => BanId(e)!.Value, e => e.GetProperty("ban"));

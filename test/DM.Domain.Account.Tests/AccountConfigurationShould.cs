@@ -9,9 +9,7 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests;
 
-/// <summary>
-/// The encryption key is checked where the host starts, the only place it is checked.
-/// </summary>
+// The encryption key is checked where the host starts, the only place it is checked.
 public class AccountConfigurationShould
 {
     private static CryptoConfiguration CryptoWith(string? key)

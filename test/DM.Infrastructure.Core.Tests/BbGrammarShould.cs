@@ -111,11 +111,6 @@ public class BbGrammarShould
         }
     }
 
-    /// <summary>
-    /// A refusal names the spelling it refuses and the way to fix it, and no character number:
-    /// the right spelling of the block, the closing tag it lacks, or the closing
-    /// tag of the [noparse] left open above it.
-    /// </summary>
     [Theory]
     [MemberData(nameof(RefusedGamePostRows))]
     public void NameTheSpellingAndTheFixWhenABlockIsRefused(string id)
@@ -142,10 +137,6 @@ public class BbGrammarShould
         };
     }
 
-    /// <summary>
-    /// The stranger always; every other kind only where a hidden block is, and
-    /// the addressee only where the block names somebody.
-    /// </summary>
     private static IEnumerable<Reader> ReadersOf(GrammarRow row)
     {
         yield return new Reader(GrammarReader.Stranger, StrangerId, false, false);
@@ -162,11 +153,6 @@ public class BbGrammarShould
         }
     }
 
-    /// <summary>
-    /// The snapshot the save path builds from the text: every name the hidden
-    /// blocks of the row address is a character of the room, owned by a user of
-    /// its own, in the order the row names them.
-    /// </summary>
     private static PrivateAddresseeSnapshotView SnapshotFor(GrammarRow row)
     {
         var roster = Addressees(row.Expect)
@@ -188,7 +174,6 @@ public class BbGrammarShould
 
     private static bool HasHidden(JsonArray pieces) => Walk(pieces).Any(piece => piece["hidden"] is JsonObject);
 
-    /// <summary>The text written inside every hidden block of the row.</summary>
     private static IEnumerable<string> HiddenTexts(JsonArray pieces) =>
         Walk(pieces)
             .Where(piece => piece["hidden"] is JsonObject)

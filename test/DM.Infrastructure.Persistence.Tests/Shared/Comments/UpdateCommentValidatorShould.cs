@@ -21,10 +21,7 @@ public class UpdateCommentValidatorShould : UnitTestBase
         validator = new UpdateCommentValidator(nestingLimit);
     }
 
-    /// <summary>
-    /// An edit is how most unrenderable text would arrive, so the edit path
-    /// refuses it too.
-    /// </summary>
+    // An edit is how most unrenderable text would arrive, so the edit path refuses it too.
     [Fact]
     public void RefuseTextTheRendererWillNotRender()
     {
@@ -37,10 +34,8 @@ public class UpdateCommentValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// The edit path enforces the same length limit as creation, or the limit
-    /// is one save away from being void.
-    /// </summary>
+    // The edit path enforces the same length limit as creation, or the limit is one save away from
+    // being void.
     [Fact]
     public void RefuseTextLongerThanTheLimit()
     {
@@ -95,10 +90,7 @@ public class UpdateCommentValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Empty);
     }
 
-    /// <summary>
-    /// Hiding markup on a surface that does not declare it.
-    /// </summary>
-    /// <remarks>The tag is not markup here; refused rather than erased, so the author rewrites the draft.</remarks>
+    // The tag is not markup here; refused rather than erased, so the author rewrites the draft.
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {

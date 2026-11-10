@@ -16,11 +16,6 @@ using NSubstitute;
 
 namespace DM.Domain.Game.Tests.Dsl;
 
-/// <summary>
-/// The post review service over substitutes of everything it asks: validators
-/// that pass, a signed-in rater past probation who has reviewed nothing yet, a
-/// fresh identifier and the current time.
-/// </summary>
 public abstract class PostReviewServiceTestBase : UnitTestBase
 {
     protected readonly IValidator<CreatePostReview> createValidator;
@@ -77,13 +72,11 @@ public abstract class PostReviewServiceTestBase : UnitTestBase
             dateTimeProvider);
     }
 
-    /// <summary>The posts among the asked ones the rater has a review of.</summary>
     protected void Reviewed(params Guid[] postIds) =>
         repository.SelectReviewedPostIdsAsync(currentUserId, Arg.Any<IReadOnlyCollection<Guid>>())
             .Returns(callInfo => (IReadOnlyCollection<Guid>)callInfo.Arg<IReadOnlyCollection<Guid>>()
                 .Where(postIds.Contains).ToArray());
 
-    /// <summary>The games among the asked ones the rater reviewed a post in since the cutoff.</summary>
     protected void RecentlyReviewedGames(params Guid[] gameIds) =>
         repository.SelectGamesReviewedSinceAsync(currentUserId, Arg.Any<IReadOnlyCollection<Guid>>(),
                 Arg.Any<DateTimeOffset>())

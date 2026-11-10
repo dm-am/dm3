@@ -9,8 +9,6 @@ export const checkEmail = vi.fn();
 
 export const recover = vi.fn();
 
-export const push = vi.fn();
-
 // One instance, so "the card said it and nothing else did" can be asserted.
 export const toast = { error: vi.fn(), warning: vi.fn(), success: vi.fn() };
 
@@ -30,7 +28,5 @@ export const userEntity = () => ({
     },
   },
 });
-
-export const vueRouter = () => ({ useRouter: () => ({ push }) });
 
 export const toastComposable = () => ({ useToast: () => toast });

@@ -8,7 +8,7 @@
  * says about a refused topic.
  */
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { flushPromises } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import { useAuthStore } from "@/shared/stores";
 import {
   mockGetTopics,
@@ -19,8 +19,7 @@ import {
   refusal,
   board,
   messages,
-  mountList,
-  unmountList,
+  mountBoard,
   signedInReader,
 } from "./TopicsList.fixtures";
 
@@ -28,11 +27,11 @@ vi.mock("@/entities/forum/api/forumApi", async () =>
   (await import("./TopicsList.doubles")).forumApi(),
 );
 
-vi.mock("vue-router", async () =>
-  (await import("./TopicsList.doubles")).vueRouter(),
-);
+enableAutoUnmount(afterEach);
 
-afterEach(unmountList);
+/** The listing of the board, the form under it, at the board's address. */
+const mountList = async (held: object = board) =>
+  (await mountBoard("/forum/main", held)).wrapper;
 
 // The form answers for what was typed and what the server names; an expired
 // session and a dead connection stay with the interceptor.
@@ -87,6 +86,19 @@ describe("TopicsList create form", () => {
     expect(messages()).toEqual([]);
   });
 
+  it("opens the topic it has just created", async () => {
+    mockCreateTopic.mockResolvedValue({
+      data: { resource: { id: "t-new", topicNumber: 7 } },
+      error: null,
+    });
+    const { wrapper, router } = await mountBoard();
+
+    await create(wrapper);
+
+    expect(router.currentRoute.value.fullPath).toBe("/forum/main/7");
+    expect(wrapper.find("form.create-topic-form").exists()).toBe(false);
+  });
+
   it("prints a refusal the interceptor says nothing about", async () => {
     mockCreateTopic.mockResolvedValue({
       data: null,
@@ -134,15 +146,15 @@ describe('TopicsList "Создать топик" by the board\'s answer', () => 
 
   it("offers the button to a member the board takes topics from", async () => {
     signIn("reader");
-    const wrapper = await mountList({}, answering(true));
+    const wrapper = await mountList(answering(true));
 
     expect(wrapper.find(".create-topic-button").exists()).toBe(true);
-    expect(wrapper.find("login-prompt-stub").exists()).toBe(false);
+    expect(wrapper.find(".login-prompt").exists()).toBe(false);
   });
 
   it("offers a member nothing on a board of the moderation", async () => {
     signIn("reader");
-    const wrapper = await mountList({}, answering(false));
+    const wrapper = await mountList(answering(false));
 
     expect(wrapper.find(".create-topic-section").exists()).toBe(false);
     expect(wrapper.find(".create-topic-button").exists()).toBe(false);
@@ -153,22 +165,22 @@ describe('TopicsList "Создать топик" by the board\'s answer', () => 
   it("offers nothing until the board answers", async () => {
     signIn("reader");
     const { viewer: _unanswered, ...listed } = board;
-    const wrapper = await mountList({}, listed);
+    const wrapper = await mountList(listed);
 
     expect(wrapper.find(".create-topic-section").exists()).toBe(false);
   });
 
   it("invites a guest to sign in where a member may open a topic", async () => {
     signIn(null);
-    const wrapper = await mountList({}, answering(false, true));
+    const wrapper = await mountList(answering(false, true));
 
-    expect(wrapper.find("login-prompt-stub").exists()).toBe(true);
+    expect(wrapper.find(".login-prompt").exists()).toBe(true);
     expect(wrapper.find(".create-topic-button").exists()).toBe(false);
   });
 
   it("invites a guest to nothing in the news", async () => {
     signIn(null);
-    const wrapper = await mountList({}, answering(false, false));
+    const wrapper = await mountList(answering(false, false));
 
     expect(wrapper.find(".create-topic-section").exists()).toBe(false);
   });
@@ -180,8 +192,8 @@ describe('TopicsList "Создать топик" by the board\'s answer', () => 
       data: { resource: answering(true) },
       error: null,
     });
-    const wrapper = await mountList({}, answering(false, true));
-    expect(wrapper.find("login-prompt-stub").exists()).toBe(true);
+    const wrapper = await mountList(answering(false, true));
+    expect(wrapper.find(".login-prompt").exists()).toBe(true);
 
     useAuthStore().updateUser({
       username: "reader",
@@ -191,7 +203,7 @@ describe('TopicsList "Создать топик" by the board\'s answer', () => 
 
     // No refusal flags: this read shows nothing of a failure.
     expect(mockGetBoard).toHaveBeenCalledWith("main", undefined);
-    expect(wrapper.find("login-prompt-stub").exists()).toBe(false);
+    expect(wrapper.find(".login-prompt").exists()).toBe(false);
     expect(wrapper.find(".create-topic-button").exists()).toBe(true);
   });
 });

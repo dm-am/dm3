@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// API_DESIGN.md declares the response shapes, and an endpoint's body matches its declared envelope.
-/// </summary>
 public class ResponseEnvelopeShould : IntegrationTestBase
 {
     public ResponseEnvelopeShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -19,13 +16,8 @@ public class ResponseEnvelopeShould : IntegrationTestBase
     private const string ListEnvelopeSchema = "DM.Web.API.Shared.Dto.ListEnvelope`1";
     private const string EnvelopeSchema = "DM.Web.API.Shared.Dto.Envelope`1";
 
-    /// <summary>
-    /// Every GET that declares an envelope puts one on the wire.
-    /// </summary>
-    /// <remarks>
-    /// The endpoints are enumerated from the published document and called; only argument-free operations, only a
-    /// 200 examined, and a floor so that nothing checked is no pass.
-    /// </remarks>
+    // The endpoints are enumerated from the published document and called; only argument-free
+    // operations, only a 200 examined, and a floor so that nothing checked is no pass.
     [Fact]
     public async Task WrapEveryDeclaredEnvelopeOnTheWire()
     {
@@ -101,7 +93,6 @@ public class ResponseEnvelopeShould : IntegrationTestBase
             "renders an empty screen and fails nothing");
     }
 
-    /// <summary>Required parameters declared on a path item or an operation.</summary>
     private static int RequiredParameterCount(JsonElement node)
     {
         if (!node.TryGetProperty("parameters", out var parameters) ||

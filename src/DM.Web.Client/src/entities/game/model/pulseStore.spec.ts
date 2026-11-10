@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { setActivePinia, createPinia } from "pinia";
 import type { ApiResult, ListEnvelope } from "@/shared/api/models/common";
 import type { Post } from "./postTypes";
+import { createMockPost } from "./store.fixtures";
 import { deferred } from "@/shared/lib/testing/tasks";
 
 const getRatedPosts = vi.fn();
@@ -16,9 +17,9 @@ const { usePulseStore } = await import("./pulseStore");
 
 const page = (title: string): ApiResult<ListEnvelope<Post>> => ({
   data: {
-    resources: [{ id: title, text: title } as unknown as Post],
+    resources: [createMockPost(title, title)],
     paging: null,
-  } as unknown as ListEnvelope<Post>,
+  },
   error: null,
 });
 

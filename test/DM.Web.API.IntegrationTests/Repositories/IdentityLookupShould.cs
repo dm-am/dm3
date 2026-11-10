@@ -15,10 +15,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Lookups that resolve one login or one address compare for equality, and stay
-/// case-insensitive while doing it.
-/// </summary>
 /// <remarks>
 /// ILIKE reads "_" and "%" as wildcards and "=" over lower() does not; "_" is a legal login character. Every probe
 /// equals no row and matches one as a pattern, and each test asks for the owned row in upper case too.
@@ -29,9 +25,6 @@ public class IdentityLookupShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Four readers of Users answer "who owns this address".
-    /// </summary>
     [Fact]
     public async Task NotResolveAnAddressThatOnlyMatchesAnotherAddressAsAPattern()
     {
@@ -62,10 +55,6 @@ public class IdentityLookupShould : IntegrationTestBase
         (await activation.FindUserByEmail(wildcard)).Should().BeNull();
     }
 
-    /// <summary>
-    /// The same question against PendingRegistrations, which decides whether a
-    /// registration is new and which row recovery resends a letter for.
-    /// </summary>
     [Fact]
     public async Task NotFindAPendingRegistrationThatOnlyMatchesAsAPattern()
     {
@@ -85,10 +74,8 @@ public class IdentityLookupShould : IntegrationTestBase
             .Should().BeNull();
     }
 
-    /// <summary>
-    /// The lookup by login resolves the person a direct chat is opened with, and the
-    /// caller's next act is to write a private message into that chat.
-    /// </summary>
+    // The lookup by login resolves the person a direct chat is opened with, and the caller's next
+    // act is to write a private message into that chat.
     [Fact]
     public async Task NotOpenADirectChatWithSomebodyWhoseLoginOnlyMatchesAsAPattern()
     {
@@ -106,10 +93,8 @@ public class IdentityLookupShould : IntegrationTestBase
             "no account is named after the single character %");
     }
 
-    /// <summary>
-    /// The from: operator names one author. All three branches of the search union
-    /// carry the same filter, so the wildcard has to come back empty from each.
-    /// </summary>
+    // All three branches of the search union carry the same filter, so the wildcard has to come
+    // back empty from each.
     [Fact]
     public async Task FilterSearchByTheAuthorLoginRatherThanByAPattern()
     {

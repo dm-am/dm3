@@ -13,7 +13,7 @@
 import { describe, it, expect, vi } from "vitest";
 
 // A whole-tree AST scan outruns the 5s default on a saturated machine.
-vi.setConfig({ testTimeout: 30_000 });
+vi.setConfig({ testTimeout: 60_000 });
 import { readFileSync } from "fs";
 import { join } from "path";
 import ts from "typescript";

@@ -10,16 +10,14 @@ using Xunit;
 
 namespace DM.Infrastructure.Mail.Tests;
 
-/// <summary>
-/// A letter that mails a link says how long it lives in the hours it is handed: the hours the
-/// server holds the link to, out of the same setting.
-/// </summary>
+// A letter that mails a link says how long it lives in the hours it is handed: the hours the server
+// holds the link to, out of the same setting.
 public class LinkLifetimeLineShould : IAsyncDisposable
 {
     private readonly HtmlRenderer _htmlRenderer = EmailRendering.CreateHtmlRenderer(
         NullLoggerFactory.Instance, new SiteAddressConfiguration { PublicUrl = "https://dm.am" });
 
-    /// <summary>Hours other than the defaults, each with the noun its number takes.</summary>
+    // Hours other than the defaults, each with the noun its number takes.
     public static TheoryData<object, string> Letters() => new()
     {
         { new RegistrationConfirmationViewModel("https://dm.am/activate/a", 21), "Ссылка для выбора имени и завершения регистрации действительна 21 час" },

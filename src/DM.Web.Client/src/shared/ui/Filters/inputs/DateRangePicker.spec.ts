@@ -9,7 +9,6 @@ import FilterApplyButton from "../primitives/FilterApplyButton.vue";
 import DateInput from "@/shared/ui/DatePicker/DateInput.vue";
 import Tooltip from "@/shared/ui/Tooltip/Tooltip.vue";
 
-// "Today" for the calendar and the quick periods: 28 September 2026.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 8, 28, 12, 0));
@@ -21,8 +20,8 @@ afterEach(() => {
 });
 
 describe("DateRangePicker", () => {
-  const mountComponent = (props = {}) => {
-    return mount(DateRangePicker, {
+  const mountComponent = (props = {}) =>
+    mount(DateRangePicker, {
       props: {
         fromValue: null,
         toValue: null,
@@ -35,14 +34,9 @@ describe("DateRangePicker", () => {
       },
       attachTo: document.body,
     });
-  };
 
   const applyOf = (wrapper: ReturnType<typeof mountComponent>) =>
     wrapper.findAllComponents(FilterApplyButton)[0];
-
-  // ============================================================================
-  // BASIC RENDERING
-  // ============================================================================
 
   describe("Basic Rendering", () => {
     it("renders from and to date inputs (site calendar, not native)", () => {
@@ -52,27 +46,13 @@ describe("DateRangePicker", () => {
       expect(wrapper.find('input[type="date"]').exists()).toBe(false);
     });
 
-    it("renders default labels", () => {
+    it("renders the labels", () => {
       const wrapper = mountComponent();
       const labels = wrapper.findAll(".date-label");
       expect(labels[0].text()).toBe("От");
       expect(labels[1].text()).toBe("До");
     });
-
-    it("uses custom labels", () => {
-      const wrapper = mountComponent({
-        fromLabel: "Начало",
-        toLabel: "Конец",
-      });
-      const labels = wrapper.findAll(".date-label");
-      expect(labels[0].text()).toBe("Начало");
-      expect(labels[1].text()).toBe("Конец");
-    });
   });
-
-  // ============================================================================
-  // VALUE BINDING
-  // ============================================================================
 
   describe("Value Binding", () => {
     it("displays from value as DD.MM.YYYY", () => {
@@ -94,10 +74,6 @@ describe("DateRangePicker", () => {
       expect((inputs[0].element as HTMLInputElement).value).toBe("15.06.2024");
     });
   });
-
-  // ============================================================================
-  // APPLY BUTTON
-  // ============================================================================
 
   describe("Apply Button", () => {
     it("emits apply event with values typed as DD.MM.YYYY", async () => {
@@ -148,10 +124,6 @@ describe("DateRangePicker", () => {
       expect(wrapper.emitted("apply")![0]).toEqual([null, null]);
     });
   });
-
-  // ============================================================================
-  // APPLY BUTTON STATE
-  // ============================================================================
 
   /**
    * The lock on the apply button has one source, `canApply`. It used to have
@@ -248,10 +220,6 @@ describe("DateRangePicker", () => {
     });
   });
 
-  // ============================================================================
-  // CLEAR BUTTON
-  // ============================================================================
-
   describe("Clear Button", () => {
     it("shows clear button when values exist", () => {
       const wrapper = mountComponent({
@@ -284,15 +252,7 @@ describe("DateRangePicker", () => {
     });
   });
 
-  // ============================================================================
-  // THE CALENDAR OF THE RANGE
-  // ============================================================================
-
-  /**
-   * One calendar under both fields, set into the panel. Each field used to
-   * open a calendar of its own over the panel, which covered the other field
-   * and "Применить" and showed no range at all.
-   */
+  // One calendar under both fields, set into the panel.
   describe("The calendar of the range", () => {
     const day = (wrapper: ReturnType<typeof mountComponent>, n: number) =>
       wrapper.findAll(".dp-day").find((cell) => cell.text() === String(n))!;
@@ -371,10 +331,6 @@ describe("DateRangePicker", () => {
     });
   });
 
-  // ============================================================================
-  // QUICK PERIODS
-  // ============================================================================
-
   describe("Quick periods", () => {
     const preset = (wrapper: ReturnType<typeof mountComponent>, name: string) =>
       wrapper.findAll(".date-preset").find((one) => one.text() === name)!;
@@ -414,10 +370,6 @@ describe("DateRangePicker", () => {
       ]);
     });
   });
-
-  // ============================================================================
-  // THE FUTURE
-  // ============================================================================
 
   describe("The future", () => {
     const day = (wrapper: ReturnType<typeof mountComponent>, n: number) =>

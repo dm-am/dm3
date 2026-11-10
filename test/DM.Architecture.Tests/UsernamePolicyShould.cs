@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// What a username may be is decided in one place.
-/// </summary>
 /// <remarks>
 /// [ApiController] validates the DTO before the action, so a DTO pattern overrides the domain one.
 /// Read by reflection: an attribute either is on a property or is not.

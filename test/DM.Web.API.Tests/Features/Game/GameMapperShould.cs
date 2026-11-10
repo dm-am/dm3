@@ -25,10 +25,8 @@ public class GameMapperShould : UnitTestBase
     private static GameMapper CreateMapper() =>
         new(new AttributeSchemaMapper(), Mock<IIdentityProvider>());
 
-    /// <summary>
-    /// PATCH carries "not sent" as null and the write model keeps saying it: null leaves the tags alone, an
-    /// empty list clears them.
-    /// </summary>
+    // PATCH carries "not sent" as null and the write model keeps saying it: null leaves the tags
+    // alone, an empty list clears them.
     [Fact]
     public void KeepAnUnsentTagListNull()
     {
@@ -70,10 +68,8 @@ public class GameMapperShould : UnitTestBase
             "an empty list is an instruction to clear, distinct from an absent field");
     }
 
-    /// <summary>
-    /// A privacy block whose individual flag was not sent folds to null, not
-    /// to a value - the lifted negation must not invent a setting.
-    /// </summary>
+    // A privacy block whose individual flag was not sent folds to null, not to a value - the lifted
+    // negation must not invent a setting.
     [Fact]
     public void FoldAPartialPrivacyBlockWithoutInventingValues()
     {
@@ -91,11 +87,8 @@ public class GameMapperShould : UnitTestBase
         update.CommentsAccessMode.Should().BeNull();
     }
 
-    /// <summary>
-    /// An NPC roster line carries no owner, and the details response says so
-    /// instead of refusing to be built.
-    /// </summary>
-    /// <remarks>The character row holds no author for an NPC, and Mapperly throws on a null into a non-nullable member.</remarks>
+    // The character row holds no author for an NPC, and Mapperly throws on a null into a
+    // non-nullable member.
     [Fact]
     public void CarryAnNpcRosterLineWithoutAnOwner()
     {
@@ -122,10 +115,8 @@ public class GameMapperShould : UnitTestBase
         npc.Author.Should().BeNull("an NPC is run by the master and owned by nobody");
     }
 
-    /// <summary>
-    /// A character somebody plays still answers with the player who does - the
-    /// null tolerance above must not have been bought by dropping every owner.
-    /// </summary>
+    // A character somebody plays still answers with the player who does - the null tolerance above
+    // must not have been bought by dropping every owner.
     [Fact]
     public void CarryTheOwnerOfAPlayedCharacter()
     {
@@ -158,9 +149,8 @@ public class GameMapperShould : UnitTestBase
         played.Author.Username.Should().Be("player");
     }
 
-    /// <summary>
-    /// A guest holds no role: a game without a mentor must not read the guest's missing id as the mentor.
-    /// </summary>
+    // A guest holds no role: a game without a mentor must not read the guest's missing id as the
+    // mentor.
     [Fact]
     public void GiveAGuestNoParticipationInAGameWithoutAMentor()
     {
@@ -202,10 +192,8 @@ public class GameMapperShould : UnitTestBase
         Role = UserRole.RegularUser
     };
 
-    /// <summary>
-    /// The set filters fold to null when absent or empty: the domain reads
-    /// null as "no filter", and an empty set must not become "match nothing".
-    /// </summary>
+    // The set filters fold to null when absent or empty: the domain reads null as "no filter", and
+    // an empty set must not become "match nothing".
     [Fact]
     public void FoldEmptyQuerySetsToNull()
     {
@@ -220,11 +208,9 @@ public class GameMapperShould : UnitTestBase
         query.RequiredTags.Should().BeNull();
     }
 
-    /// <summary>
-    /// The description of a tag reaches the public catalog as the hint surface,
-    /// which the server renders like every text: the client puts nothing but
-    /// server markup into the page, the [tip] of a description included.
-    /// </summary>
+    // The description of a tag reaches the public catalog as the hint surface, which the server
+    // renders like every text: the client puts nothing but server markup into the page, the [tip]
+    // of a description included.
     [Fact]
     public void CarryATagDescriptionAsTheHint()
     {

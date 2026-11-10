@@ -33,7 +33,6 @@ public static class PrivateBlockMarkup
 
     private const string ClosingTag = "[/private]";
 
-    /// <summary>Why hiding markup is refused on a surface that does not declare it.</summary>
     private const string SurfaceReason = "Скрытый блок работает только в игровых постах";
 
     /// <summary>
@@ -76,7 +75,6 @@ public static class PrivateBlockMarkup
     /// rather than repaired: what the author meant cannot be guessed, and the
     /// guesses differ by exactly who reads the rest of the post.
     /// </remarks>
-    /// <param name="source">Raw BBCode as the author submitted it</param>
     public static bool IsBalanced(string? source) => FindImbalance(Read(source)) is null;
 
     /// <summary>
@@ -207,9 +205,6 @@ public static class PrivateBlockMarkup
     private static string? Read(string? source) =>
         string.IsNullOrEmpty(source) ? source : ParserInput.Of(source);
 
-    /// <summary>
-    /// The refusal to report, or null when the text is well formed.
-    /// </summary>
     private static Imbalance? FindImbalance(string? source)
     {
         if (!MayContainTag(source)) return null;
@@ -270,13 +265,10 @@ public static class PrivateBlockMarkup
             : new(opened, $"Скрытый блок не закрыт: {SpellingAt(text, opened)}. Добавьте [/{TagName}].");
     }
 
-    /// <summary>A refusal and the index of the spelling it quotes.</summary>
     private readonly record struct Imbalance(int At, string Message);
 
-    /// <summary>
-    /// Where the first piece of hiding markup stands, a closing tag of any
-    /// spelling included, or -1 when there is none.
-    /// </summary>
+    // Where the first piece of hiding markup stands, a closing tag of any spelling included, or -1
+    // when there is none.
     private static int FindPrivateMarkup(string? source)
     {
         if (!MayContainTag(source)) return -1;
@@ -296,13 +288,10 @@ public static class PrivateBlockMarkup
     {
         Opening,
 
-        /// <summary>A closing tag the parser reads as one: [/private], in any case.</summary>
+        // A closing tag the parser reads as one: [/private], in any case.
         Closing,
 
-        /// <summary>
-        /// Any other spelling of the closing tag, [/private="x"] or [/private and
-        /// a space. The parser reads it as text, and it closes nothing.
-        /// </summary>
+        // The parser reads it as text, and it closes nothing.
         BrokenClosing,
 
         /// <summary>
@@ -315,11 +304,7 @@ public static class PrivateBlockMarkup
 
     private readonly record struct Token(TokenKind Kind, int Index, bool Broken, string? Attribute);
 
-    /// <summary>
-    /// The tokens of the hiding tag, and the openings of the [noparse] blocks
-    /// nobody closed, in document order. Nothing inside a closed [noparse] is a
-    /// token.
-    /// </summary>
+    // Nothing inside a closed [noparse] is a token.
     private static IEnumerable<Token> Tokens(string text)
     {
         var verbatimClosing = new VerbatimClosing(text);
@@ -369,7 +354,7 @@ public static class PrivateBlockMarkup
         }
     }
 
-    /// <summary>Whether [noparse], in any case and with nothing after the name, opens at the index.</summary>
+    // Whether [noparse], in any case and with nothing after the name, opens at the index.
     private static bool IsVerbatimOpeningAt(string text, int bracket) =>
         bracket + VerbatimOpeningTag.Length <= text.Length && AsciiEquals(text, bracket, VerbatimOpeningTag);
 
@@ -448,14 +433,10 @@ public static class PrivateBlockMarkup
             : -1;
     }
 
-    /// <summary>A closing token of the hiding tag, "[/private" in any case, read broadly.</summary>
+    // A closing token of the hiding tag, "[/private" in any case, read broadly.
     private static bool IsClosingToken(string text, int bracket) =>
         bracket + 1 < text.Length && text[bracket + 1] == '/' && NameEnd(text, bracket + 2) > 0;
 
-    /// <summary>
-    /// The opening token of the hiding tag at the index, how it is spelled, and
-    /// where it ends; null when there is none.
-    /// </summary>
     private static (Token Token, int End)? ReadOpening(string text, int bracket)
     {
         var nameEnd = NameEnd(text, bracket + 1);
@@ -473,7 +454,7 @@ public static class PrivateBlockMarkup
         return (new Token(TokenKind.Opening, bracket, true, null), BrokenEnd(text, nameEnd));
     }
 
-    /// <summary>A quote, then everything up to the first quote the closing bracket follows.</summary>
+    // A quote, then everything up to the first quote the closing bracket follows.
     private static (string Value, int End)? ReadAttribute(string text, int start)
     {
         if (start >= text.Length || text[start] != '"') return null;
@@ -490,10 +471,8 @@ public static class PrivateBlockMarkup
         return null;
     }
 
-    /// <summary>
-    /// Where a block the grammar did not accept begins: after the first "]" when
-    /// it comes before the next "[", otherwise right after the name.
-    /// </summary>
+    // Where a block the grammar did not accept begins: after the first "]" when it comes before the
+    // next "[", otherwise right after the name.
     private static int BrokenEnd(string text, int nameEnd)
     {
         for (var index = nameEnd; index < text.Length; index++)
@@ -530,7 +509,6 @@ public static class PrivateBlockMarkup
         return spelling.Replace('\r', ' ').Replace('\n', ' ');
     }
 
-    /// <summary>How much of a tag a refusal quotes back.</summary>
     private const int MaxSpellingLength = 40;
 
     /// <summary>

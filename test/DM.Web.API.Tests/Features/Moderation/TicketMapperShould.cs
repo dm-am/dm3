@@ -11,10 +11,6 @@ using DomainTicketComment = DM.Domain.Moderation.Features.Tickets.TicketComment;
 
 namespace DM.Web.API.Tests.Features.Moderation;
 
-/// <summary>
-/// The ticket text goes out as written and once more in a carrier the serializer renders; the conversation
-/// goes out rendered.
-/// </summary>
 public class TicketMapperShould : UnitTestBase
 {
     private const string Body = "[b]Страница[/b] не открывается";
@@ -34,11 +30,8 @@ public class TicketMapperShould : UnitTestBase
             .Which.Value.Should().Be(Body);
     }
 
-    /// <summary>
-    /// A comment of the conversation is written in the editor of comments and
-    /// goes out in a carrier the serializer renders with that tag set, [mod]
-    /// included.
-    /// </summary>
+    // A comment of the conversation is written in the editor of comments and goes out in a carrier
+    // the serializer renders with that tag set, [mod] included.
     [Fact]
     public void SendACommentOfTheConversationForRendering()
     {
@@ -59,10 +52,8 @@ public class TicketMapperShould : UnitTestBase
             .Which.Value.Should().Be(text);
     }
 
-    /// <summary>
-    /// A comment of the guest is signed by nobody, and says so: a missing author
-    /// alone would read as a removed account.
-    /// </summary>
+    // A comment of the guest is signed by nobody, and says so: a missing author alone would read as
+    // a removed account.
     [Fact]
     public void SendTheCommentOfTheGuestWithoutAnAuthor()
     {
@@ -77,10 +68,8 @@ public class TicketMapperShould : UnitTestBase
         result.IsGuest.Should().BeTrue();
     }
 
-    /// <summary>
-    /// A guest ticket and the ticket of a removed account both have no reporter;
-    /// the flag is what the signature reads "гость" by.
-    /// </summary>
+    // A guest ticket and the ticket of a removed account both have no reporter; the flag is what
+    // the signature reads "гость" by.
     [Fact]
     public void TellAGuestTicketFromTheTicketOfARemovedAccount()
     {

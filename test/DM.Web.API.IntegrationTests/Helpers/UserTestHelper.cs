@@ -10,14 +10,8 @@ using OtpNet;
 
 namespace DM.Web.API.IntegrationTests.Helpers;
 
-/// <summary>
-/// Activated users with real password hashes, usable for real login flows.
-/// </summary>
 public static class UserTestHelper
 {
-    /// <summary>
-    /// Registers by email and password, then activates the pending row with the chosen login.
-    /// </summary>
     public static async Task<string> CreateActivatedUser(
         HttpClient client,
         DatabaseFixture dbFixture,
@@ -72,9 +66,6 @@ public static class UserTestHelper
         return login;
     }
 
-    /// <summary>
-    /// Login with credentials and return the session cookie value.
-    /// </summary>
     public static async Task<string> Login(
         HttpClient client,
         string email,
@@ -101,9 +92,6 @@ public static class UserTestHelper
         return sessionCookie;
     }
 
-    /// <summary>
-    /// Create an HttpRequestMessage with session cookie authentication.
-    /// </summary>
     public static HttpRequestMessage CreateCookieAuthRequest(
         HttpMethod method, string url, string sessionCookie)
     {
@@ -112,12 +100,9 @@ public static class UserTestHelper
         return request;
     }
 
-    /// <summary>
-    /// The last non-empty dm_session value of a response: middleware may unload before login loads.
-    /// </summary>
+    // The last non-empty dm_session value of a response: middleware may unload before login loads.
     public static string? ExtractSessionCookie(HttpResponseMessage response) => Cookie(response, "dm_session");
 
-    /// <summary>The last non-empty value a response sets for the named cookie.</summary>
     public static string? Cookie(HttpResponseMessage response, string name)
     {
         if (!response.Headers.TryGetValues("Set-Cookie", out var cookies))
@@ -143,10 +128,6 @@ public static class UserTestHelper
         return value;
     }
 
-    /// <summary>
-    /// Turns the second factor on for a signed-in session: asks for a secret, then
-    /// confirms it with a code computed from that secret.
-    /// </summary>
     public static async Task<(string Secret, IReadOnlyList<string> Codes)> EnableSecondFactor(
         HttpClient client, string sessionCookie, string password)
     {
@@ -172,9 +153,8 @@ public static class UserTestHelper
         return (secret, codes);
     }
 
-    /// <summary>
-    /// Registers and activates an account with a login and address unique per test: the tests share one database.
-    /// </summary>
+    // Registers and activates an account with a login and address unique per test: the tests share
+    // one database.
     public static async Task<(string Login, string Email)> CreateUniqueUser(
         HttpClient client, DatabaseFixture dbFixture, string prefix, string password)
     {

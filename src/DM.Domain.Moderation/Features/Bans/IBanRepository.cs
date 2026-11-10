@@ -12,9 +12,6 @@ public interface IBanRepository
     /// </summary>
     Task<IEnumerable<Ban>> GetUserBans(Guid userId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get active ban for a user (if any)
-    /// </summary>
     Task<Ban?> GetActiveBan(Guid userId, CancellationToken ct = default);
 
     Task<Ban?> Get(Guid banId, CancellationToken ct = default);

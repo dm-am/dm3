@@ -32,9 +32,6 @@ public class SessionFactoryShould : UnitTestBase
             Options.Create(config));
     }
 
-    /// <summary>
-    /// Twelve hours for a session and thirty days for a remembered one, as configured above.
-    /// </summary>
     [Theory]
     [InlineData(false, 12)]
     [InlineData(true, 30 * 24)]

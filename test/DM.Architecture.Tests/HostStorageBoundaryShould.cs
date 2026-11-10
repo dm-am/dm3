@@ -11,10 +11,6 @@ using ArchitectureModel = ArchUnitNET.Domain.Architecture;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The HTTP host talks to the stores through the domain, everywhere and not only
-/// in its API services.
-/// </summary>
 /// <remarks>
 /// The sibling rule names *ApiService only. The bootstrap exemptions are named one by one. Read out
 /// of the IL: a type reached through a using alias leaves nothing in the file.
@@ -98,10 +94,6 @@ public class HostStorageBoundaryShould
                      "every call")
             .Check(Solution);
 
-    /// <summary>
-    /// No source file of the host names the persistence project at all, the three
-    /// bootstrap files aside.
-    /// </summary>
     /// <remarks>
     /// The loader does not model the state machine of an async body, so the IL rules above miss a store
     /// used inside one. Matched on the namespace, which an alias spells too.

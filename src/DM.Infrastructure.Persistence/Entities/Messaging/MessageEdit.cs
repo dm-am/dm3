@@ -38,9 +38,6 @@ public class MessageEdit
     [ForeignKey(nameof(MessageId))]
     public virtual Message Message { get; set; } = null!;
 
-    /// <summary>
-    /// Editor user
-    /// </summary>
     [ForeignKey(nameof(EditorUserId))]
     public virtual User Editor { get; set; } = null!;
 }

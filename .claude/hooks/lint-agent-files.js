@@ -19,7 +19,7 @@
 const { execFileSync } = require('child_process');
 const fs = require('fs');
 const path = require('path');
-const { resolveTarget } = require('./lint-edited-file');
+const { resolveTarget, formatArgs } = require('./lint-edited-file');
 
 const WRITERS = new Set(['Write', 'Edit']);
 const TOOL_TIMEOUT_MS = 180_000;
@@ -88,7 +88,7 @@ function check({ clients, csharp }, cwd) {
     const eslint = path.join(clientDir, 'node_modules', 'eslint', 'bin', 'eslint.js');
     // A worktree without packages has nothing to run this with.
     if (!fs.existsSync(eslint)) continue;
-    const { status, output } = run([process.execPath, eslint, '--fix', '--no-warn-ignored', '--max-warnings', '0', ...files], clientDir);
+    const { status, output } = run([process.execPath, eslint, '--fix', '--no-warn-ignored', '--max-warnings', '0', ...formatArgs(clientDir), ...files], clientDir);
     if (status === ESLINT_FOUND_PROBLEMS) findings.push(output);
     else if (status !== 0) brokenTools.push(output);
   }

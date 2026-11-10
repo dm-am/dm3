@@ -18,14 +18,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// Guards the shared-instance contract of every explicit forwarding group the
-/// modules declare: several interfaces, one object per scope.
-/// </summary>
-/// <remarks>
-/// Two plain AddScoped registrations give two objects per scope. Built out of the real module extensions:
-/// the registrations are the thing under test.
-/// </remarks>
+// Two plain AddScoped registrations give two objects per scope.
 public class SharedInstanceForwardingShould : UnitTestBase, IDisposable
 {
     private readonly ServiceProvider _provider;
@@ -47,10 +40,8 @@ public class SharedInstanceForwardingShould : UnitTestBase, IDisposable
             new ServiceProviderOptions { ValidateScopes = true });
     }
 
-    /// <summary>
-    /// Every declared group, as pairs. The identity trio is covered by two
-    /// pairs through its setter, which is the face authentication writes.
-    /// </summary>
+    // The identity trio is covered by two pairs through its setter, which is the face
+    // authentication writes.
     public static TheoryData<Type, Type> ForwardedPairs() => new()
     {
         { typeof(IIdentitySetter), typeof(IIdentityProvider) },

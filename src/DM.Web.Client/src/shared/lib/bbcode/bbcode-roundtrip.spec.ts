@@ -102,8 +102,7 @@ describe("BBCode Round-Trip Integration", () => {
     });
 
     // The server prints a tag whose address it refuses as typed, and so does
-    // the preview. The visual mode used to be handed an empty mark for it and
-    // saved nothing in its place.
+    // the preview.
     it.each([
       "[img]javascript:alert(1)[/img]",
       "до [img]http://192.168.0.1/a.png[/img] после",
@@ -246,8 +245,7 @@ describe("BBCode Round-Trip Integration", () => {
     );
   });
 
-  // The visual mode puts a block on lines of its own. Where the author wrote
-  // no line break at the edge of a block, the way back used to put one.
+  // The visual mode puts a block on lines of its own.
   it.each([
     "[quote]раз[/quote]два",
     "раз[spoiler]два[/spoiler]",
@@ -306,8 +304,8 @@ describe("BBCode Round-Trip Integration", () => {
     });
   });
 
-  // A hidden block that lost its wrapper in the visual mode is published on
-  // the next save: the code mark, the noparse mark and the link used to drop it.
+  // A hidden block that lost its wrapper in the visual mode is published on the
+  // next save
   describe("Private around other markup", () => {
     /** The text with every [private] block taken out, as a stranger reads it. */
     function outsideHidden(bbcode: string): string {
@@ -344,9 +342,7 @@ describe("BBCode Round-Trip Integration", () => {
       expect(outputBbcode).toBe(input);
     });
 
-    // A block inside another is read by those who read both. The visual mode
-    // used to put the inner one beside the outer one, which the save takes,
-    // and the text of the inner block went to its addressee.
+    // A block inside another is read by those who read both.
     it.each([
       '[private]раз [private="Вася"]два[/private] три[/private]',
       '[private="Вася"]раз [private]два[/private][/private]',

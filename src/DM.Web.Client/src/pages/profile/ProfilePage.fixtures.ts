@@ -1,15 +1,11 @@
 /**
  * The profile of somebody else in front of a signed-in reader, for the specs
- * of the actions and of the note, which mock vue-router with ProfilePage.doubles.
+ * of the actions and of the note, on the real router.
  */
 import { vi } from "vitest";
-import {
-  flushPromises,
-  RouterLinkStub,
-  shallowMount,
-  type VueWrapper,
-} from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
+import { createPinia, setActivePinia, type Pinia } from "pinia";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import {
   accountApi,
   blacklistApi,
@@ -24,7 +20,6 @@ import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
 import { Api } from "@/shared/api";
 import ProfilePage from "./ProfilePage.vue";
-import { route } from "./ProfilePage.doubles";
 
 const toast = useToast();
 
@@ -47,6 +42,8 @@ interface RenderOptions {
   own?: boolean;
   /** The name as the address spells it, when not as the profile does. */
   address?: string;
+  /** The query of the address, with its question mark. */
+  query?: string;
   /** "О себе" as the page reads it, and as the server gives it to its author. */
   about?: { display: string; source: string };
   /** The server lets the reader write a recommendation. */
@@ -62,26 +59,103 @@ interface RenderOptions {
   nameChangePending?: boolean;
 }
 
+/** The addresses the page and the parts drawn for real link to. */
+const ROUTES: Address[] = [
+  ["profile", "/users/:username"],
+  ["profile-uploads", "/users/:username/uploads"],
+  ["write-endorsement", "/users/:username/write-endorsement"],
+  ["direct-message", "/messenger/user/:username"],
+  ["subscriptions", "/subscriptions"],
+  ["my-tickets", "/my-tickets"],
+  ["account", "/account"],
+];
+
+/** The parts of the page a spec may draw for real; the rest stands as a stub. */
+const PARTS = [
+  "AvatarImg",
+  "FormField",
+  "ProfileSkeleton",
+  "ProfilePictureUpload",
+  "ProfilePersonalInfo",
+  "ProfileUsername",
+  "ProfileStats",
+  "ProfileViolations",
+  "ErrorPage",
+  "UserSubscribeButton",
+  "BlockTitle",
+  "BBCodeEditor",
+  "ContentText",
+  "SecondaryText",
+  "Tooltip",
+  "StatLine",
+  "ProfileRemovedAccountAbout",
+  "ProfileGamesTable",
+  "ProfileBlogsTable",
+  "ProfileBestPostSection",
+  "ProfileBestPublicationSection",
+  "ProfileTopicsList",
+  "ProfileSubscribersSection",
+  "ProfileAchievements",
+  "ProfileModerationTab",
+  "Tabs",
+  "ProfileActions",
+  "ProfileTabs",
+  "ProfilePersonalNote",
+  "ProfileEditBar",
+  "ProfileAbout",
+  "ButtonRow",
+  "Button",
+  "CaptionLine",
+  "CaptionAction",
+  "ConfirmDialog",
+  "ActionResult",
+];
+
+/**
+ * The profile page at the address of `name`, as a shallow mount draws it: the
+ * parts in `real` are drawn, every other part of the page is a stub.
+ */
+export async function mountProfile(
+  pinia: Pinia,
+  name: string,
+  { real, query = "" }: { real: string[]; query?: string },
+) {
+  const { wrapper, router } = await mountPage(
+    ProfilePage,
+    `/users/${encodeURIComponent(name)}${query}`,
+    {
+      routes: ROUTES,
+      pinia,
+      stubs: {
+        Teleport: true,
+        ...Object.fromEntries(
+          PARTS.map((part) => [part, !real.includes(part)]),
+        ),
+      },
+    },
+  );
+  await flushPromises();
+  return { wrapper, address: () => router.currentRoute.value.fullPath };
+}
+
 // The window, the tab strip, the caption line of the note and its actions are real.
-const STUBS = {
-  Teleport: true,
-  Button: false,
-  ConfirmDialog: false,
-  Tabs: false,
+const REAL = [
+  "Button",
+  "ConfirmDialog",
+  "Tabs",
   // The parts of the page these tests read, drawn for real.
-  ProfileActions: false,
-  ProfileTabs: false,
-  ProfilePersonalNote: false,
-  ProfileEditBar: false,
-  ProfileAbout: false,
+  "ProfileActions",
+  "ProfileTabs",
+  "ProfilePersonalNote",
+  "ProfileEditBar",
+  "ProfileAbout",
   // Real, or the actions in it are not drawn.
-  ButtonRow: false,
-  CaptionLine: false,
-  CaptionAction: false,
+  "ButtonRow",
+  "CaptionLine",
+  "CaptionAction",
   // Real: its words are read.
-  ActionResult: false,
-  RouterLink: RouterLinkStub,
-};
+  "ActionResult",
+];
 
 /** The load of the profile, answered in place with the user the test asks for. */
 function answerTheProfile(options: RenderOptions, shown: string) {
@@ -116,20 +190,20 @@ function answerTheProfile(options: RenderOptions, shown: string) {
  */
 export async function render(options: RenderOptions) {
   const shown = options.own ? "Me" : "Other";
-  route.params.username = options.address ?? shown;
   const pinia = createPinia();
   setActivePinia(pinia);
 
-  useAuthStore().user = {
+  useAuthStore(pinia).user = {
     id: "me-id",
     username: "Me",
     role: UserRole.RegularUser,
   } as never;
 
   answerTheProfile(options, shown);
-  vi.spyOn(useSubscriptionsStore(), "fetchSubscriptions").mockResolvedValue(
-    null as never,
-  );
+  vi.spyOn(
+    useSubscriptionsStore(pinia),
+    "fetchSubscriptions",
+  ).mockResolvedValue(null as never);
 
   vi.spyOn(userApi, "getEndorsementEligibility").mockResolvedValue(
     ok(options.endorsable ? { resource: { canCreate: true } } : null),
@@ -168,14 +242,13 @@ export async function render(options: RenderOptions) {
     ok(useAuthStore().user?.settings),
   );
 
-  const wrapper = shallowMount(ProfilePage, {
-    global: {
-      plugins: [pinia],
-      stubs: STUBS,
-    },
-  });
-  await flushPromises();
+  const { wrapper, address } = await mountProfile(
+    pinia,
+    options.address ?? shown,
+    { real: REAL, query: options.query },
+  );
   return Object.assign(wrapper, {
+    address,
     list,
     noteRequest,
     ownRead,

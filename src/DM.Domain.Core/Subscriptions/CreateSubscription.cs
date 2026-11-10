@@ -7,7 +7,6 @@ namespace DM.Domain.Core.Subscriptions;
 /// </summary>
 public class CreateSubscription
 {
-    /// <summary>Subscription identifier</summary>
     public Guid SubscriptionId { get; set; }
 
     /// <summary>Subscriber user identifier</summary>

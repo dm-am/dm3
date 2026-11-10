@@ -12,9 +12,6 @@ namespace DM.Domain.Account.Features.EmailChange;
 /// </summary>
 public interface IEmailChangeRepository
 {
-    /// <summary>
-    /// Find user by username
-    /// </summary>
     Task<AuthenticatedUser?> FindUser(string username);
 
     /// <summary>

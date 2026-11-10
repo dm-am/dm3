@@ -5,12 +5,8 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
-/// <summary>
-/// Who the post reports as a lead of its game.
-/// </summary>
-/// <remarks>
-/// A lead sees every [private] block in the game, so an unfilled field must not become Guid.Empty, the guest's id.
-/// </remarks>
+// A lead sees every [private] block in the game, so an unfilled field must not become Guid.Empty,
+// the guest's id.
 public class PostGameLeadsShould
 {
     private static readonly Guid MasterId = Guid.Parse("11111111-1111-1111-1111-111111111111");

@@ -18,8 +18,6 @@ const props = withDefaults(
     min?: string;
     /** Latest selectable date, YYYY-MM-DD. Later days are disabled. */
     max?: string;
-    /** Input placeholder. */
-    placeholder?: string;
     /** Accessible label for the text input. */
     ariaLabel?: string;
     /** The id of the text input, for a caption that points at it. */
@@ -38,7 +36,6 @@ const props = withDefaults(
   {
     min: undefined,
     max: undefined,
-    placeholder: "дд.мм.гггг",
     ariaLabel: undefined,
     inputId: undefined,
     clearable: true,
@@ -357,7 +354,7 @@ onUnmounted(() => {
         class="di-input"
         inputmode="numeric"
         autocomplete="off"
-        :placeholder="placeholder"
+        placeholder="дд.мм.гггг"
         :aria-label="ariaLabel"
         @input="onInput"
         @keydown="onInputKeydown"

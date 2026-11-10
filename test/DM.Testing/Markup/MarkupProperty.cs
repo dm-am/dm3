@@ -17,7 +17,7 @@ namespace DM.Testing.Markup;
 /// </remarks>
 public static class MarkupProperty
 {
-    /// <summary>How many texts a check tries to take out before it reports what it has.</summary>
+    // How many texts a check tries to take out before it reports what it has.
     private const int ShrinkBudget = 4000;
 
     /// <summary>
@@ -46,7 +46,7 @@ public static class MarkupProperty
         }
     }
 
-    /// <summary>The seeds of the cases a check runs: the one asked for, or the default run.</summary>
+    // The seeds of the cases a check runs: the one asked for, or the default run.
     private static IEnumerable<ulong> Seeds(ulong baseSeed, int runs)
     {
         var asked = Environment.GetEnvironmentVariable("DM_MARKUP_SEED");
@@ -65,7 +65,7 @@ public static class MarkupProperty
         }
     }
 
-    /// <summary>The check, with an exception it throws counted as a failure.</summary>
+    // The check, with an exception it throws counted as a failure.
     private static string? Safely(Func<string, string?> fails, string text)
     {
         try
@@ -125,7 +125,7 @@ public static class MarkupProperty
         return string.Concat(current);
     }
 
-    /// <summary>A piece written many times in a row, written half as many; null for any other piece.</summary>
+    // A piece written many times in a row, written half as many; null for any other piece.
     private static string? Shorter(string atom)
     {
         if (atom.Length < 8) return null;
@@ -156,5 +156,4 @@ public static class MarkupProperty
 
 }
 
-/// <summary>A generated text a check failed on, made as small as it goes.</summary>
 public sealed class MarkupPropertyException(string message) : Exception(message);

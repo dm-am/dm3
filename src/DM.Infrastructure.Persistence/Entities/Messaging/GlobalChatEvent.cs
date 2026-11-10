@@ -47,9 +47,6 @@ public class GlobalChatEvent
     /// </summary>
     public bool IsOpen { get; set; }
 
-    /// <summary>
-    /// Current event status
-    /// </summary>
     public GlobalChatEventStatus Status { get; set; }
 
     /// <summary>

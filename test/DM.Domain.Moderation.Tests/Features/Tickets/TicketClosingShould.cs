@@ -12,10 +12,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
-/// <summary>
-/// The answer of moderation with the status it chose: closed, spam or waiting
-/// for the author, with a word or without, and who is told of it.
-/// </summary>
 public class TicketClosingShould : TicketServiceTestBase
 {
     /// <summary>
@@ -34,11 +30,6 @@ public class TicketClosingShould : TicketServiceTestBase
         ClosingSucceeds();
     }
 
-    /// <summary>
-    /// The answer of moderation and the status it chose land together: the
-    /// comment is written with the ticket moved to that status, and an answer
-    /// that chose none waits for the user.
-    /// </summary>
     [Theory]
     [InlineData(null, TicketStatus.WaitingForUser)]
     [InlineData(TicketStatus.WaitingForUser, TicketStatus.WaitingForUser)]
@@ -57,11 +48,6 @@ public class TicketClosingShould : TicketServiceTestBase
         await ticketRepository.DidNotReceiveWithAnyArgs().Close(default, default, default, default, default);
     }
 
-    /// <summary>
-    /// A closing without a word only moves the status: nothing is written into the
-    /// conversation, and the ticket names the moderator who closed it, by the
-    /// conditional write of an open ticket.
-    /// </summary>
     [Theory]
     [InlineData(TicketStatus.Closed, "")]
     [InlineData(TicketStatus.Spam, "   ")]
@@ -75,10 +61,6 @@ public class TicketClosingShould : TicketServiceTestBase
         await ticketRepository.DidNotReceiveWithAnyArgs().AddComment(default!, default, default, default);
     }
 
-    /// <summary>
-    /// The page reads the ticket back as it stands after the answer: closed, it
-    /// names who closed it and offers neither the form nor the choice of a status.
-    /// </summary>
     [Fact]
     public async Task ReadTheTicketBackAfterTheAnswer()
     {
@@ -129,9 +111,7 @@ public class TicketClosingShould : TicketServiceTestBase
         await eventProducer.DidNotReceive().SendAsync(EventType.TicketAnswered, Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// A guest has no inbox: his tracking page is where the answer appears.
-    /// </summary>
+    // A guest has no inbox: his tracking page is where the answer appears.
     [Theory]
     [InlineData("Доступ восстановлен")]
     [InlineData("")]
@@ -145,9 +125,6 @@ public class TicketClosingShould : TicketServiceTestBase
         await eventProducer.DidNotReceiveWithAnyArgs().SendAsync(default(EventType), default(Guid));
     }
 
-    /// <summary>
-    /// Spam is closed without telling whoever sent it, with a word or without.
-    /// </summary>
     [Theory]
     [InlineData("Реклама")]
     [InlineData("")]
@@ -161,10 +138,6 @@ public class TicketClosingShould : TicketServiceTestBase
         await eventProducer.DidNotReceiveWithAnyArgs().SendAsync(default(EventType), default(Guid));
     }
 
-    /// <summary>
-    /// Of two closings without a word sent at once, the second closes nothing and
-    /// its moderator is told so; nobody is announced anything twice.
-    /// </summary>
     [Fact]
     public async Task RefuseAClosingThatLostTheRace()
     {
@@ -180,9 +153,6 @@ public class TicketClosingShould : TicketServiceTestBase
         await eventProducer.DidNotReceiveWithAnyArgs().SendAsync(default(EventType), default(Guid));
     }
 
-    /// <summary>
-    /// A ticket read closed is not closed again, with a word or without.
-    /// </summary>
     [Theory]
     [InlineData("", "уже закрыто")]
     [InlineData("И еще одно", "Обращение закрыто")]

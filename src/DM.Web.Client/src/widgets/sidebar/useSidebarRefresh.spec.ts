@@ -5,51 +5,49 @@
 /** The three moments a sidebar list refetches; without the forced one the counters stay the last reader's. */
 import { describe, it, expect, beforeEach, vi } from "vitest";
 import { defineComponent, nextTick } from "vue";
-import { mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
-import { useRoute } from "vue-router";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia, setActivePinia, type Pinia } from "pinia";
 import { useAuthStore } from "@/shared/stores";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { useSidebarRefresh } from "./useSidebarRefresh";
 import type { User } from "@/shared/api/models/common/user";
 
-// The block reads only fullPath, and it has to be reactive for the navigation
-// half of the composable to be observable at all.
-vi.mock("vue-router", async () => {
-  const { reactive } = await vi.importActual<typeof import("vue")>("vue");
-  const route = reactive({ fullPath: "/" });
-  return { useRoute: () => route };
-});
+const routes: Address[] = [
+  ["home", "/"],
+  ["games", "/games"],
+];
+
+let pinia: Pinia;
 
 const viewer = (username: string) => ({ id: username, username }) as User;
 
 function mountBlock(fetch: (force?: boolean) => void) {
-  return mount(
-    defineComponent({
-      setup() {
-        useSidebarRefresh(fetch);
-        return () => null;
-      },
-    }),
-  );
+  const Shell = defineComponent({
+    setup() {
+      useSidebarRefresh(fetch);
+      return () => null;
+    },
+  });
+  return mountPage(Shell, "/", { routes, pinia });
 }
 
 describe("useSidebarRefresh", () => {
   beforeEach(() => {
     localStorage.clear();
-    setActivePinia(createPinia());
-    useRoute().fullPath = "/";
+    pinia = createPinia();
+    setActivePinia(pinia);
   });
 
-  it("reads the list once on mount, unforced", () => {
+  it("reads the list once on mount, unforced", async () => {
     const fetch = vi.fn();
-    mountBlock(fetch);
+    await mountBlock(fetch);
 
     expect(fetch.mock.calls).toEqual([[]]);
   });
 
   it("forces a refetch when the viewer changes", async () => {
     const fetch = vi.fn();
-    mountBlock(fetch);
+    await mountBlock(fetch);
     fetch.mockClear();
 
     useAuthStore().updateUser(viewer("b"));
@@ -60,11 +58,11 @@ describe("useSidebarRefresh", () => {
 
   it("asks again on navigation, unforced", async () => {
     const fetch = vi.fn();
-    mountBlock(fetch);
+    const { router } = await mountBlock(fetch);
     fetch.mockClear();
 
-    useRoute().fullPath = "/games";
-    await nextTick();
+    await router.push("/games");
+    await flushPromises();
 
     expect(fetch.mock.calls).toEqual([[]]);
   });

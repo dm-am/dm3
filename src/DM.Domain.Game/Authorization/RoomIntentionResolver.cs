@@ -75,9 +75,6 @@ internal class RoomIntentionResolver :
         _ => false
     };
 
-    /// <summary>
-    /// The policy the row was granted with admits writing in the room.
-    /// </summary>
     private static bool GrantsWriting(RoomAccess access) => access.Policy == RoomAccessPolicy.Full;
 
     /// <summary>
@@ -89,9 +86,8 @@ internal class RoomIntentionResolver :
     /// </remarks>
     private static bool InPlay(RoomAccess access) => access.Character?.Status == CharacterStatus.Active;
 
-    /// <summary>
-    /// The reader rows of this user in this room; the row's user comes from a projection, so it may be absent.
-    /// </summary>
+    // The reader rows of this user in this room; the row's user comes from a projection, so it may
+    // be absent.
     private static IEnumerable<RoomAccess> ReaderRows(RoomToUpdate room, IAuthorizationSubject user) =>
         room.Accesses.Where(a =>
             a.TargetType == RoomAccessTargetType.Reader &&
@@ -109,21 +105,14 @@ internal class RoomIntentionResolver :
             a.TargetType == RoomAccessTargetType.Character &&
             a.Character?.Author?.UserId == user.UserId);
 
-    /// <summary>
-    /// The room was opened to this user: as a reader, or through a character of
-    /// theirs.
-    /// </summary>
     private static bool HoldsARow(RoomToUpdate room, IAuthorizationSubject user) =>
         ReaderRows(room, user).Any() || CharacterRows(room, user).Any();
 
-    /// <summary>One of the reader rows also grants them writing.</summary>
     private static bool MayWriteAsReader(RoomToUpdate room, IAuthorizationSubject user) =>
         ReaderRows(room, user).Any(GrantsWriting);
 
-    /// <summary>
-    /// A character of theirs in play holds a row that grants writing: the same
-    /// three conditions a post spoken by that character is held to.
-    /// </summary>
+    // A character of theirs in play holds a row that grants writing: the same three conditions a
+    // post spoken by that character is held to.
     private static bool MayWriteAsCharacter(RoomToUpdate room, IAuthorizationSubject user) =>
         CharacterRows(room, user).Any(a => GrantsWriting(a) && InPlay(a));
 }

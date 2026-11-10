@@ -32,7 +32,6 @@ public class DocumentSizeShould
 {
     private const int Limit = 80 * 1000;
 
-    /// <summary>A document past the limit, at its size.</summary>
     /// <param name="File">Path from the repository root, forward slashes.</param>
     /// <param name="Bytes">UTF-8 bytes with line ends counted as one.</param>
     private sealed record Recorded(string File, int Bytes);
@@ -41,10 +40,6 @@ public class DocumentSizeShould
     [
     ];
 
-    /// <summary>
-    /// Every document past the limit is recorded at its size, and every record has a
-    /// document of that size behind it.
-    /// </summary>
     [Fact]
     public void HoldEveryDocumentPastTheLimitAtItsRecordedSize()
     {

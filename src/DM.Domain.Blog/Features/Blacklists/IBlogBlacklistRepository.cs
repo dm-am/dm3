@@ -10,9 +10,6 @@ public interface IBlogBlacklistRepository
 {
     Task<IEnumerable<GeneralUser>> GetBlacklist(Guid blogId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Add user to blog blacklist
-    /// </summary>
     /// <remarks>
     /// Throws <see cref="DM.Domain.Core.Exceptions.DuplicateEntityException" /> when the
     /// pair is already on the list: the caller checks first, and this is the race

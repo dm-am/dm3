@@ -9,41 +9,41 @@ import { mount, RouterLinkStub } from "@vue/test-utils";
 import { SvgIcon } from "@/shared/ui/Icon";
 import CharacterCard from "./CharacterCard.vue";
 import type { Character } from "../model/characterTypes";
+import { createMockCharacter } from "../model/store.fixtures";
+import { asServed } from "@/shared/api/models";
+import { UserRole, type Username } from "@/shared/api/models/common";
 
-/**
- * A roster entry, field for field as the list endpoint sends it. Ids and most
- * scalars are branded, so the literal is asserted rather than annotated; the
- * assignment below is what the compiler actually checks.
- */
+/** A roster entry, field for field as the list endpoint sends it. */
 const rosterEntry = {
-  id: "char-1",
-  name: "Ронин",
-  status: "Active",
-  isDead: false,
-  isPlayerLeft: false,
-  isPlayerExiled: false,
-  isNpc: false,
-  author: {
+  ...createMockCharacter("char-1", "Ронин"),
+  author: asServed({
     id: "user-1",
-    username: "gamer",
+    username: "gamer" as Username,
     lastActivityUtc: null,
-    role: "Player",
+    role: UserRole.RegularUser,
     isNewbie: false,
-  },
-  picture: {},
-  totalPostsCount: 3,
-  lastPostUtc: "2026-08-02T14:54:58",
-  descriptor: "Варвар",
-} as unknown as Omit<Character, "attributes" | "privacy">;
+  }),
+  totalPostsCount: asServed(3),
+  lastPostUtc: asServed("2026-08-02T14:54:58"),
+  descriptor: asServed("Варвар"),
+};
 
 /** The compile-time half of the guard. */
 const fromRoster: Character = rosterEntry;
 
 /** The same character as the single-character read answers it. */
-const fromSheet = {
+const fromSheet: Character = {
   ...rosterEntry,
-  attributes: [{ id: "spec-1", title: "Класс", value: "Варвар" }],
-} as unknown as Character;
+  attributes: asServed([
+    {
+      id: asServed("spec-1"),
+      title: asServed("Класс"),
+      value: "Варвар",
+      modifier: asServed(""),
+      inconsistent: asServed(""),
+    },
+  ]),
+};
 
 const mountCard = (character: Character) =>
   mount(CharacterCard, {

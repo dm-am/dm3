@@ -9,11 +9,18 @@ import { execFileSync } from "node:child_process";
 import { existsSync, readFileSync } from "node:fs";
 import { extname, join } from "node:path";
 
-export type Group = "client" | "spec" | "e2e" | "server" | "srvtest";
+export type Group =
+  | "client"
+  | "spec"
+  | "e2e"
+  | "scripts"
+  | "server"
+  | "srvtest";
 export const GROUPS: readonly Group[] = [
   "client",
   "spec",
   "e2e",
+  "scripts",
   "server",
   "srvtest",
 ];
@@ -27,6 +34,7 @@ interface Line {
 
 const CLIENT = "src/DM.Web.Client/";
 const WINDOW = 8;
+const SCRIPT = [".ts", ".mts", ".js", ".mjs", ".cjs"];
 
 /** Which group a repository path counts in, if any. */
 function groupOf(path: string): Group | null {
@@ -37,6 +45,9 @@ function groupOf(path: string): Group | null {
   }
   if (path.startsWith(`${CLIENT}e2e/`)) {
     return [".ts", ".js", ".cjs", ".mjs"].includes(ext) ? "e2e" : null;
+  }
+  if (path.startsWith("scripts/")) {
+    return SCRIPT.includes(ext) ? "scripts" : null;
   }
   if (ext !== ".cs") return null;
   if (path.startsWith("src/")) {
@@ -118,7 +129,7 @@ class Lexer {
     if (this.state === "line" || this.state === "regex") this.state = "code";
     else if (this.state === "str" && ends) this.state = "code";
     this.push();
-    this.recent = (this.recent + " ").slice(-40);
+    this.recent = `${this.recent} `.slice(-40);
     return i + 1;
   }
 
@@ -297,7 +308,7 @@ function vueLines(raw: string[]): Line[] {
   const out: Line[] = new Array(raw.length);
   let outside: number[] = [];
   const flush = () => {
-    const read = lex(outside.map((at) => raw[at]).join("\n") + "\n", "html");
+    const read = lex(`${outside.map((at) => raw[at]).join("\n")}\n`, "html");
     outside.forEach((at, k) => {
       out[at] = { ...(read[k] ?? { code: "", comment: "" }), block: "outside" };
     });
@@ -321,7 +332,7 @@ function vueLines(raw: string[]): Line[] {
     while (end < raw.length && !close.test(raw[end])) end++;
     const lang = tag === "template" ? "html" : tag === "style" ? "css" : "ts";
     const inner = raw.slice(open + 1, end);
-    const read = inner.length ? lex(inner.join("\n") + "\n", lang) : [];
+    const read = inner.length ? lex(`${inner.join("\n")}\n`, lang) : [];
     tagLine(open, tag);
     inner.forEach((_, k) => {
       out[open + 1 + k] = {
@@ -369,7 +380,7 @@ const TS_IMPORT_CLOSE =
 
 /** The lines a repeat is looked for in: code only, no whitespace, no imports. */
 function normalLines(text: string, ext: string): Normal[] {
-  const script = [".ts", ".js", ".mjs", ".cjs"].includes(ext);
+  const script = SCRIPT.includes(ext);
   const out: Normal[] = [];
   let inImport = false;
   linesOf(text, ext).forEach((line, i) => {
@@ -392,6 +403,19 @@ interface Place {
   file: number;
   from: number;
   to: number;
+}
+
+/** One place of a repeated piece, lines numbered from one. */
+interface Spot {
+  path: string;
+  from: number;
+  to: number;
+}
+
+/** Code found in more than one place, and what it costs: every place but its longest. */
+export interface Piece {
+  cost: number;
+  places: Spot[];
 }
 
 function solid(lines: Normal[], start: number): boolean {
@@ -482,10 +506,10 @@ function merged(spans: [number, number][]): [number, number][] {
 }
 
 /**
- * Redundant lines of one group: fragments whose places overlap in a file are
- * one piece, and a piece costs every place but its longest.
+ * The repeated pieces of one group: fragments whose places overlap in a file
+ * are one piece, and a piece costs every place but its longest.
  */
-function redundantLines(files: Normal[][]): number {
+function redundantPieces(files: Normal[][], paths: string[]): Piece[] {
   const frags = fragments(files);
   const parent = frags.map((_, i) => i);
   const find = (x: number): number => {
@@ -520,15 +544,20 @@ function redundantLines(files: Normal[][]): number {
       piece.set(file, [...(piece.get(file) ?? []), [from, to]]);
     }
   });
-  let redundant = 0;
-  for (const piece of pieces.values()) {
-    const lengths = [...piece.values()]
-      .flatMap((spans) => merged(spans))
-      .map(([from, to]) => to - from + 1);
-    redundant += lengths.reduce((a, b) => a + b, 0) - Math.max(...lengths);
-  }
-  return redundant;
+  return [...pieces.values()]
+    .map((piece) => {
+      const places = [...piece].flatMap(([file, spans]) =>
+        merged(spans).map(([from, to]) => ({ path: paths[file], from, to })),
+      );
+      const lengths = places.map(({ from, to }) => to - from + 1);
+      const cost = lengths.reduce((a, b) => a + b, 0) - Math.max(...lengths);
+      return { cost, places };
+    })
+    .sort((a, b) => b.cost - a.cost);
 }
+
+export const redundantLines = (pieces: readonly Piece[]): number =>
+  pieces.reduce((sum, piece) => sum + piece.cost, 0);
 
 /** The files a commit would carry, in git's order, as repository paths. */
 export function committedFiles(root: string): string[] {
@@ -542,16 +571,29 @@ export function committedFiles(root: string): string[] {
   );
 }
 
-/** Redundant lines of every group, each group measured on its own. */
-export function measureDuplicates(root: string): Record<Group, number> {
-  const byGroup = new Map<Group, Normal[][]>(GROUPS.map((g) => [g, []]));
-  for (const path of committedFiles(root)) {
+/**
+ * The repeated pieces of every group, each group measured on its own, the
+ * costliest first.
+ */
+export function measureDuplicates(
+  root: string,
+  paths: readonly string[] = committedFiles(root),
+): Record<Group, Piece[]> {
+  const byGroup = new Map<Group, { lines: Normal[][]; paths: string[] }>(
+    GROUPS.map((g) => [g, { lines: [], paths: [] }]),
+  );
+  for (const path of paths) {
     const group = groupOf(path);
     if (!group) continue;
     const text = readFileSync(join(root, path), "utf8");
-    byGroup.get(group)?.push(normalLines(text, extname(path)));
+    const files = byGroup.get(group);
+    files?.lines.push(normalLines(text, extname(path)));
+    files?.paths.push(path);
   }
   return Object.fromEntries(
-    GROUPS.map((g) => [g, redundantLines(byGroup.get(g) ?? [])]),
-  ) as Record<Group, number>;
+    GROUPS.map((g) => {
+      const files = byGroup.get(g) ?? { lines: [], paths: [] };
+      return [g, redundantPieces(files.lines, files.paths)];
+    }),
+  ) as Record<Group, Piece[]>;
 }

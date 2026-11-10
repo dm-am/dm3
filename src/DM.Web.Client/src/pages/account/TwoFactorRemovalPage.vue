@@ -7,10 +7,10 @@
  * question on screen with the wait over the button.
  */
 import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
 import { readConfirmationToken } from "@/shared/lib/utils/confirmationToken";
 import { accountApi } from "@/entities/user";
 import Button from "@/shared/ui/Button/Button.vue";
+import HomeButton from "./HomeButton.vue";
 import { describeFailure } from "@/shared/lib/errors";
 import { useRateLimitNotice } from "@/shared/lib/composables/useRateLimitNotice";
 import { symbols } from "@/shared/lib/utils/icons";
@@ -19,8 +19,6 @@ import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 
 /** The statuses of a dead link, which the heading already says. */
 const LINK_IS_DEAD = [404, 410];
-
-const router = useRouter();
 
 const token = ref("");
 const loading = ref(false);
@@ -63,10 +61,6 @@ async function schedule() {
 
   scheduled.value = true;
 }
-
-function goHome() {
-  router.push("/");
-}
 </script>
 
 <template>
@@ -87,14 +81,7 @@ function goHome() {
         <p class="auth-note">
           Вход с кодом автоматически отменит назначенное отключение
         </p>
-        <Button
-          class="auth-button auth-button--spaced"
-          type="button"
-          variant="primary"
-          @click="goHome"
-        >
-          На главную
-        </Button>
+        <HomeButton />
       </template>
 
       <template v-else-if="dead">
@@ -109,14 +96,7 @@ function goHome() {
           }}
         </p>
         <!-- The one control all the dead links carry. -->
-        <Button
-          class="auth-button auth-button--spaced"
-          type="button"
-          variant="primary"
-          @click="goHome"
-        >
-          На главную
-        </Button>
+        <HomeButton />
         <p class="auth-footnote">
           Нужна помощь? Обратитесь в
           <router-link :to="supportFor('AccessRecovery')"

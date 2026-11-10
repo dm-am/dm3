@@ -17,11 +17,8 @@ using Xunit;
 
 namespace DM.Domain.Forum.Tests.Features.Digests;
 
-/// <summary>
-/// The digest of a closed period is generated once and never again: the marker
-/// row is the whole memory of it. These tests are about what happens to that
-/// marker when the topic it was taken for does not get written.
-/// </summary>
+// The digest of a closed period is generated once and never again: the marker row is the whole
+// memory of it.
 public class PeriodDigestProcessorShould : UnitTestBase
 {
     private readonly IPeriodDigestRepository digestRepository;

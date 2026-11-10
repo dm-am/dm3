@@ -4,9 +4,6 @@ using Xunit;
 
 namespace DM.Infrastructure.Mail.Tests;
 
-/// <summary>
-/// A Message-Id a relay will not replace, and that names the send it belongs to.
-/// </summary>
 public class MessageIdentifierShould
 {
     private static readonly Guid Token = Guid.Parse("11111111-2222-3333-4444-555555555555");

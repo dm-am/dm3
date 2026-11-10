@@ -10,10 +10,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The intrinsic size of an upload survives the round trip through the database
-/// and reaches the projection every reader of an avatar goes through.
-/// </summary>
 /// <remarks>
 /// Against a real Postgres: the columns and the projection's SQL translation are what a mock cannot vouch for.
 /// The rows belong to the seeded test user, so the shared listing's capped page does not change.
@@ -39,9 +35,8 @@ public class AvatarDimensionsShould : IntegrationTestBase
         picture.SourceHeight.Should().Be(150);
     }
 
-    /// <summary>
-    /// A row without the measurement projects nothing, so "nobody measured" differs from "zero pixels".
-    /// </summary>
+    // A row without the measurement projects nothing, so "nobody measured" differs from "zero
+    // pixels".
     [Fact]
     public async Task StayAbsentForAnUploadNobodyMeasured()
     {
@@ -58,10 +53,8 @@ public class AvatarDimensionsShould : IntegrationTestBase
         picture.SourceHeight.Should().BeNull();
     }
 
-    /// <summary>
-    /// The projection as production runs it: an EF Select translated to SQL, so a
-    /// column missing from the schema fails here instead of in a later release.
-    /// </summary>
+    // The projection as production runs it: an EF Select translated to SQL, so a column missing
+    // from the schema fails here instead of in a later release.
     private static async Task<AvatarPicture> ProjectAsync(DmDbContext dbContext, Guid uploadId) =>
         await dbContext.Uploads
             .Where(u => u.UploadId == uploadId)

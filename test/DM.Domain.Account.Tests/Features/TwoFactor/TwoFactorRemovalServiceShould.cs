@@ -23,16 +23,9 @@ using Identity = DM.Domain.Account.Features.Authentication.Identity;
 
 namespace DM.Domain.Account.Tests.Features.TwoFactor;
 
-/// <summary>
-/// Getting back into an account whose second factor is gone.
-/// </summary>
-/// <remarks>
-/// The letter does not take the factor off: it schedules the removal a week out,
-/// ends every session, and any successful sign-in with the factor calls it off.
-/// Every rank takes the same path: it is the only way back for a person who has
-/// lost both the phone and the recovery codes, and a privileged account
-/// simply has its rank withheld until a factor is set up again.
-/// </remarks>
+// Every rank takes the same path: it is the only way back for a person who has lost both the phone
+// and the recovery codes, and a privileged account simply has its rank withheld until a factor is
+// set up again.
 public class TwoFactorRemovalServiceShould : UnitTestBase
 {
     private static readonly Guid UserId = Guid.Parse("11112222-3333-4444-5555-666677778888");
@@ -98,12 +91,7 @@ public class TwoFactorRemovalServiceShould : UnitTestBase
             .Returns(confirmed);
     }
 
-    /// <summary>
-    /// A rank that owes a second factor takes the mailed path like anyone else.
-    /// </summary>
-    /// <remarks>
-    /// The rank is not lost with the factor, it is withheld until a factor is set up again.
-    /// </remarks>
+    // The rank is not lost with the factor, it is withheld until a factor is set up again.
     [Theory]
     [InlineData(UserRole.RegularUser)]
     [InlineData(UserRole.Admin)]
@@ -140,10 +128,6 @@ public class TwoFactorRemovalServiceShould : UnitTestBase
             Arg.Any<string>(), Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// The link schedules a removal, it does not perform one, and the letter that
-    /// says so goes out at the moment of scheduling.
-    /// </summary>
     [Fact]
     public async Task ScheduleTheRemovalRatherThanPerformIt()
     {
@@ -164,9 +148,6 @@ public class TwoFactorRemovalServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>
-    /// A promotion between the letter and the link changes nothing about it.
-    /// </summary>
     [Fact]
     public async Task ScheduleARemovalForAnAccountPromotedSinceTheLinkWasIssued()
     {
@@ -180,13 +161,7 @@ public class TwoFactorRemovalServiceShould : UnitTestBase
             UserId, Moment.AddDays(7), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A factor switched off between the read and the write schedules nothing,
-    /// and nothing that goes with a scheduling happens either.
-    /// </summary>
-    /// <remarks>
-    /// The link is followed days after it was mailed, so the write decides, not the read.
-    /// </remarks>
+    // The link is followed days after it was mailed, so the write decides, not the read.
     [Fact]
     public async Task ScheduleNothingForAFactorSwitchedOffSinceTheLetter()
     {
@@ -275,13 +250,8 @@ public class TwoFactorRemovalServiceShould : UnitTestBase
             Arg.Any<Guid>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A removal called off between the listing and the write is not carried out,
-    /// and nothing is written about it anywhere.
-    /// </summary>
-    /// <remarks>
-    /// Cancelling lands between the listing and the removal, so the write decides and everything after it waits.
-    /// </remarks>
+    // Cancelling lands between the listing and the removal, so the write decides and everything
+    // after it waits.
     [Fact]
     public async Task SayNothingAboutARemovalCalledOffWhileThePassWasRunning()
     {
@@ -303,7 +273,6 @@ public class TwoFactorRemovalServiceShould : UnitTestBase
             Identity.Success(caller, new Session { Id = Guid.NewGuid() }, UserSettings.Default, "t"));
     }
 
-    /// <summary>Journalled on both accounts, sessions of the target ended.</summary>
     [Fact]
     public async Task TakeAColleaguesFactorOffAndSaySoInBothJournals()
     {
@@ -322,7 +291,8 @@ public class TwoFactorRemovalServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>The administrator's line is read on the security screen: a comma between its parts, the rank in words.</summary>
+    // The administrator's line is read on the security screen: a comma between its parts, the rank
+    // in words.
     [Fact]
     public async Task WordTheAdministratorsJournalLineForTheReader()
     {
@@ -353,9 +323,7 @@ public class TwoFactorRemovalServiceShould : UnitTestBase
         await repository.DidNotReceive().Remove(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The arrangement needs two administrators, so it must not serve one.
-    /// </summary>
+    // The arrangement needs two administrators, so it must not serve one.
     [Fact]
     public async Task RefuseAnAdministratorTakingTheirOwnFactorOff()
     {

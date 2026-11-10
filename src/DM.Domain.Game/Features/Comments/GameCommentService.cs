@@ -119,9 +119,7 @@ internal class GameCommentService : IGameCommentService
         return comment;
     }
 
-    /// <summary>
-    /// The comment among the comments of games only: the four discussions share one table.
-    /// </summary>
+    // The comment among the comments of games only: the four discussions share one table.
     private async Task<Comment> FindAsync(Guid commentId) =>
         await _repository.Get(commentId) ??
         throw new HttpException(HttpStatusCode.NotFound, RefusalMessage.CommentNotFound(commentId));

@@ -16,13 +16,9 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// A push reaches the connections of its recipients, and nobody else.
-/// </summary>
-/// <remarks>
-/// Global chat events carry no recipients and go to every connection, guests included; everything else
-/// reaches only the connections the map holds, which keeps an anonymous connection from becoming a target.
-/// </remarks>
+// Global chat events carry no recipients and go to every connection, guests included; everything
+// else reaches only the connections the map holds, which keeps an anonymous connection from
+// becoming a target.
 public class RealtimeNotificationProcessorShould : UnitTestBase
 {
     private static readonly Guid Recipient = Guid.NewGuid();
@@ -62,9 +58,6 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
         _connections.DidNotReceive().GetConnectedUsers();
     }
 
-    /// <summary>
-    /// The start and the end of a chat event go to everyone watching the public chat.
-    /// </summary>
     [Theory]
     [InlineData(EventType.GlobalChatEventStarted)]
     [InlineData(EventType.GlobalChatEventEnded)]
@@ -95,9 +88,7 @@ public class RealtimeNotificationProcessorShould : UnitTestBase
                 ids.Contains("recipient-2")));
     }
 
-    /// <summary>
-    /// Nobody connected is an empty address list, not an audience of everyone.
-    /// </summary>
+    // Nobody connected is an empty address list, not an audience of everyone.
     [Fact]
     public async Task SendAPersonalEventNowhereWhenNoRecipientIsConnected()
     {

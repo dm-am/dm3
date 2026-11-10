@@ -4,9 +4,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The two generated descriptions of the model say the same thing.
-/// </summary>
 /// <remarks>
 /// The snapshot is what the next migration is diffed against, the designer is what `migrations remove`
 /// restores. A hand edit to InitialCreate can reach one and miss the other, and nothing else reads the

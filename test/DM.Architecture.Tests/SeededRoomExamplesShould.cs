@@ -9,18 +9,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The seed holds one example of every kind of room the product can build.
-/// </summary>
 /// <remarks>
 /// A room is what is written in it and who may open it. Read from the seeder sources: the initialisers
 /// hold no nested braces, held so by the count check below; one naming neither property is Default and Open.
 /// </remarks>
 public class SeededRoomExamplesShould
 {
-    /// <summary>
-    /// The four rooms the game menu is read against: posts and messages, open and closed.
-    /// </summary>
     private static readonly (string Type, string Access)[] Required =
     [
         ("Default", "Open"),
@@ -46,9 +40,7 @@ public class SeededRoomExamplesShould
     private static readonly Regex PolicyAssignment = new(
         @"\bPolicy\s*=\s*RoomAccessPolicy\.\w+", RegexOptions.Compiled);
 
-    /// <summary>
-    /// "Type" alone: inside "AccessType" it has no word boundary before it.
-    /// </summary>
+    // "Type" alone: inside "AccessType" it has no word boundary before it.
     private static readonly Regex TypeAssignment = new(
         @"\bType\s*=\s*RoomType\.(?<value>\w+)", RegexOptions.Compiled);
 
@@ -99,9 +91,8 @@ public class SeededRoomExamplesShould
             "and the private room of the seeded game carried no posts at all");
     }
 
-    /// <summary>
-    /// A reader that parses nothing passes everything, so rooms are counted by a pattern of their own.
-    /// </summary>
+    // A reader that parses nothing passes everything, so rooms are counted by a pattern of their
+    // own.
     [Fact]
     public void ReadEveryRoomTheSeederWrites()
     {
@@ -114,9 +105,7 @@ public class SeededRoomExamplesShould
         parsed.Should().BeGreaterThanOrEqualTo(Required.Length, "the four rooms the menu is read against are seeded");
     }
 
-    /// <summary>
-    /// Every access row the seeder writes names its policy: the enum defaults to NoAccess.
-    /// </summary>
+    // Every access row the seeder writes names its policy: the enum defaults to NoAccess.
     [Fact]
     public void GrantAPolicyOnEverySeededRoomAccess()
     {
@@ -130,7 +119,6 @@ public class SeededRoomExamplesShould
             "the enum defaults to NoAccess, and a row that names no policy grants no writing");
     }
 
-    /// <summary>The rooms the seeder builds, in the order they are written.</summary>
     private static IReadOnlyList<SeededRoom> SeededRooms()
     {
         var rooms = new List<SeededRoom>();
@@ -151,7 +139,6 @@ public class SeededRoomExamplesShould
         return rooms;
     }
 
-    /// <summary>The names of the rooms the seeder writes posts into.</summary>
     private static IReadOnlyCollection<string> PostedRooms()
     {
         var rooms = new HashSet<string>(StringComparer.Ordinal);

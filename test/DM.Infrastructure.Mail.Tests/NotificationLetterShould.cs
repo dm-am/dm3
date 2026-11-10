@@ -11,15 +11,9 @@ using Xunit;
 
 namespace DM.Infrastructure.Mail.Tests;
 
-/// <summary>
-/// The letter a notification is sent as stands on the frame of the other letters.
-/// </summary>
-/// <remarks>
-/// Two lines are its own: the addresses of the site, and how to stop the letters.
-/// </remarks>
+// Two lines are its own: the addresses of the site, and how to stop the letters.
 public class NotificationLetterShould : IAsyncDisposable
 {
-    /// <summary>A notification about a game, with a value typed by its owner.</summary>
     public static readonly NotificationLetterViewModel AboutAGame = new(
         "Игра заморожена",
         [new("Игра", "<a href=\"https://evil.example\">Смените пароль</a>"), new("Мастер", "Аллигатор")],
@@ -72,7 +66,7 @@ public class NotificationLetterShould : IAsyncDisposable
         html.Should().Contain("Вы можете отключить уведомления на почту в настройках профиля.");
     }
 
-    /// <summary>The values of a notification are what their owners typed, and reach the letter as text.</summary>
+    // The values of a notification are what their owners typed, and reach the letter as text.
     [Fact]
     public async Task EscapeWhatTheNotificationCarries()
     {

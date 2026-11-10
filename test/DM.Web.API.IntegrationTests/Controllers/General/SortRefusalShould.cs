@@ -7,22 +7,14 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A sort field the endpoint does not have comes back as 400, on the wire.
-/// </summary>
-/// <remarks>
-/// The unit test around SortVocabularyFilter proves the rule, this that it is switched on. The endpoints come
-/// from the published document.
-/// </remarks>
+// The unit test around SortVocabularyFilter proves the rule, this that it is switched on.
 public class SortRefusalShould : IntegrationTestBase
 {
     public SortRefusalShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// Stands in for any path parameter: the filter runs before the action, ahead of any lookup.
-    /// </summary>
+    // Stands in for any path parameter: the filter runs before the action, ahead of any lookup.
     private const string PathParameterStandIn = "00000000-0000-0000-0000-000000000001";
 
     [Fact]
@@ -50,10 +42,6 @@ public class SortRefusalShould : IntegrationTestBase
             "an unknown sort value is refused, not answered with 200 in the order the repository falls back to");
     }
 
-    /// <summary>
-    /// Every published GET that takes a sort, and whether it takes a sortBy
-    /// (the ones that do not still take a direction).
-    /// </summary>
     private async Task<IReadOnlyList<(string Path, bool HasSortBy)>> SortableGetPaths()
     {
         var found = new List<(string, bool)>();

@@ -6,9 +6,6 @@ using DM.Infrastructure.Persistence.Entities.Account;
 
 namespace DM.Infrastructure.Persistence.Entities.Community;
 
-/// <summary>
-/// DAL model for website testimonial (positive review about the website)
-/// </summary>
 /// <remarks>
 /// Plain text only - NO BBCode support.
 /// Only positive testimonials are allowed.

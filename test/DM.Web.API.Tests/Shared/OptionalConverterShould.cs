@@ -7,10 +7,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// Optional carries three states across the wire, and PATCH needs all three.
-/// </summary>
-/// <remarks>Optional is a class, so with the default HandleNull the serialiser skips Read on a null.</remarks>
+// Optional is a class, so with the default HandleNull the serialiser skips Read on a null.
 public class OptionalConverterShould
 {
     private class Target

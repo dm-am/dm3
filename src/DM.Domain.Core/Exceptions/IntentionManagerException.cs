@@ -29,7 +29,6 @@ public class IntentionManagerException : HttpException
         $"User {user.UserId} is not allowed to perform {intention} action" +
         (target == null ? string.Empty : $" on {Describe(target)}");
 
-    /// <summary>Type name, plus the identifier when the target carries one.</summary>
     private static string Describe(object target)
     {
         var type = target.GetType();

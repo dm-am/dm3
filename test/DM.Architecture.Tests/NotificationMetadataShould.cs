@@ -9,20 +9,15 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every field a notification carries is either named in Russian or not shown.
-/// </summary>
 /// <remarks>
 /// A letter and a bot message print every property of the metadata, falling back to the key.
 /// Asserted against the sources: the payload is an anonymous object inside a method body.
 /// </remarks>
 public class NotificationMetadataShould
 {
-    /// <summary>The project that owns the generators.</summary>
     private static readonly string DispatcherSource =
         Path.Combine("src", "DM.Workers.NotificationDispatcher");
 
-    /// <summary>The assignment every payload is written through.</summary>
     private const string PayloadAssignment = "Metadata = new";
 
     [Fact]
@@ -46,9 +41,6 @@ public class NotificationMetadataShould
 
     private static bool Hidden(string key) => NotificationWording.IsHiddenFromText(key);
 
-    /// <summary>
-    /// Every property name a generator writes into a notification payload.
-    /// </summary>
     private static IReadOnlyCollection<string> PayloadKeys()
     {
         var sources = Directory

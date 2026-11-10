@@ -11,10 +11,7 @@ public interface IObjectStorage
     /// Store the bytes under the key. Keys are never reused, so nothing is
     /// overwritten and the object may be cached indefinitely.
     /// </summary>
-    /// <param name="key">Object key.</param>
-    /// <param name="content">Object bytes.</param>
     /// <param name="contentType">Validated MIME type of the content.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     Task PutAsync(string key, byte[] content, string contentType,
         CancellationToken cancellationToken = default);
 
@@ -44,8 +41,6 @@ public interface IObjectStorage
     /// nothing here buffers the object, so a file of any allowed size costs one
     /// connection rather than its own size in memory.
     /// </remarks>
-    /// <param name="key">Object key.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     Task<StoredObject?> OpenReadAsync(string key, CancellationToken cancellationToken = default);
 
     /// <summary>

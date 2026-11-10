@@ -3,9 +3,8 @@ using Microsoft.AspNetCore.Hosting;
 
 namespace DM.Web.API.IntegrationTests;
 
-/// <summary>
-/// Inserts TestAuthenticationMiddleware ahead of the pipeline: IStartupFilter runs before Startup.Configure().
-/// </summary>
+// Inserts TestAuthenticationMiddleware ahead of the pipeline: IStartupFilter runs before
+// Startup.Configure().
 public class TestAuthenticationStartupFilter : IStartupFilter
 {
     public Action<IApplicationBuilder> Configure(Action<IApplicationBuilder> next)

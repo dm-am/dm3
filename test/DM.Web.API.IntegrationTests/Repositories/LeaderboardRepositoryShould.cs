@@ -13,10 +13,6 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The boards on the community page are eight grouped aggregates, and grouping is
-/// where the reader cannot check the answer.
-/// </summary>
 /// <remarks>
 /// A leaderboard looks finished whatever it says. A post's rating belongs to its author, and the window is
 /// half-open. Against the database: the method is one translated GroupBy.
@@ -27,9 +23,8 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// The Monday of this test's own week, a month from any other, so rows of other tests stay out of the aggregate.
-    /// </summary>
+    // The Monday of this test's own week, a month from any other, so rows of other tests stay out
+    // of the aggregate.
     private static DateTimeOffset WeekOf(int index) =>
         new DateTimeOffset(2019, 3, 4, 0, 0, 0, TimeSpan.Zero).AddDays(28 * index);
 
@@ -148,10 +143,6 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
             .Which.Score.Should().Be(3, "all three posts are that player's");
     }
 
-    /// <summary>
-    /// The volume board counts the text a reader of the room got, not the
-    /// characters the author typed to produce it.
-    /// </summary>
     /// <remarks>
     /// Markup and [private] are not in the text a reader got. The padded post is four times the plain one as source
     /// and a fifth of it as text.
@@ -191,10 +182,8 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
 
     private sealed record GameContext(Guid GameId, Guid RoomId, Guid CharacterId, string Title);
 
-    /// <summary>
-    /// A game, a room and a character of its own per call: the fixture's database
-    /// is shared and seeded, so fixed identifiers would collide.
-    /// </summary>
+    // A game, a room and a character of its own per call: the fixture's database is shared and
+    // seeded, so fixed identifiers would collide.
     private static async Task<GameContext> AddGameWithRoomAsync(DmDbContext dbContext, Guid masterId)
     {
         var gameId = Guid.NewGuid();
@@ -257,9 +246,7 @@ public class LeaderboardRepositoryShould : IntegrationTestBase
         return postId;
     }
 
-    /// <summary>
-    /// One rating of a post by <paramref name="postAuthorId"/>, written by somebody the board must not credit.
-    /// </summary>
+    // One rating of a post by postAuthorId, written by somebody the board must not credit.
     private static async Task AddReviewAsync(
         DmDbContext dbContext,
         GameContext game,

@@ -8,19 +8,9 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests;
 
-/// <summary>
-/// A seeded catalog description keeps to the rules of the text a person reads.
-/// </summary>
-/// <remarks>
-/// The text under a badge is read by everyone who opens the profile. The rows are read out of the
-/// design-time model; titles are jokes and out of scope.
-/// </remarks>
+// The text under a badge is read by everyone who opens the profile.
 public class SeedCatalogCopyShould
 {
-    /// <summary>
-    /// Characters CODE_STYLE keeps out of the text a person reads, seeded data
-    /// included, each with the reason it stays out.
-    /// </summary>
     private static readonly IReadOnlyDictionary<char, string> ForbiddenCharacters =
         new Dictionary<char, string>
         {

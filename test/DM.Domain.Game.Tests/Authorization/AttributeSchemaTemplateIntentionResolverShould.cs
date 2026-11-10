@@ -7,11 +7,8 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Authorization;
 
-/// <summary>
-/// Gates the catalogue of starting character sheets. Reading is not gated at
-/// all - the creation form fills itself from the catalogue - so the only
-/// question here is who may change it.
-/// </summary>
+// Reading is not gated at all - the creation form fills itself from the catalogue - so the only
+// question here is who may change it.
 public class AttributeSchemaTemplateIntentionResolverShould
 {
     private readonly AttributeSchemaTemplateIntentionResolver resolver = new();

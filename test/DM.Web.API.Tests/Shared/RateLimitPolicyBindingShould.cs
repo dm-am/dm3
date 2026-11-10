@@ -9,23 +9,13 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// Which endpoints spend a budget, and which budget.
-/// </summary>
-/// <remarks>
-/// The tests run with the limiter off, so every budgeted endpoint is exercised without one; the registry
-/// makes the binding reviewable and is asserted both ways, off the attributes.
-/// </remarks>
+// The tests run with the limiter off, so every budgeted endpoint is exercised without one; the
+// registry makes the binding reviewable and is asserted both ways, off the attributes.
 public class RateLimitPolicyBindingShould
 {
-    /// <summary>The namespace every controller of the host lives under.</summary>
     private const string FeaturePrefix = "DM.Web.API.Features.";
 
-    /// <summary>
-    /// Every endpoint under a policy: a controller when the whole of it is
-    /// limited, a controller and an action when only that action is.
-    /// </summary>
-    /// <remarks>Named by namespace and type: there are two ProfileControllers.</remarks>
+    // Named by namespace and type: there are two ProfileControllers.
     private static readonly Dictionary<string, string> Registry = new(StringComparer.Ordinal)
     {
         ["Account.Authentication.AuthenticationController"] = RateLimitPolicies.Auth,
@@ -85,7 +75,6 @@ public class RateLimitPolicyBindingShould
         ["General.Search.MessageSearchController.SearchMessages"] = RateLimitPolicies.Sliding,
     };
 
-    /// <summary>Every [EnableRateLimiting] of the host, named the same way.</summary>
     private static Dictionary<string, string> Applied()
     {
         var applied = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -114,7 +103,6 @@ public class RateLimitPolicyBindingShould
         return applied;
     }
 
-    /// <summary>A controller, spelled the way the registry spells it.</summary>
     private static string Named(Type controller) =>
         controller.FullName!.StartsWith(FeaturePrefix, StringComparison.Ordinal)
             ? controller.FullName![FeaturePrefix.Length..]
@@ -156,11 +144,7 @@ public class RateLimitPolicyBindingShould
             "for is a limiter registered for no endpoint");
     }
 
-    /// <summary>
-    /// A name an endpoint asks for and a limiter the host registers are two
-    /// separate lists, and only the second one counts anything.
-    /// </summary>
-    /// <remarks>A constant no policy declares throws on the first request to its endpoint.</remarks>
+    // A constant no policy declares throws on the first request to its endpoint.
     [Fact]
     public void RegisterALimiterForEveryPolicyAnEndpointAsksFor()
     {
@@ -170,10 +154,8 @@ public class RateLimitPolicyBindingShould
                 "answers 500, and it does so only in a deployment that counts");
     }
 
-    /// <summary>
-    /// Whose minute the second factor's own settings spend.
-    /// </summary>
-    /// <remarks>Switching a factor on costs four requests, more than the credential budget leaves after sign-in.</remarks>
+    // Switching a factor on costs four requests, more than the credential budget leaves after
+    // sign-in.
     [Fact]
     public void CountTheFactorsOwnSettingsPerAccountAndNotPerAddress()
     {
@@ -190,10 +172,7 @@ public class RateLimitPolicyBindingShould
                 "says nothing");
     }
 
-    /// <summary>
-    /// The mailed removal path stays on the address budget.
-    /// </summary>
-    /// <remarks>Reachable without a session, so there is no account to hold it to.</remarks>
+    // Reachable without a session, so there is no account to hold it to.
     [Fact]
     public void CountTheMailedRemovalPathPerAddress()
     {
@@ -210,7 +189,6 @@ public class RateLimitPolicyBindingShould
         }
     }
 
-    /// <summary>The registered limiter behind a policy name.</summary>
     private static RateLimitingExtensions.Policy Declared(string name) =>
         RateLimitingExtensions.Policies.Single(policy => policy.Name == name);
 }

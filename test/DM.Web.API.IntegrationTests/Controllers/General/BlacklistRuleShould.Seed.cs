@@ -58,7 +58,6 @@ public partial class BlacklistRuleShould
         public Guid TopicId { get; } = Guid.NewGuid();
         public Guid TopicCommentId { get; } = Guid.NewGuid();
 
-        /// <summary>A user the case made and nothing else, for the drop.</summary>
         public static Seed Only(GeneralUser user) => new(user);
     }
 
@@ -89,7 +88,6 @@ public partial class BlacklistRuleShould
         return seed;
     }
 
-    /// <summary>The user on the game's list, the blog's list and their owner's personal list.</summary>
     private static void AddLists(DmDbContext db, GeneralUser user, DateTimeOffset now)
     {
         var game = TestConstants.TestGameId;
@@ -119,10 +117,6 @@ public partial class BlacklistRuleShould
         });
     }
 
-    /// <summary>
-    /// His comment and somebody else's in the game's discussion, and the like, the
-    /// review and the rating he left before the list.
-    /// </summary>
     private static void AddGameDiscussionAndFeedback(DmDbContext db, Seed seed, string? action, DateTimeOffset now)
     {
         var user = seed.User;
@@ -171,10 +165,6 @@ public partial class BlacklistRuleShould
         }
     }
 
-    /// <summary>
-    /// The room both his characters are seated in, with his post, and the chat
-    /// room he writes in as a reader.
-    /// </summary>
     private static void AddRooms(DmDbContext db, Seed seed, DateTimeOffset now)
     {
         var user = seed.User;
@@ -247,10 +237,6 @@ public partial class BlacklistRuleShould
         });
     }
 
-    /// <summary>
-    /// Somebody else's publication, and a comment of his and one of somebody else
-    /// both in the blog's discussion and under the publication.
-    /// </summary>
     private static void AddBlogDiscussion(DmDbContext db, Seed seed, DateTimeOffset now)
     {
         var user = seed.User;
@@ -275,7 +261,6 @@ public partial class BlacklistRuleShould
             Comment(seed.OtherPublicationCommentId, seed.PublicationId, other, now));
     }
 
-    /// <summary>A board of the case's own with the owner's topic and comment in it.</summary>
     private static void AddForumTopic(DmDbContext db, Seed seed, DateTimeOffset now)
     {
         db.Boards.Add(new DbBoard
@@ -358,10 +343,7 @@ public partial class BlacklistRuleShould
         CreatedUtc = DateTimeOffset.UtcNow
     };
 
-    /// <summary>
-    /// Everything the case wrote, or its requests wrote, under the user it made.
-    /// The user row stays, the way the neighbouring suites leave theirs.
-    /// </summary>
+    // The user row stays, the way the neighbouring suites leave theirs.
     private async Task DropAsync(Seed seed)
     {
         var userId = seed.User.UserId;

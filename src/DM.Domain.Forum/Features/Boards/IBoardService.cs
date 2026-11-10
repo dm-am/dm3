@@ -6,14 +6,8 @@ namespace DM.Domain.Forum.Features.Boards;
 
 public interface IBoardService
 {
-    /// <summary>
-    /// Get list of boards
-    /// </summary>
     Task<IEnumerable<Board>> GetBoardsList();
 
-    /// <summary>
-    /// Get list of boards without their unread counters
-    /// </summary>
     /// <remarks>
     /// The counters of the list above cost two aggregate reads across the document
     /// store and three more queries behind them, and a caller that only needs to
@@ -34,7 +28,6 @@ public interface IBoardService
 
     Task<IEnumerable<GeneralUser>> GetModerators(string aliasOrTitle);
 
-    /// <returns>Added user</returns>
     Task<GeneralUser> AddModerator(string aliasOrTitle, string username);
 
     Task RemoveModerator(string aliasOrTitle, string username);

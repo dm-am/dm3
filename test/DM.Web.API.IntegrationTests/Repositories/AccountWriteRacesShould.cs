@@ -23,10 +23,7 @@ using PendingRegistration = DM.Domain.Account.Features.Registration.PendingRegis
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Two requests to one account arriving together. Against the container Postgres: every assertion is about what
-/// the database decided.
-/// </summary>
+// Against the container Postgres: every assertion is about what the database decided.
 public class AccountWriteRacesShould : IntegrationTestBase
 {
     private const int Parallelism = 4;
@@ -35,10 +32,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// The form submitted twice leaves one pending registration and no failure.
-    /// </summary>
-    /// <remarks>Submissions arriving together all find nothing; the unique index over the address decides.</remarks>
+    // Submissions arriving together all find nothing; the unique index over the address decides.
     [Fact]
     public async Task TakeTheRegistrationFormTwiceWithoutFailing()
     {
@@ -52,10 +46,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
             .Should().Be(1, "the address holds one pending registration whoever wrote it last");
     }
 
-    /// <summary>
-    /// A resend keeps the moment the registration started, which is what frees an
-    /// abandoned address.
-    /// </summary>
+    // A resend keeps the moment the registration started, which is what frees an abandoned address.
     [Fact]
     public async Task KeepTheStartOfARegistrationWhenItIsRepeated()
     {
@@ -73,10 +64,6 @@ public class AccountWriteRacesShould : IntegrationTestBase
         row.TokenCreatedUtc.Should().Be(started.AddDays(3), "the letter is the new one");
     }
 
-    /// <summary>
-    /// A setup started again replaces the secret; once the factor is on, nothing
-    /// replaces anything.
-    /// </summary>
     [Fact]
     public async Task ReplaceAnUnconfirmedSecretAndRefuseOneThatIsOn()
     {
@@ -119,10 +106,6 @@ public class AccountWriteRacesShould : IntegrationTestBase
             "the refused setup left the confirmed secret exactly as it was");
     }
 
-    /// <summary>
-    /// Change requests arriving together leave one live letter, and it names the
-    /// address that letter was asked for.
-    /// </summary>
     /// <remarks>
     /// Together, not in sequence: the gap is what one transaction over the account row closes. The surviving letter
     /// is found first and the waiting address read against it.
@@ -148,10 +131,6 @@ public class AccountWriteRacesShould : IntegrationTestBase
             "and the address waiting is the one that letter names");
     }
 
-    /// <summary>
-    /// One change request, in a scope of its own, and the two values it has to be
-    /// recognised by afterwards.
-    /// </summary>
     private async Task<(string Email, byte[] Hash)> RequestChange(Guid userId)
     {
         // One scope per write: a DbContext is scoped and must not be shared
@@ -193,11 +172,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
             .Should().Be(0, "the set belongs to a confirmation that switched the factor on");
     }
 
-    /// <summary>
-    /// A removal called off before the pass reaches it takes neither the factor
-    /// nor the codes.
-    /// </summary>
-    /// <remarks>The sweep removes listed accounts one at a time, and the call-off lands between.</remarks>
+    // The sweep removes listed accounts one at a time, and the call-off lands between.
     [Fact]
     public async Task LeaveTheFactorWhoseRemovalWasCalledOff()
     {
@@ -220,11 +195,8 @@ public class AccountWriteRacesShould : IntegrationTestBase
             .Should().Be(3, "an account that kept its factor keeps the way past it");
     }
 
-    /// <summary>
-    /// A reissue asked for a factor that is gone hands out nothing and stores
-    /// nothing.
-    /// </summary>
-    /// <remarks>A mailed removal can come due between the checks and the write, so the write looks at what it changes.</remarks>
+    // A mailed removal can come due between the checks and the write, so the write looks at what it
+    // changes.
     [Fact]
     public async Task IssueNoRecoveryCodesForAFactorThatIsGone()
     {
@@ -243,10 +215,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
             .Should().Be(0, "a set stored behind no factor is accepted by the next one");
     }
 
-    /// <summary>
-    /// A reissue asked for a setup nobody ever confirmed hands out nothing.
-    /// </summary>
-    /// <remarks>A row in setup is not a factor, and its secret is replaced in place by the next setup.</remarks>
+    // A row in setup is not a factor, and its secret is replaced in place by the next setup.
     [Fact]
     public async Task IssueNoRecoveryCodesForASetupThatWasNeverConfirmed()
     {
@@ -347,11 +316,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
             "a refused write leaves the account under the name it had");
     }
 
-    /// <summary>
-    /// A password change leaves no live reset link behind it, including one issued
-    /// while the change was under way.
-    /// </summary>
-    /// <remarks>A reset link outliving the change could set the password again.</remarks>
+    // A reset link outliving the change could set the password again.
     [Fact]
     public async Task LeaveNoLiveResetLinkAfterThePasswordChanges()
     {
@@ -374,11 +339,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
             .Should().Be(0, "every live link of the account goes with the password it could replace");
     }
 
-    /// <summary>
-    /// An address taken while the confirmation letter waited is refused as taken,
-    /// not as a failure of the storage engine.
-    /// </summary>
-    /// <remarks>The unique index over lower("Email") decides; this is how its refusal reaches the caller.</remarks>
+    // The unique index over lower("Email") decides; this is how its refusal reaches the caller.
     [Fact]
     public async Task RefuseAPendingAddressSomebodyElseTook()
     {
@@ -405,7 +366,7 @@ public class AccountWriteRacesShould : IntegrationTestBase
             "profile advertising a change nobody can complete");
     }
 
-    /// <summary>Whole seconds: the columns keep microseconds and are compared.</summary>
+    // Whole seconds: the columns keep microseconds and are compared.
     private static DateTimeOffset Moment() =>
         DateTimeOffset.FromUnixTimeSeconds(DateTimeOffset.UtcNow.ToUnixTimeSeconds());
 

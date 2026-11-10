@@ -42,9 +42,7 @@ public class AvailabilityServiceShould : UnitTestBase
         result.IsAvailable.Should().BeTrue();
     }
 
-    /// <summary>
-    /// Deactivated accounts included: they keep their address, and the probe has to say so.
-    /// </summary>
+    // Deactivated accounts included: they keep their address, and the probe has to say so.
     [Fact]
     public async Task ReturnUnavailableWhenEmailIsHeldByAnyAccount()
     {
@@ -106,11 +104,9 @@ public class AvailabilityServiceShould : UnitTestBase
         result.Reason.Should().Be(UsernameUnavailableReason.Taken);
     }
 
-    /// <summary>
-    /// A name a former user left behind answers as taken, not as reserved: the
-    /// guest surface gives out one bit, and telling the two apart tells a
-    /// caller somebody was here and left (SECURITY.md).
-    /// </summary>
+    // A name a former user left behind answers as taken, not as reserved: the guest surface gives
+    // out one bit, and telling the two apart tells a caller somebody was here and left
+    // (SECURITY.md).
     [Fact]
     public async Task AnswerTakenForAHistoricalUsername()
     {

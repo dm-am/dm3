@@ -28,11 +28,7 @@ using DomainApprovalInfo = DM.Domain.Account.Features.UsernameChange.UsernameCha
 
 namespace DM.Web.API.Tests.Features.Account;
 
-/// <summary>
-/// The answer to a request that mailed a link says how long the link lives, in the hours the settings
-/// give it: the receipt on the screen takes the number from here.
-/// </summary>
-/// <remarks>None of the hours is a default, so an answer that counted its own would show.</remarks>
+// None of the hours is a default, so an answer that counted its own would show.
 public class MailedLinkAnswerShould : UnitTestBase
 {
     private static readonly TokenConfiguration Tokens = new()

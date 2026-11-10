@@ -7,9 +7,5 @@ namespace DM.Domain.Account.Features.Registration;
 /// </summary>
 public interface IRegistrationService
 {
-    /// <summary>
-    /// Register new user
-    /// </summary>
-    /// <param name="registration">Registration info</param>
     Task Register(UserRegistration registration);
 }

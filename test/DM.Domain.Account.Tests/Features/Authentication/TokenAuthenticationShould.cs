@@ -44,14 +44,9 @@ public class TokenAuthenticationShould : AuthenticationServiceTestBase
         result.Error.Should().Be(AuthenticationError.Banned);
     }
 
-    /// <summary>
-    /// A removal takes effect on the next request, the way a ban does.
-    /// </summary>
-    /// <remarks>
-    /// The session is a day from its end and the account has no activity stamp,
-    /// so a token path that let the account through would both refresh the
-    /// session and stamp the account: the refusal has to stop before either.
-    /// </remarks>
+    // The session is a day from its end and the account has no activity stamp, so a token path that
+    // let the account through would both refresh the session and stamp the account: the refusal has
+    // to stop before either.
     [Fact]
     public async Task RefuseTokenOfARemovedAccount()
     {
@@ -241,7 +236,6 @@ public class TokenAuthenticationShould : AuthenticationServiceTestBase
         await repository.DidNotReceive().RefreshSession(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
     }
 
-    /// <summary>Runs token authentication against a session and nothing else.</summary>
     private async Task AuthenticateWith(Session session)
     {
         var user = Create.User(UserId).WithRole(UserRole.RegularUser).Please();
@@ -251,10 +245,8 @@ public class TokenAuthenticationShould : AuthenticationServiceTestBase
         await service.Authenticate("token");
     }
 
-    /// <summary>
-    /// The token "token" names the user and a session; the repository finds the
-    /// user and, under him, the session given (none for null).
-    /// </summary>
+    // The token "token" names the user and a session; the repository finds the user and, under him,
+    // the session given (none for null).
     private void Token(AuthenticatedUser user, Session? session)
     {
         var sessionId = session?.Id ?? Guid.NewGuid();

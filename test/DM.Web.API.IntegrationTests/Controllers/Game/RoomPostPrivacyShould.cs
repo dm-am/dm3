@@ -60,14 +60,8 @@ public class RoomPostPrivacyShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Nobody reads a [private] block by not signing in — on either listing,
-    /// with either audience.
-    /// </summary>
-    /// <remarks>
-    /// Both listings serve the post through different projections; a lead id left as the empty Guid matches the
-    /// anonymous reader. Enumerated rather than sampled.
-    /// </remarks>
+    // Both listings serve the post through different projections; a lead id left as the empty Guid
+    // matches the anonymous reader. Enumerated rather than sampled.
     [Fact]
     public async Task HideThePrivateBlockFromAnAnonymousReaderOnEveryPostListing()
     {
@@ -121,9 +115,6 @@ public class RoomPostPrivacyShould : IntegrationTestBase
         return await response.Content.ReadAsStringAsync();
     }
 
-    /// <summary>
-    /// A post by the master with one [private] block whose snapshot resolves to SecondUser; neither override opens it.
-    /// </summary>
     private Task<Guid> CreatePrivatePost() =>
         PostTestHelper.CreatePrivatePost(DatabaseFixture, PublicText, PrivateText);
 

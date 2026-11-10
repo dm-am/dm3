@@ -6,9 +6,6 @@ using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Account.Features.Deactivation;
 
-/// <summary>
-/// Repository interface for account deactivation
-/// </summary>
 /// <remarks>
 /// The three reads below are the product's only way to a removed row. Every
 /// other repository reads users through the global filter, which hides removed
@@ -17,23 +14,13 @@ namespace DM.Domain.Account.Features.Deactivation;
 /// </remarks>
 public interface IDeactivationRepository
 {
-    /// <summary>
-    /// Marks a user as deactivated (soft delete)
-    /// </summary>
-    /// <param name="userId">User identifier</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task DeactivateUser(Guid userId, CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Brings a removed account back
-    /// </summary>
     /// <remarks>
     /// The mirror of <see cref="DeactivateUser" />, and the only place in the
     /// product that clears the flag. The row never went anywhere, so the name,
     /// the address and everything written under the name come back with it.
     /// </remarks>
-    /// <param name="userId">User identifier</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task Restore(Guid userId, CancellationToken cancellationToken = default);
 
     /// <summary>

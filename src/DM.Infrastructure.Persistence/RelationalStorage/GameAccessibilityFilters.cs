@@ -8,9 +8,6 @@ using DbRoom = DM.Infrastructure.Persistence.Entities.Game.Posts.Room;
 
 namespace DM.Infrastructure.Persistence.RelationalStorage;
 
-/// <summary>
-/// Filters for game visibility
-/// </summary>
 /// <remarks>
 /// The game's blacklist is not one of them: it closes writing and leaves reading
 /// alone, as GameIntentionResolver.Read does.

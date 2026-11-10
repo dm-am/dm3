@@ -16,7 +16,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>The topics each board opens with, keyed by board title.</summary>
     private static readonly Dictionary<string, (string Title, string Text)[]> BoardTopicTemplates = new()
     {
         ["Общий"] = new[]
@@ -121,14 +120,10 @@ internal sealed partial class DataSeeder
         "июль", "август", "сентябрь", "октябрь", "ноябрь", "декабрь"
     ];
 
-    /// <summary>A month of a template, as "{month:-1}", counted from the epoch of the seed.</summary>
     private static readonly Regex MonthToken = new(@"\{(?<word>[Mm]onth):(?<shift>[+-]\d+)\}");
 
-    /// <summary>
-    /// The template with its months counted from the epoch of the seed, as
-    /// "октябрь 2026": a month written as a fixed date goes stale with the stand.
-    /// "{Month:+1}" opens with a capital, for a heading.
-    /// </summary>
+    // The template with its months counted from the epoch of the seed, as "октябрь 2026": a month
+    // written as a fixed date goes stale with the stand.
     private string Dated(string template) => MonthToken.Replace(template, token =>
     {
         var moment = _now.AddMonths(int.Parse(token.Groups["shift"].Value, CultureInfo.InvariantCulture));
@@ -141,7 +136,6 @@ internal sealed partial class DataSeeder
         return $"{name} {moment.Year}";
     });
 
-    /// <summary>The topics of a board the templates above do not name.</summary>
     private static readonly (string Title, string Text)[] GenericBoardTopics =
     [
         ("Обсуждение", "Общий топик для обсуждения."),
@@ -162,13 +156,11 @@ internal sealed partial class DataSeeder
         "Хорошая инициатива!",
     ];
 
-    /// <summary>The remark about the look of the site among the FAQ questions, which a warning names.</summary>
+    // The remark about the look of the site among the FAQ questions, which a warning names.
     private const string OffTopicFaqComment = "Темная тема — это супер!";
 
-    /// <summary>
-    /// The comments of the FAQ topic, in the order they are written: fifty of
-    /// them, enough for the topic to run over several pages.
-    /// </summary>
+    // The comments of the FAQ topic, in the order they are written: fifty of them, enough for the
+    // topic to run over several pages.
     private static readonly string[] FaqCommentTexts =
     [
         "Отличный FAQ! Очень помогло разобраться с основами.",
@@ -330,7 +322,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>The comments of one topic: fifty on the FAQ, a handful anywhere else.</summary>
     private void SeedTopicComments(Topic topic, string topicTitle, List<DbUser> users, ComprehensiveSeedResult result)
     {
         var commentsToCreate = topicTitle == "FAQ для новых пользователей" ? 50 : _random.Next(3, 8);

@@ -16,10 +16,8 @@ namespace DM.Infrastructure.Core.Parsing.Tags;
 /// </remarks>
 internal sealed class SpoilerTag : Tag
 {
-    /// <summary>The words on the button of a spoiler that was given no caption.</summary>
     private const string DefaultCaption = "Показать содержимое";
 
-    /// <summary>The words on the button of an open spoiler that was given no caption.</summary>
     private const string OpenCaption = "Скрыть содержимое";
 
     private const string Text = "text";

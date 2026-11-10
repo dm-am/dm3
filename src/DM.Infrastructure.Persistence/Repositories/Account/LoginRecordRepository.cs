@@ -12,7 +12,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Account;
 /// <inheritdoc cref="ILoginRecordRepository" />
 internal class LoginRecordRepository : ILoginRecordRepository
 {
-    /// <summary>How far back the IP views of moderation look.</summary>
     private const int IpLookbackDays = 365;
 
     private readonly DmDbContext _dbContext;

@@ -19,22 +19,14 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// The list of the rooms of a game, the way the room settings and the game menu
-/// read it: in the order the master put them in, with the number of messages in
-/// each, and a closed room named to those who may not open it with the
-/// characters let in to write in it.
-/// </summary>
-/// <remarks>Through HTTP: the order is written by one request and read by another, through the service and the mapper.</remarks>
+// Through HTTP: the order is written by one request and read by another, through the service and
+// the mapper.
 public class RoomListShould : IntegrationTestBase
 {
     public RoomListShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// A room moved to the head of the list is first in it.
-    /// </summary>
     [Fact]
     public async Task PutARoomMovedToTheHeadFirst()
     {
@@ -51,10 +43,8 @@ public class RoomListShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Moves one after another: each starts from the order the one before it
-    /// left, which is what the settings send for one "Сохранить".
-    /// </summary>
+    // Moves one after another: each starts from the order the one before it left, which is what the
+    // settings send for one "Сохранить".
     [Fact]
     public async Task PutARoomRightAfterTheRoomNamed()
     {
@@ -73,10 +63,6 @@ public class RoomListShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A room of another game is no place in this one: the move is refused by
-    /// name and the order stays.
-    /// </summary>
     [Fact]
     public async Task RefuseToPutARoomAfterARoomOfAnotherGame()
     {
@@ -93,10 +79,6 @@ public class RoomListShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The posts of a room of posts and the messages of a room of chat, the
-    /// removed ones left out.
-    /// </summary>
     [Fact]
     public async Task CountTheMessagesOfEveryRoom()
     {
@@ -193,10 +175,6 @@ public class RoomListShould : IntegrationTestBase
         string SecondWriter,
         string DeadWriter);
 
-    /// <summary>
-    /// An open game with three rooms (hall, closed room, chat) and a second game of the same master, with posts,
-    /// messages and removed rows in each, and every kind of grant in the closed room.
-    /// </summary>
     private async Task<World> Seed()
     {
         var now = DateTimeOffset.UtcNow;
@@ -237,10 +215,6 @@ public class RoomListShould : IntegrationTestBase
         return world;
     }
 
-    /// <summary>
-    /// The three rooms of the game in the order hall, closed room, chat, the chat
-    /// of the last one, and the room of the second game.
-    /// </summary>
     private static void AddRooms(DmDbContext db, World world)
     {
         db.Set<DbRoom>().AddRange(
@@ -258,9 +232,6 @@ public class RoomListShould : IntegrationTestBase
         });
     }
 
-    /// <summary>
-    /// The characters of the game and the grants of the closed room; answers the first writer.
-    /// </summary>
     private static DbCharacter AddWriters(
         DmDbContext db, World world, DbUser[] players, DbUser reader, string suffix, DateTimeOffset now)
     {
@@ -286,10 +257,6 @@ public class RoomListShould : IntegrationTestBase
         return first;
     }
 
-    /// <summary>
-    /// Two posts in the hall and one removed, one post in the closed room, three
-    /// messages in the chat and one removed.
-    /// </summary>
     private static void AddMessages(DmDbContext db, World world, DbCharacter first, DbUser player, DateTimeOffset now)
     {
         db.Set<DbPost>().AddRange(

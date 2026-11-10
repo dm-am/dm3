@@ -10,10 +10,7 @@ using Xunit;
 
 namespace DM.Domain.Blog.Tests.Authorization;
 
-/// <summary>
-/// Gates a publication: the leak that matters is another user rewriting or
-/// deleting it.
-/// </summary>
+// Gates a publication: the leak that matters is another user rewriting or deleting it.
 public class PublicationIntentionResolverShould
 {
     private readonly PublicationIntentionResolver resolver = new();

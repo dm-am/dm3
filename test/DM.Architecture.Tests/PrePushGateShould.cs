@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The hook that runs before a push is a claim about CI, and the claim has to hold.
-/// </summary>
 /// <remarks>
 /// Parity is asserted against the workflow: the build configuration, the dependency-scan commands,
 /// and every job named in the hook header as run locally or left to CI with a reason. Which part a
@@ -21,17 +18,13 @@ public class PrePushGateShould
 {
     private const string NpmAudit = "npm audit";
 
-    /// <summary>
-    /// A row of the coverage table in the hook header: the job, "+" or "-", and the note both markers need.
-    /// </summary>
     private static readonly Regex JobDecision = new(
         @"^#\s+([a-z][a-z0-9-]*)\s+([+-])\s+(\S.*)$", RegexOptions.Compiled);
 
-    /// <summary>The value of a run: step, in the plain form and in the block one.</summary>
     private static readonly Regex RunStep = new(
         @"^\s*(?:- )?run:\s*(.+)$", RegexOptions.Compiled);
 
-    /// <summary>The lookbehind keeps --collect: and its like out of the match.</summary>
+    // The lookbehind keeps --collect: and its like out of the match.
     private static readonly Regex Configuration = new(
         @"(?<![\w-])-c\s+(\w+)", RegexOptions.Compiled);
 
@@ -39,7 +32,6 @@ public class PrePushGateShould
 
     private static readonly Regex Flag = new(@"--[\w-]+(?:=[\w.]+)?", RegexOptions.Compiled);
 
-    /// <summary>A line of the hook that runs a gate, the first of which is the test of a hook.</summary>
     private static readonly Regex GateInvocation = new(
         @"^(?:node|bash|npm|dotnet)\s|^\(cd\s|=\$\(node\s", RegexOptions.Compiled);
 
@@ -51,10 +43,7 @@ public class PrePushGateShould
 
     private static string HookPath => Path.Combine(RepositoryLayout.Root, "scripts", "hooks", "pre-push");
 
-    /// <summary>
-    /// The commands of the hook. Prose that names a command is not a command, and
-    /// the header names several of them.
-    /// </summary>
+    // Prose that names a command is not a command, and the header names several of them.
     private static List<string> HookCommands()
     {
         File.Exists(HookPath).Should().BeTrue($"the hook must exist at {HookPath}");
@@ -65,11 +54,9 @@ public class PrePushGateShould
             .ToList();
     }
 
-    /// <summary>The lines of one job, from its key to the next job's, comments out.</summary>
     private static List<string> JobBody(string workflow, string job) =>
         WorkflowJobs.Body(workflow, job).Where(WorkflowJobs.IsCode).ToList();
 
-    /// <summary>The commands of one job: the value of every run: step it has.</summary>
     private static List<string> CiCommands(string workflow, string job)
     {
         var commands = new List<string>();
@@ -122,9 +109,6 @@ public class PrePushGateShould
         return match.Groups[1].Value;
     }
 
-    /// <summary>
-    /// The configuration is read out of the workflow: what is asserted is that the two agree.
-    /// </summary>
     [Fact]
     public void BuildAndTestInTheConfigurationCiShips()
     {
@@ -188,9 +172,6 @@ public class PrePushGateShould
         }
     }
 
-    /// <summary>
-    /// Every job is either run by the hook or named in its header as left to CI.
-    /// </summary>
     [Fact]
     public void AccountForEveryJobOfBothWorkflows()
     {
@@ -209,10 +190,6 @@ public class PrePushGateShould
             "job that no longer exists is a promise about nothing");
     }
 
-    /// <summary>
-    /// A push to a branch that takes only merges is refused before any gate runs.
-    /// </summary>
-    /// <remarks>The branches are read out of the pull_request trigger of the workflow.</remarks>
     [Fact]
     public void RefuseAPushToABranchThatTakesOnlyMerges()
     {
@@ -246,10 +223,7 @@ public class PrePushGateShould
         }
     }
 
-    /// <summary>
-    /// Every hook has a test, and every one of those tests is run before a push.
-    /// </summary>
-    /// <remarks>CI never invokes the hooks; a test nothing calls looks like a gate and is not one.</remarks>
+    // CI never invokes the hooks; a test nothing calls looks like a gate and is not one.
     [Fact]
     public void RunTheTestOfEveryHook()
     {

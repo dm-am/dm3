@@ -8,18 +8,13 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The two scripts that run the development stack have to mean the same thing.
-/// </summary>
-/// <remarks>The two scripts are the only way to run a local stack, so a defect in one is found on one platform.</remarks>
+// The two scripts are the only way to run a local stack, so a defect in one is found on one
+// platform.
 public class ManagementScriptsShould
 {
     private const string PowerShellScript = "dm.ps1";
     private const string ShellScript = "dm.sh";
 
-    /// <summary>
-    /// The liveness route the container healthcheck asks for, read from the compose file.
-    /// </summary>
     private static string LivenessRoute
     {
         get
@@ -32,26 +27,16 @@ public class ManagementScriptsShould
     }
 
 
-    /// <summary>
-    /// The line scripts/dm.ps1 loads one of its parts from scripts/dm with.
-    /// </summary>
     private static readonly Regex PartLoad = new(
         @"^\. \(Join-Path \$PSScriptRoot ""dm\\(?<part>\w+\.ps1)""\)\r?$", RegexOptions.Multiline);
 
-    /// <summary>
-    /// A script under scripts/, with each part scripts/dm.ps1 dot-sources put
-    /// in place of the line that loads it.
-    /// </summary>
-    /// <remarks>Read in the order PowerShell runs it; a load line naming a missing part fails the read.</remarks>
+    // Read in the order PowerShell runs it; a load line naming a missing part fails the read.
     internal static string Read(string script) =>
         PartLoad.Replace(
             File.ReadAllText(Path.Combine(RepositoryLayout.Root, "scripts", script)),
             load => File.ReadAllText(Path.Combine(RepositoryLayout.Root, "scripts", "dm", load.Groups["part"].Value)));
 
-    /// <summary>
-    /// The addresses of the local services are written once, in scripts/dm/addresses.txt.
-    /// </summary>
-    /// <remarks>A third copy in either script is the drift this exists to close.</remarks>
+    // A third copy in either script is the drift this exists to close.
     [Theory]
     [InlineData(PowerShellScript)]
     [InlineData(ShellScript)]
@@ -84,9 +69,6 @@ public class ManagementScriptsShould
         }
     }
 
-    /// <summary>
-    /// Both scripts wait on the route the container healthcheck asks for.
-    /// </summary>
     [Theory]
     [InlineData(PowerShellScript)]
     [InlineData(ShellScript)]
@@ -120,12 +102,7 @@ public class ManagementScriptsShould
             + "projections it computed at start are stale from that moment on");
     }
 
-    /// <summary>
-    /// Every time the Windows script names itself for a person to run, it names
-    /// itself in the form README gives, the one that starts from cmd as well as
-    /// from PowerShell.
-    /// </summary>
-    /// <remarks>A bare .\scripts\dm.ps1 does not start from cmd.</remarks>
+    // A bare .\scripts\dm.ps1 does not start from cmd.
     [Fact]
     public void NameItselfTheWayEveryShellRunsIt()
     {
@@ -146,10 +123,7 @@ public class ManagementScriptsShould
             + "and README's powershell -File form is the one that starts from cmd too");
     }
 
-    /// <summary>
-    /// No line the Windows script prints chains two commands with &amp;&amp;.
-    /// </summary>
-    /// <remarks>Windows PowerShell rejects &amp;&amp; as a statement separator.</remarks>
+    // Windows PowerShell rejects && as a statement separator.
     [Fact]
     public void PrintNoCommandChainTheWindowsShellRejects()
     {
@@ -163,11 +137,7 @@ public class ManagementScriptsShould
             "Windows PowerShell refuses && and a printed hint is run where it was printed");
     }
 
-    /// <summary>
-    /// The stand "e2e" prepares is switched the way CI switches its own, and the
-    /// check the pre-push hook runs reads back that same switch.
-    /// </summary>
-    /// <remarks>Under the default limits the suite fails on 429s; the key is read out of the workflow.</remarks>
+    // Under the default limits the suite fails on 429s; the key is read out of the workflow.
     [Fact]
     public void SwitchRateLimitingOffForTheSuiteTheWayContinuousIntegrationDoes()
     {
@@ -186,12 +156,7 @@ public class ManagementScriptsShould
             "the hook's check has to look for the switch the e2e command sets");
     }
 
-    /// <summary>
-    /// The stand "e2e" prepares names the commit its API was built on, and the
-    /// check the pre-push hook runs refuses an API built before the server
-    /// changes being pushed.
-    /// </summary>
-    /// <remarks>The image is built once by "e2e", so without the record the suite measures an older server.</remarks>
+    // The image is built once by "e2e", so without the record the suite measures an older server.
     [Fact]
     public void RefuseASuiteAgainstAnApiBuiltBeforeTheServerBeingPushed()
     {
@@ -214,9 +179,6 @@ public class ManagementScriptsShould
             "the client is built by the suite itself from the tree, so only the server can be stale");
     }
 
-    /// <summary>
-    /// The environment is prepared and then checked, in that order.
-    /// </summary>
     [Fact]
     public void PrepareTheEnvironmentBeforeAssertingIt()
     {
@@ -239,11 +201,8 @@ public class ManagementScriptsShould
             "asserting without preparing first is what left a clone unable to start");
     }
 
-    /// <summary>
-    /// The status screen tells a client test run and a client build from a dev
-    /// server.
-    /// </summary>
-    /// <remarks>Every vitest worker says "vite" too; the rules are applied as PowerShell applies them, first match, case ignored.</remarks>
+    // Every vitest worker says "vite" too; the rules are applied as PowerShell applies them, first
+    // match, case ignored.
     [Theory]
     [InlineData(@"""node""   ""D:\Projects\Web\dm3\src\DM.Web.Client\node_modules\.bin\\..\vite\bin\vite.js"" ", "vite dev server")]
     [InlineData(@"""node""   ""D:\Projects\Web\dm3\src\DM.Web.Client\node_modules\.bin\\..\vite\bin\vite.js"" preview --config vite.preview.config.ts --port 5174", "vite dev server")]

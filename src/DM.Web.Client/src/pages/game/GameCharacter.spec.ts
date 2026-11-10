@@ -6,20 +6,23 @@
 // mode, and a failed load the reader can repeat.
 import { describe, expect, it, vi, beforeEach } from "vitest";
 import { defineComponent, h, watchEffect } from "vue";
-import { flushPromises, mount, RouterLinkStub } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia } from "pinia";
 import {
   characterApi,
   gameNotepadApi,
   GameParticipation,
   useGameDetailsStore,
   type Character,
-  type Game,
 } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
 import { useAuthStore } from "@/entities/user";
+import { asServed } from "@/shared/api/models";
+import { AttributeSpecificationType } from "@/shared/api/models/game/attributeSchemas";
 import { provideZoneSection } from "@/shared/lib/composables/useZoneSection";
 import { announceWorded } from "@/shared/lib/errors";
 import { problem } from "@/shared/lib/testing/problem";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { deferred, endOfTask } from "@/shared/lib/testing/tasks";
 import {
   CharacterCardSkeleton,
@@ -27,14 +30,12 @@ import {
 } from "@/shared/ui/Skeleton";
 import GameCharacter from "./GameCharacter.vue";
 
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({
-    params: { id: "the-game", characterId: "char-1" },
-    query: {},
-  }),
-  useRouter: () => ({ replace: vi.fn(), push: vi.fn() }),
-}));
+const routes: [string, string][] = [
+  ["game-character", "/game/:id/characters/:characterId"],
+  ["game-characters", "/game/:id/characters"],
+  ["game-character-edit", "/game/:id/characters/:characterId/edit"],
+  ["profile", "/users/:username"],
+];
 
 const SHEET: Character = {
   id: "char-1",
@@ -53,36 +54,33 @@ const SHEET: Character = {
  * @param participation how the viewer takes part in the game
  * @param viewerId who is looking; null for a visitor with no account
  */
-function render({
+async function render({
   participation = [] as GameParticipation[],
   viewerId = null as string | null,
 } = {}) {
   const pinia = createPinia();
-  setActivePinia(pinia);
-  useAuthStore().user = viewerId ? ({ id: viewerId } as never) : null;
-  const store = useGameDetailsStore();
+  useAuthStore(pinia).user = viewerId ? ({ id: viewerId } as never) : null;
+  const store = useGameDetailsStore(pinia);
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    title: "Хроники Амбера",
-    participation,
+    ...createMockGame("the-game-guid", "Хроники Амбера"),
+    publicId: asServed("the-game"),
+    participation: asServed(participation),
     schema: {
-      id: "schema-1",
-      title: "Лист",
-      type: 0,
+      version: 0,
       specifications: [
         {
           id: "spec-1",
           title: "Раса",
-          type: 0,
+          type: AttributeSpecificationType.Text,
           order: 1,
-          isRequired: false,
+          required: false,
           isHidden: false,
           isDescriptor: false,
+          values: [],
         },
       ],
     },
-  } as unknown as Game;
+  };
 
   // Provided the way the zone shell provides it, which renders the heading.
   const announced = { value: undefined as string | undefined };
@@ -96,12 +94,11 @@ function render({
     },
   });
 
-  const wrapper = mount(host, {
-    global: {
-      plugins: [pinia],
-      stubs: { RouterLink: RouterLinkStub },
-    },
-  });
+  const { wrapper } = await mountPage(
+    host,
+    "/game/the-game/characters/char-1",
+    { routes, pinia },
+  );
   return { wrapper, announced };
 }
 
@@ -115,7 +112,7 @@ describe("GameCharacter", () => {
       .spyOn(characterApi, "getCharacter")
       .mockResolvedValue({ data: { resource: SHEET } } as never);
 
-    const { wrapper, announced } = render();
+    const { wrapper, announced } = await render();
     await flushPromises();
 
     expect(get).toHaveBeenCalledWith("char-1");
@@ -131,7 +128,7 @@ describe("GameCharacter", () => {
       error: { status: 500 },
     } as never);
 
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
 
     expect(wrapper.text()).toContain("Не удалось загрузить персонажа");
@@ -150,7 +147,7 @@ describe("GameCharacter", () => {
       error: failure,
     } as never);
 
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
     await endOfTask();
 
@@ -166,7 +163,7 @@ describe("GameCharacter", () => {
       read.promise as never,
     );
 
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
 
     expect(wrapper.findComponent(CharacterCardSkeleton).exists()).toBe(true);
@@ -185,7 +182,7 @@ describe("GameCharacter", () => {
       data: { resource: { ...SHEET, author: undefined, isNpc: true } },
     } as never);
 
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
 
     expect(wrapper.findAll(".meta-line").map((line) => line.text())).toContain(
@@ -203,7 +200,7 @@ describe("GameCharacter", () => {
       },
     } as never);
 
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
 
     expect(wrapper.text()).toContain(
@@ -216,18 +213,14 @@ describe("GameCharacter", () => {
       data: { resource: SHEET },
     } as never);
 
-    const { wrapper } = render();
+    const { wrapper } = await render();
     await flushPromises();
 
-    const back = wrapper.findAllComponents(RouterLinkStub).filter((link) => {
-      const to = link.props("to") as unknown as { name?: string };
-      return to?.name === "game-characters";
-    });
+    const back = wrapper
+      .findAll("a")
+      .filter((link) => link.attributes("href")?.endsWith("/characters"));
     expect(back).toHaveLength(1);
-    expect(back[0].props("to")).toEqual({
-      name: "game-characters",
-      params: { id: "the-game" },
-    });
+    expect(back[0].attributes("href")).toBe("/game/the-game/characters");
     expect(back[0].text()).toBe("Назад к персонажам");
   });
 
@@ -257,7 +250,7 @@ describe("GameCharacter", () => {
       } as never);
       emptyNotepads();
 
-      const { wrapper } = render(options);
+      const { wrapper } = await render(options);
       await flushPromises();
       return wrapper.text();
     }
@@ -325,7 +318,7 @@ describe("GameCharacter", () => {
       } as never);
       const { playerNotes, masterNotes } = emptyNotepads();
 
-      render({
+      await render({
         participation: [GameParticipation.Player],
         viewerId: "player-2",
       });

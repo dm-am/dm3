@@ -38,7 +38,8 @@ const byToken = (token: string) => ({
   headers: { [X_DM_ACCOUNT_TOKEN]: token },
 });
 
-type BotType = "telegram" | "discord";
+/** The messenger a notification bot runs in. */
+export type BotType = "telegram" | "discord";
 
 export default new (class AccountApi {
   public register(credentials: RegisterCredentials) {

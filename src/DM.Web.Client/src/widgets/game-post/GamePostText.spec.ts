@@ -25,13 +25,13 @@ vi.mock("@/shared/ui/BBCodeEditor", async () =>
 stubResizeObserver();
 
 describe("GamePost typesetting", () => {
-  const withEverything = {
+  const withEverything: Post = {
     ...post,
     metagameText: "<p>Метаигровой текст</p>",
     diceRolls: [
       { rolls: 1, edges: 20, bonus: 0, results: [{ value: 7 }], comment: "" },
     ],
-  } as unknown as Post;
+  };
 
   const classesOf = (wrapper: PostWrapper, selector: string) =>
     wrapper.get(selector).classes();

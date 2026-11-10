@@ -133,9 +133,7 @@ internal class AttributeSchemaTemplateService : IAttributeSchemaTemplateService
         }
     }
 
-    /// <summary>
-    /// Two templates under one title are indistinguishable in the creation form.
-    /// </summary>
+    // Two templates under one title are indistinguishable in the creation form.
     private static HttpException TitleTaken(string title) =>
         new HttpException(HttpStatusCode.Conflict, $"Шаблон схемы \"{title}\" уже есть");
 }

@@ -10,11 +10,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// A blog's blacklist is read oldest entry first, and entries made at the same
-/// moment are read by name, the order the game's list keeps
-/// (GameBlacklistOrderShould).
-/// </summary>
 /// <remarks>
 /// The copy of the personal list writes one moment on every row. The rows are written in the order no read should
 /// return, with identifiers rising in insertion order, so no index hands back the answer by accident.
@@ -76,10 +71,8 @@ public class BlogBlacklistOrderShould : IntegrationTestBase
         await dbContext.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private static async Task<Guid> AddUserAsync(DmDbContext dbContext, Guid userId, string username)
     {
         dbContext.Users.Add(new DbUser
@@ -94,7 +87,6 @@ public class BlogBlacklistOrderShould : IntegrationTestBase
         return userId;
     }
 
-    /// <summary>A blog with the owner it needs to exist.</summary>
     private static async Task<(Guid OwnerId, Guid BlogId)> AddBlogAsync(DmDbContext dbContext)
     {
         var ownerId = Guid.NewGuid();

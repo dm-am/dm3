@@ -11,14 +11,7 @@ using DbUserProfileNote = DM.Infrastructure.Persistence.Entities.Account.UserPro
 
 namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 
-/// <summary>
-/// Writes to one reader's note about one user, arriving together, are all
-/// answered and leave the note as one order of them would.
-/// </summary>
-/// <remarks>
-/// Over HTTP against the container Postgres: the database decides when the writes meet. Each pair is played over
-/// several rounds from one state, alternating which is sent first.
-/// </remarks>
+// Over HTTP against the container Postgres: the database decides when the writes meet.
 public class ProfileNoteSaveRacesShould : IntegrationTestBase
 {
     private const int Rounds = 10;
@@ -29,20 +22,14 @@ public class ProfileNoteSaveRacesShould : IntegrationTestBase
     {
     }
 
-    /// <summary>The two ways the reader clears a note.</summary>
     public enum Clear
     {
-        /// <summary>DELETE of the note.</summary>
         Delete,
 
-        /// <summary>PUT with an empty text.</summary>
         EmptySave
     }
 
-    /// <summary>
-    /// Two saves of one note arriving together are both answered and leave one note.
-    /// </summary>
-    /// <remarks>The unique index over (OwnerId, SubjectUserId) is what meets the second insert.</remarks>
+    // The unique index over (OwnerId, SubjectUserId) is what meets the second insert.
     [Fact]
     public async Task AnswerBothSavesOfOnePairArrivingTogetherAndKeepOneNote()
     {
@@ -138,9 +125,6 @@ public class ProfileNoteSaveRacesShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Two clears of one note arriving together are both answered and leave no note.
-    /// </summary>
     [Fact]
     public async Task AnswerTwoClearsOfOneNoteArrivingTogether()
     {

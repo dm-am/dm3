@@ -21,25 +21,19 @@ namespace DM.Web.API.IntegrationTests.Repositories;
 /// </remarks>
 public class CharacterPcLimitRacesShould : IntegrationTestBase
 {
-    /// <summary>
-    /// Enough callers that the interleaving the defect needs is reached rather
-    /// than left to which of two the scheduler happens to start first.
-    /// </summary>
+    // Enough callers that the interleaving the defect needs is reached rather than left to which of
+    // two the scheduler happens to start first.
     private const int Parallelism = 6;
 
-    /// <summary>The number the master typed in, smaller than the roster below.</summary>
     private const int StatedLimit = 1;
 
-    /// <summary>The attribute specification the NPC below carries a value for.</summary>
     private static readonly Guid NpcAttributeId = Guid.Parse("6c1b0a10-0000-4000-8000-000000000001");
 
-    /// <summary>
-    /// How long the queued call is watched before it is called blocked. Long
-    /// enough that a call which does not wait at all has finished.
-    /// </summary>
+    // How long the queued call is watched before it is called blocked. Long enough that a call
+    // which does not wait at all has finished.
     private static readonly TimeSpan Probe = TimeSpan.FromSeconds(2);
 
-    /// <summary>The bound on the whole wait, so a lock nobody releases fails.</summary>
+    // The bound on the whole wait, so a lock nobody releases fails.
     private static readonly TimeSpan Bound = TimeSpan.FromSeconds(30);
 
     public CharacterPcLimitRacesShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -68,10 +62,6 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
         await TheGameShouldSeatEveryoneItAdmitted(gameId, Parallelism);
     }
 
-    /// <summary>
-    /// The same for the other door into the active roster: a master adding
-    /// characters that are active from the start.
-    /// </summary>
     [Fact]
     public async Task RaiseTheStatedLimitWhenActiveCharactersAreCreatedAtOnce()
     {
@@ -91,11 +81,8 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
         await TheGameShouldSeatEveryoneItAdmitted(gameId, Parallelism);
     }
 
-    /// <summary>
-    /// An acceptance waits for the acceptance in flight beside it rather than
-    /// deciding the limit on a roster that does not yet include it.
-    /// </summary>
-    /// <remarks>The winner is held open in the repository's shape: game row taken, character already active.</remarks>
+    // An acceptance waits for the acceptance in flight beside it rather than deciding the limit on
+    // a roster that does not yet include it.
     [Fact]
     public async Task WaitForTheAcceptanceInFlightBeforeDecidingTheLimit()
     {
@@ -130,11 +117,7 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
         await TheGameShouldSeatEveryoneItAdmitted(gameId, 2);
     }
 
-    /// <summary>
-    /// The same ordering for creation: a character added while another is still
-    /// uncommitted is counted with it, not instead of it.
-    /// </summary>
-    /// <remarks>The character in flight is inserted plainly: an insert alone puts somebody on the roster.</remarks>
+    // The character in flight is inserted plainly: an insert alone puts somebody on the roster.
     [Fact]
     public async Task WaitForTheCharacterInFlightBeforeDecidingTheLimit()
     {
@@ -164,10 +147,7 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
         await TheGameShouldSeatEveryoneItAdmitted(gameId, 2);
     }
 
-    /// <summary>
-    /// An edit that cannot reach the active roster waits for nobody.
-    /// </summary>
-    /// <remarks>The game row serializes only what can move the limit; the mirror of the two tests above.</remarks>
+    // The game row serializes only what can move the limit; the mirror of the two tests above.
     [Fact]
     public async Task EditAnNpcWithoutWaitingForTheAcceptanceInFlight()
     {
@@ -262,10 +242,7 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
         });
     }
 
-    /// <summary>
-    /// A non-player character of the game, with one attribute already stored.
-    /// </summary>
-    /// <remarks>No foreign key stands behind the attribute identifier.</remarks>
+    // No foreign key stands behind the attribute identifier.
     private static async Task<Guid> AddNpcAsync(DmDbContext dbContext, Guid gameId)
     {
         var authorId = await AddUserAsync(dbContext);
@@ -309,10 +286,8 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
             IsRemoved = false
         };
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
     {
         var userId = Guid.NewGuid();
@@ -330,7 +305,6 @@ public class CharacterPcLimitRacesShould : IntegrationTestBase
         return userId;
     }
 
-    /// <summary>A recruiting game with the master it needs to exist.</summary>
     private static async Task<Guid> AddGameAsync(DmDbContext dbContext)
     {
         var masterId = await AddUserAsync(dbContext);

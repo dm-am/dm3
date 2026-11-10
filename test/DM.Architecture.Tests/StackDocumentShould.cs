@@ -151,7 +151,6 @@ public class StackDocumentShould
             .ToList();
     }
 
-    /// <summary>Lines with every indented continuation joined to the line it continues.</summary>
     private static IEnumerable<string> Items(IEnumerable<string> lines)
     {
         string? item = null;

@@ -50,33 +50,26 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
     private const string LetterObjectKey = "posts/f100_letter.png";
     private static readonly byte[] FileBytes = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x01, 0x02];
 
-    /// <summary>Master of the game: reads every room of it.</summary>
     private static GeneralUser Master => User(
         TestConstants.SecondUserId, TestConstants.SecondUserLogin, UserRole.RegularUser);
 
-    /// <summary>Author of the post and owner of the file.</summary>
     private static GeneralUser Author => User(
         TestConstants.TestUserId, TestConstants.TestUserLogin, UserRole.RegularUser);
 
-    /// <summary>
-    /// In the private room by a character of theirs, and neither the owner of the
-    /// file nor a moderator — so a 200 for them is the room rule and nothing else.
-    /// </summary>
+    // In the private room by a character of theirs, and neither the owner of the file nor a
+    // moderator — so a 200 for them is the room rule and nothing else.
     private static GeneralUser RoomMember => User(
         TestConstants.TestimonialUserIds[0], TestConstants.TestimonialUsernames[0], UserRole.RegularUser);
 
-    /// <summary>In the game with a character, with no access to this room.</summary>
     private static GeneralUser PlayerWithoutTheRoom => User(
         TestConstants.TestimonialUserIds[1], TestConstants.TestimonialUsernames[1], UserRole.RegularUser);
 
-    /// <summary>Signed in, and nothing to do with the game.</summary>
     private static GeneralUser Outsider => User(
         TestConstants.TestimonialUserIds[2], TestConstants.TestimonialUsernames[2], UserRole.RegularUser);
 
     private static GeneralUser Moderator => User(
         TestConstants.ModeratorUserId, TestConstants.ModeratorUserLogin, UserRole.Moderator);
 
-    /// <summary>In the private room by the character the hidden block of the letter is addressed to.</summary>
     private static GeneralUser Addressee => User(
         TestConstants.TestimonialUserIds[3], TestConstants.TestimonialUsernames[3], UserRole.RegularUser);
 
@@ -87,10 +80,6 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
 
     private static string LetterContentUrl => $"/v1/uploads/{LetterUploadId:D}/content";
 
-    /// <summary>
-    /// The closed room and the file attached to a post in it, written once for
-    /// the whole class.
-    /// </summary>
     public async ValueTask InitializeAsync()
     {
         // Seeded before the guard below returns. The object store is a static
@@ -114,10 +103,6 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         await db.SaveChangesAsync();
     }
 
-    /// <summary>
-    /// A second post whose file the text shows only inside a block addressed to one
-    /// reader of the room, and a character of that reader let into the room.
-    /// </summary>
     private static void AddLetter(DmDbContext db)
     {
         db.Set<DbCharacter>().Add(Character(AddresseeCharacterId, Addressee.UserId, AddresseeName));
@@ -148,9 +133,8 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         db.Set<DbUpload>().Add(Attachment(LetterUploadId, LetterPostId, LetterObjectKey, "pismo.png"));
     }
 
-    /// <summary>
-    /// A visible game holding a room only its members may enter: only the room's access type closes it.
-    /// </summary>
+    // A visible game holding a room only its members may enter: only the room's access type closes
+    // it.
     private static void AddClosedRoom(DmDbContext db)
     {
         db.Set<DbGame>().Add(new DbGame
@@ -217,9 +201,6 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         });
     }
 
-    /// <summary>
-    /// A file of the author, attached to a post by the one column that names its carrier.
-    /// </summary>
     private static DbUpload Attachment(Guid uploadId, Guid postId, string objectKey, string fileName) => new()
     {
         UploadId = uploadId,
@@ -248,10 +229,6 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
     /// Nothing in the body is an address the bytes can be fetched from without
     /// this API deciding who is asking.
     /// </summary>
-    /// <remarks>
-    /// Two shapes: the key without its extension, which also covers the address of a thumbnail beside it, and
-    /// the camelCased field name.
-    /// </remarks>
     private static void AssertNoAddressOfTheBytes(string body)
     {
         body.Should().NotContain(Path.ChangeExtension(ObjectKey, null),
@@ -262,9 +239,6 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
     private static DbCharacter Character(Guid id, Guid authorId, string name) =>
         CharacterRows.InPlay(id, GameId, authorId, name);
 
-    /// <summary>
-    /// The two refusals say the same words, not merely carry the same status.
-    /// </summary>
     /// <remarks>A refusal naming the post would say a live row exists; compared against a genuinely absent id.</remarks>
     [Fact]
     public async Task AnswerAClosedFileWithTheSameWordsAsAMissingOne()
@@ -318,10 +292,8 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
             "the room is the unit of access, not the game");
     }
 
-    /// <summary>
-    /// 404 and not 403, for all three. A 403 answers the question the closed room
-    /// was keeping shut: whether there is a file here at all.
-    /// </summary>
+    // A 403 answers the question the closed room was keeping shut: whether there is a file here at
+    // all.
     [Fact]
     public async Task NeverAnswerForbiddenWhichWouldConfirmTheFileExists()
     {
@@ -395,10 +367,6 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         response.Headers.CacheControl.MaxAge.Should().BeNull();
     }
 
-    /// <summary>
-    /// The post carries the endpoint's address and nothing else about where the
-    /// bytes live.
-    /// </summary>
     /// <remarks>
     /// The key and a thumbnail beside it are both passes on the bearer's terms. Checked over the raw body, so a
     /// new DTO field is covered.
@@ -463,10 +431,8 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         (await TitleOf(hidden)).Should().Be(await TitleOf(missing));
     }
 
-    /// <summary>
-    /// Nor does the post list it for him, read alone or with the room: a file under the
-    /// post would say what the block keeps from him.
-    /// </summary>
+    // Nor does the post list it for him, read alone or with the room: a file under the post would
+    // say what the block keeps from him.
     [Fact]
     public async Task LeaveSuchAFileOutOfThePostForThatReader()
     {
@@ -482,10 +448,6 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         IdsOf(letter).Should().BeEmpty();
     }
 
-    /// <summary>
-    /// The addressee reads the block, the author wrote it and the master leads the
-    /// game: each gets the file and sees it under the post.
-    /// </summary>
     [Fact]
     public async Task GiveSuchAFileToTheAddresseeTheAuthorAndTheMaster()
     {
@@ -500,10 +462,9 @@ public class PostAttachmentAccessShould : IntegrationTestBase, IAsyncLifetime
         }
     }
 
-    /// <summary>
-    /// Moderation has no way around a hidden block, and the address of a file is none either: the upload
-    /// record hands a moderator outside the game the address, and the address answers him as a missing file.
-    /// </summary>
+    // Moderation has no way around a hidden block, and the address of a file is none either: the
+    // upload record hands a moderator outside the game the address, and the address answers him as
+    // a missing file.
     [Fact]
     public async Task KeepSuchAFileFromAModeratorWhomTheUploadRecordGivesItsAddress()
     {

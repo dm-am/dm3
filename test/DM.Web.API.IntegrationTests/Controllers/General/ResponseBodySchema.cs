@@ -2,17 +2,11 @@ using System.Text.Json;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// How the published document types the body of one response.
-/// </summary>
-/// <remarks>Shared by three tests: a body written in place is a body, not its absence.</remarks>
+// Shared by three tests: a body written in place is a body, not its absence.
 internal static class ResponseBodySchema
 {
-    /// <summary>
-    /// Stands for a body the document describes in place instead of naming. Never
-    /// an envelope and never a declared list: those are classes, and the document
-    /// points at a class through $ref.
-    /// </summary>
+    // Never an envelope and never a declared list: those are classes, and the document points at a
+    // class through $ref.
     public const string WrittenInPlace = "(schema written in place)";
 
     /// <summary>
@@ -40,8 +34,7 @@ internal static class ResponseBodySchema
         return WrittenInPlace;
     }
 
-    /// <summary>Whether the body is an array, written out in place.</summary>
-    /// <remarks>Asked only of a body that names nothing.</remarks>
+    // Asked only of a body that names nothing.
     public static bool IsArray(JsonElement response)
     {
         if (!response.TryGetProperty("content", out var content))

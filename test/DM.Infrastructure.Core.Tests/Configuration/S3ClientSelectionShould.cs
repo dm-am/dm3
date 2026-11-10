@@ -8,13 +8,8 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Configuration;
 
-/// <summary>
-/// The object storage client is built for the provider the configuration names.
-/// </summary>
-/// <remarks>
-/// The local store answers only path-style addresses, CloudCube is an AWS bucket behind its region's
-/// endpoint; asserted on the client the container hands out.
-/// </remarks>
+// The local store answers only path-style addresses, CloudCube is an AWS bucket behind its region's
+// endpoint; asserted on the client the container hands out.
 public class S3ClientSelectionShould
 {
     private const string Endpoint = "http://storage.test:9000";
@@ -40,10 +35,7 @@ public class S3ClientSelectionShould
         config.ForcePathStyle.Should().BeFalse("an AWS bucket is addressed by its own host name");
     }
 
-    /// <summary>
-    /// A host that leaves the provider unset is refused with the setting and its value named.
-    /// </summary>
-    /// <remarks>The default member is one no implementation claims.</remarks>
+    // The default member is one no implementation claims.
     [Fact]
     public void RefuseAProviderLeftUnset()
     {
@@ -53,7 +45,6 @@ public class S3ClientSelectionShould
             .WithMessage($"*CdnConfiguration:Provider = {default(S3Provider)}*");
     }
 
-    /// <summary>The client the container builds, with the provider left unset when none is given.</summary>
     private static AmazonS3Config ClientFor(S3Provider? provider, string region)
     {
         var services = new ServiceCollection();

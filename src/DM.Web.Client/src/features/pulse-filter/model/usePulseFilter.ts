@@ -5,13 +5,17 @@ import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import { isValidDate, parsePageNumber } from "@/shared/lib/filters/values";
 import type { PulseSearchParams } from "@/entities/game";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 export type PulseSortBy = "lastreview" | "rating" | "reviewcount";
+
+/** The filters the menu of the bar offers. */
+export type PulseFilterKey = "rating" | "author" | "date";
 
 interface PulseFilterState {
   search: string;
   sortBy: PulseSortBy;
-  sortOrder: "asc" | "desc";
+  sortOrder: SortDirection;
   minRating: number | null;
   maxRating: number | null;
   authorUsernames: Set<string>;
@@ -26,7 +30,7 @@ export interface PulseFilterComposable {
   hasActiveFilters: ComputedRef<boolean>;
 
   setSearch: (search: string) => void;
-  setSort: (sortBy: PulseSortBy, sortOrder?: "asc" | "desc") => void;
+  setSort: (sortBy: PulseSortBy, sortOrder?: SortDirection) => void;
   setRatingRange: (min: number | null, max: number | null) => void;
   addAuthor: (username: string) => void;
   removeAuthor: (username: string) => void;
@@ -37,7 +41,7 @@ export interface PulseFilterComposable {
 
 type PulseFilterAction =
   | { type: "SET_SEARCH"; search: string }
-  | { type: "SET_SORT"; sortBy: PulseSortBy; sortOrder?: "asc" | "desc" }
+  | { type: "SET_SORT"; sortBy: PulseSortBy; sortOrder?: SortDirection }
   | { type: "SET_RATING_RANGE"; min: number | null; max: number | null }
   | { type: "ADD_AUTHOR"; username: string }
   | { type: "REMOVE_AUTHOR"; username: string }
@@ -135,6 +139,18 @@ const validSortByValues = new Set<string>([
   "reviewcount",
 ]);
 
+function parseRatingBound(value: LocationQuery[string]): number | null {
+  if (!value) return null;
+  const rating = parseInt(String(value), 10);
+  return isNaN(rating) ? null : rating;
+}
+
+function parseCreatedDate(value: LocationQuery[string]): string | null {
+  if (!value) return null;
+  const date = String(value);
+  return isValidDate(date) ? date : null;
+}
+
 function parseQueryToState(query: LocationQuery): PulseFilterState {
   const state = createDefaultState();
 
@@ -156,19 +172,8 @@ function parseQueryToState(query: LocationQuery): PulseFilterState {
     }
   }
 
-  if (query.minRating) {
-    const rating = parseInt(String(query.minRating), 10);
-    if (!isNaN(rating)) {
-      state.minRating = rating;
-    }
-  }
-
-  if (query.maxRating) {
-    const rating = parseInt(String(query.maxRating), 10);
-    if (!isNaN(rating)) {
-      state.maxRating = rating;
-    }
-  }
+  state.minRating = parseRatingBound(query.minRating);
+  state.maxRating = parseRatingBound(query.maxRating);
 
   if (query.authors) {
     const authors = String(query.authors)
@@ -178,19 +183,8 @@ function parseQueryToState(query: LocationQuery): PulseFilterState {
     state.authorUsernames = new Set(authors);
   }
 
-  if (query.createdFrom) {
-    const createdFrom = String(query.createdFrom);
-    if (isValidDate(createdFrom)) {
-      state.createdFrom = createdFrom;
-    }
-  }
-
-  if (query.createdTo) {
-    const createdTo = String(query.createdTo);
-    if (isValidDate(createdTo)) {
-      state.createdTo = createdTo;
-    }
-  }
+  state.createdFrom = parseCreatedDate(query.createdFrom);
+  state.createdTo = parseCreatedDate(query.createdTo);
 
   if (query.game) {
     state.gameId = String(query.game);
@@ -273,7 +267,7 @@ export function usePulseFilter(): PulseFilterComposable {
 
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search });
-  const setSort = (sortBy: PulseSortBy, sortOrder?: "asc" | "desc") =>
+  const setSort = (sortBy: PulseSortBy, sortOrder?: SortDirection) =>
     dispatch({ type: "SET_SORT", sortBy, sortOrder });
   const setRatingRange = (min: number | null, max: number | null) =>
     dispatch({ type: "SET_RATING_RANGE", min, max });

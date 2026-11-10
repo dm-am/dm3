@@ -9,13 +9,14 @@ withDefaults(
   defineProps<{
     /** Number of fields to show */
     fields?: number;
-    /** Number of buttons in the row under them */
-    actions?: number;
     /** The least height of the editor that is the last field (its min-height prop); none, a field of one line. */
     editorHeight?: number;
   }>(),
-  { fields: 3, actions: 2, editorHeight: undefined },
+  { fields: 3, editorHeight: undefined },
 );
+
+/** Buttons in the row under the fields. */
+const ACTIONS = 2;
 </script>
 
 <template>
@@ -36,8 +37,8 @@ withDefaults(
       </div>
       <div v-else class="skeleton-control" />
     </div>
-    <div v-if="actions" class="skeleton-actions">
-      <div v-for="i in actions" :key="i" class="skeleton-button" />
+    <div class="skeleton-actions">
+      <div v-for="i in ACTIONS" :key="i" class="skeleton-button" />
     </div>
   </div>
 </template>

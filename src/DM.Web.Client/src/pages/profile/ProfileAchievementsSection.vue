@@ -11,7 +11,7 @@ import type {
   UserAchievement,
 } from "@/shared/api/models/achievements";
 import type { User } from "@/shared/api/models/community";
-import { GameIcon } from "@/shared/ui/Icon";
+import GameIcon from "@/shared/ui/Icon/GameIcon.vue";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { Tooltip } from "@/shared/ui/Tooltip";
@@ -32,6 +32,7 @@ import {
   shownOnPage,
   useGuardedRequest,
 } from "@/shared/lib/composables/useGuardedRequest";
+import type { AchievementsBlockState } from "./achievementsTabState";
 
 const props = defineProps<{
   username: string;
@@ -41,7 +42,7 @@ const props = defineProps<{
 
 /** Whether the section settled empty, for the tab's shared empty text; with a catalog it never is. */
 const emit = defineEmits<{
-  state: [value: "loading" | "error" | "empty" | "content"];
+  state: [value: AchievementsBlockState];
 }>();
 
 const earned = ref<UserAchievement[]>([]);

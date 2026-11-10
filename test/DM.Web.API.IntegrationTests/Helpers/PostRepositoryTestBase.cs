@@ -9,12 +9,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Helpers;
 
-/// <summary>
-/// The rows the post repository suites read back through the repository: a
-/// master with a game and an open room of their own, and posts in it written by
-/// characters, with or without reviews.
-/// </summary>
-/// <remarks>Written straight to the container Postgres, so the rows meet production's constraints.</remarks>
+// Written straight to the container Postgres, so the rows meet production's constraints.
 public abstract class PostRepositoryTestBase : IntegrationTestBase
 {
     protected PostRepositoryTestBase(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -23,7 +18,6 @@ public abstract class PostRepositoryTestBase : IntegrationTestBase
 
     protected sealed record GameContext(Guid UserId, Guid GameId, Guid RoomId);
 
-    /// <summary>A character in the game with one post in the room.</summary>
     protected static async Task<Guid> AddPostByNewCharacterAsync(
         DmDbContext dbContext, GameContext context)
     {
@@ -52,10 +46,8 @@ public abstract class PostRepositoryTestBase : IntegrationTestBase
         return characterId;
     }
 
-    /// <summary>
-    /// A fresh master, game and room per test: the fixture's database is shared
-    /// and seeded, so fixed identifiers would collide.
-    /// </summary>
+    // A fresh master, game and room per test: the fixture's database is shared and seeded, so fixed
+    // identifiers would collide.
     protected static async Task<GameContext> AddGameWithRoomAsync(DmDbContext dbContext)
     {
         var userId = Guid.NewGuid();
@@ -95,9 +87,8 @@ public abstract class PostRepositoryTestBase : IntegrationTestBase
         return new GameContext(userId, gameId, roomId);
     }
 
-    /// <summary>
-    /// A post authored by a character with a set of reviews; negative and removed ones keep the rating from being a count.
-    /// </summary>
+    // A post authored by a character with a set of reviews; negative and removed ones keep the
+    // rating from being a count.
     protected static async Task<Guid> AddRatedPostAsync(
         DmDbContext dbContext, GameContext context, int positiveReviews,
         DateTimeOffset? reviewTime = null, DateTimeOffset? postCreatedUtc = null,
@@ -162,8 +153,6 @@ public abstract class PostRepositoryTestBase : IntegrationTestBase
         return postId;
     }
 
-    /// <summary>
-    /// A public id no other row holds: the column is NOT NULL and uniquely indexed.
-    /// </summary>
+    // A public id no other row holds: the column is NOT NULL and uniquely indexed.
     private static string UniquePublicId() => Guid.NewGuid().ToString("N")[..10];
 }

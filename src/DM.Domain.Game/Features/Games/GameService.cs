@@ -52,9 +52,7 @@ internal partial class GameService : IGameService
 
     private const string TagListCacheKey = nameof(TagListCacheKey);
 
-    /// <summary>
-    /// A master deletes his started game only while it has fewer posts than this.
-    /// </summary>
+    // A master deletes his started game only while it has fewer posts than this.
     private const int SelfDeletePostLimit = 10;
 
     public GameService(
@@ -177,9 +175,7 @@ internal partial class GameService : IGameService
         DiceEnabled = true
     };
 
-    /// <summary>
-    /// A refused invitation is logged, not thrown: the game is committed by now.
-    /// </summary>
+    // A refused invitation is logged, not thrown: the game is committed by now.
     private async Task InviteAssistantOnCreation(CreateGame createGame, Guid gameId)
     {
         if (!string.IsNullOrEmpty(createGame.AssistantUsername))
@@ -196,9 +192,7 @@ internal partial class GameService : IGameService
         }
     }
 
-    /// <summary>
-    /// A lost copy is refilled from the blacklist screen, so a failure is logged, not thrown.
-    /// </summary>
+    // A lost copy is refilled from the blacklist screen, so a failure is logged, not thrown.
     private async Task CopyBlacklistOnCreation(CreateGame createGame, Guid gameId, Guid masterId)
     {
         try
@@ -293,9 +287,7 @@ internal partial class GameService : IGameService
         return (games, pagingDataAuth.Result);
     }
 
-    /// <summary>
-    /// The storage scope cannot ask the resolver, so the intention is asked here and handed down.
-    /// </summary>
+    // The storage scope cannot ask the resolver, so the intention is asked here and handed down.
     private bool MayJudgePremoderation =>
         _intentionManager.IsAllowed(GameIntention.SetStatusModeration);
 
@@ -342,9 +334,7 @@ internal partial class GameService : IGameService
         return game;
     }
 
-    /// <summary>
-    /// A game hidden from the caller answers the 404 of an identifier that addresses nothing.
-    /// </summary>
+    // A game hidden from the caller answers the 404 of an identifier that addresses nothing.
     private T Readable<T>(T? game) where T : Game
     {
         if (game == null)
@@ -356,9 +346,7 @@ internal partial class GameService : IGameService
         return game;
     }
 
-    /// <summary>
-    /// The written row comes back without the sheet and the subscribers the details mapping needs.
-    /// </summary>
+    // The written row comes back without the sheet and the subscribers the details mapping needs.
     private async Task<GameDetails> Answered(GameDetails written)
     {
         await FillDetails(written, _identityProvider.Current.User.UserId);
@@ -506,10 +494,8 @@ internal partial class GameService : IGameService
 
     #region Private Methods
 
-    /// <summary>
-    /// A list the viewer browses, the one "Скрывать игры" cleans; not his own games, not a list
-    /// asked by a person's name, and not the moderation worklist.
-    /// </summary>
+    // A list the viewer browses, the one "Скрывать игры" cleans; not his own games, not a list
+    // asked by a person's name, and not the moderation worklist.
     private static bool IsDiscoveryListing(GamesQuery query) =>
         query.Participating != true &&
         query.OwnerUsernames is not { Count: > 0 } &&

@@ -28,9 +28,7 @@ public class PostIntentionResolverShould
         resolver.IsAllowed(user, PostIntention.Delete, PostBy(authorId)).Should().BeTrue();
     }
 
-    /// <summary>
-    /// Nothing in a game room is moderated: no rank deletes a post of somebody else.
-    /// </summary>
+    // Nothing in a game room is moderated: no rank deletes a post of somebody else.
     [Theory]
     [InlineData(UserRole.Moderator)]
     [InlineData(UserRole.SeniorModerator)]
@@ -50,9 +48,7 @@ public class PostIntentionResolverShould
         resolver.IsAllowed(user, PostIntention.Delete, PostBy(Guid.NewGuid())).Should().BeFalse();
     }
 
-    /// <summary>
-    /// Nor does any rank edit one: the edit of moderation is not a right in a game room.
-    /// </summary>
+    // Nor does any rank edit one: the edit of moderation is not a right in a game room.
     [Theory]
     [InlineData(UserRole.Moderator)]
     [InlineData(UserRole.SeniorModerator)]
@@ -91,7 +87,6 @@ public class PostIntentionResolverShould
 
     private static readonly Guid AddresseeId = Guid.Parse("00000000-0000-0000-0000-0000000000b1");
 
-    /// <summary>A post of somebody else with one hidden block, for the addressee, whose owner is named.</summary>
     private static Post PostWithABlockForVasya(
         string opening = "[private=\"Вася\"]", Guid? masterId = null, bool roomShowsAll = false) => new()
         {
@@ -103,9 +98,6 @@ public class PostIntentionResolverShould
             RoomViewPrivateText = roomShowsAll,
         };
 
-    /// <summary>
-    /// A moderator is refused a post of somebody else by both doors of the right, a hidden block or none.
-    /// </summary>
     [Fact]
     public void ForbidEditTextToAModeratorAHiddenBlockOfThePostIsClosedTo()
     {
@@ -129,9 +121,6 @@ public class PostIntentionResolverShould
             .Should().BeFalse("nor is a room that shows every addressed block");
     }
 
-    /// <summary>
-    /// A file marked "Выбранные" outside every block, and a moderator it is marked for or not: no edit.
-    /// </summary>
     [Fact]
     public void ForbidEditTextToAModeratorAMarkedFileOfThePostIsClosedTo()
     {

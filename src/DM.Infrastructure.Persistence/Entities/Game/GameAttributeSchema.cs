@@ -23,9 +23,6 @@ public class GameAttributeSchema
     /// </summary>
     public Guid GameId { get; set; }
 
-    /// <summary>
-    /// Attribute specifications
-    /// </summary>
     public List<AttributeSpecification> Specifications { get; set; } = [];
 
     /// <summary>

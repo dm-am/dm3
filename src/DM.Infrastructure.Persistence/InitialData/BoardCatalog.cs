@@ -5,17 +5,12 @@ using DM.Infrastructure.Persistence.Entities.Forum;
 
 namespace DM.Infrastructure.Persistence.InitialData;
 
-/// <summary>
-/// The boards of the forum and the two topics the site ships with, seeded with
-/// the schema.
-/// </summary>
 /// <remarks>
 /// Together, because the first board carries a denormalised account of the topics
 /// seeded into it, and the two have to agree.
 /// </remarks>
 internal static class BoardCatalog
 {
-    /// <summary>The boards, in the order the forum lists them.</summary>
     internal static Board[] Boards() =>
     [
         new Board
@@ -47,7 +42,6 @@ internal static class BoardCatalog
         Board(0xb, 11, "Новости проекта", "news", "Официальные новости, обновления и статистика", BoardAccessPolicy.Moderator)
     ];
 
-    /// <summary>The two topics of the general board.</summary>
     internal static Topic[] SystemTopics() =>
     [
         new Topic
@@ -79,7 +73,6 @@ internal static class BoardCatalog
         }
     ];
 
-    /// <summary>A board with no topics in it yet.</summary>
     private static Board Board(
         int id, int order, string title, string alias, string description, BoardAccessPolicy createTopicPolicy) => new()
         {

@@ -15,7 +15,7 @@ import {
 } from "@/entities/achievement";
 import { BlockTitle, SecondaryText } from "@/shared/ui/Layout";
 import { UserAutocomplete } from "@/entities/user";
-import { GameIcon } from "@/shared/ui/Icon";
+import GameIcon from "@/shared/ui/Icon/GameIcon.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { UserLink } from "@/entities/user";
 import { Select, type SelectOption } from "@/shared/ui/Select";

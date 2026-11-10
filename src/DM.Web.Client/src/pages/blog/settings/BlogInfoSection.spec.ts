@@ -8,15 +8,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import {
-  blogApi,
-  DraftVisibility,
-  useBlogDetailsStore,
-  type Blog,
-} from "@/entities/blog";
+import { blogApi, DraftVisibility, useBlogDetailsStore } from "@/entities/blog";
 import { useAuthStore, type User } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import BlogInfoSection from "./BlogInfoSection.vue";
 import { problem } from "@/shared/lib/testing/problem";
 import { expectRefusalUnderField } from "@/shared/lib/testing/formField";
@@ -36,12 +33,11 @@ function mountSection(readerId?: string) {
   if (readerId) useAuthStore().user = { id: readerId } as User;
   const store = useBlogDetailsStore();
   store.blog = {
-    id: "the-blog",
-    title: "Дневник",
+    ...createMockBlog("the-blog", "Дневник"),
     draftVisibility: DraftVisibility.Public,
-    author: { id: "owner-id", username: "the-owner" },
+    author: createMockUser("owner-id", "the-owner"),
     assistants: [],
-  } as unknown as Blog;
+  };
   // The reload after a save is not this spec's subject.
   vi.spyOn(store, "loadBlog").mockResolvedValue({ ok: true });
 

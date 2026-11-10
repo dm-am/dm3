@@ -13,13 +13,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// A failure past the point of no return is recorded, not answered.
-/// </summary>
-/// <remarks>
-/// Once the headers are on the wire the status setter throws, and that second exception would escape; a
-/// listing can fault after the first flush.
-/// </remarks>
+// Once the headers are on the wire the status setter throws, and that second exception would
+// escape; a listing can fault after the first flush.
 public class ErrorHandlingMiddlewareShould
 {
     [Fact]
@@ -59,10 +54,8 @@ public class ErrorHandlingMiddlewareShould
         return new DefaultHttpContext(features);
     }
 
-    /// <summary>
-    /// Kestrel refuses a status change once the headers are gone, and counts the
-    /// attempt so the rule can tell "guarded" from "happened to work".
-    /// </summary>
+    // Kestrel refuses a status change once the headers are gone, and counts the attempt so the rule
+    // can tell "guarded" from "happened to work".
     private sealed class StartedResponseFeature : IHttpResponseFeature, IHttpRequestLifetimeFeature
     {
         private int statusCode = StatusCodes.Status200OK;

@@ -10,11 +10,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Authorization;
 
-/// <summary>
-/// Gates who may wait for a turn in a room and who may drop the wait, and the
-/// reader rows both overloads of the resolver read. The posts of a room and its
-/// chat are RoomPostIntentionShould and ChatRoomIntentionShould.
-/// </summary>
 public class RoomIntentionResolverShould : RoomIntentionTestBase
 {
     [Fact]

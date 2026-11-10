@@ -12,7 +12,6 @@ namespace DM.Domain.Blog.Features.Blogs;
 /// </summary>
 public interface IBlogUserService
 {
-    /// <returns>The subscribed user</returns>
     Task<GeneralUser> Subscribe(Guid blogId, CancellationToken ct = default);
 
     Task Unsubscribe(Guid blogId, CancellationToken ct = default);

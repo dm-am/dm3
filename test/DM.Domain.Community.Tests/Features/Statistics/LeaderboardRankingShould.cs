@@ -74,9 +74,6 @@ public class LeaderboardRankingShould
         entries.Should().BeEmpty();
     }
 
-    /// <summary>
-    /// Every board the page shows comes back sorted and numbered, under the period asked.
-    /// </summary>
     [Fact]
     public async Task RankEveryBoardOfThePeriodAsked()
     {

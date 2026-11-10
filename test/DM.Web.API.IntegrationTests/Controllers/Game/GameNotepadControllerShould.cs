@@ -10,9 +10,6 @@ public class GameNotepadControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Get game notes without authentication should return Unauthorized
-    /// </summary>
     [Fact]
     public async Task GetGameNotesWhenNotAuthenticatedReturnsUnauthorized()
     {

@@ -13,9 +13,6 @@ using GameRecruitment = DM.Domain.Game.Features.Games.GameRecruitment;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// The full mapping chain the production DI composes keeps <c>Room.Game</c> with Id, PublicId and Title.
-/// </summary>
 public class PostMappingRegressionShould
 {
     private readonly PostMapper _mapper;
@@ -34,9 +31,7 @@ public class PostMappingRegressionShould
             new StubReaders());
     }
 
-    /// <summary>
-    /// A guest identity, so GameRef.Participation evaluates to an empty list.
-    /// </summary>
+    // A guest identity, so GameRef.Participation evaluates to an empty list.
     private sealed class StubIdentityProvider : DM.Domain.Core.Identity.IIdentityProvider
     {
         public DM.Domain.Core.Identity.IIdentity Current { get; } =

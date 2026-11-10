@@ -81,7 +81,6 @@ public class TopicCommentServiceShould : UnitTestBase
             eventProducer);
     }
 
-    /// <summary>The store answers a creation with this comment.</summary>
     private void CreateReturns(Comment comment) =>
         repository.Create(Arg.Any<CreateTopicCommentEntity>()).Returns(comment);
 
@@ -117,7 +116,6 @@ public class TopicCommentServiceShould : UnitTestBase
         await countersRepository.Received(1).IncrementAsync(topicId, UnreadEntryType.Message);
     }
 
-    /// <summary>The text is stored as typed, the spaces around it included (BBCODE_RENDERING.md, "Регистр имен").</summary>
     [Fact]
     public async Task StoreTheTextAsTyped()
     {
@@ -199,10 +197,6 @@ public class TopicCommentServiceShould : UnitTestBase
         exception.Which.Message.Should().Contain($"Комментарий {commentId} не найден");
     }
 
-    /// <summary>
-    /// What the topic's comments counter has to answer: where this reader
-    /// stopped, which is the first comment past his read marker.
-    /// </summary>
     [Fact]
     public async Task LeadToTheFirstCommentPastTheReadMarker()
     {
@@ -224,11 +218,8 @@ public class TopicCommentServiceShould : UnitTestBase
         await repository.DidNotReceive().GetLastComment(Arg.Any<Guid>(), Arg.Any<IReadOnlyCollection<Guid>?>());
     }
 
-    /// <summary>
-    /// Nothing unread is the ordinary state one second after the topic was
-    /// opened: opening it flushes the marker. Answering with the beginning of
-    /// the topic there is what made the same link useless on the second click.
-    /// </summary>
+    // Nothing unread is the ordinary state one second after the topic was opened: opening it
+    // flushes the marker.
     [Fact]
     public async Task FallBackToTheLastCommentWhenNothingIsUnread()
     {
@@ -251,11 +242,8 @@ public class TopicCommentServiceShould : UnitTestBase
         result.Should().BeSameAs(lastComment);
     }
 
-    /// <summary>
-    /// A reader who has never opened the topic has no marker at all, and every
-    /// comment is unread to him: he starts at the first one. Folding that case
-    /// into the fallback above would send him straight to the end.
-    /// </summary>
+    // A reader who has never opened the topic has no marker at all, and every comment is unread to
+    // him: he starts at the first one.
     [Fact]
     public async Task StartAtTheBeginningForAReaderWithoutAMarker()
     {
@@ -274,12 +262,8 @@ public class TopicCommentServiceShould : UnitTestBase
         result.Should().BeSameAs(firstComment);
     }
 
-    /// <summary>
-    /// Marking the whole forum read asks for the boards and nothing else.
-    /// </summary>
-    /// <remarks>
-    /// The list with counters is the expensive one, and this call zeroes every counter it would fill.
-    /// </remarks>
+    // The list with counters is the expensive one, and this call zeroes every counter it would
+    // fill.
     [Fact]
     public async Task AskForTheBoardsWithoutTheCountersItIsAboutToZero()
     {
@@ -298,12 +282,7 @@ public class TopicCommentServiceShould : UnitTestBase
         await boardService.DidNotReceive().GetBoardsList();
     }
 
-    /// <summary>
-    /// The removal that took the comment is the one that owns its consequences.
-    /// </summary>
-    /// <remarks>
-    /// Two removals of one comment would take the counter down twice, and it has no way back.
-    /// </remarks>
+    // Two removals of one comment would take the counter down twice, and it has no way back.
     [Fact]
     public async Task LeaveTheCountersToTheRemovalThatTookTheComment()
     {

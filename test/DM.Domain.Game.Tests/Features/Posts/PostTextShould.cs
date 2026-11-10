@@ -13,16 +13,11 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
-/// <summary>
-/// The two texts of a post, the game text and the metagame text, on their way
-/// to storage: stored as typed, and who may change them.
-/// </summary>
 public class PostTextShould : PostServiceTestBase
 {
     /// <summary>The game text as the author typed it, spaces and the case of tag names included.</summary>
     private const string GameText = "  [B]игра[/B]\n";
 
-    /// <summary>The out-of-character text as typed, spaces around it.</summary>
     private const string MetagameText = "\n[I]вне игры[/I]  ";
 
     /// <summary>
@@ -79,10 +74,8 @@ public class PostTextShould : PostServiceTestBase
         written.MetagameText.Should().Be(MetagameText);
     }
 
-    /// <summary>
-    /// Submitted text the caller may not edit is refused, not swapped for the
-    /// stored text and saved: a 200 with the post as it was looks like a successful edit.
-    /// </summary>
+    // Submitted text the caller may not edit is refused, not swapped for the stored text and saved:
+    // a 200 with the post as it was looks like a successful edit.
     [Fact]
     public async Task RefuseTextTheCallerMayNotEdit()
     {
@@ -114,10 +107,8 @@ public class PostTextShould : PostServiceTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdatePostEntity>());
     }
 
-    /// <summary>
-    /// A request that submits no text asks for nothing: the lead who may change
-    /// only the character must not be refused for the text he never sent.
-    /// </summary>
+    // A request that submits no text asks for nothing: the lead who may change only the character
+    // must not be refused for the text he never sent.
     [Fact]
     public async Task NotAskForTextRightsWhenNoTextIsSubmitted()
     {

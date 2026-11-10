@@ -16,10 +16,6 @@ import {
   signInAs,
 } from "./CommentItem.fixtures";
 
-vi.mock("vue-router", async () =>
-  (await import("./CommentItem.doubles")).vueRouter(),
-);
-
 enableAutoUnmount(afterEach);
 
 beforeEach(freshComment);
@@ -41,8 +37,10 @@ describe("CommentItem caption line", () => {
     );
   };
 
-  const footerLine = (wrapper: VueWrapper) =>
-    wrapper.element.querySelector(".comment-footer .caption-line");
+  const footerLine = (wrapper: VueWrapper) => {
+    const line = wrapper.find(".comment-footer .caption-line");
+    return line.exists() ? line.element : null;
+  };
 
   const moderatorsComment = (extra: Record<string, unknown> = {}) =>
     mountComponent(
@@ -61,9 +59,9 @@ describe("CommentItem caption line", () => {
     );
 
   // A warning reaches only below the reader's rank, hence a senior moderator.
-  it("runs the author, the dates, the actions and the like, in that order", () => {
+  it("runs the author, the dates, the actions and the like, in that order", async () => {
     signInAs("Senior", "SeniorModerator");
-    const wrapper = moderatorsComment();
+    const wrapper = await moderatorsComment();
 
     expect(parts(footerLine(wrapper))).toEqual([
       // The comma lets a narrow column break the line after the author.
@@ -77,9 +75,9 @@ describe("CommentItem caption line", () => {
     ]);
   });
 
-  it("puts the like right after the date when the viewer has no action", () => {
+  it("puts the like right after the date when the viewer has no action", async () => {
     signInAs("Reader");
-    const wrapper = mountComponent(vi.fn(), {
+    const wrapper = await mountComponent(vi.fn(), {
       createdUtc: CREATED as never,
       likes: [{ id: "u-1", username: "Other" }] as never,
     });
@@ -91,18 +89,18 @@ describe("CommentItem caption line", () => {
     ]);
   });
 
-  it("keeps the number out of the line, in its own corner", () => {
+  it("keeps the number out of the line, in its own corner", async () => {
     signInAs("Mod", "Moderator");
-    const wrapper = moderatorsComment();
+    const wrapper = await moderatorsComment();
 
     const number = wrapper.get(".comment-number").element;
     expect(number.closest(".caption-line")).toBeNull();
     expect(number.closest(".comment-footer")).not.toBeNull();
   });
 
-  it("holds the edit and the actions under the text in the full layout, as a post does", () => {
+  it("holds the edit and the actions under the text in the full layout, as a post does", async () => {
     signInAs("Senior", "SeniorModerator");
-    const wrapper = moderatorsComment({ compact: false });
+    const wrapper = await moderatorsComment({ compact: false });
 
     const line = wrapper.get(".comment-body > .comment-edit-line");
     expect(parts(line.element.querySelector(".caption-line"))).toEqual([
@@ -115,9 +113,9 @@ describe("CommentItem caption line", () => {
     expect(wrapper.get(".comment-footer").text()).toBe("7");
   });
 
-  it("stands the name, the avatar, the date and the like in the author's column, in that order", () => {
+  it("stands the name, the avatar, the date and the like in the author's column, in that order", async () => {
     signInAs("Mod", "Moderator");
-    const wrapper = moderatorsComment({ compact: false });
+    const wrapper = await moderatorsComment({ compact: false });
 
     const column = wrapper.get(".comment-header .author-inner");
     expect(
@@ -128,16 +126,20 @@ describe("CommentItem caption line", () => {
     expect(column.text()).not.toContain("Отредактировано");
   });
 
-  it("draws no edit line where there is nothing to say", () => {
+  it("draws no edit line where there is nothing to say", async () => {
     localStorage.clear();
-    const wrapper = mountComponent(vi.fn(), {}, { compact: false, number: 3 });
+    const wrapper = await mountComponent(
+      vi.fn(),
+      {},
+      { compact: false, number: 3 },
+    );
 
     expect(wrapper.find(".comment-edit-line").exists()).toBe(false);
   });
 
-  it("draws the like for a guest without letting them press it", () => {
+  it("draws the like for a guest without letting them press it", async () => {
     localStorage.clear();
-    const wrapper = mountComponent(vi.fn(), {
+    const wrapper = await mountComponent(vi.fn(), {
       likes: [{ id: "u-1", username: "Other" }] as never,
     });
 
@@ -149,16 +151,16 @@ describe("CommentItem caption line", () => {
 
 // The role badge in the caption line: its nodes, their styles, its tooltip.
 describe("CommentCaption role badge", () => {
-  it("draws the brackets as the line's text around the tooltip", () => {
+  it("draws the brackets as the line's text around the tooltip", async () => {
     const online = { lastActivityUtc: new Date().toISOString() };
-    const wrapper = mountComponent(vi.fn(), {
+    const wrapper = await mountComponent(vi.fn(), {
       author: { username: "Модератор", role: "Moderator", ...online } as never,
     });
 
     expect(markupOutline(wrapper, ".author-info")).toEqual([
       "span.caption-part.author-info",
       '  "Автор: "',
-      "  a.author-link { color: var(--link); text-decoration: none; transition: color 0.15s ease }",
+      `  a.author-link[href="/users/${encodeURIComponent("Модератор")}"] { color: var(--link); text-decoration: none; transition: color 0.15s ease }`,
       '    "Модератор"',
       ...captionBadgeOutline("M", 1),
       '  " ["',

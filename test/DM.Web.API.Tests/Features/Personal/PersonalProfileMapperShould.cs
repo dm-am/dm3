@@ -5,9 +5,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
-/// <summary>
-/// PATCH carries "not sent" as null and the write model keeps saying it: an empty contact list removes them all.
-/// </summary>
+// PATCH carries "not sent" as null and the write model keeps saying it: an empty contact list
+// removes them all.
 public class PersonalProfileMapperShould
 {
     [Fact]
@@ -68,10 +67,8 @@ public class PersonalProfileMapperShould
             });
     }
 
-    /// <summary>
-    /// A visibility block whose flag was not sent folds to null - the lifted
-    /// negation must not invent a setting.
-    /// </summary>
+    // A visibility block whose flag was not sent folds to null - the lifted negation must not
+    // invent a setting.
     [Fact]
     public void FoldAPartialVisibilityBlockWithoutInventingValues()
     {
@@ -84,10 +81,8 @@ public class PersonalProfileMapperShould
         update.RatingDisabled.Should().BeNull("showRating was not sent");
     }
 
-    /// <summary>
-    /// The participation in the rating is saved by the profile: a hidden
-    /// rating is a disabled one on the account.
-    /// </summary>
+    // The participation in the rating is saved by the profile: a hidden rating is a disabled one on
+    // the account.
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]

@@ -7,14 +7,14 @@
 // sent what it cannot help with. The pages are mounted, not the form alone:
 // a page that grew a second copy of the form must fail.
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import SupportPage from "./SupportPage.vue";
 import ComplaintPage from "./ComplaintPage.vue";
 import { SupportTicketForm } from "@/features/support-ticket";
 import { TICKET_TEXT_MAX_LENGTH } from "@/entities/ticket";
-import { createTicket, route } from "./SupportTicketForm.doubles";
+import { createTicket } from "./SupportTicketForm.doubles";
 import {
   chosenReason,
   fillAndSend,
@@ -22,16 +22,12 @@ import {
   labelsOn,
   linksOn,
   openOn,
-  options,
   reasonsOn,
   signIn,
   stubResizeObserver,
   write,
 } from "./SupportTicketForm.fixtures";
 
-vi.mock("vue-router", async () =>
-  (await import("./SupportTicketForm.doubles")).vueRouter(),
-);
 vi.mock("@/entities/ticket", async (importOriginal) =>
   (await import("./SupportTicketForm.doubles")).ticketEntity(importOriginal),
 );
@@ -45,7 +41,6 @@ describe("support and complaint", () => {
     // No stored viewer: the guest wording is what both pages open with.
     localStorage.clear();
     // A bare address, as a reader who typed /support by hand arrives with.
-    route.query = {};
     createTicket.mockReset();
     createTicket.mockResolvedValue({
       data: { trackingToken: "T-1" },
@@ -53,18 +48,18 @@ describe("support and complaint", () => {
     });
   });
 
-  it("mounts one and the same form on both pages", () => {
+  it("mounts one and the same form on both pages", async () => {
     expect(
-      mount(SupportPage, options()).findComponent(SupportTicketForm).exists(),
+      (await openOn(SupportPage)).findComponent(SupportTicketForm).exists(),
     ).toBe(true);
     expect(
-      mount(ComplaintPage, options()).findComponent(SupportTicketForm).exists(),
+      (await openOn(ComplaintPage)).findComponent(SupportTicketForm).exists(),
     ).toBe(true);
   });
 
-  it("offers a different list of reasons on each page", () => {
-    const support = reasonsOn(mount(SupportPage, options()));
-    const complaint = reasonsOn(mount(ComplaintPage, options()));
+  it("offers a different list of reasons on each page", async () => {
+    const support = reasonsOn(await openOn(SupportPage));
+    const complaint = reasonsOn(await openOn(ComplaintPage));
 
     expect(support.length).toBeGreaterThan(0);
     expect(complaint.length).toBeGreaterThan(0);
@@ -75,8 +70,8 @@ describe("support and complaint", () => {
   it.each([
     ["support", SupportPage],
     ["complaint", ComplaintPage],
-  ])("opens %s on no reason, with no field under it", (_, Page) => {
-    const wrapper = mount(Page, options());
+  ])("opens %s on no reason, with no field under it", async (_, Page) => {
+    const wrapper = await openOn(Page);
 
     expect(chosenReason(wrapper)).toBe("");
     expect(wrapper.find("select option[value='']").text()).toBe(
@@ -88,7 +83,7 @@ describe("support and complaint", () => {
   });
 
   it("brings the fields once a reason is chosen", async () => {
-    const wrapper = mount(SupportPage, options());
+    const wrapper = await openOn(SupportPage);
 
     await wrapper.find("select").setValue("Bug");
 
@@ -99,14 +94,14 @@ describe("support and complaint", () => {
     ]);
   });
 
-  it("asks the guest for the reason, an address and the text", () => {
-    expect(labelsOn(openOn(SupportPage, "Bug"))).toEqual([
+  it("asks the guest for the reason, an address and the text", async () => {
+    expect(labelsOn(await openOn(SupportPage, "Bug"))).toEqual([
       "Причина обращения",
       "Контактные данные",
       "Описание",
     ]);
     expect(
-      labelsOn(openOn(ComplaintPage, "SeniorModeratorDecisionComplaint")),
+      labelsOn(await openOn(ComplaintPage, "SeniorModeratorDecisionComplaint")),
     ).toEqual([
       "Причина жалобы",
       "Контактные данные",
@@ -116,7 +111,7 @@ describe("support and complaint", () => {
   });
 
   it("asks for no subject and sends none", async () => {
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
     expect(wrapper.find("#subject").exists()).toBe(false);
 
     await fillAndSend(wrapper);
@@ -126,7 +121,7 @@ describe("support and complaint", () => {
   });
 
   it("takes the text in the site's markup editor and sends it as written", async () => {
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
     const editor = wrapper.findComponent(BBCodeEditor);
 
     expect(editor.exists()).toBe(true);
@@ -151,7 +146,7 @@ describe("support and complaint", () => {
     "gives a signed-in author on %s his name in the guest's field, which he cannot change",
     async (_, Page, subtype) => {
       signIn("Reader");
-      const wrapper = openOn(Page, subtype);
+      const wrapper = await openOn(Page, subtype);
       await flushPromises();
 
       // Not the guest's address field, and no address asked for.
@@ -177,12 +172,14 @@ describe("support and complaint", () => {
   );
 
   // DM3 sends no letter about a ticket, so the hint promises none.
-  it("asks the guest for an address without promising a letter", () => {
-    expect(hintOf(openOn(SupportPage, "Bug"), "contact")).toBe("Укажите почту");
+  it("asks the guest for an address without promising a letter", async () => {
+    expect(hintOf(await openOn(SupportPage, "Bug"), "contact")).toBe(
+      "Укажите почту",
+    );
   });
 
   it("sends the guest's address and holds a malformed one back", async () => {
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
     await wrapper.find("#contact").setValue("reader@");
     await write(wrapper, "Не могу войти");
     await wrapper.find("form").trigger("submit");
@@ -204,7 +201,7 @@ describe("support and complaint", () => {
   });
 
   it("says under the editor that the text is missing", async () => {
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
     await wrapper.find("#contact").setValue("reader@example.com");
     await wrapper.find("form").trigger("submit");
     await flushPromises();
@@ -220,7 +217,7 @@ describe("support and complaint", () => {
       data: null,
       error: { type: "", title: "Ошибка сервера", status: 500, traceId: "" },
     });
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
 
     await fillAndSend(wrapper);
 
@@ -247,7 +244,7 @@ describe("support and complaint", () => {
         errors: { Text: ["Long"] },
       },
     });
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
 
     await fillAndSend(wrapper);
 
@@ -268,7 +265,7 @@ describe("support and complaint", () => {
         retryAfterSeconds: 30,
       },
     });
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
 
     await fillAndSend(wrapper);
 
@@ -280,7 +277,7 @@ describe("support and complaint", () => {
 
   // One sentence with the address of the ticket's page as an ordinary link.
   it("gives the guest the address of his ticket after sending", async () => {
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
 
     await fillAndSend(wrapper);
 
@@ -292,7 +289,7 @@ describe("support and complaint", () => {
       `Ответ появится на странице обращения: ${window.location.origin}/support/track#token=T-1. Сохраните ссылку, чтобы вернуться к обращению.`,
     );
     expect(linksOn(wrapper)).toContainEqual({
-      to: { name: "support-track", hash: "#token=T-1" },
+      href: "/support/track#token=T-1",
       text: `${window.location.origin}/support/track#token=T-1`,
     });
     expect(wrapper.get(".ticket-sent").text()).not.toMatch(
@@ -313,7 +310,7 @@ describe("support and complaint", () => {
       data: { ticketId: "t-9", trackingToken: null },
       error: null,
     });
-    const wrapper = openOn(SupportPage, "Bug");
+    const wrapper = await openOn(SupportPage, "Bug");
 
     await fillAndSend(wrapper);
 
@@ -321,14 +318,14 @@ describe("support and complaint", () => {
       "Ответ появится на странице обращения",
     );
     expect(linksOn(wrapper)).toContainEqual({
-      to: { name: "my-ticket", params: { ticketId: "t-9" } },
+      href: "/my-tickets/t-9",
       text: "странице обращения",
     });
   });
 
   // The counter counts to the number the server takes and the conversation counts to.
-  it("counts the text to the length the server takes a ticket at", () => {
-    const wrapper = openOn(SupportPage, "Bug");
+  it("counts the text to the length the server takes a ticket at", async () => {
+    const wrapper = await openOn(SupportPage, "Bug");
 
     expect(wrapper.findComponent(BBCodeEditor).props("maxLength")).toBe(
       TICKET_TEXT_MAX_LENGTH,
@@ -336,7 +333,7 @@ describe("support and complaint", () => {
   });
 
   it("opens a new form, on the same reason, after sending", async () => {
-    const wrapper = openOn(SupportPage, "AccessRecovery");
+    const wrapper = await openOn(SupportPage, "AccessRecovery");
     await fillAndSend(wrapper);
 
     await wrapper.find(".again-button").trigger("click");
@@ -347,7 +344,7 @@ describe("support and complaint", () => {
   });
 
   it("keeps the reason the reader picked for the next ticket", async () => {
-    const wrapper = mount(SupportPage, options());
+    const wrapper = await openOn(SupportPage);
     await wrapper.find("select").setValue("PersonalData");
     await fillAndSend(wrapper);
 
@@ -356,30 +353,30 @@ describe("support and complaint", () => {
     expect(chosenReason(wrapper)).toBe("PersonalData");
   });
 
-  it("offers removal and restoration among the support reasons", () => {
+  it("offers removal and restoration among the support reasons", async () => {
     // Removal and restoration are done by moderation by hand: this list is their only place.
-    const support = reasonsOn(mount(SupportPage, options()));
+    const support = reasonsOn(await openOn(SupportPage));
 
     expect(support).toContain("AccountRemoval");
     expect(support).toContain("AccountRestoration");
   });
 
-  it("preselects the reason the address names", () => {
-    expect(chosenReason(openOn(SupportPage, "AccountRestoration"))).toBe(
+  it("preselects the reason the address names", async () => {
+    expect(chosenReason(await openOn(SupportPage, "AccountRestoration"))).toBe(
       "AccountRestoration",
     );
   });
 
-  it("chooses nothing for a reason the page cannot offer", () => {
+  it("chooses nothing for a reason the page cannot offer", async () => {
     // A stale link or a typo would otherwise send a category the page never showed.
-    expect(chosenReason(openOn(SupportPage, "UserComplaint"))).toBe("");
-    expect(chosenReason(openOn(SupportPage, "СовсемНеПодтип"))).toBe("");
+    expect(chosenReason(await openOn(SupportPage, "UserComplaint"))).toBe("");
+    expect(chosenReason(await openOn(SupportPage, "СовсемНеПодтип"))).toBe("");
   });
 
   it("files the ticket under the reason the address named", async () => {
     signIn();
 
-    await fillAndSend(openOn(SupportPage, "AccountRemoval"));
+    await fillAndSend(await openOn(SupportPage, "AccountRemoval"));
 
     expect(createTicket).toHaveBeenCalledWith(
       expect.objectContaining({ subtype: "AccountRemoval" }),
@@ -388,7 +385,7 @@ describe("support and complaint", () => {
   });
 
   it("lets the reader change the reason the address named", async () => {
-    const wrapper = openOn(SupportPage, "AccountRestoration");
+    const wrapper = await openOn(SupportPage, "AccountRestoration");
 
     await wrapper.find("select").setValue("RegistrationIssue");
     expect(chosenReason(wrapper)).toBe("RegistrationIssue");
@@ -401,15 +398,15 @@ describe("support and complaint", () => {
     );
   });
 
-  it("asks about an error in the old site's words", () => {
+  it("asks about an error in the old site's words", async () => {
     // The note the old error report printed under its button.
-    expect(openOn(SupportPage, "Bug").find(".reason-hint").text()).toBe(
+    expect((await openOn(SupportPage, "Bug")).find(".reason-hint").text()).toBe(
       "Пожалуйста, скопируйте адрес страницы, на которой была замечена ошибка, а также постарайтесь указать, как можно воспроизвести ошибку",
     );
   });
 
   it("tells the reader what the chosen reason needs in the text", async () => {
-    const wrapper = openOn(SupportPage, "AccountRestoration");
+    const wrapper = await openOn(SupportPage, "AccountRestoration");
     const restoration = wrapper.find(".reason-hint").text();
 
     await wrapper.find("select").setValue("Bug");
@@ -430,8 +427,8 @@ describe("support and complaint", () => {
       "Вопрос по соглашению",
       "Напишите, какого пункта соглашения касается вопрос",
     ],
-  ])("offers %s under its own name and hint", (subtype, label, hint) => {
-    const wrapper = openOn(SupportPage, subtype);
+  ])("offers %s under its own name and hint", async (subtype, label, hint) => {
+    const wrapper = await openOn(SupportPage, subtype);
 
     expect(chosenReason(wrapper)).toBe(subtype);
     expect(
@@ -441,8 +438,8 @@ describe("support and complaint", () => {
     expect(wrapper.find(".reason-note").exists()).toBe(false);
   });
 
-  it("leaves the autofill of the contact field to the field", () => {
-    const wrapper = openOn(SupportPage, "Bug");
+  it("leaves the autofill of the contact field to the field", async () => {
+    const wrapper = await openOn(SupportPage, "Bug");
 
     // A form-level "off" reads to some browsers as a veto over a password manager's fill.
     expect(wrapper.find("form").attributes("autocomplete")).toBeUndefined();

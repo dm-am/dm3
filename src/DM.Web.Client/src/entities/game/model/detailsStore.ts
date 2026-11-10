@@ -17,7 +17,7 @@ import {
 } from "./details/gameChanges";
 import { createRoomsSlice, createRoomChanges } from "./details/roomsSlice";
 import { createRoomPostsSlice } from "./details/roomPostsSlice";
-import { createListSlice } from "./details/listSlice";
+import { createListSlice } from "@/shared/lib/composables/createListSlice";
 
 export const useGameDetailsStore = defineStore("gameDetails", () => {
   const { pageSize } = usePaging();

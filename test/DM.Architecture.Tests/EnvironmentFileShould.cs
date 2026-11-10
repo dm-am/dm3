@@ -17,10 +17,8 @@ public class EnvironmentFileShould
 {
     private const string EnvironmentTemplate = ".env.example";
 
-    /// <summary>
-    /// The installer has to produce docker/.env before it starts anything.
-    /// </summary>
-    /// <remarks>Compose declares the key and the store accounts through ${...:?}, which rejects an empty value.</remarks>
+    // Compose declares the key and the store accounts through ${...:?}, which rejects an empty
+    // value.
     [Fact]
     public void CreateTheEnvironmentFileBeforeTheInstallerStartsTheStack()
     {
@@ -40,10 +38,7 @@ public class EnvironmentFileShould
             "a key inherited from the repository is not a secret");
     }
 
-    /// <summary>
-    /// The developer script prepares the environment before it starts anything.
-    /// </summary>
-    /// <remarks>The template ships the encryption key empty; asked of both scripts.</remarks>
+    // The template ships the encryption key empty; asked of both scripts.
     [Theory]
     [InlineData("dm.sh", "docker compose up")]
     [InlineData("dm.ps1", "compose up")]
@@ -69,10 +64,7 @@ public class EnvironmentFileShould
             "the half that never learns what the generator learns next");
     }
 
-    /// <summary>
-    /// The generator completes a file it did not create.
-    /// </summary>
-    /// <remarks>A hand-copied .env.example carries the encryption key empty.</remarks>
+    // A hand-copied .env.example carries the encryption key empty.
     [Fact]
     public void CompleteAnEnvironmentFileSomebodyElseCreated()
     {
@@ -123,9 +115,6 @@ public class EnvironmentFileShould
             "as success to whatever called this");
     }
 
-    /// <summary>
-    /// A value that lands inside a URI stays a value, not a delimiter.
-    /// </summary>
     /// <remarks>
     /// A password sits between the colon and the at sign of a connection string. The template is what
     /// the CI jobs and the first run copy.

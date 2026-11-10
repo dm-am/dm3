@@ -13,9 +13,6 @@ namespace DM.Infrastructure.Persistence.Entities.Moderation;
 [Table("Tickets")]
 public class Ticket
 {
-    /// <summary>
-    /// Ticket identifier
-    /// </summary>
     [Key]
     public Guid TicketId { get; set; }
 
@@ -51,9 +48,6 @@ public class Ticket
     /// </summary>
     public string EntityType { get; set; } = null!;
 
-    /// <summary>
-    /// Ticket status
-    /// </summary>
     public TicketStatus Status { get; set; }
 
     /// <summary>

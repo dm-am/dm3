@@ -1,8 +1,8 @@
 <script setup lang="ts">
 import { computed, onMounted } from "vue";
 import { storeToRefs } from "pinia";
-import { vClickOutside } from "@/shared/directives";
 import { useGamesFilter, SORT_OPTIONS } from "../model";
+import type { GamesFilterKey } from "../model";
 import {
   GAME_DATE_RANGES,
   gameDateRange,
@@ -11,14 +11,7 @@ import {
 import { useGamesStore } from "@/entities/game";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
-import {
-  FilterSearchInput,
-  FilterButton,
-  FilterDropdown,
-  FilterDropdownHeader,
-  FilterDropdownItem,
-  SortButton,
-} from "@/shared/ui/Filters";
+import { FilterSearchInput, FilterMenu, SortButton } from "@/shared/ui/Filters";
 import { UserMultiSelect } from "@/entities/user";
 import GameStatusMenu from "./GameStatusMenu.vue";
 import GameDatesMenu from "./GameDatesMenu.vue";
@@ -45,7 +38,7 @@ const { localInput, handleInput, applySearch } = useFilterSearch(
 );
 
 const { showDropdown, navPath, closeDropdown, toggleDropdown } =
-  useFilterDropdown();
+  useFilterDropdown<GamesFilterKey>();
 
 const filterOptions = [
   {
@@ -58,10 +51,6 @@ const filterOptions = [
   { key: "tag", label: "Тег", hint: "Обязательный тег" },
   { key: "excludeTag", label: "Без тега", hint: "Исключить тег" },
 ];
-
-function selectRootItem(key: string) {
-  navPath.value = { filter: key };
-}
 
 function navigateBack() {
   if (!navPath.value) return;
@@ -178,59 +167,41 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton
-          :active="showDropdown"
-          @click="toggleDropdown"
+      <FilterMenu
+        v-model:nav-path="navPath"
+        :open="showDropdown"
+        :title="getDropdownTitle()"
+        :options="filterOptions"
+        @toggle="toggleDropdown"
+        @close="closeDropdown"
+        @back="navigateBack"
+      >
+        <GameStatusMenu
+          v-if="navPath?.filter === 'status'"
+          v-model:nav-path="navPath"
           @close="closeDropdown"
         />
 
-        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <FilterDropdownHeader
-            v-if="navPath"
-            :title="getDropdownTitle() ?? ''"
-            @back="navigateBack"
-          />
+        <!-- Include inactive: masters of archived games stay findable. -->
+        <UserMultiSelect
+          v-if="navPath?.filter === 'host'"
+          :selected-users="filterState.hostUsernames"
+          placeholder="Поиск ведущего"
+          include-inactive
+          @add="addHost"
+        />
 
-          <template v-if="!navPath">
-            <FilterDropdownItem
-              v-for="item in filterOptions"
-              :key="item.key"
-              :label="item.label"
-              :hint="item.hint"
-              has-sub-options
-              @item-select="selectRootItem(item.key)"
-            />
-          </template>
+        <GameDatesMenu
+          v-if="navPath?.filter === 'dates'"
+          v-model:nav-path="navPath"
+          @close="closeDropdown"
+        />
 
-          <GameStatusMenu
-            v-if="navPath?.filter === 'status'"
-            v-model:nav-path="navPath"
-            @close="closeDropdown"
-          />
-
-          <!-- Include inactive: masters of archived games stay findable. -->
-          <UserMultiSelect
-            v-if="navPath?.filter === 'host'"
-            :selected-users="filterState.hostUsernames"
-            placeholder="Поиск ведущего"
-            include-inactive
-            @add="addHost"
-            @remove="removeHost"
-          />
-
-          <GameDatesMenu
-            v-if="navPath?.filter === 'dates'"
-            v-model:nav-path="navPath"
-            @close="closeDropdown"
-          />
-
-          <GameTagsMenu
-            v-if="navPath?.filter === 'tag' || navPath?.filter === 'excludeTag'"
-            v-model:nav-path="navPath"
-          />
-        </FilterDropdown>
-      </div>
+        <GameTagsMenu
+          v-if="navPath?.filter === 'tag' || navPath?.filter === 'excludeTag'"
+          v-model:nav-path="navPath"
+        />
+      </FilterMenu>
 
       <SortButton
         :options="sortOptions"
@@ -254,7 +225,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
   gap: $small
 
   +filter-bar
-  +filter-button
 
 +filter-dropdown-base
 </style>

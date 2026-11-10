@@ -15,7 +15,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>A blog of the seed as it is described before it is written.</summary>
     private sealed record BlogTemplate
     {
         public required string Title { get; init; }
@@ -35,7 +34,6 @@ internal sealed partial class DataSeeder
         public int AssistantCount { get; init; }
     }
 
-    /// <summary>The blogs of the seed, in the order they are written.</summary>
     private static BlogTemplate[] BlogTemplates()
     {
         var (Active, Draft, Closed) = (ModuleStatus.Active, ModuleStatus.Draft, ModuleStatus.Closed);
@@ -56,7 +54,6 @@ internal sealed partial class DataSeeder
             new() { Title = "Архив сессий", Description = "Записи и отчеты с прошедших игр", Status = Active, Readers = 2 },
             new() { Title = "D&D для всех", Description = "Все о Dungeons & Dragons", Status = Active, Readers = 1 },
             new() { Title = "Киберпанк-хроники", Description = "Блог о киберпанк-играх", Status = Active, Readers = 0 },
-            // Closed
             new() { Title = "Советы новичкам", Description = "Как начать играть в ролевые игры", Status = Closed, Readers = 8 },
             new() { Title = "Мастерская сюжетов", Description = "Идеи для квестов и приключений", Status = Closed, Readers = 4, AssistantCount = 1 },
             new() { Title = "Голос игрока", Description = "Рассказы и впечатления от игр", Status = Closed, Readers = 0 },
@@ -67,10 +64,6 @@ internal sealed partial class DataSeeder
         ];
     }
 
-    /// <summary>
-    /// The publications a blog draws three of, rotating through the list by the
-    /// place of the blog.
-    /// </summary>
     private static readonly (string Title, string Content)[] PublicationTemplates =
     [
         ("Как начать свою первую игру", "В этой статье я расскажу о подготовке к первой сессии. Главное — не бояться ошибок!"),
@@ -160,9 +153,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Created {result.BlogsCreated} blogs with {result.PublicationsCreated} publications");
     }
 
-    /// <summary>
-    /// The dates of a blog, by its status and its age.
-    /// </summary>
     private (DateTimeOffset Created, DateTimeOffset? Activated, DateTimeOffset? Closed) BlogDates(
         BlogTemplate template)
     {
@@ -225,10 +215,8 @@ internal sealed partial class DataSeeder
         return (blogCreatedUtc, blogActivatedUtc, blogClosedUtc);
     }
 
-    /// <summary>The preview of a publication: its first hundred characters.</summary>
     private static string PreviewOf(string content) => content[..Math.Min(100, content.Length)] + "...";
 
-    /// <summary>The two rubrics every blog of the seed has.</summary>
     private Rubric[] SeedRubrics(DbBlog blog)
     {
         var rubrics = new[]
@@ -245,10 +233,6 @@ internal sealed partial class DataSeeder
         return rubrics;
     }
 
-    /// <summary>
-    /// Three publications of a blog, spread evenly across its lifetime, each
-    /// with its comments.
-    /// </summary>
     private void SeedPublications(
         DbBlog blog, DbUser owner, Rubric rubric, int bi, List<DbUser> users,
         ComprehensiveSeedResult result)
@@ -299,10 +283,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// The comments of a publication, spread evenly between its publication and
-    /// the closing of the blog, or now.
-    /// </summary>
     private void SeedPublicationComments(DbBlog blog, Publication publication, List<DbUser> users)
     {
         var blogClosedUtc = blog.ClosedUtc;
@@ -334,9 +314,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>
-    /// The assistants of a blog: most blogs have none, a few one, very few two.
-    /// </summary>
     private void SeedBlogAssistants(DbBlog blog, DbUser owner, int assistantCount, List<DbUser> users)
     {
         if (assistantCount > 0)
@@ -360,7 +337,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>The readers of a blog, as many as its template asks for and the users allow.</summary>
     private void SeedBlogReaders(DbBlog blog, DbUser owner, int wanted, List<DbUser> users)
     {
         var readerCount = Math.Min(wanted, users.Count - 2); // Don't exceed available users

@@ -35,9 +35,6 @@ internal class BoardRepository(
         return boards;
     }
 
-    /// <summary>
-    /// Compute the comment count and the last comment for each board.
-    /// </summary>
     /// <remarks>
     /// Comments are polymorphic by EntityId with no type column, so the join to
     /// Topics is what restricts the set to forum comments. Two statements rather

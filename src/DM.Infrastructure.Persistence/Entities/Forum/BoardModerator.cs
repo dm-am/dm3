@@ -11,9 +11,6 @@ namespace DM.Infrastructure.Persistence.Entities.Forum;
 [Table("BoardModerators")]
 public class BoardModerator
 {
-    /// <summary>
-    /// Board moderator identifier
-    /// </summary>
     [Key]
     public Guid BoardModeratorId { get; set; }
 

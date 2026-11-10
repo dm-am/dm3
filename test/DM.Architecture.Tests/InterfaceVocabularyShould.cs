@@ -9,11 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// One meaning is called by one word, and the letters of that word are the ones
-/// the convention allows -- outside the client, where the client's own check
-/// cannot see, and for the words in the client as well.
-/// </summary>
 /// <remarks>
 /// GLOSSARY states the rule, and the client enforces it for its strings (copy-rules.spec.ts).
 /// CODE_STYLE keeps U+0451 and the typographic quotes out of every text a person reads. Textual:
@@ -74,15 +69,10 @@ public class InterfaceVocabularyShould
     private static readonly Regex EntityBefore =
         new(@"закрепл\p{L}*\s+$", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 
-    /// <summary>How far before the word <see cref="EntityBefore"/> looks, in characters.</summary>
     private const int Lead = 30;
 
-    /// <summary>Text around the word that counts as its neighbourhood, in characters.</summary>
     private const int Neighbourhood = 60;
 
-    /// <summary>
-    /// The senses the word keeps: the subject of a conversation, a letter or a ticket, and the colour scheme.
-    /// </summary>
     private static readonly Regex[] OtherSenses =
     [
         new(@"(уход от|не по|по|на эту|об этой) тем[аыеу]", RegexOptions.IgnoreCase | RegexOptions.Compiled),
@@ -99,15 +89,11 @@ public class InterfaceVocabularyShould
         new("Занятные темы", RegexOptions.Compiled)
     ];
 
-    /// <summary>
-    /// The retired word named as retired: the quoted cell right after "Топик" in the glossary.
-    /// </summary>
     private static readonly Regex[] RetiredMentions =
     [
         new(@"\|\s*Топик\s*\|\s*""Тем[аыеу]""", RegexOptions.Compiled)
     ];
 
-    /// <summary>The entity called by the other word, judged by the text around each hit.</summary>
     private static bool CallsTheEntityATema(string text)
     {
         foreach (Match hit in Tema.Matches(text))

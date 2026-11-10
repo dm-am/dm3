@@ -24,6 +24,5 @@ namespace DM.Infrastructure.Persistence.Repositories.Search;
 /// </remarks>
 internal static class SearchTextConfiguration
 {
-    /// <summary>Name of the Postgres text-search configuration.</summary>
     public const string Name = "russian";
 }

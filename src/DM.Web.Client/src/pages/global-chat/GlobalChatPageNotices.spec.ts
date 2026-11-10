@@ -7,10 +7,12 @@
 // message is an ordinary link, and a press on it raises nothing.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { defineComponent, h, nextTick } from "vue";
-import { flushPromises, mount, enableAutoUnmount } from "@vue/test-utils";
+import { flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia, type Pinia } from "pinia";
+import type { Router } from "vue-router";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 
-const { api, route, router, virtualRows } = vi.hoisted(() => ({
+const { api, virtualRows } = vi.hoisted(() => ({
   api: {
     getMessages: vi.fn(),
     getEvents: vi.fn(),
@@ -19,29 +21,11 @@ const { api, route, router, virtualRows } = vi.hoisted(() => ({
     getMessagesNearDate: vi.fn(),
     getMessagesAfter: vi.fn(),
   },
-  // Filled by the mock factories below, where `ref` and `reactive` can be reached.
-  route: {
-    current: null as unknown as {
-      query: Record<string, string>;
-      hash: string;
-    },
-  },
-  router: { push: vi.fn(), replace: vi.fn() },
+  // Filled by the mock factory below, where `ref` can be reached.
   virtualRows: { held: null as unknown as { value: unknown[] } },
 }));
 
 vi.mock("@/entities/global-chat/api/globalChatApi", () => ({ default: api }));
-
-/** A route the test can move; replace changes the query as the real one does. */
-vi.mock("vue-router", async () => {
-  const { reactive } = await import("vue");
-  route.current = reactive({ params: {}, query: {}, hash: "" });
-  return { useRoute: () => route.current, useRouter: () => router };
-});
-
-const follow = (to: { query?: Record<string, string> }) => {
-  route.current.query = to.query ?? {};
-};
 
 vi.mock("@/shared/lib/composables/useSignalR", async () => {
   const { ref } = await import("vue");
@@ -71,11 +55,6 @@ vi.mock("@/shared/lib/composables/useVirtualScroll", async () => {
   };
 });
 
-// The page opens a warning dialog through it; nothing here opens one.
-vi.mock("vue-final-modal", () => ({
-  useModal: () => ({ open: vi.fn(), close: vi.fn() }),
-}));
-
 import GlobalChatPage from "./GlobalChatPage.vue";
 import { ChatSearchRow } from "@/widgets/chat-feed";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -91,20 +70,6 @@ const TooltipStub = defineComponent({
   setup(props, { slots }) {
     return () =>
       h("span", { "data-tooltip": props.text }, slots.default?.() ?? []);
-  },
-});
-
-/** A router link that says where it leads in an attribute. */
-const RouterLinkStub = defineComponent({
-  name: "RouterLink",
-  props: { to: { type: [String, Object], required: true } },
-  setup(props, { slots, attrs }) {
-    return () =>
-      h(
-        "a",
-        { ...attrs, "data-to": JSON.stringify(props.to) },
-        slots.default?.(),
-      );
   },
 });
 
@@ -135,22 +100,32 @@ const refused = () => ({
 });
 
 let pinia: Pinia;
+let router: Router;
 
-async function openChat() {
-  const wrapper = mount(GlobalChatPage, {
-    shallow: true,
-    global: {
-      plugins: [pinia],
-      stubs: {
-        ChatFeed: false,
-        ChatStrip: false,
-        FeedEdge: false,
-        MessageToolbar: false,
-        Tooltip: TooltipStub,
-        RouterLink: RouterLinkStub,
-      },
-    },
+/** Every child but the feed, its edges, notice and toolbar, as a shallow mount would leave them. */
+const stubs = {
+  PageTitle: true,
+  ChatSearchRow: true,
+  ChatEventsPanel: true,
+  LoginPrompt: true,
+  ChatComposer: true,
+  ChatMessage: true,
+  ChatMessageSkeleton: true,
+  ErrorState: true,
+  DashSeparator: true,
+  ActionResult: true,
+  SvgIcon: true,
+  Tooltip: TooltipStub,
+};
+
+async function openChat(address = "/global-chat") {
+  const mounted = await mountPage(GlobalChatPage, address, {
+    routes: [["global-chat", "/global-chat"]],
+    pinia,
+    stubs,
   });
+  router = mounted.router;
+  const wrapper = mounted.wrapper;
   await flushPromises();
   await nextTick();
   return wrapper;
@@ -191,10 +166,6 @@ beforeEach(() => {
   setActivePinia(pinia);
   api.getMessages.mockResolvedValue(messagePage([1, 2]));
   api.getEvents.mockResolvedValue({ data: { resources: [] }, error: null });
-  router.push.mockImplementation(follow);
-  router.replace.mockImplementation(follow);
-  route.current.query = {};
-  route.current.hash = "";
   virtualRows.held.value = [];
   history.replaceState(null, "", window.location.pathname);
   const toast = useToast();
@@ -254,40 +225,37 @@ describe("GlobalChatPage, a link to a message that is gone", () => {
 
 describe("GlobalChatPage, an archive date with nothing on it", () => {
   it("names the day above the feed, and raises no plate", async () => {
-    route.current.query = { date: "2019-03-05" };
     api.getMessagesNearDate.mockResolvedValue(messagePage([]));
 
-    const wrapper = await openChat();
+    const wrapper = await openChat("/global-chat?date=2019-03-05");
 
     expect(notice(wrapper).text()).toBe(
       "За 05.03.2019 сообщений нет, показаны последние сообщения",
     );
     // The URL has already lost the day: the line is the only place it is named.
-    expect(route.current.query.date).toBeUndefined();
+    expect(router.currentRoute.value.fullPath).toBe("/global-chat");
     expect(plates()).toEqual([]);
   });
 
   // A day with nothing on it comes back as a window near it: the day stays
   // picked, with no line (useChatHistoryWindow.loadDate).
   it("keeps the day over the window near it, with no line", async () => {
-    route.current.query = { date: "2019-03-05" };
     api.getMessagesNearDate.mockResolvedValue(messagePage([1, 2]));
 
-    const wrapper = await openChat();
+    const wrapper = await openChat("/global-chat?date=2019-03-05");
 
     expect(notice(wrapper).exists()).toBe(false);
     expect(api.getMessages).not.toHaveBeenCalled();
-    expect(route.current.query.date).toBe("2019-03-05");
+    expect(router.currentRoute.value.query.date).toBe("2019-03-05");
   });
 
   it("takes the line down when a later day is there", async () => {
-    route.current.query = { date: "2019-03-05" };
     api.getMessagesNearDate.mockResolvedValue(messagePage([]));
-    const wrapper = await openChat();
+    const wrapper = await openChat("/global-chat?date=2019-03-05");
     expect(notice(wrapper).exists()).toBe(true);
 
     api.getMessagesNearDate.mockResolvedValue(messagePage([3, 4]));
-    route.current.query = { date: "2026-03-14" };
+    await router.push("/global-chat?date=2026-03-14");
     await settle();
 
     expect(notice(wrapper).exists()).toBe(false);
@@ -298,7 +266,7 @@ describe("GlobalChatPage, an archive date with nothing on it", () => {
     const wrapper = await openChat();
     api.getMessagesNearDate.mockResolvedValue(refused());
 
-    route.current.query = { date: "2019-03-05" };
+    await router.push("/global-chat?date=2019-03-05");
     await settle();
 
     expect(notice(wrapper).exists()).toBe(false);
@@ -340,7 +308,7 @@ describe("GlobalChatPage, paging from a picked day", () => {
     day.data.paging.nextCursor = "next-1" as never;
     api.getMessagesNearDate.mockResolvedValue(day);
 
-    route.current.query = { date: "2026-03-14" };
+    await router.push("/global-chat?date=2026-03-14");
     await settle();
     // The landing scroll settles before the sentinels wake.
     await vi.advanceTimersByTimeAsync(650);
@@ -386,11 +354,7 @@ describe("GlobalChatPage, the link of a message", () => {
     const wrapper = await openChat();
     await hover(wrapper, "m1");
 
-    expect(JSON.parse(anchor(wrapper).attributes("data-to")!)).toEqual({
-      name: "global-chat",
-      query: {},
-      hash: "#msg-m1",
-    });
+    expect(anchor(wrapper).attributes("href")).toBe("/global-chat#msg-m1");
     expect(tooltipOf(wrapper)).toBe("Ссылка на сообщение");
   });
 
@@ -399,7 +363,7 @@ describe("GlobalChatPage, the link of a message", () => {
     await openChat();
     api.getMessagesAround.mockResolvedValue(messagePage([1, 2]));
 
-    route.current.hash = "#msg-m2";
+    await router.push("/global-chat#msg-m2");
     await settle();
 
     expect(api.getMessagesAround).toHaveBeenCalledTimes(1);

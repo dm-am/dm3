@@ -4,7 +4,8 @@
 
 // The banner is the page's only carrier of a failed load, so the read owns every refusal.
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { statisticsApi } from "@/entities/statistics";
 import SiteStatisticsPage from "./SiteStatisticsPage.vue";
 
@@ -12,27 +13,21 @@ vi.mock("@/entities/statistics", () => ({
   statisticsApi: { getLeaderboards: vi.fn() },
 }));
 
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ query: {} }),
-  useRouter: () => ({ replace: vi.fn() }),
-}));
-
 const FAILED_TO_LOAD = "Не удалось загрузить статистику";
 
-async function render() {
-  const wrapper = mount(SiteStatisticsPage, {
-    shallow: true,
-    global: {
-      stubs: {
-        // Rendered, not merely stubbed: the banner's text is the assertion.
-        ErrorState: {
-          props: ["message"],
-          template: "<div class='error-state'>{{ message }}</div>",
-        },
-        // Registered by the app layer, which no test mounts.
-        PageTitle: true,
-        SecondaryText: true,
+async function render(address = "/statistics") {
+  const { wrapper } = await mountPage(SiteStatisticsPage, address, {
+    routes: [["statistics", "/statistics"]],
+    stubs: {
+      // Rendered, not merely stubbed: the banner's text is the assertion.
+      ErrorState: {
+        props: ["message"],
+        template: "<div class='error-state'>{{ message }}</div>",
       },
+      LeadText: true,
+      MonthYearPicker: true,
+      SegmentedControl: true,
+      StatBoard: true,
     },
   });
   await flushPromises();
@@ -100,6 +95,21 @@ describe("SiteStatisticsPage", () => {
 
     expect(wrapper.get(".error-state").text()).toBe(
       "Такого периода еще не было",
+    );
+  });
+
+  it("reads the period the address names", async () => {
+    vi.mocked(statisticsApi.getLeaderboards).mockResolvedValue({
+      data: { resource: {} },
+      error: null,
+    } as never);
+
+    await render("/statistics?year=2024&month=3");
+
+    expect(vi.mocked(statisticsApi.getLeaderboards)).toHaveBeenCalledWith(
+      2024,
+      3,
+      expect.anything(),
     );
   });
 

@@ -15,7 +15,7 @@ import type {
   AchievementType,
 } from "@/shared/api/models/achievements";
 import { SecondaryText } from "@/shared/ui/Layout";
-import { GameIcon } from "@/shared/ui/Icon";
+import GameIcon from "@/shared/ui/Icon/GameIcon.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import { CaptionAction, CaptionLine } from "@/shared/ui/CaptionLine";
 import Button from "@/shared/ui/Button/Button.vue";

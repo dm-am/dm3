@@ -37,10 +37,6 @@ public interface IAuthenticationRepository
     /// <returns>Session, or null if the user has no such session</returns>
     Task<Session?> FindUserSession(Guid userId, Guid sessionId);
 
-    /// <summary>
-    /// Search for user settings by user id
-    /// </summary>
-    /// <returns>User settings</returns>
     Task<UserSettings> FindUserSettings(Guid userId);
 
     /// <summary>
@@ -58,26 +54,10 @@ public interface IAuthenticationRepository
     /// <param name="expirationDate">New expiration date</param>
     Task RefreshSession(Guid userId, Guid sessionId, DateTimeOffset expirationDate);
 
-    /// <summary>
-    /// Append new session to user authentication sessions
-    /// </summary>
-    /// <param name="userId">Authenticated user id</param>
-    /// <param name="session">Session data for creating new session</param>
-    /// <returns>Created session</returns>
     Task<Session> AddSession(Guid userId, CreateSession session);
 
-    /// <summary>
-    /// Remove all sessions from the user except one
-    /// </summary>
-    /// <param name="userId">Authenticated user id</param>
-    /// <param name="sessionId">Session id</param>
     Task RemoveSessionsExcept(Guid userId, Guid sessionId);
 
-    /// <summary>
-    /// Update user last activity date
-    /// </summary>
-    /// <param name="userId">User id</param>
-    /// <param name="lastActivityUtc">Last activity timestamp</param>
     Task UpdateActivity(Guid userId, DateTimeOffset lastActivityUtc);
 
     /// <summary>
@@ -95,10 +75,6 @@ public interface IAuthenticationRepository
     /// <returns>True if pending registration exists</returns>
     Task<bool> IsPendingRegistration(string email);
 
-    /// <summary>
-    /// Remove all sessions for a user
-    /// </summary>
-    /// <param name="userId">User identifier</param>
     Task RemoveAllSessions(Guid userId);
 
     /// <summary>
@@ -106,8 +82,6 @@ public interface IAuthenticationRepository
     /// accounts.
     /// </summary>
     /// <param name="now">Moment the pass runs at; expiration is compared against it.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
-    /// <returns>What the pass removed.</returns>
     Task<SessionPurgeResult> PurgeExpiredSessions(
         DateTimeOffset now, CancellationToken cancellationToken = default);
 }

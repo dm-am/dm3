@@ -4,10 +4,6 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests.Dto;
 
-/// <summary>
-/// Paging arithmetic: which page an entity number falls on, and the floor
-/// under that page.
-/// </summary>
 public class PagingResultShould
 {
     [Theory]

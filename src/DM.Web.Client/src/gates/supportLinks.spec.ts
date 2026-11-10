@@ -9,27 +9,17 @@
  * reason, the reason each door names is the one listed below, and the form,
  * mounted on the address supportFor builds, shows that reason in its picker.
  */
-import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import { readFileSync } from "fs";
-import { enableAutoUnmount, mount } from "@vue/test-utils";
-import { createPinia } from "pinia";
-import Form from "@/shared/ui/Form/Form.vue";
-import FormField from "@/shared/ui/Form/FormField.vue";
+import { enableAutoUnmount, type VueWrapper } from "@vue/test-utils";
 import SupportPage from "@/pages/support/SupportPage.vue";
 import { supportFor, type TicketSubtype } from "@/entities/ticket";
 import { CLIENT_SRC, asPath, collect } from "@/shared/lib/testing/sourceTree";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 
 // The page holds the markup editor; a mount left standing keeps its timers
 // running past the environment's teardown.
 enableAutoUnmount(afterEach);
-
-const { route } = vi.hoisted(() => ({
-  route: { query: {} as Record<string, string> },
-}));
-vi.mock("vue-router", () => ({
-  useRoute: () => route,
-  useRouter: () => ({ push: vi.fn() }),
-}));
 
 /** The one file allowed to spell the address with its query. */
 const BUILDER = "entities/ticket/lib/supportRoute.ts";
@@ -107,22 +97,22 @@ for (const { at, text } of sources) {
   if (reasons.length > 0) found[at] = reasons;
 }
 
-const options = () => ({
-  global: { plugins: [createPinia()], components: { Form, FormField } },
-});
+/** The support page and every address it and its form link to. */
+const ROUTES: Address[] = [
+  ["support", "/support"],
+  ["forum", "/forum/:alias"],
+  ["community", "/community"],
+  ["rules", "/rules"],
+  ["account", "/account"],
+];
 
 /** The reason the picker currently shows. */
-const chosenReason = (wrapper: ReturnType<typeof mount>) =>
+const chosenReason = (wrapper: VueWrapper) =>
   (wrapper.find("select").element as HTMLSelectElement).value;
-
-/** The query supportFor writes, as the router would hand it to the page. */
-const queryOf = (address: string): Record<string, string> =>
-  Object.fromEntries(new URL(address, window.location.origin).searchParams);
 
 describe("a link to the support form", () => {
   beforeEach(() => {
     localStorage.clear();
-    route.query = {};
   });
 
   it("is read from a tree that has them", () => {
@@ -149,10 +139,12 @@ describe("a link to the support form", () => {
 
   it.each([...new Set(Object.values(DOORS).flat())])(
     "opens the form on %s",
-    (subtype) => {
-      route.query = queryOf(supportFor(subtype));
+    async (subtype) => {
+      const { wrapper } = await mountPage(SupportPage, supportFor(subtype), {
+        routes: ROUTES,
+      });
 
-      expect(chosenReason(mount(SupportPage, options()))).toBe(subtype);
+      expect(chosenReason(wrapper)).toBe(subtype);
     },
   );
 });

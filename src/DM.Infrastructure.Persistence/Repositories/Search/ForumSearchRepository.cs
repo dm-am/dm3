@@ -28,9 +28,6 @@ internal class ForumSearchRepository : IForumSearchRepository
         _dbContext = dbContext;
     }
 
-    /// <summary>
-    /// Fills in the preview of a page: a window around the match, with the match marked.
-    /// </summary>
     /// <remarks>
     /// The forum surface does not declare the hidden block, yet the window cuts it as the
     /// message search does: the two answer the same question over one column.

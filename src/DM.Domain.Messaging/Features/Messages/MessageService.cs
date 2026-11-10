@@ -275,16 +275,8 @@ internal class MessageService : IMessageService
             updateMessage, await GetGlobalChatMessageAsync(updateMessage.MessageId));
     }
 
-    /// <summary>
-    /// Whether a message of the chat is read with [mod]: global and game-room
-    /// chats draw it, direct and group chats do not.
-    /// </summary>
     private static bool DrawsModBlock(ChatType chatType) => chatType is ChatType.Global or ChatType.GameRoom;
 
-    /// <summary>
-    /// The text as the chat stores it: without the [mod] of a non-moderator where the
-    /// tag renders.
-    /// </summary>
     [return: NotNullIfNotNull(nameof(text))]
     private string? AsWritten(string? text, ChatType chatType) =>
         DrawsModBlock(chatType) && !string.IsNullOrEmpty(text)

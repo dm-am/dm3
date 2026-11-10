@@ -14,10 +14,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 
-/// <summary>
-/// The pinned order of a board is written whole, and only for that board.
-/// </summary>
-/// <remarks>Whose topics move is decided by the board of the address, not by the ids in the body, and so is the validating read.</remarks>
+// Whose topics move is decided by the board of the address, not by the ids in the body, and so is
+// the validating read.
 public class PinnedTopicOrderShould
 {
     private static readonly Guid BoardId = Guid.Parse("9a4c1d20-0000-4000-8000-000000000001");
@@ -30,15 +28,10 @@ public class PinnedTopicOrderShould
     private static readonly Guid Loose = Guid.Parse("9a4c1d20-0000-4000-8000-000000000014");
     private static readonly Guid Foreign = Guid.Parse("9a4c1d20-0000-4000-8000-000000000015");
 
-    /// <summary>The position the other board's pinned topic holds, and keeps.</summary>
     private const int ForeignOrder = 7;
 
     private static readonly DateTimeOffset Created = new(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
 
-    /// <summary>
-    /// Two boards. The first holds three pinned topics and one that is not
-    /// pinned; the second holds a pinned topic nobody in the first may touch.
-    /// </summary>
     private static DmDbContext Seeded()
     {
         var context = InMemoryStore.Open();

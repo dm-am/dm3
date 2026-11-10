@@ -1,89 +1,69 @@
-using System.Net;
 using System.Text.Json;
-using DM.Web.API.Swagger;
+using DM.Web.API.IntegrationTests.Helpers;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Every response the contract declares names the body the host writes: a
-/// problem document under one media type for a refusal, JSON and nothing else
-/// for a success.
-/// </summary>
 public class OpenApiResponsesShould : IntegrationTestBase
 {
     public OpenApiResponsesShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>The media type a success body travels under.</summary>
     private const string JsonContentType = "application/json";
 
-    /// <summary>
-    /// The media type ErrorHandlingMiddleware writes on every refusal, repeated rather than imported.
-    /// </summary>
+    // The media type ErrorHandlingMiddleware writes on every refusal, repeated rather than
+    // imported.
     private const string ProblemJsonContentType = "application/problem+json";
 
-    /// <summary>
-    /// Every failure response is a problem document, and the contract says so.
-    /// </summary>
-    /// <remarks>ErrorHandlingMiddleware answers with ProblemDetails and application/problem+json; a new endpoint copies its neighbour's attributes.</remarks>
+    // ErrorHandlingMiddleware answers with ProblemDetails and application/problem+json; a new
+    // endpoint copies its neighbour's attributes.
     [Fact]
     public async Task DescribeEveryFailureResponseAsAProblemDocument()
     {
         var wrong = new List<string>();
         var checked_ = 0;
 
-        foreach (var group in SwaggerExtensions.ApiGroups)
+        foreach (var operation in await SwaggerDocuments.OperationsAsync(Client))
         {
-            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            if (!operation.Value.TryGetProperty("responses", out var responses))
             {
-                foreach (var operation in path.Value.EnumerateObject())
+                continue;
+            }
+
+            foreach (var status in responses.EnumerateObject())
+            {
+                if (!int.TryParse(status.Name, out var code) || code < 400)
                 {
-                    if (!operation.Value.TryGetProperty("responses", out var responses))
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    foreach (var status in responses.EnumerateObject())
-                    {
-                        if (!int.TryParse(status.Name, out var code) || code < 400)
-                        {
-                            continue;
-                        }
+                checked_++;
 
-                        checked_++;
+                // A failure response with no body is legitimate — 401 on
+                // an endpoint that says nothing beyond the status.
+                var schemaRef = SchemaReferenceOf(status.Value);
+                if (schemaRef == null)
+                {
+                    continue;
+                }
 
-                        // A failure response with no body is legitimate — 401 on
-                        // an endpoint that says nothing beyond the status.
-                        var schemaRef = SchemaReferenceOf(status.Value);
-                        if (schemaRef == null)
-                        {
-                            continue;
-                        }
+                if (!schemaRef.EndsWith("ProblemDetails", StringComparison.Ordinal))
+                {
+                    wrong.Add($"{operation.Address} {status.Name} -> {schemaRef}");
+                }
 
-                        if (!schemaRef.EndsWith("ProblemDetails", StringComparison.Ordinal))
-                        {
-                            wrong.Add($"{operation.Name.ToUpperInvariant()} {path.Name} {status.Name} -> {schemaRef}");
-                        }
-
-                        // The type is only half of the contract. A generated client
-                        // picks its deserialiser by media type, and Swashbuckle's
-                        // guess when no [Produces] is present names three of them —
-                        // none the one the middleware writes.
-                        var mediaTypes = MediaTypesOf(status.Value);
-                        if (mediaTypes.Count != 1 || mediaTypes[0] != ProblemJsonContentType)
-                        {
-                            wrong.Add(
-                                $"{operation.Name.ToUpperInvariant()} {path.Name} {status.Name} " +
-                                $"-> {string.Join(", ", mediaTypes)}");
-                        }
-                    }
+                // The type is only half of the contract. A generated client
+                // picks its deserialiser by media type, and Swashbuckle's
+                // guess when no [Produces] is present names three of them —
+                // none the one the middleware writes.
+                var mediaTypes = MediaTypesOf(status.Value);
+                if (mediaTypes.Count != 1 || mediaTypes[0] != ProblemJsonContentType)
+                {
+                    wrong.Add(
+                        $"{operation.Address} {status.Name} " +
+                        $"-> {string.Join(", ", mediaTypes)}");
                 }
             }
         }
@@ -93,55 +73,42 @@ public class OpenApiResponsesShould : IntegrationTestBase
             "the middleware answers every failure with ProblemDetails, so no endpoint may declare another type");
     }
 
-    /// <summary>
-    /// A success body is JSON, and the contract names that and nothing else.
-    /// </summary>
-    /// <remarks>One output formatter is registered, so text/plain and text/json are never written.</remarks>
+    // One output formatter is registered, so text/plain and text/json are never written.
     [Fact]
     public async Task DescribeEverySuccessBodyAsJson()
     {
         var wrong = new List<string>();
         var checked_ = 0;
 
-        foreach (var group in SwaggerExtensions.ApiGroups)
+        foreach (var operation in await SwaggerDocuments.OperationsAsync(Client))
         {
-            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            if (operation.Value.ValueKind != JsonValueKind.Object ||
+                !operation.Value.TryGetProperty("responses", out var responses))
             {
-                foreach (var operation in path.Value.EnumerateObject())
+                continue;
+            }
+
+            foreach (var status in responses.EnumerateObject())
+            {
+                if (!int.TryParse(status.Name, out var code) || code >= 400)
                 {
-                    if (operation.Value.ValueKind != JsonValueKind.Object ||
-                        !operation.Value.TryGetProperty("responses", out var responses))
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    foreach (var status in responses.EnumerateObject())
-                    {
-                        if (!int.TryParse(status.Name, out var code) || code >= 400)
-                        {
-                            continue;
-                        }
+                // 204 and its neighbours declare no body at all, which is
+                // the honest description of an empty response.
+                var mediaTypes = MediaTypesOf(status.Value);
+                if (mediaTypes.Count == 0)
+                {
+                    continue;
+                }
 
-                        // 204 and its neighbours declare no body at all, which is
-                        // the honest description of an empty response.
-                        var mediaTypes = MediaTypesOf(status.Value);
-                        if (mediaTypes.Count == 0)
-                        {
-                            continue;
-                        }
-
-                        checked_++;
-                        if (mediaTypes.Count != 1 || mediaTypes[0] != JsonContentType)
-                        {
-                            wrong.Add(
-                                $"{operation.Name.ToUpperInvariant()} {path.Name} {status.Name} " +
-                                $"-> {string.Join(", ", mediaTypes)}");
-                        }
-                    }
+                checked_++;
+                if (mediaTypes.Count != 1 || mediaTypes[0] != JsonContentType)
+                {
+                    wrong.Add(
+                        $"{operation.Address} {status.Name} " +
+                        $"-> {string.Join(", ", mediaTypes)}");
                 }
             }
         }
@@ -151,7 +118,6 @@ public class OpenApiResponsesShould : IntegrationTestBase
             "the host has one output formatter, so a success body is application/json and nothing else");
     }
 
-    /// <summary>Schema id an OpenAPI response body points at, if it declares one.</summary>
     private static string? SchemaReferenceOf(JsonElement response)
     {
         if (!response.TryGetProperty("content", out var content))
@@ -171,7 +137,6 @@ public class OpenApiResponsesShould : IntegrationTestBase
         return null;
     }
 
-    /// <summary>Media type names a response declares its body under.</summary>
     private static List<string> MediaTypesOf(JsonElement response)
     {
         var names = new List<string>();

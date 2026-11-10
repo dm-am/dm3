@@ -28,7 +28,7 @@ const VARIABLES = read("assets/styles/Variables.sass");
 
 function px(source: string, pattern: RegExp, what: string): number {
   const found = source.match(pattern);
-  if (!found) throw new Error("не нашел в листе: " + what);
+  if (!found) throw new Error(`не нашел в листе: ${what}`);
   return Number(found[1]);
 }
 
@@ -41,7 +41,7 @@ const GRID = px(VARIABLES, /\$grid-step:\s*(\d+)px/, "шаг сетки");
 const step = (name: string, what: string): number =>
   px(
     VARIABLES,
-    new RegExp("\\" + name + ":\\s*(\\d+)\\s*\\*\\s*\\$grid-step"),
+    new RegExp(`\\${name}:\\s*(\\d+)\\s*\\*\\s*\\$grid-step`),
     what,
   ) * GRID;
 
@@ -54,7 +54,7 @@ const step = (name: string, what: string): number =>
 const rule = (selector: string): string => {
   const lines = SHEET.split("\n");
   const opens = lines.indexOf(selector);
-  if (opens < 0) throw new Error("не нашел в листе: правило " + selector);
+  if (opens < 0) throw new Error(`не нашел в листе: правило ${selector}`);
 
   const body: string[] = [];
   for (let at = opens + 1; at < lines.length; at += 1) {
@@ -101,7 +101,7 @@ const MARGIN = (() => {
     /max-width:\s*calc\(100vw - #\{\$([\w-]+)\} \* 2\)/,
   );
   if (!found) throw new Error("не нашел в листе: поле карточки от края окна");
-  return step("$" + found[1], "поле карточки от края окна");
+  return step(`$${found[1]}`, "поле карточки от края окна");
 })();
 
 /** The size the caption of the main button is set in. */
@@ -112,7 +112,7 @@ const BUTTON_SIZE = (() => {
   if (!name) throw new Error("не нашел в листе: кегль главной кнопки");
   return px(
     VARIABLES,
-    new RegExp("\\$" + name + ":\\s*(\\d+)px"),
+    new RegExp(`\\$${name}:\\s*(\\d+)px`),
     "кегль главной кнопки",
   );
 })();
@@ -241,7 +241,7 @@ describe("a heading of the guest surface stands on one line", () => {
   });
 
   const cases = [
-    ...new Map(all.map((t) => [t.text + "|" + t.dialog, t])).values(),
+    ...new Map(all.map((t) => [`${t.text}|${t.dialog}`, t])).values(),
   ];
 
   it.each(cases.map((t) => [t.text, t] as const))("holds %s", (_, title) => {
@@ -252,7 +252,7 @@ describe("a heading of the guest surface stands on one line", () => {
       need,
       `${title.text.toUpperCase()} просит ${need.toFixed(1)}px при бюджете ${allowed}px ` +
         `(${title.file}, ${title.dialog ? "диалог" : "страница из письма"}` +
-        `${wide ? ", широкая карточка: " + ON_WIDE_CARD.get(title.text) : ""})`,
+        `${wide ? `, широкая карточка: ${ON_WIDE_CARD.get(title.text)}` : ""})`,
     ).toBeLessThanOrEqual(allowed);
   });
 });

@@ -10,9 +10,6 @@ namespace DM.Domain.Game.Tests.Dsl;
 
 public class GameBuilder
 {
-    /// <summary>
-    /// A game with only its id and a master who is not the caller.
-    /// </summary>
     public static GameDto Bare(Guid gameId = default) => new()
     {
         Id = gameId,
@@ -79,11 +76,6 @@ public class GameBuilder
         return this;
     }
 
-    /// <summary>
-    /// The game carries no subscriber roster any more, only the count and a flag
-    /// for the user it was read for — so this says "the viewer subscribes", which
-    /// is the only thing the roster was ever consulted for.
-    /// </summary>
     public GameBuilder WithViewerSubscribed(int subscribersCount = 1)
     {
         game.IsViewerSubscriber = true;
@@ -115,19 +107,15 @@ public class GameBuilder
         return this;
     }
 
-    /// <summary>
-    /// Recruitment is what admits a character; an unset block reads as closed.
-    /// </summary>
+    // Recruitment is what admits a character; an unset block reads as closed.
     public GameBuilder WithRecruitmentOpen()
     {
         game.Recruitment = new GameRecruitment { IsOpen = true };
         return this;
     }
 
-    /// <summary>
-    /// A player invitation the user has not answered yet: the second way into
-    /// character creation, past a closed recruitment.
-    /// </summary>
+    // A player invitation the user has not answered yet: the second way into character creation,
+    // past a closed recruitment.
     public GameBuilder WithPendingPlayerInvitation(Guid userId)
     {
         game.PendingPlayerInvitedUserIds = new[] { userId };

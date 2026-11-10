@@ -4,20 +4,14 @@
 
 /** The guest windows a page asks for by address, ?action=. */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 
-const { route, replace } = vi.hoisted(() => ({
-  route: { query: {} as Record<string, string> },
-  replace: vi.fn(),
-}));
-vi.mock("vue-router", () => ({
-  useRoute: () => route,
-  useRouter: () => ({ replace }),
-}));
-
-// One spy per window, named by the component it would open.
+// One spy per window, named by the component it would open; the rest of the
+// module stays real, as the mount registers its plugin and container.
 const { opened } = vi.hoisted(() => ({ opened: [] as string[] }));
-vi.mock("vue-final-modal", () => ({
+vi.mock("vue-final-modal", async (actual) => ({
+  ...(await actual<typeof import("vue-final-modal")>()),
   useModal: (options: { component: { name: string } }) => ({
     open: () => opened.push(options.component.name),
     close: vi.fn(),
@@ -37,7 +31,6 @@ const { default: GuestActions } = await import("./GuestActions.vue");
 describe("the guest windows asked for by address", () => {
   beforeEach(() => {
     opened.length = 0;
-    replace.mockReset();
   });
 
   it.each([
@@ -47,15 +40,33 @@ describe("the guest windows asked for by address", () => {
   ])(
     "opens %s over the page and takes it out of the address",
     async (action, window) => {
-      route.query = { action, subtype: "AccessRecovery" };
-
-      mount(GuestActions);
+      const { router } = await mountPage(
+        GuestActions,
+        `/forum?action=${action}&subtype=AccessRecovery`,
+        { routes: [["forum-index", "/forum"]] },
+      );
       await flushPromises();
 
       expect(opened).toEqual([window]);
-      expect(replace).toHaveBeenCalledWith({
-        query: { subtype: "AccessRecovery" },
-      });
+      expect(router.currentRoute.value.fullPath).toBe(
+        "/forum?subtype=AccessRecovery",
+      );
     },
   );
+
+  // The asked-for address is not kept: Back leads to the page before it.
+  it("takes the place of the address that asked for the window", async () => {
+    const { router } = await mountPage(GuestActions, "/forum", {
+      routes: [["forum-index", "/forum"]],
+    });
+    await router.push("/forum?action=login");
+    await flushPromises();
+    expect(opened).toEqual(["LoginForm"]);
+
+    router.back();
+    await flushPromises();
+
+    expect(router.currentRoute.value.fullPath).toBe("/forum");
+    expect(opened).toEqual(["LoginForm"]);
+  });
 });

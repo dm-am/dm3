@@ -17,10 +17,7 @@ public class PostFiltersShould : PostRepositoryTestBase
     {
     }
 
-    /// <summary>
-    /// Which posts come back says nothing about which of them hides something.
-    /// </summary>
-    /// <remarks>The two bodies differ by the block alone and project to the same visible text.</remarks>
+    // The two bodies differ by the block alone and project to the same visible text.
     [Fact]
     public async Task TellNothingAboutAHiddenBlockFromWhichPostsComeBack()
     {
@@ -47,9 +44,6 @@ public class PostFiltersShould : PostRepositoryTestBase
             "a post with a hidden block and the same post without one answer a search alike");
     }
 
-    /// <summary>
-    /// And the hidden words are not what is matched either.
-    /// </summary>
     [Fact]
     public async Task KeepThePrivateTextOutOfWhatTheFilterMatches()
     {
@@ -72,9 +66,6 @@ public class PostFiltersShould : PostRepositoryTestBase
         posts.Should().BeEmpty("the block is not on the page, so it is not in the search either");
     }
 
-    /// <summary>
-    /// The ordinary case: a post is found by the words of its text.
-    /// </summary>
     [Fact]
     public async Task FindAPostByTheWordsItsReaderSees()
     {
@@ -119,11 +110,7 @@ public class PostFiltersShould : PostRepositoryTestBase
         missing.Should().BeEmpty();
     }
 
-    /// <summary>
-    /// The named, visible price of the move: the markup is no longer searchable and
-    /// the words it splits are.
-    /// </summary>
-    /// <remarks>What is matched is the text the reader is shown.</remarks>
+    // What is matched is the text the reader is shown.
     [Fact]
     public async Task StopMatchingTheMarkupAndStartMatchingTheWordItSplits()
     {

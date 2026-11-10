@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
-/// <summary>
-/// An account starts in the time zone of the device it was created on.
-/// </summary>
 /// <remarks>
 /// Letters are stamped in the zone of the account, and the activation request carries the device's zone. A
 /// zone the server cannot print in is left out, and the account is created all the same.
@@ -43,7 +40,6 @@ public class RegistrationTimeZoneShould : IntegrationTestBase
             "a name no zone answers to is left out, and the account keeps UTC");
     }
 
-    /// <summary>Registers, then activates with the zone given, and answers the new account's id.</summary>
     private async Task<Guid> RegisterAsync(string? zone)
     {
         var suffix = Guid.NewGuid().ToString("N")[..10];

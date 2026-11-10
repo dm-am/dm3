@@ -11,9 +11,6 @@ public class CreateRoomValidatorShould
 {
     private readonly CreateRoomValidator validator = new();
 
-    /// <summary>
-    /// One character is a title; the bound is the only other rule.
-    /// </summary>
     [Theory]
     [InlineData(1)]
     [InlineData(RoomFieldLimits.TitleMaxLength)]

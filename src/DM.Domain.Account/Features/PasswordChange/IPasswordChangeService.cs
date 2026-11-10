@@ -16,11 +16,6 @@ public interface IPasswordChangeService
     /// <returns>Token status: ready, expired, or null if not found</returns>
     Task<PasswordResetTokenInfo?> GetTokenInfo(Guid tokenId);
 
-    /// <summary>
-    /// Change user password
-    /// </summary>
-    /// <param name="passwordChange">Password change data</param>
-    /// <returns>Updated user</returns>
     Task<GeneralUser> Change(UserPasswordChange passwordChange);
 }
 
@@ -34,8 +29,5 @@ public record PasswordResetTokenInfo(string Status)
     /// </summary>
     public static PasswordResetTokenInfo Ready() => new("ready");
 
-    /// <summary>
-    /// Token has expired
-    /// </summary>
     public static PasswordResetTokenInfo Expired() => new("expired");
 }

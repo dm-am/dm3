@@ -16,7 +16,7 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class IntentionTargetsShould
 {
-    /// <summary>Reads the room without its game, so no room rule can be answered from it.</summary>
+    // Reads the room without its game, so no room rule can be answered from it.
     private const string FlatRoomSource = ".GetAsync(";
 
     private static readonly Regex RoomIntentionCall = new(
@@ -27,17 +27,14 @@ public class IntentionTargetsShould
         @"ThrowIfForbidden\(\s*\w*Intention\.(?<verb>Create|Update|Delete)\w*",
         RegexOptions.Compiled);
 
-    /// <summary>A method declaration, captured by name.</summary>
     private static readonly Regex MethodDeclaration = new(
         @"^\s*(?:public|private|internal|protected)[\w\s<>,\[\]\(\)\?]*?\s(?<name>\w+)\s*\(",
         RegexOptions.Compiled);
 
 
 
-    /// <summary>
-    /// Name of the method the given line sits in, by walking back to the nearest declaration; it fails
-    /// towards reporting nothing.
-    /// </summary>
+    // Name of the method the given line sits in, by walking back to the nearest declaration; it
+    // fails towards reporting nothing.
     private static string EnclosingMethod(string[] lines, int at)
     {
         for (var i = at; i >= 0; i--)

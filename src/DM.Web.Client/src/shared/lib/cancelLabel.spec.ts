@@ -16,8 +16,7 @@ import { CLIENT_SRC, asPath, collect } from "@/shared/lib/testing/sourceTree";
 const ALLOWED: Record<string, string> = {
   // Row action in the list of sent invitations: it revokes an invitation that
   // exists, and the row itself names the object.
-  "pages/blog/settings/InvitationsSection.vue": "revokes a sent invitation",
-  "pages/game/settings/InvitationsSection.vue": "revokes a sent invitation",
+  "features/module-staff/ui/InvitationsEditor.vue": "revokes a sent invitation",
 };
 
 const isSource = (name: string): boolean =>

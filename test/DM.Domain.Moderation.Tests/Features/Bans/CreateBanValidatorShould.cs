@@ -199,13 +199,8 @@ public class CreateBanValidatorShould
             .WithErrorMessage("Для бана укажите срок или дату окончания");
     }
 
-    /// <summary>
-    /// Two ban scopes exist, and a request naming anything else is refused. The
-    /// type is [Flags] because a user's effective policy is a union of bans, so it
-    /// accepts eight values where a ban's scope has two. The rest used to be
-    /// coerced to FullBan in silence: a moderator sending 0 issued the strictest
-    /// ban on the site and was answered as if he had asked for it.
-    /// </summary>
+    // The type is [Flags] because a user's effective policy is a union of bans, so it accepts eight
+    // values where a ban's scope has two.
     [Theory]
     [InlineData(AccessPolicy.NotSpecified)]
     [InlineData((AccessPolicy)2)]
@@ -243,10 +238,8 @@ public class CreateBanValidatorShould
         result.ShouldNotHaveValidationErrorFor(x => x.AccessRestrictionPolicy);
     }
 
-    /// <summary>
-    /// The comment is rendered on the Comment surface, where [private] hides nothing, and is refused as every
-    /// text outside a game post is.
-    /// </summary>
+    // The comment is rendered on the Comment surface, where [private] hides nothing, and is refused
+    // as every text outside a game post is.
     [Fact]
     public void FailWhenTheCommentCarriesAHiddenBlock()
     {

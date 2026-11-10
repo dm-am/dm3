@@ -7,10 +7,6 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Personal;
 
-/// <summary>
-/// The title of a notepad entry is refused past the length of its column, on both paths; checked as MVC
-/// checks the request.
-/// </summary>
 public class NotepadEntryRequestShould
 {
     [Fact]

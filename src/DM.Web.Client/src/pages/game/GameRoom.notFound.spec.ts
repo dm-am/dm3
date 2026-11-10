@@ -2,8 +2,9 @@
  * @vitest-environment jsdom
  */
 import { describe, it, expect, beforeEach, vi } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import { GameParticipation } from "@/entities/game";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import GameRoom from "./GameRoom.vue";
 import {
   mockGetCharacters,
@@ -11,7 +12,6 @@ import {
   mockGetPosts,
   mockGetRooms,
   mockMarkRoomAsRead,
-  mockReplace,
 } from "./room/room.doubles";
 import { refusal, room, viewerOfTheGame } from "./room/room.fixtures";
 
@@ -24,9 +24,8 @@ vi.mock("@/entities/game/api/postApi", async () =>
 vi.mock("@/entities/game/api/characterApi", async () =>
   (await import("./room/room.doubles")).characterApi(),
 );
-vi.mock("vue-router", async () =>
-  (await import("./room/room.doubles")).vueRouter(),
-);
+
+type Landed = Awaited<ReturnType<typeof mountRoom>>["landed"];
 
 async function mountRoom() {
   const pinia = viewerOfTheGame("master", {
@@ -34,15 +33,41 @@ async function mountRoom() {
     participation: [GameParticipation.Owner],
   });
 
-  const wrapper = mount(GameRoom, {
-    shallow: true,
-    global: {
-      plugins: [pinia],
-      stubs: { RouterLink: true, ActionResult: false },
+  // Whether the room drew a load failure the moment it left for "not found".
+  let errorDrawnOnLeave: boolean | undefined;
+  const { wrapper, router } = await mountPage(GameRoom, "/game/g-1/rooms/1", {
+    routes: [
+      ["game-room", "/game/:id/rooms/:num"],
+      ["game", "/game/:id"],
+      ["not-found", "/:pathMatch(.*)*"],
+    ],
+    pinia,
+    // Left, the room unmounts as in the app, and reads no address but its own.
+    routed: true,
+    beforeMount: (r) =>
+      r.beforeEach((to) => {
+        if (to.name === "not-found")
+          errorDrawnOnLeave = wrapper
+            .findComponent({ name: "ErrorState" })
+            .exists();
+      }),
+    // The children drawn as stubs, so the room alone is the subject.
+    stubs: {
+      BackLink: true,
+      RoomPostFilter: true,
+      ErrorState: true,
+      GamePostSkeleton: true,
+      PagingWithSeparators: true,
+      GamePost: true,
+      PostComposer: true,
+      SecondaryText: true,
     },
   });
   await flushPromises();
-  return wrapper;
+  return {
+    errorDrawnOnLeave: () => errorDrawnOnLeave,
+    landed: () => router.currentRoute.value,
+  };
 }
 
 // A room the reader may not open has no page: its address opens "not found",
@@ -71,6 +96,13 @@ describe("GameRoom closed to the reader", () => {
     query: {},
     hash: "",
   };
+  /** The parts of the address the room was sent to that notFound names. */
+  const where = ({ name, params, query, hash }: ReturnType<Landed>) => ({
+    name,
+    params,
+    query,
+    hash,
+  });
 
   it("opens the site's not found for a closed room it may not open", async () => {
     mockGetRooms.mockResolvedValue({
@@ -80,9 +112,9 @@ describe("GameRoom closed to the reader", () => {
       },
       error: null,
     });
-    await mountRoom();
+    const { landed } = await mountRoom();
 
-    expect(mockReplace).toHaveBeenCalledWith(notFound);
+    expect(where(landed())).toEqual(notFound);
     expect(mockGetPosts).not.toHaveBeenCalled();
   });
 
@@ -91,9 +123,9 @@ describe("GameRoom closed to the reader", () => {
       data: { resources: [{ ...room, roomNumber: 2 }], paging: null },
       error: null,
     });
-    await mountRoom();
+    const { landed } = await mountRoom();
 
-    expect(mockReplace).toHaveBeenCalledWith(notFound);
+    expect(where(landed())).toEqual(notFound);
     expect(mockGetPosts).not.toHaveBeenCalled();
   });
 
@@ -103,11 +135,11 @@ describe("GameRoom closed to the reader", () => {
       data: { resources: [], paging: null },
       error: null,
     });
-    const wrapper = await mountRoom();
+    const { errorDrawnOnLeave, landed } = await mountRoom();
 
-    expect(mockReplace).toHaveBeenCalledWith(notFound);
+    expect(where(landed())).toEqual(notFound);
     expect(mockGetPosts).not.toHaveBeenCalled();
-    expect(wrapper.findComponent({ name: "ErrorState" }).exists()).toBe(false);
+    expect(errorDrawnOnLeave()).toBe(false);
   });
 
   it("opens the room it may open", async () => {
@@ -115,21 +147,17 @@ describe("GameRoom closed to the reader", () => {
       data: { resources: [room], paging: null },
       error: null,
     });
-    await mountRoom();
+    const { landed } = await mountRoom();
 
-    expect(mockReplace).not.toHaveBeenCalledWith(
-      expect.objectContaining({ name: "not-found" }),
-    );
+    expect(landed().name).not.toBe("not-found");
     expect(mockGetPosts).toHaveBeenCalled();
     expect(mockGetCharacters).toHaveBeenCalled();
   });
 
   it("does not send the reader away when the list itself failed", async () => {
     mockGetRooms.mockResolvedValue({ data: null, error: refusal(500) });
-    await mountRoom();
+    const { landed } = await mountRoom();
 
-    expect(mockReplace).not.toHaveBeenCalledWith(
-      expect.objectContaining({ name: "not-found" }),
-    );
+    expect(landed().name).not.toBe("not-found");
   });
 });

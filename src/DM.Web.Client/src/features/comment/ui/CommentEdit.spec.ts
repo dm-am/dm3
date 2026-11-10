@@ -14,10 +14,6 @@ import {
   refused,
 } from "./CommentItem.fixtures";
 
-vi.mock("vue-router", async () =>
-  (await import("./CommentItem.doubles")).vueRouter(),
-);
-
 vi.mock("@/shared/ui/BBCodeEditor", async () =>
   (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeEditor(),
 );
@@ -32,7 +28,7 @@ describe("CommentItem edit seeding", () => {
       data: { resource: comment({ text: "[b]Правила[/b]" }) },
       error: undefined,
     });
-    const wrapper = mountComponent(fetch);
+    const wrapper = await mountComponent(fetch);
 
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
@@ -50,7 +46,7 @@ describe("CommentItem edit seeding", () => {
       data: null,
       error: { message: "network" },
     });
-    const wrapper = mountComponent(fetch);
+    const wrapper = await mountComponent(fetch);
 
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
@@ -59,7 +55,9 @@ describe("CommentItem edit seeding", () => {
   });
 
   it("prints the refusal under the footer instead of raising a plate", async () => {
-    const wrapper = mountComponent(vi.fn().mockResolvedValue(refused(404)));
+    const wrapper = await mountComponent(
+      vi.fn().mockResolvedValue(refused(404)),
+    );
 
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
@@ -72,7 +70,7 @@ describe("CommentItem edit seeding", () => {
   });
 
   it("prints what the server said when it said something", async () => {
-    const wrapper = mountComponent(
+    const wrapper = await mountComponent(
       vi.fn().mockResolvedValue(refused(404, "Комментарий не найден")),
     );
 
@@ -83,7 +81,9 @@ describe("CommentItem edit seeding", () => {
   });
 
   it("says a failure the interceptor used to plate under the footer too", async () => {
-    const wrapper = mountComponent(vi.fn().mockResolvedValue(refused(503)));
+    const wrapper = await mountComponent(
+      vi.fn().mockResolvedValue(refused(503)),
+    );
 
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
@@ -95,7 +95,7 @@ describe("CommentItem edit seeding", () => {
   });
 
   it("leaves a dead connection to its plate", async () => {
-    const wrapper = mountComponent(vi.fn().mockResolvedValue(refused(0)));
+    const wrapper = await mountComponent(vi.fn().mockResolvedValue(refused(0)));
 
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
@@ -111,7 +111,7 @@ describe("CommentItem edit seeding", () => {
         data: { resource: comment({ text: "[b]Правила[/b]" }) },
         error: undefined,
       });
-    const wrapper = mountComponent(fetch);
+    const wrapper = await mountComponent(fetch);
 
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
@@ -129,7 +129,7 @@ describe("CommentItem edit seeding", () => {
       data: { resource: comment({ text: "[b]Правила[/b]" }) },
       error: undefined,
     });
-    const wrapper = mountComponent(fetch);
+    const wrapper = await mountComponent(fetch);
 
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
@@ -151,7 +151,7 @@ describe("CommentItem edit seeding", () => {
     submitEdit.mockResolvedValue({
       error: { type: "", title: "", status: 404, traceId: "t" },
     });
-    const wrapper = mountComponent(fetch);
+    const wrapper = await mountComponent(fetch);
 
     await action(wrapper, "Редактировать").trigger("click");
     await flushPromises();
@@ -162,7 +162,7 @@ describe("CommentItem edit seeding", () => {
     await flushPromises();
 
     expect(wrapper.find(".editor-stub").exists()).toBe(true);
-    expect(wrapper.find(".edit-container " + LINE).text()).toBe(
+    expect(wrapper.find(`.edit-container ${LINE}`).text()).toBe(
       "Не удалось сохранить комментарий",
     );
     expect(plates()).toEqual([]);

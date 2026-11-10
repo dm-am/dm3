@@ -13,15 +13,8 @@ using Xunit;
 
 namespace DM.Domain.Forum.Tests.Features.Topics;
 
-/// <summary>
-/// The order of the pinned topics of a board, replaced whole.
-/// </summary>
 public class PinnedOrderShould : TopicServiceTestBase
 {
-    /// <summary>
-    /// The pinned order is replaced whole, and the board of the address is what
-    /// the write is bounded by.
-    /// </summary>
     [Fact]
     public async Task WriteThePinnedOrderTheBodyNames()
     {
@@ -40,11 +33,8 @@ public class PinnedOrderShould : TopicServiceTestBase
         await repository.Received(1).ReplaceAttachOrder(board.Id, order, default);
     }
 
-    /// <summary>
-    /// A body naming a subset is refused rather than half-applied: the topics it
-    /// skips would keep the positions the same request has just handed to others,
-    /// so two of them would share a place.
-    /// </summary>
+    // A body naming a subset is refused rather than half-applied: the topics it skips would keep
+    // the positions the same request has just handed to others, so two of them would share a place.
     [Fact]
     public async Task RefuseAPinnedOrderThatSkipsAPinnedTopic()
     {
@@ -63,10 +53,8 @@ public class PinnedOrderShould : TopicServiceTestBase
             Arg.Any<Guid>(), Arg.Any<IReadOnlyList<Guid>>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The same rule from the other side: a body of the right length that names
-    /// one topic twice leaves another one with no position at all.
-    /// </summary>
+    // A body of the right length that names one topic twice leaves another one with no position at
+    // all.
     [Fact]
     public async Task RefuseAPinnedOrderThatNamesOneTopicTwice()
     {

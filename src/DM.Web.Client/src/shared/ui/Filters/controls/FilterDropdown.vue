@@ -1,22 +1,9 @@
 <script setup lang="ts">
-/**
- * FilterDropdown - Dropdown container with navigation support.
- *
- * Manages dropdown state and hierarchical navigation.
- */
+// The panel of a filter menu; Escape inside it asks to close.
 import { ref } from "vue";
-import { FilterDropdownHeader } from "../primitives";
 import { useKeepInWindow } from "./useKeepInWindow";
 
-defineProps<{
-  /** Navigation title (shown in header when navigating) */
-  navTitle?: string;
-  /** Whether navigation header should be shown */
-  showNavHeader?: boolean;
-}>();
-
 const emit = defineEmits<{
-  back: [];
   close: [];
 }>();
 
@@ -31,14 +18,6 @@ useKeepInWindow(panel);
     class="filter-dropdown-container"
     @keydown.esc="emit('close')"
   >
-    <!-- Navigation header -->
-    <FilterDropdownHeader
-      v-if="showNavHeader && navTitle"
-      :title="navTitle"
-      @back="emit('back')"
-    />
-
-    <!-- Content -->
     <slot />
   </div>
 </template>

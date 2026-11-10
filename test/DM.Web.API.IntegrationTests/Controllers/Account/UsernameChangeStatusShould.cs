@@ -12,10 +12,8 @@ using DbUsernameChangeRequest = DM.Infrastructure.Persistence.Entities.Account.U
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
-/// <summary>
-/// The account's own name change request is answered, in every state it can be in.
-/// </summary>
-/// <remarks>Every reply is mapped from the domain entry; what this guards is that a reply exists in each state.</remarks>
+// Every reply is mapped from the domain entry; what this guards is that a reply exists in each
+// state.
 public class UsernameChangeStatusShould : IntegrationTestBase
 {
     private const string Url = "/v1/account/username-change";
@@ -26,10 +24,8 @@ public class UsernameChangeStatusShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// An account that never asked gets no content, and nothing is mapped on that
-    /// path - the state every other test happened to use.
-    /// </summary>
+    // An account that never asked gets no content, and nothing is mapped on that path - the state
+    // every other test happened to use.
     [Fact]
     public async Task AnswerWithNoContentWhenNothingWasEverAsked()
     {
@@ -77,10 +73,8 @@ public class UsernameChangeStatusShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Expiry has two roads into one status, and the payload separates them so the
-    /// account is not told an approval happened when none did.
-    /// </summary>
+    // Expiry has two roads into one status, and the payload separates them so the account is not
+    // told an approval happened when none did.
     [Theory]
     [InlineData(false, "Unreviewed")]
     [InlineData(true, "ApprovalLapsed")]
@@ -101,10 +95,8 @@ public class UsernameChangeStatusShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The reason belongs to expiry alone: a live approval carries the same token
-    /// expiry and must not be labelled with it.
-    /// </summary>
+    // The reason belongs to expiry alone: a live approval carries the same token expiry and must
+    // not be labelled with it.
     [Fact]
     public async Task LeaveTheExpiryReasonUnsetOnALiveApproval()
     {

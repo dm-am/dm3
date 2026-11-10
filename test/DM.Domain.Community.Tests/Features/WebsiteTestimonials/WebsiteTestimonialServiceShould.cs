@@ -37,10 +37,8 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
     private readonly WebsiteTestimonialService service;
     private readonly Guid currentUserId;
 
-    /// <summary>
-    /// The participant the testimonial is signed by - never the caller, who is
-    /// the moderator submitting it on their behalf.
-    /// </summary>
+    // The participant the testimonial is signed by - never the caller, who is the moderator
+    // submitting it on their behalf.
     private const string AuthorUsername = "Solohin";
 
     private readonly Guid authorId = Guid.NewGuid();
@@ -101,10 +99,8 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
         intentionManager.Received(1).ThrowIfForbidden(WebsiteTestimonialIntention.Create);
     }
 
-    /// <summary>
-    /// The whole point of the named author: the entry is signed by the
-    /// participant, not by the moderator who filled the form in.
-    /// </summary>
+    // The whole point of the named author: the entry is signed by the participant, not by the
+    // moderator who filled the form in.
     [Fact]
     public async Task SignTheTestimonialWithTheNamedParticipant()
     {
@@ -133,9 +129,7 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
         await repository.DidNotReceive().Create(Arg.Any<CreateWebsiteTestimonialEntity>());
     }
 
-    /// <summary>
-    /// One testimonial per participant, and the participant is the named one, not the caller.
-    /// </summary>
+    // One testimonial per participant, and the participant is the named one, not the caller.
     [Fact]
     public async Task ThrowConflictWhenTheNamedParticipantAlreadyHasTestimonial()
     {
@@ -148,9 +142,8 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
     }
 
-    /// <summary>
-    /// Two requests can both pass the pre-check, and the loser reads the same sentence the pre-check writes.
-    /// </summary>
+    // Two requests can both pass the pre-check, and the loser reads the same sentence the pre-check
+    // writes.
     [Fact]
     public async Task ThrowConflictWhenTheIndexRefusesTheEntryThatLostTheRace()
     {
@@ -256,11 +249,9 @@ public class WebsiteTestimonialServiceShould : UnitTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdateWebsiteTestimonialEntity>());
     }
 
-    /// <summary>
-    /// Who pressed save is recorded separately from who signed the entry: the
-    /// author line is a claim about a participant, and a moderator's correction
-    /// must not quietly transfer it to the moderator.
-    /// </summary>
+    // Who pressed save is recorded separately from who signed the entry: the author line is a claim
+    // about a participant, and a moderator's correction must not quietly transfer it to the
+    // moderator.
     [Fact]
     public async Task KeepTheAuthorWhenAModeratorRewritesTheText()
     {

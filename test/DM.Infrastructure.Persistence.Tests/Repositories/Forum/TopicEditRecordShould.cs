@@ -16,13 +16,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 
-/// <summary>
-/// Who changed a topic, and whether anything changed at all.
-/// </summary>
-/// <remarks>
-/// TopicEdits is the one home of who changed a topic. A PATCH with the values held writes no history and
-/// announces nothing; both are read off the change tracker.
-/// </remarks>
+// TopicEdits is the one home of who changed a topic.
 public class TopicEditRecordShould
 {
     private static readonly Guid BoardId = Guid.Parse("6b1f0a10-0000-4000-8000-000000000001");
@@ -81,9 +75,6 @@ public class TopicEditRecordShould
         return new TopicRepository(context, guids, clock);
     }
 
-    /// <summary>
-    /// The editor is written down, and the answer says the row moved.
-    /// </summary>
     [Fact]
     public async Task RecordWhoChangedTheTopic()
     {
@@ -108,10 +99,7 @@ public class TopicEditRecordShould
         edits[0].EditedUtc.Should().Be(EditedAt);
     }
 
-    /// <summary>
-    /// A save that changes nothing leaves nothing behind, and says so.
-    /// </summary>
-    /// <remarks>The client PATCHes the fields it holds on every save, cancelled ones included.</remarks>
+    // The client PATCHes the fields it holds on every save, cancelled ones included.
     [Fact]
     public async Task LeaveNoRecordWhenTheValuesAreTheOnesTheTopicAlreadyHolds()
     {

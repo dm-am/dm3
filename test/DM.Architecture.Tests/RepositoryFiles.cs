@@ -10,20 +10,14 @@ using DM.Testing;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The files of the checkout, walked the way the rules of this tier walk them.
-/// </summary>
-/// <remarks>The skipped set of a walk stays an argument: merging the sets would widen or narrow what a gate reads.</remarks>
+// The skipped set of a walk stays an argument: merging the sets would widen or narrow what a gate
+// reads.
 internal static class RepositoryFiles
 {
-    /// <summary>
-    /// Every C# file the product is written in, build output left out.
-    /// </summary>
     public static IEnumerable<string> ProductionSources() => Directory
         .EnumerateFiles(Path.Combine(RepositoryLayout.Root, "src"), "*.cs", SearchOption.AllDirectories)
         .Where(IsAuthored);
 
-    /// <summary>Whether a path lies outside the output of both toolchains.</summary>
     public static bool IsAuthored(string path) => !path
         .Split(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar)
         .Any(segment => segment is "obj" or "bin" or "node_modules");
@@ -39,16 +33,8 @@ internal static class RepositoryFiles
         return File.ReadAllText(path);
     }
 
-    /// <summary>A path as written from the root of the checkout.</summary>
     public static string Relative(string path) => Path.GetRelativePath(RepositoryLayout.Root, path);
 
-    /// <summary>
-    /// The files under a directory, without descending into the directories named.
-    /// </summary>
-    /// <param name="directory">Directory to walk</param>
-    /// <param name="pattern">Search pattern of the file names</param>
-    /// <param name="skipped">Directory names not to step into</param>
-    /// <returns>Paths of the files found</returns>
     public static IEnumerable<string> Files(string directory, string pattern, IReadOnlyCollection<string> skipped)
     {
         foreach (var file in Directory.EnumerateFiles(directory, pattern))
@@ -70,10 +56,6 @@ internal static class RepositoryFiles
         }
     }
 
-    /// <summary>
-    /// The files a commit of the checkout would carry, as full paths: the ones git
-    /// tracks and the new ones it would add, and nothing the ignore list names.
-    /// </summary>
     /// <remarks>
     /// Asked of git rather than walked, for the rules that read the whole tree. A
     /// walk reads whatever lies on this disk, and that includes build output, the

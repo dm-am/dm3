@@ -19,7 +19,7 @@ public class FirstShared : ISharedContract;
 
 public class SecondShared : ISharedContract;
 
-/// <summary>Second implementation of a contract the infrastructure assembly introduces.</summary>
+// Second implementation of a contract the infrastructure assembly introduces.
 public class FixtureCursorService : ICursorService
 {
     public bool TryDecode(string cursor, [NotNullWhen(true)] out CursorData? data)

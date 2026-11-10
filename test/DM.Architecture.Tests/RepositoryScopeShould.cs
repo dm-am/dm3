@@ -8,16 +8,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A repository method that asks who is reading has to use the answer.
-/// </summary>
 /// <remarks>
 /// An unused parameter is legal, so a signature promising a scoped read is checked here: a parameter
 /// that names the reader appears in its body. Whether the scope is right is a test over data.
 /// </remarks>
 public class RepositoryScopeShould
 {
-    /// <summary>Parameter names that mean "the person this read is for".</summary>
     private static readonly string[] ReaderParameters = { "userId", "viewerId", "readerId", "currentUserId" };
 
     private static IEnumerable<string> PersistenceSources() => Directory

@@ -11,21 +11,12 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The stand is seeded with markup the grammar accepts.
-/// </summary>
-/// <remarks>
-/// The asset files are whole texts and are parsed on every surface; the inline texts are pieces of
-/// strings and are searched for the spellings the grammar refuses.
-/// </remarks>
+// The asset files are whole texts and are parsed on every surface; the inline texts are pieces of
+// strings and are searched for the spellings the grammar refuses.
 public class SeedMarkupShould
 {
     private static string Seeder => Path.Combine(RepositoryLayout.Root, "src", "DM.Tools.Seeder");
 
-    /// <summary>
-    /// Spellings no rendering accepts: a value straight after the name of a tag
-    /// that takes none, and [cut], which is no tag.
-    /// </summary>
     private static readonly Regex Refused = new(
         @"\[(?:mention|img|link|spoiler|quote|code|noparse|b|i|u|strike|nsfw|ul|ol|li|tab|mod)=|\[/?cut\]|\[private=[^""\\]",
         RegexOptions.Compiled);

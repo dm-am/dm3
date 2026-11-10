@@ -4,17 +4,13 @@
 
 /** The addresses of the site, drawn without a request; the ping is a reactive record the tests drive. */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import type { VueWrapper } from "@vue/test-utils";
 import { nextTick, reactive } from "vue";
 import { SITE_ADDRESSES } from "@/shared/config/site";
 import type { AddressPing } from "@/shared/lib/composables/useAddressPing";
 import SiteAddresses from "./SiteAddresses.vue";
 import Tooltip from "@/shared/ui/Tooltip/Tooltip.vue";
-
-// useRoute reads an injection rather than $route, so a mocked property on the
-// instance never reaches it. The module is what has to answer.
-const currentRoute = { fullPath: "/" };
-vi.mock("vue-router", () => ({ useRoute: () => currentRoute }));
+import { mountPage } from "@/shared/lib/testing/mountPage";
 
 // The factory closes over the record and hands it out at mount time, long
 // after this module's body has run, so the reference below is never premature.
@@ -30,13 +26,16 @@ function onHost(host: string) {
   vi.stubGlobal("location", { ...window.location, host });
 }
 
-function render(fullPath: string) {
-  currentRoute.fullPath = fullPath;
-  return mount(SiteAddresses);
+/** The block on the page being read at the address. */
+async function render(fullPath: string) {
+  const { wrapper } = await mountPage(SiteAddresses, fullPath, {
+    routes: [["page", "/:pathMatch(.*)*"]],
+  });
+  return wrapper;
 }
 
 /** Every link of the block: its host, and the text a reader sees on it. */
-function links(wrapper: ReturnType<typeof render>) {
+function links(wrapper: VueWrapper) {
   return wrapper.findAll("a[href]").map((a) => ({
     host: new URL(a.attributes("href") as string).host,
     text: a.text(),
@@ -55,19 +54,19 @@ afterEach(() => {
 });
 
 describe("the site address block", () => {
-  it("draws every address the site answers on as a link", () => {
+  it("draws every address the site answers on as a link", async () => {
     // Including the one being read: the rows are one list of the same kind of
     // thing, and a single row silently not being a link reads as a defect.
     onHost(main.host);
-    const drawn = links(render("/"));
+    const drawn = links(await render("/"));
 
     expect(drawn.map((l) => l.host)).toEqual(SITE_ADDRESSES.map((a) => a.host));
   });
 
-  it("keeps the mark beside the link, not inside it", () => {
+  it("keeps the mark beside the link, not inside it", async () => {
     // The mark is data, as the digits are: only the name is the click target.
     onHost(main.host);
-    const wrapper = render("/");
+    const wrapper = await render("/");
     const anchors = wrapper.findAll("a[href]");
 
     for (const [i, address] of SITE_ADDRESSES.entries()) {
@@ -84,10 +83,10 @@ describe("the site address block", () => {
     }
   });
 
-  it("carries the page being read across to the other address", () => {
+  it("carries the page being read across to the other address", async () => {
     // A link to the home page would cost the reader his place.
     onHost(main.host);
-    const href = render("/forum/topic/17?page=2#post-9")
+    const href = (await render("/forum/topic/17?page=2#post-9"))
       .findAll("a[href]")
       .map((a) => a.attributes("href"))
       .find((h) => new URL(h as string).host === second.host);
@@ -95,19 +94,19 @@ describe("the site address block", () => {
     expect(href).toBe(`https://${second.host}/forum/topic/17?page=2#post-9`);
   });
 
-  it("draws the same rows on a host that is neither of them", () => {
+  it("draws the same rows on a host that is neither of them", async () => {
     // localhost is every development stand.
     onHost("localhost:5173");
 
-    expect(links(render("/")).map((l) => l.host)).toEqual(
+    expect(links(await render("/")).map((l) => l.host)).toEqual(
       SITE_ADDRESSES.map((a) => a.host),
     );
   });
 
-  it("lays every address out as a table row of name, scale and ms", () => {
+  it("lays every address out as a table row of name, scale and ms", async () => {
     // A CSS table of spans: one row per address, three cells in reading order.
     onHost(main.host);
-    const board = render("/").find("li.site-addresses");
+    const board = (await render("/")).find("li.site-addresses");
     expect(board.exists()).toBe(true);
     expect(board.find("table").exists()).toBe(false);
 
@@ -127,10 +126,10 @@ describe("the site address block", () => {
 });
 
 describe("the state board", () => {
-  it("holds the ms cell with an ellipsis until the first measurement lands", () => {
+  it("holds the ms cell with an ellipsis until the first measurement lands", async () => {
     // The track stands from the first render, so nothing jumps when the number arrives.
     onHost(main.host);
-    const cells = render("/").findAll(".latency");
+    const cells = (await render("/")).findAll(".latency");
 
     expect(cells).toHaveLength(SITE_ADDRESSES.length);
     for (const cell of cells) {
@@ -140,7 +139,7 @@ describe("the state board", () => {
 
   it("shows the measured round trip and fills the scale by it", async () => {
     onHost(main.host);
-    const wrapper = render("/");
+    const wrapper = await render("/");
     pings[main.host] = { status: "up", latencyMs: 42 };
     pings[second.host] = { status: "up", latencyMs: 196 };
     await nextTick();
@@ -164,7 +163,7 @@ describe("the state board", () => {
 
   it("turns the comb red and says нет for an address that does not answer", async () => {
     onHost(main.host);
-    const wrapper = render("/");
+    const wrapper = await render("/");
     pings[main.host] = { status: "up", latencyMs: 42 };
     pings[second.host] = { status: "down", latencyMs: null };
     await nextTick();

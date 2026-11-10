@@ -36,10 +36,8 @@ public class GameIntentionResolverShould
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// A premoderation verdict is a rank and nothing else: the mentor and
-    /// everybody above one in moderation, whatever their relationship to the game.
-    /// </summary>
+    // A premoderation verdict is a rank and nothing else: the mentor and everybody above one in
+    // moderation, whatever their relationship to the game.
     [Theory]
     [InlineData(UserRole.Mentor, true)]
     [InlineData(UserRole.Moderator, true)]
@@ -59,13 +57,8 @@ public class GameIntentionResolverShould
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// Whoever may pass the verdict may open the game it is pending on, holding
-    /// no role in that game whatsoever.
-    /// </summary>
-    /// <remarks>
-    /// The curator arm cannot cover this: a game in AwaitingEdits, where every newbie's game starts, records no curator.
-    /// </remarks>
+    // The curator arm cannot cover this: a game in AwaitingEdits, where every newbie's game starts,
+    // records no curator.
     [Theory]
     [InlineData(PremoderationStatus.AwaitingEdits, UserRole.Mentor, true)]
     [InlineData(PremoderationStatus.AwaitingEdits, UserRole.Moderator, true)]
@@ -107,11 +100,9 @@ public class GameIntentionResolverShould
         resolver.IsAllowed(AuthenticatedUser.Guest, GameIntention.Read, game).Should().BeFalse();
     }
 
-    /// <summary>
-    /// A player of somebody else's game is a stranger to this one: the rank arm
-    /// is a rank and the role arms are about this game, and neither of them is a
-    /// claim about games the reader plays elsewhere.
-    /// </summary>
+    // A player of somebody else's game is a stranger to this one: the rank arm is a rank and the
+    // role arms are about this game, and neither of them is a claim about games the reader plays
+    // elsewhere.
     [Fact]
     public void KeepAPremoderatedGameShutToAPlayerOfAnotherGame()
     {
@@ -126,11 +117,8 @@ public class GameIntentionResolverShould
         resolver.IsAllowed(user, GameIntention.Read, premoderatedGame).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The rank opens games awaiting a verdict and nothing else. A private draft
-    /// is hidden by its author's choice, not by premoderation, and no mentor is
-    /// owed a look at it.
-    /// </summary>
+    // A private draft is hidden by its author's choice, not by premoderation, and no mentor is owed
+    // a look at it.
     [Theory]
     [InlineData(UserRole.Mentor)]
     [InlineData(UserRole.Moderator)]
@@ -291,10 +279,6 @@ public class GameIntentionResolverShould
         resolver.IsAllowed(user, GameIntention.Read, game).Should().BeTrue();
     }
 
-    /// <summary>
-    /// The rank admits a mentor to a premoderated game somebody else curates, and
-    /// to one nobody curates at all.
-    /// </summary>
     [Fact]
     public void AllowReadOfAPremoderatedGameForAMentorWhoDoesNotCurateIt()
     {
@@ -313,12 +297,8 @@ public class GameIntentionResolverShould
         resolver.IsAllowed(user, GameIntention.Read, curatedByNobody).Should().BeTrue();
     }
 
-    /// <summary>
-    /// Who may invite whom, and who may remove a user.
-    /// </summary>
-    /// <remarks>
-    /// Three arms read HasEditAccess and two read Contains(Master): folding them would let assistants appoint assistants.
-    /// </remarks>
+    // Three arms read HasEditAccess and two read Contains(Master): folding them would let
+    // assistants appoint assistants.
     [Theory]
     [InlineData(GameIntention.InvitePlayer, GameRole.Master, true)]
     [InlineData(GameIntention.InvitePlayer, GameRole.Assistant, true)]
@@ -357,12 +337,7 @@ public class GameIntentionResolverShould
         resolver.IsAllowed(user, intention, builder.Please()).Should().Be(expected);
     }
 
-    /// <summary>
-    /// A status change is decided from the status the game is in.
-    /// </summary>
-    /// <remarks>
-    /// Each arm is guarded by the current status, so swapping two guards must turn a case red.
-    /// </remarks>
+    // Each arm is guarded by the current status, so swapping two guards must turn a case red.
     [Theory]
     [InlineData(ModuleStatus.Draft, GameIntention.SetStatusActive, true)]
     [InlineData(ModuleStatus.Active, GameIntention.SetStatusActive, false)]
@@ -396,9 +371,7 @@ public class GameIntentionResolverShould
         resolver.IsAllowed(user, intention, game).Should().BeFalse();
     }
 
-    /// <remarks>
-    /// An arm that stops granting anything and a member added with no rule behind it both land here.
-    /// </remarks>
+    // An arm that stops granting anything and a member added with no rule behind it both land here.
     [Fact]
     public void GrantEveryIntentionTheEnumDeclaresToSomebody()
     {

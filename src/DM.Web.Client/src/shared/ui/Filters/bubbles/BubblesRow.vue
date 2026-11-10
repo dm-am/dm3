@@ -5,16 +5,6 @@
  * Wraps filter bubbles and provides "Сбросить" link.
  */
 
-withDefaults(
-  defineProps<{
-    /** Show clear all link */
-    showClearAll?: boolean;
-  }>(),
-  {
-    showClearAll: true,
-  },
-);
-
 const emit = defineEmits<{
   "clear-all": [];
 }>();
@@ -23,12 +13,7 @@ const emit = defineEmits<{
 <template>
   <div class="bubbles-row">
     <slot />
-    <button
-      v-if="showClearAll"
-      type="button"
-      class="clear-all-link"
-      @click="emit('clear-all')"
-    >
+    <button type="button" class="clear-all-link" @click="emit('clear-all')">
       Сбросить
     </button>
   </div>

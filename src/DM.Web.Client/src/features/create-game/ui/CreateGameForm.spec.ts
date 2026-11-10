@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, flushPromises } from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import CreateGameForm from "./CreateGameForm.vue";
 import {
   gameApi,
@@ -16,12 +16,6 @@ import {
 import { attributeSchemaTemplateApi } from "@/entities/attribute-schema-template";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { BadRequestError, GeneralError } from "@/shared/api/models/common";
-
-// A mock that leaves the guard hook out fails the mount instead of the assertion.
-vi.mock("vue-router", () => ({
-  useRouter: () => ({ push: vi.fn() }),
-  onBeforeRouteLeave: vi.fn(),
-}));
 
 vi.mock("@/shared/ui/BBCodeEditor", async () =>
   (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeEditor(),
@@ -76,8 +70,15 @@ const SPEC: AttributeSpecification = {
   values: [{ value: "Хаотично-добрый", modifier: null }],
 };
 
+// Routed: the unsaved-changes guard of the form runs on leaving it.
 const mountForm = () =>
-  mount(CreateGameForm, { global: { plugins: [createPinia()] } });
+  mountPage(CreateGameForm, "/games/create", {
+    routes: [
+      ["create-game", "/games/create"],
+      ["game", "/game/:id"],
+    ],
+    routed: true,
+  });
 
 const sentSpecs = (createGame: ReturnType<typeof vi.spyOn>) =>
   (createGame.mock.calls.at(-1)?.[0] as { attributeSpecifications?: unknown })
@@ -126,7 +127,7 @@ describe("CreateGameForm", () => {
       error: null,
     } as unknown as Awaited<ReturnType<typeof gameApi.createGame>>);
 
-    const wrapper = mountForm();
+    const { wrapper, router } = await mountForm();
     await flushPromises();
 
     await wrapper.find("#title").setValue("Игра");
@@ -139,6 +140,7 @@ describe("CreateGameForm", () => {
     expect(createGame).toHaveBeenCalledWith(
       expect.objectContaining({ tags: [3, 7] }),
     );
+    expect(router.currentRoute.value.fullPath).toBe("/game/game-1");
   });
 
   it("creates the game with the sheet the default template offers", async () => {
@@ -147,7 +149,7 @@ describe("CreateGameForm", () => {
       error: null,
     } as unknown as Awaited<ReturnType<typeof gameApi.createGame>>);
 
-    const wrapper = mountForm();
+    const { wrapper } = await mountForm();
     await flushPromises();
 
     await wrapper.find("#title").setValue("Игра");
@@ -166,7 +168,14 @@ describe("CreateGameForm", () => {
       error: null,
     } as unknown as Awaited<ReturnType<typeof gameApi.createGame>>);
 
-    const wrapper = mountForm();
+    // The catalogue answers only after the master has started their table.
+    const templates = vi.mocked(attributeSchemaTemplateApi.getTemplates);
+    const answer = await templates();
+    let answerNow = () => {};
+    templates.mockReturnValue(
+      new Promise((resolve) => (answerNow = () => resolve(answer))),
+    );
+    const { wrapper } = await mountForm();
     wrapper
       .findComponent({ name: "AttributeSchemaEditor" })
       .vm.$emit("update:modelValue", {
@@ -175,6 +184,7 @@ describe("CreateGameForm", () => {
           { ...SPEC, id: "spec-of-the-master", title: "Фракция" },
         ],
       });
+    answerNow();
     await flushPromises();
 
     await wrapper.find("#title").setValue("Игра");
@@ -197,7 +207,7 @@ describe("CreateGameForm", () => {
       error: refusal,
     });
 
-    const wrapper = mountForm();
+    const { wrapper } = await mountForm();
     await flushPromises();
 
     await wrapper.find("#title").setValue("Игра");
@@ -222,7 +232,7 @@ describe("CreateGameForm", () => {
       error: refusal,
     });
 
-    const wrapper = mountForm();
+    const { wrapper } = await mountForm();
     await flushPromises();
 
     await wrapper.find("#title").setValue("Игра");
@@ -247,7 +257,7 @@ describe("CreateGameForm", () => {
         error,
       });
 
-      const wrapper = mountForm();
+      const { wrapper } = await mountForm();
       await flushPromises();
 
       await wrapper.find("#title").setValue("Игра");
@@ -298,14 +308,12 @@ describe("CreateGameForm", () => {
 
   // The schema editor is a double: the heading check covers the form's own markup.
   describe("as DM2's form", () => {
-    const sent = async (
-      choose?: (w: ReturnType<typeof mountForm>) => Promise<void>,
-    ) => {
+    const sent = async (choose?: (w: VueWrapper) => Promise<void>) => {
       const createGame = vi.spyOn(gameApi, "createGame").mockResolvedValue({
         data: { resource: { id: "game-1" } },
         error: null,
       } as unknown as Awaited<ReturnType<typeof gameApi.createGame>>);
-      const wrapper = mountForm();
+      const { wrapper } = await mountForm();
       await flushPromises();
       await wrapper.find("#title").setValue("Игра");
       if (choose) await choose(wrapper);
@@ -315,7 +323,7 @@ describe("CreateGameForm", () => {
     };
 
     it("captions its fields in DM2's order, the sheet in its place", async () => {
-      const wrapper = mountForm();
+      const { wrapper } = await mountForm();
       await flushPromises();
 
       expect(
@@ -350,7 +358,7 @@ describe("CreateGameForm", () => {
     });
 
     it("offers the discussion open to everyone or read-only to outsiders, and no third mode", async () => {
-      const wrapper = mountForm();
+      const { wrapper } = await mountForm();
       await flushPromises();
 
       expect(
@@ -364,7 +372,7 @@ describe("CreateGameForm", () => {
     });
 
     it("opens both boxes clear and sends them as they stand", async () => {
-      const wrapper = mountForm();
+      const { wrapper } = await mountForm();
       await flushPromises();
       expect(
         wrapper
@@ -387,7 +395,7 @@ describe("CreateGameForm", () => {
     });
 
     it("says the least length of the description under it", async () => {
-      const wrapper = mountForm();
+      const { wrapper } = await mountForm();
       await flushPromises();
 
       const description = wrapper

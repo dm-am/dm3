@@ -142,10 +142,7 @@ public class RetentionSweepShould : IntegrationTestBase
             .Should().BeTrue("an unpublished event is a delivery still owed, never garbage");
     }
 
-    /// <summary>
-    /// A login that stopped between the two factors is a stream with a term.
-    /// </summary>
-    /// <remarks>The challenge lives five minutes; the day is slack for a row a login failed to delete.</remarks>
+    // The challenge lives five minutes; the day is slack for a row a login failed to delete.
     [Fact]
     public async Task ExpireAbandonedSecondFactorChallenges()
     {

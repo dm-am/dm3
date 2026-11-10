@@ -9,11 +9,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
-/// <summary>
-/// An answer of a ticket is held to the text of a ticket: as long, refused for
-/// the same hiding markup; and it carries one of the statuses moderation answers
-/// with, the text staying empty only for a status that ends the ticket.
-/// </summary>
 public class CreateTicketCommentValidatorShould : UnitTestBase
 {
     private readonly IBbCodeNestingLimit nestingLimit;
@@ -42,10 +37,6 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Long);
     }
 
-    /// <summary>
-    /// An answer that passes the turn to the author, or is the author's own, says
-    /// something.
-    /// </summary>
     [Theory]
     [InlineData(null, "")]
     [InlineData(null, "   ")]
@@ -57,10 +48,6 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Empty);
     }
 
-    /// <summary>
-    /// Closing a ticket or marking it as spam is an answer by itself: the text may
-    /// stay empty, and the status is all the answer changes.
-    /// </summary>
     [Theory]
     [InlineData(TicketStatus.Closed)]
     [InlineData(TicketStatus.Spam)]
@@ -95,10 +82,6 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
         }
     }
 
-    /// <summary>
-    /// The text of a closing answer, when there is one, is held to what every text
-    /// of the conversation is.
-    /// </summary>
     [Fact]
     public void HoldTheTextOfAClosingAnswerToTheRulesOfEveryAnswer()
     {
@@ -111,10 +94,7 @@ public class CreateTicketCommentValidatorShould : UnitTestBase
             .WithErrorMessage(PrivateBlockMarkup.DescribeSurfaceRefusal(hiding.Text));
     }
 
-    /// <summary>
-    /// The conversation renders with the tag set of comments, where a hiding block
-    /// hides nothing.
-    /// </summary>
+    // The conversation renders with the tag set of comments, where a hiding block hides nothing.
     [Fact]
     public void RefuseHidingMarkup()
     {

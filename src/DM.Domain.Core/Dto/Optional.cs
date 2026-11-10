@@ -16,11 +16,6 @@ public class Optional<TType>
     /// </summary>
     public TType? Value { get; }
 
-    /// <summary>
-    /// Create new optional with value
-    /// </summary>
-    /// <param name="value">Value to wrap</param>
-    /// <returns>New optional instance</returns>
     public static Optional<TType> WithValue(TType? value)
     {
         return new Optional<TType>(value);

@@ -178,6 +178,14 @@ jobs:
     - name: Lint
       run: npm run lint:ci
     - run: npm run type-check
+    # The TypeScript of the frame stand, on the client's tools and lint config: the client run
+    # does not reach outside its folder, so these run from the root.
+    - name: Frame stand types
+      working-directory: .
+      run: src/DM.Web.Client/node_modules/.bin/vue-tsc --noEmit -p scripts/visual/tsconfig.json
+    - name: Frame stand lint
+      working-directory: .
+      run: src/DM.Web.Client/node_modules/.bin/eslint --config src/DM.Web.Client/eslint.config.js --max-warnings 0 "scripts/visual/**/*.ts"
     - run: npm run build
     - run: npm run test:coverage
     - name: Upload frontend coverage

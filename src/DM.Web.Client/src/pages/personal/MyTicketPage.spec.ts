@@ -9,11 +9,9 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   enableAutoUnmount,
   flushPromises,
-  mount,
-  RouterLinkStub,
   type VueWrapper,
 } from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import {
   ticketApi,
   type TicketComment,
@@ -23,11 +21,6 @@ import { TicketConversation, TicketThread } from "@/widgets/ticket-thread";
 import MyTicketPage from "./MyTicketPage.vue";
 
 enableAutoUnmount(afterEach);
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: { ticketId: "t-1" }, query: {}, hash: "" }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-}));
 
 // A heavy tiptap component; the page owes the editor the text and the draft key.
 vi.mock("@/shared/ui/BBCodeEditor", async () =>
@@ -80,11 +73,12 @@ const serve = (ticket: TicketDetails) =>
     .mockResolvedValue({ data: { resource: ticket }, error: null } as never);
 
 const render = async () => {
-  const wrapper = mount(MyTicketPage, {
-    global: {
-      plugins: [createPinia()],
-      stubs: { RouterLink: RouterLinkStub, PageTitle: true },
-    },
+  const { wrapper } = await mountPage(MyTicketPage, "/my-tickets/t-1", {
+    routes: [
+      ["my-tickets", "/my-tickets"],
+      ["my-ticket", "/my-tickets/:ticketId"],
+      ["profile", "/users/:username"],
+    ],
   });
   await flushPromises();
   return wrapper;
@@ -176,9 +170,9 @@ describe("the page of one of my tickets", () => {
     const wrapper = await render();
 
     const back = wrapper
-      .findAllComponents(RouterLinkStub)
+      .findAll("a")
       .find((link) => link.text() === "Мои обращения");
-    expect(back?.props("to")).toEqual({ name: "my-tickets" });
+    expect(back?.attributes("href")).toBe("/my-tickets");
   });
 
   it("says what will come while nobody has answered", async () => {

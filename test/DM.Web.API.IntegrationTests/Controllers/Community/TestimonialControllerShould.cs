@@ -6,18 +6,12 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Community;
 
-/// <summary>
-/// Integration tests for Testimonial (website reviews) controller
-/// </summary>
 public class TestimonialControllerShould : IntegrationTestBase
 {
     public TestimonialControllerShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// The name the answer is signed by, read out of the envelope.
-    /// </summary>
     private static async Task<string?> AuthorOf(HttpResponseMessage response)
     {
         using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
@@ -54,9 +48,6 @@ public class TestimonialControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// A testimonial is posted on behalf of the participant the moderator names.
-    /// </summary>
     [Fact]
     public async Task PostTestimonialSignsItWithTheNamedParticipant()
     {
@@ -128,10 +119,8 @@ public class TestimonialControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// The right the inline edit on /about/testimonials is drawn from:
-    /// WebsiteTestimonialIntention.Edit admits the named author.
-    /// </summary>
+    // The right the inline edit on /about/testimonials is drawn from:
+    // WebsiteTestimonialIntention.Edit admits the named author.
     [Fact]
     public async Task PatchTestimonialLetsTheNamedAuthorRewriteTheirOwn()
     {
@@ -187,10 +176,8 @@ public class TestimonialControllerShould : IntegrationTestBase
         (await Client.SendAsync(restore)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// A testimonial is signed. Below senior moderation there is nothing here
-    /// but being the named author, and this caller is neither.
-    /// </summary>
+    // Below senior moderation there is nothing here but being the named author, and this caller is
+    // neither.
     [Fact]
     public async Task PatchTestimonialRefusesAStranger()
     {

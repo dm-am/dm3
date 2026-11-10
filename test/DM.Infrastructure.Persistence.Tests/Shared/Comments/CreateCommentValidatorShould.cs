@@ -21,10 +21,8 @@ public class CreateCommentValidatorShould : UnitTestBase
         validator = new CreateCommentValidator(nestingLimit);
     }
 
-    /// <summary>
-    /// Text the renderer will refuse is refused here, or it is stored and shows
-    /// as nothing to everyone but its author.
-    /// </summary>
+    // Text the renderer will refuse is refused here, or it is stored and shows as nothing to
+    // everyone but its author.
     [Fact]
     public void RefuseTextTheRendererWillNotRender()
     {
@@ -37,10 +35,8 @@ public class CreateCommentValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// Hiding markup on a surface that does not declare it.
-    /// </summary>
-    /// <remarks>The Comment surface has no [private]; refused rather than erased, so the author rewrites the draft.</remarks>
+    // The Comment surface has no [private]; refused rather than erased, so the author rewrites the
+    // draft.
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {
@@ -55,10 +51,8 @@ public class CreateCommentValidatorShould : UnitTestBase
         result.ShouldHaveValidationErrorFor(c => c.Text);
     }
 
-    /// <summary>
-    /// A body past the length limit is refused, and refused by length rather
-    /// than by some other rule tripping over it.
-    /// </summary>
+    // A body past the length limit is refused, and refused by length rather than by some other rule
+    // tripping over it.
     [Fact]
     public void RefuseTextLongerThanTheLimit()
     {

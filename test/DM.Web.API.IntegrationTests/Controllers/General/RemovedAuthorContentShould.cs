@@ -17,20 +17,13 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// What a removed account wrote stays where it was written, signed by nobody.
-/// </summary>
-/// <remarks>
-/// A required navigation to a soft-deleted account is an inner join. Each surface gets a world of its own written
-/// to the tables; a null author is the whole answer, the client renders it as "Аккаунт удален".
-/// </remarks>
+// A required navigation to a soft-deleted account is an inner join.
 public class RemovedAuthorContentShould : IntegrationTestBase
 {
     public RemovedAuthorContentShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>Everything the removed account left behind, by identifier.</summary>
     private sealed record World(
         string Marker,
         Guid UserId,
@@ -47,10 +40,6 @@ public class RemovedAuthorContentShould : IntegrationTestBase
         Guid GuestPostId,
         Guid CharacterId);
 
-    /// <summary>
-    /// One read: the address, the row the removed account is behind, and the member
-    /// that names him.
-    /// </summary>
     private sealed record Surface(string Url, Guid RowId, string Member, bool Single = false);
 
     public static TheoryData<string> Surfaces =>
@@ -128,11 +117,6 @@ public class RemovedAuthorContentShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A removed account with a topic and a comment on its own board, a game it
-    /// masters with a rated post in an open room, and a character with a post in a
-    /// game somebody else masters.
-    /// </summary>
     private async Task<World> SeedRemovedAuthorAsync()
     {
         // The marker names the titles the lists are searched by; the login is a

@@ -12,13 +12,8 @@ using DM.Domain.Moderation.Features.Bans;
 
 namespace DM.Web.API.Tests.Features.Moderation;
 
-/// <summary>
-/// A lifted ban stays in the moderation history and stays out of the public one.
-/// </summary>
-/// <remarks>
-/// The profile counts off History.Count and PublicBan carries no lift, while the achievement does not count
-/// a lifted ban; the moderation view keeps it, asserted here as well.
-/// </remarks>
+// The profile counts off History.Count and PublicBan carries no lift, while the achievement does
+// not count a lifted ban; the moderation view keeps it, asserted here as well.
 public class PublicBanHistoryShould
 {
     private static readonly DateTimeOffset Moment = new(2100, 1, 1, 0, 0, 0, TimeSpan.Zero);

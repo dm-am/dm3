@@ -16,15 +16,12 @@ const props = withDefaults(
     maxWidth?: number;
     /** The small tooltip over a word of a tooltip: framed to stand apart. */
     nested?: boolean;
-    /** In the flow of the page and not over it, always open. */
-    inline?: boolean;
   }>(),
   {
     text: undefined,
     placement: "top",
     maxWidth: 340,
     nested: false,
-    inline: false,
   },
 );
 
@@ -48,17 +45,11 @@ onMounted(reposition);
 // The words change while the bubble is up (a like arriving under an open list).
 watch(() => props.text, reposition);
 
-const bubbleStyle = computed(() =>
-  props.inline
-    ? // No wider than what it stands in either: on a phone the preview of a
-      // window is narrower than a tooltip may be.
-      { maxWidth: `min(${props.maxWidth}px, 100%)` }
-    : {
-        top: `${position.value.top}px`,
-        left: `${position.value.left}px`,
-        maxWidth: `${props.maxWidth}px`,
-      },
-);
+const bubbleStyle = computed(() => ({
+  top: `${position.value.top}px`,
+  left: `${position.value.left}px`,
+  maxWidth: `${props.maxWidth}px`,
+}));
 
 // Arrow offset style - adjusts arrow position when tooltip is clamped to viewport
 const arrowStyle = computed(() => {
@@ -84,10 +75,7 @@ defineExpose({
     ref="bubbleRef"
     role="tooltip"
     class="tooltip"
-    :class="[
-      `tooltip--${inline ? 'top' : position.placement}`,
-      { 'tooltip--nested': nested, 'tooltip--inline': inline },
-    ]"
+    :class="[`tooltip--${position.placement}`, { 'tooltip--nested': nested }]"
     :style="bubbleStyle"
   >
     <span ref="contentRef" class="tooltip-text">
@@ -135,14 +123,6 @@ $arrow-offset: -($arrow-depth + $tooltip-border-width)
 
   .tooltip-arrow::before
     border-color: $border
-
-// In the flow, its arrow pointing down at the start of what stands under it.
-.tooltip--inline
-  position: relative
-  z-index: auto
-
-  &.tooltip--top .tooltip-arrow
-    left: $medium + $small
 
 // Inline, so getClientRects() returns one rect per line.
 .tooltip-text

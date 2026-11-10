@@ -14,8 +14,8 @@ interface CreateWarningPayload {
   entityType?: string;
 }
 
-// "Демократический" keeps read access, "Полный" blocks everything.
-export type BanAccessPolicy = "DemocraticBan" | "FullBan";
+// The entity owns the union, its barrel exports it only as a field of Ban.
+export type BanAccessPolicy = Ban["accessPolicy"];
 
 // A non-voluntary ban must carry a term, so "Бессрочный" travels as 100 years (BanService's convention).
 interface CreateBanPayload {

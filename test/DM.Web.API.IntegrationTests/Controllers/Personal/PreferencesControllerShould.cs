@@ -35,10 +35,8 @@ public class PreferencesControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// A change of preferences leaves the contacts of the profile as they are.
-    /// </summary>
-    /// <remarks>Preferences and the profile share one update of the user, which must not read absent contacts as none.</remarks>
+    // Preferences and the profile share one update of the user, which must not read absent contacts
+    // as none.
     [Fact]
     public async Task KeepTheContactsOfTheProfileWhenPreferencesChange()
     {
@@ -56,11 +54,6 @@ public class PreferencesControllerShould : IntegrationTestBase
             .Which.ContactValue.Should().Be("@reader");
     }
 
-    /// <summary>
-    /// The participation in the rating is a visibility setting of the profile:
-    /// saved by the profile, onto the account, and read back by it. The
-    /// preferences neither carry it nor touch it.
-    /// </summary>
     [Fact]
     public async Task SaveTheParticipationInTheRatingByTheProfile()
     {
@@ -94,9 +87,6 @@ public class PreferencesControllerShould : IntegrationTestBase
             "a change of preferences leaves the participation in the rating as it is");
     }
 
-    /// <summary>
-    /// A page size the account form does not offer is refused under the field.
-    /// </summary>
     [Fact]
     public async Task RefuseAPageSizeTheFormDoesNotOffer()
     {

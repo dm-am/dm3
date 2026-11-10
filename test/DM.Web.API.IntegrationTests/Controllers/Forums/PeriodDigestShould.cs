@@ -8,17 +8,12 @@ using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
-/// <summary>
-/// Two instances generating the digest of one period leave one topic between
-/// them, and the board counts what it holds.
-/// </summary>
 /// <remarks>
 /// The period is claimed before anything is written, so the loser writes nothing. The digest runs on a schedule
 /// in every instance, and only a live database says which writer won a unique index.
 /// </remarks>
 public class PeriodDigestShould : IntegrationTestBase
 {
-    /// <summary>The board the digests are posted to, seeded by the migration.</summary>
     private static readonly Guid NewsBoardId = Guid.Parse("00000000-0000-0000-0000-00000000000b");
 
     public PeriodDigestShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -112,10 +107,8 @@ public class PeriodDigestShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A period whose topic did get written stays claimed, whatever the caller asks.
-    /// </summary>
-    /// <remarks>Creation commits and then reads back outside the retry, so the condition lives in the delete statement.</remarks>
+    // Creation commits and then reads back outside the retry, so the condition lives in the delete
+    // statement.
     [Fact]
     public async Task KeepThePeriodClaimedWhenItsTopicWasWrittenAfterAll()
     {
@@ -173,10 +166,7 @@ public class PeriodDigestShould : IntegrationTestBase
         return created.ToArray();
     }
 
-    /// <summary>
-    /// The markers of these periods and the topics they name, out of the way.
-    /// </summary>
-    /// <remarks>The board's last-topic reference is released before the rows it points at.</remarks>
+    // The board's last-topic reference is released before the rows it points at.
     private async Task DropDigests((int Year, int? Month)[] periods)
     {
         await using var db = DatabaseFixture.CreateDbContext();

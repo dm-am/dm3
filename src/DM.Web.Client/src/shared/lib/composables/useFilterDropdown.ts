@@ -1,8 +1,12 @@
 import { ref } from "vue";
 
-/** Where a hierarchical filter dropdown stands: filter, group, games' sub-options. */
-export interface FilterNavPath {
-  filter: string;
+/**
+ * Where a hierarchical filter dropdown stands: filter, group, games' sub-options.
+ * F is the filter key union of one filter bar; string in the shared menu, which
+ * serves every bar.
+ */
+export interface FilterNavPath<F extends string = string> {
+  filter: F;
   group?: string;
   /** Status sub-option (e.g., Active, Closed) - for games filter */
   status?: string;
@@ -10,9 +14,9 @@ export interface FilterNavPath {
   recruitment?: boolean;
 }
 
-export function useFilterDropdown() {
+export function useFilterDropdown<F extends string>() {
   const showDropdown = ref(false);
-  const navPath = ref<FilterNavPath | null>(null);
+  const navPath = ref<FilterNavPath<F> | null>(null);
 
   function closeDropdown() {
     showDropdown.value = false;

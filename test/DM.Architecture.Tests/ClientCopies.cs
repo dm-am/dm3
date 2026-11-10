@@ -12,10 +12,6 @@ using FluentValidation.Validators;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Reading the two sides of a rule the client keeps a copy of: the copy out of the client's
-/// source, the original out of the server's types.
-/// </summary>
 /// <remarks>
 /// The browser cannot ask the server for a bound, so the client spells it once and a gate holds
 /// the spelling to the server. A member the server keeps private or internal is read by name:
@@ -23,7 +19,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 internal static class ClientCopies
 {
-    /// <summary>The source of a client file, by its path under src/DM.Web.Client/src.</summary>
     public static string Source(string file) =>
         File.ReadAllText(Path.Combine(
             [RepositoryLayout.Root, "src", "DM.Web.Client", "src", .. file.Split('/')]));
@@ -44,7 +39,6 @@ internal static class ClientCopies
             .Aggregate(1L, (product, factor) => product * factor);
     }
 
-    /// <summary>The number a text of the client says, captured by the group "n" of the pattern.</summary>
     public static int Stated(string file, string pattern)
     {
         var match = Regex.Match(Source(file), pattern);
@@ -56,7 +50,6 @@ internal static class ClientCopies
         return int.Parse(match.Groups["n"].Value, CultureInfo.InvariantCulture);
     }
 
-    /// <summary>A number the API host's appsettings.json sets, by its section and key.</summary>
     public static int Setting(string section, string key)
     {
         using var settings = JsonDocument.Parse(File.ReadAllText(
@@ -84,7 +77,6 @@ internal static class ClientCopies
     private static object? Instance(Type owner, bool isStatic) =>
         isStatic ? null : Activator.CreateInstance(owner, nonPublic: true);
 
-    /// <summary>The longest value a request contract lets through.</summary>
     public static int Maximum(Type contract, string property)
     {
         var member = Property(contract, property);
@@ -93,7 +85,6 @@ internal static class ClientCopies
                ?? throw new InvalidOperationException($"{contract.Name}.{property} states no maximum");
     }
 
-    /// <summary>The shortest value a request contract lets through.</summary>
     public static int Minimum(Type contract, string property)
     {
         var member = Property(contract, property);
@@ -102,7 +93,6 @@ internal static class ClientCopies
                ?? throw new InvalidOperationException($"{contract.Name}.{property} states no minimum");
     }
 
-    /// <summary>The maximum length a domain validator refuses a member past.</summary>
     public static int ValidatorMaximum(Assembly assembly, string validatorType, string member)
     {
         var validator = (IValidator)Activator.CreateInstance(

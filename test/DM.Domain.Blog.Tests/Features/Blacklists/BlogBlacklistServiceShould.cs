@@ -71,9 +71,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
         return blog;
     }
 
-    /// <summary>
-    /// A subscriber keeps the subscription: the service holds no subscription store to end it with.
-    /// </summary>
+    // A subscriber keeps the subscription: the service holds no subscription store to end it with.
     [Fact]
     public async Task AddTheUserToTheBlacklist()
     {
@@ -100,12 +98,7 @@ public class BlogBlacklistServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Conflict && e.Message == RefusalMessage.AlreadyInBlacklist);
     }
 
-    /// <summary>
-    /// The request that lost the race is answered the way the check answers it.
-    /// </summary>
-    /// <remarks>
-    /// Two requests for one name both pass the read, and the unique index refuses the second insert.
-    /// </remarks>
+    // Two requests for one name both pass the read, and the unique index refuses the second insert.
     [Fact]
     public async Task AnswerConflictWhenTheInsertLosesTheRace()
     {

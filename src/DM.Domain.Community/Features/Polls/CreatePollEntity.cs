@@ -13,9 +13,6 @@ public class CreatePollEntity
     /// </summary>
     public Guid Id { get; set; }
 
-    /// <summary>
-    /// Poll start moment (UTC)
-    /// </summary>
     public DateTime StartsUtc { get; set; }
 
     /// <summary>
@@ -38,9 +35,6 @@ public class CreatePollEntity
     /// </summary>
     public bool IsAnonymous { get; set; } = true;
 
-    /// <summary>
-    /// Poll options
-    /// </summary>
     public IEnumerable<CreatePollOptionEntity> Options { get; set; } = [];
 }
 

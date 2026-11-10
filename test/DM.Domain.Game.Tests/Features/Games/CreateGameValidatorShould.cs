@@ -77,13 +77,7 @@ public class CreateGameValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Long);
     }
 
-    /// <summary>
-    /// The bound itself, from the inside: a field filled to the limit the contract
-    /// publishes is accepted here.
-    /// </summary>
-    /// <remarks>
-    /// Checking only one over the limit cannot see a validator stricter than the contract.
-    /// </remarks>
+    // Checking only one over the limit cannot see a validator stricter than the contract.
     [Fact]
     public async Task AcceptFieldsFilledToTheLimitTheContractPublishes()
     {
@@ -187,10 +181,8 @@ public class CreateGameValidatorShould : UnitTestBase
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// The sheet is created with the game, so a set the sheet cannot hold
-    /// refuses the whole request - and there is no game left over to repair.
-    /// </summary>
+    // The sheet is created with the game, so a set the sheet cannot hold refuses the whole request
+    // - and there is no game left over to repair.
     [Fact]
     public async Task FailWhenASpecificationCarriesNoTitle()
     {
@@ -202,10 +194,8 @@ public class CreateGameValidatorShould : UnitTestBase
             .WithErrorMessage("Введите название атрибута");
     }
 
-    /// <summary>
-    /// A schema-level rule, checked over the whole submitted set rather than
-    /// over one specification at a time.
-    /// </summary>
+    // A schema-level rule, checked over the whole submitted set rather than over one specification
+    // at a time.
     [Fact]
     public async Task FailWhenTwoSpecificationsClaimToBeTheDescriptor()
     {
@@ -225,10 +215,8 @@ public class CreateGameValidatorShould : UnitTestBase
         result.ShouldHaveValidationErrorFor(g => g.AttributeSpecifications);
     }
 
-    /// <summary>
-    /// An empty sheet is a master's choice, not a refusal: characters of that
-    /// game simply carry no attributes.
-    /// </summary>
+    // An empty sheet is a master's choice, not a refusal: characters of that game simply carry no
+    // attributes.
     [Fact]
     public async Task PassWhenNoSpecificationsAreSubmitted()
     {

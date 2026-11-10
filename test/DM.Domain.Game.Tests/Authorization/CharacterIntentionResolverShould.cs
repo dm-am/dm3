@@ -8,10 +8,7 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Authorization;
 
-/// <summary>
-/// Gates private game content: who may edit, accept, kill or exile a character.
-/// Most of the guards are the point: an arm that loses its guard silently widens access.
-/// </summary>
+// Most of the guards are the point: an arm that loses its guard silently widens access.
 public class CharacterIntentionResolverShould
 {
     private readonly CharacterIntentionResolver resolver = new();
@@ -204,10 +201,8 @@ public class CharacterIntentionResolverShould
             Character(CharacterStatus.Retired, isPlayerExiled: true)).Should().BeFalse();
     }
 
-    /// <summary>
-    /// Exile is the lead's move, so the lead may take it back: the master and his
-    /// assistants, the same hands that exile. Nobody else, the player included.
-    /// </summary>
+    // Exile is the lead's move, so the lead may take it back: the master and his assistants, the
+    // same hands that exile.
     [Fact]
     public void LetTheLeadBringBackTheCharacterHeExiled()
     {
@@ -224,10 +219,6 @@ public class CharacterIntentionResolverShould
             CharacterIntention.Readmit, exiled).Should().BeFalse("the moderation does not run the roster");
     }
 
-    /// <summary>
-    /// Readmit undoes an exile and nothing else: not a death, and not a character
-    /// that is still in play.
-    /// </summary>
     [Theory]
     [InlineData(CharacterStatus.Retired, true, false)]
     [InlineData(CharacterStatus.Retired, false, false)]
@@ -240,12 +231,8 @@ public class CharacterIntentionResolverShould
             Character(status, isDead: isDead, isPlayerExiled: isPlayerExiled)).Should().BeFalse();
     }
 
-    /// <summary>
-    /// A character its player took out of the game comes back by nobody's move:
-    /// not the player's, not the lead's, not the moderation's. Every intention
-    /// that puts a character back into play is asked; the transitions that would
-    /// reach them from Retired are held by CharacterStatusTransitionsShould.
-    /// </summary>
+    // Every intention that puts a character back into play is asked; the transitions that would
+    // reach them from Retired are held by CharacterStatusTransitionsShould.
     [Theory]
     [InlineData(false, false)]
     [InlineData(true, false)]

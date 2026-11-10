@@ -11,15 +11,9 @@ namespace DM.Infrastructure.Persistence.Entities.Blog;
 [Table("BlogBlacklists")]
 public class BlogBlacklist
 {
-    /// <summary>
-    /// Entry identifier
-    /// </summary>
     [Key]
     public Guid EntryId { get; set; }
 
-    /// <summary>
-    /// Blog identifier
-    /// </summary>
     public Guid BlogId { get; set; }
 
     /// <summary>
@@ -45,9 +39,6 @@ public class BlogBlacklist
     [ForeignKey(nameof(BlockedUserId))]
     public virtual User BlockedUser { get; set; } = null!;
 
-    /// <summary>
-    /// User who blocked
-    /// </summary>
     [ForeignKey(nameof(BlockedByUserId))]
     public virtual User BlockedBy { get; set; } = null!;
 

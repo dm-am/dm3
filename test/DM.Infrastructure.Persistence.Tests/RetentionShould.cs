@@ -9,18 +9,11 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests;
 
-/// <summary>
-/// Every table says how long it keeps what it is given.
-/// </summary>
-/// <remarks>
-/// A stream that gains a row per action and loses none grows without bound, so every table either declares
-/// a term in the retention registry or is named here as bounded state.
-/// </remarks>
+// A stream that gains a row per action and loses none grows without bound, so every table either
+// declares a term in the retention registry or is named here as bounded state.
 public class RetentionShould
 {
-    /// <summary>
-    /// State rather than stream: each row is bounded by the entity it belongs to and goes with it.
-    /// </summary>
+    // State rather than stream: each row is bounded by the entity it belongs to and goes with it.
     private static readonly string[] Bounded =
     [
         "AchievementCategories", "AchievementTypes", "AwardTypes",
@@ -109,9 +102,7 @@ public class RetentionShould
                 "a table cannot be both a stream with a term and bounded state; one of the " +
                 "two declarations is a leftover");
 
-    /// <summary>
-    /// The terms were approved as they stand; a silent edit is a retention decision nobody made.
-    /// </summary>
+    // The terms were approved as they stand; a silent edit is a retention decision nobody made.
     [Fact]
     public void KeepTheTermsThePoliciesWereApprovedWith()
     {

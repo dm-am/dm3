@@ -151,10 +151,6 @@ internal partial class PostRepository : IPostRepository
         return ordered.ThenByDirection(x => x.Post.PostId, ascending);
     }
 
-    /// <summary>
-    /// Whether the query asks for the room itself: every post, in the order it was
-    /// written.
-    /// </summary>
     private static bool IsTheRoomAsWritten(RoomPostsQuery query) =>
         string.IsNullOrWhiteSpace(query.Search) &&
         (query.AuthorUsernames == null || query.AuthorUsernames.All(string.IsNullOrWhiteSpace)) &&
@@ -210,7 +206,6 @@ internal partial class PostRepository : IPostRepository
         }
     }
 
-    /// <summary>One row of <see cref="EnrichWithNumbers"/>.</summary>
     private sealed class PostNumberRow
     {
         public Guid PostId { get; init; }
@@ -243,11 +238,6 @@ internal partial class PostRepository : IPostRepository
         return post;
     }
 
-    /// <summary>
-    /// Batch-loads the files attached to all posts on the page and fills
-    /// <see cref="Post.Attachments"/>, from one read of the attachment rows
-    /// (<see cref="AttachmentRows.OfPostsAsync"/>).
-    /// </summary>
     private async Task EnrichWithAttachments(IReadOnlyCollection<Post> posts, CancellationToken ct = default)
     {
         var byPost = await AttachmentRows.OfPostsAsync(_dbContext, posts.Select(p => p.Id).Distinct().ToList(), ct);

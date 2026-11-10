@@ -14,10 +14,6 @@ using NSubstitute;
 
 namespace DM.Domain.Moderation.Tests.Dsl;
 
-/// <summary>
-/// The ban service over substitutes of everything it asks: a validator that
-/// passes, a signed-in senior moderator and a clock that stands still.
-/// </summary>
 public abstract class BanServiceTestBase : UnitTestBase
 {
     protected readonly IBanRepository banRepository;
@@ -66,10 +62,6 @@ public abstract class BanServiceTestBase : UnitTestBase
         identityProvider.Current.Returns(Identities.User(moderatorUserId, "Moderator", role));
     }
 
-    /// <summary>
-    /// A ban of the kind a case of the table names, for the reader of
-    /// <see cref="SetCurrentUser" />.
-    /// </summary>
     protected Ban BanOfKind(string kind) => kind switch
     {
         "running" => new Ban

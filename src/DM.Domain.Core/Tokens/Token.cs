@@ -22,9 +22,6 @@ public class Token
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// Token type
-    /// </summary>
     public TokenType Type { get; set; }
 
     /// <summary>

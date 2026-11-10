@@ -7,13 +7,8 @@
 // nothing. His answer is appended without reading the ticket again, and no
 // draft is kept under the token.
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import {
-  enableAutoUnmount,
-  flushPromises,
-  mount,
-  RouterLinkStub,
-} from "@vue/test-utils";
-import { createPinia } from "pinia";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import {
   ticketApi,
   type TicketComment,
@@ -23,23 +18,6 @@ import { TicketConversation, TicketThread } from "@/widgets/ticket-thread";
 import TicketTrackPage from "./TicketTrackPage.vue";
 
 enableAutoUnmount(afterEach);
-
-const { route } = vi.hoisted(() => ({
-  route: {
-    params: {},
-    query: {},
-    hash: "",
-  },
-}));
-vi.mock("vue-router", () => ({
-  useRoute: () => route,
-  useRouter: () => ({
-    push: vi.fn(),
-    resolve: (to: { hash: string }) => ({
-      href: `/support/track${to.hash}`,
-    }),
-  }),
-}));
 
 const TOKEN = "k7Qm2xV9pLr4Tz8N";
 const NOT_FOUND = "Обращение по этой ссылке не найдено";
@@ -82,13 +60,22 @@ const tracked: TrackedTicket = {
   canComment: true,
 };
 
-const render = () =>
-  mount(TicketTrackPage, {
-    global: {
-      plugins: [createPinia()],
-      stubs: { RouterLink: RouterLinkStub, PageTitle: true },
-    },
-  });
+/** The page, and every address it and the conversation link to. */
+const routes: Address[] = [
+  ["support-track", "/support/track"],
+  ["profile", "/users/:username"],
+];
+
+/** The address of the letter the guest follows; the token rides in the fragment. */
+let hash = "";
+
+const render = async () =>
+  (
+    await mountPage(TicketTrackPage, `/support/track${hash}`, {
+      routes,
+      stubs: { PageTitle: true },
+    })
+  ).wrapper;
 
 const serve = (ticket: TrackedTicket = tracked) =>
   vi
@@ -96,12 +83,12 @@ const serve = (ticket: TrackedTicket = tracked) =>
     .mockResolvedValue({ data: { resource: ticket }, error: null } as never);
 
 /** The caption of the block, its spaces as a reader reads them. */
-const caption = (wrapper: ReturnType<typeof render>) =>
+const caption = (wrapper: Awaited<ReturnType<typeof render>>) =>
   wrapper.get(".record-block__caption").text().replace(/\s+/g, " ");
 
 describe("the page of a guest's ticket", () => {
   beforeEach(() => {
-    route.hash = `#token=${TOKEN}`;
+    hash = `#token=${TOKEN}`;
   });
 
   afterEach(() => {
@@ -113,7 +100,7 @@ describe("the page of a guest's ticket", () => {
     const track = vi
       .spyOn(ticketApi, "trackTicket")
       .mockResolvedValue({ data: { resource: tracked }, error: null } as never);
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(track).toHaveBeenCalledWith(TOKEN);
@@ -125,11 +112,8 @@ describe("the page of a guest's ticket", () => {
     expect(lead.text().replace(/\s+/g, " ")).toBe(
       `Ответ появится на этой странице: ${window.location.origin}/support/track#token=${TOKEN}. Сохраните ссылку, чтобы вернуться к обращению.`,
     );
-    const link = lead.getComponent(RouterLinkStub);
-    expect(link.props("to")).toEqual({
-      name: "support-track",
-      hash: `#token=${TOKEN}`,
-    });
+    const link = lead.get("a");
+    expect(link.attributes("href")).toBe(`/support/track#token=${TOKEN}`);
     expect(link.text()).toBe(
       `${window.location.origin}/support/track#token=${TOKEN}`,
     );
@@ -137,7 +121,7 @@ describe("the page of a guest's ticket", () => {
 
   it("signs the guest Гость in the caption and on his answers", async () => {
     serve({ ...tracked, comments: [asked, guestReply] });
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(caption(wrapper)).toContain("Автор: Гость,");
@@ -155,7 +139,7 @@ describe("the page of a guest's ticket", () => {
         error: null,
       } as never);
     const asMember = vi.spyOn(ticketApi, "createComment");
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     await wrapper.get(".editor-stub").setValue(guestReply.text);
@@ -179,7 +163,7 @@ describe("the page of a guest's ticket", () => {
 
   it("keeps no draft under the token", async () => {
     serve();
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     const key = wrapper.getComponent(TicketConversation).props("draftKey");
@@ -195,7 +179,7 @@ describe("the page of a guest's ticket", () => {
       resolvedUtc: "2026-10-06T10:00:00Z",
       resolvedByUsername: "SolohinLex",
     });
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(wrapper.find(".ticket-answer-form").exists()).toBe(false);
@@ -209,7 +193,7 @@ describe("the page of a guest's ticket", () => {
       data: null,
       error: { status: 404 },
     } as never);
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(wrapper.text()).toContain(NOT_FOUND);
@@ -221,13 +205,13 @@ describe("the page of a guest's ticket", () => {
 
   it("opens no ticket by its number in place of the token", async () => {
     const number = "6de5652f-1749-a4b8-1a72-e2e16f69dd89";
-    route.hash = `#token=${number}`;
+    hash = `#token=${number}`;
     const track = vi.spyOn(ticketApi, "trackTicket").mockResolvedValue({
       data: null,
       error: { status: 404 },
     } as never);
     const byNumber = vi.spyOn(ticketApi, "getTicket");
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(track).toHaveBeenCalledWith(number);
@@ -240,7 +224,7 @@ describe("the page of a guest's ticket", () => {
       data: null,
       error: { status: 500 },
     } as never);
-    const wrapper = render();
+    const wrapper = await render();
     await flushPromises();
 
     expect(wrapper.get(".error-state").text()).toContain(

@@ -1,20 +1,15 @@
 <script setup lang="ts">
-import { ref, watch } from "vue";
+import { computed } from "vue";
 import { UserAutocomplete } from "@/entities/user";
 import SecondaryText from "@/shared/ui/Layout/SecondaryText.vue";
 
 const model = defineModel<string | null>();
 
-const selectedUsername = ref(model.value || "");
-
-watch(selectedUsername, (newValue) => {
-  model.value = newValue || null;
-});
-
-watch(model, (newValue) => {
-  if (newValue !== selectedUsername.value) {
-    selectedUsername.value = newValue || "";
-  }
+const selectedUsername = computed({
+  get: () => model.value || "",
+  set: (value: string) => {
+    model.value = value || null;
+  },
 });
 </script>
 

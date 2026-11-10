@@ -21,8 +21,6 @@ public static class AccountConfigurationExtensions
     /// Binds the account options and refuses to start without a usable
     /// encryption key.
     /// </summary>
-    /// <param name="services">Service collection.</param>
-    /// <param name="configuration">Configuration to read the sections from.</param>
     public static IServiceCollection AddDmAccountConfiguration(
         this IServiceCollection services, IConfiguration configuration)
     {

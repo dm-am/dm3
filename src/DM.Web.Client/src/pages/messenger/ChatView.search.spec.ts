@@ -11,11 +11,13 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { ChatSearchRow } from "@/widgets/chat-feed";
 import { fromSiteInput } from "@/shared/lib/utils/datetime";
-import { api, nav, search } from "./ChatView.doubles";
+import { api, search } from "./ChatView.doubles";
 import {
+  address,
   closeChat,
   heldAnswer,
   messagePage,
+  moveTo,
   openChat,
   resetChatView,
   shownIds,
@@ -31,9 +33,6 @@ vi.mock("@/shared/ui/BBCodeEditor", async () =>
   (await import("@/shared/lib/testing/bbcodeEditorStub")).bbcodeComposer(
     (await import("./ChatView.doubles")).clearSpy,
   ),
-);
-vi.mock("vue-router", async () =>
-  (await import("./ChatView.doubles")).vueRouter(),
 );
 vi.mock("@/features/message-search/api/messageSearchApi", async () =>
   (await import("./ChatView.doubles")).messageSearchApi(),
@@ -235,11 +234,7 @@ describe("ChatView, the search and the calendar", () => {
     row(wrapper).vm.$emit("date-picked", "2026-09-10");
     await flushPromises();
 
-    expect(nav.push).toHaveBeenCalledWith({
-      name: "chat",
-      params: { id: "c1" },
-      query: { date: "2026-09-10" },
-    });
+    expect(address().fullPath).toBe("/messenger/c/c1?date=2026-09-10");
     expect(api.getMessages).toHaveBeenLastCalledWith(
       "c1",
       expect.objectContaining({
@@ -252,11 +247,12 @@ describe("ChatView, the search and the calendar", () => {
   });
 
   it("opens on the day the address names", async () => {
-    nav.route.query = { date: "2026-09-10" };
     api.getMessages.mockResolvedValue(
       datedPage([dated("b", "2026-09-10")], { hasPrev: true }),
     );
-    const wrapper = await openChat();
+    const wrapper = await openChat({
+      address: "/messenger/c/c1?date=2026-09-10",
+    });
     await openRow(wrapper);
 
     expect(api.getMessages).toHaveBeenCalledTimes(1);
@@ -265,26 +261,26 @@ describe("ChatView, the search and the calendar", () => {
   });
 
   it("stands near a day with no message of its own, the day kept, as the global chat does", async () => {
-    nav.route.query = { date: "2026-09-10" };
     api.getMessages.mockResolvedValueOnce(
       datedPage([dated("before", "2026-09-05"), dated("later", "2026-09-20")]),
     );
-    const wrapper = await openChat();
+    const wrapper = await openChat({
+      address: "/messenger/c/c1?date=2026-09-10",
+    });
     await openRow(wrapper);
 
     expect(notice(wrapper).exists()).toBe(false);
     expect(shownIds()).toEqual(["before", "later"]);
-    expect(nav.replace).not.toHaveBeenCalled();
+    expect(address().fullPath).toBe("/messenger/c/c1?date=2026-09-10");
     expect(row(wrapper).props("selectedDate")).toBe("2026-09-10");
     expect(api.getMessages).toHaveBeenCalledTimes(1);
   });
 
   it("says a linked message is gone over the latest messages", async () => {
-    nav.route.query = { msg: "gone" };
     api.getMessages
       .mockResolvedValueOnce(messagePage([]))
       .mockResolvedValueOnce(messagePage(["m1", "m2"]));
-    const wrapper = await openChat();
+    const wrapper = await openChat({ address: "/messenger/c/c1?msg=gone" });
 
     expect(notice(wrapper).text()).toBe(
       "Сообщение по ссылке не найдено или удалено, показаны последние сообщения",
@@ -348,7 +344,7 @@ describe("ChatView, the search and the calendar", () => {
     api.getMessages.mockResolvedValue(
       datedPage([dated("y", "2026-09-12")], { hasPrev: true }),
     );
-    nav.route.params = { id: "c2" };
+    await moveTo("/messenger/c/c2");
     await flushPromises();
     await openRow(wrapper);
     expect(row(wrapper).props("minDate")).toBe("");
@@ -368,9 +364,8 @@ describe("ChatView, the search and the calendar", () => {
 
   // A picked day and the way back carry the list's page (listPage.ts).
   it("keeps the page of the list when a day is picked and left", async () => {
-    nav.route.query = { number: "2" };
     api.getMessages.mockResolvedValue(messagePage(["m1"]));
-    const wrapper = await openChat();
+    const wrapper = await openChat({ address: "/messenger/c/c1?number=2" });
     await openRow(wrapper);
 
     api.getMessages.mockResolvedValue(
@@ -382,21 +377,13 @@ describe("ChatView, the search and the calendar", () => {
     row(wrapper).vm.$emit("date-picked", "2026-09-10");
     await flushPromises();
 
-    expect(nav.push).toHaveBeenLastCalledWith({
-      name: "chat",
-      params: { id: "c1" },
-      query: { number: "2", date: "2026-09-10" },
-    });
+    expect(address().fullPath).toBe("/messenger/c/c1?number=2&date=2026-09-10");
 
     api.getMessages.mockResolvedValue(messagePage(["m1"]));
     wrapper.findComponent({ name: "ChatFeed" }).vm.$emit("jump-to-latest");
     await flushPromises();
 
-    expect(nav.replace).toHaveBeenLastCalledWith({
-      name: "chat",
-      params: { id: "c1" },
-      query: { number: "2" },
-    });
+    expect(address().fullPath).toBe("/messenger/c/c1?number=2");
   });
 
   // From a picked day the feed pages down toward the latest messages, the sentinel of the new window watched.

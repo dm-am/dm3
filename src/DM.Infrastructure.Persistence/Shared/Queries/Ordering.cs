@@ -4,9 +4,6 @@ using System.Linq.Expressions;
 
 namespace DM.Infrastructure.Persistence.Shared.Queries;
 
-/// <summary>
-/// One key ordered in the direction the reader asked for.
-/// </summary>
 internal static class Ordering
 {
     public static IOrderedQueryable<T> OrderByDirection<T, TKey>(

@@ -44,9 +44,6 @@ public interface IBotLinkRepository
     /// </remarks>
     Task<BotChannelIds> GetChannelIds(Guid userId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get username by user ID
-    /// </summary>
     Task<string?> GetUsername(Guid userId, CancellationToken ct = default);
 
     /// <summary>

@@ -4,9 +4,6 @@ using DM.Domain.Core.Identity;
 
 namespace DM.Testing.Dsl;
 
-/// <summary>
-/// Builds an authenticated user for a test.
-/// </summary>
 public class AuthenticatedUserBuilder(Guid userId)
 {
     private readonly AuthenticatedUser user = new() { UserId = userId };

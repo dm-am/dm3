@@ -8,28 +8,22 @@ import type { GeneralError } from "@/shared/api/models/common";
 import type { StatusTransitionOption } from "./types";
 import { OWNS_REFUSAL, type RequestOptions } from "@/shared/api/interceptor";
 
-const props = withDefaults(
-  defineProps<{
-    /** Transitions to offer, in the order they are drawn. */
-    transitions: StatusTransitionOption<T>[];
-    /**
-     * Runs the chosen transition; resolves to the problem document when the
-     * server refused it and to null when it went through. The flags are the
-     * confirmation's, which prints a refusal in itself: passed on to the
-     * request, they keep the interceptor from saying it a second time.
-     */
-    apply: (value: T, options?: RequestOptions) => Promise<GeneralError | null>;
-    /**
-     * The module in the genitive case, as the sentences here spell it:
-     * "блога", "игры".
-     */
-    subject: string;
-    variant?: "strip" | "button";
-  }>(),
-  {
-    variant: "strip",
-  },
-);
+const props = defineProps<{
+  /** Transitions to offer, in the order they are drawn. */
+  transitions: StatusTransitionOption<T>[];
+  /**
+   * Runs the chosen transition; resolves to the problem document when the
+   * server refused it and to null when it went through. The flags are the
+   * confirmation's, which prints a refusal in itself: passed on to the
+   * request, they keep the interceptor from saying it a second time.
+   */
+  apply: (value: T, options?: RequestOptions) => Promise<GeneralError | null>;
+  /**
+   * The module in the genitive case, as the sentences here spell it:
+   * "блога", "игры".
+   */
+  subject: string;
+}>();
 
 // Through Ref<…>: ref() unwraps a generic into UnwrapRef<T>, which no longer satisfies `apply`.
 const pending = ref(null) as Ref<T | null>;
@@ -80,32 +74,17 @@ async function confirmed() {
 
 <template>
   <template v-if="transitions.length">
-    <template v-if="variant === 'strip'">
-      <li v-for="t in transitions" :key="t.value" class="link">
-        <span class="muted" aria-hidden="true">- </span>
-        <button
-          type="button"
-          class="strip-action"
-          :disabled="pending === t.value"
-          @click="onClick(t)"
-        >
-          {{ t.label }}
-        </button>
-      </li>
-    </template>
-
-    <div v-else class="status-buttons">
+    <li v-for="t in transitions" :key="t.value" class="link">
+      <span class="muted" aria-hidden="true">- </span>
       <button
-        v-for="t in transitions"
-        :key="t.value"
         type="button"
-        class="status-btn"
+        class="strip-action"
         :disabled="pending === t.value"
         @click="onClick(t)"
       >
         {{ t.label }}
       </button>
-    </div>
+    </li>
 
     <ConfirmDialog
       :show="!!confirmOption"
@@ -120,7 +99,6 @@ async function confirmed() {
 </template>
 
 <style scoped lang="sass">
-@use "@/assets/styles/Buttons" as *
 @use "@/assets/styles/Links" as *
 
 .link
@@ -129,14 +107,4 @@ async function confirmed() {
 // Drawn as every other link of the sidebar menu; a destructive move is not coloured.
 .strip-action
   +inline-link-button
-
-.status-buttons
-  display: flex
-  flex-wrap: wrap
-  gap: $small
-
-// The shared secondary button, a destructive move included.
-.status-btn
-  font-size: $secondary-font-size
-  +button
 </style>

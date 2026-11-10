@@ -8,9 +8,6 @@ using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The deployment has to supply what the code refuses to assume.
-/// </summary>
 /// <remarks>
 /// With no trusted network the API reads no forwarded header, a silent failure. The code side
 /// is ReverseProxySupportShould; here the compose files agree with each other.
@@ -50,10 +47,6 @@ public class ApplicationNetworkShould
             "and trusting a wider one trusts more than our own containers");
     }
 
-    /// <summary>
-    /// Behind a point of presence the main server counts one edge more and trusts
-    /// it by its own address.
-    /// </summary>
     /// <remarks>
     /// No stack of CI runs the overlay. An edge counted and not trusted stops the walk on itself,
     /// one trusted and not counted hands the API the address of the point of presence.
@@ -79,10 +72,8 @@ public class ApplicationNetworkShould
             "the overlay adds the point of presence to what the preview overlay trusts and replaces none of it");
     }
 
-    /// <summary>The overlay of the main server behind a point of presence.</summary>
     private const string PopOriginCompose = "docker-compose.pop-origin.yml";
 
-    /// <summary>A trusted network of the API, by its index, as a compose file sets it.</summary>
     private static readonly Regex TrustedNetworkKey =
         new(@"DM_ReverseProxyConfiguration__TrustedNetworks__\d+:", RegexOptions.Compiled);
 
@@ -100,7 +91,6 @@ public class ApplicationNetworkShould
             "a publication with no address is reachable from outside and skips the firewall");
     }
 
-    /// <summary>Published ports of every service, as written.</summary>
     private static string[] PublishedPorts(string compose)
     {
         var ports = new List<string>();
@@ -122,7 +112,6 @@ public class ApplicationNetworkShould
         return ports.ToArray();
     }
 
-    /// <summary>The first <c>subnet:</c> value, quoted or bare.</summary>
     private static string? FindSubnet(string compose) =>
         FindValue(compose, "subnet:");
 

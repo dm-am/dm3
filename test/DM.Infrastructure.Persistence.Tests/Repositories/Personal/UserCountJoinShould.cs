@@ -12,11 +12,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Personal;
 
-/// <summary>
-/// The counter join answers the number the correlated count answered, including
-/// for the users it has no row for.
-/// </summary>
-/// <remarks>A join returns a user without games only if it is a left one.</remarks>
+// A join returns a user without games only if it is a left one.
 public class UserCountJoinShould
 {
     private static readonly Guid MasterId = Guid.Parse("5f3a2b40-0000-4000-8000-000000000001");
@@ -35,10 +31,6 @@ public class UserCountJoinShould
         CreatedUtc = Created,
     };
 
-    /// <summary>
-    /// One user with two games of his own and an assistant seat in a third, one with
-    /// an assistant seat only, and one with nothing at all.
-    /// </summary>
     private static DmDbContext Seeded()
     {
         var context = InMemoryStore.Open();

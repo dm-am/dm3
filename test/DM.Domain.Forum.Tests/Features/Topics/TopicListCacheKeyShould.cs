@@ -42,7 +42,6 @@ namespace DM.Domain.Forum.Tests.Features.Topics;
 /// </remarks>
 public class TopicListCacheKeyShould : UnitTestBase
 {
-    /// <summary>The board whose listing the service caches.</summary>
     private const string CachedBoard = "news";
 
     private static readonly Guid BoardId = Guid.Parse("70b1c000-0000-4000-8000-0000000000b0");
@@ -115,7 +114,6 @@ public class TopicListCacheKeyShould : UnitTestBase
         return query;
     }
 
-    /// <summary>The key the listing was filed under, or null when it bypassed the cache.</summary>
     private async Task<string?> KeyOf(TopicService service, TopicsQuery query)
     {
         keys.Clear();
@@ -125,9 +123,6 @@ public class TopicListCacheKeyShould : UnitTestBase
         return keys.SingleOrDefault();
     }
 
-    /// <summary>
-    /// The service for a guest, over a cache that records the keys it is handed.
-    /// </summary>
     private TopicService ServiceFor()
     {
         var boardService = Mock<IBoardService>();

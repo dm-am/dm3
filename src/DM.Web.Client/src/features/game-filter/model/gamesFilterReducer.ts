@@ -7,6 +7,7 @@ import type {
 } from "./types";
 import { SORT_OPTIONS } from "./types";
 import { gameDateRange, type GameDateRangeKey } from "./gameDateRanges";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 export type GamesFilterAction =
   | { type: "SET_SEARCH"; search: string }
@@ -24,7 +25,7 @@ export type GamesFilterAction =
       fromUtc: string | null;
       toUtc: string | null;
     }
-  | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
+  | { type: "SET_SORT"; sortBy: string; sortOrder?: SortDirection }
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" }
   | { type: "VALIDATE_TAGS"; validTagIds: Set<number> };

@@ -6,9 +6,6 @@ using AwesomeAssertions;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Source read as text, with the comments taken out.
-/// </summary>
 /// <remarks>
 /// A comment explaining why a call is absent contains the call, and a commented-out line keeps its
 /// literal. Kept out of DM.Testing: a reference to it would put NSubstitute where the ArchUnit loader scans.
@@ -18,21 +15,11 @@ internal static class SourceText
     private static readonly Regex Comments = new(
         @"/\*.*?\*/|//[^\n]*", RegexOptions.Compiled | RegexOptions.Singleline);
 
-    /// <summary>
-    /// The file's code, with block and line comments blanked out.
-    /// </summary>
     /// <remarks>Replaced with nothing: consumers search substrings or compare relative positions.</remarks>
-    /// <param name="path">Absolute path of the source file.</param>
     internal static string ReadCode(string path) =>
         Comments.Replace(File.ReadAllText(path), string.Empty);
 
-    /// <summary>
-    /// The slice from one marker up to the next, the opening marker included.
-    /// </summary>
     /// <remarks>Both markers are asserted: an empty slice contains nothing to complain about.</remarks>
-    /// <param name="source">Text to slice</param>
-    /// <param name="start">Marker the slice opens at</param>
-    /// <param name="end">Marker the slice stops before</param>
     internal static string Between(string source, string start, string end)
     {
         var from = source.IndexOf(start, StringComparison.Ordinal);
@@ -50,12 +37,8 @@ internal static class SourceText
         @"(?<sig>(?:public|private|protected|internal)[^;{}()]*?\s(?<name>\w+)\s*\((?<args>[^)]*)\))\s*(?<open>=>|\{)",
         RegexOptions.Compiled | RegexOptions.Singleline);
 
-    /// <summary>One method of a type: what it is called, what it takes, what it does, the line it starts on.</summary>
     internal readonly record struct Member(string Name, string Parameters, string Body, int Line);
 
-    /// <summary>
-    /// The methods a file declares, each with its body.
-    /// </summary>
     /// <remarks>Brace counting: a parser dependency would put a compiler where the ArchUnit loader scans.</remarks>
     internal static IReadOnlyList<Member> Members(string code)
     {
@@ -72,21 +55,15 @@ internal static class SourceText
         return members;
     }
 
-    /// <summary>One method of a type and the lines it spans, signature to end.</summary>
     internal readonly record struct Span(string Name, int Line, int Lines);
 
     /// <summary>A header that opens a body holding declarations rather than statements.</summary>
     private static readonly Regex TypeHeader = new(
         @"\b(?:class|struct|interface|record|enum|namespace|extension)\b", RegexOptions.Compiled);
 
-    /// <summary>What may follow a parameter list before a method's body.</summary>
     private static readonly Regex AfterParameters = new(
         @"^\s*(?:$|where\b|:\s*(?:base|this)\b)", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Words that stand in front of a parenthesis without naming a method: the
-    /// modifiers before a tuple return type, and the keywords that take one.
-    /// </summary>
     private static readonly HashSet<string> NotNames = new(StringComparer.Ordinal)
     {
         "abstract", "async", "base", "catch", "checked", "default", "extension", "extern", "fixed",
@@ -96,15 +73,10 @@ internal static class SourceText
         "volatile", "when", "while",
     };
 
-    /// <summary>
-    /// The methods a file declares, each with the line its signature starts on and
-    /// the number of lines from there to the end of its body.
-    /// </summary>
     /// <remarks>
     /// Apart from <see cref="Members"/>, which may miss a declaration; a length limit may not. Comments and
     /// literals are blanked rather than removed, so lines keep their place and a "{" in a string is no body.
     /// </remarks>
-    /// <param name="text">The file as written, comments included.</param>
     internal static IReadOnlyList<Span> MemberSpans(string text)
     {
         var code = Blank(text);
@@ -113,7 +85,6 @@ internal static class SourceText
         return spans;
     }
 
-    /// <summary>The declarations between two positions of a body that holds declarations.</summary>
     private static void ReadDeclarations(string code, int from, int to, List<Span> spans)
     {
         var start = from;
@@ -153,10 +124,6 @@ internal static class SourceText
         }
     }
 
-    /// <summary>
-    /// The first semicolon, brace or arrow outside any bracket, which ends the
-    /// header of the declaration that starts at a position.
-    /// </summary>
     private static int DeclarationStop(string code, int from, int to)
     {
         var depth = 0;
@@ -174,7 +141,6 @@ internal static class SourceText
         return to;
     }
 
-    /// <summary>The first semicolon outside any bracket from a position, or the end.</summary>
     private static int StatementEnd(string code, int from, int to)
     {
         var depth = 0;
@@ -191,7 +157,6 @@ internal static class SourceText
         return to;
     }
 
-    /// <summary>The bracket closing the one that opens at a position.</summary>
     private static int Closing(string code, int open)
     {
         var depth = 0;
@@ -218,10 +183,6 @@ internal static class SourceText
     private static bool IsArrow(string code, int i) =>
         code[i] == '=' && i + 1 < code.Length && code[i + 1] == '>';
 
-    /// <summary>
-    /// Whether a header assigns outside its brackets: a field or property with an
-    /// initializer, as against the comparison and arrow operators.
-    /// </summary>
     private static bool Assigns(string header)
     {
         var depth = 0;
@@ -240,10 +201,6 @@ internal static class SourceText
         return false;
     }
 
-    /// <summary>
-    /// The name of the method a header declares, or null when it declares
-    /// something else; with it, where the declaration starts past its attributes.
-    /// </summary>
     private static string? MethodName(string header, out int lead)
     {
         lead = 0;
@@ -275,10 +232,6 @@ internal static class SourceText
         return null;
     }
 
-    /// <summary>
-    /// The identifier just in front of a parenthesis, past a list of generic
-    /// parameters, or null when what stands there names no method.
-    /// </summary>
     private static string? NameBefore(string header, int open, out int start)
     {
         var i = open - 1;
@@ -409,7 +362,6 @@ internal static class SourceText
         return at < 0 ? code.Length : from + at + (include ? marker.Length : 0);
     }
 
-    /// <summary>A quoted literal in which a backslash escapes the next character.</summary>
     private static int Escaped(char[] code, int open, char quote)
     {
         for (var k = open + 1; k < code.Length; k++)
@@ -440,7 +392,6 @@ internal static class SourceText
         return false;
     }
 
-    /// <summary>A verbatim literal, in which a doubled quote is a quote.</summary>
     private static int Verbatim(char[] code, int open)
     {
         for (var k = open + 1; k < code.Length; k++)
@@ -465,10 +416,6 @@ internal static class SourceText
     private static int LineAt(string code, int index) =>
         code.AsSpan(0, Math.Min(index, code.Length)).Count('\n') + 1;
 
-    /// <summary>
-    /// Everything after a signature: up to the matching closing brace, or, for an
-    /// expression body, up to the semicolon that ends the statement.
-    /// </summary>
     private static string BodyAfter(string code, Match signature) =>
         code[(signature.Index + signature.Length)..BodyEnd(code, signature)];
 

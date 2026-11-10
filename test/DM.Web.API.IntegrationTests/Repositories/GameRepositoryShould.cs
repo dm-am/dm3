@@ -11,10 +11,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The subscriber summary is one statement: a GROUP BY count, a windowed preview with a LIMIT per partition and an
-/// EXISTS for the viewer, so this runs against the container Postgres.
-/// </summary>
+// The subscriber summary is one statement: a GROUP BY count, a windowed preview with a LIMIT per
+// partition and an EXISTS for the viewer, so this runs against the container Postgres.
 public class GameRepositoryShould : IntegrationTestBase
 {
     private const int SubscriberCount = 25;
@@ -23,9 +21,6 @@ public class GameRepositoryShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// The preview is the twenty most recently active subscribers, chosen by the database, and the total is the total.
-    /// </summary>
     [Fact]
     public async Task ReportEverySubscriberInTheCountAndOnlyTheMostRecentInThePreview()
     {
@@ -49,9 +44,6 @@ public class GameRepositoryShould : IntegrationTestBase
             "the preview is the most recently active subscribers, newest first");
     }
 
-    /// <summary>
-    /// The per-viewer flag behind the Reader role answers for the subscriber only.
-    /// </summary>
     [Fact]
     public async Task ResolveTheReaderRoleForASubscriberAndNotForAStranger()
     {

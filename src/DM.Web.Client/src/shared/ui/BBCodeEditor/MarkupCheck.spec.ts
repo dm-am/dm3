@@ -120,8 +120,6 @@ describe("MarkupCheck", () => {
     });
 
     // The save path of a comment refuses a hidden block and names the reason.
-    // The check used to read every surface as a game post and said nothing,
-    // so the author learnt it only from the refusal after pressing send.
     const checked = async (
       context: BBCodeContext,
       modelValue: string,

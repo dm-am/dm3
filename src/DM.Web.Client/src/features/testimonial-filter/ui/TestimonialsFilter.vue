@@ -1,9 +1,11 @@
 <script setup lang="ts">
 import { computed } from "vue";
 import { useTestimonialsFilter, SORT_OPTIONS } from "../model";
+import type { TestimonialSortBy } from "../model";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { FilterSearchInput, SortButton } from "@/shared/ui/Filters";
 import type { SortOption } from "@/shared/ui/Filters";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 const props = withDefaults(
   defineProps<{
@@ -36,8 +38,8 @@ const options = computed<SortOption[]>(
 );
 
 // The direction rides with the clicked option, so an override needs no directions of its own.
-function handleSortSelect(value: string, direction?: "asc" | "desc") {
-  setSort(value as "created" | "author", direction);
+function handleSortSelect(value: string, direction?: SortDirection) {
+  setSort(value as TestimonialSortBy, direction);
 }
 </script>
 

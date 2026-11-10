@@ -11,7 +11,6 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { mount } from "@vue/test-utils";
 import DateTimeInput from "./DateTimeInput.vue";
 
-// "Today" for the calendar: 6 October 2026.
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ["Date"] });
   vi.setSystemTime(new Date(2026, 9, 6, 12, 0));
@@ -139,6 +138,22 @@ describe("DateTimeInput", () => {
       await timeOf(wrapper).setValue("1801");
       expect(lastReason(wrapper)).toBe("Не позже 06.10.2026 18:00");
       expect(wrapper.emitted("update:modelValue")).toBeUndefined();
+    });
+
+    it("names a bound in the hour a browser zone skips as written", async () => {
+      // The bound is site time: the browser's zone has no say in its digits.
+      const zone = process.env.TZ;
+      process.env.TZ = "Europe/Berlin";
+      try {
+        const wrapper = mountRow({
+          modelValue: "2026-03-29T02:00",
+          min: "2026-03-29T02:30",
+        });
+        expect(lastReason(wrapper)).toBe("Не раньше 29.03.2026 02:30");
+      } finally {
+        if (zone === undefined) delete process.env.TZ;
+        else process.env.TZ = zone;
+      }
     });
 
     it("says so when the bounds move from under the moment", async () => {

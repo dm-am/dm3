@@ -24,12 +24,6 @@ public interface IUserLookupService
     /// <exception cref="DM.Domain.Core.Exceptions.HttpException">User not found (404 Not Found)</exception>
     Task<GeneralUser> GetAsync(Guid userId);
 
-    /// <summary>
-    /// Check if username exists (for validators)
-    /// </summary>
-    /// <param name="username">Username to check</param>
-    /// <param name="ct">Cancellation token</param>
-    /// <returns>True if user exists</returns>
     Task<bool> UsernameExistsAsync(string username, CancellationToken ct = default);
 
     /// <summary>

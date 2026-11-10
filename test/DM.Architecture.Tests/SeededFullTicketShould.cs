@@ -8,10 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The seed holds a ticket whose conversation took all it takes, so the thread shows the line of a
-/// full conversation where the answer form stands.
-/// </summary>
 /// <remarks>
 /// The line stands for an open ticket with no room left (TicketService.Detailed), so the ticket has to be
 /// both, and it must not change what the queues of the moderators open with.

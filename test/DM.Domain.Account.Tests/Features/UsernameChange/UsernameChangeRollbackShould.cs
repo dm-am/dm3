@@ -17,15 +17,10 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.UsernameChange;
 
-/// <summary>
-/// Taking back a completed username change: a rename of somebody else, done by a
-/// moderator, so it is the one path of the service that asks for a permission.
-/// </summary>
+// Taking back a completed username change: a rename of somebody else, done by a moderator, so it is
+// the one path of the service that asks for a permission.
 public class UsernameChangeRollbackShould : UsernameChangeServiceTestBase
 {
-    /// <summary>
-    /// A completed change, with the name it replaced free to come back.
-    /// </summary>
     private void SetupCompletedChange(Guid requestId, Guid userId, UserRole role)
     {
         var request = new UsernameChangeRequest
@@ -70,11 +65,8 @@ public class UsernameChangeRollbackShould : UsernameChangeServiceTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The method sat behind no check of its own, so any caller wired to it would
-    /// rename a user back on behalf of whoever asked. Refused before anything is
-    /// written, whatever else about the request holds.
-    /// </summary>
+    // The method sat behind no check of its own, so any caller wired to it would rename a user back
+    // on behalf of whoever asked.
     [Fact]
     public async Task RefuseARollbackToWhoeverMayNotTakeItBack()
     {

@@ -105,7 +105,7 @@ const RADIUS_REGISTER: Record<
   },
   "shared/ui/BBCodeEditor/BBCodeEditorToolbar.vue": {
     values: ["2px"],
-    why: "the tag buttons of the toolbar, drawn as DM2's and as before 28 September: the site's 8 rounded them into controls of another kind",
+    why: "the tag buttons of the toolbar, drawn as DM2's: the site's 8 rounded them into controls of another kind",
   },
 };
 

@@ -16,13 +16,8 @@ using DbComment = DM.Infrastructure.Persistence.Entities.Shared.Comment;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Forum;
 
-/// <summary>
-/// Editing a comment leaves a trace, in all four discussions.
-/// </summary>
-/// <remarks>
-/// CommentProjections derives ModifiedUtc from the newest history entry, and the client draws "edited"
-/// from it. All four discussions are asserted.
-/// </remarks>
+// CommentProjections derives ModifiedUtc from the newest history entry, and the client draws
+// "edited" from it.
 public class CommentEditRecordShould
 {
     private static readonly DateTimeOffset Created = new(2026, 4, 1, 12, 0, 0, TimeSpan.Zero);
@@ -70,9 +65,6 @@ public class CommentEditRecordShould
         return factory;
     }
 
-    /// <summary>
-    /// The write is awaited and the trace read from the tracker.
-    /// </summary>
     private static Task WriteAsync(Func<Task> update) => update();
 
     [Theory]
@@ -128,9 +120,8 @@ public class CommentEditRecordShould
         context.Comments.Single().Text.Should().Be("Исправленная реплика");
     }
 
-    /// <summary>
-    /// A caller that names no editor gets no trace rather than a failed write: Guid.Empty answers to nobody.
-    /// </summary>
+    // A caller that names no editor gets no trace rather than a failed write: Guid.Empty answers to
+    // nobody.
     [Fact]
     public async Task WriteNoTraceWhenTheEditorIsUnknown()
     {

@@ -10,10 +10,6 @@ import { fileURLToPath } from "node:url";
 import { type BBCodeContext } from "@/shared/lib/bbcode/bbcodeTagSet";
 import { type BBCodeIssue } from "@/shared/lib/bbcode/bbcodeWarnings";
 
-// ============================================================================
-// SURFACES
-// ============================================================================
-
 export type MarkupSurface =
   | "GamePost"
   | "Comment"
@@ -29,10 +25,6 @@ export const CONTEXT_OF: Record<MarkupSurface, BBCodeContext> = {
   Profile: "info",
   DirectMessage: "direct",
 };
-
-// ============================================================================
-// THE CORPUS
-// ============================================================================
 
 /** One text of the corpus and the server's answers about it. */
 export interface CorpusEntry {
@@ -86,10 +78,6 @@ function readCorpusFile(): {
     addresses: AddressVerdict[];
   };
 }
-
-// ============================================================================
-// WHAT BOTH SIDES READ
-// ============================================================================
 
 /**
  * The text without what both sides take out before reading it, a surrogate

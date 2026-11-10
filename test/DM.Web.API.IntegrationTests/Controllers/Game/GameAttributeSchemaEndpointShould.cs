@@ -12,11 +12,6 @@ using DbGameAttributeSchema = DM.Infrastructure.Persistence.Entities.Game.GameAt
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// Who may replace the character sheet of a game, and in what order the
-/// endpoint refuses everybody else.
-/// </summary>
-/// <remarks>The master writes the sheet, a player does not, a stranger is not told the game exists, a guest signs in first.</remarks>
 public class GameAttributeSchemaEndpointShould : IntegrationTestBase
 {
     public GameAttributeSchemaEndpointShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -46,10 +41,8 @@ public class GameAttributeSchemaEndpointShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// A caller with no version never read the sheet they are replacing, and
-    /// this write deletes the values of every specification it drops.
-    /// </summary>
+    // A caller with no version never read the sheet they are replacing, and this write deletes the
+    // values of every specification it drops.
     [Fact]
     public async Task RefuseABodyWithoutAVersion()
     {
@@ -62,10 +55,6 @@ public class GameAttributeSchemaEndpointShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.BadRequest);
     }
 
-    /// <summary>
-    /// The master writes the sheet, gets the stored set back with a new
-    /// version, and the details of the game carry the same pair afterwards.
-    /// </summary>
     [Fact]
     public async Task ReplaceTheSheetForTheMasterAndCarryItIntoTheDetails()
     {
@@ -90,10 +79,8 @@ public class GameAttributeSchemaEndpointShould : IntegrationTestBase
         readSheet.GetProperty("specifications")[0].GetProperty("title").GetString().Should().Be("Раса");
     }
 
-    /// <summary>
-    /// The second of two saves made from the same reading is refused, and the
-    /// reader is told to look again rather than left believing they won.
-    /// </summary>
+    // The second of two saves made from the same reading is refused, and the reader is told to look
+    // again rather than left believing they won.
     [Fact]
     public async Task RefuseASecondReplacementMadeFromTheSameReading()
     {
@@ -121,9 +108,6 @@ public class GameAttributeSchemaEndpointShould : IntegrationTestBase
         }
     };
 
-    /// <summary>
-    /// A fresh game of the given master, with an empty sheet at version zero.
-    /// </summary>
     private async Task<Guid> SeedGame(Guid masterId)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

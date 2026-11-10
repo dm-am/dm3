@@ -180,12 +180,6 @@ public static class GeneralUserProjections
     public static IQueryable<UserDetails> ProjectToUserDetails(this IQueryable<DbUser> query) =>
         query.Select(ExpressionSplicer.Expand(DetailsRowFields));
 
-    /// <summary>
-    /// Builds a tier formula: one member-init over the derived type carrying
-    /// the <see cref="RowFields"/> bindings first and the tier's own
-    /// bindings after them. The shared member list stays a single text - the
-    /// tiers only append to it.
-    /// </summary>
     private static Expression<Func<DbUser, TTier>> WithRowFields<TTier>(
         Expression<Func<DbUser, TTier>> tierFields)
         where TTier : GeneralUser =>

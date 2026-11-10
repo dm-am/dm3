@@ -9,11 +9,8 @@ using GameDto = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Domain.Game.Tests.Authorization;
 
-/// <summary>
-/// Gates who reads a chat room of a game and who writes in it. Reading a chat
-/// room hands over its private history, and writing in it speaks in front of
-/// everybody it was opened to.
-/// </summary>
+// Reading a chat room hands over its private history, and writing in it speaks in front of
+// everybody it was opened to.
 public class ChatRoomIntentionShould : RoomIntentionTestBase
 {
     // The rooms below are closed unless a case says otherwise: in an open room
@@ -72,10 +69,6 @@ public class ChatRoomIntentionShould : RoomIntentionTestBase
         resolver.IsAllowed(user, intention, room).Should().BeFalse();
     }
 
-    /// <summary>
-    /// A character the room was opened to reads it and, with a policy that admits
-    /// writing, writes in it, the same in an open and in a closed room.
-    /// </summary>
     [Theory]
     [InlineData(RoomAccessType.Open)]
     [InlineData(RoomAccessType.Private)]
@@ -104,10 +97,8 @@ public class ChatRoomIntentionShould : RoomIntentionTestBase
         resolver.IsAllowed(user, RoomIntention.SendMessage, room).Should().BeFalse();
     }
 
-    /// <summary>
-    /// A character out of play writes nothing in a chat room, and its rows still
-    /// open the room to read, as they open its page.
-    /// </summary>
+    // A character out of play writes nothing in a chat room, and its rows still open the room to
+    // read, as they open its page.
     [Theory]
     [InlineData(CharacterStatus.Retired)]
     [InlineData(CharacterStatus.UnderReview)]
@@ -163,9 +154,8 @@ public class ChatRoomIntentionShould : RoomIntentionTestBase
         resolver.IsAllowed(user, RoomIntention.ViewMessages, room).Should().BeFalse();
     }
 
-    /// <summary>
-    /// An open chat room is read by everybody who sees the game, which RoomAvailable has already asked.
-    /// </summary>
+    // An open chat room is read by everybody who sees the game, which RoomAvailable has already
+    // asked.
     [Fact]
     public void LetAnybodyWhoSeesTheGameReadAnOpenChatRoom()
     {
@@ -177,11 +167,7 @@ public class ChatRoomIntentionShould : RoomIntentionTestBase
         resolver.IsAllowed(user, RoomIntention.ViewMessages, room).Should().BeTrue();
     }
 
-    /// <summary>
-    /// Writing in it is the room's to give, open or closed: a player of the game
-    /// whose character the room did not add reads it and does not write in it.
-    /// Taking part in the game is not the grant, the row is.
-    /// </summary>
+    // Taking part in the game is not the grant, the row is.
     [Fact]
     public void NotLetAPlayerTheOpenChatRoomDidNotAddWriteInIt()
     {
@@ -195,10 +181,8 @@ public class ChatRoomIntentionShould : RoomIntentionTestBase
         resolver.IsAllowed(user, RoomIntention.SendMessage, room).Should().BeFalse();
     }
 
-    /// <summary>
-    /// Nor does an open room give a voice to a site rank: openness is about
-    /// reading for an admin as much as for anybody else.
-    /// </summary>
+    // Nor does an open room give a voice to a site rank: openness is about reading for an admin as
+    // much as for anybody else.
     [Fact]
     public void NotLetAnAdminWriteInAnOpenChatRoomTheyHaveNoPartIn()
     {

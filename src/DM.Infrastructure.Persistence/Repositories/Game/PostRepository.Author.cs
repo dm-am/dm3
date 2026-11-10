@@ -11,10 +11,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
-/// <summary>
-/// The author column of a post a read carries: the portrait of the character
-/// who signed it, and the standing of the author nobody's character signed for
-/// </summary>
 internal partial class PostRepository
 {
     /// <summary>

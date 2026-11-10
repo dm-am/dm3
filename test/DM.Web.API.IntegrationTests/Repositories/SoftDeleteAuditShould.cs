@@ -30,9 +30,6 @@ using DbWebsiteTestimonial = DM.Infrastructure.Persistence.Entities.Community.We
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// A soft-deleted row says who removed it and when.
-/// </summary>
 /// <remarks>
 /// ISoftDeletable declares both columns with a foreign key under the author. Asserted against the row: a repository
 /// can drop the identity it is handed.
@@ -85,9 +82,6 @@ public class SoftDeleteAuditShould : IntegrationTestBase
         comment.DeletedUtc.Should().BeCloseTo(deletedUtc, TimeSpan.FromSeconds(1));
     }
 
-    /// <summary>
-    /// The same table, the other kind of comment: both answers or the column is unusable.
-    /// </summary>
     [Fact]
     public async Task NameWhoRemovedABlogComment()
     {
@@ -143,10 +137,8 @@ public class SoftDeleteAuditShould : IntegrationTestBase
         game.DeletedUtc.Should().NotBeNull();
     }
 
-    /// <summary>
-    /// Withdrawing a like is a removal too, and it goes through ExecuteUpdate rather than the
-    /// change tracker, so the columns have to be named in the statement itself.
-    /// </summary>
+    // Withdrawing a like is a removal too, and it goes through ExecuteUpdate rather than the change
+    // tracker, so the columns have to be named in the statement itself.
     [Fact]
     public async Task NameWhoWithdrewALike()
     {
@@ -182,9 +174,6 @@ public class SoftDeleteAuditShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The removals a person presses: a room, a site testimonial, an uploaded file, an endorsement.
-    /// </summary>
     [Fact]
     public async Task NameWhoRemovedARoomATestimonialAnUploadAndAnEndorsement()
     {
@@ -361,9 +350,7 @@ public class SoftDeleteAuditShould : IntegrationTestBase
         return blogId;
     }
 
-    /// <summary>
-    /// A published publication of an active blog, which is what a reader can like.
-    /// </summary>
+    // A published publication of an active blog, which is what a reader can like.
     private static async Task<Guid> AddPublicationAsync(DmDbContext dbContext)
     {
         var blogId = await AddBlogAsync(dbContext);
@@ -389,10 +376,8 @@ public class SoftDeleteAuditShould : IntegrationTestBase
         return publicationId;
     }
 
-    /// <summary>
-    /// A comment of the polymorphic table: EntityId names the topic, blog, game or
-    /// publication it belongs to, and no foreign key stands behind it.
-    /// </summary>
+    // A comment of the polymorphic table: EntityId names the topic, blog, game or publication it
+    // belongs to, and no foreign key stands behind it.
     private static async Task<Guid> AddCommentAsync(DmDbContext dbContext, Guid entityId)
     {
         var authorId = await AddUserAsync(dbContext);

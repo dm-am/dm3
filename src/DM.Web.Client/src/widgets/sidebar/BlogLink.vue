@@ -4,16 +4,10 @@ import { Tooltip } from "@/shared/ui/Tooltip";
 import { CounterPair } from "@/shared/ui/CounterPair";
 import { computed, ref } from "vue";
 
-const props = withDefaults(
-  defineProps<{
-    blog: Blog | BlogRef;
-    alwaysShowCounters?: boolean;
-    prefix?: string;
-  }>(),
-  {
-    prefix: "- ",
-  },
-);
+const props = defineProps<{
+  blog: Blog | BlogRef;
+  alwaysShowCounters?: boolean;
+}>();
 
 const {
   buildTooltip,
@@ -49,7 +43,7 @@ const blogTooltip = computed(() => buildTooltip(props.blog));
 
 <template>
   <li class="link" @mouseenter="hovered = true" @mouseleave="hovered = false">
-    <span class="muted" aria-hidden="true">{{ prefix }}</span>
+    <span class="muted" aria-hidden="true">- </span>
     <Tooltip :text="blogTooltip">
       <router-link
         :to="blogRoute"

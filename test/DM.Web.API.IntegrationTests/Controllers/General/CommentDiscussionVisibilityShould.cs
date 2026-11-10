@@ -13,14 +13,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A comment read by its id answers on a discussion the reader cannot see exactly
-/// as on a comment that is not there, end to end.
-/// </summary>
-/// <remarks>
-/// A comment of a hidden discussion, of another kind, and an id that is nothing must answer alike, body
-/// included, as the publication and blog visibility tests next door assert.
-/// </remarks>
+// A comment of a hidden discussion, of another kind, and an id that is nothing must answer alike,
+// body included, as the publication and blog visibility tests next door assert.
 public class CommentDiscussionVisibilityShould : IntegrationTestBase
 {
     public CommentDiscussionVisibilityShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -79,10 +73,8 @@ public class CommentDiscussionVisibilityShould : IntegrationTestBase
         inPrivateDraft.Should().Be(onMissing, "a like is a read of the comment first");
     }
 
-    /// <summary>
-    /// The gate is about who may open the blog: its author still reads the
-    /// comment, and a comment of an open blog is read by anybody.
-    /// </summary>
+    // The gate is about who may open the blog: its author still reads the comment, and a comment of
+    // an open blog is read by anybody.
     [Fact]
     public async Task StillGiveTheCommentToItsBlogAndToEveryReaderOfAnOpenBlog()
     {
@@ -126,9 +118,6 @@ public class CommentDiscussionVisibilityShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// And a comment of a publication in a hidden blog, read on its own route.
-    /// </summary>
     [Fact]
     public async Task AnswerOnACommentOfAPublicationInAHiddenBlogAsOnNoCommentAtAll()
     {
@@ -140,7 +129,7 @@ public class CommentDiscussionVisibilityShould : IntegrationTestBase
         inHidden.Should().Be(onMissing);
     }
 
-    /// <summary>Status and body together: the body is what tells two 404s apart.</summary>
+    // Status and body together: the body is what tells two 404s apart.
     private sealed record Answer(HttpStatusCode Status, string Body);
 
     private Task<Answer> Read(string url, GeneralUser? caller) => Send(HttpMethod.Get, url, caller);
@@ -165,10 +154,6 @@ public class CommentDiscussionVisibilityShould : IntegrationTestBase
         Guid InHiddenPublication,
         IReadOnlyList<(string Owner, Guid CommentId)> OfEveryDiscussion);
 
-    /// <summary>
-    /// A blog in a private draft and an open one with comments, a publication in each with a comment, and on request
-    /// a comment in the seeded topic and game; fresh identifiers.
-    /// </summary>
     private async Task<Seeded> SeedAsync(bool inSharedDiscussions = false)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -205,10 +190,8 @@ public class CommentDiscussionVisibilityShould : IntegrationTestBase
             [.. shared, ("blogs", inOpenBlog), ("publications", inOpenPublication)]);
     }
 
-    /// <summary>
-    /// The comments written into the topic and the game every test shares go, so
-    /// those read as they did before.
-    /// </summary>
+    // The comments written into the topic and the game every test shares go, so those read as they
+    // did before.
     private async Task DropSharedAsync(Seeded seeded)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

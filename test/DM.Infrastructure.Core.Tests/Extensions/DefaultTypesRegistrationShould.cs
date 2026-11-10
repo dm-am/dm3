@@ -10,10 +10,6 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Extensions;
 
-/// <summary>
-/// The assembly scan leaves explicit wiring alone, keeps every implementation of a shared contract, and
-/// registers nothing a container could not activate.
-/// </summary>
 public class DefaultTypesRegistrationShould
 {
     private static IServiceCollection Scanned()

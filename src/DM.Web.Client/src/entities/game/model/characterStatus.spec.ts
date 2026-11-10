@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import { characterStatusLabel } from "./characterStatus";
 import type { Character } from "./characterTypes";
+import { createMockCharacter } from "./store.fixtures";
+import { asServed } from "@/shared/api/models";
 
 /** The status of a character and the flags that refine it. */
 type Standing = {
@@ -10,15 +12,18 @@ type Standing = {
   isPlayerExiled?: boolean;
 };
 
-const character = (over: Standing): Character =>
-  ({
-    id: "c1",
-    name: "Гоблин",
-    isDead: false,
-    isPlayerLeft: false,
-    isPlayerExiled: false,
-    ...over,
-  }) as unknown as Character;
+const character = ({
+  status,
+  isDead = false,
+  isPlayerLeft = false,
+  isPlayerExiled = false,
+}: Standing): Character => ({
+  ...createMockCharacter("c1", "Гоблин"),
+  status,
+  isDead: asServed(isDead),
+  isPlayerLeft: asServed(isPlayerLeft),
+  isPlayerExiled: asServed(isPlayerExiled),
+});
 
 /**
  * The caption under a character's name for every status and every flag that

@@ -17,16 +17,12 @@ public sealed record ModuleLifecycle(
     DateTimeOffset? ActivatedUtc,
     DateTimeOffset? ClosedUtc);
 
-/// <summary>
-/// What a status move writes.
-/// </summary>
 /// <remarks>
 /// A null field is one the move does not touch: the update entities of both
 /// modules read null as "leave this column alone", which is how the first
 /// activation and the moment of closing survive a move that passes over them a
 /// second time.
 /// </remarks>
-/// <param name="Status">Status the module moves to.</param>
 /// <param name="ClosedReason">Reason to write, or null to leave the stored one.</param>
 /// <param name="ActivatedUtc">Activation stamp to write, or null to keep the stored one.</param>
 /// <param name="ClosedUtc">Closing stamp to write, or null to keep the stored one.</param>
@@ -96,15 +92,11 @@ public static class ModuleStatusPolicy
                 HttpStatusCode.BadRequest, RefusalMessage.UnknownStatusTransition)
         };
 
-    /// <summary>
-    /// The moment of the first activation, which a later one does not overwrite.
-    /// </summary>
+    // The moment of the first activation, which a later one does not overwrite.
     private static DateTimeOffset? FirstActivation(ModuleLifecycle module, DateTimeOffset now) =>
         module.ActivatedUtc.HasValue ? null : now;
 
-    /// <summary>
-    /// The moment the module stopped, which closing an already frozen one keeps.
-    /// </summary>
+    // The moment the module stopped, which closing an already frozen one keeps.
     private static DateTimeOffset? FirstClosing(ModuleLifecycle module, DateTimeOffset now) =>
         module.ClosedUtc.HasValue ? null : now;
 

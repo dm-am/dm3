@@ -8,10 +8,6 @@ using DM.Domain.Core.UnreadCounters;
 
 namespace DM.Domain.Blog.Features.Blogs;
 
-/// <summary>
-/// The unread counters a read of blogs carries, the blog's own and those of
-/// its rubrics
-/// </summary>
 /// <remarks>
 /// A guest cannot mark anything read, so a guest is shown the totals in the
 /// same fields; a reader is shown what is unread for them. The blog service
@@ -33,10 +29,6 @@ internal sealed class BlogUnreadCounters
         _identityProvider = identityProvider;
     }
 
-    /// <summary>
-    /// Fill the blog-level counters: publications with unread comments and the
-    /// unread comments across all of them.
-    /// </summary>
     public async Task FillBlogs(Blog[] blogs)
     {
         if (blogs.Length == 0) return;
@@ -63,10 +55,8 @@ internal sealed class BlogUnreadCounters
             b => b.Id, b => b.UnreadCommentsCount);
     }
 
-    /// <summary>
-    /// Fill the per-rubric "(N/A)" counter from the per-publication counters: a
-    /// rubric is not itself an unread-counter entity, its publications are.
-    /// </summary>
+    // Fill the per-rubric "(N/A)" counter from the per-publication counters: a rubric is not itself
+    // an unread-counter entity, its publications are.
     public async Task FillRubrics(Guid blogId, ICollection<Rubric> rubrics)
     {
         if (rubrics.Count == 0) return;
@@ -96,10 +86,7 @@ internal sealed class BlogUnreadCounters
         }
     }
 
-    /// <summary>
-    /// Fill the unread counters on a single blog's embedded rubrics. The
-    /// rubric list must be materialized so mutations survive serialization.
-    /// </summary>
+    // The rubric list must be materialized so mutations survive serialization.
     public async Task FillBlogRubrics(Blog blog)
     {
         var rubrics = blog.Rubrics as ICollection<Rubric> ?? blog.Rubrics.ToArray();

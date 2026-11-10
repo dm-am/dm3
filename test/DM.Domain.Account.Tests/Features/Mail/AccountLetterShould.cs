@@ -23,9 +23,6 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Mail;
 
-/// <summary>
-/// What the account letters carry that the template does not decide: the subject, and the hours a link lives.
-/// </summary>
 public class AccountLetterShould : UnitTestBase
 {
     private const string Reader = "reader@dm.am";
@@ -37,7 +34,7 @@ public class AccountLetterShould : UnitTestBase
     private readonly IOptions<SiteAddressConfiguration> _site =
         Options.Create(new SiteAddressConfiguration { PublicUrl = "https://dm.am" });
 
-    /// <summary>None of the hours is a default, so a letter that kept its own number would show.</summary>
+    // None of the hours is a default, so a letter that kept its own number would show.
     private readonly IOptions<TokenConfiguration> _tokens = Options.Create(new TokenConfiguration
     {
         PasswordResetTokenLifetimeHours = 21,
@@ -45,7 +42,6 @@ public class AccountLetterShould : UnitTestBase
         UsernameChangeApprovalTokenLifetimeHours = 23
     });
 
-    /// <summary>Every letter of the module by its sender and method, with the subject it goes out under.</summary>
     public static TheoryData<string, string> Subjects => new()
     {
         { "registration", "Dungeon Master: подтвердите почту" },
@@ -83,7 +79,8 @@ public class AccountLetterShould : UnitTestBase
         _ => throw new ArgumentOutOfRangeException(nameof(letter), letter, "no such letter")
     };
 
-    /// <summary>A mailbox filter matches the start of the subject, so every letter opens with the site's name.</summary>
+    // A mailbox filter matches the start of the subject, so every letter opens with the site's
+    // name.
     [Theory]
     [MemberData(nameof(Subjects))]
     public async Task GoOutUnderTheSubjectThatOpensWithTheSiteName(string letter, string subject)

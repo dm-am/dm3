@@ -2,14 +2,9 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Events;
 
-/// <summary>
-/// One stored domain event, as the relay hands it to its publish delegate.
-/// </summary>
 /// <param name="EventId">Identity of the publication: every republication
 /// of one row carries the same value, which is what lets the consumer treat a
 /// relay retry as a replay rather than a second event.</param>
-/// <param name="EventType">Type of the event.</param>
-/// <param name="EntityId">Entity the event reports on.</param>
 public sealed record OutboxEnvelope(Guid EventId, EventType EventType, Guid EntityId);
 
 /// <summary>
@@ -47,7 +42,6 @@ public interface IOutboxRelayProcessor
     /// delegate, marks the confirmed prefix, and reports what is left.</summary>
     /// <param name="publish">Publication with confirmation; an exception means
     /// "the row did not leave" and stops the batch.</param>
-    /// <param name="cancellationToken">Cancellation token.</param>
     Task<OutboxRelayResult> RelayBatchAsync(
         Func<OutboxEnvelope, CancellationToken, Task> publish,
         CancellationToken cancellationToken);

@@ -17,10 +17,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.AttributeSchemaTemplates;
 
-/// <summary>
-/// The catalogue of starting character sheets: who may change it, and what each
-/// refusal of the storage means to the caller.
-/// </summary>
 public class AttributeSchemaTemplateServiceShould : UnitTestBase
 {
     private readonly IIntentionManager intentionManager;
@@ -49,9 +45,6 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
     private static ReplaceAttributeSchemaTemplate Replacement(Guid templateId, string title = "Лайт") =>
         new() { TemplateId = templateId, Title = title };
 
-    /// <summary>
-    /// Reading the catalogue asks nobody anything.
-    /// </summary>
     [Fact]
     public async Task ReadTheCatalogueWithoutAGate()
     {
@@ -74,10 +67,7 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// Every write asks the same question, and asks it before it touches the
-    /// storage.
-    /// </summary>
+    // Every write asks the same question, and asks it before it touches the storage.
     [Fact]
     public async Task AuthorizeCreation()
     {
@@ -122,10 +112,8 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
         intentionManager.Received(1).ThrowIfForbidden(AttributeSchemaTemplateIntention.Manage);
     }
 
-    /// <summary>
-    /// The rank is asked before the body is, so a caller who may not write
-    /// learns nothing from the shape of what they sent.
-    /// </summary>
+    // The rank is asked before the body is, so a caller who may not write learns nothing from the
+    // shape of what they sent.
     [Fact]
     public async Task RefuseARankBeforeReadingTheBody()
     {
@@ -141,9 +129,6 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
             Arg.Any<CreateAttributeSchemaTemplate>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The row records who put the template into the catalogue.
-    /// </summary>
     [Fact]
     public async Task CreateOnBehalfOfTheCaller()
     {
@@ -156,10 +141,6 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
         await repository.Received(1).Create(creation, userId, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The title taken by a live template is a conflict, on both writes that
-    /// can take one.
-    /// </summary>
     [Fact]
     public async Task AnswerConflictWhenACreatedTitleIsTaken()
     {
@@ -196,10 +177,8 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// The site is never left without a template to start from, so the removal
-    /// of the default one is a conflict rather than a repair.
-    /// </summary>
+    // The site is never left without a template to start from, so the removal of the default one is
+    // a conflict rather than a repair.
     [Fact]
     public async Task RefuseToRemoveTheDefaultTemplate()
     {
@@ -224,9 +203,7 @@ public class AttributeSchemaTemplateServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// The loser of two simultaneous assignments is told to look again.
-    /// </summary>
+    // The loser of two simultaneous assignments is told to look again.
     [Fact]
     public async Task AnswerConflictWhenTheDefaultWasJustAssignedElsewhere()
     {

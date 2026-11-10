@@ -37,21 +37,12 @@ internal static class CommentQueries
     public static IQueryable<Guid> GameIds(DmDbContext dbContext) =>
         dbContext.Games.IgnoreQueryFilters().Select(g => g.GameId);
 
-    /// <summary>
-    /// Identifiers of every blog, removed ones included (see <see cref="GameIds" />).
-    /// </summary>
     public static IQueryable<Guid> BlogIds(DmDbContext dbContext) =>
         dbContext.Blogs.IgnoreQueryFilters().Select(b => b.BlogId);
 
-    /// <summary>
-    /// Identifiers of every publication, removed ones included (see <see cref="GameIds" />).
-    /// </summary>
     public static IQueryable<Guid> PublicationIds(DmDbContext dbContext) =>
         dbContext.Publications.IgnoreQueryFilters().Select(p => p.PublicationId);
 
-    /// <summary>
-    /// Identifiers of every topic, removed ones included (see <see cref="GameIds" />).
-    /// </summary>
     public static IQueryable<Guid> TopicIds(DmDbContext dbContext) =>
         dbContext.Topics.IgnoreQueryFilters().Select(t => t.TopicId);
 
@@ -65,9 +56,6 @@ internal static class CommentQueries
     public static IQueryable<DbComment> One(DmDbContext dbContext, Guid commentId, IQueryable<Guid> owners) =>
         dbContext.Comments.Where(c => !c.IsRemoved && c.CommentId == commentId && owners.Contains(c.EntityId));
 
-    /// <summary>
-    /// Drop the comments of the authors this reader does not see.
-    /// </summary>
     public static IQueryable<DbComment> WithoutAuthors(
         IQueryable<DbComment> query, IReadOnlyCollection<Guid>? excludeUserIds) =>
         excludeUserIds is { Count: > 0 }
@@ -80,7 +68,7 @@ internal static class CommentQueries
     /// </summary>
     public static IQueryable<DbComment> ApplyFilters(
         IQueryable<DbComment> query,
-        ICommentsQuery commentsQuery,
+        CommentsQuery commentsQuery,
         IReadOnlyCollection<Guid>? excludeUserIds)
     {
         // Exclude blocked users
@@ -118,26 +106,20 @@ internal static class CommentQueries
         return query;
     }
 
-    /// <summary>
-    /// How many comments the filtered discussion holds.
-    /// </summary>
     public static Task<int> Count(
         DmDbContext dbContext,
         Guid entityId,
-        ICommentsQuery commentsQuery,
+        CommentsQuery commentsQuery,
         IReadOnlyCollection<Guid>? excludeUserIds,
         string queryTag,
         CancellationToken ct = default) =>
         ApplyFilters(Discussion(dbContext, entityId).TagWith(queryTag), commentsQuery, excludeUserIds)
             .CountAsync(ct);
 
-    /// <summary>
-    /// One page of the filtered discussion, in the order the reader asked for.
-    /// </summary>
     public static async Task<IEnumerable<Comment>> Page(
         DmDbContext dbContext,
         Guid entityId,
-        ICommentsQuery commentsQuery,
+        CommentsQuery commentsQuery,
         PagingData paging,
         IReadOnlyCollection<Guid>? excludeUserIds,
         string queryTag,

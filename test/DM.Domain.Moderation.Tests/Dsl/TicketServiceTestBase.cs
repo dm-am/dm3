@@ -14,11 +14,6 @@ using NSubstitute;
 
 namespace DM.Domain.Moderation.Tests.Dsl;
 
-/// <summary>
-/// The ticket service over substitutes of everything it asks: validators that
-/// pass, a signed-in moderator, a clock that stands still and conversations
-/// that hold nothing until a test writes into one.
-/// </summary>
 public abstract class TicketServiceTestBase : UnitTestBase
 {
     protected readonly IValidator<CreateTicket> createValidator;
@@ -92,11 +87,6 @@ public abstract class TicketServiceTestBase : UnitTestBase
                 Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>())
             .Returns(true);
 
-    /// <summary>
-    /// An open ticket of a user complaint, filed by the given reporter, that the
-    /// repository takes a comment into; the entity it was given is read back by
-    /// the function returned.
-    /// </summary>
     protected Func<CreateTicketCommentEntity> OpenTicketTakingComments(Guid? reporterUserId,
         TicketSubtype subtype = TicketSubtype.UserComplaint, Guid? targetUserId = null)
     {
@@ -111,18 +101,11 @@ public abstract class TicketServiceTestBase : UnitTestBase
         return CommentsTaken();
     }
 
-    /// <summary>
-    /// The identifiers the factory hands out from here on are the comment's.
-    /// </summary>
     private void CommentIdentifiers()
     {
         guidFactory.Create().Returns(commentId);
     }
 
-    /// <summary>
-    /// The repository takes the comment it is given; the entity and the status it
-    /// was asked to move the ticket to are read back by the function returned.
-    /// </summary>
     protected Func<CreateTicketCommentEntity> CommentsTaken() => CommentsTaken(out _);
 
     protected Func<CreateTicketCommentEntity> CommentsTaken(out Func<TicketStatus> statusAfter)

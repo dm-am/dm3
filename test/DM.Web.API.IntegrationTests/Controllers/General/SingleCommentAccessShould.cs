@@ -11,27 +11,15 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A comment read by its identifier answers as the discussion it hangs on does,
-/// and only its own discussion's route hands it out.
-/// </summary>
-/// <remarks>The four discussions share one table, so the single read is held to the listing's answer.</remarks>
+// The four discussions share one table, so the single read is held to the listing's answer.
 public class SingleCommentAccessShould : IntegrationTestBase
 {
     public SingleCommentAccessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// The seeded game whose discussion only its people may write in, led by the
-    /// admin.
-    /// </summary>
     private static readonly Guid ReadOnlyGameId = TestConstants.NoRecruitmentGameId;
 
-    /// <summary>
-    /// A discussion only its people may write in is read by everybody, the guest
-    /// included, by the listing and by the single read alike.
-    /// </summary>
     [Fact]
     public async Task GiveACommentOfAReadOnlyDiscussionToEveryReaderAsTheListingDoes()
     {
@@ -71,9 +59,6 @@ public class SingleCommentAccessShould : IntegrationTestBase
         { "forum", "/v1/games/comments" },
     };
 
-    /// <summary>
-    /// A comment asked for through another discussion's route answers as a comment that is not there.
-    /// </summary>
     [Theory]
     [MemberData(nameof(ForeignRoutes))]
     public async Task AnswerNotFoundThroughAnotherDiscussionsRoute(string owner, string prefix)
@@ -97,10 +82,6 @@ public class SingleCommentAccessShould : IntegrationTestBase
         ? new HttpRequestMessage(HttpMethod.Get, url)
         : CreateAuthenticatedRequest(HttpMethod.Get, url, reader);
 
-    /// <summary>
-    /// A comment by the admin on the given discussion, and a reader who has no part
-    /// in any of them.
-    /// </summary>
     private async Task<(Guid CommentId, string Marker, GeneralUser Stranger)> SeedAsync(Guid entityId)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

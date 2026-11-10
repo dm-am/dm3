@@ -8,10 +8,6 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// The deletion of the picture a warning on a profile pinned, through the
-/// moderation endpoint.
-/// </summary>
 public class ProfilePictureDeletionEndpointShould : WarningControllerTestBase
 {
     public ProfilePictureDeletionEndpointShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -28,11 +24,7 @@ public class ProfilePictureDeletionEndpointShould : WarningControllerTestBase
         return await db.Uploads.IgnoreQueryFilters().AsNoTracking().SingleAsync(u => u.UploadId == uploadId);
     }
 
-    /// <summary>
-    /// "Удалить картинку" in the moderation log: the pinned picture leaves both logs, the status and "О себе" stay,
-    /// and the upload carries the moderator's deletion for the sweeper.
-    /// </summary>
-    /// <remarks>Whatever its owner did to the avatar: the other routes read through the soft-delete filter.</remarks>
+    // Whatever its owner did to the avatar: the other routes read through the soft-delete filter.
     [Theory]
     [InlineData("still the avatar")]
     [InlineData("replaced by its owner")]
@@ -47,10 +39,8 @@ public class ProfilePictureDeletionEndpointShould : WarningControllerTestBase
             "replaced by its owner" => Avatar(uploadId, TestConstants.SecondUserId),
             _ => Avatar(uploadId, TestConstants.SecondUserId, deletedBy: TestConstants.SecondUserId)
         };
-        await SeedUpload(avatar);
-        await Seed(OnProfile(warningId, TestConstants.SecondUserId, "Статус", "[b]О себе[/b]", uploadId));
-
-        try
+        await WithPinnedPicture(avatar,
+            OnProfile(warningId, TestConstants.SecondUserId, "Статус", "[b]О себе[/b]", uploadId), async () =>
         {
             var response = await DeleteProfilePicture(warningId, CustomWebApplicationFactory.CreateModeratorUser());
             var body = await response.Content.ReadAsStringAsync();
@@ -76,27 +66,17 @@ public class ProfilePictureDeletionEndpointShould : WarningControllerTestBase
                 profile.GetProperty("info").GetString().Should().Contain("<strong>О себе</strong>",
                     "{0} keeps О себе", name);
             }
-        }
-        finally
-        {
-            await Unseed(warningId);
-            await UnseedUpload(uploadId);
-        }
+        });
     }
 
-    /// <summary>
-    /// A second press answers success and changes nothing: the first deletion's author and moment stay.
-    /// </summary>
-    /// <remarks>One conditional statement (DATA_STORAGE.md, "Атомарные встречные записи").</remarks>
+    // One conditional statement (DATA_STORAGE.md, "Атомарные встречные записи").
     [Fact]
     public async Task AnswerASecondDeletionWithSuccessAndKeepTheFirstMark()
     {
         var warningId = LogId(0x76);
         var uploadId = Guid.NewGuid();
-        await SeedUpload(Avatar(uploadId, TestConstants.SecondUserId));
-        await Seed(OnProfile(warningId, TestConstants.SecondUserId, "Статус", null, uploadId));
-
-        try
+        await WithPinnedPicture(Avatar(uploadId, TestConstants.SecondUserId),
+            OnProfile(warningId, TestConstants.SecondUserId, "Статус", null, uploadId), async () =>
         {
             (await DeleteProfilePicture(warningId, CustomWebApplicationFactory.CreateModeratorUser()))
                 .StatusCode.Should().Be(HttpStatusCode.NoContent);
@@ -111,27 +91,16 @@ public class ProfilePictureDeletionEndpointShould : WarningControllerTestBase
             after.IsRemoved.Should().BeTrue();
             after.DeletedByUserId.Should().Be(TestConstants.ModeratorUserId, "the first deletion stays signed");
             after.DeletedUtc.Should().Be(first.DeletedUtc, "the grace period is not restarted");
-        }
-        finally
-        {
-            await Unseed(warningId);
-            await UnseedUpload(uploadId);
-        }
+        });
     }
 
-    /// <summary>
-    /// A reader, a guest and the open log cannot take the picture out: the
-    /// refusal is said, and the upload and the answer stay as they were.
-    /// </summary>
     [Fact]
     public async Task RefuseTheDeletionOfAPinnedPictureToAReader()
     {
         var warningId = LogId(0x77);
         var uploadId = Guid.NewGuid();
-        await SeedUpload(Avatar(uploadId, TestConstants.SecondUserId));
-        await Seed(OnProfile(warningId, TestConstants.SecondUserId, "Статус", null, uploadId));
-
-        try
+        await WithPinnedPicture(Avatar(uploadId, TestConstants.SecondUserId),
+            OnProfile(warningId, TestConstants.SecondUserId, "Статус", null, uploadId), async () =>
         {
             var asReader = await DeleteProfilePicture(warningId, CustomWebApplicationFactory.CreateTestUser());
             asReader.StatusCode.Should().Be(HttpStatusCode.Forbidden);
@@ -144,18 +113,10 @@ public class ProfilePictureDeletionEndpointShould : WarningControllerTestBase
                 await Client.GetAsync($"/v1/warnings?username={TestConstants.SecondUserLogin}"));
             RowOf(open, warningId).GetProperty("profile").TryGetProperty("picture", out _)
                 .Should().BeTrue("the picture stays in the log");
-        }
-        finally
-        {
-            await Unseed(warningId);
-            await UnseedUpload(uploadId);
-        }
+        });
     }
 
-    /// <summary>
-    /// A moderator does not take the picture out of a warning issued to himself: refused, nothing marked.
-    /// </summary>
-    /// <remarks>A party does not rule on his own case, as with tickets.</remarks>
+    // A party does not rule on his own case, as with tickets.
     [Fact]
     public async Task RefuseAModeratorThePictureOfAWarningIssuedToHimself()
     {
@@ -211,9 +172,6 @@ public class ProfilePictureDeletionEndpointShould : WarningControllerTestBase
         }
     }
 
-    /// <summary>
-    /// A warning that pins no picture answers success; a warning nobody issued answers 404.
-    /// </summary>
     [Fact]
     public async Task AnswerAWarningWithoutAPictureWithSuccessAndAnUnknownOneWithNotFound()
     {

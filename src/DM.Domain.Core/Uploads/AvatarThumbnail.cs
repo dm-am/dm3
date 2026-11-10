@@ -29,7 +29,6 @@ public static class AvatarThumbnail
     /// <summary>
     /// The sides cut for an upload of the type: both for an avatar, none for anything else.
     /// </summary>
-    /// <param name="type">Upload type.</param>
     public static IReadOnlyList<int> SizesFor(UploadType type) =>
         type is UploadType.UserAvatar or UploadType.CharacterAvatar ? Sizes : [];
 
@@ -50,8 +49,6 @@ public static class AvatarThumbnail
     /// <summary>
     /// Every object an upload of the type occupies: the original and its thumbnails.
     /// </summary>
-    /// <param name="objectKey">Object key of the original.</param>
-    /// <param name="type">Upload type.</param>
     public static IReadOnlyList<string> ObjectKeysOf(string objectKey, UploadType type) =>
         [objectKey, .. SizesFor(type).Select(size => AddressOf(objectKey, size))];
 }

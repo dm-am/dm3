@@ -16,9 +16,6 @@ public interface IUsernameHistoryRepository : IUsernameHistoryReader
     /// </summary>
     Task<bool> IsUsernameReserved(string username, CancellationToken ct = default);
 
-    /// <summary>
-    /// Check if a username is reserved for others (excluding the specified user)
-    /// </summary>
     Task<bool> IsUsernameReservedForOthers(string username, Guid excludeUserId, CancellationToken ct = default);
 
     /// <summary>

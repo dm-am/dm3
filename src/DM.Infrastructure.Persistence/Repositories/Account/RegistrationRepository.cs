@@ -8,9 +8,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
-/// <summary>
-/// Registration repository for email-first registration flow
-/// </summary>
 internal class RegistrationRepository : IRegistrationRepository
 {
     private readonly DmDbContext _dbContext;

@@ -127,12 +127,7 @@ public class GameBlacklistServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
     }
 
-    /// <summary>
-    /// The request that lost the race is answered the way the check answers it.
-    /// </summary>
-    /// <remarks>
-    /// Two requests for one user both pass the read, and the unique index refuses the second insert.
-    /// </remarks>
+    // Two requests for one user both pass the read, and the unique index refuses the second insert.
     [Fact]
     public async Task AnswerConflictWhenTheInsertLosesTheRace()
     {
@@ -153,9 +148,7 @@ public class GameBlacklistServiceShould : UnitTestBase
         await producer.DidNotReceive().SendAsync(EventType.ChangedGame, gameId);
     }
 
-    /// <summary>
-    /// A subscriber keeps the subscription: the service holds no subscription store to end it with.
-    /// </summary>
+    // A subscriber keeps the subscription: the service holds no subscription store to end it with.
     [Fact]
     public async Task AddTheUserToTheBlacklist()
     {

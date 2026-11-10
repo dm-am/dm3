@@ -13,7 +13,13 @@
 import { defineComponent, h, type Component } from "vue";
 import { DOMWrapper, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia, type Pinia } from "pinia";
-import { createMemoryHistory, createRouter, type Router } from "vue-router";
+import {
+  createMemoryHistory,
+  createRouter,
+  RouterView,
+  type RouteMeta,
+  type Router,
+} from "vue-router";
 import { createVfm, ModalsContainer } from "vue-final-modal";
 import PageTitle from "@/shared/ui/Layout/PageTitle.vue";
 import BlockTitle from "@/shared/ui/Layout/BlockTitle.vue";
@@ -25,8 +31,16 @@ import FormField from "@/shared/ui/Form/FormField.vue";
 
 const Blank = defineComponent({ render: () => null });
 
+/** What a route record carries besides its name and path. */
+export interface AddressRecord {
+  /** The meta the page reads off its route: requiresAuth, fromLetter. */
+  meta?: RouteMeta;
+  /** The views by outlet name, for a shell that draws named RouterViews. */
+  components?: Record<string, Component>;
+}
+
 /** A named address of the app, as its route table writes it. */
-export type Address = [name: string, path: string];
+export type Address = [name: string, path: string, record?: AddressRecord];
 
 export interface MountOptions {
   /** Every named address the page and what it draws link to, its own included. */
@@ -37,26 +51,58 @@ export interface MountOptions {
   attachTo?: HTMLElement;
   /** Runs at the address, before the page mounts: a guard to hold a navigation. */
   beforeMount?: (router: Router) => void;
+  /** The page's props; wrapper.setProps changes them after the mount. */
+  props?: Record<string, unknown>;
+  /** Children drawn as stubs, as global.stubs of mount takes them. */
+  stubs?: Record<string, Component | boolean>;
+  /**
+   * The page is the component of the address's route, drawn by a RouterView:
+   * its leave guards run, and a navigation to another route unmounts it.
+   */
+  routed?: boolean;
 }
 
 export async function mountPage(
   page: Component,
   address: string,
-  { routes, pinia = createPinia(), attachTo, beforeMount }: MountOptions,
+  {
+    routes,
+    pinia = createPinia(),
+    attachTo,
+    beforeMount,
+    props,
+    stubs,
+    routed = false,
+  }: MountOptions,
 ) {
   setActivePinia(pinia);
   const router = createRouter({
     history: createMemoryHistory(),
-    routes: routes.map(([name, path]) => ({ name, path, component: Blank })),
+    routes: routes.map(
+      ([name, path, { meta, components = { default: Blank } } = {}]) => ({
+        name,
+        path,
+        meta,
+        components,
+      }),
+    ),
   });
+  if (routed) {
+    const own = router.resolve(address).matched[0];
+    own.components = { default: page };
+  }
   await router.push(address);
   await router.isReady();
   beforeMount?.(router);
-  // The page and the container its windows open in, as App.vue draws them.
-  const host = defineComponent({
-    setup: () => () => [h(page), h(ModalsContainer)],
-  });
+  // The page and the container its windows open in, as App.vue draws them;
+  // the host hands the page what it is given, so setProps reaches the page.
+  const host = defineComponent(
+    (_: Record<string, unknown>, { attrs }) =>
+      () => [h(routed ? RouterView : page, attrs), h(ModalsContainer)],
+    { inheritAttrs: false },
+  );
   const wrapper = mount(host, {
+    props,
     attachTo,
     global: {
       plugins: [pinia, router, createVfm()],
@@ -69,6 +115,7 @@ export async function mountPage(
         Form,
         FormField,
       },
+      stubs,
     },
   });
   return { wrapper, router };

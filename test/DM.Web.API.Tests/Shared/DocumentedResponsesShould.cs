@@ -8,26 +8,16 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// An action documents exactly the status codes it declares.
-/// </summary>
-/// <remarks>
-/// Swashbuckle takes the codes from <c>ProducesResponseType</c> and the sentences from <c>&lt;response&gt;</c>
-/// lines, and nothing joins them. Read out of the source: the doc comment is compiled into nothing to reflect over.
-/// </remarks>
+// Swashbuckle takes the codes from ProducesResponseType and the sentences from <response> lines,
+// and nothing joins them.
 public class DocumentedResponsesShould
 {
-    /// <summary>A line of the doc comment naming a status code.</summary>
     private static readonly Regex Documented = new(
         @"<response\s+code=""(\d{3})""", RegexOptions.Compiled);
 
-    /// <summary>
-    /// The status code of a declared response type, by name or by bare number, on a line known to carry the attribute.
-    /// </summary>
     private static readonly Regex DeclaredCode = new(
         @"StatusCodes\.Status(\d{3})\w*|,\s*(\d{3})\s*\)", RegexOptions.Compiled);
 
-    /// <summary>Where an action's accumulated block ends.</summary>
     private static readonly Regex Signature = new(
         @"^\s*public\s+(?:async\s+)?[\w<>?\[\], .]+\s+\w+\s*\(", RegexOptions.Compiled);
 

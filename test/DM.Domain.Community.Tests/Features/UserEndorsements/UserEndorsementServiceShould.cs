@@ -193,12 +193,8 @@ public class UserEndorsementServiceShould : UnitTestBase
         eligibility.Status.Should().Be(HttpStatusCode.Conflict);
     }
 
-    /// <summary>
-    /// The whole point of the shared evaluation: whatever the query refuses
-    /// with is what the create call refuses with, word for word and status for
-    /// status. Two copies of the rule list would drift, and a client drawing
-    /// its control on the query would then offer a rejected POST.
-    /// </summary>
+    // Two copies of the rule list would drift, and a client drawing its control on the query would
+    // then offer a rejected POST.
     [Theory]
     [InlineData(true, false, false)]   // newbie
     [InlineData(false, false, false)]  // never played together
@@ -223,10 +219,8 @@ public class UserEndorsementServiceShould : UnitTestBase
         await repository.DidNotReceive().CreateAsync(Arg.Any<CreateUserEndorsementEntity>());
     }
 
-    /// <summary>
-    /// The intention resolver admits Create to anyone signed in, so the mock
-    /// stands in for that and the eligibility rules are what is under test.
-    /// </summary>
+    // The intention resolver admits Create to anyone signed in, so the mock stands in for that and
+    // the eligibility rules are what is under test.
     private void AllowCreateIntention() =>
         intentionManager.IsAllowed(UserEndorsementIntention.Create).Returns(true);
 
@@ -332,7 +326,6 @@ public class UserEndorsementServiceShould : UnitTestBase
         await repository.Received(1).UpdateAsync(Arg.Is<UpdateUserEndorsementEntity>(e => e.Text == "Updated text"));
     }
 
-    /// <summary>An endorsement the current user wrote, at the given moment or now.</summary>
     private UserEndorsement OwnEndorsement(Guid id, DateTimeOffset? createdUtc = null) => new()
     {
         Id = id,

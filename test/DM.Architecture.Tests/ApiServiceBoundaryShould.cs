@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// What the API layer is built out of.
-/// </summary>
 /// <remarks>
 /// Matched on source text: one rule names a shape (I*Repository), not a type, and the IL rules
 /// do not see a type used only inside an async body. See ServiceLayerBoundaryShould.
@@ -27,27 +24,20 @@ public class ApiServiceBoundaryShould
         ["UploadApiService.cs"] = ["IUploadRepository", "IIntentionManager"]
     };
 
-    /// <summary>
-    /// A dependency an API service is not allowed to be built out of.
-    /// </summary>
-    /// <remarks>The namespace qualifier is optional: written in full, a type would not start the match at the I.</remarks>
+    // The namespace qualifier is optional: written in full, a type would not start the match at the
+    // I.
     private static readonly Regex ForbiddenDependency = new(
         @"^[ \t]*private readonly (?:[A-Za-z0-9_]+\.)*(?<name>I[A-Za-z0-9]*Repository|IIntentionManager)\s",
         RegexOptions.Compiled | RegexOptions.Multiline);
 
-    /// <summary>Any dependency an API service holds, whatever it is called.</summary>
     private static readonly Regex InjectedDependency = new(
         @"^[ \t]*private readonly (?:[A-Za-z0-9_]+\.)*(?<name>I[A-Za-z0-9]*)\s",
         RegexOptions.Compiled | RegexOptions.Multiline);
 
-    /// <summary>An interface a class in the persistence layer implements.</summary>
     private static readonly Regex ImplementedContract = new(
         @"\bclass\s+\w+\s*:\s*(?<bases>[^{]+)", RegexOptions.Compiled);
 
-    /// <summary>
-    /// The authored files of the host whose names match any of the patterns.
-    /// </summary>
-    /// <remarks>The parts of a partial service count too: a field may be declared in any part.</remarks>
+    // The parts of a partial service count too: a field may be declared in any part.
     private static IReadOnlyList<string> Sources(params string[] patterns) => patterns
         .SelectMany(pattern => Directory.GetFiles(
             Path.Combine(RepositoryLayout.Root, "src", "DM.Web.API"), pattern, SearchOption.AllDirectories))
@@ -56,7 +46,6 @@ public class ApiServiceBoundaryShould
         .OrderBy(path => path, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>The dependencies of the API services that match and are forbidden, the exemptions aside.</summary>
     private static List<string> Offenders(Regex dependencies, Func<string, bool> forbidden) =>
         Sources("*ApiService.cs", "*ApiService.*.cs")
             .SelectMany(path => dependencies.Matches(File.ReadAllText(path))
@@ -84,10 +73,6 @@ public class ApiServiceBoundaryShould
             "service holding either has taken over a decision the domain also makes, and " +
             "the two only have to agree until they stop");
 
-    /// <summary>
-    /// The same boundary, matched on what a dependency is rather than on what it
-    /// is called.
-    /// </summary>
     /// <remarks>
     /// The rule above reads names, and a data-access contract not called I*Repository walks past
     /// it; where it is implemented is the evidence.

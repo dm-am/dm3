@@ -4,10 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The uploads of the model: the typed target columns, one per kind of owner, and
-/// the rules that hold them to the kind of the upload.
-/// </summary>
 internal static class UploadModel
 {
     internal static void Configure(ModelBuilder modelBuilder)

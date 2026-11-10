@@ -15,9 +15,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// SolohinLex (admin): the username history and an avatar, so the profile looks like a veteran's.
-    /// </summary>
     private async Task SetupSolohinLexProfile(List<DbUser> users, ComprehensiveSeedResult result)
     {
         var solohin = users.FirstOrDefault(u => u.Username == PrimaryLogin);
@@ -50,10 +47,6 @@ internal sealed partial class DataSeeder
             $"info=yes, avatar={(solohin.AvatarUploadId != null ? "yes" : "no")}");
     }
 
-    /// <summary>
-    /// Username history: three historical renames, rebuilt on every run.
-    /// </summary>
-    /// <returns>How many entries the history holds.</returns>
     private async Task<int> SeedSolohinLexUsernameHistory(DbUser solohin)
     {
         _dbContext.UsernameHistories.RemoveRange(
@@ -82,10 +75,6 @@ internal sealed partial class DataSeeder
         return historyEntries.Length;
     }
 
-    /// <summary>
-    /// Contacts, rebuilt on every run.
-    /// </summary>
-    /// <returns>How many contacts the profile shows.</returns>
     private async Task<int> SeedSolohinLexContacts(DbUser solohin)
     {
         _dbContext.Set<DbUserContact>().RemoveRange(
@@ -111,10 +100,6 @@ internal sealed partial class DataSeeder
         return contactEntries.Length;
     }
 
-    /// <summary>
-    /// Endorsements ("Рекомендации"), rebuilt on every run.
-    /// </summary>
-    /// <returns>How many endorsements the list holds, the skipped ones included.</returns>
     private async Task<int> SeedSolohinLexEndorsements(List<DbUser> users, DbUser solohin)
     {
         // An endorser missing from this run is skipped.
@@ -146,9 +131,6 @@ internal sealed partial class DataSeeder
         return endorsementEntries.Length;
     }
 
-    /// <summary>
-    /// The contest awards of SolohinLex, rebuilt on every run.
-    /// </summary>
     private async Task SeedSolohinLexAwards(DbUser solohin, ComprehensiveSeedResult result)
     {
         // From mid-table in 2022 to the Grand Prix in 2024: one placement per series, the special awards
@@ -195,9 +177,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"SolohinLex awards: rebuilt {demoAwards.Length} contest awards + honorary goblin across {demoAwards.Select(d => d.SeriesId).Distinct().Count()} contest series (2022-2024)");
     }
 
-    /// <summary>
-    /// The "Почетный гоблин" award, held by SolohinLex and by TestHonorary.
-    /// </summary>
     private async Task SeedHonoraryGoblins(List<DbUser> users, DbUser solohin, ComprehensiveSeedResult result)
     {
         // Dated to his early years, so the oldest award leads the list. Without ContestSeriesId the tile shows the type.
@@ -262,9 +241,6 @@ internal sealed partial class DataSeeder
         result.Details.Add("Hidden award type: Бета-тестер");
     }
 
-    /// <summary>
-    /// The avatar of SolohinLex, uploaded once.
-    /// </summary>
     private async Task SeedSolohinLexAvatar(DbUser solohin)
     {
         // Skipped when SolohinLex already has an avatar.
@@ -321,10 +297,9 @@ internal sealed partial class DataSeeder
         result.Details.Add("User ratings recomputed from actual PostReviews and Posts");
     }
 
-    /// <summary>Game posts tier ladder: T1=100, T2=500, T3=2000, T4=5000.</summary>
+    // Game posts tier ladder: T1=100, T2=500, T3=2000, T4=5000.
     private const int ArchivePostTarget = 5000;
 
-    /// <summary>The prefix of the GameText the archive posts are counted by.</summary>
     private const string ArchivePostMarker = "Архивная запись №";
 
     /// <summary>

@@ -6,9 +6,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A browser test that only passed on a retry is named on the run page.
-/// </summary>
 /// <remarks>
 /// A test passed on a retry makes the job green. The reporter writes a file and a workflow step reads
 /// it, so the path is read from both files and compared.
@@ -47,10 +44,8 @@ public class FlakyBrowserTestsShould
             "the summary is about the tests that needed a retry, not about the run as a whole");
     }
 
-    /// <summary>The shard number every leg of the job is told apart by.</summary>
     private const string Shard = "${{ matrix.shard }}";
 
-    /// <summary>One step of the job, from its name to the next step, comments out.</summary>
     private static string[] StepOf(string job, string name)
     {
         var lines = job.Split('\n')
@@ -70,10 +65,7 @@ public class FlakyBrowserTestsShould
         return lines[start..end];
     }
 
-    /// <summary>
-    /// Every leg of the suite reports under the number of its share.
-    /// </summary>
-    /// <remarks>An artifact name is unique within a run, so legs uploading under one name fail.</remarks>
+    // An artifact name is unique within a run, so legs uploading under one name fail.
     [Fact]
     public void ReportEveryShareUnderItsOwnName()
     {

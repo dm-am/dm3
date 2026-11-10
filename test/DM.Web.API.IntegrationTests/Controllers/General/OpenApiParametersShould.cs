@@ -1,27 +1,21 @@
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using DM.Web.API.IntegrationTests.Helpers;
 using DM.Web.API.Swagger;
 using AwesomeAssertions;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// The query parameters the contract publishes tell a caller what the API
-/// binds: the example URLs of the conventions document, the values of every
-/// sort parameter and the encoding of a repeatable filter.
-/// </summary>
 public class OpenApiParametersShould : IntegrationTestBase
 {
     public OpenApiParametersShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// Repo-relative: the conventions document is what clients are written from,
-    /// and it is not copied to the output directory.
-    /// </summary>
+    // Repo-relative: the conventions document is what clients are written from, and it is not
+    // copied to the output directory.
     private static readonly string ApiDesignPath =
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "docs", "conventions", "API_DESIGN.md");
 
@@ -31,11 +25,8 @@ public class OpenApiParametersShould : IntegrationTestBase
         "get", "put", "post", "delete", "patch", "options", "head", "trace"
     };
 
-    /// <summary>
-    /// Every example URL in the conventions document names query parameters the
-    /// endpoint actually declares.
-    /// </summary>
-    /// <remarks>An unbound query parameter is dropped in silence; an example URL can be diffed against the wire.</remarks>
+    // An unbound query parameter is dropped in silence; an example URL can be diffed against the
+    // wire.
     [Fact]
     public async Task DocumentOnlyExampleUrlsTheApiCanBind()
     {
@@ -113,7 +104,6 @@ public class OpenApiParametersShould : IntegrationTestBase
             "dropped and the caller gets 200 in some other order");
     }
 
-    /// <summary>Query parameter names declared on a path item or an operation.</summary>
     private static HashSet<string> QueryParameterNames(JsonElement node)
     {
         var names = new HashSet<string>(StringComparer.Ordinal);
@@ -136,9 +126,6 @@ public class OpenApiParametersShould : IntegrationTestBase
         return names;
     }
 
-    /// <summary>
-    /// Every sort parameter names the values it takes.
-    /// </summary>
     /// <remarks>
     /// The enum is published by SortVocabularySwaggerFilter from the table SortVocabularyFilter enforces, so an
     /// endpoint without an entry arrives here as a bare string.
@@ -149,40 +136,29 @@ public class OpenApiParametersShould : IntegrationTestBase
         var undeclared = new List<string>();
         var declared = 0;
 
-        foreach (var group in SwaggerExtensions.ApiGroups)
+        foreach (var operation in await SwaggerDocuments.OperationsAsync(Client))
         {
-            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            if (operation.Value.ValueKind != JsonValueKind.Object ||
+                !operation.Value.TryGetProperty("parameters", out var parameters))
             {
-                foreach (var operation in path.Value.EnumerateObject())
+                continue;
+            }
+
+            foreach (var parameter in parameters.EnumerateArray())
+            {
+                if (!parameter.TryGetProperty("name", out var name) ||
+                    name.GetString() is not ("sortBy" or "sortOrder" or "sort"))
                 {
-                    if (operation.Value.ValueKind != JsonValueKind.Object ||
-                        !operation.Value.TryGetProperty("parameters", out var parameters))
-                    {
-                        continue;
-                    }
+                    continue;
+                }
 
-                    foreach (var parameter in parameters.EnumerateArray())
-                    {
-                        if (!parameter.TryGetProperty("name", out var name) ||
-                            name.GetString() is not ("sortBy" or "sortOrder" or "sort"))
-                        {
-                            continue;
-                        }
-
-                        if (DeclaresItsValues(parameter, document.RootElement))
-                        {
-                            declared++;
-                        }
-                        else
-                        {
-                            undeclared.Add(
-                                $"{operation.Name.ToUpperInvariant()} {path.Name} {name.GetString()}");
-                        }
-                    }
+                if (DeclaresItsValues(parameter, operation.Document))
+                {
+                    declared++;
+                }
+                else
+                {
+                    undeclared.Add($"{operation.Address} {name.GetString()}");
                 }
             }
         }
@@ -193,10 +169,6 @@ public class OpenApiParametersShould : IntegrationTestBase
             "behind it answers 200 to any value");
     }
 
-    /// <summary>
-    /// Whether a parameter's schema carries an enum, directly or through the
-    /// $ref an enum type is published as.
-    /// </summary>
     private static bool DeclaresItsValues(JsonElement parameter, JsonElement document)
     {
         if (!parameter.TryGetProperty("schema", out var schema))
@@ -230,10 +202,6 @@ public class OpenApiParametersShould : IntegrationTestBase
                values.GetArrayLength() > 0;
     }
 
-    /// <summary>
-    /// A parameter that repeats is not a parameter that splits on a comma, and
-    /// the published description has to say which one it is.
-    /// </summary>
     /// <remarks>
     /// <c>?authors=alice,bob</c> on a collection binds one username "alice,bob". One string filter really splits on
     /// a comma, so the rule keys on the published type.
@@ -244,58 +212,48 @@ public class OpenApiParametersShould : IntegrationTestBase
         var wrong = new List<string>();
         var repeatableSeen = 0;
 
-        foreach (var group in SwaggerExtensions.ApiGroups)
+        foreach (var operation in await SwaggerDocuments.OperationsAsync(Client))
         {
-            var response = await Client.GetAsync($"/swagger/{group}/swagger.json");
-            response.StatusCode.Should().Be(HttpStatusCode.OK);
-
-            using var document = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
-            foreach (var path in document.RootElement.GetProperty("paths").EnumerateObject())
+            if (operation.Value.ValueKind != JsonValueKind.Object ||
+                !operation.Value.TryGetProperty("parameters", out var parameters))
             {
-                foreach (var operation in path.Value.EnumerateObject())
+                continue;
+            }
+
+            var repeatable = new List<string>();
+            foreach (var parameter in parameters.EnumerateArray())
+            {
+                if (!parameter.TryGetProperty("schema", out var schema) ||
+                    !schema.TryGetProperty("type", out var type) ||
+                    type.GetString() != "array")
                 {
-                    if (operation.Value.ValueKind != JsonValueKind.Object ||
-                        !operation.Value.TryGetProperty("parameters", out var parameters))
+                    continue;
+                }
+
+                var name = parameter.GetProperty("name").GetString()!;
+                repeatable.Add(name);
+                repeatableSeen++;
+
+                if (parameter.TryGetProperty("description", out var own) &&
+                    ClaimsCommaSeparated(own.GetString(), name))
+                {
+                    wrong.Add($"{operation.Address} parameter {name}");
+                }
+            }
+
+            if (repeatable.Count == 0 ||
+                !operation.Value.TryGetProperty("description", out var description))
+            {
+                continue;
+            }
+
+            foreach (var line in (description.GetString() ?? string.Empty).Split('\n'))
+            {
+                foreach (var name in repeatable)
+                {
+                    if (ClaimsCommaSeparated(line, name))
                     {
-                        continue;
-                    }
-
-                    var repeatable = new List<string>();
-                    foreach (var parameter in parameters.EnumerateArray())
-                    {
-                        if (!parameter.TryGetProperty("schema", out var schema) ||
-                            !schema.TryGetProperty("type", out var type) ||
-                            type.GetString() != "array")
-                        {
-                            continue;
-                        }
-
-                        var name = parameter.GetProperty("name").GetString()!;
-                        repeatable.Add(name);
-                        repeatableSeen++;
-
-                        if (parameter.TryGetProperty("description", out var own) &&
-                            ClaimsCommaSeparated(own.GetString(), name))
-                        {
-                            wrong.Add($"{operation.Name.ToUpperInvariant()} {path.Name} parameter {name}");
-                        }
-                    }
-
-                    if (repeatable.Count == 0 ||
-                        !operation.Value.TryGetProperty("description", out var description))
-                    {
-                        continue;
-                    }
-
-                    foreach (var line in (description.GetString() ?? string.Empty).Split('\n'))
-                    {
-                        foreach (var name in repeatable)
-                        {
-                            if (ClaimsCommaSeparated(line, name))
-                            {
-                                wrong.Add($"{operation.Name.ToUpperInvariant()} {path.Name} description of {name}");
-                            }
-                        }
+                        wrong.Add($"{operation.Address} description of {name}");
                     }
                 }
             }
@@ -307,7 +265,6 @@ public class OpenApiParametersShould : IntegrationTestBase
             "calling it comma-separated sends the caller down a path that answers 200 with an empty list");
     }
 
-    /// <summary>Whether a line claims the named parameter takes a comma-separated value.</summary>
     private static bool ClaimsCommaSeparated(string? text, string parameterName) =>
         text != null &&
         text.Contains("comma-separated", StringComparison.OrdinalIgnoreCase) &&

@@ -10,10 +10,8 @@ public class HealthCheckShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Liveness answers whether the process is up, and nothing else.
-    /// </summary>
-    /// <remarks>A liveness probe that fails on a database restarts a container that was fine, so no check runs.</remarks>
+    // A liveness probe that fails on a database restarts a container that was fine, so no check
+    // runs.
     [Fact]
     public async Task LivenessAnswersWithoutRunningAnyCheck()
     {
@@ -27,10 +25,6 @@ public class HealthCheckShould : IntegrationTestBase
         body.Should().NotContain("realtime-push");
     }
 
-    /// <summary>
-    /// Readiness answers whether this instance can serve a request, which means
-    /// it has to run the checks liveness deliberately skips.
-    /// </summary>
     /// <remarks>
     /// The status depends on the machine; the report names the checks. The broker and the realtime subscription
     /// are not readiness: a request is served without them.

@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.GameAttributeSchemas;
 
-/// <summary>
-/// What a descriptor of a game's sheet may be.
-/// </summary>
 public class ReplaceGameAttributeSchemaValidatorShould
 {
     private readonly ReplaceGameAttributeSchemaValidator validator = new();

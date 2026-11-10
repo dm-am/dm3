@@ -14,9 +14,6 @@ namespace DM.Infrastructure.Persistence.RelationalStorage;
 /// </remarks>
 internal static class TagNumbers
 {
-    /// <summary>
-    /// The next number no tag has carried.
-    /// </summary>
     public static async Task<int> NextAsync(DmDbContext dbContext, CancellationToken ct = default)
     {
         // Raw: an interpolation hole would become a parameter, and nextval takes a regclass.

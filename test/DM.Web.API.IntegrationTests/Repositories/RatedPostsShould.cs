@@ -10,9 +10,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The ordering comes from a GroupBy only Postgres translates, so the production query runs here, joins included.
-/// </summary>
+// The ordering comes from a GroupBy only Postgres translates, so the production query runs here,
+// joins included.
 public class RatedPostsShould : PostRepositoryTestBase
 {
     public RatedPostsShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -102,10 +101,8 @@ public class RatedPostsShould : PostRepositoryTestBase
         ordered[1].Id.Should().Be(highRatedOlderReview);
     }
 
-    /// <summary>
-    /// "Лучший пост недели" is the rating board of ONE week, not of all time.
-    /// </summary>
-    /// <remarks>The homepage block sends sortBy=rating with createdFromUtc=Monday, cutting on the post's creation date.</remarks>
+    // The homepage block sends sortBy=rating with createdFromUtc=Monday, cutting on the post's
+    // creation date.
     [Fact]
     public async Task KeepPostsCreatedBeforeTheWeekOutOfTheWeeklyRating()
     {
@@ -186,10 +183,6 @@ public class RatedPostsShould : PostRepositoryTestBase
         forGuest.Single().Room!.Game!.IsViewerSubscriber.Should().BeFalse();
     }
 
-    /// <summary>
-    /// A user subscribed to the game, so the feed has somebody to report as a
-    /// reader.
-    /// </summary>
     private static async Task<Guid> AddSubscriberAsync(DmDbContext dbContext, Guid gameId)
     {
         var subscriberId = Guid.NewGuid();

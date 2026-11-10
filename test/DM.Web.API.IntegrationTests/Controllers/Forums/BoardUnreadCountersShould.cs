@@ -11,10 +11,6 @@ using Board = DM.Infrastructure.Persistence.Entities.Forum.Board;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
-/// <summary>
-/// Reading one board fills two unread counters for a signed-in reader, from the one DbContext of the request
-/// scope, which serves one operation at a time.
-/// </summary>
 /// <remarks>
 /// The overlap itself is BoardServiceShould.ReadTheCountersOfOneBoardOneAfterTheOther's; the counters are
 /// asserted because a status alone does not tell which branch answered.

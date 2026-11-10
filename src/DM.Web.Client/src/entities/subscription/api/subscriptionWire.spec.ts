@@ -4,8 +4,8 @@
 
 /**
  * The server names the enums of a subscription and the client's model numbers
- * them (see subscriptionWire.ts). The values below are the ones the API of the
- * stand wrote on 27 September 2026, not ones made up to fit the reader.
+ * them (see subscriptionWire.ts). The values below are ones the API of the
+ * stand wrote, not ones made up to fit the reader.
  */
 import { describe, expect, it } from "vitest";
 import {

@@ -9,18 +9,10 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Two correspondents open the same conversation, whatever the database holds.
-/// </summary>
-/// <remarks>
-/// Nothing in the schema stops a pair from owning two direct chats, so the lookup orders its answer. Against
-/// PostgreSQL: which row a query returns among several is the database's answer.
-/// </remarks>
+// Nothing in the schema stops a pair from owning two direct chats, so the lookup orders its answer.
 public class DirectChatLookupShould : IntegrationTestBase
 {
-    /// <summary>
-    /// Serial numbers out of step with the write order, far above the shared identity sequence.
-    /// </summary>
+    // Serial numbers out of step with the write order, far above the shared identity sequence.
     private const int ElderSerialNumber = 1_900_000;
 
     private const int YoungerSerialNumber = 1_900_001;
@@ -29,9 +21,6 @@ public class DirectChatLookupShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Both sides of a pair that owns two conversations reach the same one.
-    /// </summary>
     [Fact]
     public async Task ReturnTheOldestOfTheDuplicateConversationsOfOnePair()
     {
@@ -63,10 +52,8 @@ public class DirectChatLookupShould : IntegrationTestBase
             "themselves in the other order does not make it a different one");
     }
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
     {
         var userId = Guid.NewGuid();
@@ -84,10 +71,7 @@ public class DirectChatLookupShould : IntegrationTestBase
         return userId;
     }
 
-    /// <summary>
-    /// A direct chat of two, written with the serial number it is to carry.
-    /// </summary>
-    /// <remarks>Raw SQL: the column is an identity one.</remarks>
+    // Raw SQL: the column is an identity one.
     private static async Task AddDirectChatAsync(
         DmDbContext dbContext, Guid chatId, int serialNumber, Guid oneId, Guid otherId)
     {

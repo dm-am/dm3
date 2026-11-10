@@ -104,10 +104,8 @@ public class TicketControllerShould : IntegrationTestBase
                 "the conversation reads from the oldest comment to the newest");
     }
 
-    /// <summary>
-    /// Whoever cannot read a ticket cannot write in it either, and cannot tell it
-    /// from a ticket that does not exist.
-    /// </summary>
+    // Whoever cannot read a ticket cannot write in it either, and cannot tell it from a ticket that
+    // does not exist.
     [Fact]
     public async Task CreateTicketCommentAnswersAStrangerAsIfThereWereNoTicket()
     {
@@ -120,9 +118,6 @@ public class TicketControllerShould : IntegrationTestBase
             .GetProperty("commentsCount").GetInt32().Should().Be(0);
     }
 
-    /// <summary>
-    /// A closed ticket takes no answer and is not opened again by one.
-    /// </summary>
     [Fact]
     public async Task CreateTicketCommentRefusesAClosedTicket()
     {
@@ -139,10 +134,8 @@ public class TicketControllerShould : IntegrationTestBase
         ticket.GetProperty("canComment").GetBoolean().Should().BeFalse();
     }
 
-    /// <summary>
-    /// An answer of a ticket is held to the length of the ticket itself, not to
-    /// the length of a comment of a topic.
-    /// </summary>
+    // An answer of a ticket is held to the length of the ticket itself, not to the length of a
+    // comment of a topic.
     [Fact]
     public async Task CreateTicketCommentHoldsTheTextToTheLengthOfATicket()
     {
@@ -155,11 +148,6 @@ public class TicketControllerShould : IntegrationTestBase
         longest.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// The last word and the closing are one answer: the comment lands, the ticket
-    /// is closed in the name of the moderator who wrote it, and nothing more is
-    /// offered on it.
-    /// </summary>
     [Fact]
     public async Task CreateTicketCommentClosesWithTheLastWordInOneAnswer()
     {
@@ -180,11 +168,6 @@ public class TicketControllerShould : IntegrationTestBase
         author.GetProperty("commentsCount").GetInt32().Should().Be(1);
     }
 
-    /// <summary>
-    /// A closing needs no word: an empty answer with a status that ends the ticket
-    /// only moves the status, the ticket names who closed it, and it is closed
-    /// once.
-    /// </summary>
     [Theory]
     [InlineData("Closed")]
     [InlineData("Spam")]
@@ -204,10 +187,8 @@ public class TicketControllerShould : IntegrationTestBase
         again.StatusCode.Should().Be(HttpStatusCode.BadRequest, "a ticket is closed once");
     }
 
-    /// <summary>
-    /// An answer that passes the turn to the author has to say something to him,
-    /// and waiting for moderation is the author's turn, not a choice of moderation.
-    /// </summary>
+    // An answer that passes the turn to the author has to say something to him, and waiting for
+    // moderation is the author's turn, not a choice of moderation.
     [Theory]
     [InlineData("", null, "text")]
     [InlineData("", "WaitingForUser", "text")]
@@ -226,10 +207,8 @@ public class TicketControllerShould : IntegrationTestBase
             .GetProperty("status").GetString().Should().Be("WaitingForModeration", "nothing was written");
     }
 
-    /// <summary>
-    /// The side of a ticket does not judge it: the moderator who filed it chooses
-    /// no status, and answers in it as its author.
-    /// </summary>
+    // The side of a ticket does not judge it: the moderator who filed it chooses no status, and
+    // answers in it as its author.
     [Fact]
     public async Task CreateTicketCommentRefusesAStatusFromTheModeratorWhoFiledIt()
     {
@@ -249,10 +228,6 @@ public class TicketControllerShould : IntegrationTestBase
             "his answer is a reply of the author, whatever his role");
     }
 
-    /// <summary>
-    /// A complaint about a moderator does not reach the moderator it names: not
-    /// to read, not to write in, not to close, not in the queue.
-    /// </summary>
     [Fact]
     public async Task HideAComplaintFromTheModeratorItNames()
     {
@@ -296,10 +271,8 @@ public class TicketControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// One queue, no wider than TicketVisibility: a junior moderator reads user complaints, a senior one complaints
-    /// about a junior's decision too, the administrators everything.
-    /// </summary>
+    // One queue, no wider than TicketVisibility: a junior moderator reads user complaints, a senior
+    // one complaints about a junior's decision too, the administrators everything.
     [Fact]
     public async Task HoldTheOneQueueToWhatTheRoleReads()
     {
@@ -321,11 +294,6 @@ public class TicketControllerShould : IntegrationTestBase
         admin.Should().Contain([complaint, juniorDecision, seniorDecision, bug, recovery]);
     }
 
-    /// <summary>
-    /// The queue stands in the order of whose turn it is: the tickets waiting for
-    /// moderation before the answered ones and the closed ones, newest first
-    /// within each, across the whole queue and not page by page.
-    /// </summary>
     [Fact]
     public async Task StandTheQueueInTheOrderOfStatusesThenNewestFirst()
     {
@@ -415,7 +383,6 @@ public class TicketControllerShould : IntegrationTestBase
         return await Filed(post);
     }
 
-    /// <summary>A ticket a guest filed through the form, with the address he left.</summary>
     private async Task<Guid> FileAsAGuest(string subtype)
     {
         var post = new HttpRequestMessage(HttpMethod.Post, "/v1/tickets")
@@ -438,10 +405,6 @@ public class TicketControllerShould : IntegrationTestBase
         return JsonDocument.Parse(body).RootElement.GetProperty("ticketId").GetGuid();
     }
 
-    /// <summary>
-    /// An answer in the conversation, with the status moderation chose with it
-    /// when one is given.
-    /// </summary>
     private Task<HttpResponseMessage> Answer(Guid ticketId, string text, GeneralUser user, string? status = null)
     {
         var post = CreateAuthenticatedRequest(HttpMethod.Post, $"/v1/moderation/tickets/{ticketId}/comments", user);

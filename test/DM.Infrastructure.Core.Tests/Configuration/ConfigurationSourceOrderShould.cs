@@ -23,7 +23,7 @@ public sealed class ConfigurationSourceOrderShould : IDisposable
 
     private readonly string _root = Path.Combine(Path.GetTempPath(), $"dm3-configuration-{Guid.NewGuid():N}");
 
-    /// <summary>Unique per test, so the environment variable of one never reaches another.</summary>
+    // Unique per test, so the environment variable of one never reaches another.
     private readonly string _section = $"OrderProbe{Guid.NewGuid():N}";
 
     [Theory]

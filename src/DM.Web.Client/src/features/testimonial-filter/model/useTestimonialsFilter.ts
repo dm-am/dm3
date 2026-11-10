@@ -3,7 +3,8 @@ import { useRoute, useRouter } from "vue-router";
 import type { LocationQuery } from "vue-router";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import {
-  applySortAction,
+  reduceSortOrClear,
+  sortOrClearDispatchers,
   parseSortDirection,
   validateSortField,
   parsePageNumber,
@@ -14,6 +15,7 @@ import type {
   TestimonialSortBy,
 } from "./types";
 import { DEFAULT_FILTER_STATE, SORT_OPTIONS } from "./types";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 export interface TestimonialsFilterComposable {
   filterState: ComputedRef<TestimonialsFilterState>;
@@ -21,14 +23,14 @@ export interface TestimonialsFilterComposable {
   hasActiveFilters: ComputedRef<boolean>;
 
   setSearch: (search: string) => void;
-  setSort: (sortBy: TestimonialSortBy, sortOrder?: "asc" | "desc") => void;
+  setSort: (sortBy: TestimonialSortBy, sortOrder?: SortDirection) => void;
   toggleSortOrder: () => void;
   clearFilters: () => void;
 }
 
 type TestimonialsFilterAction =
   | { type: "SET_SEARCH"; search: string }
-  | { type: "SET_SORT"; sortBy: TestimonialSortBy; sortOrder?: "asc" | "desc" }
+  | { type: "SET_SORT"; sortBy: TestimonialSortBy; sortOrder?: SortDirection }
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
 
@@ -43,18 +45,13 @@ function reducer(
       newState.search = action.search;
       return newState;
 
-    case "SET_SORT":
-    case "TOGGLE_SORT_ORDER":
-      applySortAction(newState, action, SORT_OPTIONS);
-      return newState;
-
-    case "CLEAR_FILTERS":
-      return createDefaultState();
-
-    default: {
-      const _exhaustive: never = action;
-      return _exhaustive;
-    }
+    default:
+      return reduceSortOrClear(
+        newState,
+        action,
+        SORT_OPTIONS,
+        createDefaultState,
+      );
   }
 }
 
@@ -145,10 +142,8 @@ export function useTestimonialsFilter(): TestimonialsFilterComposable {
 
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search });
-  const setSort = (sortBy: TestimonialSortBy, sortOrder?: "asc" | "desc") =>
-    dispatch({ type: "SET_SORT", sortBy, sortOrder });
-  const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-  const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
+  const { setSort, toggleSortOrder, clearFilters } =
+    sortOrClearDispatchers(dispatch);
 
   return {
     filterState,

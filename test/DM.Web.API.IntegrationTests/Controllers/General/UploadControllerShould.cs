@@ -35,11 +35,7 @@ public class UploadControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    /// <summary>
-    /// An upload that names no type is the caller's mistake and is answered as
-    /// one, naming the field they left out.
-    /// </summary>
-    /// <remarks>A type sent in the form instead of the query binds the enum to zero.</remarks>
+    // A type sent in the form instead of the query binds the enum to zero.
     [Fact]
     public async Task DirectUploadWithoutTypeRefusesAndNamesTheField()
     {
@@ -57,11 +53,7 @@ public class UploadControllerShould : IntegrationTestBase
             "to guess at a request they can see nothing wrong with");
     }
 
-    /// <summary>
-    /// A type outside the enum is refused as a bad request too - by model
-    /// binding, which is where a value it cannot read is refused.
-    /// </summary>
-    /// <remarks>Binding refuses this one, the guard above the other; the answer must not change between them.</remarks>
+    // Binding refuses this one, the guard above the other; the answer must not change between them.
     [Fact]
     public async Task DirectUploadWithUnknownTypeRefusesAndNamesTheField()
     {
@@ -77,9 +69,7 @@ public class UploadControllerShould : IntegrationTestBase
         FieldsRefused(body).Should().Contain("type");
     }
 
-    /// <summary>
-    /// A multipart body with the one required part; the type is checked before the file.
-    /// </summary>
+    // A multipart body with the one required part; the type is checked before the file.
     private static MultipartFormDataContent OneFilePart()
     {
         var file = new ByteArrayContent([0x89, 0x50, 0x4E, 0x47]);
@@ -87,7 +77,6 @@ public class UploadControllerShould : IntegrationTestBase
         return new MultipartFormDataContent { { file, "file", "avatar.png" } };
     }
 
-    /// <summary>The field names a ValidationProblemDetails body refuses.</summary>
     private static IEnumerable<string> FieldsRefused(string body) =>
         JsonDocument.Parse(body).RootElement
             .GetProperty("errors")

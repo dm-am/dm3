@@ -120,11 +120,7 @@ public class UpdateUserValidatorShould
             .WithErrorMessage(ValidationError.Long);
     }
 
-    /// <summary>
-    /// The page size is one of the sizes the account form offers, not a number in
-    /// a range: 15 sits inside any plausible range and no list on the site is
-    /// paged by it.
-    /// </summary>
+    // 15 sits inside any plausible range and no list on the site is paged by it.
     [Theory]
     [InlineData(0)]
     [InlineData(15)]
@@ -140,9 +136,6 @@ public class UpdateUserValidatorShould
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// The largest offered size saves.
-    /// </summary>
     [Fact]
     public void AcceptTheLargestOfferedPageSize()
     {
@@ -155,12 +148,8 @@ public class UpdateUserValidatorShould
         result.ShouldNotHaveValidationErrorFor(u => u.Settings!.PageSize);
     }
 
-    /// <summary>
-    /// Hiding markup on a surface that does not declare it.
-    /// </summary>
-    /// <remarks>
-    /// Refused rather than erased: a paragraph that vanished without a word is looked for, not rewritten.
-    /// </remarks>
+    // Refused rather than erased: a paragraph that vanished without a word is looked for, not
+    // rewritten.
     [Fact]
     public void RefuseHidingMarkupTheSurfaceDoesNotDeclare()
     {

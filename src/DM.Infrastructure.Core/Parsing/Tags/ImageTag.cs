@@ -8,7 +8,6 @@ namespace DM.Infrastructure.Core.Parsing.Tags;
 /// <summary>When an image is put behind a spoiler instead of embedding on sight.</summary>
 internal enum ImageGate
 {
-    /// <summary>Never: the image is shown where it stands.</summary>
     None,
 
     /// <summary>
@@ -21,10 +20,6 @@ internal enum ImageGate
     Always
 }
 
-/// <summary>
-/// <c>[img]address[/img]</c>, with the optional <c>width</c> and <c>height</c>
-/// parameters.
-/// </summary>
 /// <remarks>
 /// The markup is shared with the client and the editor (BbImageTagShould). A size
 /// is a limit set through CSS properties on the frame, so an ancestor can override

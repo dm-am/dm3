@@ -305,10 +305,6 @@ internal class CharacterRepository : ICharacterRepository
             .FirstAsync();
     }
 
-    /// <summary>
-    /// Writes the fields the change carries onto the tracked character, and
-    /// leaves the rest as they are.
-    /// </summary>
     /// <remarks>
     /// Modification tracking is handled via Edit history, not inline ModifiedUtc.
     /// </remarks>

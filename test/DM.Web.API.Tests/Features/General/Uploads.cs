@@ -14,7 +14,6 @@ using NSubstitute;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>The upload service of the tests that drive it with the pipeline and the bucket mocked.</summary>
 internal static class Uploads
 {
     public static UploadApiService Service(
@@ -44,7 +43,6 @@ internal static class Uploads
             authorizers);
     }
 
-    /// <summary>The row the repository answers with: the written one.</summary>
     public static StoredUpload Stored(NewUpload upload) => new()
     {
         Id = upload.Id,
@@ -61,7 +59,7 @@ internal static class Uploads
         AddresseesJson = upload.AddresseesJson,
     };
 
-    /// <summary>A file of the given length; the pipeline is mocked, so only the length matters.</summary>
+    // A file of the given length; the pipeline is mocked, so only the length matters.
     public static IFormFile File(long length = 1024)
     {
         var bytes = Encoding.UTF8.GetBytes("not a real image; processing is mocked");

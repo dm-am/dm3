@@ -18,9 +18,7 @@ using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Blogs;
 
-/// <summary>
-/// The blog side of the status moves, one case a move: the table itself is ModuleStatusPolicyShould.
-/// </summary>
+// The blog side of the status moves, one case a move: the table itself is ModuleStatusPolicyShould.
 public class BlogStatusTransitionShould : BlogServiceTestBase
 {
     private readonly DateTimeOffset now = new(2026, 7, 14, 12, 0, 0, TimeSpan.Zero);
@@ -61,9 +59,6 @@ public class BlogStatusTransitionShould : BlogServiceTestBase
         return blogId;
     }
 
-    /// <summary>
-    /// The caller passes one of the two view gates and no other intention.
-    /// </summary>
     private void OpenOnly(BlogIntention gate)
     {
         HideEveryBlogFromTheCaller();
@@ -187,14 +182,8 @@ public class BlogStatusTransitionShould : BlogServiceTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// A blog the caller cannot find anywhere on the site does not exist for them
-    /// here either: the same status and the same message an unclaimed id gets,
-    /// whichever of the two gates is the one that closed.
-    /// </summary>
-    /// <remarks>
-    /// Read without a scope, the codes 404, 400 and 403 would tell a stranger which hidden blogs exist.
-    /// </remarks>
+    // Read without a scope, the codes 404, 400 and 403 would tell a stranger which hidden blogs
+    // exist.
     [Theory]
     [InlineData(DraftVisibility.Private, PremoderationStatus.Approved)]
     [InlineData(DraftVisibility.Public, PremoderationStatus.AwaitingApproval)]
@@ -241,10 +230,8 @@ public class BlogStatusTransitionShould : BlogServiceTestBase
         onTaken.Message.Should().Be(onUnclaimed.Message);
     }
 
-    /// <summary>
-    /// The refusal comes before anything else looks at the blog, so neither the
-    /// state machine nor the authorization gate can leak what the 404 withheld.
-    /// </summary>
+    // The refusal comes before anything else looks at the blog, so neither the state machine nor
+    // the authorization gate can leak what the 404 withheld.
     [Theory]
     [InlineData(ModuleStatus.Draft)]
     [InlineData(ModuleStatus.Active)]
@@ -263,11 +250,8 @@ public class BlogStatusTransitionShould : BlogServiceTestBase
         await repository.DidNotReceive().UpdateBlog(Arg.Any<UpdateBlogEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The scope is the reader's ordinary one and nothing invented for this
-    /// endpoint: the same two gates a plain read applies, the private draft and
-    /// the pending verdict.
-    /// </summary>
+    // The scope is the reader's ordinary one and nothing invented for this endpoint: the same two
+    // gates a plain read applies, the private draft and the pending verdict.
     [Fact]
     public async Task ReadTheBlogUnderTheTwoGatesAnOrdinaryReadApplies()
     {
@@ -281,10 +265,8 @@ public class BlogStatusTransitionShould : BlogServiceTestBase
         intentionManager.Received(1).IsAllowed(BlogIntention.ViewPremoderationPending, Arg.Any<BlogDto>());
     }
 
-    /// <summary>
-    /// The owner of a private draft nobody else can open still moves it: the gate
-    /// that closes for a stranger is exactly the one that opens for them.
-    /// </summary>
+    // The owner of a private draft nobody else can open still moves it: the gate that closes for a
+    // stranger is exactly the one that opens for them.
     [Fact]
     public async Task LetTheOwnerStartAPrivateDraftNobodyElseCanSee()
     {

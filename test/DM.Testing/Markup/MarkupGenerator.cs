@@ -16,7 +16,6 @@ public sealed class MarkupRandom(ulong seed)
 {
     private ulong _state = seed;
 
-    /// <summary>The next 64 bits.</summary>
     public ulong NextBits()
     {
         _state += 0x9E3779B97F4A7C15UL;
@@ -26,10 +25,8 @@ public sealed class MarkupRandom(ulong seed)
         return z ^ (z >> 31);
     }
 
-    /// <summary>A number from 0 to <paramref name="bound"/> less one.</summary>
     public int Next(int bound) => (int)(NextBits() % (ulong)bound);
 
-    /// <summary>One item of the list.</summary>
     public T Pick<T>(IReadOnlyList<T> items) => items[Next(items.Count)];
 
     /// <summary>FNV-1a over the UTF-16 code units: a seed from a word, the same on every runtime.</summary>
@@ -45,30 +42,21 @@ public sealed class MarkupRandom(ulong seed)
         return hash;
     }
 
-    /// <summary>The seed of one case of a check: the base seed and the case number mixed.</summary>
     public static ulong CaseSeed(ulong baseSeed, int index) =>
         new MarkupRandom(baseSeed ^ ((ulong)index * 0xD1B54A32D192ED03UL)).NextBits();
 }
 
-/// <summary>
-/// One generated text, as the pieces it was assembled from.
-/// </summary>
 /// <remarks>Kept in pieces, so a failing text shrinks a piece at a time without cutting tags in half.</remarks>
 public sealed class MarkupSample(IReadOnlyList<string> atoms)
 {
-    /// <summary>The pieces in order.</summary>
     public IReadOnlyList<string> Atoms { get; } = atoms;
 
-    /// <summary>The text.</summary>
     public string Text { get; } = string.Concat(atoms);
 
     /// <inheritdoc />
     public override string ToString() => MarkupLiteral.Of(Text);
 }
 
-/// <summary>
-/// Texts assembled at random from the shared alphabet (markupAlphabet.ts).
-/// </summary>
 /// <remarks>
 /// A soup is anything; a valid text is markup the grammar accepts whole on its surface. Every word is
 /// Q, four digits and Q, distinct within a text, so it can be followed to its readers.
@@ -90,8 +78,6 @@ public sealed class MarkupGenerator
         _hiding = hiding;
     }
 
-    /// <summary>A soup of pieces of every kind.</summary>
-    /// <param name="random">Where the choices come from</param>
     /// <param name="hiding">
     /// False to leave out every piece that spells [private]: a text for a surface
     /// that has no hidden block, where the save path refuses any of it.
@@ -103,7 +89,6 @@ public sealed class MarkupGenerator
         return new MarkupSample(generator._atoms.ToArray());
     }
 
-    /// <summary>Markup the grammar accepts whole on the surface.</summary>
     public static MarkupSample Valid(MarkupRandom random, BbSurface surface)
     {
         var generator = new MarkupGenerator(random, hiding: true);
@@ -111,7 +96,6 @@ public sealed class MarkupGenerator
         return new MarkupSample(generator._atoms.ToArray());
     }
 
-    /// <summary>A word of a generated text, the n-th.</summary>
     public static string Word(int number) => $"Q{number.ToString("D4", CultureInfo.InvariantCulture)}Q";
 
     private string NextWord() => Word(++_words);
@@ -224,10 +208,8 @@ public sealed class MarkupGenerator
         }
     }
 
-    /// <summary>
-    /// An item of the list that the text may hold: without [private] when the
-    /// text has none, and inside an example without anything that could end it.
-    /// </summary>
+    // An item of the list that the text may hold: without [private] when the text has none, and
+    // inside an example without anything that could end it.
     private T Allowed<T>(IReadOnlyList<T> items, Func<T, string> text, bool insideExample = false)
     {
         while (true)
@@ -240,7 +222,7 @@ public sealed class MarkupGenerator
         }
     }
 
-    /// <summary>The piece with its placeholders filled: a list of names, a surrogate with no partner.</summary>
+    // The piece with its placeholders filled: a list of names, a surrogate with no partner.
     private string Expand(string piece) =>
         piece.Contains('{', StringComparison.Ordinal)
             ? piece.Replace("{names}", _random.Pick(_alphabet.Names), StringComparison.Ordinal)
@@ -249,9 +231,6 @@ public sealed class MarkupGenerator
             : piece;
 }
 
-/// <summary>
-/// The text both sides read, and a way to print one.
-/// </summary>
 public static class MarkupText
 {
     /// <summary>

@@ -49,7 +49,7 @@ const lastMessagePreview = computed(() => {
   const text = (msg.text || "")
     .replace(/<(?:br|hr)\s*\/?>/gi, " ")
     .replace(/<[^>]*>/g, "");
-  const truncated = text.length > 60 ? text.slice(0, 60) + "..." : text;
+  const truncated = text.length > 60 ? `${text.slice(0, 60)}...` : text;
   const prefix = isLastMessageFromMe.value ? "Вы: " : "";
   return prefix + truncated;
 });

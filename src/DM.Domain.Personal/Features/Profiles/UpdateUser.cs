@@ -30,9 +30,6 @@ public class UpdateUser
     /// </summary>
     public bool? ShowBirthday { get; set; }
 
-    /// <summary>
-    /// User real name
-    /// </summary>
     public string? Name { get; set; }
 
     /// <summary>

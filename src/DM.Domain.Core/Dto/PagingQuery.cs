@@ -2,9 +2,6 @@ using System.ComponentModel.DataAnnotations;
 
 namespace DM.Domain.Core.Dto;
 
-/// <summary>
-/// Base query for pagination
-/// </summary>
 /// <remarks>
 /// Standard pagination: ?skip=0&amp;take=20; the largest take any endpoint serves is
 /// <see cref="PagingPolicy.MaxPageSize"/>.

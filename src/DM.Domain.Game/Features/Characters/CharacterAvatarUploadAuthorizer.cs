@@ -24,9 +24,6 @@ internal class CharacterAvatarUploadAuthorizer : PublicUploadTargetAuthorizer
     /// <inheritdoc />
     public override UploadType Type => UploadType.CharacterAvatar;
 
-    /// <summary>
-    /// Changing a character's portrait is editing the character.
-    /// </summary>
     /// <remarks>
     /// The intention CharacterService.UpdateAsync asks, over the same projection, so the portrait
     /// opens exactly when the sheet does. Existence is settled before the image reaches the bucket.

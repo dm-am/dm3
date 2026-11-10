@@ -7,10 +7,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// A session authenticates only the pair it was issued for.
-/// </summary>
-/// <remarks>The lookup filters by both halves of the token, a predicate that only exists against a live store.</remarks>
+// The lookup filters by both halves of the token, a predicate that only exists against a live
+// store.
 public class SessionOwnershipShould : IntegrationTestBase
 {
     public SessionOwnershipShould(DatabaseFixture databaseFixture) : base(databaseFixture)

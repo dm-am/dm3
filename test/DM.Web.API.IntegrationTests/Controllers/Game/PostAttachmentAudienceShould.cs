@@ -44,28 +44,22 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
     private static Guid PostId => Guid.Parse("00000000-0000-0000-0000-00000000f205");
     private static Guid UploadPostId => Guid.Parse("00000000-0000-0000-0000-00000000f206");
 
-    /// <summary>A character of the game no longer let into the room.</summary>
     private static Guid GoneCharacterId => Guid.Parse("00000000-0000-0000-0000-00000000f207");
 
-    /// <summary>The post carrying <see cref="DepartedId"/>, so the strip of <see cref="PostId"/> stays as it is.</summary>
+    // The post carrying DepartedId, so the strip of PostId stays as it is.
     private static Guid DepartedPostId => Guid.Parse("00000000-0000-0000-0000-00000000f208");
 
-    /// <summary>Marked for the addressee, its picture in the text outside any block.</summary>
     private static Guid MarkedId => Guid.Parse("00000000-0000-0000-0000-00000000f210");
 
-    /// <summary>Marked for nobody: the author and the leads.</summary>
     private static Guid NobodyId => Guid.Parse("00000000-0000-0000-0000-00000000f211");
 
-    /// <summary>For everybody.</summary>
     private static Guid OpenId => Guid.Parse("00000000-0000-0000-0000-00000000f212");
 
-    /// <summary>Marked for the addressee, its picture only inside the block for him.</summary>
     private static Guid LetterId => Guid.Parse("00000000-0000-0000-0000-00000000f213");
 
-    /// <summary>For everybody, its mark changed by the cases that change one.</summary>
+    // For everybody, its mark changed by the cases that change one.
     private static Guid SwitchId => Guid.Parse("00000000-0000-0000-0000-00000000f214");
 
-    /// <summary>Marked for the addressee and for the character gone from the room.</summary>
     private static Guid DepartedId => Guid.Parse("00000000-0000-0000-0000-00000000f215");
 
     private static readonly byte[] FileBytes = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x03, 0x04];
@@ -81,7 +75,6 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
     private static GeneralUser Outsider =>
         User(TestConstants.TestimonialUserIds[6], TestConstants.TestimonialUsernames[6]);
 
-    /// <summary>The player of the character gone from the room.</summary>
     private static GeneralUser GoneOwner =>
         User(TestConstants.TestimonialUserIds[7], TestConstants.TestimonialUsernames[7]);
 
@@ -99,7 +92,7 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
 
     private static string ForVasya => MarkFor((VasyaCharacterId, "Вася", Vasya.UserId));
 
-    /// <summary>The mark of <see cref="DepartedId"/>, frozen while both were let into the room.</summary>
+    // The mark of DepartedId, frozen while both were let into the room.
     private static string ForVasyaAndTheGone =>
         MarkFor((VasyaCharacterId, "Вася", Vasya.UserId), (GoneCharacterId, "Ушедший", GoneOwner.UserId));
 
@@ -238,11 +231,10 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         return (await response.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("resource").Clone();
     }
 
-    /// <summary>The recipients a file goes out with; a null field is left out of the body.</summary>
+    // The recipients a file goes out with; a null field is left out of the body.
     private static string? Recipients(JsonElement file) =>
         file.TryGetProperty("recipients", out var recipients) ? recipients.GetString() : null;
 
-    /// <summary>The characters of the mark a file goes out with, as id and name; null when left out.</summary>
     private static (Guid Id, string? Name)[]? Addressees(JsonElement file) =>
         file.TryGetProperty("addressees", out var addressees)
             ? addressees.EnumerateArray().Select(a => (a.GetProperty("id").GetGuid(), a.GetProperty("name").GetString()))
@@ -281,7 +273,8 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         (await Send(HttpMethod.Get, Address(NobodyId), Master)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>The strip, the count at the clip and the recipients come from one list, as the reader gets it.</summary>
+    // The strip, the count at the clip and the recipients come from one list, as the reader gets
+    // it.
     [Fact]
     public async Task ListAMarkedFileOnlyForWhomItIsReadWithItsRecipients()
     {
@@ -296,10 +289,6 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         Addressees(forVasya[OpenId]).Should().BeNull();
     }
 
-    /// <summary>
-    /// A character gone from the room stays on the file whose mark names him, by the name it froze, while the
-    /// author keeps him checked; unchecked, he is gone from the mark and no character of the room to choose again.
-    /// </summary>
     [Fact]
     public async Task KeepACharacterGoneFromTheRoomOnTheFileUntilTheAuthorDropsHim()
     {
@@ -337,10 +326,8 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         (await PostAs(Vasya)).GetProperty("gameText").GetString().Should().Contain(MarkedId.ToString("D"));
     }
 
-    /// <summary>
-    /// The text view and the safe view cut the picture as the page does: the audience is a header any
-    /// caller sends, and the text of a picture is its address.
-    /// </summary>
+    // The text view and the safe view cut the picture as the page does: the audience is a header
+    // any caller sends, and the text of a picture is its address.
     [Theory]
     [InlineData("plain_text")]
     [InlineData("embed_safe")]
@@ -417,10 +404,9 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         (await Send(HttpMethod.Get, Address(SwitchId), Petya)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// A change of the mark tells a caller nothing of a file he may not have, as its address does not:
-    /// a file of a post he cannot read and a file kept from him answer as one that does not exist.
-    /// </summary>
+    // A change of the mark tells a caller nothing of a file he may not have, as its address does
+    // not: a file of a post he cannot read and a file kept from him answer as one that does not
+    // exist.
     [Fact]
     public async Task AnswerAChangeOfAFileTheCallerMayNotHaveAsOfAMissingOne()
     {
@@ -438,10 +424,9 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
             .Should().Be(HttpStatusCode.Forbidden, "he reads the file and the post, and did not write it");
     }
 
-    /// <summary>
-    /// The record of a file and its removal tell a caller nothing of a file he may not have either: the words of
-    /// a file that does not exist, and 403 only to one who reads the file and may not do it.
-    /// </summary>
+    // The record of a file and its removal tell a caller nothing of a file he may not have either:
+    // the words of a file that does not exist, and 403 only to one who reads the file and may not
+    // do it.
     [Fact]
     public async Task AnswerTheRecordAndTheRemovalOfAFileTheCallerMayNotHaveAsOfAMissingOne()
     {
@@ -462,7 +447,7 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         }
     }
 
-    /// <summary>A change that names no choice is refused, rather than read as "Все".</summary>
+    // A change that names no choice is refused, rather than read as "Все".
     [Fact]
     public async Task RefuseAChangeOfTheMarkThatChoosesNothing()
     {
@@ -476,10 +461,6 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
             "the mark stays as it was");
     }
 
-    /// <summary>
-    /// A file for everybody that the text puts only inside a block is refused, both ways it can come about:
-    /// the mark set to "Все" and the text that moves the picture into the block.
-    /// </summary>
     [Fact]
     public async Task RefuseEverybodyForAFileTheTextPutsOnlyInsideAHiddenBlock()
     {
@@ -497,7 +478,6 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
             "a refused save writes nothing");
     }
 
-    /// <summary>The record of a file the moderator may not open names it, and nothing more.</summary>
     [Fact]
     public async Task NameAMarkedFileToAModeratorWithoutOpeningIt()
     {
@@ -514,7 +494,8 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         Addressees(forAuthor).Should().Equal((VasyaCharacterId, "Вася"));
     }
 
-    /// <summary>A file uploaded for the addressee is closed to another player from the first request after the answer.</summary>
+    // A file uploaded for the addressee is closed to another player from the first request after
+    // the answer.
     [Fact]
     public async Task UploadAFileWithItsMarkInOneStep()
     {
@@ -528,10 +509,8 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         (await Send(HttpMethod.Get, Address(id), Vasya)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// The form names who sees the file and no character, as the site sends "Все" and a bare
-    /// "Выбранные": the upload goes through, and the other player reads the file by the mark.
-    /// </summary>
+    // The form names who sees the file and no character, as the site sends "Все" and a bare
+    // "Выбранные": the upload goes through, and the other player reads the file by the mark.
     [Theory]
     [InlineData("All", HttpStatusCode.OK)]
     [InlineData("Selected", HttpStatusCode.NotFound)]
@@ -544,7 +523,6 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         (await Send(HttpMethod.Get, Address(id), Author)).StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>Uploads a picture to the post that starts without files, the given form fields beside it.</summary>
     private async Task<JsonElement> UploadToThePostWithoutFiles(params (string Value, string Name)[] fields)
     {
         using var picture = new MagickImage(MagickColors.Red, 8, 8);
@@ -566,7 +544,7 @@ public class PostAttachmentAudienceShould : IntegrationTestBase, IAsyncLifetime
         return JsonDocument.Parse(body).RootElement.Clone();
     }
 
-    /// <summary>Who sees a file is chosen on a file of a post alone, and the schema says so.</summary>
+    // Who sees a file is chosen on a file of a post alone, and the schema says so.
     [Fact]
     public async Task RefuseAMarkOnAnAvatarInTheSchema()
     {

@@ -41,8 +41,5 @@ internal class MailSender : IMailSender, IDisposable
         await producer.Send(string.Empty, letter, CancellationToken.None);
     }
 
-    /// <summary>
-    /// Closes the AMQP channel this sender opened.
-    /// </summary>
     public void Dispose() => producer.Dispose();
 }

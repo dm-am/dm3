@@ -7,49 +7,53 @@ import { mount, flushPromises } from "@vue/test-utils";
 import { createRouter, createMemoryHistory } from "vue-router";
 import { createPinia } from "pinia";
 import type { Character } from "@/entities/game";
+import { createMockCharacter } from "@/entities/game/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import RoomPostFilter from "./RoomPostFilter.vue";
 
 vi.mock("@/entities/user", () => ({
   UserMultiSelect: { template: '<div class="user-multi-select" />' },
 }));
 
+const aCharacter = (
+  id: string,
+  name: string,
+  status: Character["status"],
+  isNpc: boolean,
+  username: string,
+): Character => ({
+  ...createMockCharacter(id, name),
+  status,
+  isNpc: asServed(isNpc),
+  author: asServed(createMockUser(`u-${username}`, username)),
+});
+
 const characters = [
-  {
-    id: "c-elvira",
-    name: "Эльвира Чародейка",
-    status: "Active",
-    isNpc: false,
-    author: { username: "Experienced" },
-  },
-  {
-    id: "c-stranger",
-    name: "Таинственный Незнакомец",
-    status: "Active",
-    isNpc: true,
-    author: { username: "TestMentor" },
-  },
-  {
-    id: "c-diopsid",
-    name: "Диопсид",
-    status: "Retired",
-    isNpc: false,
-    author: { username: "LongestLoginPossible" },
-  },
-  {
-    id: "c-liara",
-    name: "Лиара Тенебраум",
-    status: "UnderReview",
-    isNpc: false,
-    author: { username: "RatingNegative" },
-  },
-  {
-    id: "c-cassandra",
-    name: "Кассандра Видящая",
-    status: "Declined",
-    isNpc: false,
-    author: { username: "Игрок_Один" },
-  },
-] as unknown as Character[];
+  aCharacter("c-elvira", "Эльвира Чародейка", "Active", false, "Experienced"),
+  aCharacter(
+    "c-stranger",
+    "Таинственный Незнакомец",
+    "Active",
+    true,
+    "TestMentor",
+  ),
+  aCharacter("c-diopsid", "Диопсид", "Retired", false, "LongestLoginPossible"),
+  aCharacter(
+    "c-liara",
+    "Лиара Тенебраум",
+    "UnderReview",
+    false,
+    "RatingNegative",
+  ),
+  aCharacter(
+    "c-cassandra",
+    "Кассандра Видящая",
+    "Declined",
+    false,
+    "Игрок_Один",
+  ),
+];
 
 async function mountBar(query: Record<string, string> = {}) {
   const router = createRouter({

@@ -155,12 +155,7 @@ public class ChatServiceShould : UnitTestBase
         passed.Should().BeEquivalentTo(new[] { otherId, currentUserId });
     }
 
-    /// <summary>
-    /// Somebody removed from a chat stops being counted for it.
-    /// </summary>
-    /// <remarks>
-    /// The expiry index reads the removal stamp, and an untouched marker carries none.
-    /// </remarks>
+    // The expiry index reads the removal stamp, and an untouched marker carries none.
     [Fact]
     public async Task ForgetTheUnreadCounterOfAParticipantWhoWasRemoved()
     {
@@ -174,12 +169,7 @@ public class ChatServiceShould : UnitTestBase
                 Arg.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { removed })));
     }
 
-    /// <summary>
-    /// Marking a conversation read is a thing only its participants may do.
-    /// </summary>
-    /// <remarks>
-    /// The read behind it is the unfiltered one, so participation is checked here.
-    /// </remarks>
+    // The read behind it is the unfiltered one, so participation is checked here.
     [Theory]
     [InlineData(ChatType.Group)]
     [InlineData(ChatType.Direct)]
@@ -200,10 +190,8 @@ public class ChatServiceShould : UnitTestBase
         await unreadCountersRepository.DidNotReceive().FlushAsync(Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// A game room chat has no participant rows by design, and its access was
-    /// decided by the room before this call.
-    /// </summary>
+    // A game room chat has no participant rows by design, and its access was decided by the room
+    // before this call.
     [Fact]
     public async Task StillMarkAGameRoomChatAsReadWithNoParticipantRows()
     {
@@ -283,12 +271,7 @@ public class ChatServiceShould : UnitTestBase
         await repository.DidNotReceive().Create(Arg.Any<CreateChatEntity>(), Arg.Any<IEnumerable<CreateChatLinkEntity>>());
     }
 
-    /// <summary>
-    /// A group chat is not the way around a personal blacklist.
-    /// </summary>
-    /// <remarks>
-    /// The participant is refused before the chat exists, the message path holds the other half.
-    /// </remarks>
+    // The participant is refused before the chat exists, the message path holds the other half.
     [Fact]
     public async Task RefuseToCreateAGroupWithSomebodyWhoBlockedTheAuthor()
     {
@@ -306,13 +289,8 @@ public class ChatServiceShould : UnitTestBase
         await repository.DidNotReceive().Create(Arg.Any<CreateChatEntity>(), Arg.Any<IEnumerable<CreateChatLinkEntity>>());
     }
 
-    /// <summary>
-    /// The same refusal when the group is already there and somebody is added to it.
-    /// </summary>
-    /// <remarks>
-    /// Any participant of a group may update it, so a door standing at creation
-    /// alone is opened by whoever adds the blocked party a minute later.
-    /// </remarks>
+    // Any participant of a group may update it, so a door standing at creation alone is opened by
+    // whoever adds the blocked party a minute later.
     [Fact]
     public async Task RefuseToAddSomebodyWhoBlockedTheAuthorToAnExistingGroup()
     {
@@ -348,7 +326,6 @@ public class ChatServiceShould : UnitTestBase
             Arg.Is<UpdateChatEntity>(update => update.AddLinks.SequenceEqual(links)), Arg.Any<Guid>());
     }
 
-    /// <summary>A chat with nobody in it, found for update and handed back by the update.</summary>
     private Chat ChatToUpdate(Guid chatId, ChatType type = default)
     {
         var chat = new Chat { Id = chatId, Type = type, Participants = [] };
@@ -369,10 +346,6 @@ public class ChatServiceShould : UnitTestBase
         return chat;
     }
 
-    /// <summary>
-    /// A participant who leaves a group stops being counted for it, the way one
-    /// removed by somebody else does.
-    /// </summary>
     [Fact]
     public async Task LeaveAGroupAndForgetTheUnreadMarkerOfTheLeaver()
     {
@@ -387,10 +360,6 @@ public class ChatServiceShould : UnitTestBase
             Arg.Is<IEnumerable<Guid>>(ids => ids.SequenceEqual(new[] { currentUserId })));
     }
 
-    /// <summary>
-    /// The history is cleared for the caller alone, at this moment, and what was
-    /// unread for him is read.
-    /// </summary>
     [Fact]
     public async Task ClearTheHistoryForTheCallerAndReadWhatWasUnread()
     {
@@ -427,10 +396,6 @@ public class ChatServiceShould : UnitTestBase
             Arg.Any<Guid>(), Arg.Any<UnreadEntryType>(), Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// What the intention refuses is refused before anything is written: a direct
-    /// chat is not left, the global chat is not cleared.
-    /// </summary>
     [Fact]
     public async Task WriteNothingTheIntentionRefuses()
     {
@@ -449,10 +414,6 @@ public class ChatServiceShould : UnitTestBase
         await repository.DidNotReceive().ClearHistory(Arg.Any<Guid>(), Arg.Any<Guid>(), Arg.Any<DateTimeOffset>());
     }
 
-    /// <summary>
-    /// The chat that comes back from an update is the one its author reads: what
-    /// he cleared for himself does not come back with it.
-    /// </summary>
     [Fact]
     public async Task ReadTheUpdatedChatBackForItsAuthor()
     {

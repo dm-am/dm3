@@ -12,10 +12,9 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// A character holds one value per attribute specification: the update path reads rows into a dictionary by
-/// AttributeId and writes check-then-insert, so the index refuses a second row for the pair.
-/// </summary>
+// A character holds one value per attribute specification: the update path reads rows into a
+// dictionary by AttributeId and writes check-then-insert, so the index refuses a second row for the
+// pair.
 public class CharacterAttributeUniquenessShould : IntegrationTestBase
 {
     public CharacterAttributeUniquenessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -40,9 +39,6 @@ public class CharacterAttributeUniquenessShould : IntegrationTestBase
             .Which.ConstraintName.Should().Be("IX_CharacterAttributes_CharacterId_AttributeId");
     }
 
-    /// <summary>
-    /// The pair is what is unique: another specification on the character, or the same one on another, is ordinary.
-    /// </summary>
     [Fact]
     public async Task KeepValuesOfDifferentSpecificationsAndCharacters()
     {
@@ -71,10 +67,8 @@ public class CharacterAttributeUniquenessShould : IntegrationTestBase
         await save.Should().NotThrowAsync();
     }
 
-    /// <summary>
-    /// A fresh master, game, character and attribute row per call: the fixture
-    /// database is shared and seeded, so fixed identifiers would collide.
-    /// </summary>
+    // A fresh master, game, character and attribute row per call: the fixture database is shared
+    // and seeded, so fixed identifiers would collide.
     private async Task<(Guid CharacterId, Guid AttributeId)> AddCharacterWithAttributeAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

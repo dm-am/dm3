@@ -13,22 +13,13 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Personal;
 
-/// <summary>
-/// The user list counts once per request, not once per registered user.
-/// </summary>
-/// <remarks>
-/// A correlated count runs per row of Users before OFFSET. The statement states it: a correlated count
-/// leaves a SELECT inside ORDER BY or WHERE, a joined counter a column reference.
-/// </remarks>
+// A correlated count runs per row of Users before OFFSET.
 public class UserListCountedQueryShould
 {
 
     private static IQueryable<DbUser> Users(DmDbContext context) =>
         context.Users.Where(u => !u.IsRemoved);
 
-    /// <summary>
-    /// The ORDER BY of the outermost statement, which is where the sort key is.
-    /// </summary>
     private static string OrderByClause(string sql)
     {
         var index = sql.LastIndexOf("ORDER BY", StringComparison.Ordinal);
@@ -36,9 +27,6 @@ public class UserListCountedQueryShould
         return sql[index..];
     }
 
-    /// <summary>
-    /// The WHERE of the outermost statement, which is where the numeric range is.
-    /// </summary>
     private static string OuterWhereClause(string sql)
     {
         // The outer WHERE is the one at column zero of its line: everything a
@@ -140,17 +128,10 @@ public class UserListCountedQueryShould
 
     private static PagingData FirstPage() => new(new PagingQuery { Skip = 0, Take = 50 }, 50, 1000);
 
-    /// <summary>
-    /// Occurrences of a clause in the statement, which is how many times the page
-    /// pays for it.
-    /// </summary>
     private static int Occurrences(string sql, string clause) =>
         Regex.Matches(sql, Regex.Escape(clause)).Count;
 
-    /// <summary>
-    /// Filtering and sorting by the same number counts the table once, not twice.
-    /// </summary>
-    /// <remarks>Read off the repository, which decides the joins a request ends up with.</remarks>
+    // Read off the repository, which decides the joins a request ends up with.
     [Theory]
     [InlineData(UserSort.GamesHosting, "GamesHosting")]
     [InlineData(UserSort.BlogsHosting, "BlogsHosting")]
@@ -178,11 +159,7 @@ public class UserListCountedQueryShould
             "one left join per counted table, and the range is a predicate over what it brought");
     }
 
-    /// <summary>
-    /// A range over a counter the page is NOT sorted by still gets its own join, and
-    /// the sort still gets its own.
-    /// </summary>
-    /// <remarks>Paired by counter: two different numbers are two joins.</remarks>
+    // Paired by counter: two different numbers are two joins.
     [Fact]
     public void KeepTheJoinsApartWhenTheRangeAndTheSortReadDifferentNumbers()
     {

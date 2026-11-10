@@ -37,11 +37,9 @@ public class Identity : IIdentity
     /// <summary>
     /// Creates identity for an unauthenticated user
     /// </summary>
-    /// <param name="error">Authentication error</param>
     /// <param name="lockoutSecondsRemaining">
     /// Seconds left on the lockout, for the one error that has them.
     /// </param>
-    /// <returns>Unauthenticated user identity</returns>
     public static IIdentity Fail(
         AuthenticationError error, int? lockoutSecondsRemaining = null) => new Identity
         {
@@ -60,14 +58,6 @@ public class Identity : IIdentity
         BanEndsUtc = endsUtc
     };
 
-    /// <summary>
-    /// Creates identity for an authenticated user
-    /// </summary>
-    /// <param name="user">Authenticated user</param>
-    /// <param name="session">User session</param>
-    /// <param name="settings">User settings</param>
-    /// <param name="token">Authentication token</param>
-    /// <returns>Authenticated user identity</returns>
     public static IIdentity Success(
         AuthenticatedUser user, Session session, UserSettings settings, string token) => new Identity
         {

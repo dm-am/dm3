@@ -7,8 +7,9 @@
  * on screen re-reads them, and the broadcast events of the global chat do not.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mount, type VueWrapper } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { type VueWrapper } from "@vue/test-utils";
+import { createPinia } from "pinia";
+import { mountPage, type AddressRecord } from "@/shared/lib/testing/mountPage";
 import { NotificationType } from "@/shared/api/models/notifications";
 import type { SignalRNotification } from "@/shared/api/models/notifications";
 
@@ -18,19 +19,14 @@ const stubs = vi.hoisted(() => ({
   footer: { template: "<footer class='footer-stub' />" },
 }));
 
-const where = vi.hoisted(() => ({
-  route: null as unknown as {
-    path: string;
-    fullPath: string;
-    meta: { fromLetter?: boolean };
-    matched: { components: Record<string, object> }[];
-  },
-}));
-
-/** The records of a page of the shell, which has the right column. */
-const withRight = () => [{ components: { left: {}, right: {}, page: {} } }];
-/** The records of the messenger or of a room of posts: no right outlet. */
-const withoutRight = () => [{ components: { left: {}, page: {} } }];
+/** The views of a page of the shell, which has the right column. */
+const withRight = () => ({
+  left: stubs.blank,
+  right: stubs.blank,
+  page: stubs.blank,
+});
+/** The views of the messenger or of a room of posts: no right outlet. */
+const withoutRight = () => ({ left: stubs.blank, page: stubs.blank });
 
 const badges = vi.hoisted(() => ({
   messaging: { fetchUnreadCount: vi.fn() },
@@ -85,19 +81,7 @@ vi.mock("@/entities/user", () => ({
 vi.mock("@/shared/lib/scroll", () => ({ setScrollContainer: vi.fn() }));
 vi.mock("@/features/account-time-zone", () => ({ useTimeZoneCheck: vi.fn() }));
 
-vi.mock("vue-router", async () => {
-  const { reactive } = await import("vue");
-  where.route = reactive({
-    path: "/",
-    fullPath: "/",
-    meta: {},
-    matched: [{ components: { left: {}, right: {}, page: {} } }],
-  });
-  return { useRoute: () => where.route };
-});
-
 // The furniture of the shell: rendered, it would drag half the application in.
-vi.mock("vue-final-modal", () => ({ ModalsContainer: stubs.blank }));
 vi.mock("@/widgets/header", () => ({ Header: stubs.header }));
 vi.mock("@/widgets/footer", () => ({ Footer: stubs.footer }));
 vi.mock("@/shared/ui/Toast", () => ({ ToastContainer: stubs.blank }));
@@ -106,20 +90,12 @@ vi.mock("@/shared/ui/ScrollNav", () => ({ ScrollNav: stubs.blank }));
 import App from "./App.vue";
 
 let shell: VueWrapper | null = null;
-let pinia = createPinia();
-
-beforeEach(() => {
-  pinia = createPinia();
-  setActivePinia(pinia);
-  where.route.path = "/";
-  where.route.fullPath = "/";
-  where.route.meta = {};
-  where.route.matched = withRight();
-});
-
-/** Mounts the shell and drops the counts it reads on start. */
-async function mountShell() {
-  shell = mount(App, { global: { plugins: [pinia] } });
+/** Mounts the shell at a page with the given record and drops the counts it reads on start. */
+async function mountShell(page: AddressRecord = { components: withRight() }) {
+  ({ wrapper: shell } = await mountPage(App, "/page", {
+    routes: [["page", "/page", page]],
+    pinia: createPinia(),
+  }));
   await Promise.resolve();
   badges.messaging.fetchUnreadCount.mockClear();
   badges.notification.fetchUnreadCount.mockClear();
@@ -224,11 +200,11 @@ describe("the side columns of the shell", () => {
     shell = null;
   });
 
-  const at = async ({ letter = false, right = true } = {}) => {
-    where.route.meta = letter ? { fromLetter: true } : {};
-    where.route.matched = right ? withRight() : withoutRight();
-    return mountShell();
-  };
+  const at = async ({ letter = false, right = true } = {}) =>
+    mountShell({
+      meta: letter ? { fromLetter: true } : {},
+      components: right ? withRight() : withoutRight(),
+    });
 
   it("stands both columns on the page", async () => {
     const wrapper = await at();

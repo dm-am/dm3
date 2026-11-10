@@ -58,9 +58,6 @@ public class UserProfileNoteServiceShould : UnitTestBase
             validator);
     }
 
-    /// <summary>
-    /// An anonymous viewer has no note of their own, and that is an answer.
-    /// </summary>
     [Fact]
     public async Task ReturnNothingWhenGettingNoteWithoutAuthentication()
     {
@@ -169,13 +166,7 @@ public class UserProfileNoteServiceShould : UnitTestBase
         capturedEntity.CreatedUtc.Should().Be(now);
     }
 
-    /// <summary>
-    /// A note the pair already has is updated by the same write that creates a
-    /// new one, with no read of the note before it.
-    /// </summary>
-    /// <remarks>
-    /// The write decides new or existing itself, so there is nothing to read first.
-    /// </remarks>
+    // The write decides new or existing itself, so there is nothing to read first.
     [Fact]
     public async Task UpdateExistingNote()
     {

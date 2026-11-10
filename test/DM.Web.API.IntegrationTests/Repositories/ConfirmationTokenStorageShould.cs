@@ -14,13 +14,7 @@ using DM.Web.API.IntegrationTests.Helpers;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The value a confirmation letter carries is not in the database.
-/// </summary>
-/// <remarks>
-/// The value a letter carries is a credential, so the row keeps its hash. Against the container Postgres: the row's
-/// content and a lookup by hash are asserted.
-/// </remarks>
+// The value a letter carries is a credential, so the row keeps its hash.
 public class ConfirmationTokenStorageShould : IntegrationTestBase
 {
     public ConfirmationTokenStorageShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -112,10 +106,6 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
         (await change.FindUser(secret, DateTimeOffset.MinValue)).Should().NotBeNull();
     }
 
-    /// <summary>
-    /// A confirmed change of address spends the link it came in through.
-    /// </summary>
-    /// <remarks>The second lookup runs against the row the first one left behind.</remarks>
     [Fact]
     public async Task SpendTheLinkTheSecretCameFrom()
     {
@@ -150,9 +140,7 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
             .IsRemoved.Should().BeTrue("and the row says so, whoever reads it next");
     }
 
-    /// <summary>
-    /// The owner's new password spends a change of address somebody else asked for.
-    /// </summary>
+    // The owner's new password spends a change of address somebody else asked for.
     [Fact]
     public async Task DropThePendingAddressAndItsLinkWithThePassword()
     {
@@ -186,9 +174,6 @@ public class ConfirmationTokenStorageShould : IntegrationTestBase
             .Should().BeNull("and the link in the other mailbox has nothing left to confirm");
     }
 
-    /// <summary>
-    /// Every token sent by mail keeps the hash of its secret, across the whole shared database.
-    /// </summary>
     [Fact]
     public async Task KeepTheHashOfEveryMailedToken()
     {

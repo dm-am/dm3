@@ -22,6 +22,7 @@ import {
   type CreateRubricInput,
   type Rubric,
 } from "@/entities/blog";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { GeneralError } from "@/shared/api/models/common";
 import RubricsSection from "./RubricsSection.vue";
@@ -57,12 +58,11 @@ function mountSection() {
   const pinia = createPinia();
   setActivePinia(pinia);
   const held = [...EXISTING];
-  const served = () => ({
-    id: "the-blog",
-    title: "Дневник",
+  const served = (): Blog => ({
+    ...createMockBlog("the-blog", "Дневник"),
     rubrics: [...held],
   });
-  useBlogDetailsStore().blog = served() as unknown as Blog;
+  useBlogDetailsStore().blog = served();
 
   created = vi
     .spyOn(blogApi, "createRubric")

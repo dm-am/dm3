@@ -58,7 +58,6 @@ public class PostAttachmentVisibilityShould : UnitTestBase
     private static IAuthorizationSubject Reader(Guid userId) =>
         new AuthenticatedUser { UserId = userId, Username = "reader", Role = UserRole.RegularUser };
 
-    /// <summary>A post of the room, with two character blocks to address.</summary>
     private static DomainPost PostWith(
         string gameText, bool gameShowsAll = false, bool roomViewPrivate = false, string? mapMark = null) => new()
         {
@@ -126,9 +125,6 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         Gets(Reader(AssistantId), post, MapId).Should().BeTrue();
     }
 
-    /// <summary>
-    /// The block of the post opens to the room by either override, and so does the file in it.
-    /// </summary>
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
@@ -168,10 +164,8 @@ public class PostAttachmentVisibilityShould : UnitTestBase
             .Should().BeEquivalentTo(both);
     }
 
-    /// <summary>
-    /// The address serves the file under either spelling of the identifier, so either one inside a
-    /// block is a mention there; missing it would show the file to the whole room.
-    /// </summary>
+    // The address serves the file under either spelling of the identifier, so either one inside a
+    // block is a mention there; missing it would show the file to the whole room.
     [Theory]
     [InlineData("D-upper")]
     [InlineData("N")]
@@ -183,10 +177,8 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         Gets(Reader(ReaderId), post, MapId).Should().BeFalse();
     }
 
-    /// <summary>
-    /// A block that names nobody, bare or misspelled, is read by the author and the leads alone: neither
-    /// override opens it, nor the file in it.
-    /// </summary>
+    // A block that names nobody, bare or misspelled, is read by the author and the leads alone:
+    // neither override opens it, nor the file in it.
     [Theory]
     [InlineData("[private]")]
     [InlineData("[private=Горим]")]
@@ -198,10 +190,8 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         Gets(Reader(MasterId), post, MapId).Should().BeTrue();
     }
 
-    /// <summary>
-    /// A text the parser refuses is rendered as nothing, to its author as well, so nobody is shown a file
-    /// it mentions.
-    /// </summary>
+    // A text the parser refuses is rendered as nothing, to its author as well, so nobody is shown a
+    // file it mentions.
     [Fact]
     public void KeepAFileOfATextTheParserRefusesFromEveryReader()
     {
@@ -212,10 +202,7 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         Gets(Reader(MasterId), post, MapId).Should().BeFalse();
     }
 
-    /// <summary>
-    /// The address in a parameter of a tag inside the block is a mention inside it: the tag goes with the
-    /// block, and the address with the tag. The tag set has no [url], so the parameter is the text of [link].
-    /// </summary>
+    // The tag set has no [url], so the parameter is the text of [link].
     [Fact]
     public void ReadAMentionInAParameterOfATagInsideTheBlock()
     {
@@ -225,12 +212,8 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         Gets(Reader(AddresseeId), post, MapId).Should().BeTrue();
     }
 
-    /// <summary>
-    /// The files under the post and the picture in its text are decided by two contexts built from the
-    /// same fields of the post: whatever the reader, the block and the override, a file is listed exactly
-    /// where the page shows it. A field one of the two forgot would show the picture where the strip
-    /// hides it, or the other way round.
-    /// </summary>
+    // A field one of the two forgot would show the picture where the strip hides it, or the other
+    // way round.
     [Fact]
     public void ListAFileExactlyWhereThePageShowsIt()
     {
@@ -270,7 +253,6 @@ public class PostAttachmentVisibilityShould : UnitTestBase
     private static readonly string ForGorim =
         $"[{{\"character\":\"{GorimCharacterId}\",\"name\":\"Горим\",\"owner\":\"{AddresseeId}\"}}]";
 
-    /// <summary>The mark of a file chosen for nobody: the author and the leads.</summary>
     private const string ForNobody = "[]";
 
     private const string PlainText = "Он разложил карту на столе.";
@@ -278,10 +260,6 @@ public class PostAttachmentVisibilityShould : UnitTestBase
     private static IAuthorizationSubject ModeratorOutsideTheGame() =>
         new AuthenticatedUser { UserId = Guid.NewGuid(), Username = "moderator", Role = UserRole.Moderator };
 
-    /// <summary>
-    /// The table of UPLOADS.md for a file marked "Выбранные: Горим" in a post whose text does not
-    /// mention it: who gets it under the post.
-    /// </summary>
     [Fact]
     public void GiveAFileMarkedForACharacterToWhomAHiddenBlockForHimIsRead()
     {
@@ -298,7 +276,6 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         Gets(Reader(ReaderId), post, LetterId).Should().BeTrue("the other file is for everybody");
     }
 
-    /// <summary>Either setting "Показывать всем скрытые блоки" opens a marked file as it opens the block.</summary>
     [Theory]
     [InlineData(true, false)]
     [InlineData(false, true)]
@@ -310,7 +287,6 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         Gets(null, post, MapId).Should().BeTrue("a guest who reads the room reads it too");
     }
 
-    /// <summary>A file marked for nobody is the bare block: the author and the leads, whatever the settings.</summary>
     [Fact]
     public void KeepAFileMarkedForNobodyToTheAuthorAndTheLeadsWhateverTheSettings()
     {
@@ -322,7 +298,7 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         Gets(Reader(MasterId), post, MapId).Should().BeTrue();
     }
 
-    /// <summary>A mark that is no list of addressees is read as one for nobody: closed, not open.</summary>
+    // A mark that is no list of addressees is read as one for nobody: closed, not open.
     [Theory]
     [InlineData("{}")]
     [InlineData("не json")]
@@ -342,10 +318,8 @@ public class PostAttachmentVisibilityShould : UnitTestBase
     public void KeepTheTextAsAGuardBesideTheMark() =>
         Gets(Reader(ReaderId), PostWith(MapForGorim), MapId).Should().BeFalse();
 
-    /// <summary>
-    /// A picture of a marked file outside any block is gone for a reader the file is not for, with the line
-    /// it stood on: the page says nothing of a file that is not his.
-    /// </summary>
+    // A picture of a marked file outside any block is gone for a reader the file is not for, with
+    // the line it stood on: the page says nothing of a file that is not his.
     [Fact]
     public void CutThePictureOfAMarkedFileOutOfTheTextWithoutTrace()
     {
@@ -453,7 +427,6 @@ public class PostAttachmentVisibilityShould : UnitTestBase
         MapperFor(Reader(AddresseeId)).ToPost(PostWith(MapForGorim)).Attachments
             .Select(a => a.Id).Should().Equal(MapId, LetterId);
 
-    /// <summary>The mapper the container builds: the rule, and the reader of the request.</summary>
     private static PostMapper MapperFor(IAuthorizationSubject reader)
     {
         var readers = Mock<IAuthorizationContextProvider>();

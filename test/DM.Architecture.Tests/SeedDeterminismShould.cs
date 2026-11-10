@@ -9,10 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The seeded fixture is a function of two values and of nothing else: the
-/// instant it is laid out around and the seed its randomness is drawn from.
-/// </summary>
 /// <remarks>
 /// A screenshot baseline is worth as much as the fixture behind it is reproducible. Read out of the
 /// sources; scripts/verify-seed-reproducibility.sh measures it against a database.
@@ -43,9 +39,6 @@ public class SeedDeterminismShould
     private static readonly Regex MintedIdentifier = new(
         @"\bGuid\s*\.\s*NewGuid\s*\(", RegexOptions.Compiled);
 
-    /// <summary>
-    /// One resolved epoch, and every seeded date an offset from it.
-    /// </summary>
     [Fact]
     public void TakeTheClockOnlyThroughTheSingleResolvedEpoch()
     {
@@ -59,9 +52,6 @@ public class SeedDeterminismShould
             "entry point is a second default, and the pinned epoch stops covering the seed");
     }
 
-    /// <summary>
-    /// One generator, seeded, and the seed itself configurable.
-    /// </summary>
     [Fact]
     public void DrawOnlyFromTheSeededGenerator()
     {
@@ -78,9 +68,7 @@ public class SeedDeterminismShould
             "anywhere else is outside the value the run was pinned to");
     }
 
-    /// <summary>
-    /// Identifiers are content too: the public id of a page is cut out of one.
-    /// </summary>
+    // Identifiers are content too: the public id of a page is cut out of one.
     [Fact]
     public void MintIdentifiersFromTheSeedRatherThanFromTheOperatingSystem()
     {
@@ -100,9 +88,6 @@ public class SeedDeterminismShould
             "registration - otherwise it is a class nobody constructs");
     }
 
-    /// <summary>
-    /// Both values configurable, and both findable by whoever runs the tool.
-    /// </summary>
     [Fact]
     public void ResolveBothValuesFromConfiguration()
     {
@@ -123,9 +108,7 @@ public class SeedDeterminismShould
             "the second knob is exactly as invisible as the first one was before it was written down");
     }
 
-    /// <summary>
-    /// A reader that reads nothing passes everything.
-    /// </summary>
+    // A reader that reads nothing passes everything.
     [Fact]
     public void ReadEverySourceFileOfTheTool()
     {
@@ -139,14 +122,12 @@ public class SeedDeterminismShould
             "exemption above points at nothing and the rules quietly loosen");
     }
 
-    /// <summary>The seeder sources the rules above are read out of.</summary>
     private static IReadOnlyList<string> SeederSources() => Directory
         .EnumerateFiles(SeederDirectory, "*.cs", SearchOption.AllDirectories)
         .Where(RepositoryFiles.IsAuthored)
         .OrderBy(path => path, StringComparer.Ordinal)
         .ToList();
 
-    /// <summary>Files matching the pattern, named relative to the repository root.</summary>
     private static IReadOnlyList<string> Offenders(Regex pattern, string? except = null) => SeederSources()
         .Where(path => except == null ||
                        !string.Equals(Path.GetFileName(path), except, StringComparison.Ordinal))

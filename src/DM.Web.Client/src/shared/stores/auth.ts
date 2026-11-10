@@ -41,14 +41,7 @@ export const useAuthStore = defineStore("auth", () => {
     else localStorage.setItem(userKey, JSON.stringify(newUser));
     // The account offers a theme, it does not dictate one: the theme belongs to
     // the device, so the account value is taken only where the device has never
-    // chosen. Every appearance of a viewer used to arrive here with the account
-    // theme, and the ui store persists what it is handed, so a switch made in
-    // the settings panel survived neither a reload nor a saved profile.
-    //
-    // Signing out says nothing about the theme and no longer touches it. It
-    // used to force Light through here, and since the ui store persists what it
-    // is handed, one sign-out overwrote the choice of the device and left the
-    // system preference out of the answer for good.
+    // chosen.
     if (newUser) useUiStore().adoptAccountTheme(newUser.settings?.theme);
   }
 

@@ -53,9 +53,6 @@ public class TwoFactorChallenge
     /// </summary>
     public int Attempts { get; set; }
 
-    /// <summary>
-    /// Address the session will be created from
-    /// </summary>
     public string? IpAddress { get; set; }
 
     /// <summary>

@@ -90,7 +90,6 @@ internal class GameInvitationRepository : IGameInvitationRepository
         })
         .ToListAsync(ct);
 
-    /// <summary>Users with active characters, a row per character.</summary>
     private Task<List<GameUser>> PlayersOf(Guid gameId, CancellationToken ct) => _dbContext.Characters
         .TagWith("DM.GameInvitation.GetPlayers")
         .Where(c => c.GameId == gameId && !c.IsRemoved && c.Status == CharacterStatus.Active && !c.IsNpc)
@@ -105,7 +104,6 @@ internal class GameInvitationRepository : IGameInvitationRepository
         })
         .ToListAsync(ct);
 
-    /// <summary>Subscribers of the game.</summary>
     private Task<List<GameUser>> ReadersOf(Guid gameId, CancellationToken ct) => _dbContext.Subscriptions
         .TagWith("DM.GameInvitation.GetReaders")
         .Where(s => s.TargetType == SubscriptionTargetType.Game && s.TargetId == gameId)

@@ -10,9 +10,6 @@ public class EmailConfiguration
     /// </summary>
     public string ServerHost { get; set; } = null!;
 
-    /// <summary>
-    /// SMTP server port
-    /// </summary>
     public int ServerPort { get; set; }
 
     /// <summary>

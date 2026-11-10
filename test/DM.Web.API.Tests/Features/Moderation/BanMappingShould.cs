@@ -7,10 +7,7 @@ using DomainBan = DM.Domain.Moderation.Features.Bans.Ban;
 
 namespace DM.Web.API.Tests.Features.Moderation;
 
-/// <summary>
-/// "Banned right now" is one predicate, not lifted, started and not ended, read at the injected clock the
-/// ban queries use. The moments are far from the wall clock, so reading it fails every case.
-/// </summary>
+// The moments are far from the wall clock, so reading it fails every case.
 public class BanMappingShould
 {
 
@@ -46,9 +43,6 @@ public class BanMappingShould
         WarningMappers.At(moment).ToPublicBan(ban).IsActive.Should().BeFalse();
     }
 
-    /// <summary>
-    /// Who lifted the ban, when and why reaches the moderation view, the lifter as a user.
-    /// </summary>
     [Fact]
     public void CarryTheLiftAuditIntoTheModerationView()
     {

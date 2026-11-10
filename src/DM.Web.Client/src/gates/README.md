@@ -13,6 +13,7 @@
 | [fsdBoundaries.spec.ts](fsdBoundaries.spec.ts) | правила слоев из PATTERNS.md держит не линтер, конфиг линтера разошелся со списком слоев или типы общих компонентов для vue-tsc разошлись с их регистрацией |
 | [namedFiles.spec.ts](namedFiles.spec.ts) | комментарий называет файл, которого нет |
 | [sharedHelperBypass.spec.ts](sharedHelperBypass.spec.ts) | общий помощник написан заново вместо вызова |
+| [timerCleanup.spec.ts](timerCleanup.spec.ts) | setTimeout, setInterval или requestAnimationFrame компонента или композабла не снимается, когда владелец уходит, и не записан в реестр с причиной. Код, живущий столько же, сколько сайт (app/, main.ts, сторы, плагины), вне правила |
 | [gateRegister.spec.ts](gateRegister.spec.ts) | файл этой папки без строки в реестре или строка реестра без файла |
 | [scriptCallers.spec.ts](scriptCallers.spec.ts) | файл в `scripts/` или `docker/scripts/`, которого никто не зовет и не называет: ни скрипт, ни сборка, ни CI, ни документ. Перечень [scripts/README.md](../../../../scripts/README.md) не в счет |
 | [scriptsReadme.spec.ts](scriptsReadme.spec.ts) | файл в `scripts/`, `docker/scripts/` или оболочечный файл в `docker/` без строки в перечне [scripts/README.md](../../../../scripts/README.md), или строка перечня без файла |
@@ -21,10 +22,11 @@
 
 | Гейт | Что ловит |
 |------|-----------|
-| [duplicationRatchet.spec.ts](duplicationRatchet.spec.ts) | число повторяющихся строк в одной из групп (клиент, спеки клиента, e2e, сервер, тесты сервера) выше потолка |
+| [doubleCastRatchet.spec.ts](doubleCastRatchet.spec.ts) | число двойных приведений `as unknown as` в спеках, фикстурах, дублерах и `src/shared/lib/testing` выше потолка или ниже него, когда потолок не опущен до замера |
+| [duplicationRatchet.spec.ts](duplicationRatchet.spec.ts) | число повторяющихся строк в одной из групп (клиент, спеки клиента, e2e, TypeScript и JavaScript в `scripts/`, сервер, тесты сервера) выше потолка, без пар-двойников из реестра TWINS, или запись реестра без повтора за ней |
 | [sassSizeRatchet.spec.ts](sassSizeRatchet.spec.ts) | таблица стилей длиннее 400 строк |
-| [sizeRatchet.spec.ts](sizeRatchet.spec.ts) | реестр размеров sizeRatchet.js разошелся с деревом, или линтер с реестром |
-| [sizeRatchet.js](sizeRatchet.js) | не гейт, а его реестр: лимиты размера файла, блока SFC и функции клиента и то, что было больше в день введения. Читают eslint.config.js и sizeRatchet.spec.ts |
+| [sizeRatchet.spec.ts](sizeRatchet.spec.ts) | реестр размеров sizeRatchet.js разошелся с деревом клиента или `scripts/`, или линтер с реестром |
+| [sizeRatchet.js](sizeRatchet.js) | не гейт, а его реестр: лимиты размера файла, блока SFC и функции клиента, глубины вложенности и то, что было больше в день введения. Читают eslint.config.js и sizeRatchet.spec.ts |
 
 ## Сборка и доставка
 
@@ -34,6 +36,7 @@
 | [csp.spec.ts](csp.spec.ts) | script-src допускает inline-скрипт, или хеш единственного inline-скрипта разошелся с файлом |
 | [documentHead.spec.ts](documentHead.spec.ts) | статичная голова документа (название, описание, превью ссылки) не задает лицо сайта для тех, кто не запускает бандл |
 | [fontDelivery.spec.ts](fontDelivery.spec.ts) | то, от чего зависит ожидание шрифта до первой отрисовки (@font-face, голова документа, два прыжка nginx), вышло за бандл неправильно |
+| [gameIconBarrel.spec.ts](gameIconBarrel.spec.ts) | общий файл shared/ui/Icon отдает GameIcon или его берут через этот файл, и реестр игровых значков едет в чанке первого захода |
 
 ## API и данные
 
@@ -124,6 +127,7 @@
 | [gameSlotsCounter.spec.ts](gameSlotsCounter.spec.ts) | счетчик игроков [0/∞] переносится внутри скобок |
 | [markupLook.spec.ts](markupLook.spec.ts) | личный текст, [code] и картинка выглядят не как на DM2 там, где страница рисует разметку |
 | [pictures.spec.ts](pictures.spec.ts) | картинка, ее рамка или заглушка скруглены (круглыми остаются только логотипы партнеров) |
+| [pxTokens.spec.ts](pxTokens.spec.ts) | число в px равно токену Variables.sass той же роли (размер шрифта, отступ, радиус, размер глифа) и не записано в реестр с причиной |
 | [styleSystem.spec.ts](styleSystem.spec.ts) | компонент переопределяет значение общего слоя стилей числом вместо токена (z-index и родня) или раскладывает страницу по ширине окна или виду указателя |
 | [textCut.spec.ts](textCut.spec.ts) | текст обрезан многоточием или ограничен числом строк |
 

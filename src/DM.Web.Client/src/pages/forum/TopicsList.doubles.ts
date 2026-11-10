@@ -19,13 +19,3 @@ export const forumApi = () => ({
     getNews: vi.fn(),
   },
 });
-
-/**
- * The module vue-router stands for, under TopicCreateForm.spec.ts alone: the
- * TopicsList specs read the real router (openBoard of TopicsList.fixtures.ts).
- */
-export const vueRouter = () => ({
-  useRoute: () => ({ params: { alias: "main" }, query: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
-  RouterLink: { template: "<a><slot /></a>" },
-});

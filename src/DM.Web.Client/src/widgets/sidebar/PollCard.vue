@@ -56,9 +56,9 @@ const statusText = computed(() => {
   }
 });
 
-const statusTooltip = computed(() => {
-  return `Начало: ${startsFormatted.value}\nОкончание: ${endsFormatted.value}`;
-});
+const statusTooltip = computed(
+  () => `Начало: ${startsFormatted.value}\nОкончание: ${endsFormatted.value}`,
+);
 
 const isEditing = ref(false);
 

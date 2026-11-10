@@ -19,17 +19,17 @@ const props = withDefaults(
     watchKey?: unknown;
     /** Optional hook invoked after the content element is mounted/updated. */
     onContentMounted?: (el: HTMLElement) => void;
-    /** The share of maxHeight media may take in the collapsed view, leaving room for the text. */
-    mediaBudget?: number;
   }>(),
   {
     maxHeight: 150,
     truncatable: false,
     watchKey: undefined,
     onContentMounted: undefined,
-    mediaBudget: 0.6,
   },
 );
+
+/** The share of the budget media may take in the collapsed view, leaving room for the text. */
+const MEDIA_SHARE = 0.6;
 
 // Measured from the real line boxes, never a uniform grid: margins and mixed line-heights put lines off it,
 // and the cut landed mid-line.
@@ -101,11 +101,8 @@ function measureLineSnap(): void {
     for (const rect of rects) {
       if (rect.height <= 0) continue;
       const bottom = rect.bottom - elTop;
-      if (bottom <= budget + 0.5) {
-        if (bottom > clamp) clamp = bottom;
-      } else if (bottom < firstOverflowBottom) {
-        firstOverflowBottom = bottom;
-      }
+      if (bottom <= budget + 0.5) clamp = Math.max(clamp, bottom);
+      else firstOverflowBottom = Math.min(firstOverflowBottom, bottom);
     }
   }
   // No line fit within the budget: the raw budget, not zero.
@@ -141,7 +138,7 @@ const overrideMaxHeight = ref<string | null>(null);
 // A pure function of state: measurements enter only through lineSnap.
 const contentStyle = computed(() => {
   const max = snappedMaxHeight.value;
-  const mediaMax = Math.floor(max * props.mediaBudget);
+  const mediaMax = Math.floor(max * MEDIA_SHARE);
 
   if (overrideMaxHeight.value !== null) {
     return {

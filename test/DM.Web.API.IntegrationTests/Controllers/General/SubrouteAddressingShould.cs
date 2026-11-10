@@ -11,24 +11,12 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// Every GET subroute of a game, a blog and a chat answers the same by the
-/// identifier and by the public id, refuses an address nobody holds, and answers
-/// a reader who takes no part in it as the table below records.
-/// </summary>
-/// <remarks>
-/// The public id is resolved in three places that disagree, so the table holds what each subroute answers for
-/// every caller; read off the registered routes, so a new subroute without a row fails.
-/// </remarks>
+// The public id is resolved in three places that disagree, so the table holds what each subroute
+// answers for every caller; read off the registered routes, so a new subroute without a row fails.
 public class SubrouteAddressingShould : IntegrationTestBase
 {
-    /// <summary>A well-formed public id nothing has been given.</summary>
     private const string UnknownPublicId = "zzzzz";
 
-    /// <summary>
-    /// The answers by template: owner by identifier and public id, two addresses nobody holds, a reader who takes
-    /// no part, a guest, each by identifier and public id.
-    /// </summary>
     private static readonly IReadOnlyDictionary<string, string> Matrix = new Dictionary<string, string>
     {
         ["v1/games/{id}"] = "200 200 | 404 404 | 200 200 | 200 200",
@@ -60,10 +48,8 @@ public class SubrouteAddressingShould : IntegrationTestBase
         ["v1/chats/{id}/messages"] = "200 200 | 404 404 | 404 404 | 401 401",
     };
 
-    /// <summary>
-    /// Subroutes that address a second resource inside the first: their answer is
-    /// about the entry or the review they name, which the table above does not.
-    /// </summary>
+    // Subroutes that address a second resource inside the first: their answer is about the entry or
+    // the review they name, which the table above does not.
     private static readonly string[] AddressSomethingInside =
     [
         "v1/games/{id}/notepad/{entryId:guid}",
@@ -71,7 +57,6 @@ public class SubrouteAddressingShould : IntegrationTestBase
         "v1/blogs/{blogId}/notepad/{entryId:guid}",
     ];
 
-    /// <summary>The first segment of a subroute, which is the game, the blog or the chat.</summary>
     private static readonly Regex Owner = new(@"^(v1/(?:games|blogs|chats)/)\{[^}]+\}", RegexOptions.Compiled);
 
     public SubrouteAddressingShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -141,7 +126,6 @@ public class SubrouteAddressingShould : IntegrationTestBase
         return (int)response.StatusCode;
     }
 
-    /// <summary>A signed-in reader with no part in anything the fixture seeds.</summary>
     private async Task<GeneralUser> StrangerAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

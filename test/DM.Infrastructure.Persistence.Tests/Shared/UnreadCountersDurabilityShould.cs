@@ -13,17 +13,10 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared;
 
-/// <summary>
-/// A database that cannot be reached does not undo a commit that already
-/// happened.
-/// </summary>
-/// <remarks>
-/// The adjusting writes run after the caller's commit and must not fail it; the creating and removing writes
-/// run before the row and must fail. An unreachable address rather than a mock of the provider.
-/// </remarks>
+// The adjusting writes run after the caller's commit and must not fail it; the creating and
+// removing writes run before the row and must fail.
 public class UnreadCountersDurabilityShould
 {
-    /// <summary>Address nothing listens on, with the driver told to give up quickly.</summary>
     private const string Unreachable = "Host=127.0.0.1;Port=1;Database=dm3;Username=x;Password=x;Timeout=1";
 
     [Fact]

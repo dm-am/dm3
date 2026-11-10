@@ -142,10 +142,6 @@ internal sealed class CountryTableRefresher : BackgroundService
         return age < TimeSpan.Zero ? RefreshInterval : RefreshInterval - age;
     }
 
-    /// <summary>
-    /// One attempt: download, check, keep on disk, put in use.
-    /// </summary>
-    /// <returns>Whether the table was replaced.</returns>
     internal async Task<bool> RefreshAsync(CancellationToken stoppingToken)
     {
         var download = _path + ".download";
@@ -227,7 +223,6 @@ internal sealed class CountryTableRefresher : BackgroundService
         return total;
     }
 
-    /// <summary>A copy that did not pass is not left beside the table.</summary>
     private void Discard(string download)
     {
         try

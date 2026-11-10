@@ -8,9 +8,6 @@ namespace DM.Domain.Moderation.Features.Warnings;
 /// </summary>
 public class ProfileCapture
 {
-    /// <summary>
-    /// The status, null when there is none
-    /// </summary>
     public string? Status { get; set; }
 
     /// <summary>

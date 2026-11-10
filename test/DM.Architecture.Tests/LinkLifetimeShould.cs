@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// What the letter and the page promise about a link is what the server holds the link to.
-/// </summary>
 /// <remarks>
 /// The hours reach the letter and the screen from the settings the host runs with, so the words carry
 /// no number of their own; the client keeps one, for a screen shown before any answer named the hours.
@@ -24,7 +21,6 @@ public class LinkLifetimeShould
 
     private const string Days = @"через (?<n>\d+) дн";
 
-    /// <summary>A file under the repository root that tells the reader how long a mailed link lives.</summary>
     public static TheoryData<string> Words => new()
     {
         "src/DM.Web.Client/src/features/auth/ui/AccessRecoveryForm.vue",
@@ -60,7 +56,6 @@ public class LinkLifetimeShould
             .Should().Be(Tokens.ActivationTokenLifetimeHours,
                 "the page offering a new activation link promises it before the server has named the hours");
 
-    /// <summary>A file under the repository root, and the delay of a removal it states.</summary>
     public static TheoryData<string, int> Delays => new()
     {
         { "src/DM.Web.Client/src/features/auth/ui/TwoFactorRemovalForm.vue", new TwoFactorConfiguration().RemovalDelayDays },

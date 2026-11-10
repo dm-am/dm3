@@ -74,7 +74,6 @@ internal static class ForumMappers
                 : null
         };
 
-    /// <summary>EF projection to the domain board</summary>
     public static IQueryable<Board> ProjectToBoard(this IQueryable<DbBoard> query) =>
         query.Select(ExpressionSplicer.Expand(BoardProjection));
 

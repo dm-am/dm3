@@ -14,10 +14,6 @@ using Xunit;
 
 namespace DM.Domain.Forum.Tests.Features.Topics;
 
-/// <summary>
-/// A change of a topic: who may ask for it, what it writes and announces, and the
-/// moving and pinning only the administrators of the board may ask for.
-/// </summary>
 public class TopicUpdateShould : TopicServiceTestBase
 {
     [Fact]
@@ -44,12 +40,8 @@ public class TopicUpdateShould : TopicServiceTestBase
         await eventProducer.Received(1).SendAsync(EventType.ChangedTopic, topicId);
     }
 
-    /// <summary>
-    /// A save that changed nothing announces nothing.
-    /// </summary>
-    /// <remarks>
-    /// The notification reads its actor from the edit history, which a save that changed nothing does not write.
-    /// </remarks>
+    // The notification reads its actor from the edit history, which a save that changed nothing
+    // does not write.
     [Fact]
     public async Task SendNoChangedTopicEventWhenTheUpdateChangedNothing()
     {
@@ -63,13 +55,7 @@ public class TopicUpdateShould : TopicServiceTestBase
         await eventProducer.DidNotReceive().SendAsync(EventType.ChangedTopic, Arg.Any<Guid>());
     }
 
-    /// <summary>
-    /// The editor travels to the repository, which is what makes the topic edit
-    /// history hold anybody at all.
-    /// </summary>
-    /// <remarks>
-    /// The topic row keeps no editor, so this field is the only record of who changed a topic.
-    /// </remarks>
+    // The topic row keeps no editor, so this field is the only record of who changed a topic.
     [Fact]
     public async Task RecordTheCurrentUserAsTheEditorOfTheTopic()
     {
@@ -107,10 +93,8 @@ public class TopicUpdateShould : TopicServiceTestBase
         await repository.Received(1).Update(Arg.Any<UpdateTopicEntity>(), newBoardId);
     }
 
-    /// <summary>
-    /// Closing or pinning a topic the caller may not close or pin is refused, not
-    /// dropped: a 200 with an open topic is what a successful close produces.
-    /// </summary>
+    // Closing or pinning a topic the caller may not close or pin is refused, not dropped: a 200
+    // with an open topic is what a successful close produces.
     [Theory]
     [InlineData(true, null)]
     [InlineData(null, true)]
@@ -140,10 +124,8 @@ public class TopicUpdateShould : TopicServiceTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>());
     }
 
-    /// <summary>
-    /// The client round-trips the whole topic, so the flags it already carries are
-    /// nobody's attempt at anything and must not be refused.
-    /// </summary>
+    // The client round-trips the whole topic, so the flags it already carries are nobody's attempt
+    // at anything and must not be refused.
     [Fact]
     public async Task NotRefuseTheAdminFlagsTheTopicAlreadyCarries()
     {
@@ -161,9 +143,6 @@ public class TopicUpdateShould : TopicServiceTestBase
         intentionManager.DidNotReceive().ThrowIfForbidden(BoardIntention.AdministrateTopics, topic.Board);
     }
 
-    /// <summary>
-    /// Moving a topic to another board is the third flag of the same branch, refused the same way.
-    /// </summary>
     [Fact]
     public async Task RefuseTheBoardMoveTheCallerMayNotMake()
     {
@@ -185,10 +164,8 @@ public class TopicUpdateShould : TopicServiceTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdateTopicEntity>(), Arg.Any<Guid?>());
     }
 
-    /// <summary>
-    /// The same round-trip rule as the flags: the client sends the whole topic
-    /// back, so the board it is already in is nobody's attempt to move it.
-    /// </summary>
+    // The same round-trip rule as the flags: the client sends the whole topic back, so the board it
+    // is already in is nobody's attempt to move it.
     [Fact]
     public async Task NotRefuseTheBoardTheTopicIsAlreadyIn()
     {

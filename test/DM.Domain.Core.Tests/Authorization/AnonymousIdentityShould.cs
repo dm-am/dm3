@@ -6,12 +6,7 @@ using Xunit;
 
 namespace DM.Domain.Core.Tests.Authorization;
 
-/// <summary>
-/// The one place that says the empty user id may not be compared.
-/// </summary>
-/// <remarks>
-/// The guest and every unset projection field both carry Guid.Empty, so as an identity they match.
-/// </remarks>
+// The guest and every unset projection field both carry Guid.Empty, so as an identity they match.
 public class AnonymousIdentityShould
 {
     private static readonly Guid Someone = Guid.Parse("11111111-1111-1111-1111-111111111111");

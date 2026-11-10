@@ -12,10 +12,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// AddDbContextPool registers DmDbContext scoped, and the module's AddDefaultTypes scan of the same assembly
-/// must not shadow it: one context per scope.
-/// </summary>
+// AddDbContextPool registers DmDbContext scoped, and the module's AddDefaultTypes scan of the same
+// assembly must not shadow it: one context per scope.
 public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
 {
     private readonly ServiceProvider _provider;
@@ -48,10 +46,8 @@ public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
             "otherwise cross-repository transactions and identity resolution silently break");
     }
 
-    /// <summary>
-    /// The scan itself keeps its hands off the context: no descriptor of the
-    /// module's making names DmDbContext, so nothing can outrank the pool.
-    /// </summary>
+    // The scan itself keeps its hands off the context: no descriptor of the module's making names
+    // DmDbContext, so nothing can outrank the pool.
     [Fact]
     public void LeaveTheContextRegistrationToThePoolAlone()
     {
@@ -64,9 +60,6 @@ public class DbContextScopeResolutionShould : UnitTestBase, IDisposable
                 "registration after the pool's would silently replace it");
     }
 
-    /// <summary>
-    /// The single DmDbContext a repository instance holds, found by reflection.
-    /// </summary>
     private static DmDbContext ExtractDbContext(object repository) =>
         repository.GetType()
             .GetFields(BindingFlags.Instance | BindingFlags.NonPublic | BindingFlags.Public)

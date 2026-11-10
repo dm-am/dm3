@@ -6,8 +6,9 @@
 // of the assistants beside the master, reached from the keyboard, and the
 // status of the player's character under "Игрок".
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
+import { createPinia } from "pinia";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { useAuthStore } from "@/shared/stores/auth";
 import ProfileGamesTable from "./ProfileGamesTable.vue";
 
@@ -15,11 +16,6 @@ const { searchGames } = vi.hoisted(() => ({ searchGames: vi.fn() }));
 
 vi.mock("@/entities/game/api/gameCatalogApi", () => ({
   default: { searchGames },
-}));
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ params: { username: "author" }, query: {} }),
-  useRouter: () => ({ push: vi.fn(), replace: vi.fn() }),
 }));
 
 const game = {
@@ -41,6 +37,7 @@ const answer = (rows: unknown[]) => ({
 });
 
 let mounted: VueWrapper | null = null;
+let address = () => "";
 
 afterEach(() => {
   mounted?.unmount();
@@ -49,28 +46,33 @@ afterEach(() => {
 
 beforeEach(() => vi.clearAllMocks());
 
-async function render(pageSize?: number) {
+async function render(pageSize?: number, at = "/users/author") {
   const pinia = createPinia();
-  setActivePinia(pinia);
   // The reader's page size of lists, from the account settings.
   if (pageSize)
-    useAuthStore().user = {
+    useAuthStore(pinia).user = {
       username: "reader",
       settings: { pageSize },
     } as never;
-  mounted = mount(ProfileGamesTable, {
+  const page = await mountPage(ProfileGamesTable, at, {
+    routes: [
+      ["profile", "/users/:username"],
+      ["game", "/game/:id"],
+      ["game-reviews", "/game/:id/reviews"],
+      ["game-first-unread-post", "/game/:id/posts/unread"],
+      ["game-first-unread-comment", "/game/:id/comments/unread"],
+    ],
+    pinia,
     props: { username: "author" },
-    global: {
-      plugins: [pinia],
-      stubs: {
-        RouterLink: { template: "<a><slot /></a>" },
-        CounterPair: true,
-        Paging: true,
-        UserLink: true,
-        GameStatusBadge: true,
-      },
+    stubs: {
+      CounterPair: true,
+      Paging: true,
+      UserLink: true,
+      GameStatusBadge: true,
     },
   });
+  mounted = page.wrapper;
+  address = () => page.router.currentRoute.value.fullPath;
   await flushPromises();
   return mounted;
 }
@@ -137,6 +139,27 @@ describe("ProfileGamesTable", () => {
     searchGames.mockClear();
     await render();
     expect(searchGames.mock.calls[0][0]).toMatchObject({ size: 20 });
+  });
+
+  it("asks for the page the address names", async () => {
+    searchGames.mockResolvedValue(answer([]));
+
+    await render(undefined, "/users/author?number=3");
+
+    expect(searchGames.mock.calls[0][0]).toMatchObject({ number: 3 });
+  });
+
+  it("goes back to the first page of the address when the role changes", async () => {
+    searchGames.mockResolvedValue(answer([]));
+    const wrapper = await render(undefined, "/users/author?number=3");
+
+    const player = wrapper
+      .findAll(".role-toggle button")
+      .find((segment) => segment.text() === "Игрок")!;
+    await player.trigger("click");
+    await flushPromises();
+
+    expect(address()).toBe("/users/author");
   });
 
   it("lets the keyboard reach the hint of the assistants", async () => {

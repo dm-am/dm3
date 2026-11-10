@@ -293,8 +293,7 @@ describe("insertions", () => {
         "http://localhost/",
         "Адрес ведет в локальную сеть, такой сайт не покажет",
       ],
-      // Not an address at all, and not the reader's network: the refusal
-      // used to say it was.
+      // Not an address at all, and not the reader's network
       [
         "Вставить изображение",
         "url",

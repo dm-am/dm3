@@ -220,10 +220,6 @@ public class TopicIntentionResolverShould
             .Should().BeTrue(who);
     }
 
-    /// <summary>
-    /// The author edits a topic they closed themselves as if it were open, and a
-    /// topic somebody who moderates the board closed stays shut to their edits.
-    /// </summary>
     [Theory]
     [InlineData(true, true)]
     [InlineData(false, false)]

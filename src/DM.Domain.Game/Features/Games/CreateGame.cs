@@ -48,9 +48,6 @@ public class CreateGame
 
     public bool Draft { get; set; }
 
-    /// <summary>
-    /// When <see cref="Draft"/> is set
-    /// </summary>
     public DraftVisibility DraftVisibility { get; set; }
 
     /// <summary>

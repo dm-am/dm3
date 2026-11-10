@@ -12,7 +12,7 @@ public class LoginControllerShould : IntegrationTestBase
     {
     }
 
-    /// <remarks>The system author has an empty salt and hash; its refusal is by role, not by those columns.</remarks>
+    // The system author has an empty salt and hash; its refusal is by role, not by those columns.
     [Theory]
     [InlineData("nonexistent@test.example.com", "wrongpassword")]
     [InlineData("", "password123")]

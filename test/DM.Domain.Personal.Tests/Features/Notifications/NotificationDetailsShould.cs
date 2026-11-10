@@ -6,18 +6,8 @@ using Xunit;
 
 namespace DM.Domain.Personal.Tests.Features.Notifications;
 
-/// <summary>
-/// The list in the application shows what a letter prints, less what the row
-/// already says.
-/// </summary>
-/// <remarks>
-/// A letter has nothing beside it, so it prints the time it is about. A row of the
-/// list carries its own date next to the title, and the same time printed again
-/// underneath would be the one field the reader sees twice. The other times in a
-/// bag are moments of their own, the end of a ban or the day an award was handed
-/// out, and those are formatted on the reader's clock like every date of the site,
-/// so they are marked rather than formatted here.
-/// </remarks>
+// A row of the list carries its own date next to the title, and the same time printed again
+// underneath would be the one field the reader sees twice.
 public class NotificationDetailsShould
 {
     private static readonly DateTimeOffset Moment = new(2026, 10, 19, 12, 0, 0, TimeSpan.Zero);

@@ -174,11 +174,9 @@ public class GameStatusTransitionShould : GameServiceTestBase
         capturedUpdate.SetMentorId.Should().BeTrue();
     }
 
-    /// <summary>
-    /// The two verdicts are a rank and nothing else, so they are asked of the
-    /// targetless intention — before the game is read, which is what keeps a
-    /// stranger probing aliases from learning whether one resolves.
-    /// </summary>
+    // The two verdicts are a rank and nothing else, so they are asked of the targetless intention —
+    // before the game is read, which is what keeps a stranger probing aliases from learning whether
+    // one resolves.
     [Theory]
     [InlineData(ModulePremoderationTransition.SetApproved)]
     [InlineData(ModulePremoderationTransition.SetAwaitingEdits)]
@@ -207,11 +205,9 @@ public class GameStatusTransitionShould : GameServiceTestBase
             Arg.Is<IEnumerable<EventType>>(e => e.Contains(EventType.StatusGameModeration)), gameId);
     }
 
-    /// <summary>
-    /// The author's move is a fact about the game, so it is asked of the targeted
-    /// intention — and the mentor rank is not asked at all, because the master
-    /// making this move normally does not hold it.
-    /// </summary>
+    // The author's move is a fact about the game, so it is asked of the targeted intention — and
+    // the mentor rank is not asked at all, because the master making this move normally does not
+    // hold it.
     [Fact]
     public async Task AskTheGameWhoTheAuthorIsAndNotTheMentorRank()
     {
@@ -224,10 +220,8 @@ public class GameStatusTransitionShould : GameServiceTestBase
         intentionManager.DidNotReceive().ThrowIfForbidden(GameIntention.SetStatusModeration);
     }
 
-    /// <summary>
-    /// Illegality is answered before authorization, as on the status machine: the
-    /// author gets a 400 naming the move, not a 403 about who they are.
-    /// </summary>
+    // Illegality is answered before authorization, as on the status machine: the author gets a 400
+    // naming the move, not a 403 about who they are.
     [Fact]
     public async Task RefuseAnIllegalSubmitBeforeAskingWhoTheCallerIs()
     {

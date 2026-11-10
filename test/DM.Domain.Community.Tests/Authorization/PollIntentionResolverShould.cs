@@ -25,7 +25,6 @@ public class PollIntentionResolverShould : UnitTestBase
         resolver = new PollIntentionResolver(dateTimeProvider);
     }
 
-    /// <summary>A poll that ends the given number of days from now, with these options.</summary>
     private Poll PollEndingIn(int days, params Guid[] options) => new()
     {
         EndsUtc = now.AddDays(days),

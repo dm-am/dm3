@@ -49,9 +49,6 @@ internal class PublicationRepository : IPublicationRepository
         return publications;
     }
 
-    /// <summary>
-    /// The publications of a blog, of one rubric when it is given.
-    /// </summary>
     private static IQueryable<DbPublication> OfBlog(IQueryable<DbPublication> publications,
         Guid blogId, Guid? rubricId)
     {
@@ -81,9 +78,6 @@ internal class PublicationRepository : IPublicationRepository
     /// <inheritdoc />
     public async Task<Publication?> GetBestUserPublication(IReadOnlyCollection<Guid> authorIds, CancellationToken ct = default)
     {
-        // Single-query "best" lookup: sort by the same likes subquery
-        // pattern used by topics/comments, take the top row, project to
-        // the API DTO. Soft-deleted entries are filtered out.
         var publication = await _dbContext.Publications
             .TagWith("DM.Blog.GetBestUserPublication")
             .Where(p => !p.IsRemoved && authorIds.Contains(p.AuthorId))
@@ -248,17 +242,11 @@ internal class PublicationRepository : IPublicationRepository
         return (highest ?? 0) + 1;
     }
 
-    /// <summary>
-    /// Single-publication overload of the backfill below.
-    /// </summary>
     private Task FillLikes(Publication? publication, CancellationToken ct) =>
         publication is null
             ? Task.CompletedTask
             : FillLikes(new[] { publication }, ct);
 
-    /// <summary>
-    /// Backfill <see cref="Publication.Likes"/> for a page of publications.
-    /// </summary>
     private Task FillLikes(IReadOnlyCollection<Publication> publications, CancellationToken ct) =>
         LikeBackfill.Fill(_dbContext, publications, LikeEntityType.Publication,
             p => p.Id, (p, likes) => p.Likes = likes,

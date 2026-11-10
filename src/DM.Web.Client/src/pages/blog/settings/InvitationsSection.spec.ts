@@ -8,11 +8,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { blogApi, useBlogDetailsStore, type Blog } from "@/entities/blog";
+import { blogApi, useBlogDetailsStore } from "@/entities/blog";
 import type { BlogInvitation } from "@/entities/blog";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import type { GeneralError } from "@/shared/api/models/common";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
 import InvitationsSection from "./InvitationsSection.vue";
 import { expectFirstReadStates } from "@/shared/lib/testing/firstRead";
 
@@ -74,7 +75,7 @@ async function mountSection(
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useBlogDetailsStore();
-  store.blog = { id: "the-blog", title: "Дневник" } as unknown as Blog;
+  store.blog = createMockBlog("the-blog", "Дневник");
 
   list = vi.fn().mockResolvedValue(served(initial));
   if (first) list.mockReturnValueOnce(first);

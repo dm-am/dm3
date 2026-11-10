@@ -5,9 +5,6 @@ using DM.Domain.Core.Exceptions;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// How many tags of one group a game may carry.
-/// </summary>
 /// <remarks>
 /// A column of the tag group, not a constant: moderation edits the catalogue without a release.
 /// Both write paths reach it through <see cref="IGameTagResolver.ResolveTagIds"/>.
@@ -19,7 +16,6 @@ internal static class TagGroupLimit
     /// <remarks>
     /// Every group over its number is named, so the master fixes the form once.
     /// </remarks>
-    /// <exception cref="HttpBadRequestException">A group is over its number</exception>
     public static void ThrowIfExceeded(IReadOnlyCollection<GameTag> selectedTags)
     {
         var exceeded = selectedTags
@@ -48,9 +44,7 @@ internal static class TagGroupLimit
         ? $"В группе \"{groupTitle}\" можно выбрать только один тег"
         : $"В группе \"{groupTitle}\" можно выбрать не больше {limit} {TagsWord(limit)}";
 
-    /// <summary>
-    /// The genitive after a number: "21 тега", "22 тегов", "11 тегов".
-    /// </summary>
+    // The genitive after a number: "21 тега", "22 тегов", "11 тегов".
     private static string TagsWord(int count) =>
         count % 10 == 1 && count % 100 != 11 ? "тега" : "тегов";
 }

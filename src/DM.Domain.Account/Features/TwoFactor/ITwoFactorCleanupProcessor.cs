@@ -14,9 +14,5 @@ namespace DM.Domain.Account.Features.TwoFactor;
 /// </remarks>
 public interface ITwoFactorCleanupProcessor
 {
-    /// <summary>
-    /// Delete every unconfirmed setup older than the setup window.
-    /// </summary>
-    /// <returns>How many were deleted</returns>
     Task<int> DeleteAbandonedAsync(CancellationToken cancellationToken = default);
 }

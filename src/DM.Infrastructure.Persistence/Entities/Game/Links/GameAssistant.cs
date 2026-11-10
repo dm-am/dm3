@@ -17,9 +17,6 @@ public class GameAssistant
     [Key]
     public Guid GameAssistantId { get; set; }
 
-    /// <summary>
-    /// Game identifier
-    /// </summary>
     public Guid GameId { get; set; }
 
     /// <summary>

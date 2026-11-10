@@ -3,9 +3,6 @@ using BBCodeParser.Tags;
 
 namespace DM.Infrastructure.Core.Parsing;
 
-/// <summary>
-/// BBCode parser tag set
-/// </summary>
 internal class TagSetBuilder
 {
     private readonly List<Tag> _set;
@@ -15,19 +12,11 @@ internal class TagSetBuilder
         _set = new List<Tag>(defaultSet);
     }
 
-    /// <summary>
-    /// Build set of tags
-    /// </summary>
-    /// <returns>Array of tags</returns>
     public Tag[] Build()
     {
         return _set.ToArray();
     }
 
-    /// <summary>
-    /// Add tags to set
-    /// </summary>
-    /// <returns>Self</returns>
     public TagSetBuilder With(params Tag[] tags)
     {
         _set.AddRange(tags);

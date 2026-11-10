@@ -13,7 +13,6 @@ namespace DM.Infrastructure.Core.Parsing;
 /// </remarks>
 public static class UploadIdentifiers
 {
-    /// <summary>Thirty-two hexadecimal digits, with the dashes of the "D" spelling or none.</summary>
     private static readonly Regex Any = new(
         "[0-9a-f]{8}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{4}-?[0-9a-f]{12}",
         RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);

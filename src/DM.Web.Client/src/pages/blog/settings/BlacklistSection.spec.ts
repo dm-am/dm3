@@ -9,17 +9,19 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { blogApi, useBlogDetailsStore, type Blog } from "@/entities/blog";
+import { blogApi, useBlogDetailsStore } from "@/entities/blog";
 import { UserAutocomplete } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { User } from "@/shared/api/models/common";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
+import { createMockBlog } from "@/entities/blog/model/store.fixtures";
 import BlacklistSection from "./BlacklistSection.vue";
 
 const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
 
 const aUser = (username: string): User =>
-  ({ id: `id-${username}`, username }) as unknown as User;
+  createMockUser(`id-${username}`, username);
 
 const LANCELOT = aUser("Ланселот");
 const MORDRED = aUser("Мордред");
@@ -41,11 +43,10 @@ async function mountSection(first: unknown = listOf([LANCELOT])) {
   setActivePinia(createPinia());
   const store = useBlogDetailsStore();
   store.blog = {
-    id: "the-blog-guid",
-    title: "Записки",
-    author: { username: "Мерлин" },
-    assistants: [{ username: "Кей" }],
-  } as unknown as Blog;
+    ...createMockBlog("the-blog-guid", "Записки"),
+    author: createMockUser("u-merlin", "Мерлин"),
+    assistants: [createMockUser("u-kay", "Кей")],
+  };
 
   const reload = pending<unknown>();
   vi.spyOn(blogApi, "getBlacklist")

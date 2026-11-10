@@ -6,16 +6,11 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// The API document is written out as a build artifact and asserted well-formed. A test rather than a CLI step:
-/// this harness already has the encryption key, the XML doc file and the environment.
-/// </summary>
+// A test rather than a CLI step: this harness already has the encryption key, the XML doc file and
+// the environment.
 public class OpenApiContractShould : IntegrationTestBase
 {
-    /// <summary>
-    /// Repo-relative so CI can upload it. Cleaned and rewritten on every run —
-    /// a stale contract is worse than none.
-    /// </summary>
+    // Cleaned and rewritten on every run — a stale contract is worse than none.
     private static readonly string OutputDirectory =
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "openapi");
 
@@ -51,22 +46,14 @@ public class OpenApiContractShould : IntegrationTestBase
         written.Should().BeGreaterThan(0, "the API publishes at least one OpenAPI group");
     }
 
-    /// <summary>
-    /// Repo-relative and committed: a renamed server property shows as one line in review.
-    /// </summary>
+    // Repo-relative and committed: a renamed server property shows as one line in review.
     private static readonly string ContractSnapshotPath =
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "openapi-contract.json");
 
-    /// <summary>
-    /// Repo-relative and committed: every address the API answers.
-    /// </summary>
     private static readonly string RoutesSnapshotPath =
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "openapi-routes.json");
 
-    /// <summary>
-    /// The published addresses, as method and path.
-    /// </summary>
-    /// <remarks>The frontend suite holds every literal path it builds to this file.</remarks>
+    // The frontend suite holds every literal path it builds to this file.
     [Fact]
     public async Task MatchTheCommittedRoutesSnapshot()
     {
@@ -118,17 +105,11 @@ public class OpenApiContractShould : IntegrationTestBase
             "the API routes changed; artifacts/openapi-routes.json has just been rewritten, review the diff and commit it");
     }
 
-    /// <summary>
-    /// Repo-relative, and committed. Every address the API answers without asking
-    /// who is calling.
-    /// </summary>
     private static readonly string PublicRoutesSnapshotPath =
         Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "artifacts", "openapi-public-routes.json");
 
-    /// <summary>
-    /// Which operations are open to a visitor.
-    /// </summary>
-    /// <remarks>Dropping an authentication attribute becomes one added line in a file about what a stranger may reach.</remarks>
+    // Dropping an authentication attribute becomes one added line in a file about what a stranger
+    // may reach.
     [Fact]
     public async Task MatchTheCommittedPublicRoutesSnapshot()
     {
@@ -187,10 +168,6 @@ public class OpenApiContractShould : IntegrationTestBase
             "been rewritten, review the diff and commit it");
     }
 
-    /// <summary>
-    /// The published schemas, reduced to what a hand-written client has to
-    /// agree with: schema name to its property names.
-    /// </summary>
     /// <remarks>
     /// A snapshot: this test writes the contract and the frontend suite reads the committed file. Names only; the
     /// client declares its own types.

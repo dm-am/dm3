@@ -21,10 +21,8 @@ public class CreatePostValidatorShould : UnitTestBase
         validator = new CreatePostValidator(nestingLimit);
     }
 
-    /// <summary>
-    /// Text the renderer will refuse is refused here, or it is stored and shows
-    /// as nothing to everyone but its author.
-    /// </summary>
+    // Text the renderer will refuse is refused here, or it is stored and shows as nothing to
+    // everyone but its author.
     [Fact]
     public async Task RefuseTextTheRendererWillNotRender()
     {
@@ -41,10 +39,8 @@ public class CreatePostValidatorShould : UnitTestBase
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// A body past the length limit is refused, and refused by length rather
-    /// than by some other rule tripping over it.
-    /// </summary>
+    // A body past the length limit is refused, and refused by length rather than by some other rule
+    // tripping over it.
     [Fact]
     public async Task RefuseTextLongerThanTheLimit()
     {

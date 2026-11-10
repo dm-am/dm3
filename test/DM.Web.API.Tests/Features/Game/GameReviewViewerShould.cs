@@ -12,9 +12,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Game;
 
-/// <summary>
-/// The pencil and the trash of a review are the domain's answers, so the page counts neither.
-/// </summary>
+// The pencil and the trash of a review are the domain's answers, so the page counts neither.
 public class GameReviewViewerShould : UnitTestBase
 {
     private readonly IGameReviewService reviewService = Mock<IGameReviewService>();
@@ -43,9 +41,7 @@ public class GameReviewViewerShould : UnitTestBase
             new GameReviewViewer { CanEdit = mayEdit, CanDelete = mayDelete });
     }
 
-    /// <summary>
-    /// An edit answers with the review in its row, so the row keeps the answers too.
-    /// </summary>
+    // An edit answers with the review in its row, so the row keeps the answers too.
     [Fact]
     public async Task CarryTheDomainAnswersOnAnEditedReview()
     {

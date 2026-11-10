@@ -6,11 +6,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// The project keeps exactly one migration and regenerates it whenever the model
-/// changes, which is only safe while no production data exists. That convention
-/// is a habit; this is the check that makes it an invariant.
-/// </summary>
+// The project keeps exactly one migration and regenerates it whenever the model changes, which is
+// only safe while no production data exists.
 public class MigrationShould : IntegrationTestBase
 {
     public MigrationShould(DatabaseFixture databaseFixture) : base(databaseFixture)

@@ -5,7 +5,7 @@ import { describe, it, expect } from "vitest";
 import { mount } from "@vue/test-utils";
 import { RowIconButton } from "@/shared/ui/RowIconButton";
 import ProfilePersonalInfo from "./ProfilePersonalInfo.vue";
-import type { User } from "@/shared/api/models/community";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 
 describe("the contacts of a profile", () => {
   it("removes a middle row without moving the others into its inputs", async () => {
@@ -16,7 +16,7 @@ describe("the contacts of a profile", () => {
     ];
     const wrapper = mount(ProfilePersonalInfo, {
       props: {
-        user: { username: "Reader", contacts } as unknown as User,
+        user: { ...createMockUser("u-reader", "Reader"), contacts },
         isEditMode: true,
       },
     });
@@ -36,9 +36,8 @@ describe("the contacts of a profile", () => {
     expect(values).toEqual(["@first", "third"]);
     // A row keyed by its index would hand the third contact the second's inputs.
     expect(rows[1].element).toBe(thirdRow);
-    expect(wrapper.emitted("updateField")?.at(-1)).toEqual([
-      "contacts",
-      JSON.stringify([contacts[0], contacts[2]]),
+    expect(wrapper.emitted("updateContacts")?.at(-1)).toEqual([
+      [contacts[0], contacts[2]],
     ]);
   });
 });
@@ -57,7 +56,7 @@ describe("the edit mode of the personal info", () => {
     return mount(ProfilePersonalInfo, {
       props: {
         // No birthday and no visibility, as the public profile of a hidden one.
-        user: { username: "Reader", contacts: [] } as unknown as User,
+        user: { ...createMockUser("u-reader", "Reader"), contacts: [] },
         isEditMode: true,
         // Only the fields the editor reads.
         own: own as never,

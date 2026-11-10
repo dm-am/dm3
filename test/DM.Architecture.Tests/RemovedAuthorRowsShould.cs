@@ -10,10 +10,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// What a removed account wrote is not lost by a read, and every read that may lose a
-/// row for a removed account says so by name.
-/// </summary>
 /// <remarks>
 /// A required navigation to a soft-deleted account is an INNER JOIN onto the filtered users, and the
 /// row goes with the account. Every projection entry point is compiled to SQL against the real model;
@@ -50,10 +46,7 @@ public class RemovedAuthorRowsShould
         "ModerationMapper.ProjectToTicketComment",
     ];
 
-    /// <summary>
-    /// The reads allowed to lose a row for a removed account, and why. Adding here is a
-    /// decision about a kind of row, not a way to make the test pass.
-    /// </summary>
+    // Adding here is a decision about a kind of row, not a way to make the test pass.
     private static readonly Dictionary<string, string> MayLoseARow = new()
     {
         ["ForumMappers.ProjectToBoard"] =
@@ -84,10 +77,6 @@ public class RemovedAuthorRowsShould
             "a personal note is about a person, and a removed account is nobody",
     };
 
-    /// <summary>
-    /// An INNER JOIN onto the users table under its soft-delete filter: the shape a
-    /// required navigation to an account takes when the filter is in force.
-    /// </summary>
     private static readonly Regex LosesARow = new(
         @"INNER JOIN \(\s*SELECT [^()]*?FROM ""Users"" AS (\w+)\s+WHERE NOT \(\1\.""IsRemoved""\)\s*\) AS",
         RegexOptions.Compiled | RegexOptions.Singleline);
@@ -97,10 +86,6 @@ public class RemovedAuthorRowsShould
         .UseNpgsql("Host=localhost;Database=removed-author-probe;Username=probe;Password=probe")
         .Options);
 
-    /// <summary>
-    /// Every projection entry point of the persistence layer: a static ProjectTo*
-    /// method over the query of one entity.
-    /// </summary>
     private static IReadOnlyDictionary<string, MethodInfo> Projections() =>
         typeof(DmDbContext).Assembly.GetTypes()
             .SelectMany(type => type.GetMethods(
@@ -110,7 +95,6 @@ public class RemovedAuthorRowsShould
                              source.ParameterType.GetGenericTypeDefinition() == typeof(IQueryable<>))
             .ToDictionary(method => $"{method.DeclaringType!.Name}.{method.Name}");
 
-    /// <summary>The statement one projection compiles to over the whole set.</summary>
     private static string Statement(DmDbContext probe, MethodInfo projection)
     {
         var entity = projection.GetParameters()[0].ParameterType.GetGenericArguments()[0];

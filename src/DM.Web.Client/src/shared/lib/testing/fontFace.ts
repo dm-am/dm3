@@ -63,7 +63,7 @@ function glyphsOf(
     if (platform === 3 && encoding === 1 && b.readUInt16BE(off) === 4)
       chosen = off;
   }
-  if (chosen < 0) throw new Error("no format 4 cmap in " + file);
+  if (chosen < 0) throw new Error(`no format 4 cmap in ${file}`);
 
   const glyphs = new Map<number, number>();
   {
@@ -195,7 +195,7 @@ function kerningOf(b: Buffer, g: number): Kerning {
             const r = set + 2 + q * (2 + s1 + s2);
             const right = b.readUInt16BE(r);
             const x = xAdvance(b, r + 2, first);
-            if (x) pairs.set(left + "/" + right, x);
+            if (x) pairs.set(`${left}/${right}`, x);
           }
         }
       } else if (format === 2) {
@@ -222,7 +222,7 @@ function kernFrom(
   left: number,
   right: number,
 ): number {
-  const direct = pairs.get(left + "/" + right);
+  const direct = pairs.get(`${left}/${right}`);
   if (direct) return direct;
   for (const t of classed) {
     if (!t.covered.has(left)) continue;
@@ -265,7 +265,7 @@ export function loadFace(file: string): Face {
       let prev: number | null = null;
       for (const ch of chars) {
         const glyph = glyphs.get(ch.codePointAt(0)!);
-        if (glyph === undefined) throw new Error("no glyph for " + ch);
+        if (glyph === undefined) throw new Error(`no glyph for ${ch}`);
         units += advance(glyph);
         if (prev !== null) units += kern(prev, glyph);
         prev = glyph;

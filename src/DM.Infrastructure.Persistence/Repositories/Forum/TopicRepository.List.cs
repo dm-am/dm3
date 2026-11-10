@@ -14,10 +14,6 @@ using DbTopic = DM.Infrastructure.Persistence.Entities.Forum.Topic;
 
 namespace DM.Infrastructure.Persistence.Repositories.Forum;
 
-/// <summary>
-/// The list of topics: of one board or of every board the reader may see, counted,
-/// filtered, sorted and paged
-/// </summary>
 internal partial class TopicRepository
 {
     /// <inheritdoc />
@@ -62,10 +58,6 @@ internal partial class TopicRepository
         return topics;
     }
 
-    /// <summary>
-    /// The order a listing is read in: the key the reader asked for, and the
-    /// topic id last.
-    /// </summary>
     private IOrderedQueryable<DbTopic> SortTopics(
         IQueryable<DbTopic> dbQuery, TopicsQuery query)
     {
@@ -118,10 +110,6 @@ internal partial class TopicRepository
         return sortedDbQuery;
     }
 
-    /// <summary>
-    /// Backfill <see cref="Topic.TotalCommentsCount"/> and <see cref="Topic.LikesCount"/>
-    /// for a page of topics.
-    /// </summary>
     private async Task FillListCounts(Topic[] topics, CancellationToken ct)
     {
         // Two batched GROUP BY queries instead of correlated subqueries per row.
@@ -156,10 +144,6 @@ internal partial class TopicRepository
         }
     }
 
-    /// <summary>
-    /// Scope predicate: a single board (per-board listing) or every board
-    /// (cross-board listing, the user profile's Topics tab).
-    /// </summary>
     private static IQueryable<DbTopic> ApplyScope(IQueryable<DbTopic> dbQuery, Guid? boardId) =>
         boardId.HasValue ? dbQuery.Where(t => t.BoardId == boardId.Value) : dbQuery;
 
@@ -168,8 +152,6 @@ internal partial class TopicRepository
     /// in one place so a new filter (added to TopicsQuery) automatically
     /// affects pagination AND the listing without diverging.
     /// </summary>
-    /// <param name="dbQuery">Topics in scope</param>
-    /// <param name="query">What the reader asked for</param>
     /// <param name="authorIds">
     /// The authors meant when the names asked include "Аккаунт удален" - the removed
     /// accounts and the live ones named alongside (<see cref="RemovedAccountScope" />);

@@ -7,10 +7,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// Reads carry the request cancellation token; writes run to completion: most writes have no transaction,
-/// and a dropped connection would tear them.
-/// </summary>
+// Reads carry the request cancellation token; writes run to completion: most writes have no
+// transaction, and a dropped connection would tear them.
 public class MutatingActionsShould
 {
     [Fact]
@@ -30,6 +28,5 @@ public class MutatingActionsShould
                 "a cancelled write cannot be rolled back — see the class remarks");
     }
 
-    /// <summary>Every action of the API that writes.</summary>
     private static MethodInfo[] MutatingActions() => ApiSurface.MutatingActions().ToArray();
 }

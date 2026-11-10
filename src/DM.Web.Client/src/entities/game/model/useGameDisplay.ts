@@ -154,12 +154,7 @@ function buildAssistantTooltip(assistants: { username: string }[]): string {
 }
 
 function isViewerAuthenticated(): boolean {
-  // Without an installed pinia the guest wording is the safe answer.
-  try {
-    return useAuthStore().isAuthenticated;
-  } catch {
-    return false;
-  }
+  return useAuthStore().isAuthenticated;
 }
 
 function getUnreadPosts(game: Game | GameRef): number {

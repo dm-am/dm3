@@ -5,7 +5,7 @@
  * filter into the address. The player scope is Any, as befits a dossier: games
  * with only retired characters or a pending application are listed too.
  */
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { DataTable, type Column, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
@@ -36,6 +36,8 @@ import { parsePageNumber } from "@/shared/lib/filters";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
+import type { SortDirection } from "@/shared/lib/filters/types";
+import type { ProfileListSortBy } from "./profileListSort";
 
 const props = defineProps<{
   /** Profile owner whose games we list. */
@@ -68,8 +70,8 @@ const role = ref<RoleScope>("host");
 // `search` is the debounced `searchInput`, one fetch per pause.
 const searchInput = ref("");
 const search = ref("");
-const sortBy = ref<"created" | "title">("created");
-const sortOrder = ref<"asc" | "desc">("desc");
+const sortBy = ref<ProfileListSortBy>("created");
+const sortOrder = ref<SortDirection>("desc");
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(searchInput, (value) => {
@@ -78,6 +80,7 @@ watch(searchInput, (value) => {
     search.value = value.trim();
   }, 300);
 });
+onBeforeUnmount(() => clearTimeout(searchTimer));
 
 // A page as long as the reader's lists (account settings).
 const { pageSize } = usePaging();
@@ -170,12 +173,12 @@ const sortOptions = [
   { value: "title", label: "Название", defaultDirection: "asc" as const },
 ];
 
-function handleSortSelect(value: string, direction?: "asc" | "desc") {
+function handleSortSelect(value: string, direction?: SortDirection) {
   sortBy.value = value === "title" ? "title" : "created";
   sortOrder.value = direction ?? "desc";
 }
 
-function handleSortOrder(order: "asc" | "desc") {
+function handleSortOrder(order: SortDirection) {
   sortOrder.value = order;
 }
 

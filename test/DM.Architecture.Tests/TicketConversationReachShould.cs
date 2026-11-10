@@ -18,16 +18,9 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class TicketConversationReachShould
 {
-    /// <summary>
-    /// Every way a read reaches the table: the set and the navigation by name, or
-    /// a set of the entity asked for by type.
-    /// </summary>
     private static readonly Regex ReachesTheTable = new(
         @"\bTicketComments\b|\bSet<\s*[\w.]*TicketComment\s*>", RegexOptions.Compiled);
 
-    /// <summary>
-    /// The files allowed to reach it, relative to src/ with forward slashes.
-    /// </summary>
     private static readonly string[] Readers =
     [
         "DM.Infrastructure.Persistence/Entities/Moderation/Ticket.cs",
@@ -37,10 +30,6 @@ public class TicketConversationReachShould
         "DM.Tools.Seeder/Seeding/DataSeeder.Tickets.cs",
     ];
 
-    /// <summary>
-    /// The generators of the notifications about tickets, by the name every one of
-    /// them carries.
-    /// </summary>
     private static readonly Regex TicketNotifier = new(
         @"^DM\.Workers\.NotificationDispatcher/Notifiers/Moderation/Ticket\w*NotificationGenerator\.cs$",
         RegexOptions.Compiled);
@@ -78,9 +67,7 @@ public class TicketConversationReachShould
                 "own; a new reader is a decision, named in this file with its reason");
     }
 
-    /// <summary>
-    /// A named reader that no longer reaches the table is an open door.
-    /// </summary>
+    // A named reader that no longer reaches the table is an open door.
     [Fact]
     public void KeepTheListOfReadersHonest()
     {

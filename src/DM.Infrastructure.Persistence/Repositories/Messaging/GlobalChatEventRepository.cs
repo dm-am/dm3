@@ -131,7 +131,6 @@ internal class GlobalChatEventRepository : IGlobalChatEventRepository
             .ToListAsync(ct);
         _dbContext.GlobalChatEventParticipants.RemoveRange(participants);
 
-        // Then delete the event
         var chatEvent = await _dbContext.GlobalChatEvents
             .FirstOrDefaultAsync(e => e.GlobalChatEventId == eventId, ct);
         if (chatEvent != null)

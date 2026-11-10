@@ -25,9 +25,6 @@ internal class TestCompromisedPasswordChecker : ICompromisedPasswordChecker
     public Task<bool> IsCompromisedAsync(string password) => Task.FromResult(false);
 }
 
-/// <summary>
-/// The host under test, over the PostgreSQL container DatabaseFixture shares across all tests.
-/// </summary>
 public class CustomWebApplicationFactory : WebApplicationFactory<Program>
 {
     private readonly DatabaseFixture _databaseFixture;
@@ -167,9 +164,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
             mail.Lifetime));
     }
 
-    /// <summary>
-    /// Create a test user for authenticated requests
-    /// </summary>
     public static GeneralUser CreateTestUser(
         string username = TestConstants.TestUserLogin,
         UserRole role = UserRole.RegularUser)
@@ -183,9 +177,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         };
     }
 
-    /// <summary>
-    /// Create admin user for authenticated requests
-    /// </summary>
     public static GeneralUser CreateAdminUser()
     {
         return new GeneralUser
@@ -197,9 +188,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         };
     }
 
-    /// <summary>
-    /// Create second test user for multi-user scenarios
-    /// </summary>
     public static GeneralUser CreateSecondUser()
     {
         return new GeneralUser
@@ -211,9 +199,6 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         };
     }
 
-    /// <summary>
-    /// Create moderator user for moderation scenarios
-    /// </summary>
     public static GeneralUser CreateModeratorUser()
     {
         return new GeneralUser
@@ -225,9 +210,7 @@ public class CustomWebApplicationFactory : WebApplicationFactory<Program>
         };
     }
 
-    /// <summary>
-    /// Create senior moderator user: the rank that removes and restores accounts
-    /// </summary>
+    // Create senior moderator user: the rank that removes and restores accounts
     public static GeneralUser CreateSeniorModeratorUser()
     {
         return new GeneralUser

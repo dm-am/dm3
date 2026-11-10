@@ -106,9 +106,7 @@ public class AccountControllerShould : IntegrationTestBase
         content.Should().Contain("\"isAvailable\":false");
     }
 
-    /// <summary>
-    /// The checked identifier never appears in the request line.
-    /// </summary>
+    // The checked identifier never appears in the request line.
     [Fact]
     public async Task CheckUsernameRefusesTheQueryStringForm()
     {

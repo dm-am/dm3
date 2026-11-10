@@ -12,13 +12,8 @@ using DbPost = DM.Infrastructure.Persistence.Entities.Game.Posts.Post;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Users;
 
-/// <summary>
-/// A nested user costs the columns the formula names, not the users row.
-/// </summary>
-/// <remarks>
-/// GeneralUserProjections is spliced into every list projection; the statement states the width, read for
-/// the posts of a room and the games catalog.
-/// </remarks>
+// GeneralUserProjections is spliced into every list projection; the statement states the width,
+// read for the posts of a room and the games catalog.
 public class UserProjectionWidthShould
 {
 
@@ -37,9 +32,6 @@ public class UserProjectionWidthShould
         "IsUnderModerationWatch", "AvatarUploadId", "IsRemoved", "IsNewbie"
     ];
 
-    /// <summary>
-    /// Every column the statement reads off any alias of the Users table.
-    /// </summary>
     private static IReadOnlyCollection<string> ReferencedUserColumns(string sql)
     {
         var aliases = Regex.Matches(sql, @"(?:FROM|JOIN)\s+""Users""\s+AS\s+(\w+)")

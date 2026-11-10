@@ -6,11 +6,8 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The validator, the stored column and the form stop a character name at the
-/// same character.
-/// </summary>
-/// <remarks>Read out of the sources: the migration and snapshots build the database, the client cannot be asked.</remarks>
+// Read out of the sources: the migration and snapshots build the database, the client cannot be
+// asked.
 public class CharacterNameLimitShould
 {
     private const string CharacterEntity =

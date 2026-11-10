@@ -10,12 +10,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The description of a game tag, the hint surface: its markup is the string
-/// the client's preview draws, and it is read with its own tag set on every
-/// audience.
-/// </summary>
-/// <remarks>The pairs are written once, in hintMarkup.cases.ts, and held from both ends.</remarks>
+// The pairs are written once, in hintMarkup.cases.ts, and held from both ends.
 public class HintMarkupShould
 {
 
@@ -64,11 +59,8 @@ public class HintMarkupShould
             .Should().Be("а [tip img=\"images/a.gif\"]слово[/tip] б");
     }
 
-    /// <summary>
-    /// No surface is added without a decision about the checks that go over
-    /// every surface: a surface of content is one more for all of them, and
-    /// one with a tag set of its own is none of theirs.
-    /// </summary>
+    // No surface is added without a decision about the checks that go over every surface: a surface
+    // of content is one more for all of them, and one with a tag set of its own is none of theirs.
     [Fact]
     public void EveryBbSurfaceIsDecided()
     {

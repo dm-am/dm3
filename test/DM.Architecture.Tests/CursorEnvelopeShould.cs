@@ -6,20 +6,15 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A page that says there is more says what to ask for it with.
-/// </summary>
 /// <remarks>
 /// The flag and the cursor are not tied together by anything. Asserted on the initializers: the
 /// endpoint needs a database and the defect is visible where the result is built.
 /// </remarks>
 public class CursorEnvelopeShould
 {
-    /// <summary>One construction of a cursor result, from the new to its brace.</summary>
     private static readonly Regex Construction = new(
         @"new CursorResult<[^>]+>\s*\{(?<body>[^}]*)\}", RegexOptions.Compiled | RegexOptions.Singleline);
 
-    /// <summary>How a member of that initializer is assigned.</summary>
     private static string? Assigned(string body, string member) =>
         Regex.Match(body, $@"\b{member}\s*=\s*(?<value>[^,\r\n]+)") is { Success: true } match
             ? match.Groups["value"].Value.Trim()

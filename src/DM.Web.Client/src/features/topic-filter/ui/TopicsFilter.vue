@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { vClickOutside } from "@/shared/directives";
 import { useTopicsFilter, SORT_OPTIONS } from "../model";
+import type { TopicsFilterKey } from "../model";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
-import { formatDateRangeForDisplay } from "@/shared/lib/filters";
+import { useAuthorDateFilterBar } from "@/shared/lib/filters";
 import {
   FilterSearchInput,
-  FilterButton,
-  FilterDropdown,
-  FilterDropdownHeader,
-  FilterDropdownItem,
+  FilterMenu,
   DateRangePicker,
   SortButton,
   ExpandableBubble,
@@ -27,6 +24,7 @@ const props = withDefaults(
   { hideAuthor: false },
 );
 
+const filter = useTopicsFilter();
 const {
   filterState,
   setSearch,
@@ -35,8 +33,7 @@ const {
   setDateRange,
   setSort,
   toggleSortOrder,
-  clearFilters,
-} = useTopicsFilter();
+} = filter;
 
 const { localInput, handleInput, applySearch } = useFilterSearch(
   computed(() => filterState.value.search),
@@ -44,7 +41,7 @@ const { localInput, handleInput, applySearch } = useFilterSearch(
 );
 
 const { showDropdown, navPath, closeDropdown, toggleDropdown, navigateBack } =
-  useFilterDropdown();
+  useFilterDropdown<TopicsFilterKey>();
 
 const filterOptions = computed(() => {
   const items = [
@@ -58,10 +55,6 @@ const filterOptions = computed(() => {
   return props.hideAuthor ? items.filter((i) => i.key !== "author") : items;
 });
 
-function selectRootItem(key: string) {
-  navPath.value = { filter: key };
-}
-
 function getDropdownTitle(): string | null {
   if (!navPath.value) return null;
   if (navPath.value.filter === "author") return "Автор";
@@ -69,69 +62,17 @@ function getDropdownTitle(): string | null {
   return null;
 }
 
-function handleDateApply(from: string | null, to: string | null) {
-  setDateRange(from, to);
-  closeDropdown();
-}
-
-function handleDateClear() {
-  setDateRange(null, null);
-  closeDropdown();
-}
-
-const sortOptions = SORT_OPTIONS.map((o) => ({
-  value: o.value,
-  label: o.label,
-  hint: o.hint,
-  defaultDirection: o.defaultDirection,
-}));
-
-const hasDateFilter = computed(() => {
-  return (
-    filterState.value.createdFromUtc !== null ||
-    filterState.value.createdToUtc !== null
-  );
-});
-
-const dateFilterLabel = computed(() => {
-  return formatDateRangeForDisplay({
-    from: filterState.value.createdFromUtc,
-    to: filterState.value.createdToUtc,
-  });
-});
-
-// The sort is the SortButton's: it does not raise the "Сбросить" row.
-const hasBubbles = computed(() => {
-  const state = filterState.value;
-  return state.authors.size > 0 || hasDateFilter.value;
-});
-
-const authorsBubbleValues = computed(() =>
-  [...filterState.value.authors]
-    .sort((a, b) => a.toLowerCase().localeCompare(b.toLowerCase(), "ru"))
-    .map((author) => ({ id: author, label: author })),
-);
-
-function clearAll() {
-  localInput.value = "";
-  clearFilters();
-}
-
-function handleSearchKeydown(event: KeyboardEvent) {
-  if (event.key === "Backspace" && !localInput.value) {
-    if (filterState.value.createdFromUtc || filterState.value.createdToUtc) {
-      event.preventDefault();
-      setDateRange(null, null);
-      return;
-    }
-    if (filterState.value.authors.size > 0) {
-      event.preventDefault();
-      const lastAuthor = [...filterState.value.authors].pop();
-      if (lastAuthor) removeAuthor(lastAuthor);
-      return;
-    }
-  }
-}
+const {
+  handleDateApply,
+  handleDateClear,
+  sortOptions,
+  hasDateFilter,
+  dateFilterLabel,
+  hasBubbles,
+  authorsBubbleValues,
+  clearAll,
+  handleSearchKeydown,
+} = useAuthorDateFilterBar(filter, SORT_OPTIONS, localInput, closeDropdown);
 </script>
 
 <template>
@@ -145,51 +86,33 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton
-          :active="showDropdown"
-          @click="toggleDropdown"
-          @close="closeDropdown"
+      <FilterMenu
+        v-model:nav-path="navPath"
+        :open="showDropdown"
+        :title="getDropdownTitle()"
+        :options="filterOptions"
+        @toggle="toggleDropdown"
+        @close="closeDropdown"
+        @back="navigateBack"
+      >
+        <!-- Include inactive: an author away for 30 days stays findable. -->
+        <UserMultiSelect
+          v-if="!hideAuthor && navPath?.filter === 'author'"
+          :selected-users="filterState.authors"
+          placeholder="Поиск автора"
+          include-inactive
+          @add="addAuthor"
         />
 
-        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <FilterDropdownHeader
-            v-if="navPath"
-            :title="getDropdownTitle() ?? ''"
-            @back="navigateBack"
-          />
-
-          <template v-if="!navPath">
-            <FilterDropdownItem
-              v-for="item in filterOptions"
-              :key="item.key"
-              :label="item.label"
-              :hint="item.hint"
-              has-sub-options
-              @item-select="selectRootItem(item.key)"
-            />
-          </template>
-
-          <!-- Include inactive: an author away for 30 days stays findable. -->
-          <UserMultiSelect
-            v-if="!hideAuthor && navPath?.filter === 'author'"
-            :selected-users="filterState.authors"
-            placeholder="Поиск автора"
-            include-inactive
-            @add="addAuthor"
-            @remove="removeAuthor"
-          />
-
-          <DateRangePicker
-            v-if="navPath?.filter === 'dateRange'"
-            :from-value="filterState.createdFromUtc"
-            :to-value="filterState.createdToUtc"
-            :show-clear-button="hasDateFilter"
-            @apply="handleDateApply"
-            @clear="handleDateClear"
-          />
-        </FilterDropdown>
-      </div>
+        <DateRangePicker
+          v-if="navPath?.filter === 'dateRange'"
+          :from-value="filterState.createdFromUtc"
+          :to-value="filterState.createdToUtc"
+          :show-clear-button="hasDateFilter"
+          @apply="handleDateApply"
+          @clear="handleDateClear"
+        />
+      </FilterMenu>
 
       <SortButton
         :options="sortOptions"
@@ -228,7 +151,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
   gap: $small
 
   +filter-bar
-  +filter-button
 
 +dropdown-search-input
 +filter-dropdown-base

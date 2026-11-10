@@ -11,11 +11,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Users;
 
-/// <summary>
-/// A content read lifts the account filter and nothing else, and the nested user it
-/// then reaches is nobody when the account is removed.
-/// </summary>
-/// <remarks>The lift keeps the rows a removed account wrote; the formula keeps the account out of the answer.</remarks>
+// The lift keeps the rows a removed account wrote; the formula keeps the account out of the answer.
 public class RemovedAuthorsShould
 {
 

@@ -82,39 +82,32 @@ public class EdgeSecurityHeadersShould
         }
     }
 
-    /// <summary>
-    /// One block of an nginx configuration and the header directives declared
-    /// directly in it.
-    /// </summary>
-    /// <remarks>A level keeps the directives above it only while it declares none of its own.</remarks>
+    // A level keeps the directives above it only while it declares none of its own.
     private sealed class NginxBlock
     {
-        /// <summary>The block this one is nested in, or null at the top level.</summary>
+        // The block this one is nested in, or null at the top level.
         public NginxBlock? Parent { get; init; }
 
-        /// <summary>The line that opened the block, without its brace.</summary>
+        // The line that opened the block, without its brace.
         public string Name { get; init; } = string.Empty;
 
-        /// <summary>Headers this block sets with an add_header of its own.</summary>
+        // Headers this block sets with an add_header of its own.
         public List<string> Added { get; } = new();
 
-        /// <summary>Headers this block drops with a proxy_hide_header of its own.</summary>
+        // Headers this block drops with a proxy_hide_header of its own.
         public List<string> Hidden { get; } = new();
 
-        /// <summary>What a response leaving this block carries: its own headers, or the inherited set.</summary>
+        // What a response leaving this block carries: its own headers, or the inherited set.
         public IReadOnlyList<string> Emitted =>
             Added.Count > 0 ? Added : Parent?.Emitted ?? Array.Empty<string>();
 
-        /// <summary>Whether the copy an upstream sent is dropped before the response leaves this block.</summary>
         public bool Hides(string header) => Hidden.Count > 0
             ? Hidden.Contains(header)
             : Parent?.Hides(header) ?? false;
     }
 
-    /// <summary>
-    /// Splits a configuration into blocks by braces, keeping the two header directives of each;
-    /// lines still commented are commented on purpose.
-    /// </summary>
+    // Splits a configuration into blocks by braces, keeping the two header directives of each;
+    // lines still commented are commented on purpose.
     private static IReadOnlyList<NginxBlock> HeaderBlocks(string configuration)
     {
         var blocks = new List<NginxBlock>();

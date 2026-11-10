@@ -17,15 +17,9 @@ namespace DM.Infrastructure.Persistence.Entities.Game.Characters;
 [Table("Characters")]
 public class Character : ISoftDeletable
 {
-    /// <summary>
-    /// Character identifier
-    /// </summary>
     [Key]
     public Guid CharacterId { get; set; }
 
-    /// <summary>
-    /// Game identifier
-    /// </summary>
     public Guid GameId { get; set; }
 
     /// <summary>

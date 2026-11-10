@@ -12,19 +12,14 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The catalogue of starting character sheets, against a live Postgres.
-/// </summary>
-/// <remarks>The partial unique indexes and the conditional writes exist only under PostgreSQL.</remarks>
+// The partial unique indexes and the conditional writes exist only under PostgreSQL.
 public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
 {
     public AttributeSchemaTemplateRepositoryShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// The default flag is a fact about the shared table, so each test starts with no default.
-    /// </summary>
+    // The default flag is a fact about the shared table, so each test starts with no default.
     private static async Task ClearTheDefaultFlag(DmDbContext dbContext) =>
         await dbContext.AttributeSchemaTemplates
             .Where(t => t.IsDefault)
@@ -46,9 +41,6 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
         ]
     };
 
-    /// <summary>
-    /// A hidden template is invisible to both reads through the global soft-delete filter.
-    /// </summary>
     [Fact]
     public async Task HideATemplateInsteadOfDroppingTheRow()
     {
@@ -90,10 +82,6 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
         (await repository.Delete(created.Id)).Should().Be(AttributeSchemaTemplateRemoval.NotFound);
     }
 
-    /// <summary>
-    /// Two live templates cannot share a name, on either write that can take
-    /// one.
-    /// </summary>
     [Fact]
     public async Task RefuseATitleAnotherLiveTemplateCarries()
     {
@@ -120,10 +108,6 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
             "the rule holds however the name is arrived at");
     }
 
-    /// <summary>
-    /// The uniqueness is over the live catalogue: a name freed by hiding its
-    /// template can be used again.
-    /// </summary>
     [Fact]
     public async Task LetTheTitleOfAHiddenTemplateBeUsedAgain()
     {
@@ -142,9 +126,6 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
         again.Title.Should().Be(title);
     }
 
-    /// <summary>
-    /// A replacement writes every field, and the specifications get new server identifiers.
-    /// </summary>
     [Fact]
     public async Task HandOutFreshSpecificationIdentifiersOnEveryReplacement()
     {
@@ -199,10 +180,8 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
         replaced.Should().BeNull("a hidden template is nothing to write into");
     }
 
-    /// <summary>
-    /// The flag moves off the template that carried it and onto the named one,
-    /// in one write nobody can observe half of.
-    /// </summary>
+    // The flag moves off the template that carried it and onto the named one, in one write nobody
+    // can observe half of.
     [Fact]
     public async Task MoveTheDefaultFlagOntoTheNamedTemplate()
     {
@@ -225,10 +204,8 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
             "the catalogue offers one starting sheet and not two");
     }
 
-    /// <summary>
-    /// The site is never left without a starting sheet, so the removal of the
-    /// default one touches nothing.
-    /// </summary>
+    // The site is never left without a starting sheet, so the removal of the default one touches
+    // nothing.
     [Fact]
     public async Task RefuseToHideTheDefaultTemplate()
     {
@@ -275,10 +252,8 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
                 "the refused assignment put back the flag it had already taken off");
     }
 
-    /// <summary>
-    /// The database itself refuses a second live default, which is what makes
-    /// "at most one" a rule rather than a habit of the write path.
-    /// </summary>
+    // The database itself refuses a second live default, which is what makes "at most one" a rule
+    // rather than a habit of the write path.
     [Fact]
     public async Task RefuseASecondLiveDefaultRow()
     {
@@ -315,9 +290,6 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// The second assignment is refused by the partial unique index, and the service sees a duplicate.
-    /// </summary>
     /// <remarks>
     /// The winning claim is held open by hand on a connection of its own (the retrying strategy refuses an outside
     /// transaction), the assignment parked on it, and only then committed.
@@ -359,10 +331,8 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
             .Which.Should().Be(winner.Id, "the refused assignment wrote nothing");
     }
 
-    /// <summary>
-    /// The pair of writes an assignment is made of, run by hand so that the pair
-    /// can be left hanging between the first and the commit.
-    /// </summary>
+    // The pair of writes an assignment is made of, run by hand so that the pair can be left hanging
+    // between the first and the commit.
     private static async Task ClaimTheDefaultFlag(
         NpgsqlConnection connection, NpgsqlTransaction transaction, Guid templateId)
     {
@@ -386,9 +356,6 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
         await command.ExecuteNonQueryAsync();
     }
 
-    /// <summary>
-    /// Waits until PostgreSQL parks the assignment behind the uncommitted claim.
-    /// </summary>
     private static async Task WaitUntilTheAssignmentWaits(string connectionString, int backendPid)
     {
         await using var watch = new NpgsqlConnection(connectionString);
@@ -412,10 +379,6 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
             "The assignment never waited on the claim it has to lose to");
     }
 
-    /// <summary>
-    /// The catalogue leads with the template the creation form starts from,
-    /// and orders the rest by name.
-    /// </summary>
     [Fact]
     public async Task LeadTheCatalogueWithTheDefaultTemplate()
     {
@@ -439,10 +402,7 @@ public class AttributeSchemaTemplateRepositoryShould : IntegrationTestBase
         catalogue.Skip(1).Should().AllSatisfy(t => t.IsDefault.Should().BeFalse());
     }
 
-    /// <summary>
-    /// The catalogue carries the documents, so the creation form opens on one
-    /// request.
-    /// </summary>
+    // The catalogue carries the documents, so the creation form opens on one request.
     [Fact]
     public async Task CarryTheDocumentsInTheCatalogue()
     {

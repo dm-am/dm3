@@ -7,17 +7,7 @@ namespace DM.Domain.Account.Features.Security;
 /// </summary>
 public interface ISymmetricCryptoService
 {
-    /// <summary>
-    /// Encrypts value for storage
-    /// </summary>
-    /// <param name="valueToEncrypt">Given value</param>
-    /// <returns>Encrypted value</returns>
     Task<string> Encrypt(string valueToEncrypt);
 
-    /// <summary>
-    /// Decrypts stored value
-    /// </summary>
-    /// <param name="valueToDecrypt">Stored value</param>
-    /// <returns>Decrypted value</returns>
     Task<string> Decrypt(string valueToDecrypt);
 }

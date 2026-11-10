@@ -11,13 +11,10 @@ import { SvgIcon } from "@/shared/ui/Icon";
 
 const props = withDefaults(
   defineProps<{
-    /** Button label */
-    label?: string;
     /** Whether button is in active state */
     active?: boolean;
   }>(),
   {
-    label: "Фильтры",
     active: false,
   },
 );
@@ -45,12 +42,12 @@ function handleEscape() {
     class="filter-btn"
     :class="{ active }"
     :aria-expanded="active"
-    :aria-label="label"
+    aria-label="Фильтры"
     @click="emit('click', $event)"
     @keydown.esc="handleEscape"
   >
     <SvgIcon name="filter" class="filter-icon" />
-    <span class="filter-btn-label">{{ label }}</span>
+    <span class="filter-btn-label">Фильтры</span>
   </button>
 </template>
 

@@ -106,9 +106,6 @@ internal class WarningEntityResolver : IWarningEntityResolver
         IEnumerable<WarningEntityRequest> requests, WarningEntityType entityType) =>
         requests.Where(r => r.EntityType == entityType && r.EntityId != Guid.Empty).ToList();
 
-    /// <summary>
-    /// What one object of the page is, as the three kinds below answer it.
-    /// </summary>
     private sealed record Described(
         string? Url,
         WarningPlaceKind? PlaceKind,
@@ -167,9 +164,6 @@ internal class WarningEntityResolver : IWarningEntityResolver
     private static WarningLogClosure? TextClosure(WarningLogClosure? placeClosure, bool removedByModeration) =>
         placeClosure ?? (removedByModeration ? WarningLogClosure.RemovedByModeration : null);
 
-    /// <summary>
-    /// A comment of the page, read for what its place is told by.
-    /// </summary>
     private sealed record CommentRow(
         Guid CommentId, Guid OwnerId, Guid AuthorId, DateTimeOffset CreatedUtc, bool IsRemoved, Guid? DeletedByUserId)
     {
@@ -221,9 +215,6 @@ internal class WarningEntityResolver : IWarningEntityResolver
         Fill(requests, states, described);
     }
 
-    /// <summary>
-    /// Places the comments of a forum topic at the topic.
-    /// </summary>
     private async Task CommentsInTopics(
         List<CommentRow> comments, List<Guid> owners, Dictionary<Guid, Described> described, CancellationToken ct)
     {
@@ -241,9 +232,6 @@ internal class WarningEntityResolver : IWarningEntityResolver
             TextClosure(TopicClosure(topic.IsRemoved), comment.ByModeration)));
     }
 
-    /// <summary>
-    /// Places the comments of a blog discussion at the blog.
-    /// </summary>
     private async Task CommentsInBlogs(
         List<CommentRow> comments, List<Guid> owners, Dictionary<Guid, Described> described, CancellationToken ct)
     {
@@ -272,9 +260,6 @@ internal class WarningEntityResolver : IWarningEntityResolver
             new ReadablePlace(ReadablePlaceKind.Blog, blog.BlogId)));
     }
 
-    /// <summary>
-    /// Places the comments of a game discussion at the game.
-    /// </summary>
     private async Task CommentsInGames(
         List<CommentRow> comments, List<Guid> owners, Dictionary<Guid, Described> described, CancellationToken ct)
     {
@@ -322,9 +307,6 @@ internal class WarningEntityResolver : IWarningEntityResolver
         }
     }
 
-    /// <summary>
-    /// Places the comments under a publication at the publication.
-    /// </summary>
     private async Task CommentsInPublications(
         List<CommentRow> comments, List<Guid> owners, Dictionary<Guid, Described> described, CancellationToken ct)
     {
@@ -457,12 +439,10 @@ internal class WarningEntityResolver : IWarningEntityResolver
         PremoderationStatus PremoderationStatus,
         DraftVisibility DraftVisibility)
     {
-        /// <summary>Why a guest may not read what stands in the game, by the rules of a module.</summary>
         public WarningLogClosure? Closure(bool contentRemoved = false) =>
             ModuleClosure(IsRemoved || contentRemoved, Status, PremoderationStatus, DraftVisibility);
     }
 
-    /// <summary>The games the reviews of a page stand at, read once for the page.</summary>
     private async Task<Dictionary<Guid, GamePlace>> GamePlaces(IEnumerable<Guid> gameIds, CancellationToken ct)
     {
         var ids = gameIds.Distinct().ToList();
@@ -477,9 +457,6 @@ internal class WarningEntityResolver : IWarningEntityResolver
             .ToDictionaryAsync(g => g.GameId, g => g.Place, ct);
     }
 
-    /// <summary>
-    /// A review of a game, placed at the game and read by its rules.
-    /// </summary>
     private async Task DescribeGameReviews(
         List<WarningEntityRequest> requests, Dictionary<Guid, WarningEntityState> states, CancellationToken ct)
     {

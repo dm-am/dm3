@@ -13,10 +13,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features;
 
-/// <summary>
-/// A text of one character passes every request contract: a shortest length past
-/// the empty text protects nothing. Checked as MVC checks the request.
-/// </summary>
+// A text of one character passes every request contract: a shortest length past the empty text
+// protects nothing.
 public class TextMinimumShould
 {
     private const string OneCharacter = "Я";
@@ -45,9 +43,6 @@ public class TextMinimumShould
     [MemberData(nameof(Requests))]
     public void PassASingleCharacter(object request) => Refusals(request).Should().BeEmpty();
 
-    /// <summary>
-    /// The domain holds the length of a recommendation and of a reason, on both paths of the first.
-    /// </summary>
     [Fact]
     public void LeaveTheLongestTextToTheDomain()
     {
@@ -58,9 +53,6 @@ public class TextMinimumShould
         Refusals(new UsernameChangeCreateRequest { Reason = past }).Should().BeEmpty();
     }
 
-    /// <summary>
-    /// The number in the message is the one the request is measured against.
-    /// </summary>
     [Fact]
     public void RefuseATopicTitlePastThePolicyInItsNumber() =>
         Refusals(new CreateTopicRequest { Title = new string('a', TopicPolicy.TitleMaxLength + 1), Text = OneCharacter })

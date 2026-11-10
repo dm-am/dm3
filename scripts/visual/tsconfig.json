@@ -1,0 +1,18 @@
+{
+  "extends": "../../src/DM.Web.Client/node_modules/@vue/tsconfig/tsconfig.json",
+  "include": ["*.ts", "states/*.ts"],
+  "compilerOptions": {
+    "noEmit": true,
+    "composite": false,
+    "types": ["node"],
+    "typeRoots": ["../../src/DM.Web.Client/node_modules/@types"],
+    "paths": {
+      "@playwright/test": [
+        "../../src/DM.Web.Client/node_modules/@playwright/test"
+      ],
+      "@playwright/test/*": [
+        "../../src/DM.Web.Client/node_modules/@playwright/test/*"
+      ]
+    }
+  }
+}

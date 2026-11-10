@@ -4,9 +4,6 @@ using DM.Domain.Core.Identity;
 
 namespace DM.Testing.Dsl;
 
-/// <summary>
-/// Builds an <see cref="IIdentity"/> for a test.
-/// </summary>
 public static class Identities
 {
     public static IIdentity Guest() => new TestIdentity

@@ -33,9 +33,6 @@ internal class ChatRepository : IChatRepository
     private static Expression<Func<DbChat, bool>> UserParticipates(Guid userId) =>
         c => c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId);
 
-    /// <summary>
-    /// Global chats are open to everyone, others to their participants.
-    /// </summary>
     private static Expression<Func<DbChat, bool>> Readable(Guid userId) =>
         c => c.Type == ChatType.Global || c.UserLinks.Any(l => !l.IsRemoved && l.UserId == userId);
 

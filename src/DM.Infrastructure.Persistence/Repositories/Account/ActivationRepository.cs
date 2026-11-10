@@ -14,9 +14,6 @@ using DM.Infrastructure.Persistence.Shared.Users;
 
 namespace DM.Infrastructure.Persistence.Repositories.Account;
 
-/// <summary>
-/// Repository for email-first activation flow
-/// </summary>
 internal class ActivationRepository : IActivationRepository
 {
     private readonly DmDbContext _dbContext;

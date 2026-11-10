@@ -6,10 +6,8 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// The webhook secret guards someone else's account: an unconfigured secret closes the endpoint, and the secret
-/// is never accepted from the URL, which every access log copies.
-/// </summary>
+// The webhook secret guards someone else's account: an unconfigured secret closes the endpoint, and
+// the secret is never accepted from the URL, which every access log copies.
 public class WebhookSecretShould : IntegrationTestBase
 {
     public WebhookSecretShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -45,9 +43,8 @@ public class WebhookSecretShould : IntegrationTestBase
     private const string TelegramSecret = "telegram-webhook-secret-for-tests";
     private const string TelegramHeader = "X-Telegram-Bot-Api-Secret-Token";
 
-    /// <summary>
-    /// A host with the secret configured, which the shared one has not; it reaches the comparison and the 403 arm.
-    /// </summary>
+    // A host with the secret configured, which the shared one has not; it reaches the comparison
+    // and the 403 arm.
     private HttpClient ConfiguredClient() => DatabaseFixture.Factory
         .WithWebHostBuilder(builder => builder.ConfigureAppConfiguration((_, config) =>
             config.AddInMemoryCollection(new Dictionary<string, string?>

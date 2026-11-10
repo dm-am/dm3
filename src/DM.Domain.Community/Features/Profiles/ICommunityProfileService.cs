@@ -36,9 +36,6 @@ public interface ICommunityProfileService
     /// </summary>
     Task<IEnumerable<GeneralUser>> GetUsersByRole(UserRole role);
 
-    /// <summary>
-    /// Get username history for a user
-    /// </summary>
     Task<IReadOnlyCollection<UsernameHistoryEntry>> GetUsernameHistory(Guid userId);
 
     /// <summary>

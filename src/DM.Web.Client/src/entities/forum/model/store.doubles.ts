@@ -3,6 +3,7 @@ import { vi } from "vitest";
 import { defineStore } from "pinia";
 import { computed, ref } from "vue";
 import type { User } from "@/shared/api/models/common";
+import { createMockUser } from "./store.fixtures";
 
 export const mockGetBoards = vi.fn();
 export const mockGetBoard = vi.fn();
@@ -46,10 +47,9 @@ export const forumApi = () => ({
 export const authStore = () => ({
   useAuthStore: defineStore("auth", () => {
     const user = ref<User | null>({
-      id: "user-1",
-      username: "testuser",
+      ...createMockUser("user-1", "testuser"),
       settings: { pageSize: 20 },
-    } as unknown as User);
+    });
     return {
       user,
       isAuthenticated: computed(() => user.value !== null),

@@ -11,13 +11,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A refusal says only that it refused.
-/// </summary>
-/// <remarks>
-/// Every authorization refusal raises IntentionManagerException, whose message must not reach the title. One test:
-/// the shape is in the exception and the factory. The subject is a visible blog the caller does not own.
-/// </remarks>
+// Every authorization refusal raises IntentionManagerException, whose message must not reach the
+// title.
 public class RefusalsShould : IntegrationTestBase
 {
     public RefusalsShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -57,9 +52,8 @@ public class RefusalsShould : IntegrationTestBase
     private sealed record SeededBlog(
         string PublicId, string Username, string Email, string Title, string Description);
 
-    /// <summary>
-    /// A fresh author and a blog anybody may open: the assertions search the response for these strings.
-    /// </summary>
+    // A fresh author and a blog anybody may open: the assertions search the response for these
+    // strings.
     private async Task<SeededBlog> AddVisibleBlogAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -99,7 +93,6 @@ public class RefusalsShould : IntegrationTestBase
         return new SeededBlog(publicId, username, email, title, description);
     }
 
-    /// <summary>Somebody with an account and no role in that blog.</summary>
     private async Task<GeneralUser> AddStrangerAsync()
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

@@ -10,7 +10,6 @@ public class BlogControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>Every sort and search of the list answers a guest, popularity included.</summary>
     [Theory]
     [InlineData("/v1/blogs")]
     [InlineData("/v1/blogs?sortBy=popularity&take=10")]

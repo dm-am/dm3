@@ -1,8 +1,5 @@
 namespace DM.Web.API.IntegrationTests;
 
-/// <summary>
-/// Well-known test IDs for integration tests
-/// </summary>
 public static class TestConstants
 {
     // Users
@@ -28,7 +25,6 @@ public static class TestConstants
     public static readonly Guid TestTopicId = Guid.Parse("00000000-0000-0000-0000-000000000020");
     public static readonly Guid SecondTopicId = Guid.Parse("00000000-0000-0000-0000-000000000021");
 
-    // Comments
     // Nothing seeds a comment under this id: it stands in the requests a guest
     // is refused before the comment is looked up. A test that needs a comment
     // to exist writes its own.
@@ -38,9 +34,8 @@ public static class TestConstants
     public static readonly Guid TestGameId = Guid.Parse("00000000-0000-0000-0000-000000000040");
     public static readonly Guid TestRoomId = Guid.Parse("00000000-0000-0000-0000-000000000041");
 
-    /// <summary>
-    /// The alias TestGame is reachable by: the fixture derives public ids from the seeding order, TestGame first.
-    /// </summary>
+    // The alias TestGame is reachable by: the fixture derives public ids from the seeding order,
+    // TestGame first.
     public const string TestGamePublicId = "gamea";
 
     // Characters (seeded into TestGame so game/room tooltips have content to render)
@@ -62,7 +57,6 @@ public static class TestConstants
     // Messages (for direct/group chat testing)
     public static readonly Guid TestMessageId = Guid.Parse("00000000-0000-0000-0000-000000000060");
 
-    /// <summary>The password the accounts a test registers sign in with.</summary>
     public const string Password = "TestPass123ok";
 
     // User logins (usernames)
@@ -82,10 +76,7 @@ public static class TestConstants
     // Blogs
     public static readonly Guid TestBlogId = Guid.Parse("00000000-0000-0000-0000-000000000080");
 
-    /// <summary>
-    /// The alias TestBlog is reachable by. The fixture derives it from the seeding
-    /// order, and TestBlog is seeded first.
-    /// </summary>
+    // The fixture derives it from the seeding order, and TestBlog is seeded first.
     public const string TestBlogPublicId = "bloga";
 
     public static readonly Guid SecondBlogId = Guid.Parse("00000000-0000-0000-0000-000000000081");
@@ -112,7 +103,7 @@ public static class TestConstants
 
     public static readonly Guid[] AdditionalTestimonialIds = Ids(0xb0, 0xd0);
 
-    /// <summary>Twenty-eight identifiers: sixteen from the first byte on, twelve from the second.</summary>
+    // Twenty-eight identifiers: sixteen from the first byte on, twelve from the second.
     private static Guid[] Ids(int first, int second) => Enumerable.Range(0, 28)
         .Select(i => new Guid($"00000000-0000-0000-0000-0000000000{(i < 16 ? first + i : second + i - 16):x2}"))
         .ToArray();

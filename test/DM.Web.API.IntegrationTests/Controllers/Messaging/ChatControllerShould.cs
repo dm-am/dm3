@@ -14,10 +14,6 @@ public class ChatControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// GET /chats/{id} accepts a readable id as well as a GUID, and the global chat
-    /// is the one chat addressable by name.
-    /// </summary>
     [Fact]
     public async Task ResolveTheGlobalChatByItsReadableId()
     {
@@ -32,9 +28,6 @@ public class ChatControllerShould : IntegrationTestBase
         content.Should().Contain("00000000-0000-0000-0000-000000000001");
     }
 
-    /// <summary>
-    /// Get chats without authentication should return Unauthorized
-    /// </summary>
     [Fact]
     public async Task GetChatsWhenNotAuthenticatedReturnsUnauthorized()
     {
@@ -43,9 +36,6 @@ public class ChatControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    /// <summary>
-    /// The unread total is one person's number and nobody else's.
-    /// </summary>
     [Fact]
     public async Task RefuseTheUnreadCountToAStranger()
     {
@@ -54,10 +44,8 @@ public class ChatControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.Unauthorized);
     }
 
-    /// <summary>
-    /// The header badge asks for the whole total the markers hold, not the page the chat list returns.
-    /// </summary>
-    /// <remarks>Asserted as a delta over a marker written straight to the store; the counter carries no foreign key.</remarks>
+    // Asserted as a delta over a marker written straight to the store; the counter carries no
+    // foreign key.
     [Fact]
     public async Task SumTheUnreadMarkersOfEveryConversationOfTheReader()
     {
@@ -113,7 +101,6 @@ public class ChatControllerShould : IntegrationTestBase
         }
     }
 
-    /// <summary>The unread marker of messages a reader has under one parent.</summary>
     private static UnreadCounter Marker(Guid userId, Guid entityId, Guid parentId, int counter, bool removed = false) => new()
     {
         UserId = userId,
@@ -138,9 +125,6 @@ public class ChatControllerShould : IntegrationTestBase
         return document.RootElement.GetProperty("resource").GetProperty("count").GetInt64();
     }
 
-    /// <summary>
-    /// Get chat without authentication should return Unauthorized
-    /// </summary>
     [Fact]
     public async Task GetChatWhenNotAuthenticatedReturnsUnauthorized()
     {

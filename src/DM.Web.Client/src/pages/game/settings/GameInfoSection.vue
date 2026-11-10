@@ -12,6 +12,7 @@ import {
   gameApi,
   CommentariesAccessMode,
   TagSelector,
+  type Game,
   type UpdateGameInput,
 } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
@@ -104,13 +105,17 @@ watch(
     isRecruitmentOpen.value = g.recruitment?.isOpen ?? false;
     pcLimit.value =
       g.recruitment?.pcLimit != null ? String(g.recruitment.pcLimit) : "";
-    viewPrivates.value = g.privacySettings?.viewPrivates ?? false;
-    viewDice.value = g.privacySettings?.viewDice ?? false;
-    commentariesAccess.value =
-      g.privacySettings?.commentariesAccess ?? CommentariesAccessMode.Public;
+    showPrivacy(g.privacySettings);
   },
   { immediate: true },
 );
+
+function showPrivacy(settings: Game["privacySettings"] | undefined) {
+  viewPrivates.value = settings?.viewPrivates ?? false;
+  viewDice.value = settings?.viewDice ?? false;
+  commentariesAccess.value =
+    settings?.commentariesAccess ?? CommentariesAccessMode.Public;
+}
 
 // The saved state compares what goes on the wire, not the fields as typed.
 function buildPatch(): UpdateGameInput {

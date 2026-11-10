@@ -9,7 +9,7 @@ import {
 } from "@/entities/achievement";
 import type { AwardType } from "@/shared/api/models/achievements";
 import { SecondaryText } from "@/shared/ui/Layout";
-import { GameIcon } from "@/shared/ui/Icon";
+import GameIcon from "@/shared/ui/Icon/GameIcon.vue";
 import { ActionResult } from "@/shared/ui/ActionResult";
 import { ErrorState } from "@/shared/ui/ErrorState";
 import { refusalHere } from "@/shared/lib/errors";

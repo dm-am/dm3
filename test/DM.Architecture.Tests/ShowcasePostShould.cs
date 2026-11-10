@@ -5,10 +5,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The post the home page shows as the best of the week outscores everything
-/// else the seed puts into that week.
-/// </summary>
 /// <remarks>
 /// Leaderboard coverage tops up the same window in the first week of a month, so the showcase keeps a
 /// margin. Both sides are read out of the sources.
@@ -36,7 +32,6 @@ public class ShowcasePostShould
             "post wins is whatever the query plan returns first");
     }
 
-    /// <summary>The number added to the board size in one source.</summary>
     private static int Offset(string source, string pattern, string what)
     {
         var found = Regex.Match(source, pattern);

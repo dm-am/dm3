@@ -10,7 +10,7 @@ namespace DM.Domain.Account.Features.Authentication;
 /// <inheritdoc />
 internal class LoginRecordService : ILoginRecordService
 {
-    /// <summary>Width of the stored user agent.</summary>
+    // Width of the stored user agent.
     private const int UserAgentLimit = 500;
 
     private readonly ILoginRecordRepository _repository;

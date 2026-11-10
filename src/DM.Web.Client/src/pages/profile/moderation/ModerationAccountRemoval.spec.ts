@@ -7,7 +7,8 @@
  * window and sends nothing by itself, and a removal leads off the profile.
  */
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import ModerationAccountRemoval from "./ModerationAccountRemoval.vue";
 import AccountRemovalDialog from "./AccountRemovalDialog.vue";
 import { useToast } from "@/shared/lib/composables/useToast";
@@ -16,14 +17,6 @@ const removeAccount = vi.hoisted(() => vi.fn());
 
 vi.mock("@/entities/moderation", () => ({
   moderationApi: { removeAccount },
-}));
-
-const { push } = vi.hoisted(() => ({ push: vi.fn() }));
-
-// Only the navigation the removal ends with.
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRouter: () => ({ push }),
 }));
 
 /** The window is registered with the library, not mounted: its attrs are read. */
@@ -38,17 +31,34 @@ const modal = vi.hoisted(() => ({
   close: vi.fn(),
 }));
 
-vi.mock("vue-final-modal", () => ({
+// The container and the plugin stay the library's own: mountPage draws them.
+vi.mock("vue-final-modal", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("vue-final-modal")>()),
   useModal: (options: ModalRegistration) => {
     modal.registered.push(options);
     return { open: modal.open, close: modal.close };
   },
 }));
 
-const mountIt = (targetUsername = "reader") =>
-  mount(ModerationAccountRemoval, { props: { targetUsername } });
+const PROFILE = "/users/reader";
 
-const button = (wrapper: ReturnType<typeof mountIt>) => wrapper.get("button");
+const mountIt = async (targetUsername = "reader") => {
+  const { wrapper, router } = await mountPage(
+    ModerationAccountRemoval,
+    PROFILE,
+    {
+      routes: [
+        ["profile", "/users/:username"],
+        ["moderation-removed-accounts", "/moderation/removed-accounts"],
+      ],
+      props: { targetUsername },
+    },
+  );
+  return { wrapper, address: () => router.currentRoute.value.fullPath };
+};
+
+const button = (wrapper: Awaited<ReturnType<typeof mountIt>>["wrapper"]) =>
+  wrapper.get("button");
 
 const removalWindow = () => {
   const found = modal.registered.at(-1);
@@ -61,7 +71,6 @@ const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
 
 describe("removing an account from the moderated profile", () => {
   beforeEach(() => {
-    push.mockClear();
     modal.open.mockClear();
     modal.close.mockClear();
     modal.registered.length = 0;
@@ -71,7 +80,7 @@ describe("removing an account from the moderated profile", () => {
 
   /** The reason is asked in the window; the press on the page sends nothing. */
   it("opens the window for the account and sends nothing by itself", async () => {
-    const wrapper = mountIt("reader");
+    const { wrapper } = await mountIt("reader");
 
     expect(wrapper.find("textarea").exists()).toBe(false);
     await button(wrapper).trigger("click");
@@ -86,26 +95,27 @@ describe("removing an account from the moderated profile", () => {
    * The profile answers 404 after a removal, so the moderator lands on
    * "Удаленные пользователи" narrowed to the name, with no toast.
    */
-  it("takes the moderator to the removed account the window reports", () => {
-    const wrapper = mountIt("reader");
+  it("takes the moderator to the removed account the window reports", async () => {
+    const { wrapper, address } = await mountIt("reader");
 
     (removalWindow().attrs.onSuccess as () => void)();
+    await flushPromises();
 
     expect(modal.close).toHaveBeenCalled();
-    expect(wrapper.emitted("updated")).toHaveLength(1);
-    expect(push).toHaveBeenCalledWith({
-      name: "moderation-removed-accounts",
-      query: { search: "reader" },
-    });
+    expect(
+      wrapper.findComponent(ModerationAccountRemoval).emitted("updated"),
+    ).toHaveLength(1);
+    expect(address()).toBe("/moderation/removed-accounts?search=reader");
     expect(saidOutLoud()).toEqual([]);
   });
 
-  it("stays where it is when the window is left", () => {
-    mountIt("reader");
+  it("stays where it is when the window is left", async () => {
+    const { address } = await mountIt("reader");
 
     (removalWindow().attrs.onCancel as () => void)();
+    await flushPromises();
 
     expect(modal.close).toHaveBeenCalled();
-    expect(push).not.toHaveBeenCalled();
+    expect(address()).toBe(PROFILE);
   });
 });

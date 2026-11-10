@@ -1,49 +1,63 @@
 /** The data of the ChatView specs, the page mounted and closed, and the state every test starts from. */
 import { vi } from "vitest";
-import { defineComponent, h } from "vue";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { createPinia, setActivePinia, type Pinia } from "pinia";
+import type { Router } from "vue-router";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { useAuthStore } from "@/shared/stores";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useMessagingStore } from "@/entities/message";
-import { api, hub, nav } from "./ChatView.doubles";
+import { api, hub } from "./ChatView.doubles";
 import ChatView from "./ChatView.vue";
-
-/** What the router stand-in does with a move: the query changes. */
-const follow = (to: { query?: Record<string, string> }) => {
-  nav.route.query = to.query ?? {};
-};
 
 /** Not enableAutoUnmount: one test closes the page itself, and a second unmount makes Vue warn. */
 let closePage: (() => void) | null = null;
 
 let pinia: Pinia;
+let router: Router;
 
-/** A router link that keeps its words and says where it leads in an attribute. */
-const RouterLinkStub = defineComponent({
-  name: "RouterLink",
-  props: { to: { type: [String, Object], required: true } },
-  setup(props, { slots }) {
-    return () =>
-      h("a", { "data-to": JSON.stringify(props.to) }, slots.default?.());
-  },
-});
+/** The messenger's addresses and the profile the correspondence links to. */
+const routes: Address[] = [
+  ["messenger", "/messenger"],
+  ["chat", "/messenger/c/:id"],
+  ["direct-message", "/messenger/user/:username"],
+  ["profile", "/users/:username"],
+];
 
-/** Opens the correspondence; `attached` puts it in the document, where the focus can go. */
-export async function openChat(options: { attached?: boolean } = {}) {
-  const wrapper = mount(ChatView, {
-    ...(options.attached ? { attachTo: document.body } : {}),
-    global: {
-      plugins: [pinia],
-      stubs: { Teleport: true, RouterLink: RouterLinkStub },
+/**
+ * Opens the correspondence at its address, c1 unless the test names another;
+ * `attached` puts it in the document, where the focus can go.
+ */
+export async function openChat(
+  options: { attached?: boolean; address?: string } = {},
+) {
+  const mounted = await mountPage(
+    ChatView,
+    options.address ?? "/messenger/c/c1",
+    {
+      routes,
+      pinia,
+      stubs: { Teleport: true },
+      ...(options.attached ? { attachTo: document.body } : {}),
     },
-  });
+  );
+  router = mounted.router;
+  const wrapper = mounted.wrapper;
   closePage = () => {
     closePage = null;
     wrapper.unmount();
   };
   await flushPromises();
   return wrapper;
+}
+
+/** Where the page stands now, after the moves it and the test made. */
+export const address = () => router.currentRoute.value;
+
+/** The reader goes to another address, as a followed link takes him. */
+export async function moveTo(to: string) {
+  await router.push(to);
+  await flushPromises();
 }
 
 /** Closes the open correspondence, if a test left one open. */
@@ -69,7 +83,7 @@ export function setVisibility(state: "visible" | "hidden") {
 }
 
 /** The element the feed scrolls in. */
-export const feed = (wrapper: ReturnType<typeof mount>) =>
+export const feed = (wrapper: VueWrapper) =>
   wrapper.find(".chat-feed__list").element as HTMLElement;
 
 /** The state every test starts from: a reader, a correspondence, no messages. */
@@ -111,10 +125,6 @@ export function resetChatView() {
   });
   api.getMessages.mockResolvedValue(messagePage([]));
   api.markAsRead.mockResolvedValue({ data: null, error: null });
-  nav.route.params = { id: "c1" };
-  nav.route.query = {};
-  nav.push.mockImplementation(follow);
-  nav.replace.mockImplementation(follow);
 }
 
 /** One page as the API serves it, oldest first; `hasNext` puts the reader in the middle. */

@@ -33,9 +33,6 @@ public class Room : ISoftDeletable
 
     public string Title { get; set; } = null!;
 
-    /// <summary>
-    /// Room access type
-    /// </summary>
     public RoomAccessType AccessType { get; set; }
 
     /// <summary>

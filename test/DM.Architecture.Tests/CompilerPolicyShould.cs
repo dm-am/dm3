@@ -10,18 +10,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Compiler policy is declared once for the whole solution, and a source file that
-/// repeats it locally is either a no-op or a second policy nobody can see.
-/// </summary>
-/// <remarks>The props decide both for every project, so a local copy is a no-op that reads as a rule.</remarks>
+// The props decide both for every project, so a local copy is a no-op that reads as a rule.
 public class CompilerPolicyShould
 {
-    /// <summary>A dotnet-version a workflow asks setup-dotnet to install.</summary>
     private static readonly Regex DotnetVersion = new(
         @"dotnet-version:\s*(?<version>[0-9]+\.[0-9]+\.[0-9x]+)", RegexOptions.Compiled);
 
-    /// <summary>A file silencing the documentation diagnostic on its own account.</summary>
     private static readonly Regex DocumentationPragma = new(
         @"#pragma\s+warning\s+disable[^\r\n]*\b(?:CS)?1591\b", RegexOptions.Compiled);
 
@@ -33,15 +27,11 @@ public class CompilerPolicyShould
     private static readonly Regex InternalsGrant = new(
         @"<InternalsVisibleTo\s+Include=""([^""]+)""", RegexOptions.Compiled);
 
-    /// <summary>The solution-wide grant, written in the props as an assembly attribute.</summary>
     private static readonly Regex SolutionWideGrant = new(
         @"<_Parameter1>\$\(AssemblyName\)\.([^<]+)</_Parameter1>", RegexOptions.Compiled);
 
 
-    /// <summary>
-    /// The documentation policy is one decision, and no file states it a second time.
-    /// </summary>
-    /// <remarks>The props suppress CS1591 for the whole solution, so a local suppression silences nothing.</remarks>
+    // The props suppress CS1591 for the whole solution, so a local suppression silences nothing.
     [Fact]
     public void DeclareTheDocumentationPolicyInOnePlace()
     {
@@ -70,10 +60,6 @@ public class CompilerPolicyShould
             "repeats the value moves nothing while looking like the place it is decided");
     }
 
-    /// <summary>
-    /// Enum exhaustiveness stays a build error, and only the half that is
-    /// actionable stays on.
-    /// </summary>
     /// <remarks>
     /// CS8524 forces a `_ =>` arm that swallows CS8509, the one naming an unhandled member, so only
     /// CS8524 is suppressed.
@@ -98,10 +84,6 @@ public class CompilerPolicyShould
             "an added enum member back into a null on the wire");
     }
 
-    /// <summary>
-    /// The mapper diagnostics that stand in for a runtime configuration
-    /// assertion stay build errors, nullability included.
-    /// </summary>
     /// <remarks>
     /// RMG012, RMG020 and RMG068 stand for a configuration assertion and RMG090 for nullability;
     /// all ship below warning level.
@@ -138,11 +120,7 @@ public class CompilerPolicyShould
             "nothing and reads as a claim that the rest of the tree is not annotated");
     }
 
-    /// <summary>
-    /// The image build compiles the same sources under the same policy, so it needs
-    /// the same policy files.
-    /// </summary>
-    /// <remarks>Without .editorconfig the image build compiles under a different policy than the solution.</remarks>
+    // Without .editorconfig the image build compiles under a different policy than the solution.
     [Fact]
     public void GiveTheImageBuildTheSamePolicyFiles()
     {
@@ -167,10 +145,7 @@ public class CompilerPolicyShould
         }
     }
 
-    /// <summary>
-    /// Package versions live in the central files, all of them.
-    /// </summary>
-    /// <remarks>An override wins over the central value and is invisible from the file everyone edits.</remarks>
+    // An override wins over the central value and is invisible from the file everyone edits.
     [Fact]
     public void KeepEveryPackageVersionInTheCentralFiles()
     {
@@ -189,11 +164,7 @@ public class CompilerPolicyShould
             "central one without saying so");
     }
 
-    /// <summary>
-    /// The language of the solution is pinned in the props, and a project that names
-    /// its own is the one place where the pin does not hold.
-    /// </summary>
-    /// <remarks>A project language of its own compiles locally and fails on the band CI pins.</remarks>
+    // A project language of its own compiles locally and fails on the band CI pins.
     [Fact]
     public void PinTheLanguageVersionInOnePlace()
     {
@@ -241,7 +212,6 @@ public class CompilerPolicyShould
             "a compiler nobody uses"));
     }
 
-    /// <summary>Every dotnet-version the workflows ask setup-dotnet to install.</summary>
     private static IReadOnlyList<string> InstalledSdkVersions(string root) => Directory
         .EnumerateFiles(Path.Combine(root, ".github", "workflows"), "*.yml")
         .SelectMany(path => DotnetVersion.Matches(File.ReadAllText(path)))
@@ -256,10 +226,7 @@ public class CompilerPolicyShould
         return parts[0] + "." + parts[1];
     }
 
-    /// <summary>
-    /// Internals are opened to assemblies this solution builds, and to no others.
-    /// </summary>
-    /// <remarks>The props open internals to $(AssemblyName).Tests, so a repeated grant changes nothing.</remarks>
+    // The props open internals to $(AssemblyName).Tests, so a repeated grant changes nothing.
     [Fact]
     public void GrantInternalsOnlyToAssembliesThatExist()
     {
@@ -308,10 +275,7 @@ public class CompilerPolicyShould
             "that does not exist, and the reader takes it for a description of this one");
     }
 
-    /// <summary>
-    /// Nothing here is compiled against an older shape of anything here.
-    /// </summary>
-    /// <remarks>Every consumer is rebuilt from the same sources, so a forwarder serves nobody.</remarks>
+    // Every consumer is rebuilt from the same sources, so a forwarder serves nobody.
     [Fact]
     public void ForwardNoTypeBetweenAssembliesOfThisSolution()
     {

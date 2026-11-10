@@ -4,18 +4,12 @@ using DM.Domain.Core.Dto;
 
 namespace DM.Domain.Game.Features.Posts;
 
-/// <summary>
-/// What a reader asks of a page of one room's posts
-/// </summary>
 /// <remarks>
 /// The filters of <see cref="PostsQuery"/> under the same names, plus the characters. A post keeps its
 /// number in the room whatever the view.
 /// </remarks>
 public class RoomPostsQuery : PagingQuery
 {
-    /// <summary>
-    /// Search by post text (case-insensitive contains)
-    /// </summary>
     /// <remarks>
     /// The text a reader sees: neither the markup nor anything hidden from him is matched.
     /// </remarks>

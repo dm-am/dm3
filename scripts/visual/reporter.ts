@@ -47,21 +47,15 @@ export default class FramesReporter implements Reporter {
       console.log(
         `\nstates taken: ${this.rows.filter((r) => r.status === "passed").length}, not reached: ${broken.length}`,
       );
-      for (const r of broken)
-        console.log(`BROKEN   ${r.state}: ${r.error}`);
+      for (const r of broken) console.log(`BROKEN   ${r.state}: ${r.error}`);
       return;
     }
     const same = this.rows.filter((r) => r.status === "passed").length;
     const lines = [
       `states compared: ${this.rows.filter((r) => r.status !== "skipped").length}, same: ${same}, differ: ${changed.length}, not reached: ${broken.length}`,
       "",
-      ...changed.map(
-        (r) =>
-          `DIFFERS  ${r.state}: ${r.differs.join(", ")}`,
-      ),
-      ...broken.map(
-        (r) => `BROKEN   ${r.state}: ${r.error}`,
-      ),
+      ...changed.map((r) => `DIFFERS  ${r.state}: ${r.differs.join(", ")}`),
+      ...broken.map((r) => `BROKEN   ${r.state}: ${r.error}`),
     ];
     mkdirSync(this.options.report, { recursive: true });
     writeFileSync(

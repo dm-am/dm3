@@ -7,16 +7,13 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Configuration answers a question once.
-/// </summary>
 /// <remarks>
 /// The host decides the environment, so nothing reads the variable itself; nothing reads
 /// IOptionsMonitor, so no source reloads on change. Asserted on the text of composition.
 /// </remarks>
 public class ConfigurationSourceOfTruthShould
 {
-    /// <summary>Spelled in halves so this file does not match its own rule.</summary>
+    // Spelled in halves so this file does not match its own rule.
     private static readonly string EnvironmentVariable = "ASPNETCORE" + "_ENVIRONMENT";
 
     [Fact]

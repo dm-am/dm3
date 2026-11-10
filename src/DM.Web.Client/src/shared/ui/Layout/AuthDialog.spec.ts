@@ -6,7 +6,7 @@ import AuthDialog from "./AuthDialog.vue";
  * The cross is the visible way out of a guest dialog, and it is drawn rather
  * than typed.
  *
- * The owner chose the bars over the site's glyph: every typographic cross the
+ * The cross is drawn with bars, not the site's glyph: every typographic cross the
  * site ships is thinner than the marks it stands beside, and how much thinner
  * depends on which font actually loaded, so the same dialog closed with a
  * different weight of cross on two machines. The bars come from the stylesheet,

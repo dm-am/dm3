@@ -16,10 +16,6 @@ namespace DM.Architecture.Tests;
 /// <remarks>POINT_OF_PRESENCE.md describes the door; the shared edge is EdgeConfigurationShould's.</remarks>
 public class PointOfPresenceShould
 {
-    /// <summary>
-    /// The point of presence gets its own environment template, and it holds no
-    /// real credential.
-    /// </summary>
     /// <remarks>
     /// The door runs no application and must not carry the main server's passwords or the session key.
     /// The placeholders are required by the base compose anchor and spelled so no real value matches.
@@ -68,9 +64,6 @@ public class PointOfPresenceShould
         }
     }
 
-    /// <summary>
-    /// The second door runs an edge and a frontend, and no application at all.
-    /// </summary>
     /// <remarks>
     /// A profile widens the default set, so the command names its services and the overlay clears their
     /// dependencies on the API. An API on the door would need the production secrets.
@@ -122,10 +115,8 @@ public class PointOfPresenceShould
         }
     }
 
-    /// <summary>
-    /// The door's edge talks to the main server, not to a container beside it.
-    /// </summary>
-    /// <remarks>On the door the compose service names resolve to nothing, so the upstream arrives as configuration.</remarks>
+    // On the door the compose service names resolve to nothing, so the upstream arrives as
+    // configuration.
     [Fact]
     public void SendTheDoorsApiTrafficAcrossTheNetwork()
     {

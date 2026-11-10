@@ -14,9 +14,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Personal;
 /// </summary>
 internal static class PersonalMapper
 {
-    /// <summary>
-    /// EF projection to a blacklist entry
-    /// </summary>
     public static IQueryable<BlacklistEntry> ProjectToBlacklistEntry(
         this IQueryable<DbUserBlacklist> query) =>
         query.Select(b => new BlacklistEntry
@@ -26,9 +23,6 @@ internal static class PersonalMapper
             CreatedUtc = b.CreatedUtc
         });
 
-    /// <summary>
-    /// Settings row to the domain document
-    /// </summary>
     public static UserSettings ToUserSettings(this DbUserSettings settings) => new()
     {
         Id = settings.UserId,
@@ -37,9 +31,6 @@ internal static class PersonalMapper
         PageSize = settings.PageSize
     };
 
-    /// <summary>
-    /// EF projection to a personal profile note
-    /// </summary>
     public static IQueryable<UserProfileNote> ProjectToUserProfileNote(
         this IQueryable<DbUserProfileNote> query) =>
         query.Select(n => new UserProfileNote

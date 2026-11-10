@@ -40,9 +40,6 @@ internal class BanRepository : IBanRepository
         return await WithLifters(bans, ct);
     }
 
-    /// <summary>
-    /// Reads the moderators who lifted the bans of a page, in one read.
-    /// </summary>
     /// <remarks>
     /// The row keeps the lifter's identifier with no navigation behind it, and a
     /// foreign key only to sign a lift was not worth a change of the schema. A
@@ -126,10 +123,6 @@ internal class BanRepository : IBanRepository
         var ban = await _dbContext.Bans.FindAsync([banId], ct);
         if (ban != null)
         {
-            // Lifting a ban used to leave no trace at all: the reason reached the
-            // service and was dropped, so nobody could tell who had lifted what.
-            // Then the trace was written and soft-deleted in the same call, which
-            // hid the row from every query that could have read it back.
             ban.LiftedByUserId = liftedByUserId;
             ban.LiftedUtc = liftedUtc;
             ban.LiftReason = string.IsNullOrWhiteSpace(reason) ? null : reason;
@@ -271,9 +264,6 @@ internal class BanRepository : IBanRepository
             .ToDictionary(e => (e.BanId, e.Kind), e => e.Number);
     }
 
-    /// <summary>
-    /// The bans of one person, or of everybody.
-    /// </summary>
     private IQueryable<DbBan> Listed(Guid? targetUserId) => targetUserId is { } target
         ? _dbContext.Bans.Where(b => b.TargetUserId == target)
         : _dbContext.Bans;
@@ -316,10 +306,6 @@ internal class BanRepository : IBanRepository
         .ThenBy(e => e.Kind)
         .ThenByDescending(e => e.BanId);
 
-    /// <summary>
-    /// An entry of the list as the database lists it: whose ban, what happened,
-    /// when.
-    /// </summary>
     private sealed class LogEntry
     {
         public Guid BanId { get; set; }

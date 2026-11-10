@@ -69,9 +69,6 @@ public class CreateWarningValidatorShould
             .WithErrorMessage(ValidationError.Invalid);
     }
 
-    /// <summary>
-    /// A verbal warning without points and the heaviest single warning.
-    /// </summary>
     [Theory]
     [InlineData(0)]
     [InlineData(WarningPolicy.MaxPointsPerWarning)]
@@ -149,10 +146,8 @@ public class CreateWarningValidatorShould
             .WithErrorMessage(ValidationError.Long);
     }
 
-    /// <summary>
-    /// The reason is rendered on the Comment surface, where [private] hides nothing, and is refused as every text
-    /// outside a game post is.
-    /// </summary>
+    // The reason is rendered on the Comment surface, where [private] hides nothing, and is refused
+    // as every text outside a game post is.
     [Fact]
     public void FailWhenTheReasonCarriesAHiddenBlock()
     {

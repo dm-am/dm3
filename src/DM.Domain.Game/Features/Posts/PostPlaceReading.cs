@@ -6,10 +6,7 @@ using DM.Domain.Core.Authorization;
 
 namespace DM.Domain.Game.Features.Posts;
 
-/// <summary>
-/// Whether the viewer reads a post: by the read of the post itself, under the
-/// scope of its room. The reviews of a post are read where the post is.
-/// </summary>
+// The reviews of a post are read where the post is.
 internal class PostPlaceReading : IPlaceReading
 {
     private readonly IPostService _posts;

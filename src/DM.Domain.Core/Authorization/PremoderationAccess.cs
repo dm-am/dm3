@@ -22,7 +22,6 @@ public static class PremoderationAccess
     /// AwaitingEdits has no curator recorded, which is the state every newbie's
     /// module is created in.
     /// </remarks>
-    /// <param name="user">Authorization subject</param>
     public static bool MayJudgePremoderation(this IAuthorizationSubject user) =>
         user.IsAuthenticated && user.Role >= UserRole.Mentor;
 
@@ -35,7 +34,6 @@ public static class PremoderationAccess
     /// modules waiting on it, so the rank arm of the read gates and of the
     /// storage scope is keyed on exactly these two statuses.
     /// </remarks>
-    /// <param name="status">Premoderation status of the module</param>
     public static bool IsPending(PremoderationStatus status) =>
         status == PremoderationStatus.AwaitingApproval ||
         status == PremoderationStatus.AwaitingEdits;

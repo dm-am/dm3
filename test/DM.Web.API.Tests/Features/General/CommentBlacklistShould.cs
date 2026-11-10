@@ -26,13 +26,7 @@ using DomainComment = DM.Domain.Core.Comments.Comment;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// A blocked author stays blocked on every comment surface.
-/// </summary>
-/// <remarks>
-/// The reading of a discussion is written once per surface, so the exclusion is asserted on each. On the call
-/// into the domain: the filter runs in the query.
-/// </remarks>
+// The reading of a discussion is written once per surface, so the exclusion is asserted on each.
 public class CommentBlacklistShould : UnitTestBase
 {
     private readonly Guid _userId = Guid.NewGuid();

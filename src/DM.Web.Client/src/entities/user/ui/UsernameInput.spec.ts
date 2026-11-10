@@ -3,25 +3,28 @@
  */
 
 // One sentence for a name that cannot be had, and its own for a forbidden character.
-import { describe, expect, it, vi, beforeEach } from "vitest";
+import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
 import { flushPromises, mount } from "@vue/test-utils";
 import { accountApi } from "@/entities/user";
+import { SEARCH_DEBOUNCE_MS } from "@/shared/lib/constants/search";
 import UsernameInput from "./UsernameInput.vue";
 
 const TAKEN = "Это имя занято";
 
-// Enabled rather than typed into: the field is controlled, and re-enabling asks about the name in it.
 const answer = async (reason: string | undefined) => {
+  vi.useFakeTimers();
   vi.spyOn(accountApi, "checkUsername").mockResolvedValue({
     data: { isAvailable: false, reason },
     error: null,
   } as never);
 
   const wrapper = mount(UsernameInput, {
-    props: { modelValue: "reader", disabled: true },
+    props: { modelValue: "reader" },
   });
 
-  await wrapper.setProps({ disabled: false });
+  await wrapper.get("input").setValue("reader");
+  await vi.advanceTimersByTimeAsync(SEARCH_DEBOUNCE_MS);
+  vi.useRealTimers();
   await flushPromises();
 
   return wrapper;
@@ -30,6 +33,10 @@ const answer = async (reason: string | undefined) => {
 describe("поле имени, когда имя недоступно", () => {
   beforeEach(() => {
     vi.restoreAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it.each([

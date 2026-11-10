@@ -5,10 +5,8 @@ namespace DM.Domain.Core.Exceptions;
 /// </summary>
 public static partial class RefusalMessage
 {
-    // Blacklists of a game and of a blog
-    //
-    // One wording for both lists. The name is not repeated: the owner has just
-    // typed it into the field the answer appears under.
+    // The name is not repeated: the owner has just typed it into the field the answer appears
+    // under.
 
     /// <summary>
     /// The same person is already on the game's or the blog's blacklist

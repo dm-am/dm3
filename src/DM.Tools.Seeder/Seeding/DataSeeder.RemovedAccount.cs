@@ -20,14 +20,8 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>The login of the seeded removed account.</summary>
     private const string RemovedAccountLogin = "Ушедший Мастер";
 
-    /// <summary>
-    /// One removed account that left something everywhere the profile of "Аккаунт
-    /// удален" reads: a topic with a comment on an open board, a game it mastered with a
-    /// rated post in an open room, and a character with a post in somebody else's game.
-    /// </summary>
     /// <remarks>
     /// Written live and removed at the end, as an account leaves. Idempotent by the login, past the soft-delete filter.
     /// </remarks>
@@ -81,7 +75,7 @@ internal sealed partial class DataSeeder
             "a character in another game");
     }
 
-    /// <summary>The account itself, written live: it is removed at the end of the step.</summary>
+    // The account itself, written live: it is removed at the end of the step.
     private DbUser NewRemovedAccount()
     {
         var (hash, salt) = _securityManager.GeneratePassword(TestPassword);
@@ -145,9 +139,6 @@ internal sealed partial class DataSeeder
         return (topic, comment);
     }
 
-    /// <summary>
-    /// The game it mastered, with a post in an open room that another reader rated.
-    /// </summary>
     private async Task SeedRemovedAccountGame(
         DbUser account, DbUser reviewer, ComprehensiveSeedResult result)
     {
@@ -225,9 +216,6 @@ internal sealed partial class DataSeeder
         result.PostsCreated += 2;
     }
 
-    /// <summary>
-    /// A character in somebody else's game, with one post in its open room.
-    /// </summary>
     private async Task SeedRemovedAccountCharacter(
         DbUser account, DbGame hostGame, ComprehensiveSeedResult result)
     {

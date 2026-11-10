@@ -7,6 +7,7 @@ import { useAuthStore, UsernameInput, accountApi } from "@/entities/user";
 
 import type { User } from "@/shared/api/models/community";
 import Button from "@/shared/ui/Button/Button.vue";
+import HomeButton from "./HomeButton.vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { parseApiErrors } from "@/shared/lib/utils/apiErrors";
 import { readFieldError } from "@/shared/lib/errors/validationErrors";
@@ -56,9 +57,7 @@ const nameBlock = ref<HTMLElement | null>(null);
 
 let channel: BroadcastChannel | null = null;
 
-const canSubmit = computed(() => {
-  return phase.value === "confirmUsername";
-});
+const canSubmit = computed(() => phase.value === "confirmUsername");
 
 onMounted(async () => {
   // From the fragment, cleared from the address as it is read: in the path it went into history and the access log.
@@ -214,11 +213,6 @@ function goToProfile() {
   } else {
     router.push("/");
   }
-}
-
-// The one way out of a dead link, as on every screen that answers one: the home page has both doors.
-function goHome() {
-  router.push("/");
 }
 </script>
 
@@ -384,14 +378,7 @@ function goHome() {
         </p>
 
         <!-- The one control all the dead links carry. -->
-        <Button
-          type="button"
-          variant="primary"
-          class="auth-button auth-button--spaced"
-          @click="goHome"
-        >
-          На главную
-        </Button>
+        <HomeButton />
       </template>
 
       <!-- Help is offered under every answer but the two that end well. -->

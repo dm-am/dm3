@@ -113,17 +113,7 @@ public class ActivationServiceShould : UnitTestBase
         await producer.Received(1).SendAsync(EventType.ActivatedUser, user.UserId);
     }
 
-    /// <summary>
-    /// The same click landing twice is a success, not a failure of the storage
-    /// engine.
-    /// </summary>
-    /// <remarks>
-    /// Two requests carrying one activation link reach the write together: the
-    /// second finds the pending row gone or the name written, and the unique index
-    /// refuses it. Which index refused is not read off the constraint - the caller
-    /// looks at what is actually there, and here it is this very account, made a
-    /// moment ago by the other half of the double click.
-    /// </remarks>
+    // The same click landing twice is a success, not a failure of the storage engine.
     [Fact]
     public async Task ReturnTheAccountWhenTheSameActivationLandedTwice()
     {
@@ -141,10 +131,8 @@ public class ActivationServiceShould : UnitTestBase
         (await service.Activate(request)).Should().Be(user.UserId);
     }
 
-    /// <summary>
-    /// A name taken between the check and the write is refused under the name
-    /// field, so the form can offer another one.
-    /// </summary>
+    // A name taken between the check and the write is refused under the name field, so the form can
+    // offer another one.
     [Fact]
     public async Task RefuseANameTakenSinceItWasChecked()
     {
@@ -163,10 +151,6 @@ public class ActivationServiceShould : UnitTestBase
             .WhoseValue.Should().Be(ValidationError.Taken);
     }
 
-    /// <summary>
-    /// The address gone to another account leaves this registration with nothing
-    /// to complete.
-    /// </summary>
     [Fact]
     public async Task RefuseAnActivationWhoseAddressWentToSomebodyElse()
     {
@@ -187,7 +171,6 @@ public class ActivationServiceShould : UnitTestBase
         await producer.DidNotReceive().SendAsync(EventType.ActivatedUser, Arg.Any<Guid>());
     }
 
-    /// <summary>A link that is live, unspent and a name that is free.</summary>
     private (ActivationRequest Request, PendingRegistration Pending, CreateUser User)
         ArrangeReadyActivation()
     {

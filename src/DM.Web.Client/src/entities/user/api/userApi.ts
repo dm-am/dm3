@@ -17,12 +17,13 @@ import { UserActivityFilter } from "@/shared/api/models/community";
 import type { GameReview } from "@/shared/api/models/game/reviews";
 import { Api } from "@/shared/api";
 import type { RequestOptions } from "@/shared/api/interceptor";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 /** `sortBy: "author"` is the other side of the pair: the author, or the game for those written. */
 export type GameReviewsQuery = PagingQuery & {
   search?: string;
   sortBy?: "created" | "author";
-  sortOrder?: "asc" | "desc";
+  sortOrder?: SortDirection;
 };
 
 /** `sortBy: "author"` is the other side of the pair: the author, or the recipient for those written. */

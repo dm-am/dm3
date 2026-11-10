@@ -1,7 +1,6 @@
 using System;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
-using DM.Infrastructure.Persistence.Entities.Contracts;
 using DM.Infrastructure.Persistence.Entities.Account;
 using DM.Infrastructure.Persistence.Entities.Shared;
 using DM.Domain.Core.Enums;
@@ -17,7 +16,7 @@ namespace DM.Infrastructure.Persistence.Entities.Moderation;
 /// <see cref="PointsChangedByUserId" />.
 /// </remarks>
 [Table("Warnings")]
-public class Warning : IAdministrated
+public class Warning
 {
     /// <summary>
     /// Warning identifier
@@ -25,10 +24,14 @@ public class Warning : IAdministrated
     [Key]
     public Guid WarningId { get; set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// User who received the warning
+    /// </summary>
     public Guid TargetUserId { get; set; }
 
-    /// <inheritdoc />
+    /// <summary>
+    /// Moderator who issued the warning
+    /// </summary>
     public Guid AuthorId { get; set; }
 
     /// <summary>
@@ -122,11 +125,9 @@ public class Warning : IAdministrated
     /// </remarks>
     public string? PointsChangeText { get; set; }
 
-    /// <inheritdoc />
     [ForeignKey(nameof(TargetUserId))]
     public virtual User TargetUser { get; set; } = null!;
 
-    /// <inheritdoc />
     [ForeignKey(nameof(AuthorId))]
     public virtual User Author { get; set; } = null!;
 

@@ -9,9 +9,6 @@ using IPostRepository = DM.Domain.Game.Features.Posts.IPostRepository;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// A post and its dice rolls are written both or neither.
-/// </summary>
 /// <remarks>
 /// A roll cannot be produced twice. The rolls travel inside CreatePostEntity into the post's transaction, and the FK
 /// DiceRolls.PostId stands behind them.

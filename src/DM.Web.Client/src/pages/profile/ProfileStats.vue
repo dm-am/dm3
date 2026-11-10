@@ -11,6 +11,7 @@ import { isUserOnline } from "@/shared/lib/utils/chat";
 import { useNowTimestamp } from "@/shared/lib/composables/useNowTimestamp";
 import { VALUE_UNAVAILABLE } from "@/shared/lib/constants/copy";
 import { StatLine } from "@/shared/ui/StatLine";
+import type { ProfileSubpageName } from "./profileSubpages";
 
 const props = defineProps<{
   user: User;
@@ -47,15 +48,10 @@ const gameReviewsReceived = computed(() => props.user.gameReviewsReceived ?? 0);
 const gameReviewsGiven = computed(() => props.user.gameReviewsGiven ?? 0);
 
 /** The list behind a counter, of the user the address names. */
-const listLink = (
-  name:
-    | "given-reviews"
-    | "received-reviews"
-    | "received-endorsements"
-    | "given-endorsements"
-    | "received-game-reviews"
-    | "given-game-reviews",
-) => ({ name, params: { username: props.username } });
+const listLink = (name: ProfileSubpageName) => ({
+  name,
+  params: { username: props.username },
+});
 
 const ratingSum = computed<number | null>(() => {
   const r = props.user.rating;

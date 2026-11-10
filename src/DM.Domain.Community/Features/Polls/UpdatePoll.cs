@@ -22,14 +22,8 @@ public class UpdatePoll
     /// </summary>
     public string? Details { get; set; }
 
-    /// <summary>
-    /// Poll start date (UTC)
-    /// </summary>
     public DateTimeOffset? StartsUtc { get; set; }
 
-    /// <summary>
-    /// Poll end date (UTC)
-    /// </summary>
     public DateTimeOffset? EndsUtc { get; set; }
 
     /// <summary>

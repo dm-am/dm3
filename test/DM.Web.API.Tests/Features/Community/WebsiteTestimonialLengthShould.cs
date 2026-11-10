@@ -8,10 +8,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Community;
 
-/// <summary>
-/// The request takes the length the domain takes, and its refusal names the
-/// bounds themselves: the form shows the sentence as it comes.
-/// </summary>
+// The request takes the length the domain takes, and its refusal names the bounds themselves: the
+// form shows the sentence as it comes.
 public class WebsiteTestimonialLengthShould
 {
     [Fact]

@@ -187,19 +187,17 @@ async function fetchBestPostOfUser(
   const key = userBestKey(username);
   const existing = userBestPosts.value.get(username);
 
-  if (!force && !existing?.loading) {
-    const cached = postCache.get(key);
-    if (cached !== undefined) {
-      userBestPosts.value.set(username, {
-        post: cached,
-        loading: false,
-        loaded: true,
-        error: null,
-      });
-      return;
-    }
-  }
   if (existing?.loading) return;
+  const cached = force ? undefined : postCache.get(key);
+  if (cached !== undefined) {
+    userBestPosts.value.set(username, {
+      post: cached,
+      loading: false,
+      loaded: true,
+      error: null,
+    });
+    return;
+  }
 
   userBestPosts.value.set(username, {
     post: existing?.post ?? null,

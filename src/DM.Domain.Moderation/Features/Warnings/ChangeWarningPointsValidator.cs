@@ -3,9 +3,6 @@ using FluentValidation;
 
 namespace DM.Domain.Moderation.Features.Warnings;
 
-/// <summary>
-/// Validator for a change of warning points
-/// </summary>
 /// <remarks>
 /// The explanation is required: everybody who reads the log sees it, and without it
 /// the original verdict stands beside points that contradict it.

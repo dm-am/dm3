@@ -18,12 +18,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// The partition key decides whose budget a request spends.
-/// </summary>
-/// <remarks>
-/// Asserted on the key: the limiter is framework code. The middleware runs for real, it supplies the account.
-/// </remarks>
+// Asserted on the key: the limiter is framework code.
 public class RateLimitPartitioningShould : UnitTestBase
 {
     private const string Address = "203.0.113.9";
@@ -108,9 +103,6 @@ public class RateLimitPartitioningShould : UnitTestBase
             "the same client arrives in two spellings and must not be given two budgets");
     }
 
-    /// <summary>
-    /// A token the cipher accepts for the account, its session half different every time.
-    /// </summary>
     private string TokenOf(Guid userId)
     {
         var token = $"token-of-{userId}";

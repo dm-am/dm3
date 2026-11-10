@@ -150,9 +150,6 @@ public class UpdateGameValidatorShould
         result.ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// Whatever creation accepts, an edit of the same game accepts too.
-    /// </summary>
     /// <remarks>
     /// Both validators read <see cref="GameFieldLimits" />, or a created game could not be saved again.
     /// </remarks>

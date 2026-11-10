@@ -20,9 +20,6 @@ public class Session
     /// </summary>
     public DateTimeOffset ExpirationUtc { get; set; }
 
-    /// <summary>
-    /// Session creation time (UTC)
-    /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>

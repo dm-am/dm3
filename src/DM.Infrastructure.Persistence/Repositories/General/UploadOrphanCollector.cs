@@ -12,7 +12,7 @@ namespace DM.Infrastructure.Persistence.Repositories.General;
 /// <inheritdoc />
 internal class UploadOrphanCollector : IUploadOrphanCollector
 {
-    /// <summary>Rows per pass, so one sweep cannot hold the store for minutes.</summary>
+    // Rows per pass, so one sweep cannot hold the store for minutes.
     private const int BatchSize = 200;
 
     private readonly DmDbContext _dbContext;

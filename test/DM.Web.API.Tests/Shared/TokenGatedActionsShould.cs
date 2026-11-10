@@ -20,10 +20,8 @@ namespace DM.Web.API.Tests.Shared;
 /// </remarks>
 public class TokenGatedActionsShould
 {
-    /// <summary>The headers a token-gated action may take its credential from.</summary>
     private static readonly string[] CredentialHeaders = [TokenHeaders.Account, TokenHeaders.Ticket];
 
-    /// <summary>Every controller action in the host.</summary>
     private static MethodInfo[] Actions() => ApiSurface.RoutedActions().ToArray();
 
     [Fact]

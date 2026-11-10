@@ -17,10 +17,6 @@ namespace DM.Infrastructure.Persistence.Repositories.Game;
 /// </summary>
 internal static class ReviewMappers
 {
-    /// <summary>
-    /// EF projection to the domain game review; the game title travels via
-    /// the navigation join
-    /// </summary>
     public static IQueryable<GameReview> ProjectToGameReview(this IQueryable<DbGameReview> query) =>
         query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand<Func<DbGameReview, GameReview>>(r => new GameReview
         {

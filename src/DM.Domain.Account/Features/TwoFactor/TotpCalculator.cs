@@ -22,10 +22,8 @@ namespace DM.Domain.Account.Features.TwoFactor;
 /// </remarks>
 internal static class TotpCalculator
 {
-    /// <summary>Seconds one code is valid for.</summary>
     internal const int StepSeconds = 30;
 
-    /// <summary>Digits a code is made of.</summary>
     internal const int Digits = 6;
 
     /// <summary>
@@ -52,15 +50,7 @@ internal static class TotpCalculator
         return matched ? step : null;
     }
 
-    /// <summary>
-    /// The secret as an authenticator app expects to receive it.
-    /// </summary>
-    /// <param name="secret">Shared secret, raw bytes</param>
     public static string ToBase32(byte[] secret) => Base32Encoding.ToString(secret);
 
-    /// <summary>
-    /// The secret back from the form it is stored and shown in.
-    /// </summary>
-    /// <param name="secret">Base32 secret</param>
     public static byte[] FromBase32(string secret) => Base32Encoding.ToBytes(secret);
 }

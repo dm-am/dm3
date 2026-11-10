@@ -39,10 +39,6 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         Text = "Body text"
     };
 
-    /// <summary>
-    /// The text of a ticket and every comment of its conversation share one
-    /// length (TicketTextLimits).
-    /// </summary>
     [Fact]
     public void TakeATextAsLongAsTheTicketLimit()
     {
@@ -82,11 +78,9 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
             .WithErrorMessage(RefusalMessage.EmailInvalid);
     }
 
-    /// <summary>
-    /// A signed-in author is reachable by identity and needs no contact; a guest
-    /// asks about an account he is locked out of here or nowhere; a ticket without
-    /// a subject is named by its reason.
-    /// </summary>
+    // A signed-in author is reachable by identity and needs no contact; a guest asks about an
+    // account he is locked out of here or nowhere; a ticket without a subject is named by its
+    // reason.
     [Theory]
     [InlineData(true, TicketSubtype.Bug, "guest@example.com", null)]
     [InlineData(false, TicketSubtype.Bug, null, null)]
@@ -125,9 +119,6 @@ public class CreateTicketIntakeValidatorShould : UnitTestBase
         validator.TestValidate(input).ShouldNotHaveAnyValidationErrors();
     }
 
-    /// <summary>
-    /// A complaint about a person names the person and the place.
-    /// </summary>
     [Fact]
     public void RequireTheViolatorAndTheLinkOfAComplaintAboutAPerson()
     {

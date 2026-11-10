@@ -26,10 +26,8 @@ public class ReaderTimeShould
         ReaderTime.Format(Moment, "Europe/Moscow").Should().Be("21.09.2026 13:30 (UTC+3)");
     }
 
-    /// <summary>
-    /// The offset travels with the time. A zone can be stale — the reader moved
-    /// and has not said so — and named, the time is one the reader can convert.
-    /// </summary>
+    // A zone can be stale — the reader moved and has not said so — and named, the time is one the
+    // reader can convert.
     [Theory]
     [InlineData("Europe/Moscow", "21.09.2026 13:30 (UTC+3)")]
     [InlineData("Asia/Kolkata", "21.09.2026 16:00 (UTC+5:30)")]
@@ -40,17 +38,13 @@ public class ReaderTimeShould
         ReaderTime.Format(Moment, zone).Should().Be(expected);
     }
 
-    /// <summary>UTC is named UTC and carries no zero to add up.</summary>
     [Fact]
     public void WriteUtcWithoutAnOffset()
     {
         ReaderTime.Format(Moment, "UTC").Should().Be("21.09.2026 10:30 (UTC)");
     }
 
-    /// <summary>
-    /// No zone is UTC, which is what every account had before there was a zone
-    /// to keep.
-    /// </summary>
+    // No zone is UTC, which is what every account had before there was a zone to keep.
     [Theory]
     [InlineData(null)]
     [InlineData("")]
@@ -60,11 +54,9 @@ public class ReaderTimeShould
         ReaderTime.Format(Moment, zone).Should().Be("21.09.2026 10:30 (UTC)");
     }
 
-    /// <summary>
-    /// A zone this machine does not know is UTC and not an exception: the value
-    /// comes from a browser, the zone database moves, and a letter about
-    /// security must not fail to send over the spelling of a city.
-    /// </summary>
+    // A zone this machine does not know is UTC and not an exception: the value comes from a
+    // browser, the zone database moves, and a letter about security must not fail to send over the
+    // spelling of a city.
     [Theory]
     [InlineData("Mars/Olympus")]
     [InlineData("не зона")]
@@ -73,10 +65,8 @@ public class ReaderTimeShould
         ReaderTime.Format(Moment, zone).Should().Be("21.09.2026 10:30 (UTC)");
     }
 
-    /// <summary>
-    /// Summer time is the zone's business and not the caller's: the same zone
-    /// answers differently in January and in July.
-    /// </summary>
+    // Summer time is the zone's business and not the caller's: the same zone answers differently in
+    // January and in July.
     [Fact]
     public void FollowTheSummerTimeOfTheZone()
     {
@@ -86,10 +76,8 @@ public class ReaderTimeShould
         ReaderTime.Format(Moment, "Europe/London").Should().Be("21.09.2026 11:30 (UTC+1)");
     }
 
-    /// <summary>
-    /// A zone an account may be given is one the browser names and a letter can
-    /// print a time in: an IANA name this machine knows, and nothing else.
-    /// </summary>
+    // A zone an account may be given is one the browser names and a letter can print a time in: an
+    // IANA name this machine knows, and nothing else.
     [Theory]
     [InlineData("Europe/Moscow", true)]
     [InlineData(" Asia/Vladivostok ", true)]

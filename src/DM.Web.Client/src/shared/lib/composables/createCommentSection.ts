@@ -91,7 +91,6 @@ function commentList(api: CommentSectionApi) {
  * refusal patches nothing and goes up to the page.
  */
 function commentChanges(comments: Ref<Comment[]>, api: CommentSectionApi) {
-  /** Replaces the comment of this id with what `change` makes of it. */
   function patch(id: string, change: (comment: Comment) => Comment): void {
     const index = comments.value.findIndex((c) => c.id === id);
     if (index !== -1) comments.value[index] = change(comments.value[index]);

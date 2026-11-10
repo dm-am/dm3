@@ -5,3 +5,4 @@ export * from "./values";
 export * from "./applySortAction";
 
 export * from "./createAuthorDateFilter";
+export * from "./useAuthorDateFilterBar";

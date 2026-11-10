@@ -48,11 +48,11 @@ export const renderField = (options: {
     html.replace(/<(\w+) class=/g, `<$1 ${SCOPE.field} class=`);
   root.innerHTML = own(
     `<div class="form-field-label"><label>Причина</label><span class="form-field-optional">необязательно</span></div>` +
-      `<div class="form-field-row">CONTROL</div>` +
-      (options.error
-        ? `<span class="form-field-error">Слишком длинное значение</span>`
-        : "") +
-      (options.hint ? `<div class="form-field-hint">Подсказка</div>` : ""),
+      `<div class="form-field-row">CONTROL</div>${
+        options.error
+          ? `<span class="form-field-error">Слишком длинное значение</span>`
+          : ""
+      }${options.hint ? `<div class="form-field-hint">Подсказка</div>` : ""}`,
   ).replace("CONTROL", options.control);
   root.setAttribute(SCOPE.field, "");
   document.body.appendChild(root);

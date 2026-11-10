@@ -1,5 +1,8 @@
 import type { SortOption } from "@/shared/lib/filters";
 
+/** The filters the menu of the bar offers. */
+export type CommentsFilterKey = "author" | "dateRange";
+
 export const SORT_OPTIONS: readonly SortOption[] = [
   {
     value: "created",

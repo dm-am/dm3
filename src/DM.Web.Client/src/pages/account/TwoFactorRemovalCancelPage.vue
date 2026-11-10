@@ -5,14 +5,11 @@
  * request is out.
  */
 import { onMounted, ref } from "vue";
-import { useRouter } from "vue-router";
 import { readConfirmationToken } from "@/shared/lib/utils/confirmationToken";
 import { accountApi } from "@/entities/user";
-import Button from "@/shared/ui/Button/Button.vue";
+import HomeButton from "./HomeButton.vue";
 import { symbols } from "@/shared/lib/utils/icons";
 import { supportFor } from "@/entities/ticket";
-
-const router = useRouter();
 
 /** The request is on the wire. */
 const loading = ref(true);
@@ -39,10 +36,6 @@ onMounted(async () => {
 
   cancelled.value = true;
 });
-
-function goHome() {
-  router.push("/");
-}
 </script>
 
 <template>
@@ -63,14 +56,7 @@ function goHome() {
         <p class="auth-note">
           Если да, то рекомендуем обновить пароль от вашего почтового ящика
         </p>
-        <Button
-          class="auth-button auth-button--spaced"
-          type="button"
-          variant="primary"
-          @click="goHome"
-        >
-          На главную
-        </Button>
+        <HomeButton />
       </template>
 
       <!-- Nothing to call off: the heading of the twin page, and only what this link can say, since the page reads no account. -->
@@ -82,14 +68,7 @@ function goHome() {
         <p class="auth-text">
           Возможно ссылка уже была использована или срок ее действия истек
         </p>
-        <Button
-          class="auth-button auth-button--spaced"
-          type="button"
-          variant="primary"
-          @click="goHome"
-        >
-          На главную
-        </Button>
+        <HomeButton />
         <p class="auth-footnote">
           Нужна помощь? Обратитесь в
           <router-link :to="supportFor('AccessRecovery')"

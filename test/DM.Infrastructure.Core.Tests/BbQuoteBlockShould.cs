@@ -4,11 +4,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The [quote] tag is formatting: a block around the text, with nothing of its
-/// own inside.
-/// </summary>
-/// <remarks>The tag carries no attribute, as on DM2: one makes it a broken tag shown as typed.</remarks>
+// The tag carries no attribute, as on DM2: one makes it a broken tag shown as typed.
 public class BbQuoteBlockShould
 {
     private readonly IBbParserProvider _parserProvider = new BbParserProvider();
@@ -42,9 +38,6 @@ public class BbQuoteBlockShould
         ToHtml(BbSurface.Comment, $"[{tagName}=Вася]текст[/{tagName}]")
             .Should().Be($"[{tagName}=Вася]текст[/{tagName}]");
 
-    /// <summary>
-    /// The content of a broken quote is not text: it renders, bold stays bold.
-    /// </summary>
     [Fact]
     public void RenderTheContentOfABrokenQuote() =>
         ToHtml(BbSurface.Comment, "[quote=\"Вася\"][b]текст[/b][/quote]")

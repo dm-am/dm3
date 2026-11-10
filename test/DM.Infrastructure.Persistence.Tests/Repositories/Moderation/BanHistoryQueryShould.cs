@@ -12,14 +12,7 @@ using DM.Domain.Moderation.Features.Bans;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Moderation;
 
-/// <summary>
-/// The two history queries answer with lifted bans, and the enforcement query
-/// does not.
-/// </summary>
-/// <remarks>
-/// The history queries spelled the lift predicate by hand, out of sight of the model-level check.
-/// GetActiveBan is asserted here too: keeping the lifted row and not enforcing it is one decision.
-/// </remarks>
+// The history queries spelled the lift predicate by hand, out of sight of the model-level check.
 public class BanHistoryQueryShould : UnitTestBase
 {
     private static readonly DateTimeOffset Now = new(2026, 5, 1, 12, 0, 0, TimeSpan.Zero);
@@ -102,11 +95,7 @@ public class BanHistoryQueryShould : UnitTestBase
         entries.Single(e => e.Ban.BanId == RunningBanId).Ban.LiftedBy.Should().BeNull();
     }
 
-    /// <summary>
-    /// The list is the ban log: an issue at its start and a lift at its moment,
-    /// newest first, and the lift of an older ban above the issue of a newer one.
-    /// </summary>
-    /// <remarks>A list of bans by their start has no place for a lift both above and below the running ban.</remarks>
+    // A list of bans by their start has no place for a lift both above and below the running ban.
     [Fact]
     public async Task ListAnIssueAndALiftAsEntriesOfTheirOwnNewestFirst()
     {
@@ -186,12 +175,8 @@ public class BanHistoryQueryShould : UnitTestBase
             "the lifted ban is kept for the history and is in force for nobody");
     }
 
-    /// <summary>
-    /// The bans of a moderator who removed his account since stay in the list,
-    /// issue and lift alike, and are signed by nobody, as a removed author is
-    /// everywhere, and not by the name of the account.
-    /// </summary>
-    /// <remarks>The issuer is a required navigation to a filtered account row, so the page would come up short.</remarks>
+    // The issuer is a required navigation to a filtered account row, so the page would come up
+    // short.
     [Fact]
     public async Task SignTheBansOfAModeratorWhoIsGoneByNobody()
     {
@@ -209,10 +194,6 @@ public class BanHistoryQueryShould : UnitTestBase
         lift.LiftedBy.Should().BeNull();
     }
 
-    /// <summary>
-    /// An entry is numbered in the whole list from the oldest, which is 1, so
-    /// the list, newest first, counts down.
-    /// </summary>
     [Fact]
     public async Task NumberTheEntriesFromTheOldest()
     {
@@ -226,11 +207,9 @@ public class BanHistoryQueryShould : UnitTestBase
             (BanLogEntryKind.Issued, LiftedBanId, 1));
     }
 
-    /// <summary>
-    /// A new entry happens after every entry there is: it takes the next number
-    /// and moves the others down the list without renumbering them, so a link to
-    /// an entry by its number stays a link to that entry.
-    /// </summary>
+    // A new entry happens after every entry there is: it takes the next number and moves the others
+    // down the list without renumbering them, so a link to an entry by its number stays a link to
+    // that entry.
     [Fact]
     public async Task KeepTheNumberOfAnEntryWhenANewOneIsWritten()
     {
@@ -257,10 +236,6 @@ public class BanHistoryQueryShould : UnitTestBase
         (await Repository(context).GetBanHistory(null, 0, 1)).Entries.Single().Number.Should().Be(4);
     }
 
-    /// <summary>
-    /// The list of one person shows the numbers of the whole list: an entry of
-    /// somebody else between two of his is counted, and is not on his page.
-    /// </summary>
     [Fact]
     public async Task GiveTheListOfOnePersonTheNumbersOfTheWholeList()
     {
@@ -286,11 +261,6 @@ public class BanHistoryQueryShould : UnitTestBase
             (BanLogEntryKind.Issued, LiftedBanId, 1));
     }
 
-    /// <summary>
-    /// Entries of one moment are numbered in the order the list stands them in:
-    /// the lift above the issue has the greater number, and of two issues the one
-    /// the list puts first does too.
-    /// </summary>
     [Fact]
     public async Task NumberEntriesOfOneMomentInTheOrderOfTheList()
     {
@@ -326,11 +296,6 @@ public class BanHistoryQueryShould : UnitTestBase
             "the second of two issues of one moment stands where the list puts it");
     }
 
-    /// <summary>
-    /// The page of an entry is found by its number: in the whole list, and in
-    /// the list of the person it is about, where the position counts his entries
-    /// only. An entry that is not in the list has no position.
-    /// </summary>
     [Fact]
     public async Task FindWhereAnEntryStandsByItsNumber()
     {

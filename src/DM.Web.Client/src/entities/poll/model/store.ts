@@ -34,9 +34,7 @@ export const usePollsStore = defineStore("polls", () => {
 
     const { data, error: apiError } = await pollApi.getPolls(params);
 
-    if (!requestGuard.isCurrent(requestId)) {
-      return;
-    }
+    if (!requestGuard.isCurrent(requestId)) return;
 
     polls.value = data ?? null;
     if (apiError) error.value = "Не удалось загрузить опросы";
@@ -54,9 +52,7 @@ export const usePollsStore = defineStore("polls", () => {
   async function createPoll(poll: CreatePollRequest) {
     const { data, error } = await pollApi.postPoll(poll);
     const created = unwrapResource<Poll>(data);
-    if (created && polls.value) {
-      polls.value.resources.unshift(created);
-    }
+    if (created && polls.value) polls.value.resources.unshift(created);
     return { data: created, error };
   }
 

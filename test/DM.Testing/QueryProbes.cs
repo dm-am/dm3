@@ -12,13 +12,11 @@ namespace DM.Testing;
 /// <remarks>The cache-key rules walk a query by reflection: a hand-kept list forgets the new field.</remarks>
 public static class QueryProbes
 {
-    /// <summary>The properties a caller can set on a query of the given type.</summary>
     public static IReadOnlyList<PropertyInfo> WritableProperties(Type queryType) => queryType
         .GetProperties(BindingFlags.Public | BindingFlags.Instance)
         .Where(property => property.CanWrite)
         .ToList();
 
-    /// <summary>Values of the given type that a default query does not carry.</summary>
     public static IReadOnlyCollection<object> Candidates(Type type)
     {
         var underlying = Nullable.GetUnderlyingType(type) ?? type;
@@ -62,7 +60,6 @@ public static class QueryProbes
         return Collections(underlying);
     }
 
-    /// <summary>One-element collections of whatever the property holds.</summary>
     private static IReadOnlyCollection<object> Collections(Type type)
     {
         if (!type.IsGenericType || !typeof(IEnumerable).IsAssignableFrom(type))

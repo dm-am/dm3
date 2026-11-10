@@ -3,7 +3,7 @@
  * The blogs the user hosts as a table with search, sort and server paging, on
  * the contract of /blogs.
  */
-import { computed, ref, watch } from "vue";
+import { computed, onBeforeUnmount, ref, watch } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import { DataTable, type SortState } from "@/shared/ui/DataTable";
 import { Tooltip } from "@/shared/ui/Tooltip";
@@ -25,6 +25,8 @@ import { highlightMatch } from "@/shared/lib/utils/highlight";
 import { parsePageNumber } from "@/shared/lib/filters";
 import { buildReadersTooltip } from "@/shared/lib/utils/tooltipBuilders";
 import { useGuardedRequest } from "@/shared/lib/composables/useGuardedRequest";
+import type { SortDirection } from "@/shared/lib/filters/types";
+import type { ProfileListSortBy } from "./profileListSort";
 
 const props = defineProps<{
   /** Profile owner whose hosted blogs we list. */
@@ -48,8 +50,8 @@ const {
 // `search` is the debounced `searchInput`, one fetch per pause.
 const searchInput = ref("");
 const search = ref("");
-const sortBy = ref<"created" | "title">("created");
-const sortOrder = ref<"asc" | "desc">("desc");
+const sortBy = ref<ProfileListSortBy>("created");
+const sortOrder = ref<SortDirection>("desc");
 
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 watch(searchInput, (value) => {
@@ -58,6 +60,7 @@ watch(searchInput, (value) => {
     search.value = value.trim();
   }, 300);
 });
+onBeforeUnmount(() => clearTimeout(searchTimer));
 
 const pageNumber = computed(() => parsePageNumber(route.query.number) ?? 1);
 
@@ -133,12 +136,12 @@ const sortOptions = [
   { value: "title", label: "Название", defaultDirection: "asc" as const },
 ];
 
-function handleSortSelect(value: string, direction?: "asc" | "desc") {
+function handleSortSelect(value: string, direction?: SortDirection) {
   sortBy.value = value === "title" ? "title" : "created";
   sortOrder.value = direction ?? "desc";
 }
 
-function handleSortOrder(order: "asc" | "desc") {
+function handleSortOrder(order: SortDirection) {
   sortOrder.value = order;
 }
 

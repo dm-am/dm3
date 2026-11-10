@@ -1,6 +1,5 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
-import { vClickOutside } from "@/shared/directives";
 import {
   formatDateRangeForDisplay,
   formatNumberRangeForDisplay,
@@ -9,10 +8,7 @@ import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import {
   FilterSearchInput,
-  FilterButton,
-  FilterDropdown,
-  FilterDropdownHeader,
-  FilterDropdownItem,
+  FilterMenu,
   NumericRangePicker,
   DateRangePicker,
   OptionsList,
@@ -27,9 +23,11 @@ import type { Character } from "@/entities/game";
 import {
   useRoomPostFilter,
   WITHOUT_CHARACTER,
+  type RoomPostFilterKey,
   type RoomPostReviews,
   type RoomPostSortBy,
 } from "../model";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 const props = defineProps<{
   characters: Character[];
@@ -55,7 +53,7 @@ const { localInput, handleInput, applySearch } = useFilterSearch(
 );
 
 const { showDropdown, navPath, closeDropdown, toggleDropdown } =
-  useFilterDropdown();
+  useFilterDropdown<RoomPostFilterKey>();
 
 // The order of the menu is the order of the bubbles below the bar.
 const filterOptions = [
@@ -69,11 +67,6 @@ const filterOptions = [
 const dropdownTitle = computed(
   () => filterOptions.find((o) => o.key === navPath.value?.filter)?.label ?? "",
 );
-
-function selectRootItem(key: string) {
-  characterQuery.value = "";
-  navPath.value = { filter: key };
-}
 
 function navigateBack() {
   navPath.value = null;
@@ -180,11 +173,11 @@ const sortOptions = [
   },
 ];
 
-function handleSortSelect(value: string, direction?: "asc" | "desc") {
+function handleSortSelect(value: string, direction?: SortDirection) {
   setSort(value as RoomPostSortBy, direction);
 }
 
-function handleSortOrderChange(order: "asc" | "desc") {
+function handleSortOrderChange(order: SortDirection) {
   setSort(filterState.value.sortBy, order);
 }
 
@@ -261,9 +254,9 @@ function handleSearchKeydown(event: KeyboardEvent) {
   event.preventDefault();
 }
 
-// The menu reopens at its root, and the character search goes with it.
-watch(showDropdown, (open) => {
-  if (!open) characterQuery.value = "";
+// The character search starts empty on each level of the menu and when it reopens.
+watch(navPath, () => {
+  characterQuery.value = "";
 });
 </script>
 
@@ -278,82 +271,63 @@ watch(showDropdown, (open) => {
         @keydown="handleSearchKeydown"
       />
 
-      <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton
-          label="Фильтры"
-          :active="showDropdown"
-          @click="toggleDropdown"
-          @close="closeDropdown"
+      <FilterMenu
+        v-model:nav-path="navPath"
+        :open="showDropdown"
+        :title="dropdownTitle"
+        :options="filterOptions"
+        @toggle="toggleDropdown"
+        @close="closeDropdown"
+        @back="navigateBack"
+      >
+        <UserMultiSelect
+          v-if="navPath?.filter === 'author'"
+          :selected-users="filterState.authorUsernames"
+          placeholder="Поиск автора"
+          include-inactive
+          @add="addAuthor"
         />
 
-        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <FilterDropdownHeader
-            v-if="navPath"
-            :title="dropdownTitle"
-            @back="navigateBack"
-          />
-
-          <template v-if="!navPath">
-            <FilterDropdownItem
-              v-for="option in filterOptions"
-              :key="option.key"
-              :label="option.label"
-              :hint="option.hint"
-              has-sub-options
-              @item-select="selectRootItem(option.key)"
+        <template v-if="navPath?.filter === 'character'">
+          <div class="dropdown-search">
+            <input
+              v-model="characterQuery"
+              type="text"
+              class="dropdown-search-input"
+              placeholder="Поиск персонажа"
+              aria-label="Поиск персонажа"
             />
-          </template>
-
-          <UserMultiSelect
-            v-if="navPath?.filter === 'author'"
-            :selected-users="filterState.authorUsernames"
-            placeholder="Поиск автора"
-            include-inactive
-            @add="addAuthor"
-            @remove="removeAuthor"
-          />
-
-          <template v-if="navPath?.filter === 'character'">
-            <div class="dropdown-search">
-              <input
-                v-model="characterQuery"
-                type="text"
-                class="dropdown-search-input"
-                placeholder="Поиск персонажа"
-                aria-label="Поиск персонажа"
-              />
-            </div>
-            <OptionsList
-              :options="characterOptions"
-              :filter-query="characterQuery"
-              @select="handleCharacterSelect"
-            />
-          </template>
-
-          <NumericRangePicker
-            v-if="navPath?.filter === 'rating'"
-            :min-value="filterState.minRating"
-            :max-value="filterState.maxRating"
-            :allow-negative="true"
-            @apply="handleRatingApply"
-            @clear="handleRatingClear"
-          />
-
+          </div>
           <OptionsList
-            v-if="navPath?.filter === 'reviews'"
-            :options="reviewOptions"
-            @select="handleReviewsSelect"
+            :options="characterOptions"
+            :filter-query="characterQuery"
+            @select="handleCharacterSelect"
           />
+        </template>
 
-          <DateRangePicker
-            v-if="navPath?.filter === 'date'"
-            :from-value="filterState.createdFrom"
-            :to-value="filterState.createdTo"
-            @apply="handleDateApply"
-            @clear="handleDateClear"
-          />
-        </FilterDropdown>
-      </div>
+        <NumericRangePicker
+          v-if="navPath?.filter === 'rating'"
+          :min-value="filterState.minRating"
+          :max-value="filterState.maxRating"
+          :allow-negative="true"
+          @apply="handleRatingApply"
+          @clear="handleRatingClear"
+        />
+
+        <OptionsList
+          v-if="navPath?.filter === 'reviews'"
+          :options="reviewOptions"
+          @select="handleReviewsSelect"
+        />
+
+        <DateRangePicker
+          v-if="navPath?.filter === 'date'"
+          :from-value="filterState.createdFrom"
+          :to-value="filterState.createdTo"
+          @apply="handleDateApply"
+          @clear="handleDateClear"
+        />
+      </FilterMenu>
 
       <SortButton
         :options="sortOptions"
@@ -426,7 +400,6 @@ watch(showDropdown, (open) => {
   gap: $small
 
   +filter-bar
-  +filter-button
 
 +filter-dropdown-base
 +dropdown-search-input

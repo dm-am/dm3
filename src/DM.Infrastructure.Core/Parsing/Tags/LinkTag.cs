@@ -38,7 +38,6 @@ internal sealed class LinkTag : ContentTag
     /// <inheritdoc />
     public override string RenderText(TagNode node, string content) => OwnText(node) ?? content;
 
-    /// <summary>The text the author gave the link, or null when there is none.</summary>
     private static string? OwnText(TagNode node) =>
         node.Parameters.TryGetValue(Text, out var text) && text.Length > 0 ? text : null;
 }

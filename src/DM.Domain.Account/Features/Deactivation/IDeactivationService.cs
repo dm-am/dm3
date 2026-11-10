@@ -30,15 +30,10 @@ public interface IDeactivationService
     Task DeactivateByModeration(string username, string reason,
         CancellationToken cancellationToken = default);
 
-    /// <summary>
-    /// Bring a removed account back on a moderator's decision.
-    /// </summary>
     /// <remarks>
     /// Who may do it is the removal's rule; whose account is not limited by rank,
     /// because giving an account back is no act against its owner.
     /// </remarks>
-    /// <param name="username">Whose account to bring back</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task RestoreByModeration(string username, CancellationToken cancellationToken = default);
 
     /// <summary>

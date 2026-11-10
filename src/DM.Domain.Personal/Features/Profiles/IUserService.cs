@@ -25,14 +25,8 @@ public interface IUserService : IUserLookupService
         UserRole? role = null,
         UserSort sort = UserSort.Name);
 
-    /// <summary>
-    /// Get user details by username
-    /// </summary>
     Task<UserDetails> GetDetailsAsync(string username);
 
-    /// <summary>
-    /// Get user details by ID
-    /// </summary>
     Task<UserDetails> GetDetailsAsync(Guid userId);
 
     /// <summary>

@@ -5,14 +5,7 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A database built by the migration alone offers a character sheet to start a
-/// game from.
-/// </summary>
-/// <remarks>
-/// The creation form starts from the default template, and the row ships with the schema. Read through the
-/// model on a throwaway database no seed touched.
-/// </remarks>
+// The creation form starts from the default template, and the row ships with the schema.
 public class DefaultAttributeSchemaTemplateShould : IntegrationTestBase
 {
     public DefaultAttributeSchemaTemplateShould(DatabaseFixture databaseFixture) : base(databaseFixture)

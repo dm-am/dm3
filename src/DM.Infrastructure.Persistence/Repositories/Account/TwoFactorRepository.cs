@@ -251,7 +251,6 @@ internal class TwoFactorRepository : ITwoFactorRepository
         return replaced;
     }
 
-    /// <summary>The rows of one set, identifiers and all.</summary>
     /// <remarks>
     /// Built before the execution strategy runs so that a retry replays the same
     /// identifiers rather than minting a second set of them.

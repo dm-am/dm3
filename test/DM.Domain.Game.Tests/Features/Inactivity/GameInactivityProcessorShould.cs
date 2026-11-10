@@ -29,11 +29,9 @@ namespace DM.Domain.Game.Tests.Features.Inactivity;
 /// </summary>
 public class GameInactivityProcessorShould : UnitTestBase
 {
-    /// <summary>
-    /// The well-known system author, spelled out rather than taken from
-    /// SystemUser so that changing the constant has to be a deliberate edit here
-    /// too — every warning ever posted is attributed to this id.
-    /// </summary>
+    // The well-known system author, spelled out rather than taken from SystemUser so that changing
+    // the constant has to be a deliberate edit here too — every warning ever posted is attributed
+    // to this id.
     private static readonly Guid SystemUserId = Guid.Parse("00000000-0000-0000-0000-000000000001");
 
     private readonly IInactivityRepository inactivityRepository;
@@ -116,11 +114,8 @@ public class GameInactivityProcessorShould : UnitTestBase
             logger);
     }
 
-    /// <summary>
-    /// The game and the moment stamped on it. The moment sits at a different
-    /// argument in the warning, which carries the threshold its cutoff is measured
-    /// with, so its position is named rather than assumed.
-    /// </summary>
+    // The moment sits at a different argument in the warning, which carries the threshold its
+    // cutoff is measured with, so its position is named rather than assumed.
     private static bool RecordStamped(
         List<(Guid GameId, DateTimeOffset At)> log, CallInfo call, int at = 1)
     {

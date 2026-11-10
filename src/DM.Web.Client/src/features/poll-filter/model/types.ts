@@ -1,4 +1,15 @@
 import type { PollSortBy, PollStatus } from "@/entities/poll";
+import type { SortDirection } from "@/shared/lib/filters/types";
+
+/** Anonymous or public votes; "" is all. */
+export type PollTypeFilter = "anonymous" | "public" | "";
+
+/** The filters the menu of the bar offers. */
+export type PollsFilterKey =
+  | "status"
+  | "pollType"
+  | "startsRange"
+  | "endsRange";
 
 export interface PollsFilterState {
   /** "" is all. */
@@ -15,12 +26,11 @@ export interface PollsFilterState {
 
   endsToUtc: string;
 
-  /** "" is all. */
-  pollType: "anonymous" | "public" | "";
+  pollType: PollTypeFilter;
 
   sortBy: PollSortBy;
 
-  sortOrder: "asc" | "desc";
+  sortOrder: SortDirection;
 }
 
 export const DEFAULT_FILTER_STATE: PollsFilterState = {

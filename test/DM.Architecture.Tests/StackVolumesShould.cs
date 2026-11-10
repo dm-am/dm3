@@ -4,20 +4,12 @@ using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The state of the stack that must outlive a container is on a named volume.
-/// </summary>
 /// <remarks>
 /// A directory in the container layer is gone with the container, and the
 /// update mechanism recreates containers on its own schedule.
 /// </remarks>
 public class StackVolumesShould
 {
-    /// <summary>
-    /// The stand gives the API a place of its own for the country table, at the
-    /// path the setting names, that the API can write and that outlives the
-    /// container.
-    /// </summary>
     /// <remarks>
     /// The API downloads the table itself as the image user, and a named volume takes the owner of the
     /// directory the image creates at that path, so the image hands that directory to its user.
@@ -42,10 +34,6 @@ public class StackVolumesShould
             "one leaves the download nowhere to be written");
     }
 
-    /// <summary>
-    /// The broker holds work nothing else records, so its state needs a volume like
-    /// every other store.
-    /// </summary>
     /// <remarks>
     /// The mail queue and its dead letters are the only record of a letter owed or failed. Mnesia keeps
     /// its data under a directory named after the node, so the hostname is fixed as well.

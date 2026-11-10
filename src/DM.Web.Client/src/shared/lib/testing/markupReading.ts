@@ -5,10 +5,6 @@
  * Spec-only; docs/guides/TESTING.md, "Генеративные проверки разметки".
  */
 
-// ============================================================================
-// WHAT THE EYE GETS
-// ============================================================================
-
 /**
  * A run of text and what it is drawn with (sorted, joined by "|"). Space and
  * undrawn characters are left out, and dashes read as the hyphens they stand
@@ -85,6 +81,16 @@ function caption(text: string | null): string | null {
 
 function image(img: Element, frame: Element | null): string {
   return `img:${img.getAttribute("src")}|${frame?.getAttribute("data-bb-width") ?? ""}|${frame?.getAttribute("data-bb-height") ?? ""}`;
+}
+
+/** An image of the preview, with the size its frame carries when it has one. */
+function framedImage(img: Element): string {
+  return image(
+    img,
+    img.parentElement?.classList.contains("bb-image-frame")
+      ? img.parentElement
+      : null,
+  );
 }
 
 /** The nodes the browser builds of a string of HTML. */
@@ -251,6 +257,16 @@ export function inThePreview(html: string, lines = false): Run[] {
       runs.atom("\u21b5", marks);
     }
   };
+  // The layout the preview draws around the tags: paragraphs, breaks, image frames.
+  const untagged = (element: Element, marks: string[], inside: () => void) => {
+    if (element.tagName === "P") {
+      inside();
+      if (lines) runs.atom("\u00b6", marks);
+    } else if (element.tagName === "BR") {
+      if (lines) runs.atom("\u23ce", marks);
+    } else if (element.classList.contains("bb-image-frame")) inside();
+    else unknown(element, "the preview");
+  };
   const walk = (nodes: ChildNode[], marks: string[], list: string): void => {
     for (const node of nodes) {
       if (node.nodeType === Node.TEXT_NODE) {
@@ -310,27 +326,13 @@ export function inThePreview(html: string, lines = false): Run[] {
           ]);
           break;
         case "img":
-          runs.atom("<img>", [
-            ...marks,
-            image(
-              element,
-              element.parentElement?.classList.contains("bb-image-frame")
-                ? element.parentElement
-                : null,
-            ),
-          ]);
+          runs.atom("<img>", [...marks, framedImage(element)]);
           break;
         case "private":
           inside(addressees(element.getAttribute("data-bb-character")));
           break;
         case null:
-          if (element.tagName === "P") {
-            inside(null);
-            if (lines) runs.atom("\u00b6", marks);
-          } else if (element.tagName === "BR") {
-            if (lines) runs.atom("\u23ce", marks);
-          } else if (element.classList.contains("bb-image-frame")) inside(null);
-          else unknown(element, "the preview");
+          untagged(element, marks, () => inside(null));
           break;
         default:
           unknown(element, "the preview");
@@ -341,10 +343,6 @@ export function inThePreview(html: string, lines = false): Run[] {
   walk(nodesOf(html), [], "none");
   return runs.out;
 }
-
-// ============================================================================
-// WHAT THE BROWSER BUILDS
-// ============================================================================
 
 /** The elements that close themselves. */
 const VOID = new Set(["br", "img", "hr", "input", "wbr"]);

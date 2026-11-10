@@ -8,10 +8,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The pattern that cuts a [private] block out means the same thing in
-/// PostgreSQL and in .NET.
-/// </summary>
 /// <remarks>
 /// The stored tsvector, the room filter and the snippet share it, two in Postgres and one in .NET; Postgres takes a
 /// whole expression's greediness from its first quantifier. Against the container Postgres.

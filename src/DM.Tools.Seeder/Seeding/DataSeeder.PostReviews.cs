@@ -14,10 +14,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// The finished games the organic review pass rates, their open rooms and
-    /// the posts in them.
-    /// </summary>
     private sealed record FinishedGamePosts(
         List<Guid> GameIds, List<Room> Rooms, Dictionary<Guid, Guid> RoomToGameId, List<Post> Posts);
 
@@ -86,11 +82,6 @@ internal sealed partial class DataSeeder
         return new FinishedGamePosts(finishedGameIds, rooms, roomToGameId, posts);
     }
 
-    /// <summary>
-    /// Random reviews of the finished games' posts the showcase left alone:
-    /// thirty posts of this week with two to four reviews each, then eight older
-    /// ones with a single review.
-    /// </summary>
     private void SeedRandomPostReviews(
         FinishedGamePosts finished, HashSet<Guid> processedPostIds, List<DbUser> experiencedUsers,
         ComprehensiveSeedResult result)
@@ -132,7 +123,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>A review of a post, counted.</summary>
     private void AddPostReview(
         Guid postId, Guid postAuthorId, Guid gameId, Guid reviewerId, DateTimeOffset createdUtc, string text,
         ReviewSign sign, ComprehensiveSeedResult result)
@@ -162,10 +152,6 @@ internal sealed partial class DataSeeder
             reviewDate, text, sign, result);
     }
 
-    /// <summary>
-    /// Spreads post reviews across the seeded games, so the ratings pulse and the per-game review pages
-    /// have history: a few rated posts in most games, positive dominant, dated over months.
-    /// </summary>
     /// <remarks>
     /// Every review keeps the write rules of PostReviewService. Runs before EnsureLeaderboardCoverage, which
     /// then tops up only what is missing; everything stays before the current week, for the homepage widgets.
@@ -216,13 +202,10 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Spread {created} post reviews across {gamesTouched.Count} games");
     }
 
-    /// <summary>A post the spread may rate, with the game it is in.</summary>
     private sealed record SpreadCandidate(Guid PostId, Guid AuthorId, DateTimeOffset CreatedUtc, Guid GameId);
 
-    /// <summary>
-    /// Posts a reviewer with no special access could legally rate, through the gate PostReviewService
-    /// reads (GameAccessibilityFilters), ordered by creation and id.
-    /// </summary>
+    // Posts a reviewer with no special access could legally rate, through the gate
+    // PostReviewService reads (GameAccessibilityFilters), ordered by creation and id.
     private async Task<List<SpreadCandidate>> SpreadCandidates(DateTimeOffset weekStart)
     {
         var rows = await _dbContext.Posts
@@ -291,11 +274,9 @@ internal sealed partial class DataSeeder
         return new ReviewerRules(existingPairs, reviewMoments);
     }
 
-    /// <summary>
-    /// The sign of a spread review: neutral from a newbie, the only sign one may
-    /// give, and otherwise positive dominant, some negative: roughly how a site
-    /// where people rate what they liked distributes.
-    /// </summary>
+    // The sign of a spread review: neutral from a newbie, the only sign one may give, and otherwise
+    // positive dominant, some negative: roughly how a site where people rate what they liked
+    // distributes.
     private ReviewSign SpreadSign(DbUser reviewer)
     {
         if (ProbationPolicy.IsNewbie(reviewer.QuantityRating))
@@ -343,7 +324,6 @@ internal sealed partial class DataSeeder
         "Можно лучше",
     ];
 
-    /// <summary>The one set of review texts, some with BBCode, for every seeded review of a post.</summary>
     private string ReviewText(ReviewSign sign) => sign switch
     {
         ReviewSign.Positive => PositiveReviewTexts[_random.Next(PositiveReviewTexts.Length)],
@@ -351,10 +331,6 @@ internal sealed partial class DataSeeder
         _ => NeutralReviewTexts[_random.Next(NeutralReviewTexts.Length)]
     };
 
-    /// <summary>
-    /// The reviews of one game: two to four rated posts at even strides over its
-    /// timeline, each with one to three reviewers.
-    /// </summary>
     /// <returns>How many reviews it wrote, never more than the budget.</returns>
     private int SpreadGameReviews(
         IGrouping<Guid, SpreadCandidate> gameGroup, int budget, List<DbUser> experienced, List<DbUser> newbies,

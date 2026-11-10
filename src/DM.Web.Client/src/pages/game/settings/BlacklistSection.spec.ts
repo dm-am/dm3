@@ -9,7 +9,10 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import { gameApi, useGameDetailsStore, type Game } from "@/entities/game";
+import { gameApi, useGameDetailsStore } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
 import { UserAutocomplete } from "@/entities/user";
 import { useToast } from "@/shared/lib/composables/useToast";
 import type { User } from "@/shared/api/models/common";
@@ -19,7 +22,7 @@ const toast = useToast();
 const saidOutLoud = () => toast.toasts.value.map((t) => t.message);
 
 const aUser = (username: string): User =>
-  ({ id: `id-${username}`, username }) as unknown as User;
+  createMockUser(`id-${username}`, username);
 
 const LANCELOT = aUser("Ланселот");
 const MORDRED = aUser("Мордред");
@@ -40,14 +43,13 @@ async function mountSection(first: unknown = listOf([LANCELOT])) {
   setActivePinia(createPinia());
   const store = useGameDetailsStore();
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    title: "Хроники Амбера",
-    master: { username: "Мерлин" },
-    mentor: null,
-    assistants: [{ username: "Кей" }],
-    players: [{ username: "Гавейн" }],
-  } as unknown as Game;
+    ...createMockGame("the-game-guid", "Хроники Амбера"),
+    publicId: asServed("the-game"),
+    master: asServed(createMockUser("master-id", "Мерлин")),
+    mentor: asServed(null),
+    assistants: asServed([createMockUser("assistant-id", "Кей")]),
+    players: asServed([createMockUser("player-id", "Гавейн")]),
+  };
 
   const reload = pending<unknown>();
   vi.spyOn(gameApi, "getBlacklist")

@@ -5,10 +5,11 @@
 // A list loading and a list that failed are not an empty list: the store sets
 // an error and nulls the page (GameCharacters.spec.ts holds the same for the roster).
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { messagingApi, useMessagingStore } from "@/entities/message";
 import { useAuthStore, userApi } from "@/entities/user";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import ChatsList from "./ChatsList.vue";
 
 enableAutoUnmount(afterEach);
@@ -17,17 +18,11 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-const push = vi.hoisted(() => vi.fn());
-
-vi.mock("vue-router", () => ({
-  useRoute: () => ({ query: {} }),
-  useRouter: () => ({ push }),
-  RouterLink: { template: "<a><slot /></a>" },
-}));
-
 const EMPTY = "Нет переписок";
 
-function render(state: { loading?: boolean; error?: string | null } = {}) {
+async function render(
+  state: { loading?: boolean; error?: string | null } = {},
+) {
   const pinia = createPinia();
   setActivePinia(pinia);
   const store = useMessagingStore();
@@ -37,34 +32,38 @@ function render(state: { loading?: boolean; error?: string | null } = {}) {
   store.loadingChats = state.loading ?? false;
   store.error = state.error ?? null;
 
-  const wrapper = mount(ChatsList, {
+  const { wrapper, router } = await mountPage(ChatsList, "/messenger", {
+    routes: [
+      ["messenger", "/messenger"],
+      ["chat", "/messenger/c/:id"],
+      ["direct-message", "/messenger/user/:username"],
+    ],
+    pinia,
     attachTo: document.body,
-    global: {
-      plugins: [pinia],
-      stubs: { RouterLink: { template: "<a><slot /></a>" } },
-    },
   });
 
-  return { wrapper, store, fetchChats };
+  return { wrapper, router, store, fetchChats };
 }
 
 describe("ChatsList", () => {
-  it("says nothing about the conversations while they are being fetched", () => {
-    const { wrapper } = render({ loading: true });
+  it("says nothing about the conversations while they are being fetched", async () => {
+    const { wrapper } = await render({ loading: true });
 
     expect(wrapper.text()).not.toContain(EMPTY);
     expect(wrapper.find(".chat-skeleton-list").exists()).toBe(true);
   });
 
-  it("names a failed load instead of reporting no conversations", () => {
-    const { wrapper } = render({ error: "Не удалось загрузить переписки" });
+  it("names a failed load instead of reporting no conversations", async () => {
+    const { wrapper } = await render({
+      error: "Не удалось загрузить переписки",
+    });
 
     expect(wrapper.text()).not.toContain(EMPTY);
     expect(wrapper.text()).toContain("Не удалось загрузить переписки");
   });
 
   it("repeats the request without a page reload", async () => {
-    const { wrapper, fetchChats } = render({
+    const { wrapper, fetchChats } = await render({
       error: "Не удалось загрузить переписки",
     });
     fetchChats.mockClear();
@@ -75,15 +74,15 @@ describe("ChatsList", () => {
     expect(fetchChats).toHaveBeenCalled();
   });
 
-  it("still says the truth when there is genuinely nothing", () => {
-    const { wrapper } = render();
+  it("still says the truth when there is genuinely nothing", async () => {
+    const { wrapper } = await render();
 
     expect(wrapper.text()).toContain(EMPTY);
   });
 
   // The list stands whole at one width: no magnifier stands in for the field.
-  it("always has the field of the search", () => {
-    const { wrapper } = render();
+  it("always has the field of the search", async () => {
+    const { wrapper } = await render();
 
     expect(wrapper.get("input").attributes("placeholder")).toBe(
       "Поиск собеседника",
@@ -104,7 +103,7 @@ describe("ChatsList, the search of a person", () => {
     ...over,
   });
 
-  function renderSearch() {
+  async function renderSearch() {
     const conversations = vi.spyOn(messagingApi, "getChats").mockResolvedValue({
       data: {
         resources: [
@@ -130,17 +129,17 @@ describe("ChatsList, the search of a person", () => {
       },
       error: null,
     } as never);
-    const { wrapper } = render();
+    const { wrapper, router } = await render();
     useAuthStore().user = { username: ME } as never;
-    push.mockClear();
-    return { wrapper, conversations };
+    return { wrapper, router, conversations };
   }
 
-  const offered = (wrapper: ReturnType<typeof renderSearch>["wrapper"]) =>
-    wrapper.findAll(".autocomplete-item").map((row) => row.text());
+  const offered = (
+    wrapper: Awaited<ReturnType<typeof renderSearch>>["wrapper"],
+  ) => wrapper.findAll(".autocomplete-item").map((row) => row.text());
 
   it("offers the people and groups of the reader's conversations by name before a name is typed, and opens the one picked", async () => {
-    const { wrapper, conversations } = renderSearch();
+    const { wrapper, router, conversations } = await renderSearch();
 
     const field = wrapper.get("input");
     await field.trigger("focusin");
@@ -155,12 +154,9 @@ describe("ChatsList, the search of a person", () => {
       "Мордред",
     ]);
     await wrapper.findAll(".autocomplete-item")[2].trigger("mousedown");
+    await flushPromises();
 
-    expect(push).toHaveBeenCalledWith({
-      name: "chat",
-      params: { id: "g-1" },
-      query: {},
-    });
+    expect(router.currentRoute.value.fullPath).toBe("/messenger/c/g-1");
   });
 
   it("writes to a person found by name, and never offers the reader to themselves", async () => {
@@ -169,7 +165,7 @@ describe("ChatsList, the search of a person", () => {
       data: { resources: [person(ME), person("Моргана")] },
       error: null,
     } as never);
-    const { wrapper } = renderSearch();
+    const { wrapper, router } = await renderSearch();
 
     const field = wrapper.get("input");
     await field.trigger("focus");
@@ -179,12 +175,13 @@ describe("ChatsList, the search of a person", () => {
 
     expect(offered(wrapper)).toEqual(["Моргана"]);
     await wrapper.get(".autocomplete-item").trigger("mousedown");
+    await flushPromises();
 
-    expect(push).toHaveBeenCalledWith({
-      name: "direct-message",
-      params: { username: "Моргана" },
-      query: {},
-    });
+    // The whole address: no query of the list rides along into the conversation.
+    expect(router.currentRoute.value.name).toBe("direct-message");
+    expect(router.currentRoute.value.fullPath).toBe(
+      `/messenger/user/${encodeURIComponent("Моргана")}`,
+    );
     expect((field.element as HTMLInputElement).value).toBe("");
   });
 });

@@ -4,37 +4,23 @@
 import { describe, it, expect, afterEach, beforeEach, vi } from "vitest";
 import {
   enableAutoUnmount,
-  mount,
   flushPromises,
   type VueWrapper,
 } from "@vue/test-utils";
-import { createPinia } from "pinia";
 import { Tooltip } from "@/shared/ui/Tooltip";
 import CommentItem from "./CommentItem.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
-import {
-  route,
-  submitDelete,
-  submitEdit,
-  submitLike,
-  submitUnlike,
-} from "./CommentItem.doubles";
+import { submitDelete, submitLike, submitUnlike } from "./CommentItem.doubles";
 import {
   LIKE_BUTTON,
   LINE,
-  RouterLinkStub,
   action,
-  comment,
   freshComment,
   mountComponent,
   plates,
   refused,
   signInAs,
 } from "./CommentItem.fixtures";
-
-vi.mock("vue-router", async () =>
-  (await import("./CommentItem.doubles")).vueRouter(),
-);
 
 // A question left open by one test would answer the next one's clicks.
 enableAutoUnmount(afterEach);
@@ -54,7 +40,7 @@ describe("CommentItem delete", () => {
     submitDelete.mockResolvedValue({
       error: { type: "", title: "", status: 404, traceId: "t" },
     });
-    const wrapper = mountComponent(vi.fn());
+    const wrapper = await mountComponent(vi.fn());
 
     await action(wrapper, "Удалить").trigger("click");
     inQuestion(".dialog-btn-submit").click();
@@ -74,7 +60,7 @@ describe("CommentItem delete", () => {
   });
 
   it("closes the question once the comment is gone", async () => {
-    const wrapper = mountComponent(vi.fn());
+    const wrapper = await mountComponent(vi.fn());
 
     await action(wrapper, "Удалить").trigger("click");
     inQuestion(".dialog-btn-submit").click();
@@ -84,7 +70,7 @@ describe("CommentItem delete", () => {
   });
 
   it("asks before deleting", async () => {
-    const wrapper = mountComponent(vi.fn());
+    const wrapper = await mountComponent(vi.fn());
 
     await action(wrapper, "Удалить").trigger("click");
 
@@ -93,7 +79,7 @@ describe("CommentItem delete", () => {
   });
 
   it("deletes nothing when the question is answered no", async () => {
-    const wrapper = mountComponent(vi.fn());
+    const wrapper = await mountComponent(vi.fn());
 
     await action(wrapper, "Удалить").trigger("click");
     inQuestion(".dialog-btn-cancel").click();
@@ -107,9 +93,9 @@ describe("CommentItem delete", () => {
 describe("CommentItem likes", () => {
   const liker = (username: string) => ({ id: `u-${username}`, username });
 
-  it("shows the count and the reader's own like as the list brought them", () => {
+  it("shows the count and the reader's own like as the list brought them", async () => {
     signInAs("Reader");
-    const wrapper = mountComponent(vi.fn(), {
+    const wrapper = await mountComponent(vi.fn(), {
       likes: [liker("Reader"), liker("Other")] as never,
     });
 
@@ -118,9 +104,9 @@ describe("CommentItem likes", () => {
     expect(like.text()).toBe("Нравится (2)");
   });
 
-  it("shows someone else's likes without claiming the reader's", () => {
+  it("shows someone else's likes without claiming the reader's", async () => {
     signInAs("Reader");
-    const wrapper = mountComponent(vi.fn(), {
+    const wrapper = await mountComponent(vi.fn(), {
       likes: [liker("Other")] as never,
     });
 
@@ -131,7 +117,7 @@ describe("CommentItem likes", () => {
 
   it("takes back a like that came with the list", async () => {
     signInAs("Reader");
-    const wrapper = mountComponent(vi.fn(), {
+    const wrapper = await mountComponent(vi.fn(), {
       likes: [liker("Reader")] as never,
     });
 
@@ -144,7 +130,7 @@ describe("CommentItem likes", () => {
 
   it("likes a comment the reader has not liked", async () => {
     signInAs("Reader");
-    const wrapper = mountComponent(vi.fn());
+    const wrapper = await mountComponent(vi.fn());
 
     await wrapper.find(LIKE_BUTTON).trigger("click");
     await flushPromises();
@@ -156,7 +142,7 @@ describe("CommentItem likes", () => {
   it("says what the server answered when it refuses the like", async () => {
     signInAs("Reader");
     submitLike.mockResolvedValue(refused(409, "Вы уже отметили Нравится"));
-    const wrapper = mountComponent(vi.fn());
+    const wrapper = await mountComponent(vi.fn());
 
     await wrapper.find(LIKE_BUTTON).trigger("click");
     await flushPromises();
@@ -169,12 +155,12 @@ describe("CommentItem likes", () => {
   it("falls back to its own words for a mark and its removal", async () => {
     signInAs("Reader");
     submitLike.mockResolvedValue(refused(404));
-    const liking = mountComponent(vi.fn());
+    const liking = await mountComponent(vi.fn());
     await liking.find(LIKE_BUTTON).trigger("click");
     await flushPromises();
 
     submitUnlike.mockResolvedValue(refused(404));
-    const unliking = mountComponent(vi.fn(), {
+    const unliking = await mountComponent(vi.fn(), {
       likes: [liker("Reader")] as never,
     });
     await unliking.find(LIKE_BUTTON).trigger("click");
@@ -188,7 +174,7 @@ describe("CommentItem likes", () => {
   it("says a refusal the interceptor used to plate under the footer", async () => {
     signInAs("Reader");
     submitLike.mockResolvedValue(refused(403, "Вы не можете поставить лайк"));
-    const wrapper = mountComponent(vi.fn());
+    const wrapper = await mountComponent(vi.fn());
 
     await wrapper.find(LIKE_BUTTON).trigger("click");
     await flushPromises();
@@ -202,7 +188,7 @@ describe("CommentItem likes", () => {
     signInAs("Reader");
     let answer: (value: unknown) => void = () => {};
     submitLike.mockReturnValue(new Promise((resolve) => (answer = resolve)));
-    const wrapper = mountComponent(vi.fn());
+    const wrapper = await mountComponent(vi.fn());
 
     await wrapper.find(LIKE_BUTTON).trigger("click");
     await wrapper.find(LIKE_BUTTON).trigger("click");
@@ -216,47 +202,39 @@ describe("CommentItem likes", () => {
 
 describe("CommentItem number", () => {
   const numberLink = (wrapper: VueWrapper) => {
-    const found = wrapper
-      .findAllComponents(RouterLinkStub)
-      .find((link) => link.classes().includes("comment-number"));
-    if (!found) throw new Error("Номер комментария не ссылка");
+    const found = wrapper.find("a.comment-number");
+    if (!found.exists()) throw new Error("Номер комментария не ссылка");
     return found;
   };
 
   // The link keeps the reader's view: page 3 of a filtered list is not page 3 of the whole.
-  it("leads to the comment's anchor in the view of the list the reader is on", () => {
-    route.query = {
-      number: "3",
-      search: "кубы",
-      authors: "Experienced",
-      sortOrder: "desc",
-    };
-    const wrapper = mountComponent(vi.fn(), {}, { number: 12 });
+  it("leads to the comment's anchor in the view of the list the reader is on", async () => {
+    const wrapper = await mountComponent(
+      vi.fn(),
+      {},
+      { number: 12 },
+      "/forum?number=3&search=кубы&authors=Experienced&sortOrder=desc",
+    );
 
-    expect(numberLink(wrapper).props("to")).toEqual({
-      query: {
-        number: "3",
-        search: "кубы",
-        authors: "Experienced",
-        sortOrder: "desc",
-      },
-      hash: "#comment-c-1",
-    });
+    expect(numberLink(wrapper).attributes("href")).toBe(
+      `/forum?number=3&search=${encodeURIComponent("кубы")}&authors=Experienced&sortOrder=desc#comment-c-1`,
+    );
   });
 
-  it("carries no page number on a page that has none", () => {
-    const wrapper = mountComponent(vi.fn(), {}, { number: 12 });
+  it("carries no page number on a page that has none", async () => {
+    const wrapper = await mountComponent(vi.fn(), {}, { number: 12 });
 
-    expect(numberLink(wrapper).props("to")).toEqual({
-      query: {},
-      hash: "#comment-c-1",
-    });
+    expect(numberLink(wrapper).attributes("href")).toBe("/forum#comment-c-1");
   });
 
-  it("stands last in the footer, outside its caption line, in both layouts", () => {
+  it("stands last in the footer, outside its caption line, in both layouts", async () => {
     localStorage.clear();
     for (const compact of [true, false]) {
-      const wrapper = mountComponent(vi.fn(), {}, { number: 12, compact });
+      const wrapper = await mountComponent(
+        vi.fn(),
+        {},
+        { number: 12, compact },
+      );
 
       const number = numberLink(wrapper).element;
       const footer = wrapper.get(".comment-footer").element;
@@ -272,31 +250,12 @@ describe("CommentItem number", () => {
 
   // Only the real router marks links to the current page as current.
   it("is a link of the real router, not announced as the current page", async () => {
-    const { createRouter, createMemoryHistory } =
-      await vi.importActual<typeof import("vue-router")>("vue-router");
-    const page = { render: () => null };
-    const router = createRouter({
-      history: createMemoryHistory(),
-      routes: [
-        { path: "/profile/:username", name: "profile", component: page },
-        { path: "/:any(.*)*", component: page },
-      ],
-    });
-    await router.push("/forum/newbies/3?number=2&authors=Experienced");
-    route.query = { number: "2", authors: "Experienced" };
-
-    const wrapper = mount(CommentItem, {
-      global: { plugins: [createPinia(), router] },
-      props: {
-        comment: comment(),
-        number: 12,
-        fetchEditSource: vi.fn() as never,
-        submitEdit: submitEdit as never,
-        submitDelete: submitDelete as never,
-        submitLike: submitLike as never,
-        submitUnlike: submitUnlike as never,
-      },
-    });
+    const wrapper = await mountComponent(
+      vi.fn(),
+      {},
+      { number: 12 },
+      "/forum/newbies/3?number=2&authors=Experienced",
+    );
 
     const link = wrapper.get("a.comment-number");
     expect(link.attributes("href")).toBe(
@@ -305,9 +264,13 @@ describe("CommentItem number", () => {
     expect(link.attributes("aria-current")).toBeUndefined();
   });
 
-  it("has no tooltip, and a name that says which comment it is", () => {
+  it("has no tooltip, and a name that says which comment it is", async () => {
     for (const compact of [true, false]) {
-      const wrapper = mountComponent(vi.fn(), {}, { number: 12, compact });
+      const wrapper = await mountComponent(
+        vi.fn(),
+        {},
+        { number: 12, compact },
+      );
 
       const link = numberLink(wrapper);
       expect(
@@ -321,17 +284,25 @@ describe("CommentItem number", () => {
     }
   });
 
-  it("is read out with the name the list gives what it counts", () => {
-    const wrapper = mountComponent(vi.fn(), {}, { number: 3, noun: "Ответ" });
+  it("is read out with the name the list gives what it counts", async () => {
+    const wrapper = await mountComponent(
+      vi.fn(),
+      {},
+      { number: 3, noun: "Ответ" },
+    );
 
     expect(numberLink(wrapper).attributes("aria-label")).toBe("Ответ 3");
   });
 });
 
 describe("CommentItem full layout", () => {
-  it("puts the author's column beside the text and the number under both", () => {
+  it("puts the author's column beside the text and the number under both", async () => {
     localStorage.clear();
-    const wrapper = mountComponent(vi.fn(), {}, { compact: false, number: 3 });
+    const wrapper = await mountComponent(
+      vi.fn(),
+      {},
+      { compact: false, number: 3 },
+    );
 
     const columns = wrapper.get(".comment-columns").element;
     expect([...columns.children].map((child) => child.className)).toEqual([
@@ -339,14 +310,16 @@ describe("CommentItem full layout", () => {
       "comment-body",
     ]);
     const footer = wrapper.get(".comment-footer").element;
-    expect(footer.parentElement).toBe(wrapper.element);
+    expect(footer.parentElement).toBe(
+      wrapper.findComponent(CommentItem).element,
+    );
     expect(columns.compareDocumentPosition(footer)).toBe(
       Node.DOCUMENT_POSITION_FOLLOWING,
     );
   });
 
-  it("asks for the avatar at the width it is drawn", () => {
-    const wrapper = mountComponent(
+  it("asks for the avatar at the width it is drawn", async () => {
+    const wrapper = await mountComponent(
       vi.fn(),
       {
         author: {
@@ -362,8 +335,12 @@ describe("CommentItem full layout", () => {
     expect(wrapper.get("img.avatar").attributes("sizes")).toBe("128px");
   });
 
-  it("keeps the compact layout without a column", () => {
-    const wrapper = mountComponent(vi.fn(), {}, { compact: true, number: 3 });
+  it("keeps the compact layout without a column", async () => {
+    const wrapper = await mountComponent(
+      vi.fn(),
+      {},
+      { compact: true, number: 3 },
+    );
 
     expect(wrapper.find(".comment-header").exists()).toBe(false);
     expect(wrapper.find(".avatar-link").exists()).toBe(false);

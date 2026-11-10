@@ -100,7 +100,6 @@ describe("the confirmation window", () => {
   it("paints nothing in the window red but a refusal", () => {
     const wrapper = open();
 
-    // The destructive modifier used to paint the confirm button red.
     const red = wrapper
       .findAll("*")
       .filter((one) => one.classes().some((name) => /danger/.test(name)));

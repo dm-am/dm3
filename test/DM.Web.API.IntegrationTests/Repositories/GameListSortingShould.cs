@@ -10,10 +10,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// Every order the game list offers is the order it promises, in both
-/// directions.
-/// </summary>
 /// <remarks>
 /// Only the sequence shows a branch with a swapped column or direction. Against the container Postgres: booleans,
 /// coalesced dates and trigram relevance are the database's; no two orders below are the same list.
@@ -22,11 +18,6 @@ public class GameListSortingShould : IntegrationTestBase
 {
     private static readonly DateTimeOffset Start = new(2026, 1, 1, 0, 0, 0, TimeSpan.Zero);
 
-    /// <summary>
-    /// The nine games: title, status, recruitment open, recruitment count, closed
-    /// reason, and the days after <see cref="Start"/> they were created,
-    /// activated, closed and opened recruitment, with their popularity.
-    /// </summary>
     private static readonly IReadOnlyList<Seed> Forest =
     [
         new("Alder", ModuleStatus.Draft, false, 0, ClosedReason.None, 5, null, null, null, 50),
@@ -80,10 +71,8 @@ public class GameListSortingShould : IntegrationTestBase
         titles.Should().Equal(expected, $"sortBy={sortBy}&sortOrder={sortOrder} is the order the list promises");
     }
 
-    /// <summary>
-    /// With no key, the list runs by the date a game started, the date it was
-    /// created standing in for a game never activated.
-    /// </summary>
+    // With no key, the list runs by the date a game started, the date it was created standing in
+    // for a game never activated.
     [Theory]
     [InlineData("asc", new[] { "Hazel", "Alder", "Ginkgo", "Dogwood", "Birch", "Cedar", "Elm", "Fir", "Ivy" })]
     [InlineData("desc", new[] { "Ivy", "Fir", "Elm", "Cedar", "Birch", "Dogwood", "Ginkgo", "Alder", "Hazel" })]
@@ -96,10 +85,8 @@ public class GameListSortingShould : IntegrationTestBase
         titles.Should().Equal(expected);
     }
 
-    /// <summary>
-    /// A list of closed games alone runs by the day each was closed, which is not
-    /// the order the same three games take in the list without a key.
-    /// </summary>
+    // A list of closed games alone runs by the day each was closed, which is not the order the same
+    // three games take in the list without a key.
     [Theory]
     [InlineData("asc", new[] { "Elm", "Ginkgo", "Fir" })]
     [InlineData("desc", new[] { "Fir", "Ginkgo", "Elm" })]
@@ -116,9 +103,6 @@ public class GameListSortingShould : IntegrationTestBase
         titles.Should().Equal(expected);
     }
 
-    /// <summary>
-    /// A search without a key answers the closest titles first: exact, starting with the words, then by trigram similarity.
-    /// </summary>
     [Fact]
     public async Task PutTheClosestTitlesFirstWhenASearchNamesNoKey()
     {
@@ -131,7 +115,6 @@ public class GameListSortingShould : IntegrationTestBase
             "would put the long one before the close one, and between two equally close the alphabet decides");
     }
 
-    /// <summary>A search with a key answers in the order of the key.</summary>
     [Fact]
     public async Task OrderASearchByTheKeyItNames()
     {
@@ -142,9 +125,6 @@ public class GameListSortingShould : IntegrationTestBase
         titles.Should().Equal(["Amber Ember Lanterns", "Ember", "Embersong", "Yember", "Zember"]);
     }
 
-    /// <summary>
-    /// Five titles "ember" finds four ways, two equally close, and one it does not find.
-    /// </summary>
     private static readonly IReadOnlyList<Seed> Relevance =
     [
         new("Zember", ModuleStatus.Active, false, 1, ClosedReason.None, 1, 1, null, null, 0),
@@ -178,10 +158,7 @@ public class GameListSortingShould : IntegrationTestBase
         { null, "desc", true, false },
     };
 
-    /// <summary>
-    /// Two games equal in the key fall back to the title, in every order.
-    /// </summary>
-    /// <remarks>Equal keys are common, and without a second key a page repeats one game and skips another.</remarks>
+    // Equal keys are common, and without a second key a page repeats one game and skips another.
     [Theory]
     [MemberData(nameof(TieBreaks))]
     public async Task BreakATieByTheTitle(string? sortBy, string sortOrder, bool closedOnly, bool titlesRunBackwards)
@@ -207,9 +184,6 @@ public class GameListSortingShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Five pairs of games that differ only in adjacent titles.
-    /// </summary>
     private static readonly IReadOnlyList<Seed> Twins =
     [
         new("Larch", ModuleStatus.Draft, false, 0, ClosedReason.None, 3, null, null, null, 1),
@@ -238,10 +212,8 @@ public class GameListSortingShould : IntegrationTestBase
 
     private sealed record Owner(Guid UserId, string Username);
 
-    /// <summary>
-    /// The games under a master of their own: the fixture's database is shared,
-    /// and the owner filter keeps every other test's games out of the list.
-    /// </summary>
+    // The games under a master of their own: the fixture's database is shared, and the owner filter
+    // keeps every other test's games out of the list.
     private async Task<Owner> SeedAsync(IEnumerable<Seed> seeds)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();
@@ -285,7 +257,6 @@ public class GameListSortingShould : IntegrationTestBase
         return new Owner(masterId, username);
     }
 
-    /// <summary>The titles of the owner's games, in the order the list gives them.</summary>
     private async Task<IReadOnlyList<string>> ListAsync(Owner owner, GamesQuery query)
     {
         using var scope = DatabaseFixture.Factory.Services.CreateScope();

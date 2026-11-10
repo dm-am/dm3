@@ -5,21 +5,24 @@
 // The roster links every character to the actions the backend lets the
 // viewer take on it: the master and assistants act, the game mentor reads.
 import { describe, expect, it, vi } from "vitest";
-import { mount, RouterLinkStub } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { createPinia } from "pinia";
 import {
   useGameDetailsStore,
   type Character,
-  type Game,
+  type GameParticipation,
 } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import GameCharacters from "./GameCharacters.vue";
 
-// The rest of the router stays real for the components that import it.
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({ params: { id: "the-game" }, query: {} }),
-  useRouter: () => ({ replace: vi.fn() }),
-}));
+const routes: [string, string][] = [
+  ["game-characters", "/game/:id/characters"],
+  ["game-character", "/game/:id/characters/:characterId"],
+  ["game-character-edit", "/game/:id/characters/:characterId/edit"],
+  ["game-character-create", "/game/:id/characters/create"],
+  ["profile", "/users/:username"],
+];
 
 /** The fields of a roster entry this page reads; ids are branded on the wire. */
 type CharacterOverrides = Partial<{
@@ -47,57 +50,59 @@ function character(over: CharacterOverrides = {}): Character {
   } as unknown as Character;
 }
 
-function render(
-  participation: string[],
+/** The read of the roster the page asks for, spied in every render. */
+let loadCharacters: ReturnType<typeof vi.spyOn>;
+
+async function render(
+  participation: GameParticipation[],
   characters: Character[],
   state: { charactersLoading?: boolean; charactersError?: string } = {},
 ) {
   const pinia = createPinia();
-  setActivePinia(pinia);
-  const store = useGameDetailsStore();
+  const store = useGameDetailsStore(pinia);
   store.game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-    participation,
-  } as unknown as Game;
+    ...createMockGame("the-game-guid", "Игра"),
+    publicId: asServed("the-game"),
+    participation: asServed(participation),
+  };
   // Seeded, so mounting the page does not reach for the endpoint.
   store.characters = characters;
   store.charactersLoading = state.charactersLoading ?? false;
   store.charactersError = state.charactersError ?? null;
   // An empty roster makes the page ask for one.
-  vi.spyOn(store, "loadCharacters").mockResolvedValue(undefined);
+  loadCharacters = vi
+    .spyOn(store, "loadCharacters")
+    .mockResolvedValue(undefined);
 
-  return mount(GameCharacters, {
-    global: {
-      plugins: [pinia],
-      stubs: { RouterLink: RouterLinkStub },
-    },
-  });
+  const { wrapper } = await mountPage(
+    GameCharacters,
+    "/game/the-game/characters",
+    { routes, pinia },
+  );
+  return wrapper;
 }
 
 /** Every link the roster draws into a character's own page. */
-function manageLinks(wrapper: ReturnType<typeof render>) {
-  return wrapper.findAllComponents(RouterLinkStub).filter((link) => {
-    const to = link.props("to") as unknown as { name?: string };
-    return to?.name === "game-character-edit";
-  });
+function manageLinks(wrapper: Awaited<ReturnType<typeof render>>) {
+  return wrapper
+    .findAll("a")
+    .filter((link) => link.attributes("href")?.endsWith("/edit"));
 }
 
 describe("GameCharacters", () => {
-  it("lets the master answer an application in a game with no NPC", () => {
-    const wrapper = render(["Owner", "Authority"], [character()]);
+  it("lets the master answer an application in a game with no NPC", async () => {
+    const wrapper = await render(["Owner", "Authority"], [character()]);
 
     const links = manageLinks(wrapper);
     expect(links).toHaveLength(1);
     expect(links[0].text()).toBe("Рассмотреть заявку");
-    expect(links[0].props("to")).toEqual({
-      name: "game-character-edit",
-      params: { id: "the-game", characterId: "char-1" },
-    });
+    expect(links[0].attributes("href")).toBe(
+      "/game/the-game/characters/char-1/edit",
+    );
   });
 
-  it("links a character in the game to the actions the master has on it", () => {
-    const wrapper = render(
+  it("links a character in the game to the actions the master has on it", async () => {
+    const wrapper = await render(
       ["Owner", "Authority"],
       [character({ status: "Active" })],
     );
@@ -107,9 +112,9 @@ describe("GameCharacters", () => {
     expect(links[0].text()).toBe("Управление персонажем");
   });
 
-  it("draws no link to a page that would offer the master nothing", () => {
+  it("draws no link to a page that would offer the master nothing", async () => {
     // Staff have no transition for a character that left.
-    const wrapper = render(
+    const wrapper = await render(
       ["Owner", "Authority"],
       [character({ status: "Retired", isPlayerLeft: true })],
     );
@@ -117,15 +122,15 @@ describe("GameCharacters", () => {
     expect(manageLinks(wrapper)).toHaveLength(0);
   });
 
-  it("names the two lists of the roster and a character with no player", () => {
-    const wrapper = render(
+  it("names the two lists of the roster and a character with no player", async () => {
+    const wrapper = await render(
       [],
       [
         character({ id: "char-1", status: "Active" }),
         {
           ...character({ id: "char-2", status: "Active", isNpc: true }),
           author: undefined,
-        } as unknown as Character,
+        },
       ],
     );
 
@@ -138,18 +143,18 @@ describe("GameCharacters", () => {
     );
   });
 
-  it("shows an application to a guest, with no way to decide it", () => {
-    const wrapper = render([], [character()]);
+  it("shows an application to a guest, with no way to decide it", async () => {
+    const wrapper = await render([], [character()]);
 
     expect(wrapper.find(".section-title").text()).toBe("На рассмотрении");
     expect(wrapper.text()).toContain("Ронин");
     expect(manageLinks(wrapper)).toHaveLength(0);
   });
 
-  it("shows the mentor the application and no way to decide it", () => {
+  it("shows the mentor the application and no way to decide it", async () => {
     // GameParticipation.Moderator is the game mentor: canManage in the store,
     // refused by CharacterIntentionResolver.
-    const wrapper = render(["Moderator"], [character()]);
+    const wrapper = await render(["Moderator"], [character()]);
 
     expect(wrapper.text()).toContain("На рассмотрении");
     expect(manageLinks(wrapper)).toHaveLength(0);
@@ -160,15 +165,16 @@ describe("GameCharacters", () => {
 describe("GameCharacters load states", () => {
   const EMPTY = "В этой игре пока нет персонажей";
 
-  it("says nothing about the roster while it is being fetched", () => {
-    const wrapper = render([], [], { charactersLoading: true });
+  it("says nothing about the roster while it is being fetched", async () => {
+    const wrapper = await render([], [], { charactersLoading: true });
 
+    expect(loadCharacters).toHaveBeenCalledWith("the-game");
     expect(wrapper.text()).not.toContain(EMPTY);
     expect(wrapper.find(".character-skeleton-grid").exists()).toBe(true);
   });
 
-  it("names a failed load and offers to repeat it", () => {
-    const wrapper = render([], [], {
+  it("names a failed load and offers to repeat it", async () => {
+    const wrapper = await render([], [], {
       charactersError: "Не удалось загрузить персонажей",
     });
 

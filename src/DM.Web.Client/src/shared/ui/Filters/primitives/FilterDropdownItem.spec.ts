@@ -7,14 +7,13 @@ import { mount } from "@vue/test-utils";
 import FilterDropdownItem from "./FilterDropdownItem.vue";
 
 describe("FilterDropdownItem", () => {
-  const mountComponent = (props = {}) => {
-    return mount(FilterDropdownItem, {
+  const mountComponent = (props = {}) =>
+    mount(FilterDropdownItem, {
       props: {
         label: "Test Label",
         ...props,
       },
     });
-  };
 
   describe("Basic Rendering", () => {
     it("renders label text", () => {

@@ -14,10 +14,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
-/// <summary>
-/// The evidence of a warning: the copy taken as it is issued, and what is told
-/// of the offending object when the warning is read.
-/// </summary>
 public class WarningEvidenceCaptureShould : WarningServiceTestBase
 {
     /// <summary>
@@ -56,10 +52,6 @@ public class WarningEvidenceCaptureShould : WarningServiceTestBase
         captured!.EntitySnapshot.Should().Be("Оскорбление, за которое выносится предупреждение");
     }
 
-    /// <summary>
-    /// A warning issued from the profile block names no content, so there is
-    /// nothing to snapshot and nothing to ask the resolver about.
-    /// </summary>
     [Fact]
     public async Task TakeNoSnapshotWhenTheWarningNamesNoContent()
     {
@@ -82,11 +74,6 @@ public class WarningEvidenceCaptureShould : WarningServiceTestBase
                 Arg.Any<WarningEntityType>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The moderation list carries the address of the offending object, its place
-    /// and the date it was written — read per request, none of them stored on the
-    /// warning — beside the snapshot, which is the text the warning was given for.
-    /// </summary>
     [Fact]
     public async Task DescribeTheOffendingObjectOnTheModerationList()
     {
@@ -152,14 +139,8 @@ public class WarningEvidenceCaptureShould : WarningServiceTestBase
                 Arg.Any<IReadOnlyCollection<WarningEntityRequest>>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A warning on a profile is a warning on the warned user: the profile is
-    /// copied as it stands, the avatar pinned by its upload, and the identifier
-    /// the request named is not read.
-    /// </summary>
-    /// <remarks>
-    /// The object is set here and not taken from the request, so no request can make a warning carry somebody else's profile.
-    /// </remarks>
+    // The object is set here and not taken from the request, so no request can make a warning carry
+    // somebody else's profile.
     [Fact]
     public async Task TakeTheProfileOfTheWarnedUserWhicheverIdentifierTheRequestNamed()
     {
@@ -196,15 +177,8 @@ public class WarningEvidenceCaptureShould : WarningServiceTestBase
             Arg.Any<WarningEntityType>(), Arg.Any<Guid>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A warning on a profile has no place on the site: it is not sent to the
-    /// resolver, and its "О себе" in the snapshot does not make it a text that
-    /// nothing places.
-    /// </summary>
-    /// <remarks>
-    /// Without the exception the copy of "О себе" sent the row down the branch of
-    /// an unplaced text and closed it as not found, a state true of no profile.
-    /// </remarks>
+    // A warning on a profile has no place on the site: it is not sent to the resolver, and its "О
+    // себе" in the snapshot does not make it a text that nothing places.
     [Fact]
     public async Task LeaveAWarningOnAProfileWithoutAPlace()
     {

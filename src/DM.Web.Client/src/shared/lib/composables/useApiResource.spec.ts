@@ -12,8 +12,7 @@ describe("useApiResource", () => {
     const resource = useApiResource(fetcher);
 
     // The sidebar blocks decide "the request failed" by reading the data right
-    // after awaiting fetch(). A second caller used to get an already-resolved
-    // promise and read null on a perfectly healthy request.
+    // after awaiting fetch().
     const initial = resource.fetch();
     const joined = resource.fetch();
 

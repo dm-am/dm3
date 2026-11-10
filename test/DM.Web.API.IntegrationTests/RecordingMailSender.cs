@@ -3,9 +3,6 @@ using DM.Domain.Core.Mail;
 
 namespace DM.Web.API.IntegrationTests;
 
-/// <summary>
-/// The letters the host sent, kept where a test can read them.
-/// </summary>
 /// <remarks>
 /// The mail worker does not run here, so the broker drops every letter. A decorator: the real sender still
 /// validates and waits for the confirm. Static, as <see cref="InMemoryObjectStorage" /> is.
@@ -18,8 +15,7 @@ public sealed class RecordingMailSender : IMailSender, IDisposable
 
     public RecordingMailSender(IMailSender inner) => _inner = inner;
 
-    /// <summary>What was sent to one address, in the order it was sent.</summary>
-    /// <remarks>By address: the suite shares one host.</remarks>
+    // By address: the suite shares one host.
     public static IReadOnlyList<EmailLetter> To(string email) => Letters
         .Where(letter => string.Equals(letter.Address, email, StringComparison.OrdinalIgnoreCase))
         .ToList();
@@ -34,9 +30,6 @@ public sealed class RecordingMailSender : IMailSender, IDisposable
         Letters.Enqueue(letter);
     }
 
-    /// <summary>
-    /// Closes the sender underneath, which nothing else will.
-    /// </summary>
-    /// <remarks>Built by hand, so the container disposes this wrapper alone.</remarks>
+    // Built by hand, so the container disposes this wrapper alone.
     public void Dispose() => (_inner as IDisposable)?.Dispose();
 }

@@ -14,12 +14,7 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostPendencies;
 
-/// <summary>
-/// When a player is prodded about a post the room is waiting for.
-/// </summary>
-/// <remarks>
-/// The order matters: a reminder sent before its stamp is saved goes out again on the next pass.
-/// </remarks>
+// The order matters: a reminder sent before its stamp is saved goes out again on the next pass.
 public class PendencyReminderProcessorShould : UnitTestBase
 {
     private static readonly DateTimeOffset Now = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
@@ -53,10 +48,8 @@ public class PendencyReminderProcessorShould : UnitTestBase
         processor = new PendencyReminderProcessor(repository, producer, clock);
     }
 
-    /// <summary>
-    /// The stamp is what stops the same reminder going out on every pass, so it
-    /// has to be durable before the first message leaves.
-    /// </summary>
+    // The stamp is what stops the same reminder going out on every pass, so it has to be durable
+    // before the first message leaves.
     [Fact]
     public async Task ClaimEveryPendencyBeforeAnnouncingAnyOfThem()
     {
@@ -86,11 +79,8 @@ public class PendencyReminderProcessorShould : UnitTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The moment the cutoffs are measured back from and the moment written on
-    /// the claimed rows are the same instant, which is what a test moving the
-    /// clock has to be able to move.
-    /// </summary>
+    // The moment the cutoffs are measured back from and the moment written on the claimed rows are
+    // the same instant, which is what a test moving the clock has to be able to move.
     [Fact]
     public async Task StampTheClaimWithTheMomentItMeasuredFrom()
     {

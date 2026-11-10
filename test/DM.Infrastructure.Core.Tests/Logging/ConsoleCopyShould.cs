@@ -10,13 +10,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Logging;
 
-/// <summary>
-/// The console copy of a line carries what the line was about.
-/// </summary>
-/// <remarks>
-/// The console copy is the one left when the log store is down. Asserted on the formatter: the sink
-/// resolves its stream on its own terms.
-/// </remarks>
+// The console copy is the one left when the log store is down.
 public class ConsoleCopyShould
 {
     [Fact]
@@ -41,7 +35,6 @@ public class ConsoleCopyShould
             "this console is read by a person as it is written, and JSON one line per event " +
             "is not a thing a person reads");
 
-    /// <summary>One event with a property, written the way the sink would write it.</summary>
     private static string Render(Serilog.Formatting.ITextFormatter? formatter)
     {
         formatter.Should().NotBeNull("a server writes this copy with a formatter of its own");

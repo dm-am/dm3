@@ -104,10 +104,8 @@ public class PublicationServiceShould : UnitTestBase
         await eventProducer.Received(1).SendAsync(EventType.NewPublication, publicationId);
     }
 
-    /// <summary>
-    /// The right to publish is a property of the blog, and the publication
-    /// service has to go and ask the blog for it rather than answer itself.
-    /// </summary>
+    // The right to publish is a property of the blog, and the publication service has to go and ask
+    // the blog for it rather than answer itself.
     [Fact]
     public async Task AskTheBlogWhetherAPublicationMayBeCreated()
     {
@@ -142,10 +140,8 @@ public class PublicationServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// A publication is read inside its blog, and the blog is the only thing that
-    /// knows whether the reader may be there at all.
-    /// </summary>
+    // A publication is read inside its blog, and the blog is the only thing that knows whether the
+    // reader may be there at all.
     [Fact]
     public async Task AskTheBlogWhetherThePublicationMayBeRead()
     {
@@ -180,10 +176,8 @@ public class PublicationServiceShould : UnitTestBase
         onHidden.Message.Should().Be(onMissing.Message);
     }
 
-    /// <summary>
-    /// The gate is about the blog and nothing else: a publication in a blog the
-    /// reader may open is still read.
-    /// </summary>
+    // The gate is about the blog and nothing else: a publication in a blog the reader may open is
+    // still read.
     [Fact]
     public async Task ReadAPublicationInAVisibleBlog()
     {
@@ -195,10 +189,8 @@ public class PublicationServiceShould : UnitTestBase
         publication.Id.Should().Be(publicationId);
     }
 
-    /// <summary>
-    /// The profile widget is public, so "published" alone must not hand a stranger
-    /// a publication in a blog nobody outside it may open.
-    /// </summary>
+    // The profile widget is public, so "published" alone must not hand a stranger a publication in
+    // a blog nobody outside it may open.
     [Fact]
     public async Task NameNoBestPublicationFromAHiddenBlog()
     {

@@ -8,16 +8,12 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A character lost in transcoding does not get committed.
-/// </summary>
 /// <remarks>
 /// U+FFFD is what a decoder writes for bytes it could not read. Both markers are spelled by code point;
 /// src and test only, the audit documents quote the damage.
 /// </remarks>
 public class SourceEncodingShould
 {
-    /// <summary>U+FFFD REPLACEMENT CHARACTER.</summary>
     private const char Replacement = '\uFFFD';
 
     private static readonly string[] Extensions = [".cs", ".ts", ".vue", ".json", ".sh", ".ps1"];

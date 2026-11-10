@@ -5,9 +5,12 @@
 // The form is offered by the server's answer (game.viewer.canReview), and
 // what an editable card hands up lands in the list.
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useGameDetailsStore, GameStatus, type Game } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { useAuthStore } from "@/entities/user";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
 import Button from "@/shared/ui/Button/Button.vue";
@@ -16,12 +19,32 @@ import { LoginPrompt } from "@/features/auth";
 import { composerDraftKey } from "@/shared/lib/utils/draftKey";
 import GameReviews from "./GameReviews.vue";
 
-const { getGameReviews, createGameReview, getGame, query } = vi.hoisted(() => ({
+const { getGameReviews, createGameReview, getGame } = vi.hoisted(() => ({
   getGameReviews: vi.fn(),
   createGameReview: vi.fn(),
   getGame: vi.fn(),
-  query: {} as Record<string, string>,
 }));
+
+/** The query of the address the page opens at. */
+const query: Record<string, string> = {};
+
+// Every child drawn as a stub, so the page alone is the subject.
+const children = Object.fromEntries(
+  [
+    "ActionResult",
+    "BBCodeEditor",
+    "BlockTitle",
+    "Button",
+    "DashSeparator",
+    "ErrorState",
+    "GameReviewEditable",
+    "LeadText",
+    "LoginPrompt",
+    "PagingWithSeparators",
+    "SecondaryText",
+    "TestimonialSkeleton",
+  ].map((name) => [name, true]),
+);
 
 // The endpoints alone; the stores and types of the module stay real.
 vi.mock("@/entities/game", async (importOriginal) => {
@@ -29,11 +52,6 @@ vi.mock("@/entities/game", async (importOriginal) => {
   vi.spyOn(real.gameApi, "getGame").mockImplementation(getGame);
   return { ...real, gameReviewApi: { getGameReviews, createGameReview } };
 });
-
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({ params: { id: "the-game" }, query }),
-}));
 
 /** The fields of a review row the page reads. */
 function review(username: string) {
@@ -51,14 +69,13 @@ const theGame = (
   blacklisted: boolean,
   canReview: boolean,
   status: GameStatus = GameStatus.Closed,
-) =>
-  ({
-    id: "the-game-guid",
-    publicId: "the-game",
-    status,
-    viewerBlacklisted: blacklisted,
-    viewer: { canComment: true, canReview },
-  }) as unknown as Game;
+): Game => ({
+  ...createMockGame("the-game-guid", "Игра"),
+  publicId: asServed("the-game"),
+  status,
+  viewerBlacklisted: asServed(blacklisted),
+  viewer: asServed({ canComment: true, canReview }),
+});
 
 async function render(
   viewer: { username: string } | null,
@@ -93,10 +110,16 @@ async function render(
   useGameDetailsStore().game = theGame(blacklisted, canReview, status);
   useAuthStore().user = viewer as never;
 
-  const wrapper = mount(GameReviews, {
-    global: { plugins: [pinia], renderStubDefaultSlot: true, stubs },
-    shallow: true,
-  });
+  const search = new URLSearchParams(query).toString();
+  const { wrapper } = await mountPage(
+    GameReviews,
+    `/game/the-game/reviews${search ? `?${search}` : ""}`,
+    {
+      routes: [["game-reviews", "/game/:id/reviews"]],
+      pinia,
+      stubs: { ...children, ...stubs },
+    },
+  );
   await flushPromises();
   return wrapper;
 }

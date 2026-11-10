@@ -11,10 +11,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Posts;
 
-/// <summary>
-/// The dice of a new post: rolled and written with it when the room rolls dice,
-/// dropped when it does not.
-/// </summary>
 public class PostDiceShould : PostServiceTestBase
 {
     [Fact]

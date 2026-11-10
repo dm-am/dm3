@@ -37,8 +37,8 @@ function sizeRefusal(value: string): string | null {
 }
 
 // The fields of the insertion panels. The text of a link comes first, as it
-// reads in the post, and the caret starts in it (owner's call, 28 September
-// 2026); the address is the one field a link cannot do without.
+// reads in the post, and the caret starts in it; the address is the one field
+// a link cannot do without.
 const linkFields: InputField[] = [
   {
     name: "text",

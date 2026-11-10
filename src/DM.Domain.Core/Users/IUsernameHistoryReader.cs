@@ -6,8 +6,5 @@ namespace DM.Domain.Core.Users;
 /// </summary>
 public interface IUsernameHistoryReader
 {
-    /// <summary>
-    /// Get username history for a user
-    /// </summary>
     Task<IReadOnlyCollection<UsernameHistoryEntry>> GetByUserIdAsync(Guid userId, CancellationToken ct = default);
 }

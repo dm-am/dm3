@@ -133,9 +133,6 @@ internal class DeactivationService : IDeactivationService
         return (accounts, paging.Result);
     }
 
-    /// <summary>
-    /// The caller, once he is allowed to remove and restore accounts at all.
-    /// </summary>
     private AuthenticatedUser RequireModeration()
     {
         var currentUser = _identityProvider.Current.User;
@@ -147,13 +144,8 @@ internal class DeactivationService : IDeactivationService
         return currentUser;
     }
 
-    /// <summary>
-    /// Send the letter the decision earns, when there is an address to send it to.
-    /// </summary>
-    /// <remarks>
-    /// A missing address is a line in the log rather than a refusal: the decision
-    /// is already written down.
-    /// </remarks>
+    // A missing address is a line in the log rather than a refusal: the decision is already written
+    // down.
     private Task Notify(string? email, Func<string, Task> send)
     {
         if (!string.IsNullOrWhiteSpace(email))

@@ -2,41 +2,49 @@
  * @vitest-environment jsdom
  */
 
-import { describe, expect, it, vi } from "vitest";
-import { mount } from "@vue/test-utils";
+import { describe, expect, it } from "vitest";
 import { createPinia, setActivePinia } from "pinia";
-import { useGameDetailsStore, type Game } from "@/entities/game";
+import { useGameDetailsStore } from "@/entities/game";
+import { createMockGame } from "@/entities/game/model/store.fixtures";
+import { asServed } from "@/shared/api/models";
+import { mountPage } from "@/shared/lib/testing/mountPage";
 import { RatedPostsList } from "@/widgets/rated-posts";
 import GamePostReviews from "./GamePostReviews.vue";
 
-vi.mock("vue-router", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("vue-router")>()),
-  useRoute: () => ({ params: { id: "the-game" }, query: {} }),
-}));
-
-function render() {
+async function render() {
   const pinia = createPinia();
   setActivePinia(pinia);
   useGameDetailsStore().game = {
-    id: "the-game-guid",
-    publicId: "the-game",
-  } as unknown as Game;
+    ...createMockGame("the-game-guid", "Игра"),
+    publicId: asServed("the-game"),
+  };
 
-  return mount(GamePostReviews, {
-    global: { plugins: [pinia] },
-    shallow: true,
-  });
+  const { wrapper } = await mountPage(
+    GamePostReviews,
+    "/game/the-game/post-reviews",
+    {
+      routes: [["game-post-reviews", "/game/:id/post-reviews"]],
+      pinia,
+      stubs: { RatedPostsList: true },
+    },
+  );
+  return wrapper;
 }
 
 describe("GamePostReviews", () => {
-  it("draws the shared rated-posts list, scoped to this game", () => {
-    const list = render().findComponent(RatedPostsList);
+  it("draws the shared rated-posts list, scoped to this game", async () => {
+    const list = (await render()).findComponent(RatedPostsList);
 
     expect(list.exists()).toBe(true);
     // The guid, not the public id the route carries.
     expect(list.props("scope")).toEqual({
       kind: "game",
       gameId: "the-game-guid",
+    });
+    // Its pages go by the address the reader came by.
+    expect(list.props("pagingTo")).toEqual({
+      name: "game-post-reviews",
+      params: { id: "the-game" },
     });
   });
 });

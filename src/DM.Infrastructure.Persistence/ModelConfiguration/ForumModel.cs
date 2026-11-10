@@ -4,10 +4,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The forum module of the model: topic numbers, the comments of a topic, and the
-/// boards and topics the site ships with.
-/// </summary>
 internal static class ForumModel
 {
     internal static void Configure(ModelBuilder modelBuilder)

@@ -7,13 +7,7 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared.Configuration;
 
-/// <summary>
-/// Every background service the API host declares is started by it.
-/// </summary>
-/// <remarks>
-/// The list is explicit: the migration container runs the same host and starts none. Only the types of
-/// this assembly are compared.
-/// </remarks>
+// The list is explicit: the migration container runs the same host and starts none.
 public class HostedServiceRegistrationShould
 {
     [Fact]

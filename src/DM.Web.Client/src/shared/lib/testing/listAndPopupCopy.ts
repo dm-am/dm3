@@ -271,6 +271,72 @@ const members = (expression: string): string[] =>
     .map(([, name]) => name)
     .filter((name) => name !== "value" && name !== "length");
 
+type Scan = ReturnType<typeof scanOf>;
+
+/** The components a tag can stand for, by the name of their file. */
+const componentsByName = (tree: Tree): Map<string, string[]> => {
+  const components = new Map<string, string[]>();
+  for (const file of tree.files.filter((f) => f.endsWith(".vue"))) {
+    const name = file.slice(file.lastIndexOf("/") + 1, -".vue".length);
+    components.set(name, [...(components.get(name) ?? []), file]);
+  }
+  return components;
+};
+
+/** Popup content as far as it is known: the files inside, and every template's read. */
+interface PopupContent {
+  inside: Set<string>;
+  reads: Map<string, Read>;
+}
+
+/** The files of the components a template draws inside a popup. */
+const drawnFiles = (
+  read: Read,
+  whole: boolean,
+  components: Map<string, string[]>,
+): string[] =>
+  read.drawn
+    .filter((tag) => whole || tag !== "")
+    .flatMap((tag) => components.get(tag) ?? []);
+
+/** One reading of every template; whether a file joined the popup content. */
+const readOnce = (
+  tree: Tree,
+  scan: Scan,
+  components: Map<string, string[]>,
+  { inside, reads }: PopupContent,
+): boolean => {
+  let grew = false;
+  for (const file of tree.files.filter((f) => f.endsWith(".vue"))) {
+    const read = readTemplate(scan.read(file), inside.has(file));
+    reads.set(file, read);
+    const whole = inside.has(file) || read.whole;
+    if (read.whole && !inside.has(file)) {
+      inside.add(file);
+      grew = true;
+    }
+    for (const drawn of drawnFiles(read, whole, components))
+      if (!inside.has(drawn)) {
+        inside.add(drawn);
+        grew = true;
+      }
+  }
+  return grew;
+};
+
+/**
+ * Popup content, found template by template until nothing new turns up: a
+ * component drawn inside a window is part of that window, and so is whatever
+ * it draws in turn.
+ */
+const popupContent = (tree: Tree, scan: Scan): PopupContent => {
+  const components = componentsByName(tree);
+  const content: PopupContent = { inside: new Set(), reads: new Map() };
+  let grew = true;
+  while (grew) grew = readOnce(tree, scan, components, content);
+  return content;
+};
+
 /** Every line of a tree the rule has something to say about, by file. */
 export const copyOf = (tree: Tree): Map<string, string[]> => {
   const scan = scanOf(tree);
@@ -278,37 +344,7 @@ export const copyOf = (tree: Tree): Map<string, string[]> => {
   const add = (file: string, lines: string[]) =>
     out.set(file, [...(out.get(file) ?? []), ...lines]);
 
-  // The components a tag can stand for, by the name of their file.
-  const components = new Map<string, string[]>();
-  for (const file of tree.files.filter((f) => f.endsWith(".vue"))) {
-    const name = file.slice(file.lastIndexOf("/") + 1, -".vue".length);
-    components.set(name, [...(components.get(name) ?? []), file]);
-  }
-
-  // Popup content, found template by template until nothing new turns up:
-  // a component drawn inside a window is part of that window, and so is
-  // whatever it draws in turn.
-  const inside = new Set<string>();
-  const reads = new Map<string, Read>();
-  let grew = true;
-  while (grew) {
-    grew = false;
-    for (const file of tree.files.filter((f) => f.endsWith(".vue"))) {
-      const read = readTemplate(scan.read(file), inside.has(file));
-      reads.set(file, read);
-      const whole = inside.has(file) || read.whole;
-      if (read.whole && !inside.has(file)) {
-        inside.add(file);
-        grew = true;
-      }
-      for (const tag of read.drawn)
-        for (const drawn of components.get(tag) ?? [])
-          if (!inside.has(drawn) && (whole || tag !== "")) {
-            inside.add(drawn);
-            grew = true;
-          }
-    }
-  }
+  const { inside, reads } = popupContent(tree, scan);
 
   for (const [file, read] of reads) {
     add(file, read.lines);

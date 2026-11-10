@@ -12,9 +12,6 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 [Table("Tokens")]
 public class Token : ISoftDeletable
 {
-    /// <summary>
-    /// Token identifier
-    /// </summary>
     [Key]
     public Guid TokenId { get; set; }
 

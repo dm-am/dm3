@@ -7,8 +7,8 @@
  * rows the blocks above take, a viewer gets neither the block nor that read.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { flushPromises } from "@vue/test-utils";
+import { createPinia, setActivePinia, type Pinia } from "pinia";
 import { Api } from "@/shared/api";
 import {
   GameParticipation,
@@ -17,14 +17,18 @@ import {
   type GameRef,
 } from "@/entities/game";
 import { useAuthStore } from "@/entities/user";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import ActiveGames from "./ActiveGames.vue";
 
-vi.mock("vue-router", async (actual) => ({
-  ...(await actual<typeof import("vue-router")>()),
-  useRoute: () => ({ fullPath: "/" }),
-}));
-
 const stubs = { SidebarEntityList: true };
+const routes: Address[] = [
+  ["home", "/"],
+  ["forum-index", "/forum"],
+  ["games", "/games"],
+];
+
+let pinia: Pinia;
+const render = () => mountPage(ActiveGames, "/", { routes, pinia, stubs });
 
 const game = (id: string, participation: GameParticipation[] = []) =>
   ({
@@ -55,7 +59,8 @@ function takesAsked() {
 }
 
 beforeEach(() => {
-  setActivePinia(createPinia());
+  pinia = createPinia();
+  setActivePinia(pinia);
 });
 
 afterEach(() => {
@@ -68,7 +73,7 @@ describe("ActiveGames", () => {
     store.recruitingGamesPage = { resources: [game("open")] } as never;
     const takes = takesAsked();
 
-    mount(ActiveGames, { global: { stubs } });
+    await render();
     await flushPromises();
 
     expect(takes()).toEqual([SIDEBAR_GAME_ROWS.active + 1]);
@@ -80,10 +85,26 @@ describe("ActiveGames", () => {
     fullPageUnder(mine).participatingGames = [mine];
     const takes = takesAsked();
 
-    const wrapper = mount(ActiveGames, { global: { stubs } });
+    const { wrapper } = await render();
     await flushPromises();
 
-    expect(wrapper.html()).toBe("<!--v-if-->");
+    expect(wrapper.findComponent(ActiveGames).html()).toBe("<!--v-if-->");
     expect(takes()).toEqual([]);
+  });
+
+  it("asks a guest's server again on a navigation after a failed read", async () => {
+    const get = vi
+      .spyOn(Api, "get")
+      .mockResolvedValue({ data: null, error: { title: "Сбой" } } as never);
+    const asked = () => get.mock.calls.filter(([url]) => url === "games");
+
+    const { router } = await render();
+    await flushPromises();
+    expect(asked()).toHaveLength(1);
+
+    await router.push("/forum");
+    await flushPromises();
+
+    expect(asked()).toHaveLength(2);
   });
 });

@@ -4,9 +4,6 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Infrastructure.Core.Authorization;
 
-/// <summary>
-/// Who may edit, delete and like a comment
-/// </summary>
 /// <remarks>
 /// Here and not in a domain module: a comment belongs to no one module, and the
 /// kernel that declares it is scanned by nobody.

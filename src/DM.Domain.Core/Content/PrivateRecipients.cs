@@ -13,7 +13,6 @@ namespace DM.Domain.Core.Content;
 /// </remarks>
 public static class PrivateRecipients
 {
-    /// <summary>The leads, as the line names them, in its order.</summary>
     private static readonly string[] Leads = ["DungeonMaster", "Assistant"];
 
     /// <summary>The line naming the leads and then <paramref name="names"/>.</summary>

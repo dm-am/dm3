@@ -7,9 +7,6 @@ namespace DM.Domain.Core.Tokens;
 /// </summary>
 public class CreateToken
 {
-    /// <summary>
-    /// Token identifier
-    /// </summary>
     public Guid TokenId { get; set; }
 
     /// <summary>
@@ -28,9 +25,6 @@ public class CreateToken
     /// </summary>
     public byte[]? SecretHash { get; set; }
 
-    /// <summary>
-    /// User identifier
-    /// </summary>
     public Guid UserId { get; set; }
 
     /// <summary>
@@ -43,8 +37,5 @@ public class CreateToken
     /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
-    /// <summary>
-    /// Token type
-    /// </summary>
     public TokenType Type { get; set; }
 }

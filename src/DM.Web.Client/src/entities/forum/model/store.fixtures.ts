@@ -32,7 +32,7 @@ export const pageOf = (total: number): PagingInfo => ({
 
 export const createMockUser = (id: string, username: string): User =>
   ({
-    id: id,
+    id,
     username,
     role: "RegularUser",
     isOnline: false,

@@ -1,16 +1,13 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { vClickOutside } from "@/shared/directives";
 import { useBlogsFilter, STATUS_OPTIONS, SORT_OPTIONS } from "../model";
-import type { StatusFilter } from "../model";
+import type { BlogsFilterKey, StatusFilter } from "../model";
 import { useFilterSearch } from "@/shared/lib/composables/useFilterSearch";
 import { useFilterDropdown } from "@/shared/lib/composables/useFilterDropdown";
 import { formatDateRangeForDisplay } from "@/shared/lib/filters";
 import {
   FilterSearchInput,
-  FilterButton,
-  FilterDropdown,
-  FilterDropdownHeader,
+  FilterMenu,
   FilterDropdownItem,
   DateRangePicker,
   OptionsList,
@@ -46,7 +43,7 @@ const {
   closeDropdown,
   toggleDropdown,
   navigateBack: navigateBackBase,
-} = useFilterDropdown();
+} = useFilterDropdown<BlogsFilterKey>();
 
 function navigateBack() {
   // From level 3 (date range input) back to the choice of the date type.
@@ -80,10 +77,6 @@ const statusListOptions = STATUS_OPTIONS.filter((o) => o.value !== "any").map(
     hint: o.hint,
   }),
 );
-
-function selectRootItem(key: string) {
-  navPath.value = { filter: key };
-}
 
 function selectDateType(value: string) {
   navPath.value = { filter: "dates", group: value };
@@ -172,44 +165,41 @@ const statusLabel = computed(() => {
   return opt?.label ?? filterState.value.status;
 });
 
-const hasCreatedDateFilter = computed(() => {
-  return (
+const hasCreatedDateFilter = computed(
+  () =>
     filterState.value.createdFromUtc !== null ||
-    filterState.value.createdToUtc !== null
-  );
-});
-const createdDateLabel = computed(() => {
-  return formatDateRangeForDisplay({
+    filterState.value.createdToUtc !== null,
+);
+const createdDateLabel = computed(() =>
+  formatDateRangeForDisplay({
     from: filterState.value.createdFromUtc,
     to: filterState.value.createdToUtc,
-  });
-});
+  }),
+);
 
-const hasActivatedDateFilter = computed(() => {
-  return (
+const hasActivatedDateFilter = computed(
+  () =>
     filterState.value.activatedFromUtc !== null ||
-    filterState.value.activatedToUtc !== null
-  );
-});
-const activatedDateLabel = computed(() => {
-  return formatDateRangeForDisplay({
+    filterState.value.activatedToUtc !== null,
+);
+const activatedDateLabel = computed(() =>
+  formatDateRangeForDisplay({
     from: filterState.value.activatedFromUtc,
     to: filterState.value.activatedToUtc,
-  });
-});
+  }),
+);
 
-const hasClosedDateFilter = computed(() => {
-  return (
+const hasClosedDateFilter = computed(
+  () =>
     filterState.value.closedFromUtc !== null ||
-    filterState.value.closedToUtc !== null
-  );
-});
-const closedDateLabel = computed(() => {
-  return formatDateRangeForDisplay({
+    filterState.value.closedToUtc !== null,
+);
+const closedDateLabel = computed(() =>
+  formatDateRangeForDisplay({
     from: filterState.value.closedFromUtc,
     to: filterState.value.closedToUtc,
-  });
-});
+  }),
+);
 
 // The sort is the SortButton's: it does not raise the "Сбросить" row.
 const hasBubbles = computed(() => {
@@ -277,68 +267,50 @@ function handleSearchKeydown(event: KeyboardEvent) {
         @blur="applySearch"
       />
 
-      <div v-click-outside="closeDropdown" class="filter-section">
-        <FilterButton
-          :active="showDropdown"
-          @click="toggleDropdown"
-          @close="closeDropdown"
+      <FilterMenu
+        v-model:nav-path="navPath"
+        :open="showDropdown"
+        :title="getDropdownTitle()"
+        :options="filterOptions"
+        @toggle="toggleDropdown"
+        @close="closeDropdown"
+        @back="navigateBack"
+      >
+        <OptionsList
+          v-if="navPath?.filter === 'status'"
+          :options="statusListOptions"
+          @select="handleStatusSelect"
         />
 
-        <FilterDropdown v-if="showDropdown" @close="closeDropdown">
-          <FilterDropdownHeader
-            v-if="navPath"
-            :title="getDropdownTitle() ?? ''"
-            @back="navigateBack"
+        <!-- Include inactive: a host away for 30 days stays findable. -->
+        <UserMultiSelect
+          v-if="navPath?.filter === 'host'"
+          :selected-users="filterState.hostUsernames"
+          placeholder="Поиск ведущего"
+          include-inactive
+          @add="addHost"
+        />
+
+        <template v-if="navPath?.filter === 'dates' && !navPath.group">
+          <FilterDropdownItem
+            v-for="item in dateTypeOptions"
+            :key="item.value"
+            :label="item.label"
+            :hint="item.hint"
+            has-sub-options
+            @item-select="selectDateType(item.value)"
           />
+        </template>
 
-          <template v-if="!navPath">
-            <FilterDropdownItem
-              v-for="item in filterOptions"
-              :key="item.key"
-              :label="item.label"
-              :hint="item.hint"
-              has-sub-options
-              @item-select="selectRootItem(item.key)"
-            />
-          </template>
-
-          <OptionsList
-            v-if="navPath?.filter === 'status'"
-            :options="statusListOptions"
-            @select="handleStatusSelect"
-          />
-
-          <!-- Include inactive: a host away for 30 days stays findable. -->
-          <UserMultiSelect
-            v-if="navPath?.filter === 'host'"
-            :selected-users="filterState.hostUsernames"
-            placeholder="Поиск ведущего"
-            include-inactive
-            @add="addHost"
-            @remove="removeHost"
-          />
-
-          <template v-if="navPath?.filter === 'dates' && !navPath.group">
-            <FilterDropdownItem
-              v-for="item in dateTypeOptions"
-              :key="item.value"
-              :label="item.label"
-              :hint="item.hint"
-              has-sub-options
-              @item-select="selectDateType(item.value)"
-            />
-          </template>
-
-          <DateRangePicker
-            v-if="navPath?.filter === 'dates' && navPath.group"
-            :from-value="getCurrentDateValues().from"
-            :to-value="getCurrentDateValues().to"
-            :show-clear-button="hasCurrentDateFilter()"
-            @apply="handleDateApply"
-            @clear="handleDateClear"
-          />
-        </FilterDropdown>
-      </div>
+        <DateRangePicker
+          v-if="navPath?.filter === 'dates' && navPath.group"
+          :from-value="getCurrentDateValues().from"
+          :to-value="getCurrentDateValues().to"
+          :show-clear-button="hasCurrentDateFilter()"
+          @apply="handleDateApply"
+          @clear="handleDateClear"
+        />
+      </FilterMenu>
 
       <SortButton
         :options="sortOptions"
@@ -398,7 +370,6 @@ function handleSearchKeydown(event: KeyboardEvent) {
   gap: $small
 
   +filter-bar
-  +filter-button
 
 +dropdown-search-input
 +filter-dropdown-base

@@ -11,10 +11,8 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Game;
 
-/// <summary>
-/// RoomNumber is the address a room resolves by, and its OrderNumber the place in the list: both MAX+1, so
-/// creation is serialized per game.
-/// </summary>
+// RoomNumber is the address a room resolves by, and its OrderNumber the place in the list: both
+// MAX+1, so creation is serialized per game.
 public class RoomNumberAllocationShould : IntegrationTestBase
 {
     private const int Parallelism = 8;
@@ -23,10 +21,8 @@ public class RoomNumberAllocationShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// The room a game is created with is written by the game repository, in the
-    /// same batch as the game, and is the one room no allocation pass ever sees.
-    /// </summary>
+    // The room a game is created with is written by the game repository, in the same batch as the
+    // game, and is the one room no allocation pass ever sees.
     [Fact]
     public async Task NumberTheRoomAGameIsCreatedWith()
     {
@@ -69,9 +65,6 @@ public class RoomNumberAllocationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// Every new room takes the place after the last one.
-    /// </summary>
     [Fact]
     public async Task PlaceConcurrentRoomsOfOneGameOneAfterAnother()
     {
@@ -124,10 +117,8 @@ public class RoomNumberAllocationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A removed room keeps its number: its address has to stay dead rather than
-    /// start opening a room written after it.
-    /// </summary>
+    // A removed room keeps its number: its address has to stay dead rather than start opening a
+    // room written after it.
     [Fact]
     public async Task NotHandOutTheNumberOfARemovedRoom()
     {
@@ -170,10 +161,8 @@ public class RoomNumberAllocationShould : IntegrationTestBase
         });
     }
 
-    /// <summary>
-    /// A game built by the repository the application creates games with, master
-    /// included: the number of the room it comes with is one of the facts here.
-    /// </summary>
+    // A game built by the repository the application creates games with, master included: the
+    // number of the room it comes with is one of the facts here.
     private async Task<(Guid GameId, Guid MasterId)> CreateGame()
     {
         var gameId = Guid.NewGuid();

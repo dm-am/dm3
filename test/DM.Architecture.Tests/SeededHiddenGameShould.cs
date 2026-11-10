@@ -57,10 +57,6 @@ public class SeededHiddenGameShould
             "the post shows the reader what everybody reads beside what the leads and the author do");
     }
 
-    /// <summary>
-    /// The map is mentioned only in the block for the addressee, the letter nowhere: an outsider loses
-    /// the map and keeps the letter, the addressee and the master keep both.
-    /// </summary>
     [Fact]
     public void KeepTheMentionedAttachmentFromAnOutsiderAlone()
     {

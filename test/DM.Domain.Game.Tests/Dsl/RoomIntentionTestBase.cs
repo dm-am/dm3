@@ -4,10 +4,6 @@ using DM.Domain.Game.Features.Games;
 
 namespace DM.Domain.Game.Tests.Dsl;
 
-/// <summary>
-/// The room resolver and the people of a game its cases ask about: the master,
-/// an assistant, a player and a stranger to the game.
-/// </summary>
 public abstract class RoomIntentionTestBase
 {
     private protected readonly RoomIntentionResolver resolver = new();

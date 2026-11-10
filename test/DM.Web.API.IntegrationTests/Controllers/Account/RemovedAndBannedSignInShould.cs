@@ -10,10 +10,7 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Account;
 
-/// <summary>
-/// What the sign-in says about an account that moderation has closed, and when.
-/// </summary>
-/// <remarks>On a live database: the lookup by address runs past the global filter on removed rows.</remarks>
+// On a live database: the lookup by address runs past the global filter on removed rows.
 public class RemovedAndBannedSignInShould : IntegrationTestBase
 {
     public RemovedAndBannedSignInShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -23,10 +20,8 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
     private async Task<HttpResponseMessage> SignIn(string email, string password) =>
         await Client.PostAsJsonAsync("/v1/account/login", new { email, password });
 
-    /// <summary>
-    /// The owner of a removed account, holding the right password, is told what
-    /// became of it; that is the one place the site says so (SECURITY.md).
-    /// </summary>
+    // The owner of a removed account, holding the right password, is told what became of it; that
+    // is the one place the site says so (SECURITY.md).
     [Fact]
     public async Task NameARemovedAccountToItsOwnerOnceThePasswordIsProven()
     {
@@ -45,10 +40,8 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
         problem["title"]!.GetValue<string>().Should().Be("Аккаунт удален");
     }
 
-    /// <summary>
-    /// Without the password the removed account is indistinguishable from an
-    /// address that was never registered.
-    /// </summary>
+    // Without the password the removed account is indistinguishable from an address that was never
+    // registered.
     [Fact]
     public async Task HideARemovedAccountBehindTheUnifiedRefusalWithoutThePassword()
     {
@@ -67,10 +60,8 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
         body.Should().Contain("Неверная почта или пароль").And.NotContain("удален");
     }
 
-    /// <summary>
-    /// Recovery answers a removed account exactly as a live one on the wire.
-    /// </summary>
-    /// <remarks>The truth goes to the mailbox; on the screen two guest requests must not combine into "removed".</remarks>
+    // The truth goes to the mailbox; on the screen two guest requests must not combine into
+    // "removed".
     [Fact]
     public async Task AnswerRecoveryForARemovedAccountAsForALiveOne()
     {
@@ -92,9 +83,7 @@ public class RemovedAndBannedSignInShould : IntegrationTestBase
         goneBody["status"]!.GetValue<string>().Should().Be(liveBody["status"]!.GetValue<string>());
     }
 
-    /// <summary>
-    /// A ban with an end carries that end, so the screen can name the day.
-    /// </summary>
+    // A ban with an end carries that end, so the screen can name the day.
     [Fact]
     public async Task CarryTheEndOfATemporaryBan()
     {

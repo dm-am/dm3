@@ -26,7 +26,7 @@ const GONE = "33333333-3333-3333-3333-333333333333";
 const USER = "44444444-4444-4444-4444-444444444444";
 
 const wire = (over: Record<string, unknown>) => ({
-  id: "s-" + String(over.targetId),
+  id: `s-${String(over.targetId)}`,
   settings: "None",
   createdUtc: "2026-09-16T00:09:26.612346+00:00",
   ...over,

@@ -5,7 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, RouterLinkStub } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
-import type { User } from "@/entities/user";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import type { GeneralError } from "@/shared/api/models/common";
 import { RowIconButton } from "@/shared/ui/RowIconButton";
 import type { BlacklistRow } from "../model/types";
@@ -17,7 +17,7 @@ const HINT = "Внесенные не пишут комментарии в бл�
 const aRow = (username: string, createdUtc?: string): BlacklistRow => ({
   id: `id-${username}`,
   username,
-  user: { id: `id-${username}`, username } as unknown as User,
+  user: createMockUser(`id-${username}`, username),
   createdUtc,
 });
 

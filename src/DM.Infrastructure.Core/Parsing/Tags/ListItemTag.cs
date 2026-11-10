@@ -30,9 +30,6 @@ internal sealed class ListItemTag : Tag
     public override string GetCloseHtml(TagNode node, string attributeValue) =>
         StandsInAnItem(node) ? NestedClose : ItemClose;
 
-    /// <summary>
-    /// Whether the nearest item or list drawn around the node is an item.
-    /// </summary>
     private static bool StandsInAnItem(TagNode node)
     {
         for (var ancestor = node.Parent; ancestor is TagNode tag; ancestor = tag.Parent)

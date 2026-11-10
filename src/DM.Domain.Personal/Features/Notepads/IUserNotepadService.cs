@@ -16,9 +16,6 @@ public interface IUserNotepadService
     /// </summary>
     Task<IEnumerable<NotepadEntry>> GetEntries(CancellationToken ct = default);
 
-    /// <summary>
-    /// Get entry by ID
-    /// </summary>
     Task<NotepadEntry> GetEntry(Guid entryId, CancellationToken ct = default);
 
     Task<NotepadEntry> CreateEntry(CreateNotepadEntry createEntry, CancellationToken ct = default);

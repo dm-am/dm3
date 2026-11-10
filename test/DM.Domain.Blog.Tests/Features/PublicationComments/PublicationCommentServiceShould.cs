@@ -123,9 +123,7 @@ public class PublicationCommentServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden && e.Message == RefusalMessage.BlacklistedFromBlog);
     }
 
-    /// <summary>
-    /// Rewriting one's comment under a publication is writing in the blog again.
-    /// </summary>
+    // Rewriting one's comment under a publication is writing in the blog again.
     [Fact]
     public async Task RefuseABlacklistedAuthorTheEditOfHisComment()
     {
@@ -158,7 +156,8 @@ public class PublicationCommentServiceShould : UnitTestBase
         await repository.DidNotReceive().Update(Arg.Any<UpdatePublicationCommentEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>The text is stored as typed, the spaces around it included (BBCODE_RENDERING.md, "Регистр имен").</summary>
+    // The text is stored as typed, the spaces around it included (BBCODE_RENDERING.md, "Регистр
+    // имен").
     [Fact]
     public async Task StoreTheTextAsTyped()
     {
@@ -249,12 +248,8 @@ public class PublicationCommentServiceShould : UnitTestBase
             Arg.Any<UpdatePublicationCommentEntity>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The removal that went through pays the unread counters and announces itself.
-    /// </summary>
-    /// <remarks>
-    /// The count and the last-comment pointer are the database's, see DiscussionCountersShould and LastCommentPointerShould.
-    /// </remarks>
+    // The count and the last-comment pointer are the database's, see DiscussionCountersShould and
+    // LastCommentPointerShould.
     [Fact]
     public async Task PayTheCountersForTheRemovalThatWentThrough()
     {

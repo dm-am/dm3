@@ -6,7 +6,10 @@ import { buildRatedPostsParams, postApi } from "@/entities/game";
 import type { Post, PulseSearchParams, RatedPostsScope } from "@/entities/game";
 import type { ListEnvelope } from "@/shared/api/models/common";
 import { PulseFilter, usePulseFilter } from "@/features/pulse-filter";
-import { GamePost } from "@/widgets/game-post/@x/rated-posts";
+import {
+  GamePost,
+  type NavigationLevel,
+} from "@/widgets/game-post/@x/rated-posts";
 import { GamePostSkeleton } from "@/shared/ui/Skeleton";
 import PagingWithSeparators from "@/shared/ui/Paging/PagingWithSeparators.vue";
 import { SecondaryText } from "@/shared/ui/Layout";
@@ -25,7 +28,7 @@ const props = withDefaults(
     /** Hide the "Авторы" filter where the scope already fixes the author. */
     hideAuthorFilter?: boolean;
     /** Breadcrumb depth of a post: "room" on a page that already is the game. */
-    navigationLevel?: "game" | "room";
+    navigationLevel?: NavigationLevel;
   }>(),
   { hideAuthorFilter: false, navigationLevel: "game" },
 );

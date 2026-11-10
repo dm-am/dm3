@@ -10,11 +10,8 @@ using static DM.Architecture.Tests.MeterSources;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A consumer says what happened to the messages it took, and a rule reads what
-/// it said.
-/// </summary>
-/// <remarks>Only the consumer knows whether the work it took succeeded; series coverage is MetricSeriesShould's.</remarks>
+// Only the consumer knows whether the work it took succeeded; series coverage is
+// MetricSeriesShould's.
 public class ConsumerMetricsShould
 {
     [Fact]
@@ -62,10 +59,8 @@ public class ConsumerMetricsShould
         }
     }
 
-    /// <summary>The file a host composes itself in.</summary>
     private const string Composition = "Startup.cs";
 
-    /// <summary>The interface a host takes its consumers from.</summary>
     private const string ConsumerFactory = "IDmConsumerBuilder";
 
     /// <summary>A middleware installed into a pipeline, as the declaration spells it.</summary>
@@ -74,7 +69,6 @@ public class ConsumerMetricsShould
     /// <summary>
     /// The hosts that consume, read off the tree rather than listed here.
     /// </summary>
-    /// <remarks>A host is a project that composes itself and asks the client for a consumer.</remarks>
     private static IReadOnlyCollection<DirectoryInfo> ConsumingHosts() =>
         new DirectoryInfo(Path.Combine(RepositoryLayout.Root, "src"))
             .EnumerateDirectories()
@@ -87,38 +81,24 @@ public class ConsumerMetricsShould
         .Where(file => RepositoryFiles.IsAuthored(file.FullName))
         .Any(file => File.ReadAllText(file.FullName).Contains(ConsumerFactory, StringComparison.Ordinal));
 
-    /// <summary>
-    /// The consumer middlewares a host installs, out of the declarations in its
-    /// composition.
-    /// </summary>
-    /// <remarks>The declaring call is generic over the middleware type the message scope resolves.</remarks>
+    // The declaring call is generic over the middleware type the message scope resolves.
     private static IReadOnlyCollection<string> InstalledConsumerMiddlewares(string composition) =>
         Installation.Matches(composition).Select(match => match.Groups[1].Value).ToArray();
 
-    /// <summary>The interface a consumer middleware implements, which is what selects one.</summary>
-    /// <remarks>Not by file name: the realtime push of the API has no retry to name a file after.</remarks>
+    // Not by file name: the realtime push of the API has no retry to name a file after.
     private const string ConsumerSide = "IConsumerMiddleware";
 
-    /// <summary>The helper that holds the policy and the instruments they share.</summary>
     private const string SharedPipeline = "MeasuredConsumerPipeline";
 
-    /// <summary>
-    /// A middleware that counts what passes through it: either it writes the
-    /// instruments itself, or it hands the pipeline to the helper that does.
-    /// </summary>
-    /// <remarks>The middlewares share one copy of the counters through the helper.</remarks>
+    // The middlewares share one copy of the counters through the helper.
     private static bool Measures(string source) =>
         source.Contains("MessagingMetrics", StringComparison.Ordinal) ||
         source.Contains(SharedPipeline, StringComparison.Ordinal);
 
-    /// <summary>A metrics class declaring the meter its instruments belong to.</summary>
     private static readonly Regex MeterOwner = new(
         @"class\s+(\w+)[\s\S]{0,400}?const\s+string\s+MeterName", RegexOptions.Compiled);
 
-    /// <summary>
-    /// Every meter this project declares reaches the exporter.
-    /// </summary>
-    /// <remarks>An unregistered meter still records in process memory and exports no series.</remarks>
+    // An unregistered meter still records in process memory and exports no series.
     [Fact]
     public void RegisterEveryMeterWithTheExporter()
     {
@@ -141,10 +121,7 @@ public class ConsumerMetricsShould
         }
     }
 
-    /// <summary>
-    /// The meters whose measurements nobody is waiting on, and why each is one.
-    /// </summary>
-    /// <remarks>Named rather than derived: whether a failure has a caller left is not in the declaration.</remarks>
+    // Named rather than derived: whether a failure has a caller left is not in the declaration.
     private static readonly (string Owner, string Why)[] Unattended =
     [
         // Nobody waits on a delivery, and a refused channel is swallowed so the others do not repeat.
@@ -153,20 +130,14 @@ public class ConsumerMetricsShould
         ("StorageMetrics", "a dropped write is answered as a success"),
     ];
 
-    /// <summary>
-    /// Failure counters whose alert reads a different series, and that series; both halves are asserted.
-    /// </summary>
-    /// <remarks>A refused outbox publish is a delay, alerted through the lag gauge.</remarks>
+    // A refused outbox publish is a delay, alerted through the lag gauge.
     private static readonly Dictionary<string, string> AlertedThroughAnotherSeries =
         new(StringComparer.Ordinal)
         {
             ["dm_messaging_outbox_publish_failed"] = "dm_messaging_outbox_lag",
         };
 
-    /// <summary>
-    /// Every failure nobody is waiting on is read by a rule.
-    /// </summary>
-    /// <remarks>There is no caller to return the error to, so a counter no rule reads is silence.</remarks>
+    // There is no caller to return the error to, so a counter no rule reads is silence.
     [Fact]
     public void AlertOnEveryFailureNobodyIsWaitingOn()
     {
@@ -200,9 +171,6 @@ public class ConsumerMetricsShould
         }
     }
 
-    /// <summary>
-    /// Every sender counts what its channel refused.
-    /// </summary>
     /// <remarks>
     /// Each sender catches its own failures, so the pipeline never counts them. By the file, so a
     /// new channel is asked the same.
@@ -231,11 +199,7 @@ public class ConsumerMetricsShould
                 "got the notification and nothing anywhere saying so");
     }
 
-    /// <summary>
-    /// Refusals at the front door are read by a rule, under both of the names they
-    /// arrive under.
-    /// </summary>
-    /// <remarks>Past the limiter the reason is recorded; before it only the status on the request series.</remarks>
+    // Past the limiter the reason is recorded; before it only the status on the request series.
     [Fact]
     public void AlertOnRefusalsAtTheFrontDoor()
     {

@@ -36,15 +36,10 @@ public sealed record ModulePremoderationChange(
 /// </remarks>
 public static class ModulePremoderationPolicy
 {
-    /// <summary>
-    /// The premoderation status a module is created in.
-    /// </summary>
     /// <remarks>
     /// Two kinds of author are held back: a newbie, computed from the post count,
     /// and a user a moderator put under watch by hand.
     /// </remarks>
-    /// <param name="author">The user creating the game or the blog.</param>
-    /// <returns>Premoderation status to store on the new module.</returns>
     public static PremoderationStatus InitialStatus(IUser author) =>
         author.IsNewbie || author.IsUnderModerationWatch
             ? PremoderationStatus.AwaitingEdits

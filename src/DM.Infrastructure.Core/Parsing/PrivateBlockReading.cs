@@ -65,7 +65,6 @@ public sealed class PrivateBlockReading : IPrivateBlockReading
         return string.Equals(whole, read, StringComparison.Ordinal);
     }
 
-    /// <summary>The text whole, and as the context reads it.</summary>
     private (string Whole, string Read) Read(string? text, RenderContext context)
     {
         var source = text ?? string.Empty;
@@ -81,7 +80,6 @@ public sealed class PrivateBlockReading : IPrivateBlockReading
         }
     }
 
-    /// <summary>The context the page of this reader is rendered with (BbConverterFactory).</summary>
     private static RenderContext ContextOf(IAuthorizationSubject? reader, PrivateBlockText text) => new()
     {
         Viewer = reader,
@@ -95,7 +93,6 @@ public sealed class PrivateBlockReading : IPrivateBlockReading
         RoomViewPrivateText = text.RoomViewPrivateText
     };
 
-    /// <summary>The uploads the whole text mentions and the reading of it does not.</summary>
     private static HashSet<Guid> Lost(string whole, string read, IReadOnlyCollection<Guid> uploadIds) =>
         uploadIds.Where(id => Mentions(whole, id) && !Mentions(read, id)).ToHashSet();
 

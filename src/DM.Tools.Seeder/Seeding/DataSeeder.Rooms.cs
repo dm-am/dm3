@@ -10,17 +10,9 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// The rooms of a game: the three every game has, the closed chat room of the
-    /// UI test data game, and the two lists access is granted over.
-    /// </summary>
     private sealed record GameRooms(
         Room Main, Room Chat, Room Private, Room? PrivateChat, List<Room> Restricted, List<Room> Open);
 
-    /// <summary>
-    /// Room names from the game setting, so the seed reads as a tabletop session;
-    /// the "За ширмой" pool for a setting without its own.
-    /// </summary>
     private static (string Main, string Chat, string Secret) RoomTitles(string setting) => setting switch
     {
         "Forgotten Realms" => ("Таверна 'Полумесяц'", "Кулуары авантюристов", "Тайный алтарь"),
@@ -51,7 +43,6 @@ internal sealed partial class DataSeeder
         _ => ("Главная сцена", "За ширмой", "Тайная комната"),
     };
 
-    /// <summary>The rooms of a game, in the order their OrderNumber gives them.</summary>
     private GameRooms SeedGameRooms(SeedingGame seeding)
     {
         var game = seeding.Game;
@@ -117,11 +108,7 @@ internal sealed partial class DataSeeder
         return new GameRooms(mainRoom, chatRoom, privateRoom, privateChatRoom, restrictedRooms, openRooms);
     }
 
-    /// <summary>
-    /// UI test fixtures for the room list: the archived room for the "archived rooms" spoiler, and the
-    /// closed chat room, the fourth example of the game menu. Only this game has a chat behind its rooms.
-    /// </summary>
-    /// <returns>The closed chat room.</returns>
+    // Only this game has a chat behind its rooms.
     private Room SeedUiTestRooms(DbGame game, List<Room> openRooms, List<Room> restrictedRooms)
     {
         var archivedRoom = new Room
@@ -161,10 +148,8 @@ internal sealed partial class DataSeeder
         return privateChatRoom;
     }
 
-    /// <summary>
-    /// Room access of a character, in the closed rooms and in the open ones:
-    /// openness is about reading, and whoever writes in a room was added to it.
-    /// </summary>
+    // Room access of a character, in the closed rooms and in the open ones: openness is about
+    // reading, and whoever writes in a room was added to it.
     private void GrantRoomAccess(GameRooms rooms, Character character)
     {
         foreach (var grantedRoom in rooms.Restricted.Concat(rooms.Open))

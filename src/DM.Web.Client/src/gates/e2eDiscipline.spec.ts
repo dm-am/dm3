@@ -128,17 +128,19 @@ const gates = (parent: ts.Node, child: ts.Node): boolean => {
     // `expect(items.map(...))` asserts before the callback is anybody's problem.
     return parent.arguments.some((argument) => argument === child);
   }
-  return (
-    ts.isForStatement(parent) ||
-    ts.isForOfStatement(parent) ||
-    ts.isForInStatement(parent) ||
-    ts.isWhileStatement(parent) ||
-    ts.isDoStatement(parent) ||
-    ts.isSwitchStatement(parent) ||
-    ts.isTryStatement(parent) ||
-    ts.isCatchClause(parent)
-  );
+  return isLoopSwitchOrTry(parent);
 };
+
+/** The statements whose every part counts as gated. */
+const isLoopSwitchOrTry = (node: ts.Node): boolean =>
+  ts.isForStatement(node) ||
+  ts.isForOfStatement(node) ||
+  ts.isForInStatement(node) ||
+  ts.isWhileStatement(node) ||
+  ts.isDoStatement(node) ||
+  ts.isSwitchStatement(node) ||
+  ts.isTryStatement(node) ||
+  ts.isCatchClause(node);
 
 /** Whether the body asserts on the path it takes every time. */
 const assertsUnconditionally = (body: ts.Node): boolean => {

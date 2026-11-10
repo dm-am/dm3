@@ -17,10 +17,7 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class SecondFactorSecretShould
 {
-    /// <summary>
-    /// Services that draw a QR code from a value in a URL.
-    /// </summary>
-    /// <remarks>Named one by one: no pattern says the value travels to somebody else's machine.</remarks>
+    // Named one by one: no pattern says the value travels to somebody else's machine.
     private static readonly string[] DrawnByStrangers =
     [
         "api.qrserver.com",

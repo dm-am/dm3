@@ -106,10 +106,8 @@ public class BlogNotepadServiceShould : UnitTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Forbidden);
     }
 
-    /// <summary>
-    /// A blog the reader may not even open answers as a blog that is not there:
-    /// a 403 on its notepad would tell him it exists.
-    /// </summary>
+    // A blog the reader may not even open answers as a blog that is not there: a 403 on its notepad
+    // would tell him it exists.
     [Fact]
     public async Task AnswerAStrangerOnTheNotepadOfAHiddenBlogAsOnNoBlogAtAll()
     {

@@ -3,10 +3,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.ModelConfiguration;
 
-/// <summary>
-/// The blog module of the model: assistants, the readable key of a blog, the
-/// numbers of its publications and its blacklist.
-/// </summary>
 internal static class BlogModel
 {
     internal static void Configure(ModelBuilder modelBuilder)

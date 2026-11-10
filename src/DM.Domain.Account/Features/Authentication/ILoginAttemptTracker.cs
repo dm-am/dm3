@@ -28,10 +28,6 @@ public interface ILoginAttemptTracker
     /// <returns>Remaining lockout time in seconds, 0 if not locked</returns>
     Task<int> GetRemainingLockoutSeconds(LoginAttemptOrigin origin);
 
-    /// <summary>
-    /// Record a failed login attempt
-    /// </summary>
-    /// <param name="origin">Account and client address of the attempt</param>
     Task RecordFailedAttempt(LoginAttemptOrigin origin);
 
     /// <summary>

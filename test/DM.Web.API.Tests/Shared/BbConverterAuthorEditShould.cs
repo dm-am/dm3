@@ -16,21 +16,13 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// The author who asks for their own text to edit it gets the BBCode as it was
-/// saved, and nobody else gets it.
-/// </summary>
-/// <remarks>
-/// The editor works on BBCode (BBCODE_RENDERING.md, "Исходник на правку"): HTML
-/// handed to it would have to be turned back, and the way back loses what the
-/// author typed.
-/// </remarks>
+// The editor works on BBCode (BBCODE_RENDERING.md, "Исходник на правку"): HTML handed to it would
+// have to be turned back, and the way back loses what the author typed.
 public class BbConverterAuthorEditShould
 {
     private static readonly Guid AuthorId = Guid.Parse("11111111-1111-1111-1111-111111111111");
     private static readonly Guid StrangerId = Guid.Parse("44444444-4444-4444-4444-444444444444");
 
-    /// <summary>Every kind of text that is not a plain word: markup, a hidden block, a dash, a CR LF.</summary>
     private const string Source =
         "[b]раз[/b] -- два\r\n[private=\"Вася\"]тайна[/private]\n[quote]три[/quote] a < b & [noparse][i][/noparse]";
 
@@ -46,10 +38,8 @@ public class BbConverterAuthorEditShould
         shown.Should().Contain("<strong>раз</strong>").And.NotContain("тайна").And.NotContain("[b]");
     }
 
-    /// <summary>
-    /// A text nested too deep to render is the author's to repair, so it comes
-    /// back to them as typed while the page shows nothing.
-    /// </summary>
+    // A text nested too deep to render is the author's to repair, so it comes back to them as typed
+    // while the page shows nothing.
     [Fact]
     public void GiveTheAuthorEvenATextTooDeepToRender()
     {
@@ -59,10 +49,7 @@ public class BbConverterAuthorEditShould
         Serialize(deep, viewer: StrangerId).Should().BeEmpty();
     }
 
-    /// <summary>
-    /// Whoever may edit the text gets it as its author does: the editor saves what
-    /// it was handed. The check is asked of the request's own intention manager.
-    /// </summary>
+    // Whoever may edit the text gets it as its author does: the editor saves what it was handed.
     [Fact]
     public void GiveAnEditorWhoIsNotTheAuthorTheSource()
     {
@@ -72,11 +59,9 @@ public class BbConverterAuthorEditShould
         Serialize(plain, viewer: StrangerId, mayEdit: false).Should().Contain("<strong>раз</strong>");
     }
 
-    /// <summary>
-    /// The edit right is the one question: whether an editor who is not the author
-    /// reads every hidden block is that right's own (PostIntentionResolverShould), so
-    /// the source goes exactly where the edit would be taken and nowhere else.
-    /// </summary>
+    // The edit right is the one question: whether an editor who is not the author reads every
+    // hidden block is that right's own (PostIntentionResolverShould), so the source goes exactly
+    // where the edit would be taken and nowhere else.
     [Fact]
     public void HandTheSourceOfAHiddenBlockExactlyWhereTheEditRightGoes()
     {
@@ -84,7 +69,6 @@ public class BbConverterAuthorEditShould
         Serialize(Source, viewer: StrangerId, mayEdit: false).Should().NotContain("тайна");
     }
 
-    /// <summary>The JSON string the converter writes for a post text by <see cref="AuthorId"/>.</summary>
     private static string Serialize(string bbCode, Guid viewer, bool? mayEdit = null)
     {
         var subject = new TestSubject { UserId = viewer, Role = UserRole.RegularUser, IsAuthenticated = true };

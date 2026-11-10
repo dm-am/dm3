@@ -10,10 +10,6 @@ using DbRubric = DM.Infrastructure.Persistence.Entities.Blog.Rubric;
 
 namespace DM.Infrastructure.Persistence.Repositories.Blog;
 
-/// <summary>
-/// The rubrics of a blog: their reads, writes and order, and the publications
-/// each one holds
-/// </summary>
 internal partial class BlogRepository
 {
     /// <inheritdoc />

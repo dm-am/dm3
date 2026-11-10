@@ -10,9 +10,6 @@ public class GameBlacklistControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Get game blacklist without authentication should return Unauthorized
-    /// </summary>
     [Fact]
     public async Task GetBlacklistWhenNotAuthenticatedReturnsUnauthorized()
     {

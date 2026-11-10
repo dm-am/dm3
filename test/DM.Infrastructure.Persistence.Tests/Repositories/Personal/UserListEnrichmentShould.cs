@@ -16,13 +16,7 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Personal;
 
-/// <summary>
-/// The user list fetches the four numbers it draws, and none of the profile ones.
-/// </summary>
-/// <remarks>
-/// The counters are nullable, so "not fetched" differs from "fetched and zero". Both directions: the
-/// profile still answers everything the list does not fetch.
-/// </remarks>
+// The counters are nullable, so "not fetched" differs from "fetched and zero".
 public class UserListEnrichmentShould
 {
     private static readonly Guid AuthorId = Guid.Parse("3b9d4c10-0000-4000-8000-000000000001");
@@ -43,9 +37,6 @@ public class UserListEnrichmentShould
         LastActivityUtc = Created,
     };
 
-    /// <summary>
-    /// One user with something of every kind; the topic and the comment are profile content.
-    /// </summary>
     private static DmDbContext Seeded()
     {
         var context = InMemoryStore.Open();

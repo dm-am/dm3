@@ -112,7 +112,7 @@ function ipv6Groups(literal: string): number[] | null {
   if (dotted) {
     const [a, b, c, d] = dotted.slice(1).map(Number);
     tail.push((a << 8) | b, (c << 8) | d);
-    text = text.slice(0, dotted.index) + "0";
+    text = `${text.slice(0, dotted.index)}0`;
     text = text.replace(/:0$/, ":");
   }
   const halves = text.split("::");

@@ -7,16 +7,8 @@ namespace DM.Domain.Core.Exceptions;
 /// </summary>
 public class HttpException : Exception
 {
-    /// <summary>
-    /// HTTP status code
-    /// </summary>
     public HttpStatusCode StatusCode { get; }
 
-    /// <summary>
-    /// New HTTP bypass exception
-    /// </summary>
-    /// <param name="statusCode">HTTP status code</param>
-    /// <param name="message">Client message</param>
     public HttpException(HttpStatusCode statusCode, string message) : base(message) => StatusCode = statusCode;
 
     /// <summary>

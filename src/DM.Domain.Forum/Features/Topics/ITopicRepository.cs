@@ -93,15 +93,11 @@ public interface ITopicRepository
     Task ReplaceAttachOrder(Guid boardId, IReadOnlyList<Guid> orderedTopicIds, CancellationToken ct = default);
 }
 
-/// <summary>
-/// What an update did: the topic as it now stands, and whether it moved at all.
-/// </summary>
 /// <remarks>
 /// A PATCH that round-trips the values the topic already holds answers 200 but is
 /// not an edit: it leaves no row in the edit history and announces nothing, both
 /// decided by this one fact.
 /// </remarks>
-/// <param name="Topic">The topic after the update.</param>
 /// <param name="Changed">True when the row was actually modified.</param>
 public sealed record TopicUpdateResult(Topic Topic, bool Changed);
 

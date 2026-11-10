@@ -1,10 +1,25 @@
-import type { Router } from "vue-router";
+import type { LocationQuery, Router } from "vue-router";
 
 export interface FilterDispatcherConfig<State> {
   /** Build URL query from state (only non-default values) */
   buildQuery: (state: State) => Record<string, string>;
   /** Module name for error logging */
   name: string;
+}
+
+/** Empty values in the address count as absent, as buildQuery leaves them out. */
+function isSameQuery(
+  query: Record<string, string>,
+  current: LocationQuery,
+): boolean {
+  const currentKeys = Object.keys(current).filter(
+    (k) => current[k] !== undefined && current[k] !== "",
+  );
+  const keys = Object.keys(query);
+  return (
+    keys.length === currentKeys.length &&
+    keys.every((k) => query[k] === current[k])
+  );
 }
 
 /** Batches rapid actions into a single navigation. */
@@ -58,9 +73,7 @@ export function createFilterDispatcher<State, Action>(
 
     pendingState = newState;
 
-    // The dispatcher outlives the page: by the time the timer fires the reader
-    // may be elsewhere, and replace({ name, query }) would stamp this query on
-    // that page. The route name is shared by every board, so the path decides.
+    // The dispatcher outlives the page; the path, not the shared route name, tells it left.
     const scheduledPath = routerInstance?.currentRoute.value.path ?? null;
 
     if (debounceTimer) clearTimeout(debounceTimer);
@@ -86,23 +99,7 @@ export function createFilterDispatcher<State, Action>(
       const query = config.buildQuery(pendingState);
       pendingState = null;
 
-      const currentQuery = currentRoute.query;
-
-      const queryKeys = Object.keys(query);
-      const currentKeys = Object.keys(currentQuery).filter(
-        (k) => currentQuery[k] !== undefined && currentQuery[k] !== "",
-      );
-
-      if (queryKeys.length === currentKeys.length) {
-        let same = true;
-        for (const key of queryKeys) {
-          if (query[key] !== currentQuery[key]) {
-            same = false;
-            break;
-          }
-        }
-        if (same) return;
-      }
+      if (isSameQuery(query, currentRoute.query)) return;
 
       // By name, not path, so a query-only change keeps the component.
       isNavigating = true;

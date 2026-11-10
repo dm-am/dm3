@@ -6,10 +6,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Features.Game;
 
-/// <summary>
-/// How long a review may be is the domain's rule (GameReviewFieldLimits), on both paths, counted the way
-/// the service stores the text; checked as MVC checks the request.
-/// </summary>
+// How long a review may be is the domain's rule (GameReviewFieldLimits), on both paths, counted the
+// way the service stores the text; checked as MVC checks the request.
 public class GameReviewRequestShould
 {
     [Theory]

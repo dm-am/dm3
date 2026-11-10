@@ -56,7 +56,7 @@ public class UploadAudienceShould : UnitTestBase
     private UploadApiService Service(params IUploadTargetAuthorizer[] authorizers) =>
         Uploads.Service(_userId, _repository, _imageProcessing, _objectStorage, _intentionManager, authorizers);
 
-    /// <summary>The mark the module freezes is the one the insert writes: no moment the file is wider.</summary>
+    // The mark the module freezes is the one the insert writes: no moment the file is wider.
     [Fact]
     public async Task WriteTheFrozenMarkInTheInsertOfTheFile()
     {
@@ -72,7 +72,7 @@ public class UploadAudienceShould : UnitTestBase
         result.Addressees.Should().BeEquivalentTo(new[] { Vasya });
     }
 
-    /// <summary>An avatar is everybody's: a chosen audience is refused before the pipeline runs.</summary>
+    // An avatar is everybody's: a chosen audience is refused before the pipeline runs.
     [Fact]
     public async Task RefuseAChosenAudienceForAnAvatarBeforeProcessing()
     {
@@ -86,7 +86,6 @@ public class UploadAudienceShould : UnitTestBase
             Arg.Any<Stream>(), Arg.Any<string>(), Arg.Any<UploadType>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>The author's right to the post is asked first, then the mark is frozen and written alone.</summary>
     [Fact]
     public async Task ChangeTheMarkThroughTheRightToThePost()
     {
@@ -132,10 +131,8 @@ public class UploadAudienceShould : UnitTestBase
         (await act.Should().ThrowAsync<HttpBadRequestException>()).Which.ValidationErrors.Should().ContainKey("visibleTo");
     }
 
-    /// <summary>
-    /// A list names a file the post keeps from the caller without opening it, and says nothing of who it is
-    /// for; a file he may open carries its recipients.
-    /// </summary>
+    // A list names a file the post keeps from the caller without opening it, and says nothing of
+    // who it is for; a file he may open carries its recipients.
     [Fact]
     public async Task NameAWithheldFileWithoutItsRecipientsAndWithoutOpeningIt()
     {
@@ -178,7 +175,6 @@ public class UploadAudienceShould : UnitTestBase
         return row.Id;
     }
 
-    /// <summary>A rule of one upload type that records what it was asked and answers as told.</summary>
     private sealed class MarkingAuthorizer(UploadType type = UploadType.PostAttachment) : IUploadTargetAuthorizer
     {
         public UploadType Type { get; } = type;
@@ -223,7 +219,6 @@ public class UploadAudienceShould : UnitTestBase
 
 internal static class UploadRepositoryStubs
 {
-    /// <summary>The repository answers a changed mark with the row as it now stands.</summary>
     public static void SetAddressesReturnsTheRow(this IUploadRepository repository) =>
         repository.SetAddresseesAsync(Arg.Any<Guid>(), Arg.Any<string?>())
             .Returns(ci => new StoredUpload

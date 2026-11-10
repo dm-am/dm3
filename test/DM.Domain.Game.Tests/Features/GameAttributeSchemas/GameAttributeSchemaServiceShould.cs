@@ -54,10 +54,8 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
             repository);
     }
 
-    /// <summary>
-    /// A caller with no version never read the sheet they are replacing, and
-    /// the replacement deletes values.
-    /// </summary>
+    // A caller with no version never read the sheet they are replacing, and the replacement deletes
+    // values.
     [Fact]
     public async Task RefuseABodyWithoutAVersionBeforeReadingTheGame()
     {
@@ -72,10 +70,8 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
         await repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
     }
 
-    /// <summary>
-    /// One identifier twice asks for two specifications that are one, and the
-    /// values written against it would answer to both.
-    /// </summary>
+    // One identifier twice asks for two specifications that are one, and the values written against
+    // it would answer to both.
     [Fact]
     public async Task RefuseARepeatedIdentifierBeforeReadingTheGame()
     {
@@ -97,10 +93,8 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
         await repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
     }
 
-    /// <summary>
-    /// The sheet is part of the game, so it is written by whoever may write the
-    /// game - and nothing is written for anybody else.
-    /// </summary>
+    // The sheet is part of the game, so it is written by whoever may write the game - and nothing
+    // is written for anybody else.
     [Fact]
     public async Task RefuseACallerWhoMayNotEditTheGame()
     {
@@ -115,10 +109,8 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
         await repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
     }
 
-    /// <summary>
-    /// The game is resolved by the same read the details use, so a game this
-    /// caller cannot see refuses the replacement the way it refuses a read.
-    /// </summary>
+    // The game is resolved by the same read the details use, so a game this caller cannot see
+    // refuses the replacement the way it refuses a read.
     [Fact]
     public async Task RefuseAGameTheCallerCannotSee()
     {
@@ -132,10 +124,8 @@ public class GameAttributeSchemaServiceShould : UnitTestBase
         await repository.DidNotReceive().Replace(Arg.Any<ReplaceGameAttributeSchema>());
     }
 
-    /// <summary>
-    /// Nothing was written, so the caller is told to look again rather than
-    /// left believing their set is stored.
-    /// </summary>
+    // Nothing was written, so the caller is told to look again rather than left believing their set
+    // is stored.
     [Fact]
     public async Task RefuseAVersionTheStoredSheetHasMovedPast()
     {

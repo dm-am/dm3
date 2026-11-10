@@ -7,20 +7,12 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests.RelationalStorage;
 
-/// <summary>
-/// A soft-deleted row is invisible to every query, and that holds for the model
-/// rather than for a repository.
-/// </summary>
-/// <remarks>
-/// OnModelCreating applies the filter in a loop over IRemovable; an IsRemoved column on an entity without
-/// the interface would read as present to every reader.
-/// </remarks>
+// OnModelCreating applies the filter in a loop over IRemovable; an IsRemoved column on an entity
+// without the interface would read as present to every reader.
 public class SoftDeleteFilterShould
 {
-    /// <summary>
-    /// Entities that opt out of the global filter: the unread-marker upsert revives tombstones, so it spells
-    /// its own IsRemoved predicate in every read.
-    /// </summary>
+    // Entities that opt out of the global filter: the unread-marker upsert revives tombstones, so
+    // it spells its own IsRemoved predicate in every read.
     private static readonly string[] OwnTheirPredicates =
     [
         nameof(Entities.Shared.UnreadCounter),
@@ -42,9 +34,6 @@ public class SoftDeleteFilterShould
             .Should().BeEmpty("an unfiltered set answers with rows the site treats as deleted");
     }
 
-    /// <summary>
-    /// The opt-out list keeps naming entities that exist and really are unfiltered.
-    /// </summary>
     [Fact]
     public void KeepTheOptOutListHonest()
     {

@@ -10,9 +10,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The object store is deployed with the boundaries the code relies on.
-/// </summary>
 /// <remarks>
 /// Only the S3 port of SeaweedFS asks for a key, so the boundaries live in compose, storage-start.sh and
 /// the scripts. check-storage.sh checks a running stand; this, that the lines are still written.
@@ -30,10 +27,8 @@ public class StorageConfigurationShould
 
     private static string StartScript => File.ReadAllText(Path.Combine(DockerDirectory, "storage-start.sh"));
 
-    /// <summary>
-    /// The store sits in a network of its own, which nothing but its proxy joins.
-    /// </summary>
-    /// <remarks>On a shared network any container could erase the bucket through the filer; an overlay merges its keys in.</remarks>
+    // On a shared network any container could erase the bucket through the filer; an overlay merges
+    // its keys in.
     [Fact]
     public void KeepTheStoreInAnInternalNetworkOnlyItsProxyJoins()
     {
@@ -63,10 +58,7 @@ public class StorageConfigurationShould
         }
     }
 
-    /// <summary>
-    /// Every service the store can run without is off, and nothing reports home.
-    /// </summary>
-    /// <remarks>Each is another door on the same process, and telemetry is on unless turned off.</remarks>
+    // Each is another door on the same process, and telemetry is on unless turned off.
     [Theory]
     [InlineData("-s3.iam=false")]
     [InlineData("-webdav=false")]
@@ -80,9 +72,6 @@ public class StorageConfigurationShould
             "the default of this flag opens a service the deployment has no use for");
     }
 
-    /// <summary>
-    /// The command line is the whole configuration of the store.
-    /// </summary>
     /// <remarks>
     /// The server stores its flags in the volume and prefers them over a default on the command line, so the
     /// file is removed before each start. Without a volume size it is derived from the disk.
@@ -103,10 +92,7 @@ public class StorageConfigurationShould
             "without it the size of a volume follows the size of the disk it lands on");
     }
 
-    /// <summary>
-    /// The collector is held under the limit of the container.
-    /// </summary>
-    /// <remarks>The filer allocates large buffers up front; check-storage.sh measures the CPU price.</remarks>
+    // The filer allocates large buffers up front; check-storage.sh measures the CPU price.
     [Fact]
     public void HoldTheHeapOfTheStoreUnderTheLimitOfItsContainer()
     {
@@ -119,9 +105,6 @@ public class StorageConfigurationShould
             "the heap limit was chosen against this ceiling and means nothing under another");
     }
 
-    /// <summary>
-    /// The store has no administrator, and every account is scoped to the bucket.
-    /// </summary>
     /// <remarks>
     /// An environment key becomes a global administrator no bucket can scope; an action without the bucket
     /// suffix applies to every bucket.
@@ -147,10 +130,6 @@ public class StorageConfigurationShould
         }
     }
 
-    /// <summary>
-    /// Anonymous reads reach the prefixes the product declared public, and no
-    /// others.
-    /// </summary>
     /// <remarks>
     /// The prefixes live in UploadFolder and the grant in the identity file, compared as sets. The list
     /// check-storage.sh probes is held here too.
@@ -195,11 +174,8 @@ public class StorageConfigurationShould
             "the private probe has to be a prefix nobody may read");
     }
 
-    /// <summary>
-    /// The images of the store and its client name a digest, and the client is
-    /// written once.
-    /// </summary>
-    /// <remarks>A Docker Hub tag can be rewritten, and the client runs backup, check and restore from one spelling.</remarks>
+    // A Docker Hub tag can be rewritten, and the client runs backup, check and restore from one
+    // spelling.
     [Fact]
     public void PinTheStoreAndItsClientByDigest()
     {
@@ -230,13 +206,9 @@ public class StorageConfigurationShould
         clients[0].Should().MatchRegex(digested, "the client image can be rewritten under its tag");
     }
 
-    /// <summary>An identity of the file storage-start.sh writes, by name and actions.</summary>
     private sealed record Identity(string Name, string[] Actions);
 
-    /// <summary>
-    /// The identities of the file the server is started with, parsed as JSON.
-    /// </summary>
-    /// <remarks>The heredoc keeps every variable inside a JSON string, so the text is a valid document.</remarks>
+    // The heredoc keeps every variable inside a JSON string, so the text is a valid document.
     private static List<Identity> Identities()
     {
         var config = Regex.Match(string.Join(' ', StartCommand()), @"-s3\.config=(\S+)");
@@ -255,7 +227,6 @@ public class StorageConfigurationShould
             .ToList();
     }
 
-    /// <summary>The value a script assigns to a variable at column zero, quotes removed.</summary>
     private static string ShellValue(string script, string name)
     {
         var assignment = Regex.Match(script, $@"(?m)^{name}=""([^""]*)""\r?$");
@@ -263,7 +234,6 @@ public class StorageConfigurationShould
         return assignment.Groups[1].Value;
     }
 
-    /// <summary>The shell variable the bucket of the server is named by, such as <c>$B</c>.</summary>
     private static string BucketVariable()
     {
         var bucket = Regex.Match(string.Join(' ', StartCommand()), @"-bucket=""?(\$\w+)""?(\s|$)");
@@ -271,10 +241,6 @@ public class StorageConfigurationShould
         return bucket.Groups[1].Value;
     }
 
-    /// <summary>
-    /// The tokens of the command storage-start.sh hands the process over to, with
-    /// its continuations folded.
-    /// </summary>
     private static string[] StartCommand()
     {
         var folded = Regex.Replace(StartScript, @"\\\r?\n\s*", " ");
@@ -284,14 +250,12 @@ public class StorageConfigurationShould
         return command[0].Split(' ', StringSplitOptions.RemoveEmptyEntries);
     }
 
-    /// <summary>Trimmed lines, comments and blank lines left out.</summary>
     private static List<string> ActiveLines(string text) => text
         .Split('\n')
         .Select(line => line.Trim())
         .Where(line => line.Length > 0 && !line.StartsWith('#'))
         .ToList();
 
-    /// <summary>The items of a YAML list under a key, as written.</summary>
     private static string[] ListUnder(List<string> lines, string key) => lines
         .SkipWhile(line => line != key)
         .Skip(1)
@@ -299,13 +263,10 @@ public class StorageConfigurationShould
         .Select(line => line[2..].Trim().Trim('\'', '"'))
         .ToArray();
 
-    /// <summary>The body of one top-level section, up to the next one.</summary>
     private static string Section(string compose, string name) => Block(compose, name, indent: "");
 
-    /// <summary>The body of one service.</summary>
     private static string ServiceBlock(string compose, string name) => Block(Section(compose, "services"), name);
 
-    /// <summary>The body of one key at the given indent, up to the next key at that indent.</summary>
     private static string Block(string text, string name, string indent = "  ")
     {
         var lines = text.Split('\n');
@@ -317,7 +278,6 @@ public class StorageConfigurationShould
             .TakeWhile(line => !Regex.IsMatch(line, $@"^{indent}[^\s#]")));
     }
 
-    /// <summary>The services a compose file declares, by name.</summary>
     private static IEnumerable<string> ServiceNames(string compose)
     {
         if (!Regex.IsMatch(compose, @"(?m)^services:\s*$"))

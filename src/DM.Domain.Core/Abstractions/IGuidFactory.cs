@@ -5,9 +5,5 @@ namespace DM.Domain.Core.Abstractions;
 /// </summary>
 public interface IGuidFactory
 {
-    /// <summary>
-    /// Creates GUID
-    /// </summary>
-    /// <returns>New GUID</returns>
     Guid Create();
 }

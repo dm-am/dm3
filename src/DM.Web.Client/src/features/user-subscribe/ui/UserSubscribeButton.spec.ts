@@ -96,8 +96,7 @@ enableAutoUnmount(afterEach);
 const Host = defineComponent({
   setup() {
     const result = useActionResult();
-    return () =>
-      h(UserSubscribeButton, { userId: USER_ID, username: USERNAME, result });
+    return () => h(UserSubscribeButton, { userId: USER_ID, result });
   },
 });
 

@@ -12,14 +12,15 @@ import { flushPromises } from "@vue/test-utils";
 import {
   mockGetChatMessages,
   mockMarkChatRoomRead,
-  mockReplace,
   mockSendChatMessage,
-  route,
 } from "./GameChatRoom.doubles";
 import {
   WINDOW_HEIGHT,
   heldRead,
+  landing,
   message,
+  moveTo,
+  notFoundAsked,
   notFoundAt,
   openRoom,
   page,
@@ -32,22 +33,18 @@ import {
   setHidden,
   shownIds,
   tick,
+  timesSentToNotFound,
   unmountRoom,
 } from "./GameChatRoom.fixtures";
 
 vi.mock("@/entities/game/api/roomApi", async () =>
   (await import("./GameChatRoom.doubles")).roomApi(),
 );
-vi.mock("vue-router", async () =>
-  (await import("./GameChatRoom.doubles")).vueRouter(),
-);
 
 describe("GameChatRoom live tail", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.useFakeTimers();
-    route.params.id = "g-1";
-    route.params.num = "1";
     setHidden(false);
     mockGetChatMessages.mockResolvedValue(page());
     mockSendChatMessage.mockResolvedValue({ data: null, error: null });
@@ -214,7 +211,7 @@ describe("GameChatRoom live tail", () => {
     expect(mockGetChatMessages.mock.calls.at(-1)?.[0]).toBe("r-1");
 
     // Room 2, empty, opened while that read is in flight.
-    route.params.num = "2";
+    await moveTo("2");
     await flushPromises();
     expect(shownIds(wrapper)).toEqual([]);
 
@@ -235,7 +232,7 @@ describe("GameChatRoom live tail", () => {
     });
     await tick();
 
-    expect(mockReplace).toHaveBeenCalledWith(notFoundAt("1"));
+    expect(notFoundAsked()).toEqual(notFoundAt("1"));
     expect(wrapper.find(".chat-messages").exists()).toBe(false);
 
     const readsBefore = reads();
@@ -254,13 +251,13 @@ describe("GameChatRoom live tail", () => {
       error: { status: 404 },
     });
     await tick();
-    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(timesSentToNotFound()).toBe(1);
 
     mockGetChatMessages.mockResolvedValue(page(message("m-7")));
-    route.params.num = "2";
+    await moveTo("2");
     await flushPromises();
 
-    expect(mockReplace).toHaveBeenCalledTimes(1);
+    expect(timesSentToNotFound()).toBe(1);
     expect(shownIds(wrapper)).toEqual(["msg-m-7"]);
   });
 
@@ -271,7 +268,7 @@ describe("GameChatRoom live tail", () => {
     expect(mockGetChatMessages.mock.calls.at(-1)?.[0]).toBe("r-1");
 
     mockGetChatMessages.mockResolvedValueOnce(page(message("m-7")));
-    route.params.num = "2";
+    await moveTo("2");
     await flushPromises();
     expect(mockGetChatMessages.mock.calls.at(-1)?.[0]).toBe("r-2");
     expect(shownIds(wrapper)).toEqual(["msg-m-7"]);
@@ -279,7 +276,11 @@ describe("GameChatRoom live tail", () => {
     held.answer({ data: null, error: { status: 404 } } as never);
     await flushPromises();
 
-    expect(mockReplace).not.toHaveBeenCalled();
+    expect(timesSentToNotFound()).toBe(0);
+    expect(landing()).toEqual({
+      name: "game-chat-room",
+      fullPath: "/game/g-1/chat-rooms/2",
+    });
     expect(shownIds(wrapper)).toEqual(["msg-m-7"]);
   });
 

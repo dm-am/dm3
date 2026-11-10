@@ -12,25 +12,16 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Infrastructure.Persistence.Tests.Shared.Comments;
 
-/// <summary>
-/// Two pages of one discussion are two halves of the same list, not two lists.
-/// </summary>
-/// <remarks>
-/// Each page asks for the order again, and equal keys are ordinary (the DM2 import, a busy second, no likes).
-/// The same comments seeded both ways must page identically.
-/// </remarks>
+// Each page asks for the order again, and equal keys are ordinary (the DM2 import, a busy second,
+// no likes).
 public class CommentSortingShould
 {
     private static readonly Guid EntityId = Guid.Parse("6f0a1c40-0000-4000-8000-000000000001");
     private static readonly Guid AuthorId = Guid.Parse("6f0a1c40-0000-4000-8000-000000000002");
 
-    /// <summary>The one second all four comments were posted in.</summary>
     private static readonly DateTimeOffset Tie = new(2026, 6, 1, 12, 0, 0, TimeSpan.Zero);
 
-    /// <summary>
-    /// Differ in the last byte only, so the order between them is the same in .NET and in
-    /// Postgres.
-    /// </summary>
+    // Differ in the last byte only, so the order between them is the same in .NET and in Postgres.
     private static readonly Guid[] CommentIds =
     [
         Guid.Parse("6f0a1c40-0000-4000-8000-000000000011"),
@@ -39,10 +30,6 @@ public class CommentSortingShould
         Guid.Parse("6f0a1c40-0000-4000-8000-000000000014")
     ];
 
-    /// <summary>
-    /// One discussion, four comments sharing a timestamp and a like each, seeded in the
-    /// order the caller asks for.
-    /// </summary>
     private static DmDbContext Seeded(IEnumerable<Guid> commentIds)
     {
         var context = InMemoryStore.Open();
@@ -84,7 +71,6 @@ public class CommentSortingShould
         return context;
     }
 
-    /// <summary>Every page of the discussion, read one after another.</summary>
     private static IReadOnlyList<Guid> PagedThrough(DmDbContext context, string? sortBy, int pageSize)
     {
         var read = new List<Guid>();
@@ -121,10 +107,6 @@ public class CommentSortingShould
             "the order is whatever arrangement the rows happened to arrive in");
     }
 
-    /// <summary>
-    /// The identifier is a tie-break and not the order: a genuinely newer comment leads
-    /// even when its identifier is the smaller one.
-    /// </summary>
     [Fact]
     public void StillPreferTheNewerCommentWhenTheTimestampsDiffer()
     {

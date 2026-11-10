@@ -10,21 +10,16 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The testing guide names every runner this tree tests with.
-/// </summary>
 /// <remarks>
 /// The runners are read out of the package scripts and the test projects. A tier is not a runner:
 /// the xunit projects collapse to one word here.
 /// </remarks>
 public class DocumentedTestTiersShould
 {
-    /// <summary>What can stand in front of the runner on a script line.</summary>
     private static readonly string[] Wrappers =
         ["npx", "npm", "run", "run-p", "run-s", "cross-env"];
 
-    /// <summary>The .NET test frameworks a test project can be built on.</summary>
-    /// <remarks>The xunit.v3 suffix is dropped: the guide names the runner, not the package id.</remarks>
+    // The xunit.v3 suffix is dropped: the guide names the runner, not the package id.
     private static readonly Regex TestFramework = new(
         @"PackageReference Include=""(?<runner>xunit|nunit|mstest)(?:\.v3)?""",
         RegexOptions.IgnoreCase | RegexOptions.Compiled);

@@ -7,13 +7,10 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The delay a wrong password costs stays under the timeout of the client asking.
-/// </summary>
-/// <remarks>The numbers live in different languages and projects, so the rule is a ratio, not a pair of literals.</remarks>
+// The numbers live in different languages and projects, so the rule is a ratio, not a pair of
+// literals.
 public class LoginDelayCeilingShould
 {
-    /// <summary>The client gives up on a request after this many seconds.</summary>
     private static double ClientTimeoutSeconds()
     {
         var client = File.ReadAllText(Path.Combine(DM.Testing.RepositoryLayout.Root,
@@ -40,10 +37,7 @@ public class LoginDelayCeilingShould
             "is what stops guessing, and these seconds are paid by whoever mistyped");
     }
 
-    /// <summary>
-    /// A schedule that only ever goes up, and a first step that costs nothing.
-    /// </summary>
-    /// <remarks>The lookup takes the first match, so thresholds out of order shadow each other.</remarks>
+    // The lookup takes the first match, so thresholds out of order shadow each other.
     [Fact]
     public void GrowWithTheAttemptsAndStartFree()
     {

@@ -19,26 +19,17 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// A game of the catalog being written: its row, its master, its template
-    /// and size, and its place in the catalog.
-    /// </summary>
     private sealed record SeedingGame(DbGame Game, DbUser Master, GameTemplate Template, GameVariation Variation, int Index)
     {
-        /// <summary>The game that carries the game-zone UI test fixtures.</summary>
         public bool IsUiTestDataGame => Template.IsUiTestData;
     }
 
-    /// <summary>
-    /// The Diopside character and its large post, which the game pass writes once,
-    /// into the first finished game that can carry them.
-    /// </summary>
+    // The Diopside character and its large post, which the game pass writes once, into the first
+    // finished game that can carry them.
     private sealed class GameShowcase
     {
-        /// <summary>Track if we've created the Diopside character.</summary>
         public bool HasDiopsideCharacter { get; set; }
 
-        /// <summary>Track if we've used the large Diopside post.</summary>
         public bool HasLargePost { get; set; }
     }
 
@@ -117,7 +108,7 @@ internal sealed partial class DataSeeder
         return gameIds;
     }
 
-    /// <summary>The draft a role of the stand masters: TestMentor's, so its page offers "Начать игру".</summary>
+    // The draft a role of the stand masters: TestMentor's, so its page offers "Начать игру".
     internal const string MentorDraftTitle = "Проект: Ледяной Север";
 
     /// <summary>
@@ -175,10 +166,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"Draft \"{MentorDraftTitle}\" ({draft.PublicId}) of {mentor.Username}");
     }
 
-    /// <summary>
-    /// The row of a game: its dates by its status, its recruitment and its
-    /// readable address.
-    /// </summary>
     private async Task<DbGame> NewGame(
         GameTemplate template, GameVariation variation, int gi, DbUser master, Guid? mentorId)
     {
@@ -227,7 +214,6 @@ internal sealed partial class DataSeeder
         };
     }
 
-    /// <summary>The dates of a game, by its status and its place in the catalog.</summary>
     private (DateTimeOffset Created, DateTimeOffset? Activated, DateTimeOffset? Closed) GameDates(
         GameTemplate template, int gi)
     {
@@ -301,10 +287,7 @@ internal sealed partial class DataSeeder
         return (gameCreatedUtc, gameActivatedUtc, gameClosedUtc);
     }
 
-    /// <summary>
-    /// Everything written into a game that is not a draft, saved before the next
-    /// game starts.
-    /// </summary>
+    // Everything written into a game that is not a draft, saved before the next game starts.
     private async Task SeedGameContent(
         SeedingGame seeding, List<DbUser> users, GameShowcase showcase,
         ComprehensiveSeedResult result)
@@ -327,9 +310,6 @@ internal sealed partial class DataSeeder
         await SaveLinkingLastMessages(chatsAwaitingLastMessage);
     }
 
-    /// <summary>
-    /// The assistants of a game: every fifth game gets one, every twentieth two.
-    /// </summary>
     private void SeedGameAssistants(SeedingGame seeding, List<DbUser> users)
     {
         var (game, master, _, _, gi) = seeding;
@@ -361,7 +341,6 @@ internal sealed partial class DataSeeder
         }
     }
 
-    /// <summary>The readers (subscriptions) of a game, as many as its variation asks for.</summary>
     private void SeedGameReaders(SeedingGame seeding, List<DbUser> playersForGame, List<DbUser> users)
     {
         var (game, master, _, variation, _) = seeding;
@@ -372,7 +351,6 @@ internal sealed partial class DataSeeder
         AddReaders(readers, SubscriptionTargetType.Game, game.GameId, game.CreatedUtc);
     }
 
-    /// <summary>Subscriptions of the readers, each within two weeks of the start.</summary>
     private void AddReaders(
         IEnumerable<DbUser> readers, SubscriptionTargetType targetType, Guid targetId, DateTimeOffset startUtc)
     {
@@ -399,10 +377,6 @@ internal sealed partial class DataSeeder
         "Хорошая динамика, не скучно.",
     ];
 
-    /// <summary>
-    /// The comments of a game, spread evenly between its activation and its
-    /// closing, or now.
-    /// </summary>
     private void SeedGameComments(SeedingGame seeding, List<DbUser> users)
     {
         var (game, _, _, variation, _) = seeding;

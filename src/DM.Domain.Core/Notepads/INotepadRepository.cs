@@ -7,18 +7,12 @@ namespace DM.Domain.Core.Notepads;
 /// </summary>
 public interface INotepadRepository
 {
-    /// <summary>
-    /// Get all entries in a notepad
-    /// </summary>
     Task<IEnumerable<NotepadEntry>> GetEntriesAsync(
         NotepadType notepadType,
         Guid containerId,
         Guid? ownerId = null,
         CancellationToken ct = default);
 
-    /// <summary>
-    /// Get entry by ID
-    /// </summary>
     Task<NotepadEntry?> GetEntryAsync(Guid entryId, CancellationToken ct = default);
 
     Task<NotepadEntry> CreateEntryAsync(CreateNotepadEntryInternal entry, CancellationToken ct = default);
@@ -36,12 +30,9 @@ public interface INotepadRepository
 /// </summary>
 public class CreateNotepadEntryInternal
 {
-    /// <summary>Entry identifier</summary>
     public Guid EntryId { get; set; }
     public NotepadType NotepadType { get; set; }
-    /// <summary>Container identifier</summary>
     public Guid ContainerId { get; set; }
-    /// <summary>Owner identifier</summary>
     public Guid? OwnerId { get; set; }
     /// <summary>Author identifier</summary>
     public Guid AuthorId { get; set; }
@@ -62,7 +53,6 @@ public class UpdateNotepadEntryInternal
 {
     /// <summary>Entry identifier</summary>
     public Guid EntryId { get; set; }
-    /// <summary>Entry title</summary>
     public string? Title { get; set; }
     /// <summary>Entry content</summary>
     public string? Content { get; set; }

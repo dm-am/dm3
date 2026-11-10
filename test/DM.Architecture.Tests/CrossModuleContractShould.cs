@@ -8,10 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A module reads another module through the kernel and writes to it through an
-/// event, and the kernel contracts one module implements for another only read.
-/// </summary>
 /// <remarks>
 /// The reading half is DomainBoundaryShould; this is the writing half. A member that hands
 /// nothing back is called for its effect, which is what events carry.
@@ -25,10 +21,6 @@ public class CrossModuleContractShould
         .Select(Assembly.LoadFrom)
         .ToArray();
 
-    /// <summary>
-    /// Kernel interfaces a domain module implements: the contracts one module
-    /// publishes for the others through the architecture centre.
-    /// </summary>
     private static Type[] ImplementedByAModule() => DomainAssemblies()
         .Where(assembly => assembly.GetName().Name != Kernel)
         .SelectMany(assembly => assembly.GetTypes())
@@ -71,11 +63,7 @@ public class CrossModuleContractShould
     /// </summary>
     private static readonly string[] CheckVerbs = ["Ensure", "ThrowIf", "Validate", "Assert"];
 
-    /// <summary>
-    /// A member called for its effect rather than for its answer: nothing comes
-    /// back, or the only thing that comes back is the completion.
-    /// </summary>
-    /// <remarks>Property accessors are skipped: some contracts are DTO shapes.</remarks>
+    // Property accessors are skipped: some contracts are DTO shapes.
     private static bool IsCommand(MethodInfo method) =>
         !method.IsSpecialName &&
         !CheckVerbs.Any(verb => method.Name.StartsWith(verb, StringComparison.Ordinal)) &&

@@ -15,7 +15,7 @@ namespace DM.Domain.Core.Tests.Users;
 /// </remarks>
 public class RemovedAccountShould
 {
-    /// <summary>The "е" with two dots, spelled as its code point as the sources require.</summary>
+    // The "е" with two dots, spelled as its code point as the sources require.
     private const char DottedE = (char)0x0451;
 
     public static TheoryData<string> TheProfileName =>
@@ -65,10 +65,8 @@ public class RemovedAccountShould
             "an account named so would sign its posts the way the removed ones are signed");
     }
 
-    /// <summary>
-    /// A lookalike is refused as a name and still not taken for the profile: the address
-    /// answers the name, and "Aккаунт удален" with a Latin letter is not it.
-    /// </summary>
+    // A lookalike is refused as a name and still not taken for the profile: the address answers the
+    // name, and "Aккаунт удален" with a Latin letter is not it.
     [Theory]
     [MemberData(nameof(LookalikesOfIt))]
     public void NotOpenTheProfileForALookalike(string username)

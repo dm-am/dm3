@@ -1,5 +1,5 @@
 /**
- * Measures the client against the limits of sizeRatchet.js with ESLint's own
+ * Measures the client and scripts/ against the limits of sizeRatchet.js with ESLint's own
  * rules through eslint.config.js, each wrapped to hear what it reports and name
  * the node stably rather than by line number.
  */
@@ -11,10 +11,13 @@ import { relative } from "node:path";
 interface FunctionSize {
   lines?: number;
   complexity?: number;
+  depth?: number;
 }
 type Block = "script" | "template" | "style";
 export interface FileSize {
   lines?: number;
+  /** Nesting outside any function: the top level of a module or a script block. */
+  depth?: number;
   blocks?: Partial<Record<Block, number>>;
   functions?: Record<string, FunctionSize>;
 }
@@ -24,6 +27,7 @@ export interface Limits {
   lines: number;
   functionLines: number;
   complexity: number;
+  depth: number;
   blocks: Record<Block, number>;
 }
 
@@ -247,7 +251,7 @@ function unitKeys(code: SourceCode): Map<Node, string> {
 }
 
 interface Reading {
-  measure: "lines" | "block" | "functionLines" | "complexity";
+  measure: "lines" | "block" | "functionLines" | "complexity" | "depth";
   value: number;
   name?: string;
 }
@@ -299,6 +303,15 @@ function core(name: string): Rule.RuleModule {
   return rule;
 }
 
+/** The function max-depth counts a nested statement in, or none at the top level. */
+function enclosingUnit(node: Node): Node | null {
+  let at = node.parent as Node | null;
+  while (at && !isFunction(at) && at.type !== "StaticBlock") {
+    at = at.parent as Node | null;
+  }
+  return at;
+}
+
 const PLUGIN = "dm-size";
 const rules: Record<string, Rule.RuleModule> = {
   lines: listen(core("max-lines"), ({ data }) => ({
@@ -326,16 +339,30 @@ const rules: Record<string, Rule.RuleModule> = {
     value: Number(data?.complexity),
     name: unitKeys(code).get(node as Node),
   })),
+  depth: listen(core("max-depth"), ({ node, data }, code) => {
+    const unit = enclosingUnit(node as Node);
+    return {
+      measure: "depth",
+      value: Number(data?.depth),
+      name: unit ? unitKeys(code).get(unit) : undefined,
+    };
+  }),
 };
 
-/** A linter that runs only the measuring rules, on the project's own config. */
+/**
+ * A linter that runs only the measuring rules, on the project's own config.
+ * Given the client's config file, it measures a folder outside the client, such
+ * as scripts/ from the repository root, by the same limits.
+ */
 export function measurer(
-  clientDir: string,
+  cwd: string,
   limits: Limits,
   functionScope: string[],
+  configFile?: string,
 ): ESLint {
   return new ESLint({
-    cwd: clientDir,
+    cwd,
+    ...(configFile ? { overrideConfigFile: configFile } : {}),
     cache: false,
     ruleFilter: ({ ruleId }) => ruleId.startsWith(`${PLUGIN}/`),
     overrideConfig: [
@@ -344,6 +371,7 @@ export function measurer(
         rules: {
           [`${PLUGIN}/lines`]: ["error", { max: limits.lines }],
           [`${PLUGIN}/complexity`]: ["error", limits.complexity],
+          [`${PLUGIN}/depth`]: ["error", limits.depth],
         },
       },
       {
@@ -364,7 +392,14 @@ export function measurer(
 }
 
 function record(entry: FileSize, reading: Reading, line: number) {
-  if (reading.measure === "lines") {
+  // max-depth reports every statement past the limit; the deepest one is the size.
+  if (reading.measure === "depth") {
+    const at =
+      reading.name === undefined
+        ? entry
+        : ((entry.functions ??= {})[reading.name] ??= {});
+    at.depth = Math.max(at.depth ?? 0, reading.value);
+  } else if (reading.measure === "lines") {
     entry.lines = reading.value;
   } else if (reading.measure === "block") {
     (entry.blocks ??= {})[reading.name as Block] = reading.value;
@@ -383,16 +418,19 @@ export interface Measurement {
   files: string[];
 }
 
-/** Every file, block and function of the client past its limit, with its size. */
+/**
+ * Every file, block and function past its limit, with its size, keyed by path
+ * from the folder the linter runs in.
+ */
 export async function measure(
   linter: ESLint,
-  clientDir: string,
+  baseDir: string,
   patterns: string[] = ["."],
 ): Promise<Measurement> {
   const register: SizeRegister = {};
   const files: string[] = [];
   for (const result of await linter.lintFiles(patterns)) {
-    const path = relative(clientDir, result.filePath).replace(/\\/g, "/");
+    const path = relative(baseDir, result.filePath).replace(/\\/g, "/");
     files.push(path);
     for (const message of result.messages) {
       if (!message.ruleId?.startsWith(`${PLUGIN}/`)) {
@@ -408,6 +446,7 @@ export async function measure(
 const sizes = (entry: FileSize | undefined) => {
   const flat = new Map<string, number>();
   if (entry?.lines) flat.set("lines", entry.lines);
+  if (entry?.depth) flat.set("depth", entry.depth);
   for (const [block, value] of Object.entries(entry?.blocks ?? {})) {
     flat.set(`<${block}> lines`, value);
   }
@@ -416,9 +455,14 @@ const sizes = (entry: FileSize | undefined) => {
     if (size.complexity) {
       flat.set(`function "${name}" complexity`, size.complexity);
     }
+    if (size.depth) flat.set(`function "${name}" depth`, size.depth);
   }
   return flat;
 };
+
+/** How to bring a measure back under its limit, printed with each failure. */
+export const HOW_TO_CUT =
+  "cut by meaning, each part named after what it does, never by size alone";
 
 /**
  * Where the register and the tree disagree, one line per measure: grown past
@@ -440,14 +484,16 @@ export function disagreements(
       if (record === size) continue;
       if (record === undefined) {
         out.push(
-          `${path}: ${what} ${size} is past the limit and has no record: split the code (a new record needs the owner's word)`,
+          `${path}: ${what} ${size} is past the limit and has no record: split the code (a new record needs the owner's word); ${HOW_TO_CUT}`,
         );
       } else if (size === undefined) {
         out.push(
           `${path}: ${what} is back within the limit: drop the record of ${record}`,
         );
       } else if (size > record) {
-        out.push(`${path}: ${what} grew from ${record} to ${size}`);
+        out.push(
+          `${path}: ${what} grew from ${record} to ${size}; ${HOW_TO_CUT}`,
+        );
       } else {
         out.push(
           `${path}: ${what} shrank from ${record} to ${size}: lower the record to ${size}`,

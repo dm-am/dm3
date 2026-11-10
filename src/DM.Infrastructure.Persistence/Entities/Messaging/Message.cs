@@ -14,9 +14,6 @@ namespace DM.Infrastructure.Persistence.Entities.Messaging;
 public class Message : ISoftDeletable
 {
 
-    /// <summary>
-    /// Message identifier
-    /// </summary>
     [Key]
     public Guid MessageId { get; set; }
 
@@ -48,9 +45,6 @@ public class Message : ISoftDeletable
     /// </summary>
     public Guid? DeletedByUserId { get; set; }
 
-    /// <summary>
-    /// When the message was deleted
-    /// </summary>
     public DateTimeOffset? DeletedUtc { get; set; }
 
     /// <summary>

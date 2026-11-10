@@ -25,9 +25,6 @@ using MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// One notification, one format, whichever transport carried it.
-/// </summary>
 /// <remarks>
 /// The DTO leaves the API over REST and over the hub, and a dictionary key is not touched by
 /// PropertyNamingPolicy; the dictionary arm stands in for a writer handing the bag under CLR names.
@@ -92,15 +89,8 @@ public class NotificationWireShould
             "the metadata keys travel in the case the client reads them in");
     }
 
-    /// <summary>
-    /// The push carries the row the list shows: the title, the address, the
-    /// details, the date and the mark, put together by the one mapper both
-    /// transports call.
-    /// </summary>
-    /// <remarks>
-    /// The pushed copy is taken from the processor itself, and the listed copy is handed the bag under
-    /// CLR member names.
-    /// </remarks>
+    // The pushed copy is taken from the processor itself, and the listed copy is handed the bag
+    // under CLR member names.
     [Fact]
     public async Task PushTheRowTheListShows()
     {
@@ -157,7 +147,6 @@ public class NotificationWireShould
             .Should().Equal("Персонаж: Цири", "Игра: Ведьмак", "Мастер: SolohinLex");
     }
 
-    /// <summary>What MVC answers a request with.</summary>
     private static JsonSerializerOptions ApiContract
     {
         get
@@ -168,7 +157,6 @@ public class NotificationWireShould
         }
     }
 
-    /// <summary>What the hub pushes with.</summary>
     private static JsonSerializerOptions HubContract =>
         new ServiceCollection()
             .AddDmSignalR()
@@ -186,9 +174,6 @@ public class NotificationWireShould
             Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         });
 
-    /// <summary>
-    /// What the hub sends the connections of the reader when the message reaches the API.
-    /// </summary>
     private static async Task<Notification> PushAsync(RealtimeNotification message)
     {
         Notification? sent = null;
@@ -210,9 +195,6 @@ public class NotificationWireShould
         return sent!;
     }
 
-    /// <summary>
-    /// Stands in for a host interface, answering every call the way the test says.
-    /// </summary>
     public class Stand : DispatchProxy
     {
         private Func<MethodInfo, object?[], object?> _answer = (_, _) => null;

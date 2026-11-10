@@ -11,9 +11,8 @@ using Topic = DM.Domain.Forum.Features.Topics.Topic;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
-/// <summary>
-/// TopicNumber, the topic URL key, is MAX+1 with no lock, so the unique index keeps two creates from sharing one.
-/// </summary>
+// TopicNumber, the topic URL key, is MAX+1 with no lock, so the unique index keeps two creates from
+// sharing one.
 public class TopicNumberAllocationShould : IntegrationTestBase
 {
     private const int Parallelism = 8;
@@ -67,10 +66,8 @@ public class TopicNumberAllocationShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A removed topic keeps its number: its link has to stay a 410 rather than
-    /// start resolving to whatever was created after it.
-    /// </summary>
+    // A removed topic keeps its number: its link has to stay a 410 rather than start resolving to
+    // whatever was created after it.
     [Fact]
     public async Task NotHandOutTheNumberOfARemovedTopic()
     {

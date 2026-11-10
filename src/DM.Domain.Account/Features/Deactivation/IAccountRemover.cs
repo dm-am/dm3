@@ -15,10 +15,5 @@ namespace DM.Domain.Account.Features.Deactivation;
 /// </remarks>
 public interface IAccountRemover
 {
-    /// <summary>
-    /// Remove the account
-    /// </summary>
-    /// <param name="userId">Whose account</param>
-    /// <param name="cancellationToken">Cancellation token</param>
     Task Remove(Guid userId, CancellationToken cancellationToken = default);
 }

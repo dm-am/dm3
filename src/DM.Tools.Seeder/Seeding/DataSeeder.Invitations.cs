@@ -11,10 +11,6 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// The invitations waiting for an answer: into the first game TestUser masters, into the first
-    /// blog he writes, and one to him, so the settings of both and his account each list some.
-    /// </summary>
     /// <remarks>
     /// An invitation is a token, and the token sweep deletes every token a week after it was issued by
     /// the server's clock (AccountRetentionPolicy.TokenRetention), however long the invitation itself is
@@ -129,7 +125,6 @@ internal sealed partial class DataSeeder
             : [Invitation(TokenType.BlogAssistantInvitation, member, blog.BlogId, null, TimeSpan.FromHours(5))];
     }
 
-    /// <summary>A live invitation of one person into one game or blog, issued the given time ago.</summary>
     private Token Invitation(TokenType type, DbUser invitee, Guid entityId, DbUser? creator, TimeSpan age) => new()
     {
         TokenId = _guidFactory.Create(),

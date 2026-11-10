@@ -357,6 +357,7 @@ function handleEditKeydown(e: KeyboardEvent) {
 <style scoped lang="sass">
 @use "@/assets/styles/Buttons" as *
 @use "@/assets/styles/Links" as *
+@use "@/widgets/chat-message/compactLayout" as *
 
 // 72px: the chat is more spacious than comments.
 $avatar-size: 72px
@@ -531,42 +532,5 @@ $icon-size: 16px
   .msg-time-gutter .msg-time-hover
     opacity: 1
 
-// gutter + .msg-gap ($small) = 88px, the full layout's avatar column, so text starts on one x.
-$compact-time-gutter: 80px
-
-.chat-message.compact
-  .msg-layout-compact
-    display: block
-  .msg-body
-    display: block
-  .msg-header-compact
-    margin-bottom: 0
-    line-height: 1.4
-  .msg-time-group
-    width: $compact-time-gutter
-    text-align: left
-  .msg-content
-    display: block
-    margin-left: calc(#{$compact-time-gutter} + #{$small})
-    margin-top: 0
-  .msg-edit
-    margin-left: calc(#{$compact-time-gutter} + #{$small})
-  .msg-text
-    display: block
-  .msg-text :deep(.bb-quote),
-  .msg-text :deep(.bb-mod),
-  .msg-text :deep(.bb-private)
-    display: block !important
-    margin: 0 !important
-    padding: 0
-    line-height: 1.4
-  .msg-text :deep(ul),
-  .msg-text :deep(ol)
-    display: block !important
-    margin: 0 !important
-    padding-left: $big
-    line-height: 1.4
-  .msg-reactions
-    display: block
-    margin-top: $tiny
++compact-layout
 </style>

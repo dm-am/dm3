@@ -25,15 +25,6 @@ using NSubstitute;
 
 namespace DM.Domain.Game.Tests.Dsl;
 
-/// <summary>
-/// The post service over substitutes of everything it asks: validators that
-/// pass, intentions that allow, a signed-in user, a producer that takes every
-/// event and tag names written as they came.
-/// </summary>
-/// <remarks>
-/// The room and post repositories answer nothing until a case tells them what
-/// to: the room a post goes to is the case's own, built with the helpers below.
-/// </remarks>
 public abstract class PostServiceTestBase : UnitTestBase
 {
     protected readonly IIntentionManager intentionManager;
@@ -47,11 +38,9 @@ public abstract class PostServiceTestBase : UnitTestBase
     protected readonly IIdentityProvider identityProvider;
     protected readonly Guid currentUserId = Guid.NewGuid();
 
-    /// <summary>
-    /// The id the factory hands the service. The post id is generated before the
-    /// write rather than read back from it — that is what lets the dice be stored
-    /// first — so a test that wants to talk about the post has to know it up front.
-    /// </summary>
+    // The post id is generated before the write rather than read back from it — that is what lets
+    // the dice be stored first — so a test that wants to talk about the post has to know it up
+    // front.
     protected readonly Guid postId = Guid.NewGuid();
     private protected readonly PostService service;
 
@@ -115,13 +104,11 @@ public abstract class PostServiceTestBase : UnitTestBase
             new PrivateBlockReading(new BbParserProvider()));
     }
 
-    /// <summary>A room whose access list holds the given characters.</summary>
     protected static RoomToUpdate RoomWith(Guid roomId, params (string Name, Guid OwnerId)[] characters) =>
         RoomWithCharacters(roomId, characters
             .Select(c => (Guid.NewGuid(), c.Name, c.OwnerId))
             .ToArray());
 
-    /// <summary>The same, when the test has to say which character is which.</summary>
     protected static RoomToUpdate RoomWithCharacters(
         Guid roomId, params (Guid CharacterId, string Name, Guid OwnerId)[] characters)
     {

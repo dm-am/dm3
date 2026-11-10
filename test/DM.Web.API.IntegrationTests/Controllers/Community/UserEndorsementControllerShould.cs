@@ -16,9 +16,8 @@ public class UserEndorsementControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Seed an endorsement directly: the create endpoint's gates are too heavy to arrange through the API.
-    /// </summary>
+    // Seed an endorsement directly: the create endpoint's gates are too heavy to arrange through
+    // the API.
     private async Task SeedEndorsement(Guid id, Guid authorId, Guid targetUserId, string text, DateTimeOffset createdUtc)
     {
         await using var db = DatabaseFixture.CreateDbContext();
@@ -217,9 +216,7 @@ public class UserEndorsementControllerShould : IntegrationTestBase
         return (canCreate, reason);
     }
 
-    /// <summary>
-    /// The question the write form asks before it draws itself; a guest is answered, not refused.
-    /// </summary>
+    // The question the write form asks before it draws itself; a guest is answered, not refused.
     [Fact]
     public async Task GetEligibilityForGuestAnswersNoWithSignInSentence()
     {
@@ -243,9 +240,6 @@ public class UserEndorsementControllerShould : IntegrationTestBase
         reason.Should().Be("Нельзя рекомендовать самого себя");
     }
 
-    /// <summary>
-    /// The whole path: may I, the POST, the recommendation on the received page, and a second "may I" says no.
-    /// </summary>
     [Fact]
     public async Task PostUserEndorsementShowsUpInRecipientsListAndClosesThePair()
     {

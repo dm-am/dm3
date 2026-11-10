@@ -5,16 +5,9 @@ using static DM.Infrastructure.Core.Tests.BbAudienceRender;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// The [private] tag, the hidden block: its recipients for the reader, its
-/// addressees for the author's editor, and its spellings (BBCODE_RENDERING.md,
-/// "Скрытый блок [private]").
-/// </summary>
 public class BbPrivateTagShould
 {
-    /// <summary>
-    /// A tag attribute is author text, so it is encoded where the tag writes it.
-    /// </summary>
+    // A tag attribute is author text, so it is encoded where the tag writes it.
     [Fact]
     public void EncodePrivateAddresseeInTheRecipients()
     {
@@ -25,11 +18,8 @@ public class BbPrivateTagShould
             "data-recipients=\"DungeonMaster, Assistant, &lt;img src=x onerror=alert(1)&gt;\">t</span>");
     }
 
-    /// <summary>
-    /// Hiding markup where it does not work is erased for every reader, the
-    /// author included.
-    /// </summary>
-    /// <remarks>The save path refuses such text, so what reaches the page was stored before it or carried from DM2.</remarks>
+    // The save path refuses such text, so what reaches the page was stored before it or carried
+    // from DM2.
     [Theory]
     [InlineData(BbSurface.Comment)]
     [InlineData(BbSurface.GlobalChatMessage)]
@@ -55,10 +45,8 @@ public class BbPrivateTagShould
                 "до <span class=\"private-message\" data-recipients=\"DungeonMaster, Assistant, Вася\">тайна</span> после");
     }
 
-    /// <summary>
-    /// The recipients name the master and the assistants first, then the block's names, a lead not twice;
-    /// the names are the list the save path reads.
-    /// </summary>
+    // The recipients name the master and the assistants first, then the block's names, a lead not
+    // twice; the names are the list the save path reads.
     [Theory]
     [InlineData("[private=\"Лиара Тенебраум\"]тайна[/private]", "DungeonMaster, Assistant, Лиара Тенебраум")]
     [InlineData("[private=\"Assistant, Вася, dungeonmaster\"]тайна[/private]", "DungeonMaster, Assistant, Вася")]
@@ -70,10 +58,8 @@ public class BbPrivateTagShould
             .Should().Contain($"<span class=\"private-message\" data-recipients=\"{recipients}\">");
     }
 
-    /// <summary>
-    /// A block naming nobody is read by the master and the assistants, named in Latin letters as DM2 does,
-    /// as plain text. An empty value, commas alone and a misspelling name nobody.
-    /// </summary>
+    // A block naming nobody is read by the master and the assistants, named in Latin letters as DM2
+    // does, as plain text.
     [Theory]
     [InlineData("[private]тайна[/private]")]
     [InlineData("[private=\"\"]тайна[/private]")]
@@ -85,9 +71,7 @@ public class BbPrivateTagShould
             .Should().Contain("<span class=\"private-message\" data-recipients=\"DungeonMaster, Assistant\">");
     }
 
-    /// <summary>
-    /// Encoding does not reach what the reader sees: an ampersand arrives as one character.
-    /// </summary>
+    // Encoding does not reach what the reader sees: an ampersand arrives as one character.
     [Fact]
     public void KeepPrivateAddresseeWhenItIsAnOrdinaryName()
     {

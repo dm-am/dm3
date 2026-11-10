@@ -11,8 +11,6 @@ namespace DM.Domain.Core.Content;
 /// either setting opens the addressed blocks to every reader of the room
 /// (<see cref="PrivateBlockReaders"/>).
 /// </remarks>
-/// <param name="Source">Raw BBCode as stored.</param>
-/// <param name="AuthorUserId">Author of the post.</param>
 /// <param name="GameLeadUserIds">Master and assistants of the game; mentors are not leads.</param>
 /// <param name="PrivateAddresseeSnapshotJson">The addressees frozen at save time (<see cref="PrivateAddresseeSnapshot"/>).</param>
 /// <param name="GameShowPrivateMessages">The game setting "Показывать всем скрытые блоки".</param>

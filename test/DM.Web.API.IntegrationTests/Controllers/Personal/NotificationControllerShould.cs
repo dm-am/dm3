@@ -11,10 +11,8 @@ namespace DM.Web.API.IntegrationTests.Controllers.Personal;
 
 public class NotificationControllerShould : IntegrationTestBase
 {
-    /// <summary>
-    /// The bag of an accepted character, spelled the way the store holds it: the
-    /// generator writes CharacterName, the store hands back characterName.
-    /// </summary>
+    // The bag of an accepted character, spelled the way the store holds it: the generator writes
+    // CharacterName, the store hands back characterName.
     private const string AcceptedCharacter = """
         {"characterName":"Цири","characterId":"tsiri~aBcD","gameTitle":"Ведьмак: Дикая Охота",
          "gameId":"vedmak~eFgH-1_2","newStatus":"Active","masterUsername":"SolohinLex"}
@@ -34,10 +32,8 @@ public class NotificationControllerShould : IntegrationTestBase
 
     private static GeneralUser Reader => CustomWebApplicationFactory.CreateSecondUser();
 
-    /// <summary>
-    /// A row of the list says what happened, where it leads, when, and with what.
-    /// </summary>
-    /// <remarks>The words and the path come from the letter's table, read off the stored bag, whose keys are camelCase.</remarks>
+    // The words and the path come from the letter's table, read off the stored bag, whose keys are
+    // camelCase.
     [Fact]
     public async Task ListWhatHappenedWhereItLeadsAndWhen()
     {
@@ -73,10 +69,8 @@ public class NotificationControllerShould : IntegrationTestBase
         Field(row, "isRead").GetBoolean().Should().BeTrue("the reader has just marked it read");
     }
 
-    /// <summary>
-    /// Whether a notification was read is the reader's own: one row of the store
-    /// reaches several people, and each reads it in their own time.
-    /// </summary>
+    // Whether a notification was read is the reader's own: one row of the store reaches several
+    // people, and each reads it in their own time.
     [Fact]
     public async Task AnswerEachReaderWithTheirOwnMark()
     {
@@ -89,11 +83,8 @@ public class NotificationControllerShould : IntegrationTestBase
         Field(await ListedAsync(other, id), "isRead").GetBoolean().Should().BeTrue();
     }
 
-    /// <summary>
-    /// The start and the end of a ban arrive marked as moments, for the page to
-    /// put on the reader's clock, though the store spells them startedUtc and
-    /// endedUtc.
-    /// </summary>
+    // The start and the end of a ban arrive marked as moments, for the page to put on the reader's
+    // clock, though the store spells them startedUtc and endedUtc.
     [Fact]
     public async Task MarkTheMomentsOfAStoredBag()
     {
@@ -111,10 +102,8 @@ public class NotificationControllerShould : IntegrationTestBase
         });
     }
 
-    /// <summary>
-    /// A changed email leads nowhere and does not repeat its own time under the
-    /// date of the row, though the store spells the time eventTime.
-    /// </summary>
+    // A changed email leads nowhere and does not repeat its own time under the date of the row,
+    // though the store spells the time eventTime.
     [Fact]
     public async Task LeaveOutTheTimeTheRowShowsAndLeadNowhereWithoutAPage()
     {
@@ -130,19 +119,14 @@ public class NotificationControllerShould : IntegrationTestBase
         Details(row).Should().Equal(new[] { ("Новая почта", "two@example.com", false) });
     }
 
-    /// <summary>
-    /// The current moment to the second: the store keeps microseconds, and a row
-    /// written now stands at the top of a list sorted newest first.
-    /// </summary>
+    // The current moment to the second: the store keeps microseconds, and a row written now stands
+    // at the top of a list sorted newest first.
     private static DateTimeOffset Now()
     {
         var now = DateTimeOffset.UtcNow;
         return new DateTimeOffset(now.Year, now.Month, now.Day, now.Hour, now.Minute, now.Second, TimeSpan.Zero);
     }
 
-    /// <summary>
-    /// A notification written the way the store holds one, addressed to the readers given.
-    /// </summary>
     private async Task<Guid> StoreAsync(
         EventType eventType, string metadata, DateTimeOffset createdUtc,
         params (GeneralUser User, bool IsRead)[] recipients)
@@ -168,7 +152,6 @@ public class NotificationControllerShould : IntegrationTestBase
         return id;
     }
 
-    /// <summary>The row of the notification in the reader's list.</summary>
     private async Task<JsonElement> ListedAsync(GeneralUser reader, Guid id)
     {
         var response = await Client.SendAsync(

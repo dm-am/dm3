@@ -14,12 +14,6 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Tokens;
 
-/// <summary>
-/// How long the account area keeps what has served its purpose.
-/// </summary>
-/// <remarks>
-/// Each processor is asked for one pass, and the cutoff it hands the store is checked against the clock it was given.
-/// </remarks>
 public class AccountRetentionShould : UnitTestBase
 {
     private static readonly DateTimeOffset Now = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
@@ -79,10 +73,8 @@ public class AccountRetentionShould : UnitTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// The approval deadline is stored per request rather than derived from a
-    /// window, so what the pass supplies is the moment to compare it against.
-    /// </summary>
+    // The approval deadline is stored per request rather than derived from a window, so what the
+    // pass supplies is the moment to compare it against.
     [Fact]
     public async Task ExpireAnApprovalTheRequesterNeverUsed()
     {
@@ -115,10 +107,8 @@ public class AccountRetentionShould : UnitTestBase
         await repository.Received(1).PurgeExpiredSessions(Now, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A token has to be expired well before it is deleted: a reader following a
-    /// stale link is told the link expired, not that nothing was ever issued.
-    /// </summary>
+    // A token has to be expired well before it is deleted: a reader following a stale link is told
+    // the link expired, not that nothing was ever issued.
     [Fact]
     public void KeepATokenLongerThanAnyTokenIsValidFor()
     {

@@ -9,21 +9,15 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every answer that tells a caller whether an identifier is registered is both
-/// written down as a decision and recorded when it is given.
-/// </summary>
 /// <remarks>
 /// Disclosing existence is a recorded trade made acceptable by one entry per disclosing answer, so
 /// the document and the surfaces are held to each other both ways.
 /// </remarks>
 public class IdentifierDisclosureShould
 {
-    /// <summary>The convention document that records the exception.</summary>
     private static readonly string Convention =
         Path.Combine("docs", "conventions", "SECURITY.md");
 
-    /// <summary>A surface of the recorded table, by the route it answers on.</summary>
     private static readonly Regex Documented = new(
         @"^\|\s*`(?:GET|POST|PUT|DELETE)\s+/v1/account/([\w-]+)`\s*\|",
         RegexOptions.Compiled | RegexOptions.Multiline);
@@ -58,10 +52,7 @@ public class IdentifierDisclosureShould
             "and the reader of the document is counting on the list being complete");
     }
 
-    /// <summary>
-    /// The identifier that was probed stays out of the entry.
-    /// </summary>
-    /// <remarks>Entries live for a month: the value would make the record a better list than the scan.</remarks>
+    // Entries live for a month: the value would make the record a better list than the scan.
     [Fact]
     public void KeepTheProbedIdentifierOutOfTheEntry()
     {

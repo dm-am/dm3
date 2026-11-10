@@ -14,14 +14,10 @@ namespace DM.Domain.Account.Features.Authentication;
 /// Read by authentication and by the rate limiter, which runs before it: the format
 /// lives in one place so that the two cannot drift.
 /// </remarks>
-/// <param name="UserId">Account the token was issued to.</param>
-/// <param name="SessionId">Session the token names.</param>
 public sealed record SessionToken(Guid UserId, Guid SessionId)
 {
-    /// <summary>
-    /// The payload spelling of the tokens already issued: camelCase names, and both
-    /// halves required, so a payload missing one does not open to an empty id.
-    /// </summary>
+    // The payload spelling of the tokens already issued: camelCase names, and both halves required,
+    // so a payload missing one does not open to an empty id.
     private static readonly JsonSerializerOptions PayloadOptions = new(JsonSerializerDefaults.Web)
     {
         RespectRequiredConstructorParameters = true
@@ -40,7 +36,6 @@ public sealed record SessionToken(Guid UserId, Guid SessionId)
     /// caller that needs those answers has to ask the store for them.
     /// </remarks>
     /// <param name="cryptoService">Cipher the token was minted with.</param>
-    /// <param name="token">Token as the caller sent it.</param>
     /// <returns>Contents of the token, or null when there are none to read.</returns>
     public static async Task<SessionToken?> Read(ISymmetricCryptoService cryptoService, string token)
     {

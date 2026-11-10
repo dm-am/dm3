@@ -7,6 +7,7 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useAuthStore } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/common";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import type { WebsiteTestimonial } from "@/shared/api/models/community";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import TestimonialDeleteButton from "./TestimonialDeleteButton.vue";
@@ -31,8 +32,10 @@ const testimonial = {
   createdUtc: "2026-01-01T00:00:00Z",
 } as unknown as WebsiteTestimonial;
 
-const viewer = (role: UserRole) =>
-  ({ id: "u-viewer", username: "viewer", role }) as unknown as User;
+const viewer = (role: UserRole): User => ({
+  ...createMockUser("u-viewer", "viewer"),
+  role,
+});
 
 const TRASH = 'button[aria-label="Удалить"]';
 

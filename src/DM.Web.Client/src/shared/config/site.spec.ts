@@ -56,8 +56,8 @@ describe("the other addresses of the site", () => {
 });
 
 /**
- * "Скопировать ссылку" and the link a moderator quotes: always the RU proxy, or
- * where the reader is? The owner chose where the reader is (5 October 2026).
+ * "Скопировать ссылку" and the link a moderator quotes point where the reader
+ * is: a copied link opens on the address it was copied from.
  */
 describe("the origin of a link that leaves the page", () => {
   it("is the address being read, not one address for every reader", () => {

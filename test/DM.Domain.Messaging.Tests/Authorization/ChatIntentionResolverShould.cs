@@ -42,9 +42,7 @@ public class ChatIntentionResolverShould
             .Should().BeFalse();
     }
 
-    /// <summary>
-    /// The ordinary ban silences the global chat; private correspondence is outside it by design.
-    /// </summary>
+    // The ordinary ban silences the global chat; private correspondence is outside it by design.
     [Theory]
     [InlineData(ChatType.Global, false, false)]
     [InlineData(ChatType.Direct, true, true)]
@@ -76,11 +74,8 @@ public class ChatIntentionResolverShould
         resolver.IsAllowed(user, ChatIntention.LeaveChat, ChatOf(type, participates)).Should().Be(expected);
     }
 
-    /// <summary>
-    /// The history is cleared by a participant of a direct or group chat, for
-    /// himself. A stranger has no history there to clear, and the global chat
-    /// and a game room chat have no participant row to keep the mark on.
-    /// </summary>
+    // A stranger has no history there to clear, and the global chat and a game room chat have no
+    // participant row to keep the mark on.
     [Theory]
     [InlineData(ChatType.Group, true, true)]
     [InlineData(ChatType.Direct, true, true)]

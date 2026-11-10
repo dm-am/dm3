@@ -31,19 +31,10 @@ public interface ISubscriptionService
     /// </remarks>
     Task<Subscription> SubscribeAsync(SubscriptionTargetType targetType, Guid targetId, SubscriptionSettings? settings = null, CancellationToken ct = default);
 
-    /// <summary>
-    /// Update subscription settings
-    /// </summary>
     Task<Subscription> UpdateSettingsAsync(Guid subscriptionId, SubscriptionSettings settings, CancellationToken ct = default);
 
-    /// <summary>
-    /// Unsubscribe by subscription ID
-    /// </summary>
     Task UnsubscribeAsync(Guid subscriptionId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Unsubscribe by target type and ID
-    /// </summary>
     Task UnsubscribeByTargetAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default);
 
     /// <summary>
@@ -51,9 +42,6 @@ public interface ISubscriptionService
     /// </summary>
     Task<Subscription?> GetSubscriptionAsync(SubscriptionTargetType targetType, Guid targetId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get subscription by ID
-    /// </summary>
     Task<Subscription?> GetByIdAsync(Guid subscriptionId, CancellationToken ct = default);
 
     /// <summary>

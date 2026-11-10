@@ -6,9 +6,7 @@ using DM.Domain.Core.UnreadCounters;
 
 namespace DM.Domain.Game.Features.Games;
 
-/// <summary>
-/// A guest marks nothing read, so he is shown the totals in the same fields.
-/// </summary>
+// A guest marks nothing read, so he is shown the totals in the same fields.
 internal sealed class GameUnreadCounters
 {
     private readonly IGameRepository _repository;

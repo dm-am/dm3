@@ -7,9 +7,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A job that repeats runs on the one loop, not on a copy of it.
-/// </summary>
 /// <remarks>
 /// Work before the first await runs inside host startup, and a cancellation there stops the host.
 /// Held by the timer, which only a hand-rolled loop needs.

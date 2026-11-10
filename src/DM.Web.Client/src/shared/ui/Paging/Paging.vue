@@ -185,26 +185,20 @@ const pageNumbers = computed(() => {
 const windowBounds = computed(() => getWindowBounds(localPaging.value));
 
 // The dots stand with << and >>: where the line is short the window gives up numbers, not the dots.
-const showFirst = computed(() => {
-  return (
-    localPaging.value.pages > fitted.value && windowBounds.value.lowerBound > 1
-  );
-});
+const showFirst = computed(
+  () =>
+    localPaging.value.pages > fitted.value && windowBounds.value.lowerBound > 1,
+);
 
-const showLast = computed(() => {
-  return (
+const showLast = computed(
+  () =>
     localPaging.value.pages > fitted.value &&
-    windowBounds.value.upperBound < localPaging.value.pages
-  );
-});
+    windowBounds.value.upperBound < localPaging.value.pages,
+);
 
-const leftEllipsisTarget = computed(() => {
-  return windowBounds.value.lowerBound - 1;
-});
+const leftEllipsisTarget = computed(() => windowBounds.value.lowerBound - 1);
 
-const rightEllipsisTarget = computed(() => {
-  return windowBounds.value.upperBound + 1;
-});
+const rightEllipsisTarget = computed(() => windowBounds.value.upperBound + 1);
 
 function getPageLink(page: number) {
   if (props.useQuery) {
@@ -217,15 +211,14 @@ function getPageLink(page: number) {
       params: props.to.params,
       query: newQuery,
     };
-  } else {
-    const entityNumber = (page - 1) * localPaging.value.take + 1;
-    return {
-      name: props.to.name,
-      params: Object.assign({}, props.to.params, {
-        n: entityNumber,
-      }),
-    };
   }
+  const entityNumber = (page - 1) * localPaging.value.take + 1;
+  return {
+    name: props.to.name,
+    params: Object.assign({}, props.to.params, {
+      n: entityNumber,
+    }),
+  };
 }
 </script>
 

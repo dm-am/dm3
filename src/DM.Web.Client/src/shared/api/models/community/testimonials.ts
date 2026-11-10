@@ -33,8 +33,10 @@ export type UpdateWebsiteTestimonialRequest = {
   text?: string;
 };
 
+export type TestimonialSortBy = "created" | "author";
+
 export type WebsiteTestimonialsQuery = PagingQuery & {
   search?: string;
-  sortBy?: "created" | "author";
+  sortBy?: TestimonialSortBy;
   sortOrder?: SortDirection;
 };

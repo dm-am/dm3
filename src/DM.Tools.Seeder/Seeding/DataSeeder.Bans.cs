@@ -13,22 +13,13 @@ namespace DM.Tools.Seeder.Seeding;
 
 internal sealed partial class DataSeeder
 {
-    /// <summary>
-    /// The bans of the seed: SolohinLex's chain, and beside it one ban of every
-    /// kind the ban list draws (<see cref="SeedBanListCases"/>).
-    /// </summary>
     private async Task SeedSolohinLexBans(List<DbUser> users, ComprehensiveSeedResult result)
     {
         await SeedSolohinLexChain(users, result);
         await SeedBanListCases(users, result);
     }
 
-    /// <summary>
-    /// Seed 10 past bans for SolohinLex, issued by TestSeniorMod, the rank that bans: three tiers of the
-    /// "резиновая уточка" chain are earned (BANS_1, BANS_3, BANS_10), BANS_30 stays locked. There are no
-    /// voluntary bans in the seed. An eleventh, lifted early, is not counted by the
-    /// chain. Idempotent.
-    /// </summary>
+    // An eleventh, lifted early, is not counted by the chain.
     private async Task SeedSolohinLexChain(List<DbUser> users, ComprehensiveSeedResult result)
     {
         var solohin = users.FirstOrDefault(u => u.Username == PrimaryLogin);
@@ -98,12 +89,6 @@ internal sealed partial class DataSeeder
         result.Details.Add($"SolohinLex bans seeded: {toCreate} created (total {targetCount}) for \"резиновая уточка\" demo, and one lifted early");
     }
 
-    /// <summary>
-    /// The bans the ban list needs beside SolohinLex's chain, one of each kind it
-    /// draws: a permanent full ban from an administrator, a running ordinary one
-    /// from a senior moderator, the site's automatic ban, filed under the system
-    /// account, and a ban another moderator lifted early.
-    /// </summary>
     /// <remarks>
     /// Fixed identifiers: drawn from the seeded factory, they would shift every identifier drawn after them.
     /// The permanent full ban keeps LongestLoginPossible from signing in.
@@ -183,10 +168,6 @@ internal sealed partial class DataSeeder
         result.Details.Add("Ban list cases seeded: a permanent full ban, a running ban, an automatic ban and a lifted one");
     }
 
-    /// <summary>
-    /// The fixed identifiers of <see cref="SeedBanListCases"/>, in the order it
-    /// writes them.
-    /// </summary>
     private static readonly Guid[] BanListCaseIds =
     [
         FixedGuid(0xb0, 1),

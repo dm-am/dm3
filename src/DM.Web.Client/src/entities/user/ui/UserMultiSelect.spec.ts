@@ -48,8 +48,8 @@ describe("UserMultiSelect", () => {
     vi.useRealTimers();
   });
 
-  const mountComponent = (props = {}) => {
-    return mount(UserMultiSelect, {
+  const mountComponent = (props = {}) =>
+    mount(UserMultiSelect, {
       props: {
         selectedUsers: new Set<string>(),
         ...props,
@@ -60,7 +60,6 @@ describe("UserMultiSelect", () => {
         },
       },
     });
-  };
 
   describe("Basic Rendering", () => {
     it("renders search input", () => {
@@ -93,7 +92,7 @@ describe("UserMultiSelect", () => {
         data: { resources: [] },
       });
 
-      const wrapper = mountComponent({ debounceMs: 150 });
+      const wrapper = mountComponent();
       const input = wrapper.find("input");
 
       await input.setValue("test");
@@ -135,11 +134,11 @@ describe("UserMultiSelect", () => {
         data: { resources: [] },
       });
 
-      const wrapper = mountComponent({ debounceMs: 0 });
+      const wrapper = mountComponent();
       const input = wrapper.find("input");
 
       await input.setValue("nonexistent");
-      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(150);
       await vi.runAllTimersAsync();
       await nextTick();
       await nextTick();
@@ -171,7 +170,7 @@ describe("UserMultiSelect", () => {
 
   describe("Component Behavior", () => {
     it("cleans up debounce timer on unmount", async () => {
-      const wrapper = mountComponent({ debounceMs: 1000 });
+      const wrapper = mountComponent();
       const input = wrapper.find("input");
 
       await input.setValue("test");

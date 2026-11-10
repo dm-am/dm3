@@ -22,9 +22,6 @@ public class CreateSession
     /// </summary>
     public bool Persistent { get; set; }
 
-    /// <summary>
-    /// Session creation time (UTC)
-    /// </summary>
     public DateTimeOffset CreatedUtc { get; set; }
 
     /// <summary>

@@ -7,26 +7,16 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import {
   enableAutoUnmount,
   flushPromises,
-  mount,
-  RouterLinkStub,
   type VueWrapper,
 } from "@vue/test-utils";
-import { createPinia, setActivePinia } from "pinia";
+import { createPinia, setActivePinia, type Pinia } from "pinia";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { formatDateFull } from "@/shared/lib/utils/datetime";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { useUiStore } from "@/shared/stores/ui";
 import type { TicketComment } from "@/entities/ticket";
 import TicketConversation from "./TicketConversation.vue";
 import type { ConversationTicket } from "./types";
-
-const route = vi.hoisted(() => ({
-  query: {} as Record<string, string>,
-  hash: "",
-}));
-
-vi.mock("vue-router", () => ({
-  useRoute: () => route,
-}));
 
 const editor = vi.hoisted(() => ({ cleared: 0 }));
 
@@ -114,13 +104,20 @@ const closed = (over: Partial<ConversationTicket> = {}) =>
 enableAutoUnmount(afterEach);
 
 let send: ReturnType<typeof vi.fn>;
+let pinia: Pinia;
+
+/** The page of a ticket the block stands on, and the profiles its names link to. */
+const routes: Address[] = [
+  ["my-ticket", "/my-tickets/:ticketId"],
+  ["profile", "/users/:username"],
+  ["received-reviews", "/users/:username/received-reviews"],
+];
 
 beforeEach(() => {
-  route.query = {};
-  route.hash = "";
   editor.cleared = 0;
   localStorage.clear();
-  setActivePinia(createPinia());
+  pinia = createPinia();
+  setActivePinia(pinia);
   send = vi.fn().mockResolvedValue({ error: null });
   const { toasts, dismiss } = useToast();
   [...toasts.value].forEach((t) => dismiss(t.id));
@@ -129,19 +126,23 @@ beforeEach(() => {
 const signInAs = (username: string, role?: string) =>
   localStorage.setItem("user", JSON.stringify({ username, role }));
 
-function render(
+async function render(
   ticket: ConversationTicket,
   extra: Record<string, unknown> = {},
-): VueWrapper {
-  return mount(TicketConversation, {
-    global: { stubs: { RouterLink: RouterLinkStub } },
+  at = "/my-tickets/t-1",
+): Promise<VueWrapper> {
+  const { wrapper } = await mountPage(TicketConversation, at, {
+    routes,
+    pinia,
+    attachTo: document.body,
     props: {
       ticket,
       send,
       draftKey: "ticket:t-1:comment",
       ...extra,
-    } as never,
+    },
   });
+  return wrapper;
 }
 
 /** The grey lines of the block, by their words. */
@@ -161,8 +162,8 @@ const sendButton = (wrapper: VueWrapper) =>
   wrapper.findAll("button").find((button) => button.text() === "Отправить");
 
 describe("the answers of a ticket", () => {
-  it("stand oldest first, numbered from one, each a comment of the site", () => {
-    const wrapper = render(open());
+  it("stand oldest first, numbered from one, each a comment of the site", async () => {
+    const wrapper = await render(open());
 
     expect(wrapper.findAll(".comment").map((c) => c.attributes("id"))).toEqual([
       "comment-c-1",
@@ -179,8 +180,8 @@ describe("the answers of a ticket", () => {
   });
 
   // The number is read out with the name of what it counts: answers.
-  it("read their numbers out as answers", () => {
-    const wrapper = render(open());
+  it("read their numbers out as answers", async () => {
+    const wrapper = await render(open());
 
     expect(
       wrapper.findAll(".comment-number").map((n) => n.attributes("aria-label")),
@@ -188,9 +189,9 @@ describe("the answers of a ticket", () => {
   });
 
   // A senior moderator, offered everything on a comment of a topic.
-  it("offer nothing to press, even to a senior moderator", () => {
+  it("offer nothing to press, even to a senior moderator", async () => {
     signInAs("Senior", "SeniorModerator");
-    const wrapper = render(open());
+    const wrapper = await render(open());
 
     expect(wrapper.findAll(".comment")).toHaveLength(2);
     expect(wrapper.find(".caption-action").exists()).toBe(false);
@@ -198,8 +199,8 @@ describe("the answers of a ticket", () => {
     expect(wrapper.text()).not.toMatch(/Редактировать|Удалить|Предупреждение/);
   });
 
-  it("sign the guest's with a word that leads nowhere", () => {
-    const wrapper = render(open({ comments: [fromGuest] }));
+  it("sign the guest's with a word that leads nowhere", async () => {
+    const wrapper = await render(open({ comments: [fromGuest] }));
     const caption = wrapper.get(".comment-footer .author-info");
 
     expect(caption.text().replace(/\s+/g, " ")).toBe("Автор: Гость");
@@ -207,8 +208,8 @@ describe("the answers of a ticket", () => {
     expect(caption.text()).not.toMatch(/online|offline/);
   });
 
-  it("sign a removed account's as every such name is signed", () => {
-    const wrapper = render(open({ comments: [fromRemoved] }));
+  it("sign a removed account's as every such name is signed", async () => {
+    const wrapper = await render(open({ comments: [fromRemoved] }));
 
     expect(
       wrapper.get(".comment-footer .author-info").text().replace(/\s+/g, " "),
@@ -218,32 +219,49 @@ describe("the answers of a ticket", () => {
   // An answer has the one look of a DM2 comment, the compact one.
   it.each(["full", "compact"] as const)(
     "are compact comments with the reader's layout %s",
-    (layout) => {
+    async (layout) => {
       useUiStore().setMessageLayout(layout);
-      const wrapper = render(open({ comments: [fromGuest] }));
+      const wrapper = await render(open({ comments: [fromGuest] }));
 
       expect(wrapper.get(".comment").classes()).toContain("compact");
     },
   );
+
+  it("open at the answer the address names", async () => {
+    const scrolled: string[] = [];
+    // jsdom has no scrollIntoView of its own.
+    Element.prototype.scrollIntoView = function (this: Element) {
+      scrolled.push(this.id);
+    };
+    try {
+      await render(open(), {}, "/my-tickets/t-1#comment-c-2");
+      // The block waits out its layout before it scrolls.
+      await new Promise((resolve) => setTimeout(resolve, 150));
+
+      expect(scrolled).toEqual(["comment-c-2"]);
+    } finally {
+      delete (Element.prototype as Partial<Element>).scrollIntoView;
+    }
+  });
 });
 
 describe("the form of a ticket", () => {
-  it("counts to the length the server takes an answer of a ticket at", () => {
-    const counter = render(open())
+  it("counts to the length the server takes an answer of a ticket at", async () => {
+    const counter = (await render(open()))
       .getComponent({ name: "BBCodeEditor" })
       .props("maxLength");
 
     expect(counter).toBe(10000);
   });
 
-  it("asks for an answer, not a comment", () => {
-    const field = render(open()).getComponent({ name: "BBCodeEditor" });
+  it("asks for an answer, not a comment", async () => {
+    const field = (await render(open())).getComponent({ name: "BBCodeEditor" });
 
     expect(field.props("placeholder")).toBe("Написать ответ...");
   });
 
   it("sends what the author wrote through the page, with no status", async () => {
-    const wrapper = render(open());
+    const wrapper = await render(open());
 
     await wrapper.get(".editor-stub").setValue("Вот ссылка");
     await sendButton(wrapper)!.trigger("click");
@@ -254,7 +272,7 @@ describe("the form of a ticket", () => {
   });
 
   it("sends nothing empty for the author", async () => {
-    const wrapper = render(open());
+    const wrapper = await render(open());
 
     expect(wrapper.find("select").exists()).toBe(false);
     expect(sendButton(wrapper)!.attributes("disabled")).toBeDefined();
@@ -264,7 +282,7 @@ describe("the form of a ticket", () => {
     send.mockResolvedValueOnce({
       error: { type: "", title: "Обращение закрыто", status: 400, traceId: "" },
     });
-    const wrapper = render(open());
+    const wrapper = await render(open());
 
     await wrapper.get(".editor-stub").setValue("Вот ссылка");
     await sendButton(wrapper)!.trigger("click");
@@ -277,16 +295,16 @@ describe("the form of a ticket", () => {
     expect(wrapper.text()).toContain("Обращение закрыто");
   });
 
-  it("is gone once the ticket is closed", () => {
-    const wrapper = render(closed());
+  it("is gone once the ticket is closed", async () => {
+    const wrapper = await render(closed());
 
     expect(wrapper.find(".editor-stub").exists()).toBe(false);
     expect(sendButton(wrapper)).toBeUndefined();
   });
 
   // An open ticket takes no answer past the limit (TicketTextLimits): neither a form nor a line.
-  it("shows nothing once the conversation is full", () => {
-    const wrapper = render(open({ canComment: false }));
+  it("shows nothing once the conversation is full", async () => {
+    const wrapper = await render(open({ canComment: false }));
 
     expect(wrapper.find(".editor-stub").exists()).toBe(false);
     expect(plates(wrapper)).toEqual([]);
@@ -304,7 +322,7 @@ describe("the form of a ticket", () => {
         traceId: "",
       },
     });
-    const wrapper = render(open());
+    const wrapper = await render(open());
 
     await wrapper.get(".editor-stub").setValue("Еще слово");
     await sendButton(wrapper)!.trigger("click");
@@ -318,8 +336,8 @@ describe("the form of a ticket", () => {
 describe("the answer of moderation", () => {
   const moderated = () => render(open({ canResolve: true }));
 
-  it("chooses the status over the field, waiting for the user at first", () => {
-    const wrapper = moderated();
+  it("chooses the status over the field, waiting for the user at first", async () => {
+    const wrapper = await moderated();
     const select = wrapper.get("select");
     const options = select
       .findAll("option")
@@ -340,7 +358,7 @@ describe("the answer of moderation", () => {
   });
 
   it("sends the status chosen with the text", async () => {
-    const wrapper = moderated();
+    const wrapper = await moderated();
 
     await wrapper.get(".editor-stub").setValue("Пришлите ссылку");
     await sendButton(wrapper)!.trigger("click");
@@ -349,14 +367,14 @@ describe("the answer of moderation", () => {
     expect(send).toHaveBeenCalledWith("Пришлите ссылку", "WaitingForUser");
   });
 
-  it("asks a word of an answer that waits for the user", () => {
-    expect(sendButton(moderated())!.attributes("disabled")).toBeDefined();
+  it("asks a word of an answer that waits for the user", async () => {
+    expect(sendButton(await moderated())!.attributes("disabled")).toBeDefined();
   });
 
   it.each(["Closed", "Spam"] as const)(
     "closes as %s without a word",
     async (status) => {
-      const wrapper = moderated();
+      const wrapper = await moderated();
 
       await wrapper.get("select").setValue(status);
       expect(sendButton(wrapper)!.attributes("disabled")).toBeUndefined();
@@ -368,7 +386,7 @@ describe("the answer of moderation", () => {
   );
 
   it("closes with the last word when there is one", async () => {
-    const wrapper = moderated();
+    const wrapper = await moderated();
 
     await wrapper.get("select").setValue("Closed");
     await wrapper.get(".editor-stub").setValue("Предупреждение снято");
@@ -384,23 +402,23 @@ describe("a ticket nobody answered yet", () => {
   const WAIT =
     "Когда модерация ответит, здесь появится ответ, а вам придет уведомление";
 
-  it("says what the page gives it to say, over the form", () => {
-    const wrapper = render(open({ comments: [] }), { emptyText: WAIT });
+  it("says what the page gives it to say, over the form", async () => {
+    const wrapper = await render(open({ comments: [] }), { emptyText: WAIT });
 
     expect(lines(wrapper)).toEqual([WAIT]);
     expect(wrapper.find(".editor-stub").exists()).toBe(true);
   });
 
-  it("says nothing where the page gives it nothing to say", () => {
-    expect(lines(render(open({ comments: [] })))).toEqual([]);
+  it("says nothing where the page gives it nothing to say", async () => {
+    expect(lines(await render(open({ comments: [] })))).toEqual([]);
   });
 
-  it("says nothing of an answer to come once there are answers", () => {
-    expect(lines(render(open(), { emptyText: WAIT }))).toEqual([]);
+  it("says nothing of an answer to come once there are answers", async () => {
+    expect(lines(await render(open(), { emptyText: WAIT }))).toEqual([]);
   });
 
-  it("says nothing of an answer to come once it is closed", () => {
-    const wrapper = render(closed({ comments: [] }), { emptyText: WAIT });
+  it("says nothing of an answer to come once it is closed", async () => {
+    const wrapper = await render(closed({ comments: [] }), { emptyText: WAIT });
 
     expect(lines(wrapper)).toEqual([]);
     expect(plates(wrapper)).toEqual([
@@ -411,8 +429,8 @@ describe("a ticket nobody answered yet", () => {
 
 /** The closed line, "(а)" with no gender as in the records of a ban, in the plate. */
 describe("a closed ticket", () => {
-  it("has no form and one plate under the answers: when, and by whom", () => {
-    const wrapper = render(closed());
+  it("has no form and one plate under the answers: when, and by whom", async () => {
+    const wrapper = await render(closed());
 
     expect(wrapper.find(".editor-stub").exists()).toBe(false);
     expect(plates(wrapper)).toEqual([
@@ -420,14 +438,14 @@ describe("a closed ticket", () => {
     ]);
   });
 
-  it("says it was closed as spam", () => {
-    expect(plates(render(closed({ status: "Spam" })))).toEqual([
+  it("says it was closed as spam", async () => {
+    expect(plates(await render(closed({ status: "Spam" })))).toEqual([
       `Обращение закрыто как спам ${at(CLOSED)}, закрыл(а) TestModerator.`,
     ]);
   });
 
-  it("names a closer whose account was removed as every such name", () => {
-    expect(plates(render(closed({ resolvedByUsername: null })))).toEqual([
+  it("names a closer whose account was removed as every such name", async () => {
+    expect(plates(await render(closed({ resolvedByUsername: null })))).toEqual([
       `Обращение закрыто ${at(CLOSED)}, закрыл(а) Аккаунт удален.`,
     ]);
   });

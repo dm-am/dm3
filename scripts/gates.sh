@@ -100,10 +100,12 @@ hook_tests() {
     node "$ROOT/.claude/hooks/block-new-migrations.test.js" &&
     node "$ROOT/.claude/hooks/lint-edited-file.test.js" &&
     node "$ROOT/.claude/hooks/block-in-subagents.test.js" &&
-    node "$ROOT/.claude/hooks/lint-agent-files.test.js"
+    node "$ROOT/.claude/hooks/lint-agent-files.test.js" &&
+    node "$ROOT/.claude/hooks/lint-size-hint.test.js"
 }
 
 in_client() { (cd "$CLIENT" && "$@"); }
+in_root() { (cd "$ROOT" && "$@"); }
 
 # Solution tests and coverage in one run, as CI gets them: the cobertura reports go to
 # --results-directory and the next step reads them. The directory is emptied first, since a
@@ -138,6 +140,10 @@ step "frontend docs" "Фронтенд: гейты в src/gates" in_client npm r
 step frontend "Фронтенд: мертвый код (knip)" in_client npm run knip
 step frontend "Фронтенд: линт и формат" in_client npm run lint:ci
 step frontend "Фронтенд: типы" in_client npm run type-check
+# The TypeScript of the frame stand, on the client's tools and lint config: the client run
+# does not reach outside its folder, so these run from the root.
+step frontend "Стенд кадров: типы" in_root src/DM.Web.Client/node_modules/.bin/vue-tsc --noEmit -p scripts/visual/tsconfig.json
+step frontend "Стенд кадров: линт и формат" in_root src/DM.Web.Client/node_modules/.bin/eslint --config src/DM.Web.Client/eslint.config.js --max-warnings 0 "scripts/visual/**/*.ts"
 # The docs job: architecture tests alone. The map calls it only when build is not needed,
 # and build runs the same tests below.
 step docs "Документы: архитектурные тесты Release" dotnet test "$ROOT/test/DM.Architecture.Tests" -c Release --nologo

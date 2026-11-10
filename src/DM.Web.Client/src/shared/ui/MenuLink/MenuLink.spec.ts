@@ -25,7 +25,6 @@ async function rowAt(
   props: {
     to: string;
     current?: "page" | "true";
-    hint?: string;
   },
   counter?: string,
 ) {
@@ -46,12 +45,6 @@ async function rowAt(
     },
     global: {
       plugins: [router],
-      stubs: {
-        Tooltip: {
-          props: ["text"],
-          template: '<span class="tooltip" :data-text="text"><slot /></span>',
-        },
-      },
     },
   });
   await flushPromises();
@@ -105,20 +98,5 @@ describe("MenuLink", () => {
 
     expect(link.attributes("aria-current")).toBeUndefined();
     expect(link.classes()).not.toContain("current");
-  });
-
-  it("puts the hint on the link and only when there is one", async () => {
-    const hinted = await rowAt("/forum/general", {
-      to: "/forum/general",
-      hint: "Жизнь сообщества",
-    });
-    expect(hinted.find(".tooltip").attributes("data-text")).toBe(
-      "Жизнь сообщества",
-    );
-    expect(hinted.find(".tooltip a").exists()).toBe(true);
-
-    const bare = await rowAt("/forum/general", { to: "/forum/general" });
-    expect(bare.find(".tooltip").exists()).toBe(false);
-    expect(bare.find("a").text()).toBe("Общий");
   });
 });

@@ -35,9 +35,6 @@ vi.mock("@/shared/ui/BBCodeEditor", async () =>
     (await import("./ChatView.doubles")).clearSpy,
   ),
 );
-vi.mock("vue-router", async () =>
-  (await import("./ChatView.doubles")).vueRouter(),
-);
 vi.mock("@/shared/lib/composables/useVirtualScroll", async (original) =>
   (await import("./ChatView.doubles")).virtualScroll(await original()),
 );
@@ -117,6 +114,8 @@ describe("ChatView, live tail", () => {
       .mockResolvedValueOnce(messagePage(["m1"]))
       .mockResolvedValueOnce(messagePage(["m1", "m2"]));
     await openChat();
+    // The open one is the correspondence its address names.
+    expect(api.getChat.mock.calls[0][0]).toBe("c1");
 
     pushNewMessage("c1");
     await flushPromises();

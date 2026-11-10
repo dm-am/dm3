@@ -7,6 +7,7 @@ import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useAuthStore } from "@/entities/user";
 import { UserRole, type User } from "@/shared/api/models/common";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 import type { GameReview } from "@/shared/api/models/game/reviews";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
 import GameReviewEditable from "./GameReviewEditable.vue";
@@ -47,8 +48,10 @@ const review = (viewer: Offer) =>
 
 const FRESH = review({ canEdit: true, canDelete: true });
 
-const reader = (id: string, role: UserRole) =>
-  ({ id, username: id, role }) as unknown as User;
+const reader = (id: string, role: UserRole): User => ({
+  ...createMockUser(id, id),
+  role,
+});
 
 const PENCIL = 'button[aria-label="Редактировать"]';
 const TRASH = 'button[aria-label="Удалить"]';

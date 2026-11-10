@@ -74,9 +74,6 @@ public class Game : ISoftDeletable
     /// </summary>
     public int? RecruitmentPcLimit { get; set; }
 
-    /// <summary>
-    /// When the recruitment was opened
-    /// </summary>
     public DateTimeOffset? RecruitmentStartedUtc { get; set; }
 
     /// <summary>

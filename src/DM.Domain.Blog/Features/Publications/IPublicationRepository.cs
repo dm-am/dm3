@@ -8,14 +8,8 @@ namespace DM.Domain.Blog.Features.Publications;
 
 public interface IPublicationRepository
 {
-    /// <summary>
-    /// Count publications for a blog
-    /// </summary>
     Task<int> CountPublications(Guid blogId, Guid? rubricId, CancellationToken ct = default);
 
-    /// <summary>
-    /// Get publications for a blog
-    /// </summary>
     Task<IEnumerable<Publication>> GetPublications(Guid blogId, Guid? rubricId, PagingData paging,
         CancellationToken ct = default);
 

@@ -86,16 +86,11 @@ namespace DM.Infrastructure.Persistence;
 /// </summary>
 public static class PersistenceRegistrationExtensions
 {
-    /// <summary>
-    /// Registers the repositories and the assembly's default types.
-    /// </summary>
     /// <remarks>
     /// The DbContext itself is deliberately absent: each host declares its own
     /// (pooled in the API, plain elsewhere), and the assembly scan refuses
     /// DbContext descendants so this module cannot shadow that choice.
     /// </remarks>
-    /// <param name="services">Service collection.</param>
-    /// <returns>Service collection for chaining.</returns>
     public static IServiceCollection AddDmPersistence(this IServiceCollection services)
     {
         AddRelationalStorage(services);

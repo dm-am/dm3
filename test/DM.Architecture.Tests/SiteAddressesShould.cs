@@ -9,17 +9,10 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The addresses the site answers on are configuration, and configuration is
-/// the only place they are written down.
-/// </summary>
 /// <remarks>A compiled hostname fails exactly the reader a second address exists for. Relative paths are fine.</remarks>
 public class SiteAddressesShould
 {
-    /// <summary>
-    /// The two declarations name the same addresses.
-    /// </summary>
-    /// <remarks>The client keeps its copy for when the site stops answering; the two may not disagree.</remarks>
+    // The client keeps its copy for when the site stops answering; the two may not disagree.
     [Fact]
     public void DeclareTheSameAddressesOnBothSides()
     {
@@ -49,7 +42,6 @@ public class SiteAddressesShould
             "full name, \"Основной сервер\" and not \"Основной\"");
     }
 
-    /// <summary>The values of one field of every address of the client's list, in its order.</summary>
     private static List<string> ClientField(string field) => Regex
         .Matches(
             File.ReadAllText(Path.Combine(RepositoryLayout.Root,
@@ -58,9 +50,6 @@ public class SiteAddressesShould
         .Select(match => match.Groups[1].Value)
         .ToList();
 
-    /// <summary>
-    /// The rows of the sidebar block are named by the address itself.
-    /// </summary>
     /// <remarks>
     /// The block is headed "Серверы сайта", so the canonical row says "Основной" and does not repeat the word.
     /// A sentence has no heading over it and says the word.
@@ -74,10 +63,7 @@ public class SiteAddressesShould
             .Should().Equal("Основной сервер", "RU-прокси");
     }
 
-    /// <summary>
-    /// Where an address of the site is allowed to be written down.
-    /// </summary>
-    /// <remarks>Each declaration is not a use; tests name addresses because they assert about them.</remarks>
+    // Each declaration is not a use; tests name addresses because they assert about them.
     private static readonly string[] DeclarationFiles =
     {
         Path.Combine("src", "DM.Domain.Core", "Site", "SiteAddresses.cs"),

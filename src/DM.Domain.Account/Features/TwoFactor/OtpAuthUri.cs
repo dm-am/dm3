@@ -2,9 +2,6 @@ using System;
 
 namespace DM.Domain.Account.Features.TwoFactor;
 
-/// <summary>
-/// The string an authenticator app reads out of the QR code.
-/// </summary>
 /// <remarks>
 /// The label is the username and not the address. An app writes the label into
 /// its own list, and that list travels into a cloud backup for a great many
@@ -12,12 +9,6 @@ namespace DM.Domain.Account.Features.TwoFactor;
 /// </remarks>
 internal static class OtpAuthUri
 {
-    /// <summary>
-    /// Builds the URI for one account.
-    /// </summary>
-    /// <param name="issuer">Name of the site, from configuration</param>
-    /// <param name="username">Label the app files the entry under</param>
-    /// <param name="base32Secret">The shared secret</param>
     public static string For(string issuer, string username, string base32Secret)
     {
         var escapedIssuer = Uri.EscapeDataString(issuer);

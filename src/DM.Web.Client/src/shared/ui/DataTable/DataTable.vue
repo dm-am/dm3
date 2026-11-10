@@ -15,7 +15,6 @@ const props = withDefaults(
     loading?: boolean;
     /** Empty state text */
     emptyText?: string;
-    /** Current sort state */
     sort?: SortState;
     /** Whether to show row numbers */
     showRowNumbers?: boolean;

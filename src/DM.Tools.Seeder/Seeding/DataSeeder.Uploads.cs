@@ -16,10 +16,8 @@ internal sealed partial class DataSeeder
     private const string SolohinLexImage = "DM.Tools.Seeder.Assets.Seed.SolohinLex.jpg";
     private const string SolohinLexInfo = "DM.Tools.Seeder.Assets.Seed.SolohinLex.bbcode";
 
-    /// <summary>
-    /// Runs a seed image through the real image pipeline: magic bytes, EXIF strip, resize, thumbnails,
-    /// S3 PUTs with Cache-Control: immutable. Returns an Upload entity ready for Add().
-    /// </summary>
+    // Runs a seed image through the real image pipeline: magic bytes, EXIF strip, resize,
+    // thumbnails, S3 PUTs with Cache-Control: immutable.
     private async Task<DbUpload> SeedImageFromBytesAsync(
         byte[] imageBytes,
         string declaredContentType,
@@ -94,9 +92,7 @@ internal sealed partial class DataSeeder
             Path = $"{_cdnConfig.BucketName}/{objectKey}",
         }.ToString();
 
-    /// <summary>
-    /// Read UTF-8 text from an embedded assembly resource; a missing one fails the seed.
-    /// </summary>
+    // Read UTF-8 text from an embedded assembly resource; a missing one fails the seed.
     private static async Task<string> LoadEmbeddedTextAsync(string resourceName)
     {
         await using var stream = OpenEmbedded(resourceName);
@@ -104,9 +100,7 @@ internal sealed partial class DataSeeder
         return await reader.ReadToEndAsync();
     }
 
-    /// <summary>
-    /// Read the bytes of an embedded seed image; a missing one fails the seed.
-    /// </summary>
+    // Read the bytes of an embedded seed image; a missing one fails the seed.
     private static byte[] ReadEmbeddedSeedBytes(string resourceName)
     {
         using var resourceStream = OpenEmbedded(resourceName);

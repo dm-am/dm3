@@ -4,7 +4,8 @@ import type { LocationQuery } from "vue-router";
 import { usePaging } from "@/shared/lib/composables/usePaging";
 import { createFilterDispatcher } from "@/shared/lib/composables/createFilterDispatcher";
 import {
-  applySortAction,
+  reduceSortOrClear,
+  sortOrClearDispatchers,
   parseDateFromUrl,
   dateToApiStart,
   dateToApiEnd,
@@ -14,7 +15,7 @@ import {
 import { UserRole, type UsersSearchParams } from "@/entities/user";
 import type {
   UsersFilterState,
-  ActivityFilter,
+  UserActivityChoice,
   OnlineFilter,
   RoleFilter,
   ExperienceFilter,
@@ -24,6 +25,7 @@ import {
   SORT_OPTIONS,
   EXPERIENCE_OPTIONS,
 } from "./types";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 export interface UsersFilterComposable {
   filterState: ComputedRef<UsersFilterState>;
@@ -31,7 +33,7 @@ export interface UsersFilterComposable {
   hasActiveFilters: ComputedRef<boolean>;
 
   setSearch: (search: string) => void;
-  setActivity: (activity: ActivityFilter) => void;
+  setActivity: (activity: UserActivityChoice) => void;
   setOnlineFilter: (onlineFilter: OnlineFilter) => void;
   setRole: (role: RoleFilter) => void;
   setExperience: (experience: ExperienceFilter) => void;
@@ -40,14 +42,14 @@ export interface UsersFilterComposable {
   setGamesPlayingRange: (min: number | null, max: number | null) => void;
   setBlogsHostingRange: (min: number | null, max: number | null) => void;
   setRegisteredRange: (fromUtc: string | null, toUtc: string | null) => void;
-  setSort: (sortBy: string, sortOrder?: "asc" | "desc") => void;
+  setSort: (sortBy: string, sortOrder?: SortDirection) => void;
   toggleSortOrder: () => void;
   clearFilters: () => void;
 }
 
 type UsersFilterAction =
   | { type: "SET_SEARCH"; search: string }
-  | { type: "SET_ACTIVITY"; activity: ActivityFilter }
+  | { type: "SET_ACTIVITY"; activity: UserActivityChoice }
   | { type: "SET_ONLINE_FILTER"; onlineFilter: OnlineFilter }
   | { type: "SET_ROLE"; role: RoleFilter }
   | { type: "SET_EXPERIENCE"; experience: ExperienceFilter }
@@ -60,7 +62,7 @@ type UsersFilterAction =
       fromUtc: string | null;
       toUtc: string | null;
     }
-  | { type: "SET_SORT"; sortBy: string; sortOrder?: "asc" | "desc" }
+  | { type: "SET_SORT"; sortBy: string; sortOrder?: SortDirection }
   | { type: "TOGGLE_SORT_ORDER" }
   | { type: "CLEAR_FILTERS" };
 
@@ -120,18 +122,14 @@ function reducer(
       newState.registeredToUtc = action.toUtc;
       return newState;
 
-    case "SET_SORT":
-    case "TOGGLE_SORT_ORDER":
-      applySortAction(newState, action, SORT_OPTIONS, "asc");
-      return newState;
-
-    case "CLEAR_FILTERS":
-      return createDefaultState();
-
-    default: {
-      const _exhaustive: never = action;
-      return _exhaustive;
-    }
+    default:
+      return reduceSortOrClear(
+        newState,
+        action,
+        SORT_OPTIONS,
+        createDefaultState,
+        "asc",
+      );
   }
 }
 
@@ -377,7 +375,7 @@ export function useUsersFilter(): UsersFilterComposable {
 
   const setSearch = (search: string) =>
     dispatch({ type: "SET_SEARCH", search });
-  const setActivity = (activity: ActivityFilter) =>
+  const setActivity = (activity: UserActivityChoice) =>
     dispatch({ type: "SET_ACTIVITY", activity });
   const setOnlineFilter = (onlineFilter: OnlineFilter) =>
     dispatch({ type: "SET_ONLINE_FILTER", onlineFilter });
@@ -394,10 +392,8 @@ export function useUsersFilter(): UsersFilterComposable {
     dispatch({ type: "SET_BLOGS_HOSTING_RANGE", min, max });
   const setRegisteredRange = (fromUtc: string | null, toUtc: string | null) =>
     dispatch({ type: "SET_REGISTERED_RANGE", fromUtc, toUtc });
-  const setSort = (sortBy: string, sortOrder?: "asc" | "desc") =>
-    dispatch({ type: "SET_SORT", sortBy, sortOrder });
-  const toggleSortOrder = () => dispatch({ type: "TOGGLE_SORT_ORDER" });
-  const clearFilters = () => dispatch({ type: "CLEAR_FILTERS" });
+  const { setSort, toggleSortOrder, clearFilters } =
+    sortOrClearDispatchers(dispatch);
 
   return {
     filterState,

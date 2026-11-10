@@ -11,9 +11,6 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// One voter, one option, and the write is what says so.
-/// </summary>
 /// <remarks>
 /// The primary key (PollId, UserId) and INSERT ... ON CONFLICT DO NOTHING are the only place the rule runs; the
 /// foreign keys make a vote for something missing unrepresentable.
@@ -88,9 +85,6 @@ public class PollVotingShould : IntegrationTestBase
             .Should().BeEquivalentTo(new[] { first, second });
     }
 
-    /// <summary>
-    /// The voter is a foreign key: a vote for a user the database does not hold is refused.
-    /// </summary>
     [Fact]
     public async Task RefuseAVoteOfAVoterWhoDoesNotExist()
     {

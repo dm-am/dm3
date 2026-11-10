@@ -6,10 +6,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Messaging;
 
-/// <summary>
-/// A like on a message of a private conversation is on the message the reader is
-/// handed back.
-/// </summary>
 /// <remarks>
 /// The client replaces the message with the one the answer brings. The global chat's half is
 /// <see cref="GlobalChatMessageOperationsShould" />; over HTTP, the likers are filled in a projection.
@@ -72,10 +68,8 @@ public class PrivateMessageLikesShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.OK);
     }
 
-    /// <summary>
-    /// The seeded message is shared with the tests around this one, so the like is
-    /// taken back off it however this one ends.
-    /// </summary>
+    // The seeded message is shared with the tests around this one, so the like is taken back off it
+    // however this one ends.
     private Task Unlike() => Client.SendAsync(CreateAuthenticatedRequest(
         HttpMethod.Delete, $"/v1/messages/{TestConstants.TestMessageId}/likes", Reader));
 

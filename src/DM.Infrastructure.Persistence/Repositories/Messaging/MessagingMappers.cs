@@ -13,9 +13,6 @@ using DbGlobalChatEventParticipant = DM.Infrastructure.Persistence.Entities.Mess
 
 namespace DM.Infrastructure.Persistence.Repositories.Messaging;
 
-/// <summary>
-/// Projection formulas for the messaging module.
-/// </summary>
 internal static class MessagingMappers
 {
     /// <summary>
@@ -46,10 +43,6 @@ internal static class MessagingMappers
                 .ToList()
         };
 
-    /// <summary>
-    /// The one event-participant formula, asked for on its own and nested
-    /// under the event.
-    /// </summary>
     private static readonly Expression<Func<DbGlobalChatEventParticipant, GlobalChatEventParticipant>>
         ParticipantProjection =
             p => new GlobalChatEventParticipant
@@ -109,9 +102,6 @@ internal static class MessagingMappers
     public static IQueryable<Message> ProjectToMessage(this IQueryable<DbMessage> query) =>
         query.KeepingRemovedAuthors().Select(ExpressionSplicer.Expand(MessageShape));
 
-    /// <summary>
-    /// EF projection to the domain global chat event
-    /// </summary>
     public static IQueryable<GlobalChatEvent> ProjectToGlobalChatEvent(
         this IQueryable<DbGlobalChatEvent> query) =>
         query.Select(ExpressionSplicer.Expand<Func<DbGlobalChatEvent, GlobalChatEvent>>(
@@ -133,9 +123,6 @@ internal static class MessagingMappers
                     .ToList()
             }));
 
-    /// <summary>
-    /// EF projection to the domain event participant
-    /// </summary>
     public static IQueryable<GlobalChatEventParticipant> ProjectToGlobalChatEventParticipant(
         this IQueryable<DbGlobalChatEventParticipant> query) =>
         query.Select(ExpressionSplicer.Expand(ParticipantProjection));

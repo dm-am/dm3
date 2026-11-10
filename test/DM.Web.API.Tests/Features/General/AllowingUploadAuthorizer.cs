@@ -6,15 +6,11 @@ using DM.Domain.Core.Uploads;
 
 namespace DM.Web.API.Tests.Features.General;
 
-/// <summary>
-/// An authorizer that answers for one upload type and refuses nothing but, when told, the removal.
-/// </summary>
-/// <remarks>The rules it stands in for are about which authorizer is picked, so the answer is a constant.</remarks>
+// The rules it stands in for are about which authorizer is picked, so the answer is a constant.
 internal sealed class AllowingUploadAuthorizer(UploadType type, bool mayDetach = true) : IUploadTargetAuthorizer
 {
     public UploadType Type { get; } = type;
 
-    /// <summary>Whether the removal path consulted this rule at all.</summary>
     public bool DetachAsked { get; private set; }
 
     public Task EnsureAllowedAsync(Guid targetId) => Task.CompletedTask;

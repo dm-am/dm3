@@ -1,4 +1,4 @@
-import { nextTick, ref, type Ref } from "vue";
+import { nextTick, onScopeDispose, ref, type Ref } from "vue";
 import { isNearBottom } from "@/shared/lib/utils/liveTail";
 import {
   isDateSeparator,
@@ -6,6 +6,9 @@ import {
 } from "@/shared/lib/utils/chat";
 import { markArrival } from "@/shared/lib/composables/useScrollToElement";
 import type { VirtualScrollReturn } from "@/shared/lib/composables/useVirtualScroll";
+
+/** How a message brought into view lines up in the feed. */
+export type MessageAlign = "center" | "start";
 
 /** Where the reader of a feed stands, and the two ways the page moves him. */
 export function useFeedPosition(options: {
@@ -40,6 +43,10 @@ export function useFeedPosition(options: {
     }, 150);
   }
 
+  onScopeDispose(() => {
+    if (scrollEndTimeout) clearTimeout(scrollEndTimeout);
+  });
+
   /** The reader stands at the end of the loaded window, measured now. */
   function atBottom(): boolean {
     return list.value ? isNearBottom(list.value) : true;
@@ -54,7 +61,7 @@ export function useFeedPosition(options: {
   }
 
   /** Brings a message into view and marks its arrival with the site's pulse. */
-  function scrollToMessage(id: string, align: "center" | "start" = "center") {
+  function scrollToMessage(id: string, align: MessageAlign = "center") {
     const index = rows.value.findIndex(
       (item) => !isDateSeparator(item) && item.id === id,
     );

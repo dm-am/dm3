@@ -6,11 +6,6 @@ using static DM.Infrastructure.Core.Tests.BbVisibilityRender;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// [private] visibility — game posts only: the author, the addressee, the
-/// leads, the settings that share private text, and every spelling of the
-/// block.
-/// </summary>
 public class BbPrivateVisibilityShould
 {
     [Fact]
@@ -44,11 +39,7 @@ public class BbPrivateVisibilityShould
         html.Should().NotContain("private-message");
     }
 
-    /// <summary>
-    /// Every spelling of the block is a block, and none of them reaches a reader
-    /// the block was not addressed to.
-    /// </summary>
-    /// <remarks>Only the quoted form addresses anybody; the rest address nobody, and a stranger sees none.</remarks>
+    // Only the quoted form addresses anybody; the rest address nobody, and a stranger sees none.
     [Theory]
     [InlineData("[private=B]secret[/private]")]
     [InlineData("[private=\"B\"]secret[/private]")]
@@ -67,11 +58,8 @@ public class BbPrivateVisibilityShould
         html.Should().NotContain("private-message");
     }
 
-    /// <summary>
-    /// The snapshot is keyed by the name as the author typed it, and the render
-    /// path encodes that name before the parser sees it.
-    /// </summary>
-    /// <remarks>HtmlEncode covers the apostrophe too; asserted both ways, as the comparison decides visibility.</remarks>
+    // The snapshot is keyed by the name as the author typed it, and the render path encodes that
+    // name before the parser sees it.
     [Theory]
     [InlineData("D'Artagnan")]
     [InlineData("Tom & Jerry")]
@@ -173,10 +161,6 @@ public class BbPrivateVisibilityShould
             .Should().Contain("secret");
     }
 
-    /// <summary>
-    /// A misspelled block is not read for its name, even when the snapshot holds
-    /// an entry under the text it seems to carry.
-    /// </summary>
     [Theory]
     [InlineData("[private=B]secret[/private]")]
     [InlineData("[private=\"B]secret[/private]")]
@@ -188,10 +172,6 @@ public class BbPrivateVisibilityShould
         RenderWithContext(input, BbSurface.GamePost, ctx).Should().NotContain("secret");
     }
 
-    /// <summary>
-    /// A name in capitals is the name: the block is well spelled, and it reaches
-    /// the reader it names.
-    /// </summary>
     [Theory]
     [InlineData("[PRIVATE=\"B\"]secret[/PRIVATE]")]
     [InlineData("[Private=\"B\"]secret[/private]")]
@@ -204,10 +184,6 @@ public class BbPrivateVisibilityShould
             .Should().NotContain("secret");
     }
 
-    /// <summary>
-    /// Off the game post a block is read and erased for every reader, its author
-    /// and the game's leads included.
-    /// </summary>
     [Theory]
     [InlineData(BbSurface.Comment)]
     [InlineData(BbSurface.GlobalChatMessage)]
@@ -244,13 +220,7 @@ public class BbPrivateVisibilityShould
         text.Should().Contain("after");
     }
 
-    /// <summary>
-    /// A tag the author forgot to close does not carry the block past the filter.
-    /// </summary>
-    /// <remarks>
-    /// Swallowed text never becomes a node the filter is asked about. Both audiences: the plain text is what
-    /// the stored search text and X-Dm-Audience: plain_text return.
-    /// </remarks>
+    // Swallowed text never becomes a node the filter is asked about.
     [Theory]
     [InlineData("до [img]https://example.com/a.png\n[private=\"B\"]secret[/private]\n" +
                 "[img]https://example.com/b.png[/img] после")]

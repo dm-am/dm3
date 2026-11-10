@@ -1,7 +1,3 @@
-<script setup lang="ts">
-// An empty setup still names the component, and tests stub it by that name.
-</script>
-
 <template>
   <h1><slot /></h1>
 </template>

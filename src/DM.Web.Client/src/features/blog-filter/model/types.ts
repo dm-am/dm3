@@ -1,6 +1,10 @@
 import type { BlogStatus } from "@/entities/blog";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 export type StatusFilter = "any" | BlogStatus;
+
+/** The filters the menu of the bar offers. */
+export type BlogsFilterKey = "status" | "host" | "dates";
 
 export interface BlogsFilterState {
   search: string;
@@ -26,7 +30,7 @@ export interface BlogsFilterState {
 
   sortBy: string;
 
-  sortOrder: "asc" | "desc";
+  sortOrder: SortDirection;
 }
 
 // The store's own shape, taken from the entity that owns the query.

@@ -16,8 +16,7 @@ describe("commentPermalink", () => {
         number: "2",
       }),
     ).toBe(
-      permalinkOrigin() +
-        "/forum/newbies/3?authors=Experienced&sortOrder=desc&number=2#comment-c1",
+      `${permalinkOrigin()}/forum/newbies/3?authors=Experienced&sortOrder=desc&number=2#comment-c1`,
     );
   });
 
@@ -48,7 +47,7 @@ describe("commentPermalink", () => {
     window.history.replaceState(null, "", "/forum/newbies/3");
 
     expect(commentPermalink("c1", {})).toBe(
-      permalinkOrigin() + "/forum/newbies/3#comment-c1",
+      `${permalinkOrigin()}/forum/newbies/3#comment-c1`,
     );
   });
 });

@@ -10,10 +10,6 @@ using Microsoft.EntityFrameworkCore.ChangeTracking;
 
 namespace DM.Infrastructure.Persistence.Repositories.Search;
 
-/// <summary>
-/// The bodies the search reads by their visible text, and the projection of that
-/// text beside each of them before every write.
-/// </summary>
 internal static class SearchableBodies
 {
     /// <summary>

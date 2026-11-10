@@ -76,8 +76,6 @@ export const icons = {
     fill: "currentColor",
   },
 
-  // Sections
-
   /** Expand all sections (plus in three nested frames) */
   expandAll: {
     viewBox: "17 17 42 42",
@@ -210,8 +208,6 @@ export const icons = {
     fill: "currentColor",
   },
 
-  // User
-
   /** Default avatar (user silhouette). Rendered inline by AvatarImg */
   defaultAvatar: {
     viewBox: "0 0 1200 1200",
@@ -225,8 +221,6 @@ export const icons = {
     path: '<circle cx="28" cy="28" r="26" fill="none" stroke="currentColor" stroke-width="1" stroke-dasharray="4 2"/><path d="M18 18l20 20M38 18l-20 20" stroke="currentColor" stroke-width="1.5"/>',
     fill: "none",
   },
-
-  // Settings
 
   /** Settings gear */
   settings: {

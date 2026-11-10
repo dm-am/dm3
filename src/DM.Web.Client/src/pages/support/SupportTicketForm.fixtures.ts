@@ -1,17 +1,10 @@
 /** The support and complaint pages mounted for their specs, the reader's steps and the readers of the form. */
 import { vi } from "vitest";
-import {
-  flushPromises,
-  mount,
-  RouterLinkStub,
-  type VueWrapper,
-} from "@vue/test-utils";
-import { createPinia } from "pinia";
-import Form from "@/shared/ui/Form/Form.vue";
-import FormField from "@/shared/ui/Form/FormField.vue";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { BBCodeEditor } from "@/shared/ui/BBCodeEditor";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import SupportPage from "./SupportPage.vue";
-import { route } from "./SupportTicketForm.doubles";
+import ComplaintPage from "./ComplaintPage.vue";
 
 // A function rather than an arrow: the markup editor watches its mode tabs with
 // one, built with `new`, and vitest will not construct an arrow.
@@ -24,14 +17,20 @@ export function stubResizeObserver() {
   );
 }
 
-/** The form shell is registered by the app, not by the test runner. */
-export const options = () => ({
-  global: {
-    plugins: [createPinia()],
-    components: { Form, FormField },
-    stubs: { RouterLink: RouterLinkStub, Teleport: true },
-  },
-});
+/** The two pages, and every address they and the sent card link to. */
+const routes: Address[] = [
+  ["support", "/support"],
+  ["complaint", "/complaint"],
+  ["support-track", "/support/track"],
+  ["my-tickets", "/my-tickets"],
+  ["my-ticket", "/my-tickets/:ticketId"],
+  ["rules", "/rules"],
+  ["forum", "/forum/:alias"],
+  ["community", "/community"],
+  ["account", "/account"],
+  ["profile", "/users/:username"],
+  ["home", "/"],
+];
 
 /** A signed-in viewer, as the auth store reads him back on creation. */
 export const signIn = (username = "Reader") =>
@@ -42,10 +41,13 @@ export const signIn = (username = "Reader") =>
 
 export type Page = typeof SupportPage;
 
-/** A page opened on a reason, as a link that knows it opens it. */
-export const openOn = (Page: Page, subtype?: string) => {
-  route.query = subtype ? { subtype } : {};
-  return mount(Page, options());
+/** A page opened at its address, on a reason as a link that knows it opens it. */
+export const openOn = async (Page: Page, subtype?: string) => {
+  const own = Page === ComplaintPage ? "/complaint" : "/support";
+  const address = subtype ? `${own}?subtype=${subtype}` : own;
+  // Windows draw in place, where the page text is read.
+  return (await mountPage(Page, address, { routes, stubs: { Teleport: true } }))
+    .wrapper;
 };
 
 /** The text, as the editor hands it to the form. */
@@ -86,15 +88,12 @@ export const labelsOn = (wrapper: VueWrapper) =>
 /** Where the links of a mounted piece lead. */
 export const linksOn = (wrapper: VueWrapper) =>
   wrapper
-    .findAllComponents(RouterLinkStub)
-    .map((link) => ({ to: link.props("to"), text: link.text() }));
+    .findAll("a")
+    .map((link) => ({ href: link.attributes("href"), text: link.text() }));
 
 /** Where the links of the note under the reason lead. */
 export const noteLinksOn = (wrapper: VueWrapper) =>
-  wrapper
-    .findAllComponents(RouterLinkStub)
-    .filter((link) => link.element.closest(".reason-note"))
-    .map((link) => link.props("to"));
+  wrapper.findAll(".reason-note a").map((link) => link.attributes("href"));
 
 /** The lines of the note under the reason, as they read. */
 export const noteOn = (wrapper: VueWrapper) =>

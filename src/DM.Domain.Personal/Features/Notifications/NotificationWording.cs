@@ -17,14 +17,10 @@ namespace DM.Domain.Personal.Features.Notifications;
 /// </remarks>
 public static class NotificationWording
 {
-    /// <summary>
-    /// Shown for an event type that carries no title of its own.
-    /// </summary>
     private const string UnknownEventTitle = "Уведомление";
 
     private static readonly Dictionary<EventType, string> EventTypeTitles = new()
     {
-        // Games
         [EventType.StatusGameActive] = "Игра началась",
         [EventType.StatusGameClosed] = "Игра закрыта",
         [EventType.StatusGameFrozen] = "Игра заморожена",
@@ -71,7 +67,6 @@ public static class NotificationWording
         [EventType.StatusBlogFinished] = "Блог завершен",
         [EventType.BlogInvitationCreated] = "Приглашение в блог",
 
-        // Messages
         [EventType.NewMessage] = "Новое сообщение",
         [EventType.LikedMessage] = "Нравится: сообщение",
 
@@ -134,7 +129,6 @@ public static class NotificationWording
         ["LikerUsername"] = "Отметил",
         ["PointsChangedByUsername"] = "Изменил",
 
-        // Games
         ["GameTitle"] = "Игра",
         ["RoomTitle"] = "Комната",
         ["CharacterName"] = "Персонаж",
@@ -145,12 +139,10 @@ public static class NotificationWording
         ["TopicTitle"] = "Топик",
         ["BoardTitle"] = "Раздел",
 
-        // Blog
         ["BlogTitle"] = "Блог",
         ["PublicationTitle"] = "Публикация",
         ["Role"] = "Роль",
 
-        // Awards
         ["AwardTitle"] = "Награда",
         ["AwardDescription"] = "Описание",
         ["AwardedUtc"] = "Вручено",
@@ -259,7 +251,6 @@ public static class NotificationWording
     /// machine-facing fields here rather than in the generators is what keeps the link
     /// buildable: NotificationDestination reads the same bag through ReadFields below.
     /// </remarks>
-    /// <param name="metadata">Metadata bag of a notification</param>
     public static IReadOnlyList<KeyValuePair<string, string>> ReadMetadata(object? metadata) =>
         ShownFields(metadata)
             .Select(field => new KeyValuePair<string, string>(FormatPropertyName(field.Key), field.Value))
@@ -298,7 +289,6 @@ public static class NotificationWording
     /// Metadata that is not an object yields nothing. Nothing is dropped here: the
     /// sentence leaves out the identifiers, and the link is made of them.
     /// </remarks>
-    /// <param name="metadata">Metadata bag of a notification</param>
     public static IReadOnlyList<KeyValuePair<string, string>> ReadFields(object? metadata)
     {
         if (metadata == null)
@@ -323,7 +313,8 @@ public static class NotificationWording
 
             return fields;
         }
-        catch (Exception)
+        // A member with no converter, a cycle, an element that was never set.
+        catch (Exception e) when (e is NotSupportedException or JsonException or InvalidOperationException)
         {
             // A bag that cannot be read costs the notification its details, not its
             // delivery.

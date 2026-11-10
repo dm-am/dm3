@@ -54,10 +54,8 @@ public class CharacterAttributeValueFillerShould : UnitTestBase
         Attributes = attributes
     };
 
-    /// <summary>
-    /// A schema whose descriptor is hidden, written around the validator that refuses one,
-    /// and a character that fills it.
-    /// </summary>
+    // A schema whose descriptor is hidden, written around the validator that refuses one, and a
+    // character that fills it.
     private Character WithHiddenDescriptor()
     {
         SetupSchema(new AttributeSpecification

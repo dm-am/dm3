@@ -6,7 +6,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mount, flushPromises, enableAutoUnmount } from "@vue/test-utils";
 import { createPinia, setActivePinia } from "pinia";
 import { useAuthStore } from "@/shared/stores";
-import type { User } from "@/shared/api/models/common";
+import { createMockUser } from "@/entities/forum/model/store.fixtures";
 
 const { mockSearchMessages } = vi.hoisted(() => ({
   mockSearchMessages: vi.fn(),
@@ -77,7 +77,7 @@ describe("MessageSearchBar", () => {
     setActivePinia(createPinia());
     mockSearchMessages.mockReset();
     mockSearchMessages.mockResolvedValue(answer());
-    useAuthStore().user = { username: "kot" } as unknown as User;
+    useAuthStore().user = createMockUser("u-kot", "kot");
   });
 
   it("is one filter-bar row: the field and the row's buttons together", () => {

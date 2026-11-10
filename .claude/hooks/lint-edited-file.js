@@ -48,7 +48,13 @@ function resolveTarget(filePath) {
   return relative ? { clientDir, relative } : null;
 }
 
-module.exports = { resolveTarget };
+// The cut hint under size findings; a client without the formatter (an old worktree) keeps the default output.
+function formatArgs(clientDir) {
+  const formatter = path.join(clientDir, "lint-formatter.mjs");
+  return require("fs").existsSync(formatter) ? ["--format", formatter] : [];
+}
+
+module.exports = { resolveTarget, formatArgs };
 
 if (require.main !== module) return;
 
@@ -81,7 +87,7 @@ if (!require("fs").existsSync(eslintBin)) process.exit(0);
 try {
   execFileSync(
     process.execPath,
-    [eslintBin, relative, "--max-warnings", "0"],
+    [eslintBin, relative, "--max-warnings", "0", ...formatArgs(clientDir)],
     { cwd: clientDir, stdio: "pipe", encoding: "utf8", timeout: 60_000 },
   );
 } catch (error) {

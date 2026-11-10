@@ -8,11 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The blacklist of a game and the blacklist of a blog are each spelled in one
-/// place, refuse in one sentence, and are asked only by the few actions they
-/// close.
-/// </summary>
 /// <remarks>
 /// The rule is a predicate beside the roles (IsBlacklisted) and the refusal the method next to it
 /// (ThrowIfBlacklisted). It closes the discussion and the application of a game and the comments
@@ -20,15 +15,11 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class BlacklistRuleShould
 {
-    /// <summary>
-    /// The spellings of the rule and of its refusal.
-    /// </summary>
-    /// <remarks>IsBlocked stays forbidden as a second way of asking; IsBlockedAsync is the personal list.</remarks>
+    // IsBlocked stays forbidden as a second way of asking; IsBlockedAsync is the personal list.
     private static readonly Regex Spelling = new(
         @"BlacklistedUsers\.Any\(|BlacklistedUserIds\.Contains\(|RefusalMessage\.BlacklistedFrom(?:Game|Blog)\b|\.IsBlocked\(",
         RegexOptions.Compiled);
 
-    /// <summary>The two files the rule lives in.</summary>
     private static readonly string[] Owners = ["GameRoleExtensions.cs", "BlogRoleExtensions.cs"];
 
     [Fact]
@@ -57,9 +48,6 @@ public class BlacklistRuleShould
         }
     }
 
-    /// <summary>
-    /// The places that ask the predicate, and why each may.
-    /// </summary>
     private static readonly Dictionary<string, string> Askers = new()
     {
         ["GameRoleExtensions.cs"] = "the rule itself",
@@ -76,7 +64,6 @@ public class BlacklistRuleShould
         ["BlogMapper.cs"] = "the viewer flag on the blog",
     };
 
-    /// <summary>A call of the predicate or of its refusal.</summary>
     private static readonly Regex Asking = new(@"\b(?:IsBlacklisted|ThrowIfBlacklisted)\(", RegexOptions.Compiled);
 
     [Fact]

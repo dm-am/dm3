@@ -14,9 +14,6 @@ using Microsoft.Extensions.Options;
 
 namespace DM.Domain.Account.Features.Registration;
 
-/// <summary>
-/// Service for email-first user activation (username selection after email verification)
-/// </summary>
 internal class ActivationService : IActivationService
 {
     private readonly IValidator<ActivationRequest> _validator;
@@ -84,10 +81,8 @@ internal class ActivationService : IActivationService
         return user.UserId;
     }
 
-    /// <summary>
-    /// The account the address already belongs to, when that account is this very
-    /// activation done once already.
-    /// </summary>
+    // The account the address already belongs to, when that account is this very activation done
+    // once already.
     private async Task<Guid?> AlreadyActivatedAs(string email, string username)
     {
         var existingUser = await _repository.FindUserByEmail(email);

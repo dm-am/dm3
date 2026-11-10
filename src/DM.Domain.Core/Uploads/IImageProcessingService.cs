@@ -25,7 +25,6 @@ public interface IImageProcessingService
     /// <see cref="DM.Domain.Core.Exceptions.HttpBadRequestException"/> on any
     /// validation error.
     /// </summary>
-    /// <param name="input">Bytes as the caller sent them.</param>
     /// <param name="declaredContentType">
     /// What the client called the file. Recorded on the trace and never trusted:
     /// the format is decided by the magic bytes.
@@ -35,7 +34,6 @@ public interface IImageProcessingService
     /// whether the stored file is downscaled — an avatar is a small square and a
     /// post attachment is a map somebody has to be able to read.
     /// </param>
-    /// <param name="ct">Cancellation token.</param>
     Task<ProcessedImage> ProcessAsync(
         Stream input,
         string declaredContentType,

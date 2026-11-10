@@ -8,13 +8,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Persistence.Tests;
 
-/// <summary>
-/// A seeded board agrees with the topics seeded into it.
-/// </summary>
-/// <remarks>
-/// The topic counter is denormalised and a migrated database holds what the seed said. Read out of the
-/// design-time model.
-/// </remarks>
+// The topic counter is denormalised and a migrated database holds what the seed said.
 public class SeededForumSummaryShould
 {
     [Fact]
@@ -36,10 +30,6 @@ public class SeededForumSummaryShould
         }
     }
 
-    /// <summary>
-    /// The last-topic block of a seeded board names the newest topic seeded into it.
-    /// </summary>
-    /// <remarks>All five columns move together.</remarks>
     [Fact]
     public void NameTheNewestTopicSeededIntoIt()
     {
@@ -127,10 +117,8 @@ public class SeededForumSummaryShould
             .GroupBy(topic => topic.BoardId)
             .ToDictionary(group => group.Key, group => group.Count());
 
-    /// <summary>
-    /// A column the seed may leave unset: HasData over entity instances carries every property,
-    /// HasData over anonymous objects carries only the named ones.
-    /// </summary>
+    // A column the seed may leave unset: HasData over entity instances carries every property,
+    // HasData over anonymous objects carries only the named ones.
     private static object? Optional(IDictionary<string, object?> row, string column) =>
         row.TryGetValue(column, out var value) ? value : null;
 }

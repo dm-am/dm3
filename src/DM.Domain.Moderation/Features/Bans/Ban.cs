@@ -43,9 +43,6 @@ public class Ban
     /// </summary>
     public DateTimeOffset? LiftedUtc { get; set; }
 
-    /// <summary>
-    /// Moderator who lifted the ban early
-    /// </summary>
     public Guid? LiftedByUserId { get; set; }
 
     /// <summary>

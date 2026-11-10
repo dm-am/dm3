@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// An example of C# in a document does not declare a type the code already has.
-/// </summary>
 /// <remarks>
 /// A copy of a real type is never compiled and falls behind it; an example uses a name of its own.
 /// Blocks marked csharp, cs or c# are read, against the types declared in src and test.
@@ -52,7 +49,6 @@ public class DocumentExampleTypesShould
     public void ReadTheNameADeclarationGives(string line, string name) =>
         string.Join(",", Declared([line])).Should().Be(name);
 
-    /// <summary>The names the lines declare, lines of comment left out.</summary>
     private static IEnumerable<string> Declared(IEnumerable<string> lines) => lines
         .Where(line => !Comment.IsMatch(line))
         .SelectMany(line => Declaration.Matches(line).Select(match => match.Groups["name"].Value))

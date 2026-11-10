@@ -10,17 +10,11 @@ using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The installer deploys the same stack the unit brings back, from the ref the
-/// documented command downloads, and refuses a server it cannot make usable.
-/// </summary>
-/// <remarks>Nothing executes the installer under test, so its lines are asserted as text.</remarks>
+// Nothing executes the installer under test, so its lines are asserted as text.
 public class InstallerShould
 {
-    /// <summary>
-    /// A server is not installed without an address to deliver mail to.
-    /// </summary>
-    /// <remarks>The compose default is Mailpit on loopback; a contour that delivers nowhere is worse than none.</remarks>
+    // The compose default is Mailpit on loopback; a contour that delivers nowhere is worse than
+    // none.
     [Fact]
     public void RefuseToInstallAServerWithNowhereToSendMail()
     {
@@ -37,11 +31,7 @@ public class InstallerShould
             "calling this, which is how the environment stayed Development once already");
     }
 
-    /// <summary>
-    /// The branch the documented command downloads is the branch the installer
-    /// then clones.
-    /// </summary>
-    /// <remarks>Coherence of the guide, the usage comment and the default, not the choice of branch.</remarks>
+    // Coherence of the guide, the usage comment and the default, not the choice of branch.
     [Fact]
     public void InstallFromTheRefTheDocumentedCommandDownloads()
     {
@@ -79,7 +69,7 @@ public class InstallerShould
         }
     }
 
-    /// <remarks>The same invariant as the CI step, off the runner: a reboot must not bring up a bare API.</remarks>
+    // The same invariant as the CI step, off the runner: a reboot must not bring up a bare API.
     [Fact]
     public void DeployTheSameFilesAndProfilesFromTheUnitAndTheInstaller()
     {
@@ -126,9 +116,6 @@ public class InstallerShould
             "the SPA image is published by the same run and has to move with it");
     }
 
-    /// <summary>
-    /// The log of every container on the server has a ceiling.
-    /// </summary>
     /// <remarks>
     /// The json-file driver keeps every line forever. Given to the daemon, which also covers the one-off
     /// containers of the scripts.
@@ -151,7 +138,6 @@ public class InstallerShould
             "log options apply to containers created after they are set");
     }
 
-    /// <summary>Compose files and profiles named by the docker compose lines of a file.</summary>
     private static List<string> ComposeSelectors(string text)
     {
         var selectors = text.Split('\n')

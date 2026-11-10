@@ -3,7 +3,7 @@ export {
   type GameReviewsQuery,
   type EndorsementsQuery,
 } from "./userApi";
-export { default as accountApi } from "./accountApi";
+export { default as accountApi, type BotType } from "./accountApi";
 export {
   default as personalApi,
   type UpdateProfilePayload,

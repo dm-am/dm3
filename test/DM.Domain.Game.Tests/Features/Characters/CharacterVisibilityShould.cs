@@ -16,11 +16,8 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.Characters;
 
-/// <summary>
-/// Who sees a character. An application under review is seen by everybody, a
-/// guest included; a declined one by nobody, the applicant and the master,
-/// assistants and mentor included, on the list and by a direct link alike.
-/// </summary>
+// An application under review is seen by everybody, a guest included; a declined one by nobody, the
+// applicant and the master, assistants and mentor included, on the list and by a direct link alike.
 public class CharacterVisibilityShould : CharacterServiceTestBase
 {
     private readonly Guid gameId = Guid.NewGuid();
@@ -52,10 +49,8 @@ public class CharacterVisibilityShould : CharacterServiceTestBase
 
     public static TheoryData<Viewer> EveryViewer => new(Enum.GetValues<Viewer>());
 
-    /// <summary>
-    /// The refusal is the one an unknown identifier gets, word for word, so the
-    /// answer does not tell a declined application from a character that never was.
-    /// </summary>
+    // The refusal is the one an unknown identifier gets, word for word, so the answer does not tell
+    // a declined application from a character that never was.
     [Theory]
     [MemberData(nameof(EveryViewer))]
     public async Task AnswerADeclinedApplicationAsACharacterThatIsNotThere(Viewer viewer)

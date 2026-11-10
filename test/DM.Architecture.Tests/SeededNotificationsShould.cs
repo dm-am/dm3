@@ -15,20 +15,14 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The notifications the seed writes are rows the list can tell: a title of their
-/// own, a link to the page the seed wrote, a place for "Где" and a person for "Кто".
-/// </summary>
 /// <remarks>
 /// Nothing fails on a payload of another shape: the link is not built and the columns stay empty. Each
 /// payload goes through the list's mapper and is held to the generator it copies.
 /// </remarks>
 public class SeededNotificationsShould
 {
-    /// <summary>What a row with no title of its own is headed, by NotificationWording.</summary>
     private const string Untitled = "Уведомление";
 
-    /// <summary>The assignment every generator writes its payload through.</summary>
     private const string PayloadAssignment = "Metadata = new";
 
     private static readonly DateTimeOffset Epoch = new(2026, 10, 18, 12, 0, 0, TimeSpan.Zero);
@@ -41,7 +35,6 @@ public class SeededNotificationsShould
     private static readonly Guid NewGameId = Guid.Parse("10000000-0000-0000-0000-000000000006");
     private static readonly Guid LikedGameId = Guid.Parse("10000000-0000-0000-0000-000000000007");
 
-    /// <summary>Every fact the seed reads, with the names and titles of the fixture.</summary>
     private static readonly DataSeeder.NotificationFacts Everything = new(
         new DataSeeder.CommentFact(
             Guid.Parse("20000000-0000-0000-0000-000000000001"), TopicId, "FAQ для новых пользователей", "Player Four"),
@@ -78,15 +71,10 @@ public class SeededNotificationsShould
             "/game/", LikedGameId, "Игра: Пески Времени", "Отметил: Тест Елки", []),
     };
 
-    /// <summary>The titles the list sorts into "Где" (parts.ts, PLACES).</summary>
     private static readonly string[] PlaceFields =
         ["gameTitle", "roomTitle", "topicTitle", "boardTitle", "blogTitle", "publicationTitle"];
 
-    /// <summary>
-    /// Each row reads as the list shows it: a title of its own, a link to the
-    /// seeded page, and exactly a place, a person and nothing else unaccounted for.
-    /// </summary>
-    /// <remarks>Read in both key orders: jsonb does not keep the order the list pairs details by.</remarks>
+    // Read in both key orders: jsonb does not keep the order the list pairs details by.
     [Fact]
     public void ReadAsTheRowsOfTheList()
     {
@@ -119,10 +107,6 @@ public class SeededNotificationsShould
         }
     }
 
-    /// <summary>
-    /// The line of what is unread stands over the list: the newest rows are unread,
-    /// and they stay so when the fixture lacks the facts it may lack.
-    /// </summary>
     [Fact]
     public void LeaveTheNewestUnread()
     {
@@ -141,10 +125,6 @@ public class SeededNotificationsShould
             "the facts a fixture may lack cost their rows and not the line of what is unread");
     }
 
-    /// <summary>
-    /// Under the seven, the read rows of the weeks before: enough for the list to run past a page of
-    /// twenty, each a row of its own, older than the seven and carrying what its generator writes.
-    /// </summary>
     [Fact]
     public void RunPastAPageOfTwentyWithTheEarlierRows()
     {
@@ -188,10 +168,7 @@ public class SeededNotificationsShould
         }
     }
 
-    /// <summary>
-    /// Each payload carries the fields its generator writes, no more and no fewer.
-    /// </summary>
-    /// <remarks>Every generator that writes the event is asked: a new game reaches the subscribers from two.</remarks>
+    // Every generator that writes the event is asked: a new game reaches the subscribers from two.
     [Fact]
     public void CarryThePayloadItsGeneratorWrites()
     {
@@ -224,7 +201,6 @@ public class SeededNotificationsShould
             IsRead = notification.IsRead
         });
 
-    /// <summary>The same payload with its keys in the reverse order.</summary>
     private static string Reversed(string payload)
     {
         var fields = JsonNode.Parse(payload)!.AsObject()
@@ -233,10 +209,6 @@ public class SeededNotificationsShould
         return new JsonObject(fields).ToJsonString();
     }
 
-    /// <summary>
-    /// The details of a row sorted into the columns of the list, the way
-    /// src/DM.Web.Client/src/entities/notification/lib/parts.ts sorts them.
-    /// </summary>
     private static (List<string> Places, List<string> People, List<string> Others) Columns(Notification row)
     {
         var fields = ((JsonElement)row.Payload).EnumerateObject()
@@ -275,10 +247,6 @@ public class SeededNotificationsShould
         return columns;
     }
 
-    /// <summary>
-    /// The members of every payload a generator of the dispatcher writes for the
-    /// event, read out of the sources the way NotificationMetadataShould reads them.
-    /// </summary>
     private static IReadOnlyList<IReadOnlyList<string>> GeneratorPayloads(EventType eventType)
     {
         var mention = new Regex($@"\bEventType\.{eventType}\b");

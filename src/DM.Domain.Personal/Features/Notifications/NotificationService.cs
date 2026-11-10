@@ -86,9 +86,6 @@ internal class NotificationService : INotificationService
         return notifications;
     }
 
-    /// <summary>
-    /// Drops batch entries that repeat a (EventId, EventType) pair already in it.
-    /// </summary>
     /// <remarks>
     /// Such a pair would make the unique index refuse the whole batch on every
     /// retry, so the duplicate is dropped with a warning instead.
@@ -114,10 +111,6 @@ internal class NotificationService : INotificationService
         return kept;
     }
 
-    /// <summary>
-    /// Drops the notifications a previous delivery of the same event already
-    /// stored, keyed by (EventId, EventType).
-    /// </summary>
     /// <remarks>
     /// The bus delivers at least once, and every channel is built from the survivors,
     /// so a replay is sent by none. A notification without an EventId is not
@@ -151,10 +144,6 @@ internal class NotificationService : INotificationService
         return remaining;
     }
 
-    /// <summary>
-    /// Drops from each notification the recipients who have its actor on their
-    /// personal blacklist.
-    /// </summary>
     /// <remarks>
     /// Unconditional: the flags of <see cref="UserBlacklistSettings"/> govern what a
     /// listing shows, and a notification cannot be scrolled past. One statement per

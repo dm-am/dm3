@@ -34,10 +34,7 @@ public class SecurityHeadersShould : UnitTestBase
         policy.Should().Contain("script-src 'self' 'unsafe-inline'");
     }
 
-    /// <summary>
-    /// connect-src names this origin, not every host that speaks a scheme.
-    /// </summary>
-    /// <remarks>A scheme source matches every host; 'self' covers ws:// and wss:// where the hub is mapped.</remarks>
+    // A scheme source matches every host; 'self' covers ws:// and wss:// where the hub is mapped.
     [Fact]
     public async Task NameNoHostBeyondThisOriginInConnectSrc()
     {
@@ -48,10 +45,8 @@ public class SecurityHeadersShould : UnitTestBase
         policy.Should().NotContain(" ws:");
     }
 
-    /// <summary>
-    /// The retired header stays retired.
-    /// </summary>
-    /// <remarks>X-XSS-Protection asks for a filter no browser has; sent, it claims a defence nothing performs.</remarks>
+    // X-XSS-Protection asks for a filter no browser has; sent, it claims a defence nothing
+    // performs.
     [Fact]
     public async Task SendNoHeaderThatNoBrowserStillHonours()
     {

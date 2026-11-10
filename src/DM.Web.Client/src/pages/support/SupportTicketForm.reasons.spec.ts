@@ -8,7 +8,7 @@ import { enableAutoUnmount } from "@vue/test-utils";
 import { LoginPrompt } from "@/features/auth";
 import SupportPage from "./SupportPage.vue";
 import ComplaintPage from "./ComplaintPage.vue";
-import { createTicket, route } from "./SupportTicketForm.doubles";
+import { createTicket } from "./SupportTicketForm.doubles";
 import {
   fillAndSend,
   hintOf,
@@ -21,9 +21,6 @@ import {
   type Page,
 } from "./SupportTicketForm.fixtures";
 
-vi.mock("vue-router", async () =>
-  (await import("./SupportTicketForm.doubles")).vueRouter(),
-);
 vi.mock("@/entities/ticket", async (importOriginal) =>
   (await import("./SupportTicketForm.doubles")).ticketEntity(importOriginal),
 );
@@ -33,13 +30,12 @@ stubResizeObserver();
 describe("the note under a reason", () => {
   beforeEach(() => {
     localStorage.clear();
-    route.query = {};
   });
 
   // Forgetting a password or losing the phone needs no administration: the
   // windows that give access back open over the page.
-  it("gives a guest who lost access the two windows that give it back", () => {
-    const wrapper = openOn(SupportPage, "AccessRecovery");
+  it("gives a guest who lost access the two windows that give it back", async () => {
+    const wrapper = await openOn(SupportPage, "AccessRecovery");
 
     expect(noteOn(wrapper)).toEqual([
       "Сюда пишут, если нет доступа к почте аккаунта",
@@ -49,60 +45,59 @@ describe("the note under a reason", () => {
     expect(wrapper.find(".reason-note-line.is-lead").exists()).toBe(true);
 
     expect(noteLinksOn(wrapper)).toEqual([
-      { query: { subtype: "AccessRecovery", action: "recovery" } },
-      { query: { subtype: "AccessRecovery", action: "two-factor" } },
+      "/support?subtype=AccessRecovery&action=recovery",
+      "/support?subtype=AccessRecovery&action=two-factor",
     ]);
   });
 
   // Without the mailbox, what only the owner knows tells him from somebody who knows his name.
-  it("asks a guest who lost access for what only the owner knows", () => {
+  it("asks a guest who lost access for what only the owner knows", async () => {
     expect(
-      openOn(SupportPage, "AccessRecovery").find(".reason-hint").text(),
+      (await openOn(SupportPage, "AccessRecovery")).find(".reason-hint").text(),
     ).toBe(
       "Напишите имя пользователя и почту аккаунта, а также то, что знает только владелец: названия ваших игр и персонажей, примерную дату регистрации",
     );
   });
 
-  it("sends a signed-in reader who lost access to his settings", () => {
+  it("sends a signed-in reader who lost access to his settings", async () => {
     signIn();
-    const wrapper = openOn(SupportPage, "AccessRecovery");
+    const wrapper = await openOn(SupportPage, "AccessRecovery");
 
     expect(noteOn(wrapper)[0]).toBe("Вы уже вошли в аккаунт");
-    expect(noteLinksOn(wrapper)).toEqual([{ name: "account" }]);
+    expect(noteLinksOn(wrapper)).toEqual(["/account"]);
   });
 
-  it("says what the site already sends again for a registration", () => {
-    const wrapper = openOn(SupportPage, "RegistrationIssue");
+  it("says what the site already sends again for a registration", async () => {
+    const wrapper = await openOn(SupportPage, "RegistrationIssue");
 
     expect(noteOn(wrapper)[1]).toBe(
       'Письмо могло попасть в папку "Спам", отправить его еще раз можно через Восстановление доступа',
     );
   });
 
-  it("tells a signed-in reader what a removal leaves behind", () => {
+  it("tells a signed-in reader what a removal leaves behind", async () => {
     signIn();
 
-    expect(noteOn(openOn(SupportPage, "AccountRemoval"))).toEqual([
+    expect(noteOn(await openOn(SupportPage, "AccountRemoval"))).toEqual([
       'Посты, комментарии и сообщения останутся на месте, вместо имени над ними будет "Аккаунт удален"',
       'Вернуть имя можно через поддержку, подробнее на странице "Аккаунт удален"',
     ]);
   });
 
-  it("says who the senior moderators are and what rudeness costs, under a decision complaint", () => {
-    const wrapper = openOn(ComplaintPage, "ModeratorDecisionComplaint");
+  it("says who the senior moderators are and what rudeness costs, under a decision complaint", async () => {
+    const wrapper = await openOn(ComplaintPage, "ModeratorDecisionComplaint");
 
     expect(noteOn(wrapper)).toEqual([
       'Кто из модераторов старший, видно в разделе "Администрация" правил',
       "Решения по жалобам принимаются коллегиально, хамство в жалобе добавляет баллы",
     ]);
-    expect(noteLinksOn(wrapper)).toEqual([{ name: "rules", hash: "#admins" }]);
+    expect(noteLinksOn(wrapper)).toEqual(["/rules#admins"]);
   });
 });
 
 describe("the reasons filed from an account", () => {
   beforeEach(() => {
     localStorage.clear();
-    route.query = {};
     createTicket.mockReset();
     createTicket.mockResolvedValue({ data: {}, error: null });
   });
@@ -131,8 +126,8 @@ describe("the reasons filed from an account", () => {
     ],
   ])(
     "gives a guest the sign-in line instead of the form for %s",
-    (Page, subtype, action, lines) => {
-      const wrapper = openOn(Page as Page, subtype as string);
+    async (Page, subtype, action, lines) => {
+      const wrapper = await openOn(Page as Page, subtype as string);
 
       expect(noteOn(wrapper)).toEqual(lines);
       expect(wrapper.findComponent(LoginPrompt).props("action")).toBe(action);
@@ -143,7 +138,7 @@ describe("the reasons filed from an account", () => {
 
   it("asks a member for the violator and the link, both required", async () => {
     signIn();
-    const wrapper = openOn(ComplaintPage, "UserComplaint");
+    const wrapper = await openOn(ComplaintPage, "UserComplaint");
 
     expect(labelsOn(wrapper)).toEqual([
       "Причина жалобы",
@@ -168,7 +163,7 @@ describe("the reasons filed from an account", () => {
 
   it("holds back a link that leads to no page", async () => {
     signIn();
-    const wrapper = openOn(ComplaintPage, "UserComplaint");
+    const wrapper = await openOn(ComplaintPage, "UserComplaint");
     await wrapper.find("#violator").setValue("Experienced");
     await wrapper.find("#violationUrl").setValue("forum/flood/1");
 
@@ -182,7 +177,7 @@ describe("the reasons filed from an account", () => {
 
   it("sends the violator and the link with the complaint", async () => {
     signIn();
-    const wrapper = openOn(ComplaintPage, "UserComplaint");
+    const wrapper = await openOn(ComplaintPage, "UserComplaint");
     await wrapper.find("#violator").setValue("  Experienced ");
     await wrapper
       .find("#violationUrl")
@@ -212,7 +207,7 @@ describe("the reasons filed from an account", () => {
         errors: { targetUsername: ["Пользователь не найден"] },
       },
     });
-    const wrapper = openOn(ComplaintPage, "UserComplaint");
+    const wrapper = await openOn(ComplaintPage, "UserComplaint");
     await wrapper.find("#violator").setValue("Nobody");
     await wrapper
       .find("#violationUrl")
@@ -230,7 +225,10 @@ describe("the reasons filed from an account", () => {
   /** A decision is found by who complains, so its link stays optional. */
   it("keeps the link of a decision complaint optional and sends no violator", async () => {
     signIn();
-    const wrapper = openOn(ComplaintPage, "SeniorModeratorDecisionComplaint");
+    const wrapper = await openOn(
+      ComplaintPage,
+      "SeniorModeratorDecisionComplaint",
+    );
 
     expect(labelsOn(wrapper)).not.toContain("Нарушитель");
     expect(wrapper.find(".form-field-optional").text()).toBe("необязательно");
@@ -244,9 +242,9 @@ describe("the reasons filed from an account", () => {
     expect(createTicket.mock.calls[0][0].violationUrl).toBeUndefined();
   });
 
-  it("asks a banned guest for the name of his account in a decision complaint", () => {
+  it("asks a banned guest for the name of his account in a decision complaint", async () => {
     expect(
-      openOn(ComplaintPage, "SeniorModeratorDecisionComplaint")
+      (await openOn(ComplaintPage, "SeniorModeratorDecisionComplaint"))
         .find(".reason-hint")
         .text(),
     ).toBe(

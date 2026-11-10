@@ -10,9 +10,6 @@ public class ChatRoomControllerShould : IntegrationTestBase
     {
     }
 
-    /// <summary>
-    /// Get chat rooms without authentication should return OK (public endpoint)
-    /// </summary>
     [Fact]
     public async Task GetChatRoomsWhenNotAuthenticatedReturnsOk()
     {
@@ -32,9 +29,8 @@ public class ChatRoomControllerShould : IntegrationTestBase
         response.StatusCode.Should().Be(HttpStatusCode.NotFound);
     }
 
-    /// <summary>
-    /// Chat room messages are read without an account, so a guest asking for a missing room is told it is missing.
-    /// </summary>
+    // Chat room messages are read without an account, so a guest asking for a missing room is told
+    // it is missing.
     [Fact]
     public async Task GetChatRoomMessagesWhenNotAuthenticatedWithNonExistentIdReturnsNotFound()
     {

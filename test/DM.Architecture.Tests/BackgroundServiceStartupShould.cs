@@ -9,9 +9,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A background service does its work after the host has started, not during.
-/// </summary>
 /// <remarks>
 /// Everything before the first await of ExecuteAsync runs inside host startup. The async state
 /// machine attribute is asserted: a body returning Task.CompletedTask cannot satisfy it.

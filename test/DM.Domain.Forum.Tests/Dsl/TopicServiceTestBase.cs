@@ -22,12 +22,6 @@ using NSubstitute;
 
 namespace DM.Domain.Forum.Tests.Dsl;
 
-/// <summary>
-/// The topic service over substitutes of everything it asks: validators that
-/// pass, a signed-in regular user who administrates no board, unread counters
-/// that answer zero, a producer that takes every event and a cache that always
-/// asks the repository.
-/// </summary>
 public abstract class TopicServiceTestBase : UnitTestBase
 {
     protected readonly IBoardService boardService;
@@ -107,7 +101,6 @@ public abstract class TopicServiceTestBase : UnitTestBase
             cache);
     }
 
-    /// <summary>A topic of a board, found by its identifier and saved as changed.</summary>
     protected Topic SetupTopic(Guid topicId, Guid? authorId = null, bool isClosed = false, bool closedByAuthor = false)
     {
         var topic = new Topic

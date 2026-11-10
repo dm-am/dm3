@@ -10,9 +10,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { flushPromises } from "@vue/test-utils";
 import { characterApi } from "@/entities/game";
-import { routed } from "./CharacterEdit.doubles";
 import {
   FLAGS,
+  ROSTER,
+  SHEET,
+  address,
   OTHER,
   buttons,
   changesStatus,
@@ -24,10 +26,6 @@ import {
   statusInWords,
 } from "./CharacterEdit.fixtures";
 
-vi.mock("vue-router", async (importOriginal) =>
-  (await import("./CharacterEdit.doubles")).vueRouter(importOriginal),
-);
-
 describe("CharacterEdit", () => {
   beforeEach(resetPage);
 
@@ -38,7 +36,7 @@ describe("CharacterEdit", () => {
       "Удалить неигрового персонажа",
       "Трактирщик",
       {
-        participation: ["Owner"],
+        participation: ["Owner" as const],
         subject: character({
           name: "Трактирщик",
           isNpc: true,
@@ -58,17 +56,15 @@ describe("CharacterEdit", () => {
         .spyOn(characterApi, "deleteCharacter")
         .mockResolvedValue({ data: null, error: null } as never);
 
-      const { wrapper, loadCharacters, roster, page } = render(options);
+      const { wrapper, loadCharacters, roster, page, router } =
+        await render(options);
       await flushPromises();
 
       await press(wrapper, label);
 
       expect(remove).toHaveBeenCalledWith("char-1", FLAGS);
       expect(loadCharacters).toHaveBeenCalledWith("the-game");
-      expect(routed.push).toHaveBeenCalledWith({
-        name: "game-characters",
-        params: { id: "the-game" },
-      });
+      expect(address(router)).toBe(ROSTER);
       expect(roster()).not.toContain(name);
       expect(saidOutLoud()).toEqual([]);
       // The window that asked closes with its own fade over the roster.
@@ -83,13 +79,13 @@ describe("CharacterEdit", () => {
       error: { status: 404, title: "Персонаж не найден" },
     } as never);
 
-    const { wrapper, loadCharacters } = render();
+    const { wrapper, loadCharacters, router } = await render();
     await flushPromises();
 
     await press(wrapper, "Удалить персонажа");
 
     expect(loadCharacters).not.toHaveBeenCalled();
-    expect(routed.push).not.toHaveBeenCalled();
+    expect(address(router)).toBe(SHEET);
     expect(wrapper.get(".dialog-refusal").text()).toBe("Персонаж не найден");
     expect(wrapper.find(".dialog-container").exists()).toBe(true);
     expect(saidOutLoud()).toEqual([]);
@@ -98,7 +94,7 @@ describe("CharacterEdit", () => {
   it("writes an accepted application into the status, not into a plate", async () => {
     const change = changesStatus();
 
-    const { wrapper } = render({
+    const { wrapper } = await render({
       participation: ["Owner"],
       subject: character({ status: "UnderReview", author: OTHER }),
       becomes: character({ status: "Active", author: OTHER }),
@@ -117,7 +113,7 @@ describe("CharacterEdit", () => {
   it("keeps the status legible when exiling leaves only the way back", async () => {
     const change = changesStatus();
 
-    const { wrapper } = render({
+    const { wrapper } = await render({
       participation: ["Owner"],
       subject: character({ author: OTHER }),
       becomes: character({
@@ -141,7 +137,7 @@ describe("CharacterEdit", () => {
   it("writes a character out of the game into the status of their own sheet", async () => {
     const change = changesStatus();
 
-    const { wrapper } = render({
+    const { wrapper } = await render({
       subject: character(),
       becomes: character({ status: "Retired", isPlayerLeft: true }),
     });
@@ -162,7 +158,7 @@ describe("CharacterEdit", () => {
       error: { status: 404, title: "Персонаж не найден" },
     } as never);
 
-    const { wrapper, loadCharacters } = render({
+    const { wrapper, loadCharacters } = await render({
       subject: character(),
       becomes: character({ status: "Retired", isPlayerLeft: true }),
     });
@@ -184,7 +180,7 @@ describe("CharacterEdit", () => {
       error: { status: 404, title: "Персонаж не найден" },
     } as never);
 
-    const { wrapper, loadCharacters } = render({
+    const { wrapper, loadCharacters } = await render({
       participation: ["Owner"],
       subject: character({ status: "UnderReview", author: OTHER }),
     });
@@ -204,14 +200,14 @@ describe("CharacterEdit", () => {
     const leftTheGame = character({ status: "Retired", isPlayerLeft: true });
 
     it("offers the owner no way back", async () => {
-      const { wrapper } = render({ subject: leftTheGame });
+      const { wrapper } = await render({ subject: leftTheGame });
       await flushPromises();
 
       expect(buttons(wrapper)).toEqual(["Удалить персонажа"]);
     });
 
     it("offers the master no way back either, and revives only the dead", async () => {
-      const left = render({
+      const left = await render({
         participation: ["Owner"],
         subject: character({
           status: "Retired",
@@ -222,7 +218,7 @@ describe("CharacterEdit", () => {
       await flushPromises();
       expect(buttons(left.wrapper)).not.toContain("Вернуть в игру");
 
-      const dead = render({
+      const dead = await render({
         participation: ["Owner"],
         subject: character({
           status: "Retired",
@@ -239,7 +235,7 @@ describe("CharacterEdit", () => {
   describe("after the master exiled the character", () => {
     it("brings the character back for the master", async () => {
       const change = changesStatus();
-      const { wrapper } = render({
+      const { wrapper } = await render({
         participation: ["Owner"],
         subject: character({
           status: "Retired",
@@ -259,7 +255,7 @@ describe("CharacterEdit", () => {
     });
 
     it("offers the exiled player no way back", async () => {
-      const { wrapper } = render({
+      const { wrapper } = await render({
         subject: character({ status: "Retired", isPlayerExiled: true }),
       });
       await flushPromises();
@@ -268,7 +264,7 @@ describe("CharacterEdit", () => {
     });
 
     it("offers the master nothing when the player had left as well", async () => {
-      const { wrapper } = render({
+      const { wrapper } = await render({
         participation: ["Owner"],
         subject: character({
           status: "Retired",
@@ -287,7 +283,7 @@ describe("CharacterEdit", () => {
 // jsdom lays nothing out: the attributes of ButtonRow say "no scroll, no …".
 describe("CharacterEdit row of transitions", () => {
   it("stands every transition in a row of buttons, none held back", async () => {
-    const { wrapper } = render({
+    const { wrapper } = await render({
       participation: ["Owner"],
       subject: character({ author: OTHER }),
     });

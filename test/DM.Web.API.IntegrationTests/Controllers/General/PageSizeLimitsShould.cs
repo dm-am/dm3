@@ -4,9 +4,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.General;
 
-/// <summary>
-/// A page size outside the declared range is a caller mistake, not a clipped page.
-/// </summary>
 /// <remarks>
 /// API_DESIGN states it: take runs from 1 to PagingPolicy.MaxPageSize. The security journal declares a take of
 /// its own, and the warning log is the shared PagingQuery on a public endpoint.

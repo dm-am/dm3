@@ -28,19 +28,17 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class AgentInstructionSizeShould
 {
-    /// <summary>The instructions of the session, of each agent and of each skill.</summary>
     private static readonly Regex Instructions = new(
         @"^\.claude/(?:CLAUDE\.md|agents/[^/]+\.md|skills/[^/]+/SKILL\.md)$",
         RegexOptions.Compiled);
 
-    /// <summary>A file of instructions, at its size.</summary>
     /// <param name="File">Path from the repository root, forward slashes.</param>
     /// <param name="Bytes">UTF-8 bytes with line ends counted as one.</param>
     private sealed record Recorded(string File, int Bytes);
 
     private static readonly Recorded[] Register =
     [
-        new(".claude/CLAUDE.md", 4885),
+        new(".claude/CLAUDE.md", 3838),
         new(".claude/agents/code-reviewer.md", 3458),
         new(".claude/agents/debugger.md", 1686),
         new(".claude/agents/frontend-developer.md", 2683),

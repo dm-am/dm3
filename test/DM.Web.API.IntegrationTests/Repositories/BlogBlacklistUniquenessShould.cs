@@ -13,11 +13,8 @@ using DbUserBlacklist = DM.Infrastructure.Persistence.Entities.Account.UserBlack
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// One user is on one blog's blacklist once, the rule the game's list already
-/// keeps (GameBlacklistUniquenessShould).
-/// </summary>
-/// <remarks>Adding is check-then-insert, so the rule lives in the schema, and the repository answers its refusal in the domain's terms.</remarks>
+// Adding is check-then-insert, so the rule lives in the schema, and the repository answers its
+// refusal in the domain's terms.
 public class BlogBlacklistUniquenessShould : IntegrationTestBase
 {
     public BlogBlacklistUniquenessShould(DatabaseFixture databaseFixture) : base(databaseFixture)
@@ -52,11 +49,8 @@ public class BlogBlacklistUniquenessShould : IntegrationTestBase
             .Should().Be(1);
     }
 
-    /// <summary>
-    /// The owner's personal list lands on the blog once, however many copies of it
-    /// run at the same time.
-    /// </summary>
-    /// <remarks>The statement settles every pair against the index itself, so concurrent copies end without an error.</remarks>
+    // The statement settles every pair against the index itself, so concurrent copies end without
+    // an error.
     [Fact]
     public async Task CopyThePersonalListOnceWhenCopiesRunTogether()
     {
@@ -101,10 +95,8 @@ public class BlogBlacklistUniquenessShould : IntegrationTestBase
         }
     }
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
     {
         var userId = Guid.NewGuid();
@@ -122,7 +114,6 @@ public class BlogBlacklistUniquenessShould : IntegrationTestBase
         return userId;
     }
 
-    /// <summary>A blog with the owner it needs to exist.</summary>
     private static async Task<(Guid OwnerId, Guid BlogId)> AddBlogAsync(DmDbContext dbContext)
     {
         var ownerId = await AddUserAsync(dbContext);

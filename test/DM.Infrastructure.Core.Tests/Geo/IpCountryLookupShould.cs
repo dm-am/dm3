@@ -9,10 +9,7 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests.Geo;
 
-/// <summary>
-/// The country of an address, read out of a local table of ranges.
-/// </summary>
-/// <remarks>One letter prints this; the answer is either right or absent.</remarks>
+// One letter prints this; the answer is either right or absent.
 public class IpCountryLookupShould : IDisposable
 {
     private readonly string _path = Path.Combine(Path.GetTempPath(), $"dm3-country-{Guid.NewGuid():N}.csv");
@@ -38,7 +35,6 @@ public class IpCountryLookupShould : IDisposable
         lookup.Find("203.0.113.42").Should().Be("Россия");
     }
 
-    /// <summary>The ends of a range belong to it.</summary>
     [Theory]
     [InlineData("203.0.113.0")]
     [InlineData("203.0.113.255")]
@@ -107,7 +103,6 @@ public class IpCountryLookupShould : IDisposable
         lookup.Find("203.0.113.42").Should().BeNull();
     }
 
-    /// <summary>A publisher that quotes every field is read the same way.</summary>
     [Fact]
     public void ReadAQuotedTable()
     {
@@ -116,10 +111,7 @@ public class IpCountryLookupShould : IDisposable
         lookup.Find("203.0.113.42").Should().Be("Россия");
     }
 
-    /// <summary>
-    /// The table the deployment downloads, user-country of sapics/ip-location-db: no header, no quotes, both
-    /// families, IPv6 compressed. The lines are the publisher's, picked for where compression lands.
-    /// </summary>
+    // The lines are the publisher's, picked for where compression lands.
     [Fact]
     public void ReadTheTableTheDeploymentDownloads()
     {
@@ -147,7 +139,6 @@ public class IpCountryLookupShould : IDisposable
         lookup.Find("2.27.26.130").Should().BeNull();
     }
 
-    /// <summary>A broken line is dropped, and the lines around it still answer.</summary>
     [Fact]
     public void SkipALineItCannotRead()
     {
@@ -161,10 +152,8 @@ public class IpCountryLookupShould : IDisposable
         lookup.Find("1.0.0.7").Should().Be("Австралия");
     }
 
-    /// <summary>
-    /// No table is not a failure: this decides one line of one letter, and a
-    /// stale download must not keep the site from starting.
-    /// </summary>
+    // No table is not a failure: this decides one line of one letter, and a stale download must not
+    // keep the site from starting.
     [Fact]
     public void NameNothingWhenTheTableIsMissing()
     {

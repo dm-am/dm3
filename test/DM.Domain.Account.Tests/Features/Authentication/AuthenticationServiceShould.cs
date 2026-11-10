@@ -12,11 +12,6 @@ using Xunit;
 
 namespace DM.Domain.Account.Tests.Features.Authentication;
 
-/// <summary>
-/// The password step of a login: what it refuses before the password is looked
-/// at, what it refuses only once the password is proven, and what a proven
-/// password earns.
-/// </summary>
 public class AuthenticationServiceShould : AuthenticationServiceTestBase
 {
     [Fact]

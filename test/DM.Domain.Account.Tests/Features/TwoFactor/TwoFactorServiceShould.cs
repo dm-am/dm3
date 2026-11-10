@@ -21,18 +21,12 @@ using Identity = DM.Domain.Account.Features.Authentication.Identity;
 
 namespace DM.Domain.Account.Tests.Features.TwoFactor;
 
-/// <summary>
-/// The second factor as its owner switches it on and off.
-/// </summary>
-/// <remarks>
-/// The factor is off until confirmed, so a broken setup shows at the confirmation, not at a sign-in.
-/// </remarks>
+// The factor is off until confirmed, so a broken setup shows at the confirmation, not at a sign-in.
 public class TwoFactorServiceShould : UnitTestBase
 {
     private static readonly Guid UserId = Guid.Parse("6c5b4a39-2817-4655-9403-1122334455aa");
     private static readonly DateTimeOffset Moment = new(2026, 3, 1, 12, 0, 0, TimeSpan.Zero);
 
-    /// <summary>When the secret a confirmation is checked against was issued.</summary>
     private static readonly DateTimeOffset SecretIssued = Moment.AddMinutes(-1);
     private const string Password = "correct horse";
 
@@ -109,7 +103,6 @@ public class TwoFactorServiceShould : UnitTestBase
         ConfirmedUtc = Moment.AddDays(-1)
     };
 
-    /// <summary>The answer carries the secret and the otpauth URI.</summary>
     [Fact]
     public async Task HandOverTheSecretAndTheUri()
     {
@@ -137,7 +130,6 @@ public class TwoFactorServiceShould : UnitTestBase
         setup.OtpAuthUri.Should().NotContain("reader@example.com");
     }
 
-    /// <summary>What reaches storage is the envelope, not the secret.</summary>
     [Fact]
     public async Task StoreTheSecretOnlyInsideTheEnvelope()
     {
@@ -148,7 +140,6 @@ public class TwoFactorServiceShould : UnitTestBase
             UserId, "envelope:" + setup.Secret, Moment, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>Without the password nothing is issued.</summary>
     [Fact]
     public async Task RefuseToIssueASecretWithoutTheCurrentPassword()
     {
@@ -158,7 +149,6 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<DateTimeOffset>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>A second call before confirmation replaces the secret.</summary>
     [Fact]
     public async Task ReplaceAnUnconfirmedSecretRatherThanRepeatIt()
     {
@@ -184,9 +174,6 @@ public class TwoFactorServiceShould : UnitTestBase
         thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
-    /// <summary>
-    /// Only a code that matched the issued secret switches the factor on.
-    /// </summary>
     [Fact]
     public async Task SwitchTheFactorOnOnlyForACodeThatMatched()
     {
@@ -214,7 +201,6 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>The recovery codes come back once, with the confirmation.</summary>
     [Fact]
     public async Task IssueTheRecoveryCodesWithTheConfirmation()
     {
@@ -238,10 +224,7 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>Confirming ends every other session.</summary>
-    /// <remarks>
-    /// Before the factor goes on, which is the order that survives a failure.
-    /// </remarks>
+    // Before the factor goes on, which is the order that survives a failure.
     [Fact]
     public async Task EndEveryOtherSessionBeforeTheFactorGoesOn()
     {
@@ -258,12 +241,7 @@ public class TwoFactorServiceShould : UnitTestBase
         });
     }
 
-    /// <summary>
-    /// A failure at the write leaves the account off, not on and empty-handed.
-    /// </summary>
-    /// <remarks>
-    /// A factor switched on for an owner who never saw a recovery code ties him to one device.
-    /// </remarks>
+    // A factor switched on for an owner who never saw a recovery code ties him to one device.
     [Fact]
     public async Task LeaveTheFactorOffWhenTheConfirmationCannotBeStored()
     {
@@ -365,14 +343,8 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>
-    /// A setup that lost the race to a confirmation is refused by the write.
-    /// </summary>
-    /// <remarks>
-    /// The read above it answered "off" and a confirmation committed between the
-    /// two. Same refusal as the read gives, because what the owner is told must
-    /// not depend on which of the two noticed.
-    /// </remarks>
+    // Same refusal as the read gives, because what the owner is told must not depend on which of
+    // the two noticed.
     [Fact]
     public async Task RefuseASetupThatLostTheRaceToAConfirmation()
     {
@@ -385,7 +357,6 @@ public class TwoFactorServiceShould : UnitTestBase
         thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
-    /// <summary>Switching off costs the password and a second factor.</summary>
     [Fact]
     public async Task RefuseToSwitchOffWithoutTheCurrentPassword()
     {
@@ -424,7 +395,6 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>A reissue retires the previous set whole.</summary>
     [Fact]
     public async Task ReplaceTheWholeSetOfRecoveryCodes()
     {
@@ -457,12 +427,8 @@ public class TwoFactorServiceShould : UnitTestBase
         thrown.StatusCode.Should().Be(HttpStatusCode.Conflict);
     }
 
-    /// <summary>
-    /// A factor taken off while the reissue was asked for hands out no codes.
-    /// </summary>
-    /// <remarks>
-    /// The state is read before the password and the code are checked, and a mailed removal may come due in between.
-    /// </remarks>
+    // The state is read before the password and the code are checked, and a mailed removal may come
+    // due in between.
     [Fact]
     public async Task RefuseToReissueCodesForAFactorTakenOffWhileItWasAsked()
     {
@@ -482,7 +448,7 @@ public class TwoFactorServiceShould : UnitTestBase
             Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
     }
 
-    /// <summary>The status "on" is the confirmation stamp and nothing else.</summary>
+    // The status "on" is the confirmation stamp and nothing else.
     [Fact]
     public async Task CallTheFactorOnExactlyWhenTheStampIsThere()
     {

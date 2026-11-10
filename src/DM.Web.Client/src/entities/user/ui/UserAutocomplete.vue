@@ -45,7 +45,7 @@
         >
           <AvatarImg
             :picture="row.picture"
-            :alt="''"
+            alt=""
             :size="24"
             img-class="user-avatar"
           />
@@ -56,7 +56,7 @@
     <div v-else class="selected-user">
       <AvatarImg
         :picture="selectedUser.picture"
-        :alt="''"
+        alt=""
         :size="24"
         img-class="user-avatar"
       />
@@ -74,7 +74,7 @@
 </template>
 
 <script setup lang="ts">
-import { computed, ref, watch, onMounted, nextTick } from "vue";
+import { computed, ref, watch, nextTick } from "vue";
 import {
   UserActivityFilter,
   type User,
@@ -99,7 +99,6 @@ type Row = InitialOption & { user?: User };
 const props = defineProps<{
   modelValue: string;
   placeholder?: string;
-  autofocus?: boolean;
   /** Id for the search <input>, so a caller's <label for> reaches it. */
   id?: string;
   /** The names the server would refuse for this field, in any case. */
@@ -117,14 +116,6 @@ const inDialog = useInDialog();
 const inputRef = ref<HTMLInputElement | null>(null);
 
 const listboxId = `autocomplete-listbox-${Math.random().toString(36).slice(2, 9)}`;
-
-onMounted(() => {
-  if (props.autofocus) {
-    nextTick(() => {
-      inputRef.value?.focus();
-    });
-  }
-});
 
 const emit = defineEmits<{
   (e: "update:modelValue", value: string): void;

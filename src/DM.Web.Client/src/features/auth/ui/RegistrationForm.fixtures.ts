@@ -1,10 +1,10 @@
 import { vi } from "vitest";
-import { flushPromises, mount } from "@vue/test-utils";
+import { flushPromises } from "@vue/test-utils";
 import type { ApiResult, BadRequestError } from "@/shared/api/models/common";
 import type { EmailAvailability } from "@/shared/api/models/account";
 import RegistrationForm from "./RegistrationForm.vue";
 import { checkEmail, recover, register } from "./authForms.doubles";
-import { AuthDialogStub } from "./authForms.fixtures";
+import { AuthDialogStub, mountAuthForm } from "./authForms.fixtures";
 
 export type CheckEmailAnswer = ApiResult<EmailAvailability>;
 
@@ -29,17 +29,18 @@ export const fieldProblem = (field: string, code: string): BadRequestError => ({
 
 export const clock = { now: 0 };
 
-export function mountForm() {
-  return mount(RegistrationForm, {
-    global: { stubs: { AuthDialog: AuthDialogStub } },
+// Attached on request: focus is only observable in a document.
+export const mountForm = (attachTo?: HTMLElement) =>
+  mountAuthForm(RegistrationForm, {
+    stubs: { AuthDialog: AuthDialogStub },
+    attachTo,
   });
-}
 
-export type Wrapper = ReturnType<typeof mountForm>;
+export type Wrapper = Awaited<ReturnType<typeof mountForm>>;
 
 // Types the address and waits out the check the blur starts.
 export async function askAbout(email = "reader@dm.am") {
-  const wrapper = mountForm();
+  const wrapper = await mountForm();
   await wrapper.find("#registration-email").setValue(email);
   await wrapper.find("#registration-email").trigger("blur");
   await flushPromises();
@@ -62,7 +63,7 @@ export async function acceptRules(wrapper: Wrapper) {
 }
 
 export async function submitRegistration(password = "correct horse battery") {
-  const wrapper = mountForm();
+  const wrapper = await mountForm();
   await toPasswordStep(wrapper);
 
   await wrapper.find("#registration-password").setValue(password);

@@ -10,9 +10,6 @@ public class TicketComment
 {
     public Guid TicketCommentId { get; set; }
 
-    /// <summary>
-    /// The ticket the comment is written in
-    /// </summary>
     public Guid TicketId { get; set; }
 
     /// <summary>

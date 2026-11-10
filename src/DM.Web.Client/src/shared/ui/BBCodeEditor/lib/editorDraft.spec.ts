@@ -54,7 +54,7 @@ describe("editor draft", () => {
       });
 
       const wrapper = mount(BBCodeEditor, {
-        props: { modelValue: "", draftKey: "test-draft", showCharCount: true },
+        props: { modelValue: "", draftKey: "test-draft" },
       });
       await nextTick();
 
@@ -70,7 +70,7 @@ describe("editor draft", () => {
       localStorageMock.getItem.mockReturnValueOnce(expiredDraft);
 
       const wrapper = mount(BBCodeEditor, {
-        props: { modelValue: "", draftKey: "test-draft", showCharCount: true },
+        props: { modelValue: "", draftKey: "test-draft" },
       });
 
       await nextTick();
@@ -105,7 +105,6 @@ describe("editor draft", () => {
         props: {
           modelValue: "same content",
           draftKey: "test-draft",
-          showCharCount: true,
         },
       });
 
@@ -120,7 +119,6 @@ describe("editor draft", () => {
         props: {
           modelValue: "test content",
           draftKey: "test-draft",
-          showCharCount: true,
         },
       });
       await nextTick();
@@ -138,7 +136,6 @@ describe("editor draft", () => {
       const wrapper = mount(BBCodeEditor, {
         props: {
           modelValue: "test content",
-          showCharCount: true,
         },
       });
 
@@ -150,7 +147,6 @@ describe("editor draft", () => {
         props: {
           modelValue: "",
           draftKey: "test-draft-2",
-          showCharCount: true,
         },
       });
       await nextTick();

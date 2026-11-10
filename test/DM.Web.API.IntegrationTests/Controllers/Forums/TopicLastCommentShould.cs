@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Forums;
 
-/// <summary>
-/// A listed topic names its last comment by the comment's own identifier.
-/// </summary>
 /// <remarks>The "last comment" date links to #comment-&lt;id&gt;. Over HTTP: the field is filled in a query.</remarks>
 public class TopicLastCommentShould : IntegrationTestBase
 {
@@ -20,7 +17,6 @@ public class TopicLastCommentShould : IntegrationTestBase
 
     private static GeneralUser Author => CustomWebApplicationFactory.CreateTestUser();
 
-    /// <summary>The board list and the list across boards (the profile's topics).</summary>
     public static TheoryData<string, int> Lists => new()
     {
         { $"/v1/boards/{TestConstants.TestBoardId}/topics", 9501 },
@@ -48,10 +44,7 @@ public class TopicLastCommentShould : IntegrationTestBase
             "the list links to the last comment by this identifier");
     }
 
-    /// <summary>
-    /// A topic by the test user on the test board. The number is this class's own:
-    /// the board is shared, and a topic number is unique on it.
-    /// </summary>
+    // The number is this class's own: the board is shared, and a topic number is unique on it.
     private async Task<(Guid TopicId, string Marker)> AddTopicAsync(int topicNumber)
     {
         var topicId = Guid.NewGuid();
@@ -74,10 +67,8 @@ public class TopicLastCommentShould : IntegrationTestBase
         return (topicId, marker);
     }
 
-    /// <summary>
-    /// Through the route the page uses, so the topic's last-comment pointer is
-    /// moved by the write path itself and not by the test.
-    /// </summary>
+    // Through the route the page uses, so the topic's last-comment pointer is moved by the write
+    // path itself and not by the test.
     private async Task<Guid> CommentAsync(Guid topicId, string text)
     {
         var request = CreateAuthenticatedRequest(HttpMethod.Post, $"/v1/topics/{topicId}/comments", Author);

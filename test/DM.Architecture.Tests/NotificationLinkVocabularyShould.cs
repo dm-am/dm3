@@ -10,10 +10,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// One notification leads to one place, in the list and in the letter about it,
-/// and the client builds that place for none.
-/// </summary>
 /// <remarks>
 /// The list row arrives with its path from NotificationDestination, the table the letter's link is
 /// built from. What is held here is the boundary: no client source builds a path for an event.
@@ -23,26 +19,17 @@ public class NotificationLinkVocabularyShould
     private static readonly string ClientSource =
         Path.Combine("src", "DM.Web.Client", "src");
 
-    /// <summary>
-    /// A switch arm, one event or several, that answers with a path: case
-    /// NotificationType.X: return payload.id ? `/game/${payload.id}` : null.
-    /// </summary>
     private static readonly Regex PathArm = new(
         @"case\s+NotificationType\.\w+\s*:(?:\s*case\s+NotificationType\.\w+\s*:)*\s*return\b[^;]*?[""'`]/",
         RegexOptions.Compiled);
 
-    /// <summary>A row keyed by the enum whose value holds a path, on one line.</summary>
     private static readonly Regex PathRow = new(
         @"\[NotificationType\.\w+\]\s*:[^\r\n]*?[""'`]/", RegexOptions.Compiled);
 
-    /// <summary>
-    /// A row keyed by a bare name whose value holds a path, on one line; it counts
-    /// when the name is one of the server's events.
-    /// </summary>
     private static readonly Regex NamedPathRow = new(
         @"^\s*[""']?(\w+)[""']?\s*:[^\r\n]*?[""'`]/", RegexOptions.Compiled | RegexOptions.Multiline);
 
-    /// <summary>A line comment, dropped so a commented-out row is not read as one.</summary>
+    // A line comment, dropped so a commented-out row is not read as one.
     private static readonly Regex LineComment = new(@"//[^\r\n]*", RegexOptions.Compiled);
 
     [Fact]
@@ -78,7 +65,6 @@ public class NotificationLinkVocabularyShould
             "is how a notification the letter linked became a line nobody could click");
     }
 
-    /// <summary>The server's event names a source keys a path by.</summary>
     private static List<string> NamedRows(string source) =>
         NamedPathRow.Matches(LineComment.Replace(source, string.Empty))
             .Select(row => row.Groups[1].Value)

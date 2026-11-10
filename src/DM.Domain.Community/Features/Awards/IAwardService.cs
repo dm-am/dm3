@@ -32,6 +32,5 @@ public interface IAwardService
     Task<IReadOnlyCollection<UserAward>> GetSeriesAwardsAsync(Guid seriesId, CancellationToken ct = default);
     /// <summary>Grant an award to a user. ContestSeriesId is optional (null = outside a contest). WorkUrl is a link to the topic with the work (optional).</summary>
     Task<UserAward> GrantAsync(string username, Guid awardTypeId, Guid? contestSeriesId, string? workUrl, CancellationToken ct = default);
-    /// <summary>Revoke a previously granted award (soft-delete).</summary>
     Task RevokeAsync(Guid awardId, CancellationToken ct = default);
 }

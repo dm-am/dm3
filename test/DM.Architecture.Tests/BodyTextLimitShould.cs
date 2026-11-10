@@ -9,10 +9,7 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The composers count against the same number the save refuses at.
-/// </summary>
-/// <remarks>The client keeps a copy of the server's limit, read out of the sources here.</remarks>
+// The client keeps a copy of the server's limit, read out of the sources here.
 public class BodyTextLimitShould
 {
     private static readonly Regex ClientLimit =

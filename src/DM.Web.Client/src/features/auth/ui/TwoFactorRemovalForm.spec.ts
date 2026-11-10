@@ -2,18 +2,19 @@
  * @vitest-environment jsdom
  */
 import { afterEach, describe, expect, it, vi, beforeEach } from "vitest";
-import { enableAutoUnmount, flushPromises, mount } from "@vue/test-utils";
+import { enableAutoUnmount, flushPromises } from "@vue/test-utils";
 import { nextTick } from "vue";
-import { createPinia, setActivePinia } from "pinia";
 import { accountApi } from "@/entities/user";
 import { Api } from "@/shared/api";
 import TwoFactorRemovalForm from "./TwoFactorRemovalForm.vue";
-import { push, toast } from "./authForms.doubles";
-import { AuthDialogStub, expectWaitRunsDown } from "./authForms.fixtures";
+import { toast } from "./authForms.doubles";
+import {
+  address,
+  AuthDialogStub,
+  expectWaitRunsDown,
+  mountAuthForm,
+} from "./authForms.fixtures";
 
-vi.mock("vue-router", async () =>
-  (await import("./authForms.doubles")).vueRouter(),
-);
 vi.mock("@/shared/lib/composables/useToast", async () =>
   (await import("./authForms.doubles")).toastComposable(),
 );
@@ -21,18 +22,14 @@ vi.mock("@/shared/lib/composables/useToast", async () =>
 enableAutoUnmount(afterEach);
 
 // Attached to the document, because focus is only observable there.
-const options = () => ({
-  attachTo: document.body,
-  global: {
-    plugins: [createPinia()],
+const mountForm = () =>
+  mountAuthForm(TwoFactorRemovalForm, {
+    attachTo: document.body,
     stubs: { AuthDialog: AuthDialogStub },
-  },
-});
-
-const mountForm = () => mount(TwoFactorRemovalForm, options());
+  });
 
 async function submit(email = "reader@dm.am") {
-  const wrapper = mountForm();
+  const wrapper = await mountForm();
 
   await wrapper.find("#two-factor-removal-email").setValue(email);
   await wrapper.find("form").trigger("submit");
@@ -42,12 +39,11 @@ async function submit(email = "reader@dm.am") {
 
 describe("the mailed removal request", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     vi.restoreAllMocks();
   });
 
-  it("asks for the address", () => {
-    const wrapper = mountForm();
+  it("asks for the address", async () => {
+    const wrapper = await mountForm();
 
     expect(wrapper.get(".auth-title").text()).toBe("Запрос на отключение");
     expect(wrapper.text()).not.toContain("Нет доступа к приложению?");
@@ -58,8 +54,8 @@ describe("the mailed removal request", () => {
     expect(wrapper.find("#two-factor-removal-email").exists()).toBe(true);
   });
 
-  it("puts the delay in a centred warning box", () => {
-    const box = mountForm().get(".auth-warnbox");
+  it("puts the delay in a centred warning box", async () => {
+    const box = (await mountForm()).get(".auth-warnbox");
     const lead = box.get("b").text();
 
     expect(box.classes()).toContain("auth-warnbox--notice");
@@ -69,8 +65,8 @@ describe("the mailed removal request", () => {
     ]);
   });
 
-  it("offers one control, and it names the result", () => {
-    const wrapper = mountForm();
+  it("offers one control, and it names the result", async () => {
+    const wrapper = await mountForm();
 
     const captions = wrapper.findAll("button").map((b) => b.text());
     expect(captions).toEqual(["Отправить письмо", "поддержку"]);
@@ -78,7 +74,7 @@ describe("the mailed removal request", () => {
 
   describe("no access to the mailbox either", () => {
     it("closes the dialog and opens the support form", async () => {
-      const wrapper = mountForm();
+      const wrapper = await mountForm();
 
       expect(wrapper.text()).toContain("Нужна помощь? Обратитесь в");
       await wrapper
@@ -87,8 +83,10 @@ describe("the mailed removal request", () => {
         ?.trigger("click");
       await flushPromises();
 
-      expect(wrapper.emitted("cancel")).toHaveLength(1);
-      expect(push).toHaveBeenCalledWith("/support?subtype=AccessRecovery");
+      expect(
+        wrapper.findComponent(TwoFactorRemovalForm).emitted("cancel"),
+      ).toHaveLength(1);
+      expect(address()).toBe("/support?subtype=AccessRecovery");
     });
 
     it("leaves the receipt without the offer", async () => {
@@ -105,7 +103,7 @@ describe("the mailed removal request", () => {
   });
 
   it("puts the caret in the field it opens with", async () => {
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     await flushPromises();
 
     expect(document.activeElement).toBe(
@@ -117,7 +115,7 @@ describe("the mailed removal request", () => {
     const send = vi
       .spyOn(accountApi, "requestTwoFactorRemoval")
       .mockResolvedValue({ data: null, error: null } as never);
-    const wrapper = mountForm();
+    const wrapper = await mountForm();
     const button = () => wrapper.find("button[type='submit']");
 
     expect(button().attributes("disabled")).toBeDefined();
@@ -135,8 +133,8 @@ describe("the mailed removal request", () => {
     expect(strip.classes()).toContain("auth-message--error");
   });
 
-  it("keeps the strip under the field with nothing in it", () => {
-    const wrapper = mountForm();
+  it("keeps the strip under the field with nothing in it", async () => {
+    const wrapper = await mountForm();
 
     const strip = wrapper.find(".auth-message");
     expect(strip.exists()).toBe(true);

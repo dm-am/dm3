@@ -8,31 +8,43 @@
  * and no sentence the server did not send. The checking line is tokenPages.spec.ts's.
  */
 import { describe, expect, it, vi, beforeEach, afterEach } from "vitest";
-import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
+import { flushPromises, type VueWrapper } from "@vue/test-utils";
 import { nextTick } from "vue";
-import { createPinia, setActivePinia } from "pinia";
+import type { Router } from "vue-router";
+import { mountPage, type Address } from "@/shared/lib/testing/mountPage";
 import { useToast } from "@/shared/lib/composables/useToast";
 import { Api } from "@/shared/api";
 import { accountApi, UsernameInput } from "@/entities/user";
 import type { User } from "@/shared/api/models/community";
 import AccountActivationPage from "./AccountActivationPage.vue";
-import { push } from "./guestPages.doubles";
-
-vi.mock("vue-router", async () =>
-  (await import("./guestPages.doubles")).vueRouter(),
-);
 
 // The token arrives in the fragment; readConfirmationToken takes it from there.
 beforeEach(() => {
   window.location.hash = "#token=a-token";
 });
 
-const options = () => ({
-  global: {
-    plugins: [createPinia()],
-    stubs: { RouterLink: { template: "<a><slot /></a>" } },
-  },
-});
+/** The page, and every address its card leads to. */
+const routes: Address[] = [
+  ["activation", "/activate"],
+  ["home", "/"],
+  ["profile", "/users/:username"],
+  ["support", "/support"],
+];
+
+let router: Router;
+
+/** Open the page at its address, as the letter does. */
+const open = async (attach = false) => {
+  const opened = await mountPage(AccountActivationPage, "/activate", {
+    routes,
+    ...(attach ? { attachTo: document.body } : {}),
+  });
+  router = opened.router;
+  return opened.wrapper;
+};
+
+/** Where the reader is now. */
+const address = () => router.currentRoute.value.fullPath;
 
 const ready = {
   data: { status: "ready" as const, email: "reader@example.com" },
@@ -49,10 +61,7 @@ const arrive = async (info: unknown, attach = false) => {
     info as Awaited<ReturnType<typeof accountApi.getActivationInfo>>,
   );
 
-  const wrapper = mount(AccountActivationPage, {
-    ...options(),
-    ...(attach ? { attachTo: document.body } : {}),
-  });
+  const wrapper = await open(attach);
   await flushPromises();
   return wrapper;
 };
@@ -116,11 +125,8 @@ const activated = () =>
 
 describe("the activation page", () => {
   beforeEach(() => {
-    setActivePinia(createPinia());
     localStorage.clear();
     vi.restoreAllMocks();
-    // Not a spy, so restoreAllMocks does not reach it.
-    push.mockClear();
     // A card left in the document would answer the next test's selectors.
     document.body.innerHTML = "";
   });
@@ -343,7 +349,8 @@ describe("the activation page", () => {
     expect(wrapper.find(".form-actions").exists()).toBe(false);
 
     await ways[0].trigger("click");
-    expect(push).toHaveBeenLastCalledWith("/");
+    await flushPromises();
+    expect(address()).toBe("/");
   });
 
   /** A link with nothing in it: no line of the card's own and no word of the database. */
@@ -351,7 +358,7 @@ describe("the activation page", () => {
     window.location.hash = "";
     const check = vi.spyOn(accountApi, "getActivationInfo");
 
-    const wrapper = mount(AccountActivationPage, options());
+    const wrapper = await open();
     await flushPromises();
 
     expect(check).not.toHaveBeenCalled();
@@ -486,7 +493,8 @@ describe("the activation page", () => {
       expect(wrapper.find(".auth-footnote").exists()).toBe(false);
 
       // The news is on the card: nothing moves the reader or speaks over it.
-      expect(push).not.toHaveBeenCalled();
+      await flushPromises();
+      expect(address()).toBe("/activate");
       expect(toasts.value).toHaveLength(0);
     });
 
@@ -497,8 +505,9 @@ describe("the activation page", () => {
       await activatedElsewhere("another");
 
       await wrapper.get("button.auth-button").trigger("click");
+      await flushPromises();
 
-      expect(push).toHaveBeenLastCalledWith("/users/another");
+      expect(address()).toBe("/users/another");
     });
 
     /** The half the screen above stands on: the name goes into the message. */
@@ -551,7 +560,7 @@ describe("the activation page", () => {
         }) as never,
       );
 
-      const wrapper = mount(AccountActivationPage, options());
+      const wrapper = await open();
       await nextTick();
       await activatedElsewhere();
       answer({ data: null, error: { status: 404 } });

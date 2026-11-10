@@ -8,16 +8,10 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// A validation message is read by a person, and this interface is Russian.
-/// </summary>
-/// <remarks>
-/// Keyed on alphabets: an all-English message is translated with its form, a message in two alphabets is
-/// wrong on any. Latin technical tokens stay allowed.
-/// </remarks>
+// Keyed on alphabets: an all-English message is translated with its form, a message in two
+// alphabets is wrong on any.
 public class ErrorCopyShould
 {
-    /// <summary>Latin tokens that belong in Russian copy as they stand.</summary>
     private static readonly Regex AllowedLatinTokens =
         new("email", RegexOptions.IgnoreCase | RegexOptions.Compiled);
 

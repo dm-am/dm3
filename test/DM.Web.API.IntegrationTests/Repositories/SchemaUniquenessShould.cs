@@ -18,10 +18,6 @@ using DbUsernameChangeRequest = DM.Infrastructure.Persistence.Entities.Account.U
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// One subscription per (subscriber, target), one live like per (entity, reader), one live portrait per character,
-/// one tag per game, one name change awaiting a moderator per account.
-/// </summary>
 /// <remarks>
 /// Each write is check-then-insert, so the rule lives in the schema: the second insert reaches the database and the
 /// database says no.
@@ -53,10 +49,7 @@ public class SchemaUniquenessShould : IntegrationTestBase
             .Which.SqlState.Should().Be("23505", "that is unique_violation");
     }
 
-    /// <summary>
-    /// The write answers the refusal instead of forwarding it.
-    /// </summary>
-    /// <remarks>All three subscribe services go through this one insert, so the answer belongs here.</remarks>
+    // All three subscribe services go through this one insert, so the answer belongs here.
     [Fact]
     public async Task AnswerARacingSubscribeWithTheRowThatWon()
     {
@@ -79,11 +72,8 @@ public class SchemaUniquenessShould : IntegrationTestBase
             .Should().Be(1);
     }
 
-    /// <summary>
-    /// Refuses a second live like of one entity by one reader, and keeps accepting the next
-    /// one after it is withdrawn.
-    /// </summary>
-    /// <remarks>Partial on live rows, as the portrait index is: unliking sets IsRemoved and liking again is allowed.</remarks>
+    // Partial on live rows, as the portrait index is: unliking sets IsRemoved and liking again is
+    // allowed.
     [Fact]
     public async Task RefuseASecondLiveLikeOfOneEntityByOneReader()
     {
@@ -117,10 +107,8 @@ public class SchemaUniquenessShould : IntegrationTestBase
             "withdrawing a like is what frees the reader to leave another one");
     }
 
-    /// <summary>
-    /// Refuses the second live portrait and keeps accepting the replacement.
-    /// </summary>
-    /// <remarks>A total index would refuse every replacement: the replaced row stays until the orphan sweeper drops it.</remarks>
+    // A total index would refuse every replacement: the replaced row stays until the orphan sweeper
+    // drops it.
     [Fact]
     public async Task RefuseASecondLivePortraitOfOneCharacter()
     {
@@ -154,10 +142,7 @@ public class SchemaUniquenessShould : IntegrationTestBase
             "retiring the current portrait is what frees the slot for the next one");
     }
 
-    /// <summary>
-    /// The rule is the character's, and only the character's.
-    /// </summary>
-    /// <remarks>A user avatar is collected when the profile is saved and a post carries several attachments.</remarks>
+    // A user avatar is collected when the profile is saved and a post carries several attachments.
     [Fact]
     public async Task LeaveASecondAvatarOfOneUserAlone()
     {
@@ -174,10 +159,8 @@ public class SchemaUniquenessShould : IntegrationTestBase
             .Should().Be(2, "the profile save retires a superseded avatar, the upload does not");
     }
 
-    /// <summary>
-    /// A user of this test's own: the fixture database is shared and seeded, so a
-    /// fixed identifier would depend on whoever else wrote one.
-    /// </summary>
+    // A user of this test's own: the fixture database is shared and seeded, so a fixed identifier
+    // would depend on whoever else wrote one.
     private static async Task<Guid> AddUserAsync(DmDbContext dbContext)
     {
         var userId = Guid.NewGuid();
@@ -195,7 +178,6 @@ public class SchemaUniquenessShould : IntegrationTestBase
         return userId;
     }
 
-    /// <summary>A character with the game and the master it needs to exist.</summary>
     private static async Task<(Guid UserId, Guid CharacterId)> AddCharacterAsync(DmDbContext dbContext)
     {
         var userId = await AddUserAsync(dbContext);
@@ -225,10 +207,7 @@ public class SchemaUniquenessShould : IntegrationTestBase
         return (userId, characterId);
     }
 
-    /// <summary>
-    /// One tag is on one game once.
-    /// </summary>
-    /// <remarks>The required-tag filter compares a count of rows to the count of tags asked for.</remarks>
+    // The required-tag filter compares a count of rows to the count of tags asked for.
     [Fact]
     public async Task RefuseTheSameTagTwiceOnOneGame()
     {
@@ -275,9 +254,6 @@ public class SchemaUniquenessShould : IntegrationTestBase
             .Which.SqlState.Should().Be("23505", "that is unique_violation");
     }
 
-    /// <summary>
-    /// Refuses a second name change request awaiting a moderator, and accepts the next one once the first is decided.
-    /// </summary>
     /// <remarks>
     /// Partial on Status = 0: a total index would leave an account one request in its lifetime. Approvals stay out:
     /// one stops being in flight when its link runs out, and no index predicate can be written against the clock.

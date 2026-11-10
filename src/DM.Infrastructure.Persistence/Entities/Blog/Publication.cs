@@ -70,9 +70,6 @@ public class Publication : ISoftDeletable
     /// </summary>
     public Guid? ModifiedByUserId { get; set; }
 
-    /// <summary>
-    /// View count
-    /// </summary>
     public int ViewCount { get; set; }
 
     /// <summary>

@@ -11,7 +11,6 @@ namespace DM.Domain.Core.Dates;
 /// </remarks>
 public static class ReaderTime
 {
-    /// <summary>The spelling of a moment in every letter that prints one.</summary>
     private const string Pattern = "dd.MM.yyyy HH:mm";
 
     /// <summary>
@@ -43,7 +42,7 @@ public static class ReaderTime
         TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId.Trim(), out var zone) &&
         zone.HasIanaId;
 
-    /// <summary>The zone by name, or UTC when this machine has no such zone.</summary>
+    // The zone by name, or UTC when this machine has no such zone.
     private static TimeZoneInfo Resolve(string? timeZoneId) =>
         !string.IsNullOrWhiteSpace(timeZoneId) &&
         TimeZoneInfo.TryFindSystemTimeZoneById(timeZoneId, out var zone)

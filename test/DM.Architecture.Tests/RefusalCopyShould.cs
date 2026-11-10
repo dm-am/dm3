@@ -10,9 +10,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// A refusal is read by the person who was refused, and this interface is Russian.
-/// </summary>
 /// <remarks>
 /// The message of an HttpException becomes the title the client shows, and a validation message one of
 /// its errors; both are read for language, only refusals for repetition. Textual, over src/ only. A
@@ -20,19 +17,12 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class RefusalCopyShould
 {
-    /// <summary>
-    /// Where a refusal takes its wording: the two exceptions whose message the
-    /// middleware turns into a title, and the factory call itself.
-    /// </summary>
-    /// <remarks>The rate limiter builds its document in OnRejected, outside MVC, so the factory is read too.</remarks>
+    // The rate limiter builds its document in OnRejected, outside MVC, so the factory is read too.
     private static readonly Regex RefusalWording = new(
         @"new\s+(?:HttpException|HttpBadRequestException)\s*\(" +
         @"|Create(?:Validation)?ProblemDetails\s*\(",
         RegexOptions.Compiled);
 
-    /// <summary>
-    /// Where a failed validation takes its wording.
-    /// </summary>
     /// <remarks>
     /// FluentValidation and data annotation messages go into the errors the client shows verbatim. Only
     /// the language rules apply: one email sentence in many validators is not drift.
@@ -58,10 +48,8 @@ public class RefusalCopyShould
     /// </summary>
     private static readonly Regex Cyrillic = new(@"\p{IsCyrillic}", RegexOptions.Compiled);
 
-    /// <summary>That same letter and its capital, by number and for the same reason.</summary>
     private static readonly char[] EWithDots = [(char)0x0451, (char)0x0401];
 
-    /// <summary>An interpolation hole is not wording: {commentId} and {id} say nothing.</summary>
     private static readonly Regex Hole = new(@"\{[^{}]*\}", RegexOptions.Compiled);
 
     private static readonly Regex Whitespace = new(@"\s+", RegexOptions.Compiled);
@@ -117,14 +105,12 @@ public class RefusalCopyShould
     private static string Describe(ThrowSite site) =>
         site.Source + ":" + site.Line + " -> " + string.Join(" | ", site.Messages);
 
-    /// <summary>The wording with its interpolated values taken out: {commentId} and {id} are one wording.</summary>
     private static string Normalize(string message) =>
         Whitespace.Replace(Hole.Replace(message, "{}"), " ").Trim();
 
     private static IReadOnlyList<ThrowSite> ThrowSites() =>
         Sites(RefusalWording);
 
-    /// <summary>Every wording a refused person reads, of either kind.</summary>
     private static IReadOnlyList<ThrowSite> EveryWording() =>
         [.. ThrowSites(), .. Sites(ValidationWording)];
 
@@ -192,10 +178,6 @@ public class RefusalCopyShould
         return messages;
     }
 
-    /// <summary>
-    /// Reads the literal opening at this quote, and the index past its closing quote; raw and verbatim
-    /// literals on their own terms.
-    /// </summary>
     private static (string Value, int End) ReadLiteral(string text, int start)
     {
         if (start + 2 < text.Length && text[start + 1] == '"' && text[start + 2] == '"')

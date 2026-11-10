@@ -12,19 +12,12 @@ using DbUser = DM.Infrastructure.Persistence.Entities.Account.User;
 
 namespace DM.Web.API.IntegrationTests.Repositories;
 
-/// <summary>
-/// The author column a room's posts carry: the portrait of the character who
-/// signed a post, and the leads of the game it was written in.
-/// </summary>
 public class PostAuthorShould : PostRepositoryTestBase
 {
     public PostAuthorShould(DatabaseFixture databaseFixture) : base(databaseFixture)
     {
     }
 
-    /// <summary>
-    /// A room shows the portrait the character has now, not the one it replaced.
-    /// </summary>
     /// <remarks>
     /// The schema refuses a second live portrait, so the insert through the endpoint's repository retires the row it
     /// replaces in the same transaction.
@@ -57,9 +50,6 @@ public class PostAuthorShould : PostRepositoryTestBase
         posts[0].Character.Picture.SourceObjectKey.Should().NotBe(older);
     }
 
-    /// <summary>
-    /// Reading a room's posts has to translate to SQL at all.
-    /// </summary>
     /// <remarks>
     /// Npgsql cannot correlate a collection subquery concatenated onto an in-memory array. The assistant makes this a
     /// gate: with the master alone both shapes agree.
@@ -91,7 +81,7 @@ public class PostAuthorShould : PostRepositoryTestBase
         single!.GameLeadUserIds.Should().BeEquivalentTo(new[] { context.UserId, assistantId });
     }
 
-    /// <summary>An assistant on the game, so the lead list has two entries.</summary>
+    // An assistant on the game, so the lead list has two entries.
     private static async Task<Guid> AddAssistantAsync(DmDbContext dbContext, Guid gameId)
     {
         var assistantId = Guid.NewGuid();

@@ -52,9 +52,7 @@ public class UnreadCountersReservationShould
         counters.TakenBack.Should().BeEmpty("the row landed");
     }
 
-    /// <summary>
-    /// Disposal runs while the caller's own exception is on its way out.
-    /// </summary>
+    // Disposal runs while the caller's own exception is on its way out.
     [Fact]
     public async Task KeepTheCallersFailureWhenTakingBackFailsToo()
     {
@@ -90,9 +88,6 @@ public class UnreadCountersReservationShould
             .Which.Should().Be((EntityId, UnreadEntryType.Message, (Guid[]?)null));
     }
 
-    /// <summary>
-    /// The readers are read once, when the marker is built.
-    /// </summary>
     /// <remarks>
     /// The same people have to be written and, if the write is taken back, taken
     /// back. A sequence enumerated a second time may answer differently, and the

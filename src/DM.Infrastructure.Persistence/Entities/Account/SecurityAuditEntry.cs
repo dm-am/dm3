@@ -11,9 +11,6 @@ namespace DM.Infrastructure.Persistence.Entities.Account;
 [Table("SecurityAuditEntries")]
 public class SecurityAuditEntry
 {
-    /// <summary>
-    /// Entry identifier
-    /// </summary>
     public Guid SecurityAuditEntryId { get; set; }
 
     /// <summary>

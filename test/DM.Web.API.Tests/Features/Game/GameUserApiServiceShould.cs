@@ -19,10 +19,7 @@ using DomainGame = DM.Domain.Game.Features.Games.Game;
 
 namespace DM.Web.API.Tests.Features.Game;
 
-/// <summary>
-/// The reader's button subscribes only to a game the reader may open.
-/// </summary>
-/// <remarks>The route takes a GUID without the visibility filter, so the service asks the game first.</remarks>
+// The route takes a GUID without the visibility filter, so the service asks the game first.
 public class GameUserApiServiceShould : UnitTestBase
 {
     private readonly IGameSubscriptionService _subscriptionService = Mock<IGameSubscriptionService>();

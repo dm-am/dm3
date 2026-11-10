@@ -8,9 +8,6 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Work started on the path of a request has to finish on it.
-/// </summary>
 /// <remarks>
 /// A task nobody awaits outlives the request scope and publishes through a disposed sender, or leaks
 /// the channel <see cref="MessageProducerOwnershipShould"/> guards. Hosted services are exempt.
@@ -19,9 +16,6 @@ public class RequestPathBackgroundWorkShould
 {
     private static string SourceDirectory => Path.Combine(DM.Testing.RepositoryLayout.Root, "src");
 
-    /// <summary>
-    /// Handing work off with nobody waiting for it, in every spelling, a discarded task included.
-    /// </summary>
     private static readonly (string Name, Regex Pattern)[] Handoffs =
     [
         ("Task.Run", new Regex(@"Task\.Run\s*\(", RegexOptions.Compiled)),
@@ -31,7 +25,7 @@ public class RequestPathBackgroundWorkShould
         ("a discarded call", new Regex(@"(?<![\w.])_\s*=\s*[A-Za-z_][\w.]*\s*\(", RegexOptions.Compiled)),
     ];
 
-    /// <summary>Files whose lifetime is the process, not a scope.</summary>
+    // Files whose lifetime is the process, not a scope.
     private static bool IsHostedService(string code) =>
         code.Contains("IHostedService", StringComparison.Ordinal) ||
         code.Contains("BackgroundService", StringComparison.Ordinal);

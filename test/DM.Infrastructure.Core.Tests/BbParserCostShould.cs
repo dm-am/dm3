@@ -10,21 +10,14 @@ using Xunit;
 
 namespace DM.Infrastructure.Core.Tests;
 
-/// <summary>
-/// Tests that time the renderer, run one at a time.
-/// </summary>
-/// <remarks>A measurement taken beside the rest of the assembly measures the machine.</remarks>
+// A measurement taken beside the rest of the assembly measures the machine.
 [CollectionDefinition(Name, DisableParallelization = true)]
 public class BbParserCostCollection
 {
-    /// <summary>Name the classes join this collection by.</summary>
     public const string Name = "BBCode cost";
 }
 
-/// <summary>
-/// What the renderer costs as the post grows.
-/// </summary>
-/// <remarks>The shape of the growth is asserted, not absolute milliseconds.</remarks>
+// The shape of the growth is asserted, not absolute milliseconds.
 [Collection(BbParserCostCollection.Name)]
 public class BbParserCostShould
 {
@@ -49,15 +42,8 @@ public class BbParserCostShould
             .Should().BeLessThan(QuadraticThreshold);
     }
 
-    /// <summary>
-    /// The shapes of the parameter grammar that cost the square of the input in
-    /// a reader that backtracks: a name followed by thousands of spaces, many
-    /// pairs, many openings each running to the next, many quotes in one value.
-    /// </summary>
-    /// <remarks>
-    /// Each shape is row L of bbcodeGrammar.cases.ts, grown; the reader scans a tag once, so no character is
-    /// read more than a few times.
-    /// </remarks>
+    // Each shape is row L of bbcodeGrammar.cases.ts, grown; the reader scans a tag once, so no
+    // character is read more than a few times.
     [Theory]
     [InlineData("name-then-spaces")]
     [InlineData("repeated-pairs")]
@@ -81,11 +67,8 @@ public class BbParserCostShould
             .Should().BeLessThan(QuadraticThreshold);
     }
 
-    /// <summary>
-    /// The save path reads hidden blocks by a scanner of its own, over the same
-    /// shapes and the ones only a hidden block has: an attribute that never ends
-    /// and a [noparse] nobody closed.
-    /// </summary>
+    // The save path reads hidden blocks by a scanner of its own, over the same shapes and the ones
+    // only a hidden block has: an attribute that never ends and a [noparse] nobody closed.
     [Theory]
     [InlineData("[private=\"")]
     [InlineData("[private ")]
@@ -107,21 +90,13 @@ public class BbParserCostShould
             .Should().BeLessThan(QuadraticThreshold);
     }
 
-    /// <summary>
-    /// The inputs of the three sizes, built before the clock starts.
-    /// </summary>
-    /// <remarks>Built outside the measured work: the largest lands on the large object heap.</remarks>
+    // Built outside the measured work: the largest lands on the large object heap.
     private static System.Collections.Generic.Dictionary<int, string> Inputs(
         Func<int, string> build, int baseLength) =>
         new[] { baseLength, baseLength * 4, baseLength * 16 }.ToDictionary(length => length, build);
 
-    /// <summary>
-    /// The same for the whole render.
-    /// </summary>
-    /// <remarks>
-    /// Every tag once cut out before the parser, and one with an encoded attribute, each unclosed inside a
-    /// closed note; every [code] asks once for its closing tag.
-    /// </remarks>
+    // Every tag once cut out before the parser, and one with an encoded attribute, each unclosed
+    // inside a closed note; every [code] asks once for its closing tag.
     [Fact]
     public void RenderTagSoupWithoutQuadraticCost()
     {
@@ -212,16 +187,11 @@ public class BbParserCostShould
         measured.Should().Be(2, "a check of no text passes");
     }
 
-    /// <summary>
-    /// Halfway between linear growth of a quadrupled input (4) and quadratic growth (16).
-    /// </summary>
+    // Halfway between linear growth of a quadrupled input (4) and quadratic growth (16).
     private const double QuadraticThreshold = 8.0;
 
-    /// <summary>
-    /// The gentlest of up to three readings of the steepest step, the first one
-    /// under the threshold ending the search.
-    /// </summary>
-    /// <remarks>Outside load can push linear code over the threshold for a reading, never quadratic code under it.</remarks>
+    // Outside load can push linear code over the threshold for a reading, never quadratic code
+    // under it.
     private static double MeasureGrowth(Action<int> work, int baseLength)
     {
         const int readings = 3;
@@ -235,13 +205,7 @@ public class BbParserCostShould
         return gentlest;
     }
 
-    /// <summary>
-    /// The steepest step in cost across three inputs, each four times the last.
-    /// </summary>
-    /// <remarks>
-    /// Three points, because a fixed overhead flattens the first step. Sizes are timed over repetitions in
-    /// interleaved rounds, the best kept; collector pauses are taken out, and the warm-up is not counted.
-    /// </remarks>
+    // Three points, because a fixed overhead flattens the first step.
     private static double SteepestStep(Action<int> work, int baseLength)
     {
         const int repetitions = 40;

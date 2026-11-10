@@ -14,10 +14,6 @@ using Microsoft.EntityFrameworkCore;
 
 namespace DM.Infrastructure.Persistence.Repositories.Game;
 
-/// <summary>
-/// The people of a game a read carries: its master, assistants and characters,
-/// and whose turn it is
-/// </summary>
 internal partial class GameRepository
 {
     /// <summary>
@@ -42,6 +38,19 @@ internal partial class GameRepository
         if (games.Count == 0) return;
         var gameIds = games.Select(g => g.Id).ToHashSet();
 
+        await FillPlayersAsync(games, gameIds, ct);
+        await FillSubscribersAsync(games, gameIds, userId, ct);
+        await FillInvitationsAsync(games, gameIds, ct);
+        await FillReviewCountsAsync(games, gameIds, ct);
+        await FillActiveCharactersAsync(games, gameIds, ct);
+        await FillTurnMarkersAsync(games, gameIds, userId, ct);
+    }
+
+    private async Task FillPlayersAsync(
+        IReadOnlyList<GameDto> games,
+        HashSet<Guid> gameIds,
+        CancellationToken ct)
+    {
         // PcCount — active non-NPC characters per game, single GROUP BY.
         var pcCounts = await _dbContext.Characters
             .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
@@ -85,6 +94,20 @@ internal partial class GameRepository
                 g => g.Key,
                 g => g.Select(c => c.Author).DistinctBy(u => u.UserId).ToList());
 
+        foreach (var game in games)
+        {
+            game.Players = playersMap.TryGetValue(game.Id, out var players)
+                ? players.ToList()
+                : [];
+        }
+    }
+
+    private async Task FillSubscribersAsync(
+        IReadOnlyList<GameDto> games,
+        HashSet<Guid> gameIds,
+        Guid userId,
+        CancellationToken ct)
+    {
         // Subscriber summary — the total, whether this viewer is one of them, and
         // the capped preview of names, all from one statement.
         var subscriberSummaries = await SubscriberSummaries.ByTarget(
@@ -92,16 +115,18 @@ internal partial class GameRepository
 
         foreach (var game in games)
         {
-            game.Players = playersMap.TryGetValue(game.Id, out var players)
-                ? players.ToList()
-                : [];
-
             var summary = subscriberSummaries.GetValueOrDefault(game.Id);
             game.SubscribersCount = summary?.Count ?? 0;
             game.IsViewerSubscriber = summary?.ViewerSubscribed ?? false;
             game.SubscriberUsernames = summary?.Preview ?? [];
         }
+    }
 
+    private async Task FillInvitationsAsync(
+        IReadOnlyList<GameDto> games,
+        HashSet<Guid> gameIds,
+        CancellationToken ct)
+    {
         // Invitation tokens in one query, projected for the reason the players are.
         var tokens = await _dbContext.Tokens
             .AsNoTracking()
@@ -154,7 +179,13 @@ internal partial class GameRepository
                 game.PendingPlayerInvitedUserIds = new HashSet<Guid>();
             }
         }
+    }
 
+    private async Task FillReviewCountsAsync(
+        IReadOnlyList<GameDto> games,
+        HashSet<Guid> gameIds,
+        CancellationToken ct)
+    {
         // Game / post review counts — both batched by GameId.
         var gameReviewCounts = await _dbContext.GameReviews
             .Where(r => !r.IsRemoved && gameIds.Contains(r.GameId))
@@ -168,6 +199,18 @@ internal partial class GameRepository
             .Select(g => new { GameId = g.Key, Count = g.Count() })
             .ToDictionaryAsync(x => x.GameId, x => x.Count, ct);
 
+        foreach (var game in games)
+        {
+            game.GameReviewsCount = gameReviewCounts.GetValueOrDefault(game.Id, 0);
+            game.PostReviewsCount = postReviewCounts.GetValueOrDefault(game.Id, 0);
+        }
+    }
+
+    private async Task FillActiveCharactersAsync(
+        IReadOnlyList<GameDto> games,
+        HashSet<Guid> gameIds,
+        CancellationToken ct)
+    {
         // Active characters for [X/Y] tooltip — feeds game/room tooltips.
         var activeCharacterData = await _dbContext.Characters
             .Where(c => gameIds.Contains(c.GameId) && c.Status == CharacterStatus.Active && !c.IsNpc)
@@ -186,18 +229,10 @@ internal partial class GameRepository
 
         foreach (var game in games)
         {
-            game.GameReviewsCount = gameReviewCounts.GetValueOrDefault(game.Id, 0);
-            game.PostReviewsCount = postReviewCounts.GetValueOrDefault(game.Id, 0);
             game.ActiveCharacters = activeCharactersMap.GetValueOrDefault(game.Id, []);
         }
-
-        await FillTurnMarkersAsync(games, gameIds, userId, ct);
     }
 
-    /// <summary>
-    /// Populate the turn marker — whether the game waits for a post from this
-    /// viewer, and for which of his characters.
-    /// </summary>
     /// <remarks>
     /// The room selection asked of the pendencies table: one statement for the page,
     /// a row only for this viewer, none for an anonymous read.

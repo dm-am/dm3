@@ -18,10 +18,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Warnings;
 
-/// <summary>
-/// The reads of warnings: the open log, the moderation list, and the warnings
-/// and points of one user.
-/// </summary>
 public class WarningLogShould : WarningServiceTestBase
 {
     [Fact]
@@ -97,11 +93,6 @@ public class WarningLogShould : WarningServiceTestBase
         paging.TotalEntitiesCount.Should().Be(1);
     }
 
-    /// <summary>
-    /// The open log shows the offending text where a guest could read it, so it
-    /// asks where the text stood and whether it is open there, for the rows of
-    /// the page and once.
-    /// </summary>
     [Fact]
     public async Task DescribeTheOffendingObjectOnTheOpenLog()
     {
@@ -118,9 +109,6 @@ public class WarningLogShould : WarningServiceTestBase
         warning.LogClosure.Should().Be(WarningLogClosure.PlaceNotPublic);
     }
 
-    /// <summary>
-    /// A game closed to a guest, given to the open log with the closure its readers have.
-    /// </summary>
     private Guid AClosedGameOnTheLog(WarningLogClosure? closureForReader = null)
     {
         var gameId = Guid.NewGuid();
@@ -153,10 +141,6 @@ public class WarningLogShould : WarningServiceTestBase
         return gameId;
     }
 
-    /// <summary>
-    /// The open log is read by everybody, and a place closed to a guest opens to
-    /// the viewer the game's own read lets in: the text and its address as for an open place.
-    /// </summary>
     [Fact]
     public async Task OpenAClosedPlaceToTheViewerWhoReadsIt()
     {
@@ -173,9 +157,6 @@ public class WarningLogShould : WarningServiceTestBase
             Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A text moderation took off the site stays without its address for the reader of the place too.
-    /// </summary>
     [Fact]
     public async Task KeepTheClosureOfTheTextForTheViewerWhoReadsThePlace()
     {
@@ -203,9 +184,6 @@ public class WarningLogShould : WarningServiceTestBase
         warning.LogShowsText.Should().BeFalse();
     }
 
-    /// <summary>
-    /// A guest reads no place closed to a guest, and nothing is asked for him.
-    /// </summary>
     [Fact]
     public async Task AskNothingForAGuest()
     {
@@ -291,15 +269,8 @@ public class WarningLogShould : WarningServiceTestBase
         warnings.Should().ContainSingle(w => w.WarningId == warningId);
     }
 
-    /// <summary>
-    /// The moderation list reads the page the open log reads, through the same
-    /// method of the repository.
-    /// </summary>
-    /// <remarks>
-    /// Two reads of one list would be two orderings and two filters to keep in
-    /// agreement, and the only difference the two screens have is who may call them
-    /// and what a row carries.
-    /// </remarks>
+    // Two reads of one list would be two orderings and two filters to keep in agreement, and the
+    // only difference the two screens have is who may call them and what a row carries.
     [Fact]
     public async Task ReadTheModerationListThroughTheSamePage()
     {

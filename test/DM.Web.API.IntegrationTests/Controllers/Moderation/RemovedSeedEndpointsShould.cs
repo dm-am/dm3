@@ -4,9 +4,6 @@ using Xunit;
 
 namespace DM.Web.API.IntegrationTests.Controllers.Moderation;
 
-/// <summary>
-/// The development seeding surface lives in DM.Tools.Seeder; its routes are gone from the application.
-/// </summary>
 public class RemovedSeedEndpointsShould : IntegrationTestBase
 {
     public RemovedSeedEndpointsShould(DatabaseFixture databaseFixture) : base(databaseFixture)

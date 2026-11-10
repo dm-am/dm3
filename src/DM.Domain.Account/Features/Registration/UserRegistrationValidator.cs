@@ -5,10 +5,7 @@ using Microsoft.Extensions.Options;
 
 namespace DM.Domain.Account.Features.Registration;
 
-/// <summary>
-/// Validator for user registration DTO model (email-first flow).
-/// Username validation happens during activation, not registration.
-/// </summary>
+// Username validation happens during activation, not registration.
 internal class UserRegistrationValidator : AbstractValidator<UserRegistration>
 {
     public UserRegistrationValidator(

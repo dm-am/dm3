@@ -9,11 +9,7 @@ using static DM.Architecture.Tests.DeploymentFiles;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// Every alert rule reaches a receiver that exists, and the contour says it is
-/// alive.
-/// </summary>
-/// <remarks>The chain is in MONITORING.md; every link fails silently, so it is asserted link by link.</remarks>
+// The chain is in MONITORING.md; every link fails silently, so it is asserted link by link.
 public class AlertDeliveryShould
 {
     private const string ScrapeConfiguration = "prometheus.yml";
@@ -21,10 +17,7 @@ public class AlertDeliveryShould
     private const string AlertRules = "prometheus/alerts.yml";
     private const string AlertDeliveryEntrypoint = "alertmanager-init.sh";
 
-    /// <summary>
-    /// The document points an external watcher at readiness, not at liveness.
-    /// </summary>
-    /// <remarks>Liveness is the process being up; readiness asks the stores.</remarks>
+    // Liveness is the process being up; readiness asks the stores.
     [Fact]
     public void PointTheExternalWatcherAtReadiness()
     {
@@ -41,9 +34,6 @@ public class AlertDeliveryShould
             "told to poll");
     }
 
-    /// <summary>
-    /// The gate of the monitoring answers about the images the stack runs.
-    /// </summary>
     [Fact]
     public void CheckTheImagesTheComposeFileNames()
     {
@@ -55,13 +45,8 @@ public class AlertDeliveryShould
             "written into the script");
     }
 
-    /// <summary>
-    /// Every alert rule reaches something that can deliver it.
-    /// </summary>
-    /// <remarks>
-    /// Each link fails silently: a rule file with no alerting section, a list with no target, a
-    /// target no service answers to, a receiver declared as a bare name.
-    /// </remarks>
+    // Each link fails silently: a rule file with no alerting section, a list with no target, a
+    // target no service answers to, a receiver declared as a bare name.
     [Fact]
     public void DeliverEveryAlertRuleToAReceiverThatExists()
     {

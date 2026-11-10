@@ -18,13 +18,8 @@ using Xunit;
 
 namespace DM.Web.API.Tests.Shared;
 
-/// <summary>
-/// An action marked [AllowAnonymous] is reachable without a session.
-/// </summary>
-/// <remarks>
-/// [AllowAnonymous] is metadata, and this project authorises with a filter of its own, which must read it.
-/// Checked on the filter: the defect is the filter's.
-/// </remarks>
+// [AllowAnonymous] is metadata, and this project authorises with a filter of its own, which must
+// read it.
 public class AnonymousActionsShould
 {
     private static AuthorizationFilterContext ContextFor(params object[] metadata)
@@ -35,7 +30,6 @@ public class AnonymousActionsShould
         return new AuthorizationFilterContext(actionContext, new List<IFilterMetadata>());
     }
 
-    /// <summary>The filter the attribute applies, made the way MVC makes it.</summary>
     private static IAuthorizationFilter Filter(bool authenticated)
     {
         var identityProvider = Substitute.For<IIdentityProvider>();

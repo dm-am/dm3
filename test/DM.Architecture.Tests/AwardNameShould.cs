@@ -8,11 +8,7 @@ using Xunit;
 
 namespace DM.Architecture.Tests;
 
-/// <summary>
-/// The award is called "Народное признание, например", and every quotation of it
-/// carries the whole name.
-/// </summary>
-/// <remarks>The last two words are a joke and part of the title; a comment quoting it short reads as a typo.</remarks>
+// The last two words are a joke and part of the title; a comment quoting it short reads as a typo.
 public class AwardNameShould
 {
     private const string Name = "Народное признание";

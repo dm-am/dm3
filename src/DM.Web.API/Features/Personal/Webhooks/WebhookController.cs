@@ -16,9 +16,6 @@ using Microsoft.AspNetCore.RateLimiting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using DM.Web.API.Shared.RateLimiting;
-using Org.BouncyCastle.Crypto.Parameters;
-using Org.BouncyCastle.Crypto.Signers;
-using Org.BouncyCastle.Math.EC.Rfc8032;
 
 namespace DM.Web.API.Features.Personal.Webhooks;
 
@@ -39,9 +36,10 @@ namespace DM.Web.API.Features.Personal.Webhooks;
 /// POST /v1/webhooks/discord. There is no shared secret: Discord signs every
 /// request with the application's Ed25519 key — `X-Signature-Ed25519` over the
 /// UTF-8 bytes of `X-Signature-Timestamp` + raw body — and the signature is
-/// verified against BotConfiguration.DiscordPublicKey. A missing or invalid
-/// signature answers 401: Discord validates the endpoint by deliberately
-/// sending broken signatures and expects exactly that code.
+/// verified against BotConfiguration.DiscordPublicKey by DiscordSignatureVerifier.
+/// A missing, invalid or stale signature answers 401: Discord validates the
+/// endpoint by deliberately sending broken signatures and expects exactly that
+/// code.
 ///
 /// The /connect slash command links user accounts; the interaction response
 /// returned in the 200 is the reply the invoking user sees.
@@ -63,17 +61,27 @@ public class WebhookController : ControllerBase
     /// <inheritdoc cref="DiscordSignatureHeader" />
     private const string DiscordTimestampHeader = "X-Signature-Timestamp";
 
+    /// <summary>Ceiling of a webhook body.</summary>
+    /// <remarks>
+    /// The body is buffered whole ahead of any credential check, and an update of either provider is
+    /// kilobytes: under the host's ceiling an anonymous caller fills megabytes of memory per request.
+    /// </remarks>
+    internal const int MaxBodyBytes = 256 * 1024;
+
     private readonly IReadOnlyDictionary<string, IWebhookHandler> _handlers;
     private readonly BotConfiguration _botConfig;
+    private readonly DiscordSignatureVerifier _discordSignature;
     private readonly ILogger<WebhookController> _logger;
 
     public WebhookController(
         IEnumerable<IWebhookHandler> handlers,
         IOptions<BotConfiguration> botConfig,
+        DiscordSignatureVerifier discordSignature,
         ILogger<WebhookController> logger)
     {
         _handlers = handlers.ToDictionary(h => h.BotType, h => h);
         _botConfig = botConfig.Value;
+        _discordSignature = discordSignature;
         _logger = logger;
     }
 
@@ -82,83 +90,29 @@ public class WebhookController : ControllerBase
     /// </summary>
     /// <param name="type">Bot type: telegram or discord</param>
     /// <response code="200">Webhook processed; Discord reads the interaction response from the body</response>
-    /// <response code="401">Invalid Discord signature</response>
+    /// <response code="401">Invalid Discord signature, or its timestamp is far from the server's clock</response>
     /// <response code="403">Invalid Telegram secret</response>
     /// <response code="404">Webhook is not configured for this type</response>
+    /// <response code="413">Body larger than any update of a provider</response>
     [HttpPost("{type}")]
     [EnableRateLimiting(RateLimitPolicies.Sliding)]
+    [RequestSizeLimit(MaxBodyBytes)]
     [ProducesResponseType(StatusCodes.Status200OK)]
     [ProducesResponseType(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status413PayloadTooLarge)]
     public async Task<IActionResult> HandleWebhook(string type)
     {
         var normalizedType = type.ToLowerInvariant();
+        var rawBody = await ReadRawBody();
 
-        // Read by hand rather than bound with [FromBody]: the Discord signature
-        // covers the exact bytes on the wire, and a JsonElement re-serialized
-        // after model binding is not those bytes.
-        byte[] rawBody;
-        using (var buffer = new MemoryStream())
+        if (!Authenticate(normalizedType, rawBody))
         {
-            await Request.Body.CopyToAsync(buffer);
-            rawBody = buffer.ToArray();
+            return NotFound();
         }
 
-        switch (normalizedType)
-        {
-            case "telegram":
-                {
-                    // Fail closed: without a secret the webhook does not exist.
-                    if (string.IsNullOrEmpty(_botConfig.TelegramWebhookSecret))
-                    {
-                        _logger.LogWarning("Telegram webhook received but no secret is configured; rejecting");
-                        return NotFound();
-                    }
-
-                    // Fixed-time comparison: a plain != leaks the shared secret one byte at
-                    // a time to anyone who can measure the response.
-                    var provided = Encoding.UTF8.GetBytes(Request.Headers[TelegramSecretHeader].ToString());
-                    var expected = Encoding.UTF8.GetBytes(_botConfig.TelegramWebhookSecret);
-                    if (!CryptographicOperations.FixedTimeEquals(provided, expected))
-                    {
-                        _logger.LogWarning("Invalid Telegram webhook secret");
-                        // Thrown: ErrorHandlingMiddleware owns the body of every refusal.
-                        throw new HttpException(HttpStatusCode.Forbidden, "Неверный секрет вебхука");
-                    }
-
-                    break;
-                }
-            case "discord":
-                {
-                    // Fail closed, as above.
-                    if (string.IsNullOrEmpty(_botConfig.DiscordPublicKey))
-                    {
-                        _logger.LogWarning("Discord webhook received but no public key is configured; rejecting");
-                        return NotFound();
-                    }
-
-                    if (!VerifyDiscordSignature(
-                            _botConfig.DiscordPublicKey,
-                            Request.Headers[DiscordSignatureHeader].ToString(),
-                            Request.Headers[DiscordTimestampHeader].ToString(),
-                            rawBody))
-                    {
-                        _logger.LogWarning("Invalid Discord interaction signature");
-                        // 401 by Discord's contract: endpoint validation sends
-                        // deliberately broken signatures and requires this code.
-                        throw new HttpException(HttpStatusCode.Unauthorized, "Неверная подпись запроса");
-                    }
-
-                    break;
-                }
-            default:
-                // An unknown type answers the same as an unconfigured one:
-                // a probe of the path learns nothing either way.
-                return NotFound();
-        }
-
-        // The switch above lets through only the types a handler is registered for.
+        // Authenticate lets through only the types a handler is registered for.
         var handler = _handlers[normalizedType];
 
         // Parsed only behind the checks: a caller who failed them gets a refusal.
@@ -177,6 +131,89 @@ public class WebhookController : ControllerBase
         }
     }
 
+    /// <remarks>
+    /// Read by hand rather than bound with [FromBody]: the Discord signature
+    /// covers the exact bytes on the wire, and a JsonElement re-serialized
+    /// after model binding is not those bytes.
+    /// </remarks>
+    private async Task<byte[]> ReadRawBody()
+    {
+        using var buffer = new MemoryStream();
+        try
+        {
+            await Request.Body.CopyToAsync(buffer);
+        }
+        catch (BadHttpRequestException refusal) when (refusal.StatusCode == StatusCodes.Status413PayloadTooLarge)
+        {
+            // The server stops the read at MaxBodyBytes with an exception of its own, which
+            // ErrorHandlingMiddleware would answer as an unhandled failure.
+            throw new HttpException(HttpStatusCode.RequestEntityTooLarge, "Тело запроса больше допустимого");
+        }
+
+        return buffer.ToArray();
+    }
+
+    /// <summary>
+    /// Proves the caller is the provider of the bot: every credential check of the endpoint, in one place.
+    /// </summary>
+    /// <remarks>
+    /// False when there is no such webhook here: an unknown type, or one with no secret or key configured.
+    /// </remarks>
+    private bool Authenticate(string botType, byte[] rawBody)
+    {
+        switch (botType)
+        {
+            case "telegram":
+                {
+                    // Fail closed: without a secret the webhook does not exist.
+                    if (string.IsNullOrEmpty(_botConfig.TelegramWebhookSecret))
+                    {
+                        _logger.LogWarning("Telegram webhook received but no secret is configured; rejecting");
+                        return false;
+                    }
+
+                    // Fixed-time comparison: a plain != leaks the shared secret one byte at
+                    // a time to anyone who can measure the response.
+                    var provided = Encoding.UTF8.GetBytes(Request.Headers[TelegramSecretHeader].ToString());
+                    var expected = Encoding.UTF8.GetBytes(_botConfig.TelegramWebhookSecret);
+                    if (!CryptographicOperations.FixedTimeEquals(provided, expected))
+                    {
+                        _logger.LogWarning("Invalid Telegram webhook secret");
+                        // Thrown: ErrorHandlingMiddleware owns the body of every refusal.
+                        throw new HttpException(HttpStatusCode.Forbidden, "Неверный секрет вебхука");
+                    }
+
+                    return true;
+                }
+            case "discord":
+                {
+                    // Fail closed, as above.
+                    if (string.IsNullOrEmpty(_botConfig.DiscordPublicKey))
+                    {
+                        _logger.LogWarning("Discord webhook received but no public key is configured; rejecting");
+                        return false;
+                    }
+
+                    if (!_discordSignature.Verify(
+                            _botConfig.DiscordPublicKey,
+                            Request.Headers[DiscordSignatureHeader].ToString(),
+                            Request.Headers[DiscordTimestampHeader].ToString(),
+                            rawBody))
+                    {
+                        // 401 by Discord's contract: endpoint validation sends
+                        // deliberately broken signatures and requires this code.
+                        throw new HttpException(HttpStatusCode.Unauthorized, "Неверная подпись запроса");
+                    }
+
+                    return true;
+                }
+            default:
+                // An unknown type answers the same as an unconfigured one:
+                // a probe of the path learns nothing either way.
+                return false;
+        }
+    }
+
     private static JsonDocument ParseBody(byte[] rawBody)
     {
         try
@@ -188,47 +225,5 @@ public class WebhookController : ControllerBase
             // Thrown: ErrorHandlingMiddleware owns the body of the refusal.
             throw new HttpException(HttpStatusCode.BadRequest, "Тело запроса не является корректным JSON");
         }
-    }
-
-    /// <summary>
-    /// Verifies Discord's Ed25519 signature over timestamp + raw body.
-    /// </summary>
-    /// <remarks>
-    /// The fixed-time rule the Telegram branch follows with FixedTimeEquals
-    /// holds here by construction: Ed25519 verification does not branch on
-    /// secret data. Malformed hex and wrong lengths are refusals, not errors —
-    /// both arrive from anyone on the internet.
-    /// </remarks>
-    private static bool VerifyDiscordSignature(
-        string publicKeyHex, string signatureHex, string timestamp, byte[] body)
-    {
-        if (string.IsNullOrEmpty(signatureHex) || string.IsNullOrEmpty(timestamp))
-        {
-            return false;
-        }
-
-        byte[] publicKey;
-        byte[] signature;
-        try
-        {
-            publicKey = Convert.FromHexString(publicKeyHex);
-            signature = Convert.FromHexString(signatureHex);
-        }
-        catch (FormatException)
-        {
-            return false;
-        }
-
-        if (publicKey.Length != Ed25519.PublicKeySize || signature.Length != Ed25519.SignatureSize)
-        {
-            return false;
-        }
-
-        var timestampBytes = Encoding.UTF8.GetBytes(timestamp);
-        var signer = new Ed25519Signer();
-        signer.Init(false, new Ed25519PublicKeyParameters(publicKey));
-        signer.BlockUpdate(timestampBytes, 0, timestampBytes.Length);
-        signer.BlockUpdate(body, 0, body.Length);
-        return signer.VerifySignature(signature);
     }
 }

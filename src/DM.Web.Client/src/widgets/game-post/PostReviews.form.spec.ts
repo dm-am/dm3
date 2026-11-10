@@ -175,7 +175,7 @@ describe("GamePost answers a refused review in the form", () => {
 
 /** The rating is offered by the server's answer, narrowed by what happened on the page. */
 describe("GamePost offers the rating by the server's answer", () => {
-  const unrated = { ...roomPost, reviewCount: 0, rating: 0 } as unknown as Post;
+  const unrated: Post = { ...roomPost, reviewCount: 0, rating: 0 };
 
   beforeEach(() => {
     localStorage.clear();

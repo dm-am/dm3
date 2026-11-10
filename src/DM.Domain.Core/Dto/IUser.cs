@@ -2,13 +2,6 @@ using DM.Domain.Core.Enums;
 
 namespace DM.Domain.Core.Dto;
 
-/// <summary>
-/// Base interface for internal user DTOs in service layer.
-/// </summary>
-/// <remarks>
-/// Implemented by GeneralUser and used for authorization checks,
-/// identity management, and cross-service user data transfer.
-/// </remarks>
 public interface IUser
 {
     /// <summary>

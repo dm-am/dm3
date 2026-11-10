@@ -30,14 +30,7 @@ using DbUsernameHistory = DM.Infrastructure.Persistence.Entities.Account.Usernam
 
 namespace DM.Infrastructure.Persistence.Tests.Repositories.Personal;
 
-/// <summary>
-/// Every number on a profile is counted from its own rows.
-/// </summary>
-/// <remarks>
-/// Each counter is a GROUP BY copied onto the user by name. One user carries every counter at a value no
-/// other has, with an excluded row beside each kind, and the counters are walked by type. In memory, as
-/// UserListEnrichmentShould is.
-/// </remarks>
+// Each counter is a GROUP BY copied onto the user by name.
 public class ProfileCountersShould
 {
     private static readonly Guid SubjectId = Guid.Parse("c0de0000-0000-4000-8000-000000000001");
@@ -85,9 +78,7 @@ public class ProfileCountersShould
             ("subject_old", "moderator"));
     }
 
-    /// <summary>
-    /// The rule above holds only as long as it names every counter there is.
-    /// </summary>
+    // The rule above holds only as long as it names every counter there is.
     [Fact]
     public async Task LeaveNoCounterOfTheProfileUnseededOrEqualToAnother()
     {
@@ -133,7 +124,6 @@ public class ProfileCountersShould
         return context;
     }
 
-    /// <summary>Games hosted: three mastered, three assisted, and one of each removed.</summary>
     private static void SeedHostedGames(DmDbContext context)
     {
         context.Games.AddRange(
@@ -162,10 +152,6 @@ public class ProfileCountersShould
         }
     }
 
-    /// <summary>
-    /// Games played: seven of them, each with two characters the player walked
-    /// away from, and the characters that are not a game played or not a drop.
-    /// </summary>
     private static void SeedPlayedGames(DmDbContext context)
     {
         var statuses = new[]
@@ -198,7 +184,6 @@ public class ProfileCountersShould
         context.Characters.AddRange(npc, removed, Drop(goneGame));
     }
 
-    /// <summary>Blogs hosted: two owned, six assisted, and a removed one owned.</summary>
     private static void SeedBlogs(DmDbContext context)
     {
         context.Blogs.AddRange(
@@ -253,11 +238,6 @@ public class ProfileCountersShould
         context.PostReviews.Add(PostReview(PeerId, SubjectId, hosts, isRemoved: true));
     }
 
-    /// <summary>
-    /// Topics, comments and global chat lines by the subject, and the likes on
-    /// them: one on a topic, two on publications, three on comments and ten on
-    /// chat lines.
-    /// </summary>
     private static void SeedDiscussions(DmDbContext context)
     {
         var boardId = Guid.NewGuid();
@@ -296,7 +276,6 @@ public class ProfileCountersShould
         context.Set<DbLike>().AddRange(takenBack, Like(LikeEntityType.Topic, peersTopic.TopicId));
     }
 
-    /// <summary>A ban served and a ban lifted early, and two renames of the subject.</summary>
     private static void SeedModeration(DmDbContext context)
     {
         context.Set<DbBan>().AddRange(
@@ -392,7 +371,6 @@ public class ProfileCountersShould
         CreatedUtc = Moment.AddDays(-20),
     };
 
-    /// <summary>A character the player retired by leaving the game.</summary>
     private static DbCharacter Drop(DbGame game)
     {
         var character = Character(game, CharacterStatus.Retired);

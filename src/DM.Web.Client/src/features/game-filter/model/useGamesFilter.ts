@@ -21,6 +21,7 @@ import {
   hasRange,
   type GameDateRangeKey,
 } from "./gameDateRanges";
+import type { SortDirection } from "@/shared/lib/filters/types";
 
 const dispatcher = createFilterDispatcher<GamesFilterState, GamesFilterAction>({
   buildQuery: buildQueryFromState,
@@ -42,10 +43,7 @@ function gamesSearchParams(
       params.recruitmentFilter = state.recruitmentFilter;
     }
     if (state.status === "Closed" && state.closedReasonFilter !== "any") {
-      params.closedReasonFilter = state.closedReasonFilter as
-        | "None"
-        | "Finished"
-        | "Frozen";
+      params.closedReasonFilter = state.closedReasonFilter;
     }
   }
 
@@ -136,7 +134,7 @@ export function useGamesFilter() {
     setActivatedRange: setRange("activated"),
     setClosedRange: setRange("closed"),
     setRecruitmentStartedRange: setRange("recruitmentstarted"),
-    setSort: (sortBy: string, sortOrder?: "asc" | "desc") =>
+    setSort: (sortBy: string, sortOrder?: SortDirection) =>
       dispatch({ type: "SET_SORT", sortBy, sortOrder }),
     toggleSortOrder: () => dispatch({ type: "TOGGLE_SORT_ORDER" }),
     clearFilters: () => dispatch({ type: "CLEAR_FILTERS" }),

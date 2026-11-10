@@ -96,6 +96,9 @@ node "$ROOT/.claude/hooks/block-in-subagents.test.js"
 say "Хуки: линт файлов агента"
 node "$ROOT/.claude/hooks/lint-agent-files.test.js"
 
+say "Хуки: подсказка, как резать, под находкой размера"
+node "$ROOT/.claude/hooks/lint-size-hint.test.js"
+
 # The map's verdict: a "<job>=true|false" line per job. The report of groups and skipped jobs
 # goes to stderr, i.e. here.
 say "Пути: какие гейты нужны этому пушу"
@@ -158,6 +161,16 @@ if wants frontend; then
 
   say "Фронтенд: типы"
   (cd "$CLIENT" && npm run type-check)
+fi
+
+# The TypeScript of the frame stand, on the client's tools and lint config: the client run
+# does not reach outside its folder, so these run from the root.
+if wants frontend; then
+  say "Стенд кадров: типы"
+  (cd "$ROOT" && src/DM.Web.Client/node_modules/.bin/vue-tsc --noEmit -p scripts/visual/tsconfig.json)
+
+  say "Стенд кадров: линт и формат"
+  (cd "$ROOT" && src/DM.Web.Client/node_modules/.bin/eslint --config src/DM.Web.Client/eslint.config.js --max-warnings 0 "scripts/visual/**/*.ts")
 fi
 
 # The docs job: architecture tests alone. The map calls it only when build is not needed,

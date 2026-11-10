@@ -15,11 +15,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Tickets;
 
-/// <summary>
-/// Who reads a ticket: the queue of each role, the author's own tickets, the
-/// holder of a tracking token, and everybody else answered as if there were
-/// no ticket (TicketVisibility).
-/// </summary>
 public class TicketVisibilityShould : TicketServiceTestBase
 {
     [Theory]
@@ -217,10 +212,6 @@ public class TicketVisibilityShould : TicketServiceTestBase
         result.Should().BeNull();
     }
 
-    /// <summary>
-    /// Whoever neither filed a ticket nor moderates it cannot tell it from a
-    /// ticket that does not exist, to read or to write.
-    /// </summary>
     [Theory]
     [InlineData(UserRole.RegularUser, TicketSubtype.UserComplaint)]
     [InlineData(UserRole.Moderator, TicketSubtype.AccessRecovery)]
@@ -287,9 +278,6 @@ public class TicketVisibilityShould : TicketServiceTestBase
         counted.Should().Be(currentUserId);
     }
 
-    /// <summary>
-    /// The queue answers an empty page; what it was asked with goes to the callbacks.
-    /// </summary>
     private void QueueAnswersEmpty(
         Action<IReadOnlyCollection<TicketSubtype>?>? subtypes = null, Action<Guid?>? violator = null) =>
         ticketRepository.GetTickets(

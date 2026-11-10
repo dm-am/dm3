@@ -16,12 +16,8 @@ using Xunit;
 
 namespace DM.Domain.Blog.Tests.Features.Likes;
 
-/// <summary>
-/// A like is gated by the like intention of its subject and by nothing else. The
-/// blog's blacklist closes comments only, so the service does not read the blog
-/// at all; that a blacklisted reader likes like anybody is held end to end by
-/// BlacklistRuleShould.
-/// </summary>
+// The blog's blacklist closes comments only, so the service does not read the blog at all; that a
+// blacklisted reader likes like anybody is held end to end by BlacklistRuleShould.
 public class BlogLikeServiceShould : UnitTestBase
 {
     private readonly IPublicationService publicationService;

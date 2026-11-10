@@ -11,9 +11,6 @@ public interface IUserReadRepository
 {
     // Single user
 
-    /// <summary>
-    /// Get user by username
-    /// </summary>
     Task<GeneralUser?> GetUserAsync(string username);
 
     /// <summary>
@@ -25,19 +22,10 @@ public interface IUserReadRepository
     /// </remarks>
     Task<Guid?> FindUserIdAsync(string username);
 
-    /// <summary>
-    /// Get user by ID
-    /// </summary>
     Task<GeneralUser?> GetUserAsync(Guid userId);
 
-    /// <summary>
-    /// Get user details by username
-    /// </summary>
     Task<UserDetails?> GetUserDetailsAsync(string username);
 
-    /// <summary>
-    /// Get user details by ID
-    /// </summary>
     Task<UserDetails?> GetUserDetailsAsync(Guid userId);
 
     // List users
@@ -56,9 +44,6 @@ public interface IUserReadRepository
 
     Task<IEnumerable<GeneralUser>> GetUsersByRoleAsync(UserRole role);
 
-    /// <summary>
-    /// Get users by IDs
-    /// </summary>
     /// <remarks>
     /// Hydrates the achievement counters, one query each.
     /// A caller that only renders names and badges wants

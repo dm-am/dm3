@@ -1,9 +1,13 @@
 export * from "./model";
-export { useCommunityStore } from "./model/communityStore";
+export {
+  useCommunityStore,
+  type UserActivityChoice,
+} from "./model/communityStore";
 
 export {
   userApi,
   accountApi,
+  type BotType,
   personalApi,
   blacklistApi,
   type GameReviewsQuery,

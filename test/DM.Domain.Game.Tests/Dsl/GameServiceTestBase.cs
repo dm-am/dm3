@@ -25,15 +25,6 @@ using NSubstitute;
 
 namespace DM.Domain.Game.Tests.Dsl;
 
-/// <summary>
-/// The game service over substitutes of everything it asks: validators that
-/// pass, a signed-in regular user, unread counters that answer zero and a
-/// producer that takes every event.
-/// </summary>
-/// <remarks>
-/// A test class moves what its cases need from here, by the fields: a clock of
-/// its own, a newer author, a repository that answers.
-/// </remarks>
 public abstract class GameServiceTestBase : UnitTestBase
 {
     protected readonly IIntentionManager intentionManager;
@@ -123,7 +114,6 @@ public abstract class GameServiceTestBase : UnitTestBase
         return validator;
     }
 
-    /// <summary>Markers that are made, and a zero for every counter asked.</summary>
     private static IUnreadCountersRepository ZeroUnreadCounters()
     {
         var counters = Mock<IUnreadCountersRepository>();

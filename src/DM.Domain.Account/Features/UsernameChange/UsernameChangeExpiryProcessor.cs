@@ -8,10 +8,10 @@ namespace DM.Domain.Account.Features.UsernameChange;
 /// <inheritdoc />
 internal class UsernameChangeExpiryProcessor : IUsernameChangeExpiryProcessor
 {
-    /// <summary>What the requester is told when no moderator got to their request.</summary>
+    // What the requester is told when no moderator got to their request.
     private const string UnreviewedComment = "Автоматически отклонено: истек срок ожидания модерации";
 
-    /// <summary>Why the approval lapsed. Approving takes no comment, so this often stands alone.</summary>
+    // Approving takes no comment, so this often stands alone.
     private const string ApprovalExpiredComment =
         "Токен истек: пользователь не выбрал новое имя в отведенное время";
 

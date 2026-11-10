@@ -16,10 +16,6 @@ using Xunit;
 
 namespace DM.Domain.Moderation.Tests.Features.Bans;
 
-/// <summary>
-/// The reads of bans: the bans of one user, the running bans and the ban
-/// history.
-/// </summary>
 public class BanHistoryShould : BanServiceTestBase
 {
     [Fact]
@@ -86,10 +82,7 @@ public class BanHistoryShould : BanServiceTestBase
         result.Should().ContainSingle().Which.CanLift.Should().BeFalse("lifting is the senior moderator's");
     }
 
-    /// <summary>
-    /// The ban log is public, as the warning log is: a guest reads it, and is
-    /// offered no lift.
-    /// </summary>
+    // The ban log is public, as the warning log is: a guest reads it, and is offered no lift.
     [Theory]
     [InlineData(UserRole.Guest)]
     [InlineData(UserRole.RegularUser)]
@@ -119,9 +112,6 @@ public class BanHistoryShould : BanServiceTestBase
         await banRepository.Received(1).GetBanHistory(null, 0, 20, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// A name narrows the list to the bans of that person, read by his id.
-    /// </summary>
     [Fact]
     public async Task NarrowTheBanHistoryToTheNamedPerson()
     {
@@ -153,10 +143,6 @@ public class BanHistoryShould : BanServiceTestBase
             Arg.Any<Guid?>(), Arg.Any<int>(), Arg.Any<int>(), Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// Each ban of the list says whether the reader may lift it, by the rule the
-    /// lift is refused by: the list offers the lift by that flag.
-    /// </summary>
     [Fact]
     public async Task MarkEachBanOfTheHistoryWithWhetherTheReaderMayLiftIt()
     {
@@ -174,11 +160,6 @@ public class BanHistoryShould : BanServiceTestBase
         entries.Select(e => e.Ban.CanLift).Should().Equal(true, false);
     }
 
-    /// <summary>
-    /// The page of an entry is the page of this list its position falls on, and
-    /// the answer says which page it is; the page asked for by the offset gives
-    /// way to it.
-    /// </summary>
     [Fact]
     public async Task OpenThePageThatHoldsTheEntryOfTheGivenNumber()
     {
@@ -194,10 +175,6 @@ public class BanHistoryShould : BanServiceTestBase
         await banRepository.Received(1).GetBanHistory(targetUserId, 40, 20, Arg.Any<CancellationToken>());
     }
 
-    /// <summary>
-    /// An entry the list does not have, gone or of somebody else, leaves the
-    /// page to the offset that was asked for.
-    /// </summary>
     [Fact]
     public async Task KeepThePageAskedForWhenTheListHasNoSuchEntry()
     {

@@ -15,11 +15,6 @@ using Xunit;
 
 namespace DM.Domain.Game.Tests.Features.PostReviews;
 
-/// <summary>
-/// A new review of a post, and the page of posts that says which of them may
-/// get one: who may rate, what a newbie may give, the window between two reviews
-/// in one game, and the counter the post author is owed.
-/// </summary>
 public class PostReviewCreationShould : PostReviewServiceTestBase
 {
     [Fact]
@@ -118,11 +113,9 @@ public class PostReviewCreationShould : PostReviewServiceTestBase
             .Where(e => e.StatusCode == HttpStatusCode.Conflict);
     }
 
-    /// <summary>
-    /// The three-day window is a conflict with what the rater did in the game,
-    /// not a rate limit: the page that offered the form did not know of the
-    /// review written since, and the reader is told the rule in its own words.
-    /// </summary>
+    // The three-day window is a conflict with what the rater did in the game, not a rate limit: the
+    // page that offered the form did not know of the review written since, and the reader is told
+    // the rule in its own words.
     [Fact]
     public async Task ThrowConflictWithTheRuleWhenCooldownNotExpired()
     {
@@ -142,12 +135,8 @@ public class PostReviewCreationShould : PostReviewServiceTestBase
                         e.Message == "Оценивать посты в одной игре можно раз в три дня");
     }
 
-    /// <summary>
-    /// The post is looked up as the rater, not as nobody.
-    /// </summary>
-    /// <remarks>
-    /// Room access, applied where the post is read, is all that stands between a rating and a private room.
-    /// </remarks>
+    // Room access, applied where the post is read, is all that stands between a rating and a
+    // private room.
     [Fact]
     public async Task ReadThePostAsTheRaterSoRoomAccessApplies()
     {
@@ -159,13 +148,7 @@ public class PostReviewCreationShould : PostReviewServiceTestBase
         await repository.Received(1).GetPostInfoAsync(postId, currentUserId);
     }
 
-    /// <summary>
-    /// The counter the post author is owed rides on the call that writes the
-    /// review, and is not a write of its own: the service hands over the sign.
-    /// </summary>
-    /// <remarks>
-    /// QualityRating is stored and not summed, so the review and the delta are one write.
-    /// </remarks>
+    // QualityRating is stored and not summed, so the review and the delta are one write.
     [Fact]
     public async Task WriteAPositiveReviewForThePostAuthor()
     {
@@ -211,10 +194,8 @@ public class PostReviewCreationShould : PostReviewServiceTestBase
             Arg.Is<CreatePostReviewEntity>(e => e.Sign == ReviewSign.Neutral));
     }
 
-    /// <summary>
-    /// The flag rides on every page of posts, so a guest, whom the intention
-    /// already refuses, costs no query at all.
-    /// </summary>
+    // The flag rides on every page of posts, so a guest, whom the intention already refuses, costs
+    // no query at all.
     [Fact]
     public async Task AnswerAGuestWithoutAskingTheDatabase()
     {
@@ -227,11 +208,6 @@ public class PostReviewCreationShould : PostReviewServiceTestBase
         await repository.DidNotReceiveWithAnyArgs().SelectGamesReviewedSinceAsync(default, default!, default);
     }
 
-    /// <summary>
-    /// One page, every rule of the write, and two queries for all of it: the
-    /// rater's own post, a post he rated, a post of a game he rated in during the
-    /// window, and the one post left that he may rate.
-    /// </summary>
     [Fact]
     public async Task JudgeAPageOfPostsByTheRulesOfTheWriteInTwoQueries()
     {

@@ -18,9 +18,6 @@ namespace DM.Architecture.Tests;
 /// </remarks>
 public class StorageClockShould
 {
-    /// <summary>
-    /// A read of the machine clock, under either spelling.
-    /// </summary>
     /// <remarks>
     /// The lookbehind lets a property called DateTime through (<c>row.DateTime.Now</c>); the optional
     /// <c>System.</c> is matched explicitly so the qualified form is caught.
@@ -29,9 +26,6 @@ public class StorageClockShould
         @"(?<![\w.])(System\s*\.\s*)?DateTime(Offset)?\s*\.\s*(Now|UtcNow|Today)\b",
         RegexOptions.Compiled);
 
-    /// <summary>
-    /// One source of "now" for the whole layer, and it is injected.
-    /// </summary>
     [Fact]
     public void TakeTheClockOnlyThroughTheInjectedProvider()
     {
@@ -50,10 +44,8 @@ public class StorageClockShould
         @"(?<![\w.])(System\s*\.\s*)?Guid\s*\.\s*NewGuid\s*\(",
         RegexOptions.Compiled);
 
-    /// <summary>
-    /// One source of new identifiers for the whole layer, and it is injected.
-    /// </summary>
-    /// <remarks>The seeding tool replaces IGuidFactory with a deterministic one, so a direct call breaks reproduction.</remarks>
+    // The seeding tool replaces IGuidFactory with a deterministic one, so a direct call breaks
+    // reproduction.
     [Fact]
     public void TakeNewIdentifiersOnlyThroughTheInjectedFactory()
     {
@@ -62,9 +54,7 @@ public class StorageClockShould
             "that bypasses it hands out an identifier no fixture can predict");
     }
 
-    /// <summary>
-    /// A reader that reads nothing passes everything.
-    /// </summary>
+    // A reader that reads nothing passes everything.
     [Fact]
     public void ReadEverySourceFileOfTheLayer()
     {
