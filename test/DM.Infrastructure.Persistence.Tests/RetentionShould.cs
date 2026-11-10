@@ -108,20 +108,24 @@ public class RetentionShould
     {
         var policies = RetentionRegistry
             .Policies(new AuthenticationConfiguration())
-            .ToDictionary(policy => policy.Table);
+            .ToDictionary(policy => (policy.Table, policy.TimestampColumn));
 
-        policies["LoginAttempts"].Term.Should().Be(TimeSpan.FromHours(24),
+        policies[("LoginAttempts", "LastAttemptUtc")].Term.Should().Be(TimeSpan.FromHours(24),
             "the default lockout window, read from AuthenticationConfiguration rather than mirrored");
-        policies["SecurityAuditEntries"].Term.Should().Be(TimeSpan.FromDays(180));
-        policies["Notifications"].Term.Should().Be(TimeSpan.FromDays(180));
-        policies["UnreadCounters"].Term.Should().Be(TimeSpan.FromDays(7));
-        // Published rows only: an unpublished row carries a NULL stamp that
+        policies[("SecurityAuditEntries", "TimestampUtc")].Term.Should().Be(TimeSpan.FromDays(180));
+        policies[("Notifications", "CreatedUtc")].Term.Should().Be(TimeSpan.FromDays(180));
+        policies[("UnreadCounters", "RemovedUtc")].Term.Should().Be(TimeSpan.FromDays(7));
+        // Processed rows only: a row that is not processed carries a NULL stamp that
         // never matches the cutoff, so the sweep cannot touch a backlog.
-        policies["OutboxEvents"].Term.Should().Be(TimeSpan.FromDays(7),
-            "a week of published rows covers investigating a delivery incident");
+        policies[("OutboxEvents", "ProcessedUtc")].Term.Should().Be(TimeSpan.FromDays(7),
+            "a week of processed rows covers investigating a delivery incident");
+        // Dead rows by the moment of death, never by insertion: a row may die an hour
+        // after it was stored or be returned and die again weeks later.
+        policies[("OutboxEvents", "DeadUtc")].Term.Should().Be(TimeSpan.FromDays(30),
+            "a month leaves time to look at a dead row before it goes");
         // The challenge lives five minutes; the day is slack for a row the end
         // of a login failed to delete, and not a second lifetime of the challenge.
-        policies["TwoFactorChallenges"].Term.Should().Be(TimeSpan.FromDays(1));
-        policies.Should().HaveCount(6, "a policy added or dropped is a retention decision too");
+        policies[("TwoFactorChallenges", "CreatedUtc")].Term.Should().Be(TimeSpan.FromDays(1));
+        policies.Should().HaveCount(7, "a policy added or dropped is a retention decision too");
     }
 }

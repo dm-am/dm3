@@ -85,8 +85,8 @@ public class EnvironmentFileShould
     /// in this repository.
     /// </summary>
     /// <remarks>
-    /// The environment is read at startup and simply set; a password is baked into the Postgres and
-    /// RabbitMQ users at first boot, so the script refuses instead of rotating it.
+    /// The environment is read at startup and simply set; a password is baked into the Postgres
+    /// users at first boot, so the script refuses instead of rotating it.
     /// </remarks>
     [Fact]
     public void RefuseToApproveAServerFileStillHoldingTheTemplatesSecrets()
@@ -149,5 +149,26 @@ public class EnvironmentFileShould
                 "string, so a character that a URI reads as a delimiter ends the string early " +
                 "and the client rejects it before it connects");
         }
+    }
+
+    /// <remarks>
+    /// A secret nothing reads is one more value to generate, copy, rotate and leak, and the first
+    /// reader to look for its service finds none. Mutation it must fail on: the password of a
+    /// service that left the stack kept in the generator, the template or the topology check.
+    /// </remarks>
+    [Theory]
+    [InlineData("scripts/init-env.sh", @"(?<=SECRETS=\([^)]*)\b[A-Z][A-Z0-9_]+\b(?=[^)]*\))")]
+    [InlineData(EnvironmentTemplate, @"(?m)^[A-Za-z][A-Za-z0-9_]*(?==)")]
+    [InlineData("../scripts/deployment/check-compose-topology.sh", @"(?m)(?<=^export )[A-Za-z][A-Za-z0-9_]*(?==)")]
+    public void CarryOnlyVariablesTheStackReads(string file, string names)
+    {
+        var compose = string.Concat(Directory
+            .EnumerateFiles(DockerDirectory, "docker-compose*.yml")
+            .Select(File.ReadAllText));
+        var declared = Regex.Matches(Read(file), names).Select(match => match.Value).Distinct().ToList();
+
+        declared.Should().NotBeEmpty($"{file} sets variables, and a pattern that finds none passes everything");
+        declared.Where(name => !compose.Contains("${" + name, StringComparison.Ordinal))
+            .Should().BeEmpty($"{file} sets variables no compose file reads, so they belong to nothing the stack runs");
     }
 }

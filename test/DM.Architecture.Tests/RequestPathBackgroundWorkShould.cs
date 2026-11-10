@@ -46,8 +46,8 @@ public class RequestPathBackgroundWorkShould
             .ToList();
 
         offenders.Should().BeEmpty(
-            "a task nobody waits for outlives the scope that owns its AMQP channel and its " +
-            "database connection, and the only thing that ever reports the failure is the source");
+            "a task nobody waits for outlives the scope that owns its database " +
+            "connection, and the only thing that ever reports the failure is the source");
     }
 
     /// <summary>

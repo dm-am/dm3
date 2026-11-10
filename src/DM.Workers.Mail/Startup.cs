@@ -4,12 +4,13 @@ using DM.Infrastructure.Core.Authorization;
 using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Core.Logging;
-using DM.Infrastructure.Messaging;
+using DM.Infrastructure.Persistence;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using DM.Infrastructure.Mail;
+using Npgsql;
 
 namespace DM.Workers.Mail;
 
@@ -32,22 +33,26 @@ public class Startup
     {
         services
             .AddDmCoreConfiguration(_configuration)
-            .AddDmMessageQueuing(_configuration)
             .AddDmMailConfiguration(_configuration)
-            .AddDmLogging("DM.MailSender.Consumer", _configuration, _environment);
+            .AddDmLogging("DM.MailSender.Consumer", _configuration, _environment)
+            .RequireRelationalStorage();
 
-        services.AddDmRetryingConsumer(MailConsumer.QueueName);
-        services.AddDmConsumerMiddleware<RetryingConsumerMiddleware>();
+        // Letters are claimed from the outbox table, on connections of the process's one source.
+        services
+            .AddDmConnectionSource()
+            .AddHostedService(MailQueue.Worker);
 
-        services.AddHostedService<MailConsumer>();
-
-        services.AddDmBrokerHealthCheck(_configuration, ["messaging", "ready"]);
+        // The process's own source, so the check probes the pool the claim draws from.
+        services.AddHealthChecks()
+            .AddNpgSql(
+                provider => provider.GetRequiredService<NpgsqlDataSource>(),
+                name: "postgresql",
+                tags: ["db", "ready"]);
 
         services.AddScoped<IAuthorizationContextProvider, NoAuthorizationContextProvider>();
 
         // After the explicit registrations: the scans only fill gaps.
         services
-            .AddDmMessaging()
             .AddDmCore()
             .AddDefaultTypes(typeof(Startup).Assembly);
     }

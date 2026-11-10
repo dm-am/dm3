@@ -33,21 +33,4 @@ public class StackVolumesShould
             "a new volume takes the owner of the directory it is mounted over, and a root-owned " +
             "one leaves the download nowhere to be written");
     }
-
-    /// <remarks>
-    /// The mail queue and its dead letters are the only record of a letter owed or failed. Mnesia keeps
-    /// its data under a directory named after the node, so the hostname is fixed as well.
-    /// </remarks>
-    [Fact]
-    public void KeepTheBrokerStateInANamedVolume()
-    {
-        var compose = Read(BaseCompose);
-
-        compose.Should().Contain("rmqdata:/var/lib/rabbitmq",
-            "a durable queue whose directory lives in the container layer is durable " +
-            "only until the container is recreated");
-        compose.Should().Contain("hostname: 'dm-rmq'",
-            "mnesia stores its data under a directory named after the node, so a " +
-            "generated hostname makes the volume unreadable to the next container");
-    }
 }

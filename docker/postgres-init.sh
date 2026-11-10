@@ -23,6 +23,10 @@ fi
 psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" --dbname postgres <<-SQL
     CREATE ROLE dm_app LOGIN PASSWORD '${DM_APP_PASSWORD}';
     CREATE DATABASE dm3 OWNER dm_app;
+    -- Pushes are notifications, which no privilege guards: a role that connects to dm3 hears
+    -- every one and sends its own. The owner keeps the right, the superuser
+    -- bypasses it.
+    REVOKE CONNECT ON DATABASE dm3 FROM PUBLIC;
 
     -- pg_monitor reads the statistics views and no table of any database.
     CREATE ROLE dm_exporter LOGIN PASSWORD '${DM_EXPORTER_PASSWORD}';

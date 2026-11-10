@@ -21,13 +21,12 @@ public class HealthCheckShould : IntegrationTestBase
 
         var body = await response.Content.ReadAsStringAsync();
         body.Should().NotContain("postgresql");
-        body.Should().NotContain("rabbitmq");
         body.Should().NotContain("realtime-push");
     }
 
     /// <remarks>
-    /// The status depends on the machine; the report names the checks. The broker and the realtime subscription
-    /// are not readiness: a request is served without them.
+    /// The status depends on the machine; the report names the checks. The realtime listener is
+    /// not readiness: a request is served without it.
     /// </remarks>
     [Fact]
     public async Task ReadinessReportsTheStoresARequestNeeds()
@@ -36,13 +35,11 @@ public class HealthCheckShould : IntegrationTestBase
 
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("postgresql");
-        body.Should().NotContain("rabbitmq");
         body.Should().NotContain("realtime-push");
     }
 
     /// <summary>
-    /// The detail endpoint is the one that hides nothing: broker and realtime
-    /// subscription included.
+    /// The detail endpoint is the one that hides nothing: the realtime listener included.
     /// </summary>
     /// <remarks>This report is the only place inside the host that says push is not reaching the instance.</remarks>
     [Fact]
@@ -52,7 +49,6 @@ public class HealthCheckShould : IntegrationTestBase
 
         var body = await response.Content.ReadAsStringAsync();
         body.Should().Contain("postgresql");
-        body.Should().Contain("rabbitmq");
         body.Should().Contain("realtime-push");
     }
 }

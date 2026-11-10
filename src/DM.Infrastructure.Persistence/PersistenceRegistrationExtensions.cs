@@ -61,6 +61,7 @@ using DM.Domain.Core.Subscriptions;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Core.Users;
 using DM.Domain.Core.Retention;
+using DM.Infrastructure.Core.Configuration;
 using DM.Infrastructure.Core.Extensions;
 using DM.Infrastructure.Persistence.RelationalStorage;
 using DM.Infrastructure.Persistence.Repositories.Account;
@@ -78,6 +79,8 @@ using DM.Infrastructure.Persistence.Shared.Subscriptions;
 using DM.Infrastructure.Persistence.Shared.UnreadCounters;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Options;
+using Npgsql;
 
 namespace DM.Infrastructure.Persistence;
 
@@ -110,6 +113,35 @@ public static class PersistenceRegistrationExtensions
         return services;
     }
 
+    /// <summary>
+    /// The process's one source of database connections, built from ConnectionStrings:Rdb.
+    /// </summary>
+    /// <remarks>
+    /// Everything in the process that talks to the database takes its connections here, so
+    /// the process holds one pool and its size is the one the connection string names.
+    /// </remarks>
+    public static IServiceCollection AddDmConnectionSource(this IServiceCollection services)
+    {
+        services.TryAddSingleton(provider => NpgsqlDataSource.Create(
+            provider.GetRequiredService<IOptions<ConnectionStrings>>().Value.Rdb));
+        return services;
+    }
+
+    /// <summary>
+    /// The gauges of depth, age and dead rows of every queue, read on each scrape through the
+    /// process's connection source.
+    /// </summary>
+    /// <remarks>
+    /// Started with the host, so the gauges exist from the first scrape and live as long as it.
+    /// </remarks>
+    public static IServiceCollection AddDmQueueMetrics(this IServiceCollection services)
+    {
+        services.AddDmConnectionSource();
+        services.TryAddSingleton<QueueMetrics>();
+        services.AddHostedService(provider => provider.GetRequiredService<QueueMetrics>());
+        return services;
+    }
+
     private static void AddRelationalStorage(IServiceCollection services)
     {
         // The registry of retention policies lives beside the sweeper.
@@ -117,11 +149,6 @@ public static class PersistenceRegistrationExtensions
 
         // Publishing an event is an outbox INSERT on the request's scoped DmDbContext.
         services.TryAddScoped<DM.Domain.Core.Events.IEventProducer, OutboxEventProducer>();
-
-        // The storage half of the relay: claim a batch under FOR UPDATE SKIP
-        // LOCKED, run it through the host's publisher, mark the confirmed
-        // prefix.
-        services.TryAddScoped<DM.Domain.Core.Events.IOutboxRelayProcessor, OutboxRelayProcessor>();
     }
 
     private static void AddCommunity(IServiceCollection services)

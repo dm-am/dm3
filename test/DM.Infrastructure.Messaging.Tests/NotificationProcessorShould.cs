@@ -128,7 +128,7 @@ public class NotificationProcessorShould : UnitTestBase
     }
 
     /// <summary>
-    /// Counts realtime pushes and can fail the way a broker that went away does.
+    /// Counts realtime pushes and can fail the way a database that went away does.
     /// </summary>
     private sealed class RecordingRealtimeProducer : IRealtimeNotificationProducer
     {
@@ -140,7 +140,7 @@ public class NotificationProcessorShould : UnitTestBase
         {
             if (Fail)
             {
-                throw new InvalidOperationException("the broker went away");
+                throw new InvalidOperationException("the database went away");
             }
 
             Sent++;

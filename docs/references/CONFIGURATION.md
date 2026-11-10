@@ -105,5 +105,5 @@ Endpoint URL приложения Discord, `DiscordPublicKey` это Public Key 
 ## Проверки здоровья
 
 `/_health` отвечает проверке здоровья Docker и зависимостей не проверяет. `/_ready`
-проверяет PostgreSQL, `/_health/detail` все зависимости, включая RabbitMQ и подписку
-API на живые уведомления (`realtime-push`). `/metrics` отдает метрики Prometheus.
+проверяет PostgreSQL, `/_health/detail` все зависимости: PostgreSQL и слушателя
+живых уведомлений API (`realtime-push`). Воркеры проверяют только базу. `/metrics` отдает метрики Prometheus.

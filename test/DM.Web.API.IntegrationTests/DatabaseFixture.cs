@@ -9,7 +9,6 @@ using DM.Infrastructure.Persistence.Entities.Subscriptions;
 using Microsoft.EntityFrameworkCore;
 using Npgsql;
 using Testcontainers.PostgreSql;
-using Testcontainers.RabbitMq;
 using Xunit;
 
 namespace DM.Web.API.IntegrationTests;
@@ -25,35 +24,17 @@ public partial class DatabaseFixture : IAsyncLifetime
         .WithPassword("test")
         .Build();
 
-    // The broker container's user, handed to the host as a setting: the endpoint's userinfo is not
-    // read.
-    public const string BrokerUsername = "guest";
-
-    public const string BrokerPassword = "guest";
-
-    // The AMQP port is pinned: Docker reassigns a random port on restart, which the broker-restart tests do.
-    private readonly RabbitMqContainer _rabbitMqContainer = new RabbitMqBuilder()
-        .WithImage("rabbitmq:4.3-management-alpine")
-        .WithUsername(BrokerUsername)
-        .WithPassword(BrokerPassword)
-        .WithPortBinding(45672, 5672)
-        .Build();
-
     private CustomWebApplicationFactory? _sharedFactory;
 
     public string ConnectionString { get; private set; } = string.Empty;
-    public string RabbitMqConnectionString { get; private set; } = string.Empty;
 
     public CustomWebApplicationFactory Factory => _sharedFactory ??= new CustomWebApplicationFactory(this);
 
     public async ValueTask InitializeAsync()
     {
-        await Task.WhenAll(
-            _postgresContainer.StartAsync(),
-            _rabbitMqContainer.StartAsync());
+        await _postgresContainer.StartAsync();
 
         ConnectionString = _postgresContainer.GetConnectionString();
-        RabbitMqConnectionString = _rabbitMqContainer.GetConnectionString();
 
         await using var context = CreateDbContext();
         // The migration builds the schema and its seed rows, the database the site starts from.
@@ -64,9 +45,7 @@ public partial class DatabaseFixture : IAsyncLifetime
     public async ValueTask DisposeAsync()
     {
         _sharedFactory?.Dispose();
-        await Task.WhenAll(
-            _postgresContainer.DisposeAsync().AsTask(),
-            _rabbitMqContainer.DisposeAsync().AsTask());
+        await _postgresContainer.DisposeAsync();
     }
 
     public DmDbContext CreateDbContext() => new(new DbContextOptionsBuilder<DmDbContext>()
@@ -74,11 +53,6 @@ public partial class DatabaseFixture : IAsyncLifetime
         .EnableSensitiveDataLogging()
         .EnableDetailedErrors()
         .Options);
-
-    // Stops the broker container without removing it: queues and persisted messages survive.
-    public Task StopBrokerAsync() => _rabbitMqContainer.StopAsync();
-
-    public Task StartBrokerAsync() => _rabbitMqContainer.StartAsync();
 
     public DmDbContext CreateDbContextFor(string databaseName)
     {

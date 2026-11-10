@@ -15,7 +15,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Logging;
 using NSubstitute;
 using NSubstitute.ExceptionExtensions;
-using RabbitMQ.Client.Exceptions;
+using Npgsql;
 using Xunit;
 
 namespace DM.Web.API.Tests.Shared.Authentication;
@@ -68,7 +68,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task HoldTheLoginUntilTheLetterIsHandedToTheBroker()
+    public async Task HoldTheLoginUntilTheLetterIsStored()
     {
         var handedOver = new TaskCompletionSource();
         sender
@@ -89,11 +89,11 @@ public class WebAuthenticationServiceShould : UnitTestBase
     }
 
     [Fact]
-    public async Task KeepTheLoginWhenTheBrokerRefusesTheLetter()
+    public async Task KeepTheLoginWhenTheLetterCannotBeStored()
     {
         sender
             .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>())
-            .ThrowsAsync(new BrokerUnreachableException(new Exception("connection refused")));
+            .ThrowsAsync(new NpgsqlException("connection refused"));
 
         var identity = await service.Awaiting(s => s.Authenticate(Credentials(), Context()))
             .Should().NotThrowAsync("an informational letter does not cost anybody their session");
@@ -111,7 +111,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
     {
         sender
             .SendAsync(Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<string?>())
-            .ThrowsAsync(new BrokerUnreachableException(new Exception("connection refused")));
+            .ThrowsAsync(new NpgsqlException("connection refused"));
 
         var events = new List<string?>();
         using var listener = CounterTags.Listen("dm.messaging.publish_failed", "event", events);
@@ -120,7 +120,7 @@ public class WebAuthenticationServiceShould : UnitTestBase
         listener.RecordObservableInstruments();
 
         // Swallowing is only allowed while it is counted: an alert reads this
-        // counter, and without it a broker refusing every publish looks exactly
+        // counter, and without it a database refusing every letter looks exactly
         // like a site where nothing suspicious ever happens.
         events.Should().Contain(nameof(SecurityEventType.SuspiciousLogin));
         logger.At(LogLevel.Warning).Should().ContainSingle();

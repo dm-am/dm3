@@ -27,7 +27,7 @@ using Xunit;
 namespace DM.Workers.NotificationDispatcher.Tests;
 
 /// <summary>
-/// A broker redelivery of one event costs the recipient nothing twice.
+/// A second delivery of one event costs the recipient nothing twice.
 /// </summary>
 /// <remarks>
 /// A message carries the EventId its publisher minted and the write is idempotent by (EventId, EventType).
@@ -41,7 +41,7 @@ public class EventReplayShould
     public EventReplayShould(NotificationDatabaseFixture fixture) => _fixture = fixture;
 
     [Fact]
-    public async Task DeliverOnceWhenTheBrokerHandsTheSameEventTwice()
+    public async Task DeliverOnceWhenTheQueueHandsTheSameEventTwice()
     {
         var message = new InvokedEvent
         {
@@ -206,7 +206,7 @@ public class EventReplayShould
     /// <summary>
     /// The service the worker resolves at run time, composed by hand: the types are internal, reached by name.
     /// </summary>
-    private static INotificationService RealNotificationService(DmDbContext context)
+    internal static INotificationService RealNotificationService(DmDbContext context)
     {
         var guidFactory = Substitute.For<IGuidFactory>();
         guidFactory.Create().Returns(_ => Guid.NewGuid());

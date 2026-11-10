@@ -1,5 +1,7 @@
+using System;
 using System.Threading.Tasks;
 using DM.Infrastructure.Persistence;
+using DM.Infrastructure.Persistence.Entities.Outbox;
 using Microsoft.EntityFrameworkCore;
 using Testcontainers.PostgreSql;
 using Xunit;
@@ -21,6 +23,9 @@ public class NotificationDatabaseFixture : IAsyncLifetime
 
     private string _connectionString = string.Empty;
 
+    /// <summary>The database as a client outside the data layer reaches it.</summary>
+    public string ConnectionString => _connectionString;
+
     public async ValueTask InitializeAsync()
     {
         await _postgres.StartAsync();
@@ -38,6 +43,30 @@ public class NotificationDatabaseFixture : IAsyncLifetime
         .EnableSensitiveDataLogging()
         .EnableDetailedErrors()
         .Options);
+
+    /// <summary>An outbox row as it stands in the table now, untracked.</summary>
+    public async Task<OutboxEvent> OutboxRow(long id)
+    {
+        await using var context = CreateContext();
+        return await context.OutboxEvents.AsNoTracking().SingleAsync(row => row.Id == id);
+    }
+
+    /// <summary>Polls the condition every 50 ms until it holds, or fails after the given time.</summary>
+    public static async Task WaitUntil(Func<Task<bool>> condition, TimeSpan within)
+    {
+        var deadline = DateTime.UtcNow + within;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (await condition())
+            {
+                return;
+            }
+
+            await Task.Delay(50);
+        }
+
+        throw new TimeoutException($"Not reached within {within}");
+    }
 }
 
 /// <summary>

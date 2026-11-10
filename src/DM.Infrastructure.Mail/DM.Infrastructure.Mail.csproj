@@ -7,11 +7,12 @@
     <ItemGroup>
         <PackageReference Include="Microsoft.Extensions.Options.ConfigurationExtensions" />
         <PackageReference Include="FluentValidation" />
+        <!-- A letter is one insert through the process's connection source. -->
+        <PackageReference Include="Npgsql" />
     </ItemGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\DM.Infrastructure.Core\DM.Infrastructure.Core.csproj" />
-        <ProjectReference Include="..\DM.Infrastructure.Messaging\DM.Infrastructure.Messaging.csproj" />
     </ItemGroup>
 
     <ItemGroup>

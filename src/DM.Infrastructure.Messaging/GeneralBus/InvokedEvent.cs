@@ -4,7 +4,7 @@ using DM.Domain.Core.Enums;
 namespace DM.Infrastructure.Messaging.GeneralBus;
 
 /// <summary>
-/// Domain event message model for RabbitMQ transport
+/// The message a stored event becomes for its handler
 /// </summary>
 public class InvokedEvent
 {
@@ -22,7 +22,7 @@ public class InvokedEvent
     /// Identity of this publication, distinct from the entity it reports on.
     /// </summary>
     /// <remarks>
-    /// Stamped by OutboxEventProducer; a relay retry and a redelivery carry the same id.
+    /// Stamped by OutboxEventProducer; a second handling of one row carries the same id.
     /// <see cref="Guid.Empty"/> is a message without the field, processed without deduplication.
     /// </remarks>
     public Guid EventId { get; set; }

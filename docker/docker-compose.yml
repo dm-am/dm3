@@ -19,7 +19,6 @@ volumes:
   pgdata:
   lokidata:
   storagedata:
-  rmqdata:
   alertmanagerdata:
   prometheusdata:
 
@@ -48,12 +47,6 @@ x-workload-env: &workload-env
   # is no secret. The key lives on the one application instance; a point of presence
   # runs no application code.
   DM_CryptoConfiguration__KeyBase64: ${DM_CryptoConfiguration__KeyBase64:?DM_CryptoConfiguration__KeyBase64 is required, generate with openssl rand -base64 32}
-
-  # === RabbitMQ ===
-  DM_RabbitMqConfiguration__Endpoint: amqp://${RABBITMQ_HOST:-dm-rmq}:5672
-  DM_RabbitMqConfiguration__VirtualHost: /
-  DM_RabbitMqConfiguration__Username: guest
-  DM_RabbitMqConfiguration__Password: ${RABBITMQ_DEFAULT_PASS}
 
   # === CDN (object storage) ===
   DM_CdnConfiguration__Url: http://${STORAGE_HOST:-dm-storage}:9000
@@ -160,44 +153,6 @@ services:
         limits:
           memory: 256M
           cpus: '0.5'
-
-  # --- Infrastructure: Message Broker ---
-
-  rabbitmq:
-    container_name: 'dm-rmq'
-    # 4.3: 3.x left community support, and there is no in-place upgrade from 3.13.
-    image: 'rabbitmq:4.3-management'
-    hostname: 'dm-rmq'
-    ports:
-      - '127.0.0.1:15672:15672'
-      - '127.0.0.1:5672:5672'
-      # rabbitmq_prometheus metrics: queue depth, dead-letter queues and consumerless queues
-      # are visible only here.
-      - '127.0.0.1:15692:15692'
-    environment:
-      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_DEFAULT_PASS}
-    volumes:
-      # The plugin is off by default, and the default endpoint aggregates across queues,
-      # which cannot name the one backing up.
-      - ./rabbitmq/enabled_plugins:/etc/rabbitmq/enabled_plugins:ro
-      - ./rabbitmq/dm.conf:/etc/rabbitmq/conf.d/10-dm.conf:ro
-      # The queues are durable but lived in the container layer, so recreating the container
-      # lost unsent mail. The hostname pins the node name, under which mnesia stores its data.
-      - rmqdata:/var/lib/rabbitmq
-    healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "-q", "check_running"]
-      interval: 5s
-      timeout: 10s
-      retries: 20
-      start_period: 60s
-    restart: unless-stopped
-    deploy:
-      resources:
-        limits:
-          memory: 512M
-          cpus: '0.5'
-        reservations:
-          memory: 256M
 
   # --- Infrastructure: Dev Tools ---
 
@@ -425,8 +380,9 @@ services:
     image: prometheuscommunity/postgres-exporter:v0.20.1
     container_name: 'dm-pg-exporter'
     environment:
-      # pg_monitor only: statistics views, not tables or the server.
-      DATA_SOURCE_NAME: "postgresql://dm_exporter:${DM_EXPORTER_PASSWORD}@dm-pg:5432/dm3?sslmode=disable"
+      # pg_monitor only: statistics views, not tables or the server. The maintenance database,
+      # because only dm_app may connect to dm3; the series read are server-wide.
+      DATA_SOURCE_NAME: "postgresql://dm_exporter:${DM_EXPORTER_PASSWORD}@dm-pg:5432/postgres?sslmode=disable"
     depends_on:
       postgres:
         condition: service_healthy
@@ -474,8 +430,6 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
-      rabbitmq:
-        condition: service_healthy
     restart: "no"
 
   # --- Application: Consumers ---
@@ -490,9 +444,10 @@ services:
       args:
         PROJECT_NAME: DM.Workers.Mail
     environment: *workload-env
+    # Letters wait in the outbox table, so the worker starts once the schema is there.
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
       mailpit:
         condition: service_started
     healthcheck:
@@ -518,9 +473,10 @@ services:
       args:
         PROJECT_NAME: DM.Workers.NotificationDispatcher
     environment: *workload-env
+    # Events wait in the outbox table, so the worker starts once the schema is there.
     depends_on:
-      rabbitmq:
-        condition: service_healthy
+      migration:
+        condition: service_completed_successfully
     healthcheck:
       test: ["CMD-SHELL", "curl -f http://localhost:5000/_health || exit 1"]
       interval: 15s
@@ -553,8 +509,6 @@ services:
     depends_on:
       migration:
         condition: service_completed_successfully
-      rabbitmq:
-        condition: service_healthy
       # Started, not healthy: without its store the site still serves pages and only uploads
       # fail (ObjectStorageDown says so). The seeder and every --wait gate on seaweedfs health.
       storage:

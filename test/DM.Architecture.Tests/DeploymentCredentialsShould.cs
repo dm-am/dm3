@@ -36,13 +36,7 @@ public class DeploymentCredentialsShould
         exporter.Value.Should().NotContain("postgresql://postgres",
             "reading the statistics views needs pg_monitor and nothing else");
 
-        // Without the comments: this file explains itself at length, and a rule
-        // that reads the prose is satisfied by a statement somebody commented out.
-        var script = string.Join('\n', File
-            .ReadAllLines(Path.Combine(DockerDirectory, "postgres-init.sh"))
-            .Select(line => line.Trim())
-            .Where(line => !line.StartsWith("--", StringComparison.Ordinal))
-            .Where(line => !line.StartsWith('#')));
+        var script = InitScriptStatements();
 
         foreach (var role in new[] { "dm_app", "dm_exporter" })
         {
@@ -58,6 +52,44 @@ public class DeploymentCredentialsShould
 
         ServiceBlock(compose, "postgres").Should().Contain("postgres-init.sh:/docker-entrypoint-initdb.d/",
             "a script the server never runs creates nothing at all");
+    }
+
+    /// <summary>
+    /// Nobody but the application role may connect to the application database, and the
+    /// exporter reads the server through the maintenance database.
+    /// </summary>
+    /// <remarks>
+    /// Any role that connects to a database hears every notification in it and sends its own.
+    /// The revoke runs once, on an empty volume; the smoke job reads it back.
+    /// </remarks>
+    [Fact]
+    public void LetOnlyTheApplicationRoleConnectToTheApplicationDatabase()
+    {
+        var script = InitScriptStatements();
+
+        var created = script.IndexOf("CREATE DATABASE dm3", StringComparison.Ordinal);
+        var revoked = script.IndexOf("REVOKE CONNECT ON DATABASE dm3 FROM PUBLIC", StringComparison.Ordinal);
+        created.Should().BeGreaterThan(-1, "the script creates the application database");
+        revoked.Should().BeGreaterThan(created,
+            "every role may connect to a new database until the right is taken from PUBLIC");
+
+        // pg_up and pg_stat_activity_count, which the alert and the dashboard read, cover the
+        // whole server from any database the exporter reaches.
+        var exporter = Regex.Match(Read(BaseCompose), @"DATA_SOURCE_NAME:\s*""?postgresql://[^/]+/(?<database>\w+)");
+        exporter.Success.Should().BeTrue("the exporter connects through one connection string");
+        exporter.Groups["database"].Value.Should().Be("postgres",
+            "an exporter connected to dm3 is a second role that hears and sends pushes");
+
+        // The script holds only on a fresh volume, so the deployed pair reads the right back.
+        var smoke = ServiceBlock(
+            File.ReadAllText(Path.Combine(RepositoryLayout.Root, ".github", "workflows", "dotnet.yml")),
+            "deployment-smoke");
+        smoke.Should().Contain("bash docker/scripts/check-database-privileges.sh",
+            "a restore into an existing database leaves PUBLIC its right, and only a read of " +
+            "the server tells");
+        File.ReadAllText(Path.Combine(DockerDirectory, "scripts", "check-database-privileges.sh"))
+            .Should().Contain("has_database_privilege('public', 'dm3', 'CONNECT')",
+                "the check asks the server, not the script that was meant to set it");
     }
 
     /// <summary>
@@ -98,7 +130,7 @@ public class DeploymentCredentialsShould
             .ToList();
 
         credentials.Should().HaveCountGreaterThanOrEqualTo(5,
-            "the anchor carries the keys of the broker, the store, the signature and the relay, " +
+            "the anchor carries the keys of the store, the signature, the relay and the bots, " +
             "and a walk that finds none passes on anything");
 
         foreach (var credential in credentials)
@@ -183,6 +215,14 @@ public class DeploymentCredentialsShould
             line => line.Contains("DM_PREVIEW_PASSWORD", StringComparison.Ordinal),
             "the terminal, the shell history and the install log keep whatever is printed here");
     }
+
+    // Without the comments: this file explains itself at length, and a rule
+    // that reads the prose is satisfied by a statement somebody commented out.
+    private static string InitScriptStatements() => string.Join('\n', File
+        .ReadAllLines(Path.Combine(DockerDirectory, "postgres-init.sh"))
+        .Select(line => line.Trim())
+        .Where(line => !line.StartsWith("--", StringComparison.Ordinal))
+        .Where(line => !line.StartsWith('#')));
 
     private static string Git(string arguments)
     {

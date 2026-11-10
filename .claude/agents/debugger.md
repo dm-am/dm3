@@ -1,6 +1,6 @@
 ---
 name: debugger
-description: Debugs DM3 issues - EF Core, RabbitMQ, SignalR, Vue 3. Use for errors, test failures, and performance issues.
+description: Debugs DM3 issues - EF Core, the queue, SignalR, Vue 3. Use for errors, test failures, and performance issues.
 tools: Read, Write, Edit, Bash, Glob, Grep
 effort: medium
 ---
@@ -23,19 +23,20 @@ run it.
 docker logs dm-api --tail 100
 docker logs dm-migration --tail 50
 docker logs dm-pg --tail 50
-docker logs dm-rmq --tail 50
+docker logs dm-notification-worker --tail 50
+docker logs dm-mail-worker --tail 50
 
-# Service status, docker and host processes alike
+# Service status, docker and host processes
 powershell -File .\scripts\dm.ps1 status
 
-# Tests: the whole solution, or one project by path
+# Tests: the solution, or one project by path
 dotnet test DM.sln
 dotnet test test/DM.Domain.Game.Tests
 ```
 
-A glob over the test projects does not replace the first line: PowerShell
-passes it as a literal path that does not exist, and a shell that expands it
-hands `dotnet test` one argument per project where it takes one.
+A glob over the test projects is no shortcut: PowerShell passes it as a
+literal path, and an expanding shell hands `dotnet test` one argument per
+project where it takes one.
 
 ## Where to look
 

@@ -21,7 +21,11 @@ BACKUP_FILE="$BACKUP_DIR/${DATABASE}_$TIMESTAMP.sql.gz"
 TMP_FILE="$(mktemp "$BACKUP_DIR/.${DATABASE}_$TIMESTAMP.XXXXXX")"
 trap 'rm -f "$TMP_FILE"' EXIT
 
-docker exec "$CONTAINER" pg_dump -U postgres "$DATABASE" | gzip > "$TMP_FILE"
+# The outbox table goes in as structure only: a waiting letter keeps its live confirmation
+# link in plaintext there. The double quotes keep the name's case; unquoted,
+# pg_dump folds it to outboxevents, matches nothing and dumps every row.
+docker exec "$CONTAINER" pg_dump -U postgres --exclude-table-data='"OutboxEvents"' "$DATABASE" \
+    | gzip > "$TMP_FILE"
 
 if [ ! -s "$TMP_FILE" ]; then
     echo "[$(date)] ERROR: Backup file is empty!" >&2

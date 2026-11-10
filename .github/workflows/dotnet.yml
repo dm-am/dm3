@@ -266,7 +266,7 @@ jobs:
       run: |
         docker compose config --quiet
         docker compose up -d --wait storage seaweedfs
-        docker compose up -d postgres rabbitmq mailpit jaeger
+        docker compose up -d postgres mailpit jaeger
         docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
         # The two workers the stand scripts start beside the API: notifications are born in one.
@@ -631,7 +631,7 @@ jobs:
       # stops the job.
       run: |
         docker compose up -d --wait storage seaweedfs
-        docker compose up -d postgres rabbitmq mailpit jaeger
+        docker compose up -d postgres mailpit jaeger
         docker compose up -d --build --wait migration
         docker compose up -d --build --wait dmapi
         docker compose up -d --build --wait nginx
@@ -647,6 +647,15 @@ jobs:
         bash docker/scripts/smoke-edge.sh http://localhost preview smoke-test-password
         bash docker/scripts/check-storage.sh
         bash docker/scripts/backup-storage.sh
+
+    # The revoke of postgres-init.sh, read back from the server the pair runs on.
+    - name: Only the application role may connect to the application database
+      run: bash docker/scripts/check-database-privileges.sh
+
+    # The backup script's exclusion read back from a real dump of the migrated schema: a
+    # waiting letter keeps a live link in plaintext, and an unquoted pattern dumps it anyway.
+    - name: The nightly dump holds no outbox rows and restores with an empty outbox table
+      run: bash docker/scripts/check-dump-excludes-outbox.sh
 
     - name: Logs on failure
       if: failure()

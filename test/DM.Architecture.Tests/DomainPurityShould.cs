@@ -26,7 +26,6 @@ public class DomainPurityShould
         "Serilog",
         "Microsoft.AspNetCore",
         "Microsoft.EntityFrameworkCore",
-        "RabbitMQ",
         "DM.Infrastructure",
     ];
 

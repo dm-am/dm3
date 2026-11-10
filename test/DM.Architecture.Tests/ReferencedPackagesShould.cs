@@ -34,7 +34,6 @@ public class ReferencedPackagesShould
     [
         new("AWSSDK.S3", [@"\bAmazon\.S3\b", @"\bAmazon\.Runtime\b"]),
         new("AspNetCore.HealthChecks.Npgsql", [@"\bAddNpgSql\b", @"\bNpgSqlHealthCheck"]),
-        new("AspNetCore.HealthChecks.Rabbitmq", [@"\bAddRabbitMQ\b", @"\bRabbitMQHealthCheck"]),
         new("AspNetCore.HealthChecks.UI.Client", [@"\bUIResponseWriter\b", @"HealthChecks\.UI\.Client"]),
         new("BouncyCastle.Cryptography", [@"\bOrg\.BouncyCastle\b"]),
         new("Konscious.Security.Cryptography.Argon2", [@"\bKonscious\.Security\.Cryptography\b", @"\bArgon2id\b"]),

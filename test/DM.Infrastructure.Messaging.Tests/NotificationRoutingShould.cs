@@ -9,14 +9,9 @@ using Xunit;
 namespace DM.Infrastructure.Messaging.Tests;
 
 /// <summary>
-/// The dispatcher binds its queue to exactly the events its generators answer,
-/// asking each one through CanResolve. That binding used to be a hand-written
-/// list and drifted: 14 generators answered events no binding matched, so
-/// RabbitMQ dropped those messages and the features simply looked absent.
-///
-/// Deriving the binding makes that drift impossible, but only while every
-/// generator is actually discoverable and actually answers something — which is
-/// what these tests hold in place.
+/// An event becomes a notification only through a generator that answers it, asked
+/// through CanResolve. Fourteen generators once answered nothing, and the features
+/// simply looked absent. These tests hold every generator discoverable and answering.
 /// </summary>
 public class NotificationRoutingShould
 {
@@ -27,10 +22,10 @@ public class NotificationRoutingShould
         .ToArray();
 
     [Fact]
-    public void ExposeGeneratorsToDeriveTheBindingFrom()
+    public void ExposeTheGeneratorsTheProcessorAsks()
     {
         GeneratorTypes.Should().HaveCountGreaterThan(20,
-            "the queue binding is derived from these types; discovering none would bind nothing at all, " +
+            "the processor asks these types; discovering none would answer no event at all, " +
             "and the dispatcher would go quiet without a single error");
     }
 
@@ -60,13 +55,12 @@ public class NotificationRoutingShould
     /// <summary>
     /// The unread-messages badge has nothing else behind it: the client refreshes
     /// it when this event arrives over the hub, and no timer stands in for that.
-    /// The event reaches the hub only while some generator answers it — what no
-    /// generator answers is not in the binding, and the broker drops it without
-    /// a trace. Deleting that generator would switch the live badge off and leave
-    /// every other test green.
+    /// The event reaches the hub only while some generator answers it, and what no
+    /// generator answers is marked processed without a trace. Deleting that
+    /// generator would switch the live badge off and leave every other test green.
     /// </summary>
     [Fact]
-    public void BindTheEventTheUnreadBadgeRidesOn()
+    public void AnswerTheEventTheUnreadBadgeRidesOn()
     {
         GeneratorTypes.Any(type => Answers(type, EventType.NewMessage)).Should().BeTrue(
             "a new message reaches an open tab through this event and no other");
@@ -76,13 +70,13 @@ public class NotificationRoutingShould
     /// The events strip above the chat feed has nothing else behind it either: it
     /// is read when the page opens and no timer re-reads it. A start or an end
     /// reaches an open tab through these two events and nothing else, and an
-    /// event no generator answers is not in the binding, so the broker drops it
-    /// without a trace and the strip goes on showing what was true at page load.
+    /// event no generator answers is marked processed without a trace, so the strip
+    /// goes on showing what was true at page load.
     /// </summary>
     [Theory]
     [InlineData(EventType.GlobalChatEventStarted)]
     [InlineData(EventType.GlobalChatEventEnded)]
-    public void BindTheEventsTheChatEventsStripRidesOn(EventType eventType) =>
+    public void AnswerTheEventsTheChatEventsStripRidesOn(EventType eventType) =>
         GeneratorTypes.Any(type => Answers(type, eventType)).Should().BeTrue(
             "the strip re-reads itself on this event and on no other");
 

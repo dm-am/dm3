@@ -16,37 +16,89 @@ rule_files:
 evaluation_interval: 1m
 
 tests:
-  # Очередь, которую консьюмер разобрал в память: ready ноль, unacked две
-  # тысячи. По одной серии ready это здоровая пустая очередь, и правило молчало
-  # ровно там, где отставание уже случилось.
+  # Слушатель живых уведомлений, который пять минут подряд не слушает: правило
+  # срабатывает на экземпляр. Рядом экземпляр, который слушает, и он молчит.
   - interval: 1m
     input_series:
-      - series: 'rabbitmq_queue_messages_ready{queue="dm.notifications"}'
-        values: '0+0x15'
-      - series: 'rabbitmq_queue_messages_unacked{queue="dm.notifications"}'
-        values: '2000+0x15'
+      - series: 'dm_messaging_push_listening{job="dm-api",instance="dm-api-1:8080"}'
+        values: '0+0x10'
+      - series: 'dm_messaging_push_listening{job="dm-api",instance="dm-api-2:8080"}'
+        values: '1+0x10'
     alert_rule_test:
-      - eval_time: 11m
-        alertname: QueueBacklog
+      - eval_time: 4m
+        alertname: RealtimePushNotListening
+        exp_alerts: []
+      - eval_time: 6m
+        alertname: RealtimePushNotListening
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: dm-api
+              instance: dm-api-1:8080
+            exp_annotations:
+              summary: "API dm-api-1:8080 не слушает живые уведомления"
+              description: "Пять минут экземпляр API не слушает канал уведомлений в базе, поэтому живые уведомления в его вкладки не приходят. Сами уведомления сохранены и читаются запросом. Смотреть docker logs dm-api и строку realtime-push в /_health/detail."
+
+  # Возраст очереди разрезается по очереди: застрявшая почта поднимает алерт
+  # про почту, а пустая очередь уведомлений рядом молчит.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_lag_seconds{queue="dm.mail.sending"}'
+        values: '600+60x15'
+      - series: 'dm_messaging_outbox_lag_seconds{queue="dm.notifications"}'
+        values: '0+0x15'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: OutboxBacklogAging
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dm.mail.sending
+            exp_annotations:
+              summary: "Записи застряли в очереди dm.mail.sending"
+              description: "Самая старая ожидающая запись очереди ждет больше 5 минут, уведомления, письма и счетчики по ней не уходят. Ничего не потеряно, записи ждут обработки. Смотреть поля Attempts и LastError у старых записей в базе и docker logs обработчика очереди."
+
+  # Мертвая запись поднимает алерт своей очереди, если живет пять минут. Рядом
+  # очередь без мертвых записей, и она молчит. Вторая очередь показывает, что
+  # правило не привязано к одной.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_dead{queue="dm.mail.sending"}'
+        values: '0+0x2 1+0x10'
+      - series: 'dm_messaging_outbox_dead{queue="dm.notifications"}'
+        values: '0+0x12'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DeadOutboxRows
+        exp_alerts: []
+      - eval_time: 9m
+        alertname: DeadOutboxRows
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              queue: dm.mail.sending
+            exp_annotations:
+              summary: "В очереди dm.mail.sending есть мертвые записи"
+              description: 'Записи очереди исчерпали повторы или не читаются, и больше их никто не возьмет. Причина в поле LastError: SELECT "Id", "DeadUtc", "LastError" FROM "OutboxEvents" WHERE "DeadUtc" IS NOT NULL. Вернуть запись в очередь, когда причина устранена: UPDATE "OutboxEvents" SET "DeadUtc" = NULL, "Attempts" = 0, "NextAttemptUtc" = NULL WHERE "Id" = <Id> AND "DeadUtc" IS NOT NULL AND "ProcessedUtc" IS NULL; Письмо об учетной записи, мертвое больше 48 часов, не возвращать, а удалить: ссылка в нем уже истекла.'
+
+  # Мертвая запись события поднимает тот же алерт под своей очередью, а запись,
+  # которую вернули или удалили, его гасит.
+  - interval: 1m
+    input_series:
+      - series: 'dm_messaging_outbox_dead{queue="dm.notifications"}'
+        values: '2+0x7 0+0x5'
+    alert_rule_test:
+      - eval_time: 6m
+        alertname: DeadOutboxRows
         exp_alerts:
           - exp_labels:
               severity: warning
               queue: dm.notifications
             exp_annotations:
-              summary: "Очередь dm.notifications растет"
-              description: "Больше 1000 сообщений ждут или обрабатываются десять минут подряд. Считаются и ожидающие, и взятые обработчиком, но не завершенные. Смотреть очередь в RabbitMQ и docker logs ее обработчика."
-
-  # Обратная сторона: сумма ниже порога молчит. Без этого случая правило,
-  # срабатывающее всегда, прошло бы проверку выше.
-  - interval: 1m
-    input_series:
-      - series: 'rabbitmq_queue_messages_ready{queue="dm.notifications"}'
-        values: '10+0x15'
-      - series: 'rabbitmq_queue_messages_unacked{queue="dm.notifications"}'
-        values: '5+0x15'
-    alert_rule_test:
-      - eval_time: 11m
-        alertname: QueueBacklog
+              summary: "В очереди dm.notifications есть мертвые записи"
+              description: 'Записи очереди исчерпали повторы или не читаются, и больше их никто не возьмет. Причина в поле LastError: SELECT "Id", "DeadUtc", "LastError" FROM "OutboxEvents" WHERE "DeadUtc" IS NOT NULL. Вернуть запись в очередь, когда причина устранена: UPDATE "OutboxEvents" SET "DeadUtc" = NULL, "Attempts" = 0, "NextAttemptUtc" = NULL WHERE "Id" = <Id> AND "DeadUtc" IS NOT NULL AND "ProcessedUtc" IS NULL; Письмо об учетной записи, мертвое больше 48 часов, не возвращать, а удалить: ссылка в нем уже истекла.'
+      - eval_time: 10m
+        alertname: DeadOutboxRows
         exp_alerts: []
 
   # Отказы доставки разрезаются по каналу: одно правило на все каналы назвало бы

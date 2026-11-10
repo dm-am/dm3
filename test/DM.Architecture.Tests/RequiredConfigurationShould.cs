@@ -25,7 +25,7 @@ public class RequiredConfigurationShould
 
     /// <remarks>
     /// The development overlays reach the compose stack without the container, and the template is the
-    /// source. The broker's guest password sits in every base file, so each overlay has to answer it.
+    /// source.
     /// </remarks>
     [Fact]
     public void ReachTheLocalStackWithTheCredentialsItIsBroughtUpWith()
@@ -72,20 +72,6 @@ public class RequiredConfigurationShould
                 settings.Should().Contain($"\"{Declared("STORAGE_APP_PASSWORD")}\"",
                     $"{name} uses the secret of that account");
             }
-        }
-
-        var brokerHosts = Hosts
-            .Where(host => Reads(BaseSettings(host), "RabbitMqConfiguration", "Endpoint"))
-            .ToArray();
-        brokerHosts.Should().HaveCountGreaterThanOrEqualTo(3,
-            "the API and both workers talk to the broker, and a walk that finds none passes on anything");
-
-        foreach (var host in brokerHosts)
-        {
-            Answer(OverlaySettings(host), "RabbitMqConfiguration", "Password").Should().Be(
-                Declared("RABBITMQ_DEFAULT_PASS"),
-                $"{host} talks to the broker, and the base file answers it with the guest password " +
-                "of the image, which the stack does not start the broker with");
         }
     }
 

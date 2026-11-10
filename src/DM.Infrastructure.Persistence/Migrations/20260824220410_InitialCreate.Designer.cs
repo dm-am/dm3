@@ -3770,29 +3770,45 @@ namespace DM.Infrastructure.Persistence.Migrations
                         .HasColumnType("integer")
                         .HasDefaultValue(0);
 
-                    b.Property<Guid>("EntityId")
+                    b.Property<DateTimeOffset?>("DeadUtc")
+                        .HasColumnType("timestamp with time zone");
+
+                    b.Property<Guid?>("EntityId")
                         .HasColumnType("uuid");
 
                     b.Property<Guid>("EventId")
                         .HasColumnType("uuid");
 
-                    b.Property<int>("EventType")
+                    b.Property<int?>("EventType")
                         .HasColumnType("integer");
 
                     b.Property<string>("LastError")
                         .HasColumnType("text");
 
+                    b.Property<DateTimeOffset?>("NextAttemptUtc")
+                        .HasColumnType("timestamp with time zone");
+
                     b.Property<DateTimeOffset>("OccurredUtc")
                         .HasColumnType("timestamp with time zone");
 
-                    b.Property<DateTimeOffset?>("PublishedUtc")
+                    b.Property<string>("Payload")
+                        .HasColumnType("text");
+
+                    b.Property<DateTimeOffset?>("ProcessedUtc")
                         .HasColumnType("timestamp with time zone");
+
+                    b.Property<string>("Queue")
+                        .IsRequired()
+                        .HasColumnType("text");
+
+                    b.Property<string>("TraceParent")
+                        .HasColumnType("text");
 
                     b.HasKey("Id");
 
-                    b.HasIndex("OccurredUtc", "Id")
-                        .HasDatabaseName("IX_OutboxEvents_Pending")
-                        .HasFilter("\"PublishedUtc\" IS NULL");
+                    b.HasIndex("Queue", "OccurredUtc", "Id")
+                        .HasDatabaseName("IX_OutboxEvents_Ready")
+                        .HasFilter("\"ProcessedUtc\" IS NULL AND \"DeadUtc\" IS NULL");
 
                     b.ToTable("OutboxEvents");
                 });

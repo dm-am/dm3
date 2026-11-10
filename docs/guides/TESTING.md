@@ -9,7 +9,7 @@
 | Слой | Фреймворк | Назначение |
 |------|-----------|------------|
 | Backend Unit | xUnit + NSubstitute + AwesomeAssertions | Бизнес-логика: ветки правил, валидация, маппинг |
-| Backend Integration | xUnit + Testcontainers | Контракт HTTP, трансляция в SQL, транзакции против настоящей базы и настоящего брокера в контейнерах |
+| Backend Integration | xUnit + Testcontainers | Контракт HTTP, трансляция в SQL, транзакции и очередь против настоящей базы в контейнере |
 | Architecture | xUnit + ArchUnitNET | Конвенции дерева: слои, зависимости, текстовые гейты по исходникам |
 | Frontend Unit | Vitest + Vue Test Utils | Компоненты, утилиты, BBCode |
 | E2E | Playwright | Сценарии в браузере против поднятого стека |

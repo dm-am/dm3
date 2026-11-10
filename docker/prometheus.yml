@@ -38,10 +38,6 @@ scrape_configs:
     static_configs:
       - targets: ['dm-node-exporter:9100']
 
-  - job_name: 'rabbitmq'
-    static_configs:
-      - targets: ['dm-rmq:15692']
-
   # Object storage, through the proxy that is its one door into this network.
   # The site does not wait for it to start, so a store that is down is a site
   # that answers everything except its pictures, and nothing else says so.

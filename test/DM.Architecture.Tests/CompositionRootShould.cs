@@ -137,6 +137,34 @@ public class CompositionRootShould
     }
 
     /// <remarks>
+    /// Run rather than read: each host starts on its own settings files and a deployment's
+    /// encryption key, and nothing else. Mutation it must fail on: a host that still validates
+    /// a section of a service the stack no longer runs.
+    /// </remarks>
+    [Theory]
+    [InlineData("DM.Web.API")]
+    [InlineData("DM.Workers.NotificationDispatcher")]
+    [InlineData("DM.Workers.Mail")]
+    public void StartEveryHostOnTheSettingsItsFilesCarry(string host)
+    {
+        Func<IConfiguration, IWebHostEnvironment, Action<IServiceCollection>> compose = host switch
+        {
+            "DM.Web.API" => (configuration, environment) =>
+                new DM.Web.API.Startup(configuration, environment).ConfigureServices,
+            "DM.Workers.NotificationDispatcher" => (configuration, environment) =>
+                new DM.Workers.NotificationDispatcher.Startup(configuration, environment).ConfigureServices,
+            _ => (configuration, environment) =>
+                new DM.Workers.Mail.Startup(configuration, environment).ConfigureServices,
+        };
+        var key = KeyValuePair.Create<string, string?>(
+            "CryptoConfiguration:KeyBase64", Convert.ToBase64String(new byte[32]));
+
+        // A prefix no key starts with: nothing is withheld.
+        Refusals(host, withheld: "\0", compose, key).Should().BeEmpty(
+            $"{host} has to start on the settings it ships, plus the key a deployment supplies");
+    }
+
+    /// <remarks>
     /// The verifier throws on a key that is no point of the curve, which would be a 500 on every
     /// interaction. The dispatcher binds the same section and sends with the tokens alone.
     /// </remarks>
@@ -408,7 +436,7 @@ public class CompositionRootShould
                 "and files tickets like a person");
     }
 
-    private static IReadOnlyList<(string, IServiceCollection, ServiceProvider)> BuildHosts() =>
+    internal static IReadOnlyList<(string, IServiceCollection, ServiceProvider)> BuildHosts() =>
     [
         Build("DM.Web.API", (configuration, environment) =>
         {

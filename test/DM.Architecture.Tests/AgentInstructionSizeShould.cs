@@ -38,7 +38,7 @@ public class AgentInstructionSizeShould
 
     private static readonly Recorded[] Register =
     [
-        new(".claude/CLAUDE.md", 3838),
+        new(".claude/CLAUDE.md", 3826),
         new(".claude/agents/code-reviewer.md", 3458),
         new(".claude/agents/debugger.md", 1686),
         new(".claude/agents/frontend-developer.md", 2683),
