@@ -1,13 +1,16 @@
 using System;
 using System.Threading;
 using System.Threading.Tasks;
+using DM.Domain.Core.Blacklists;
 using DM.Domain.Core.Content;
 using DM.Domain.Core.Enums;
 using DM.Domain.Core.Exceptions;
+using DM.Domain.Core.Identity;
 using DM.Domain.Core.Users;
 using DM.Domain.Game.Features.AttributeSchemas;
 using DM.Domain.Game.Features.Games;
 using DM.Testing;
+using DM.Testing.Dsl;
 using FluentValidation.TestHelper;
 using NSubstitute;
 using Xunit;
@@ -18,11 +21,16 @@ public class CreateGameValidatorShould : UnitTestBase
 {
     private readonly CreateGameValidator validator;
     private readonly IUserLookupService userLookupService;
+    private readonly IUserBlacklistChecker blacklistChecker;
+    private readonly Guid masterId = Guid.NewGuid();
 
     public CreateGameValidatorShould()
     {
         userLookupService = Mock<IUserLookupService>();
-        validator = new CreateGameValidator(userLookupService);
+        blacklistChecker = Mock<IUserBlacklistChecker>();
+        var identityProvider = Mock<IIdentityProvider>();
+        identityProvider.Current.Returns(Identities.User(masterId, UserRole.RegularUser));
+        validator = new CreateGameValidator(userLookupService, blacklistChecker, identityProvider);
     }
 
     private static CreateGame ValidGame(Action<CreateGame>? change = null)
@@ -179,6 +187,25 @@ public class CreateGameValidatorShould : UnitTestBase
 
         var result = await validator.TestValidateAsync(input);
         result.ShouldNotHaveAnyValidationErrors();
+    }
+
+    // The invitation after creation would be refused, and by then the game would exist without it.
+    [Fact]
+    public async Task FailWhenTheAssistantKeepsTheMasterInTheirBlacklist()
+    {
+        var assistantId = Guid.NewGuid();
+        userLookupService
+            .UsernameExistsAsync("blocker", Arg.Any<CancellationToken>()).Returns(true);
+        userLookupService
+            .FindUserIdAsync("blocker", Arg.Any<CancellationToken>()).Returns((true, assistantId));
+        blacklistChecker
+            .IsBlockedAsync(assistantId, masterId, Arg.Any<CancellationToken>()).Returns(true);
+
+        var input = ValidGame(g => g.AssistantUsername = "blocker");
+
+        var result = await validator.TestValidateAsync(input);
+        result.ShouldHaveValidationErrorFor(x => x.AssistantUsername)
+            .WithErrorMessage(RefusalMessage.CannotInviteThisUser);
     }
 
     // The sheet is created with the game, so a set the sheet cannot hold refuses the whole request

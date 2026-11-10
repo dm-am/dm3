@@ -34,7 +34,7 @@ function goBack() {
 
 <template>
   <div class="error-page">
-    <page-title>Упс! {{ config.title }}!</page-title>
+    <page-title>{{ config.title }}</page-title>
 
     <img
       :src="config.image.src"

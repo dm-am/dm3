@@ -61,6 +61,8 @@ public class PasswordChangeServiceShould : UnitTestBase
                 Arg.Any<CancellationToken>()).Returns(new ValidationResult());
 
         dateTimeProvider.Now.Returns(DateTimeOffset.UtcNow);
+        repository.UpdatePassword(Arg.Any<Guid>(), Arg.Any<string>(), Arg.Any<string>(), Arg.Any<Guid?>())
+            .Returns(true);
 
         service = new PasswordChangeService(
             validator,
@@ -202,6 +204,41 @@ public class PasswordChangeServiceShould : UnitTestBase
         // just as the form inside a session does.
         await twoFactorRepository.Received(1).RemoveChallengesOf(
             userId, Arg.Any<CancellationToken>());
+    }
+
+    // The account was removed between the lookup and the write: the password in the database is the old one.
+    [Fact]
+    public async Task RefuseWithoutEndingSessionsOrWritingWhenTheAccountIsGoneAtTheWrite()
+    {
+        var userId = Guid.NewGuid();
+        var tokenId = Guid.NewGuid();
+        var user = new AuthenticatedUser
+        {
+            UserId = userId,
+            Username = "testuser",
+            Email = "test@example.com",
+            Role = UserRole.RegularUser,
+            Salt = "salt",
+            PasswordHash = "hash"
+        };
+        var passwordChange = new UserPasswordChange { Token = tokenId, NewPassword = "newpass123" };
+
+        identityProvider.Current.Returns(Identity.Guest());
+        repository.FindUser(tokenId, Arg.Any<DateTimeOffset>()).Returns(user);
+        securityManager.GeneratePassword(passwordChange.NewPassword).Returns(("newhash", "newsalt"));
+        repository.UpdatePassword(userId, "newhash", "newsalt", tokenId).Returns(false);
+
+        var exception = await Assert.ThrowsAsync<HttpException>(() => service.Change(passwordChange));
+
+        exception.StatusCode.Should().Be(HttpStatusCode.NotFound);
+        exception.Message.Should().Be(RefusalMessage.UserNotFound);
+        await twoFactorRepository.DidNotReceive().RemoveChallengesOf(Arg.Any<Guid>(), Arg.Any<CancellationToken>());
+        await sessionService.DidNotReceive().LogoutAll(Arg.Any<Guid>());
+        await sessionService.DidNotReceive().LogoutElsewhere();
+        await auditService.DidNotReceive().LogAsync(
+            Arg.Any<Guid>(), Arg.Any<SecurityEventType>(), Arg.Any<string?>(), Arg.Any<string?>(), Arg.Any<string?>());
+        await eventProducer.DidNotReceive().SendAsync(Arg.Any<EventType>(), Arg.Any<Guid>());
+        await notificationSender.DidNotReceive().Send(Arg.Any<string>());
     }
 
     [Fact]

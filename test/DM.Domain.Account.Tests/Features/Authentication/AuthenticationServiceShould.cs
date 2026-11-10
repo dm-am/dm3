@@ -113,7 +113,7 @@ public class AuthenticationServiceShould : AuthenticationServiceTestBase
         sessionFactory.Create(true, null).Returns(createSession);
         repository.FindUserSettings(userId).Returns(settings);
         repository.AddSession(userId, createSession).Returns(session);
-        cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
+        cryptoService.Encrypt(Arg.Any<string>(), SealPurpose.SessionToken).Returns("encrypted-token");
 
         var result = await service.Authenticate(email, "password");
 
@@ -234,7 +234,7 @@ public class AuthenticationServiceShould : AuthenticationServiceTestBase
         sessionFactory.Create(true, null).Returns(new CreateSession { Id = Guid.NewGuid() });
         repository.FindUserSettings(user.UserId).Returns(UserSettings.Default);
         repository.AddSession(user.UserId, Arg.Any<CreateSession>()).Returns(new Session { Id = Guid.NewGuid() });
-        cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
+        cryptoService.Encrypt(Arg.Any<string>(), SealPurpose.SessionToken).Returns("encrypted-token");
 
         var result = await service.Authenticate(email, "password");
 

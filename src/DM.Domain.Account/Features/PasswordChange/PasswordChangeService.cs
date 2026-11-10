@@ -110,7 +110,11 @@ internal class PasswordChangeService : IPasswordChangeService
         await RefuseUnfitPassword(user, passwordChange.NewPassword);
 
         var (hash, salt) = _securityManager.GeneratePassword(passwordChange.NewPassword);
-        await _repository.UpdatePassword(user.UserId, hash, salt, passwordChange.Token);
+        // An account removed after the lookup keeps its old password, so nothing below may tell it otherwise.
+        if (!await _repository.UpdatePassword(user.UserId, hash, salt, passwordChange.Token))
+        {
+            throw new HttpException(System.Net.HttpStatusCode.NotFound, RefusalMessage.UserNotFound);
+        }
 
         // Any login begun with the old password dies with it, on both routes.
         await _twoFactorRepository.RemoveChallengesOf(user.UserId);

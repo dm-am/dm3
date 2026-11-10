@@ -54,9 +54,18 @@ function whole(value: number | "", fallback: number): number | null {
 /** An empty field with the box means the server's own cap, no limit. */
 function explosion(): number {
   if (!explodes.value) return 0;
-  const limit = explosionLimit.value;
+  return limitOf(explosionLimit.value);
+}
+
+function limitOf(limit: number | ""): number {
   if (limit === "" || !Number.isFinite(limit)) return UNLIMITED_EXPLOSIONS;
   return Math.min(UNLIMITED_EXPLOSIONS, Math.max(0, Math.trunc(limit)));
+}
+
+/** The field shows the number the roll will use, not the one typed. */
+function onLimitBlur() {
+  if (explosionLimit.value !== "")
+    explosionLimit.value = limitOf(explosionLimit.value);
 }
 
 /** A number typed into "Броски взрываются максимум" means the dice explode. */
@@ -131,6 +140,7 @@ function removeRoll(index: number) {
           aria-label="Сколько раз взрывается кубик"
           :disabled="disabled"
           @input="onLimitInput"
+          @blur="onLimitBlur"
         />
         раз
       </label>

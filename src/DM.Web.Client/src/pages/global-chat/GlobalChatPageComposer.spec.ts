@@ -203,3 +203,16 @@ describe("GlobalChatPage, the field to write in", () => {
     expect(wrapper.findComponent({ name: "LoginPrompt" }).exists()).toBe(true);
   });
 });
+
+describe("GlobalChatPage, an empty chat", () => {
+  it.each([
+    ["a signed-in reader", true],
+    ["a guest", false],
+  ])("says the same to %s", async (_who, signedIn) => {
+    if (signedIn) useAuthStore().updateUser({ username: "Alice" } as never);
+
+    const wrapper = await openChat();
+
+    expect(wrapper.get(".chat-feed__empty").text()).toBe("Сообщений пока нет");
+  });
+});

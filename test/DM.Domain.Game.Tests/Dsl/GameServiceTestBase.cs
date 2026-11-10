@@ -12,7 +12,6 @@ using DM.Domain.Core.Events;
 using DM.Domain.Core.Identity;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Features.GameAttributeSchemas;
-using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Games;
 using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Subscriptions;
@@ -64,8 +63,6 @@ public abstract class GameServiceTestBase : UnitTestBase
         author = identity.User;
         identityProvider.Current.Returns(identity);
 
-        var gameBlacklistRepository = Mock<IGameBlacklistRepository>();
-
         unreadCountersRepository = ZeroUnreadCounters();
 
         subscriptionService = Mock<IGameSubscriptionService>();
@@ -95,7 +92,6 @@ public abstract class GameServiceTestBase : UnitTestBase
             assistantRepository,
             invitationService,
             identityProvider,
-            gameBlacklistRepository,
             blacklistChecker,
             unreadCountersRepository,
             subscriptionService,

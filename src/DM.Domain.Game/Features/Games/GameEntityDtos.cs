@@ -63,6 +63,11 @@ public class CreateGameEntity
 
     public IEnumerable<Guid> TagIds { get; set; } = [];
 
+    /// <summary>
+    /// Copied in the transaction of the game row: a game open without its master's list lets the people on it in
+    /// </summary>
+    public bool CopyMasterBlacklist { get; set; }
+
     public DateTimeOffset CreatedUtc { get; set; }
 }
 

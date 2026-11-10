@@ -24,10 +24,10 @@ public sealed record SessionToken(Guid UserId, Guid SessionId)
     };
 
     /// <summary>
-    /// Opens a token. Null when it was not minted by this server, no longer
-    /// decrypts under any key version, or does not carry both halves — forgery,
-    /// corruption and a retired key are one answer here, and none of them names
-    /// an account.
+    /// Opens a token. Null when it was not minted by this server as a session
+    /// token, no longer decrypts under any key version, or does not carry both
+    /// halves — forgery, corruption, a retired key and a value sealed for another
+    /// purpose are one answer here, and none of them names an account.
     /// </summary>
     /// <remarks>
     /// The cipher is AEAD, so a token that opens is one this server wrote and the
@@ -41,7 +41,7 @@ public sealed record SessionToken(Guid UserId, Guid SessionId)
     {
         try
         {
-            var payload = await cryptoService.Decrypt(token);
+            var payload = await cryptoService.Decrypt(token, SealPurpose.SessionToken);
             return JsonSerializer.Deserialize<SessionToken>(payload, PayloadOptions);
         }
         catch (Exception ex) when (ex is JsonException or FormatException or CryptographicException)
@@ -56,5 +56,5 @@ public sealed record SessionToken(Guid UserId, Guid SessionId)
     /// <param name="cryptoService">Cipher to mint it with.</param>
     /// <returns>Encrypted token.</returns>
     public Task<string> Write(ISymmetricCryptoService cryptoService) =>
-        cryptoService.Encrypt(JsonSerializer.Serialize(this, PayloadOptions));
+        cryptoService.Encrypt(JsonSerializer.Serialize(this, PayloadOptions), SealPurpose.SessionToken);
 }

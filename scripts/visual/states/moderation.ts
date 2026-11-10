@@ -1,4 +1,4 @@
-import { button, refuse, type State } from "./shared";
+import { button, refuse, refuseOnLoad, type State } from "./shared";
 
 export const MODERATION_STATES: State[] = [
   // Moderation
@@ -61,6 +61,17 @@ export const MODERATION_STATES: State[] = [
     name: "admin-achievements",
     role: "admin",
     url: "/moderation/achievements",
+  },
+  {
+    // The catalogue loads on mount, so the refusal stands before the reload.
+    name: "admin-achievements-refused",
+    role: "admin",
+    url: "/moderation/achievements",
+    act: (page) =>
+      refuseOnLoad(
+        page,
+        /\/v1\/moderation\/achievement-(categories|types)(\?|$)/,
+      ),
   },
   {
     name: "admin-achievement-category-dialog",

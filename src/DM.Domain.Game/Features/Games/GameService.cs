@@ -17,7 +17,6 @@ using DM.Domain.Core.Statuses;
 using DM.Domain.Core.UnreadCounters;
 using DM.Domain.Game.Authorization;
 using DM.Domain.Game.Features.GameAttributeSchemas;
-using DM.Domain.Game.Features.Blacklists;
 using DM.Domain.Game.Features.Invitations;
 using DM.Domain.Game.Features.Subscriptions;
 using DM.Domain.Game.Features.Rooms;
@@ -38,7 +37,6 @@ internal partial class GameService : IGameService
     private readonly IGameAssistantRepository _assistantRepository;
     private readonly IGameInvitationService _invitationService;
     private readonly IIdentityProvider _identityProvider;
-    private readonly IGameBlacklistRepository _gameBlacklistRepository;
     private readonly IUserBlacklistChecker _userBlacklistChecker;
     private readonly IUnreadCountersRepository _unreadCountersRepository;
     private readonly IGameSubscriptionService _subscriptionService;
@@ -66,7 +64,6 @@ internal partial class GameService : IGameService
         IGameAssistantRepository assistantRepository,
         IGameInvitationService invitationService,
         IIdentityProvider identityProvider,
-        IGameBlacklistRepository gameBlacklistRepository,
         IUserBlacklistChecker userBlacklistChecker,
         IUnreadCountersRepository unreadCountersRepository,
         IGameSubscriptionService subscriptionService,
@@ -86,7 +83,6 @@ internal partial class GameService : IGameService
         _assistantRepository = assistantRepository;
         _invitationService = invitationService;
         _identityProvider = identityProvider;
-        _gameBlacklistRepository = gameBlacklistRepository;
         _userBlacklistChecker = userBlacklistChecker;
         _unreadCountersRepository = unreadCountersRepository;
         _subscriptionService = subscriptionService;
@@ -109,6 +105,11 @@ internal partial class GameService : IGameService
 
         // Tags come by short id; the link table keys on the tags' own identifiers.
         var validTagIds = await _tagResolver.ResolveTagIds(createGame.Tags);
+
+        // The request decides when it says anything; silent, the master's account setting does.
+        var copyBlacklist = createGame.CopyBlacklist ??
+                            (await _userBlacklistChecker.GetSettingsAsync(userId))
+                            .HasFlag(UserBlacklistSettings.AutoPopulateContentBlacklist);
 
         var now = _dateTimeProvider.Now;
         var gameId = _guidFactory.Create();
@@ -135,6 +136,7 @@ internal partial class GameService : IGameService
             RecruitmentStartedUtc = createGame.Draft ? null : now,
             RecruitmentCount = createGame.Draft ? 0 : 1,
             TagIds = validTagIds,
+            CopyMasterBlacklist = copyBlacklist,
             CreatedUtc = now
         };
 
@@ -149,9 +151,6 @@ internal partial class GameService : IGameService
         counters.Commit();
 
         // Committed by now: nothing below may turn a created game into a 500, or the caller makes two.
-        await CopyBlacklistOnCreation(createGame, createdGame.Id, userId);
-
-        // After the copy, so an assistant from the master's own blacklist is refused by the game's list.
         await InviteAssistantOnCreation(createGame, createdGame.Id);
 
         // A lost event costs one notification, and the producer swallows a refusal itself.
@@ -189,26 +188,6 @@ internal partial class GameService : IGameService
                 _logger.LogWarning(exception, "Failed to invite assistant {Username} for game {GameId}",
                     createGame.AssistantUsername, gameId);
             }
-        }
-    }
-
-    // A lost copy is refilled from the blacklist screen, so a failure is logged, not thrown.
-    private async Task CopyBlacklistOnCreation(CreateGame createGame, Guid gameId, Guid masterId)
-    {
-        try
-        {
-            var copyBlacklist = createGame.CopyBlacklist ??
-                                (await _userBlacklistChecker.GetSettingsAsync(masterId))
-                                .HasFlag(UserBlacklistSettings.AutoPopulateContentBlacklist);
-            if (copyBlacklist)
-            {
-                await _gameBlacklistRepository.CopyFromPersonalBlacklist(gameId, masterId);
-            }
-        }
-        catch (Exception exception)
-        {
-            _logger.LogWarning(exception,
-                "Failed to copy the personal blacklist into game {GameId}", gameId);
         }
     }
 

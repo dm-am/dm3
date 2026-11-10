@@ -17,6 +17,7 @@ import type {
 import { SecondaryText } from "@/shared/ui/Layout";
 import GameIcon from "@/shared/ui/Icon/GameIcon.vue";
 import { ConfirmDialog } from "@/shared/ui/ConfirmDialog";
+import { ErrorState } from "@/shared/ui/ErrorState";
 import { CaptionAction, CaptionLine } from "@/shared/ui/CaptionLine";
 import Button from "@/shared/ui/Button/Button.vue";
 import { DataTable, type Column } from "@/shared/ui/DataTable";
@@ -28,6 +29,7 @@ import { OWNS_REFUSAL } from "@/shared/api/interceptor";
 const {
   adminCategories: categories,
   adminTypes: types,
+  adminFailed: failed,
   loadAdmin: load,
   reload,
 } = useAchievementCatalog();
@@ -129,7 +131,13 @@ async function confirmDeleteTier() {
       далее. Тир категории выдается, когда счет доходит до его порога.
     </SecondaryText>
 
-    <ul class="cat-list">
+    <ErrorState
+      v-if="failed"
+      message="Не удалось загрузить достижения"
+      :retry="load"
+    />
+
+    <ul v-else class="cat-list">
       <li
         v-for="c in sortedCategories"
         :key="c.id"

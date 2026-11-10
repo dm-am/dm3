@@ -2,7 +2,7 @@ import {
   ADMIN_GAME,
   DECLINED_CHARACTER,
   OWNED_GAME,
-  refuse,
+  refuseOnLoad,
   type State,
 } from "./shared";
 
@@ -17,16 +17,7 @@ export const CHARACTERS_STATES: State[] = [
     name: "member-game-character-failed",
     role: "user",
     url: (f) => `/game/${f.playedGame}/characters/${f.characterId}`,
-    act: async (page) => {
-      await refuse(
-        page,
-        /\/v1\/characters\/[0-9a-f-]{36}$/,
-        "GET",
-        500,
-        "Ошибка",
-      );
-      await page.reload({ waitUntil: "load" });
-    },
+    act: (page) => refuseOnLoad(page, /\/v1\/characters\/[0-9a-f-]{36}$/),
   },
   {
     name: "guest-game-characters",

@@ -143,7 +143,26 @@ describe("UserMultiSelect", () => {
       await nextTick();
       await nextTick();
 
-      expect(wrapper.find(".dropdown-empty").exists()).toBe(true);
+      expect(wrapper.find(".dropdown-empty").text()).toBe(
+        "Пользователь не найден",
+      );
+    });
+
+    // A refused search is not an answer that nobody has the name.
+    it("says the search failed when it was refused", async () => {
+      mockSearchUsers.mockResolvedValue({
+        data: null,
+        error: { status: 500, title: "Ошибка" },
+      });
+
+      const wrapper = mountComponent();
+      await wrapper.find("input").setValue("anna");
+      await vi.advanceTimersByTimeAsync(150);
+      await nextTick();
+
+      expect(wrapper.find(".dropdown-empty").text()).toBe(
+        "Не удалось загрузить пользователей",
+      );
     });
   });
 

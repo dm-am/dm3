@@ -31,7 +31,7 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
     {
         dateTimeProvider.Now.Returns(Moment);
         guidFactory.Create().Returns(ChallengeId);
-        cryptoService.Encrypt(Arg.Any<string>()).Returns("encrypted-token");
+        cryptoService.Encrypt(Arg.Any<string>(), SealPurpose.SessionToken).Returns("encrypted-token");
 
         user = Create.User(UserId)
             .WithRole(UserRole.RegularUser)
@@ -343,7 +343,7 @@ public class SecondFactorLoginShould : AuthenticationServiceTestBase
         twoFactorRepository.IsConfirmed(UserId, Arg.Any<CancellationToken>()).Returns(factorConfirmed);
         repository.FindUserSession(UserId, SessionId)
             .Returns(new Session { Id = SessionId, ExpirationUtc = Moment.AddDays(1) });
-        cryptoService.Decrypt("token")
+        cryptoService.Decrypt("token", SealPurpose.SessionToken)
             .Returns($"{{\"userId\":\"{UserId}\",\"sessionId\":\"{SessionId}\"}}");
     }
 

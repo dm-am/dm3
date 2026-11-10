@@ -53,15 +53,21 @@ internal class PasswordChangeRepository : IPasswordChangeRepository
         await FindUser(secret, createdSince) != null;
 
     /// <inheritdoc />
-    public async Task UpdatePassword(Guid userId, string passwordHash, string salt, Guid? secretToInvalidate)
+    /// <remarks>
+    /// The account filter leaves a removed account out of the update, so an account
+    /// removed after the lookup counts zero rows and its links stay as they were.
+    /// </remarks>
+    public async Task<bool> UpdatePassword(Guid userId, string passwordHash, string salt, Guid? secretToInvalidate)
     {
+        var updated = false;
+
         // Both writes or neither, user row first and tokens after, in the order the
         // issue of a reset link takes them, so the two queue up rather than interleave.
         await RetryableWrite.Run(_dbContext, async () =>
         {
             await using var transaction = await _dbContext.Database.BeginTransactionAsync();
 
-            await _dbContext.Users
+            var rows = await _dbContext.Users
                 .Where(u => u.UserId == userId)
                 .ExecuteUpdateAsync(s => s
                     .SetProperty(u => u.PasswordHash, passwordHash)
@@ -71,6 +77,11 @@ internal class PasswordChangeRepository : IPasswordChangeRepository
                     // A pending change of address goes with the password: a new password
                     // ends the asker's sessions but not their mailbox.
                     .SetProperty(u => u.PendingEmail, (string?)null));
+            updated = rows > 0;
+            if (!updated)
+            {
+                return;
+            }
 
             // Every live reset link of the account, not only the one this change came
             // in through, and the confirmation link of the dropped address.
@@ -82,5 +93,7 @@ internal class PasswordChangeRepository : IPasswordChangeRepository
 
             await transaction.CommitAsync();
         });
+
+        return updated;
     }
 }

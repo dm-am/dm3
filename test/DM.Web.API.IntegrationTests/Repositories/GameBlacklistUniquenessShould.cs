@@ -105,8 +105,9 @@ public class GameBlacklistUniquenessShould : IntegrationTestBase
             // One scope per copy: a DbContext is scoped and must not be shared
             // between parallel calls.
             using var scope = DatabaseFixture.Factory.Services.CreateScope();
-            var repository = scope.ServiceProvider.GetRequiredService<IGameBlacklistRepository>();
-            return await repository.CopyFromPersonalBlacklist(gameId, masterId);
+            var dbContext = scope.ServiceProvider.GetRequiredService<DmDbContext>();
+            return await DM.Infrastructure.Persistence.Repositories.Game.GameBlacklistRepository
+                .CopyFromPersonalBlacklist(dbContext, gameId, masterId, DateTimeOffset.UtcNow, CancellationToken.None);
         }));
 
         written.Sum().Should().Be(entries, "each entry is written by exactly one of the copies");

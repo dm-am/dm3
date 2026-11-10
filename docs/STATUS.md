@@ -51,8 +51,8 @@
 
 | Маршрут | Путь | Страница | Доступ | Кадры |
 |---|---|---|---|---|
-| games | `/games` | `game/GamesPage.vue` | все | guest-games, guest-games-filter-root, guest-games-filter-level, guest-games-filter-dates, guest-games-bubbles, guest-games-filter-status, guest-games-filter-tags, guest-games-bad-tag, guest-game-crazy-adventures |
-| create-game | `/games/create` | `create-game/CreateGamePage.vue` | все | member-create-game |
+| games | `/games` | `game/GamesPage.vue` | все | guest-games, guest-games-filter-root, guest-games-filter-level, guest-games-filter-dates, guest-games-bubbles, guest-games-filter-status, guest-games-filter-tags, guest-games-bad-tag, guest-game-crazy-adventures, member-filter-people-refused |
+| create-game | `/games/create` | `create-game/CreateGamePage.vue` | все | member-create-game, member-create-game-assistant-blocked |
 | game | `/game/:id` | `game/GameDetails.vue` | все, зона игры | guest-game, member-game-player, member-game-owner, mentor-game, admin-game-frozen, admin-game-finished |
 | game-chat-room | `/game/:id/chat-rooms/:num` | `game/GameChatRoom.vue` | все, зона игры | member-room-chat, member-room-chat-load-failed |
 | game-characters | `/game/:id/characters` | `game/GameCharacters.vue` | все, зона игры | member-game-characters, guest-game-characters, member-owned-game-characters |
@@ -66,7 +66,7 @@
 | game-notepad | `/game/:id/notes` | `game/GameNotepad.vue` | все, зона игры | кадра нет |
 | game-first-unread-post | `/game/:id/posts/unread` | `game/GameFirstUnreadPost.vue` | все | кадра нет |
 | game-first-unread-comment | `/game/:id/comments/unread` | `game/GameFirstUnreadComment.vue` | все | кадра нет |
-| game-room | `/game/:id/rooms/:num` | `game/GameRoom.vue` | все, зона игры | guest-room, member-room, member-room-own-post-edit, member-room-big-post, member-room-reviews-open, member-room-address-params, member-room-sort-menu, admin-room-pendency-hover, member-room-composer-roll, member-room-composer-attachment, member-room-composer-attachment-selected, member-room-composer-attachment-chosen, guest-room-hidden-file, member-room-marked-file |
+| game-room | `/game/:id/rooms/:num` | `game/GameRoom.vue` | все, зона игры | guest-room, member-room, member-room-own-post-edit, member-room-big-post, member-room-reviews-open, member-room-address-params, member-room-sort-menu, admin-room-pendency-hover, member-room-composer-roll, member-dice-explosion-blur, member-room-composer-attachment, member-room-composer-attachment-selected, member-room-composer-attachment-chosen, guest-room-hidden-file, member-room-marked-file |
 
 ### Блоги
 
@@ -111,7 +111,7 @@
 
 | Маршрут | Путь | Страница | Доступ | Кадры |
 |---|---|---|---|---|
-| global-chat | `/global-chat` | `global-chat/GlobalChatPage.vue` | все | member-global-chat-full, member-global-chat-compact, member-global-chat-like-tooltip, member-global-chat-search-empty |
+| global-chat | `/global-chat` | `global-chat/GlobalChatPage.vue` | все | member-global-chat-full, member-global-chat-compact, member-global-chat-like-tooltip, member-global-chat-empty, member-global-chat-search-empty |
 | messenger | `/messenger` | `messenger/NoChatSelected.vue` | вход | member-messenger, member-messenger-search |
 | chat | `/messenger/c/:id` | `messenger/ChatView.vue` | вход | member-messenger-chat-full, member-messenger-chat-compact |
 | direct-message | `/messenger/user/:username` | `messenger/DirectChatRedirect.vue` | вход | кадра нет |
@@ -149,7 +149,7 @@
 | moderation-awards | `/moderation/awards` | `moderation/ModerationAwards.vue` | вход, модерация | admin-award-series-create-year |
 | moderation-awards-series | `/moderation/awards/series/:id` | `moderation/ModerationAwardsSeries.vue` | вход, модерация | admin-award-series-refused |
 | moderation-award-types | `/moderation/award-types` | `moderation/ModerationAwardTypes.vue` | вход, модерация | admin-award-types-refused, admin-award-type-dialog |
-| moderation-achievements | `/moderation/achievements` | `moderation/ModerationAchievements.vue` | вход, модерация | admin-achievements, admin-achievement-category-dialog, admin-achievement-tier-dialog |
+| moderation-achievements | `/moderation/achievements` | `moderation/ModerationAchievements.vue` | вход, модерация | admin-achievements, admin-achievements-refused, admin-achievement-category-dialog, admin-achievement-tier-dialog |
 | moderation-fundraising | `/moderation/fundraising` | `moderation/FundraisingPage.vue` | вход, модерация | admin-fundraising |
 
 ### Обращения
@@ -183,10 +183,10 @@
 | Роль | Состояний |
 |---|---|
 | guest | 71 |
-| user | 93 |
+| user | 97 |
 | mentor | 3 |
 | moderator | 12 |
 | senior | 6 |
-| admin | 32 |
+| admin | 33 |
 
 Состояний, которые скрипт не прочел: 2.

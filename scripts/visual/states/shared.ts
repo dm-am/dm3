@@ -107,6 +107,12 @@ export async function refuse(
   );
 }
 
+/** A page whose read fails on load: the read is refused before the page loads again. */
+export async function refuseOnLoad(page: Page, url: RegExp) {
+  await refuse(page, url, "GET", 500, "Ошибка");
+  await page.reload({ waitUntil: "load" });
+}
+
 /** Answers GET on one address with the given body, for a list the seed cannot hold for long. */
 export async function answer(page: Page, url: RegExp, body: unknown) {
   await page.route(url, (route) =>
